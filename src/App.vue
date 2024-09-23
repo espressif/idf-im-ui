@@ -11,6 +11,7 @@
 
 <script>
 import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } from 'naive-ui'
+import { darkTheme } from 'naive-ui'
 import { computed } from 'vue'
 
 export default {
@@ -22,7 +23,7 @@ export default {
   },
   setup() {
     const osTheme = useOsTheme()
-    const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null))
+    const theme = null // computed(() => (osTheme.value === 'dark' ? darkTheme : null))
 
     return {
       theme
