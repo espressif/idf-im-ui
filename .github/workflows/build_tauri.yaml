@@ -37,6 +37,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          vcpkg install openssl:x64-windows-static-md
+
+      - name: Install OpenSSL (Macos)
+        if: matrix.os == 'macos-latest'
+        run: brew install openssl
+
       - name: setup node
         uses: actions/setup-node@v4
         with:
@@ -52,7 +63,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
         # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
         # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
 
