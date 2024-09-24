@@ -1,14 +1,19 @@
-import { createRouter, createWebHashHistory } from 'vue-router'
-import WizardStep from './components/WizardStep.vue'
+import { createRouter, createWebHashHistory } from "vue-router";
+import WizardStep from "./components/WizardStep.vue";
+import Welcome from "./components/Welcome.vue";
+import LoadConfig from "./components/LoadConfig.vue";
 
 const routes = [
-  { path: '/:step', component: WizardStep, props: true },
-  { path: '/', redirect: '/1' }
-]
+  { path: "/welcome", component: Welcome, props: true },
+  { path: "/load_config", component: LoadConfig, props: true },
+
+  { path: "/wizard/:step", component: WizardStep, props: true },
+  { path: "/", redirect: "/welcome" },
+];
 
 const router = createRouter({
   history: createWebHashHistory(),
-  routes
-})
+  routes,
+});
 
-export default router
+export default router;

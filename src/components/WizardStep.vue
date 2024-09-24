@@ -1,8 +1,7 @@
 <template>
   <div class="wizard-container">
     <h2>Step {{ currentStep }}: {{ stepTitle }}</h2>
-    <Welcome v-if="currentStep === 1" />
-    <Greet v-if="currentStep === 2" />
+    <PrerequisitiesCheck v-if="currentStep === 1" />
 
     <div>
       <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
@@ -17,22 +16,48 @@
 import { ref, computed } from 'vue'
 import { useWizardStore } from '../store'
 import { NButton, NCheckbox } from 'naive-ui'
-import Welcome from './steps/Welcome.vue';
 import Greet from './Greet.vue';
-
-
+import PrerequisitiesCheck from './wizard_steps/PrerequisitiesCheck.vue';
 
 export default {
-  components: { NButton, NCheckbox, Welcome, Greet },
+  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck },
   setup() {
     const store = useWizardStore()
 
-    const steps = [{
-      title: "Welcome",
-    },
-    {
-      title: "Optional config loading",
-    }
+    const steps = [
+      {
+        title: "Wizard",
+      },
+      {
+        title: "Prerequisities Check ",
+      },
+      {
+        title: "Install Prerequisites", // skip on POSIX
+      },
+      {
+        title: "Python Sanity check",
+      },
+      {
+        title: "Install Python", // skip is python is sane or on POSIX
+      },
+      {
+        title: "Select Target",
+      },
+      {
+        title: "Select IDF Version",
+      },
+      {
+        title: "Select mirror",
+      },
+      {
+        title: "Select Installation Path",
+      },
+      {
+        title: "Install single version",
+      },
+      {
+        title: "Post install steps", // creating desktop shorcut
+      }
     ]; // Add more steps as needed
 
     const stepTitle = computed(() => {
