@@ -26,7 +26,7 @@ jobs:
         include:
           - platform: "macos-latest" # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
-          - platform: "macos-latest" # for Intel based macs.
+          - platform: "macos-12" # for Intel based macs.
             args: "--target x86_64-apple-darwin"
           - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
             args: ""
@@ -80,3 +80,75 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Upload app .deb
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: eim-linux-x86_64-deb
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+      - name: Upload app .rpm
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: eim-linux-x86_64-rpm
+          path: |
+            src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+      - name: Upload app .AppImage
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: eim-linux-x86_64-AppImage
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-latest'
+        with:
+          name: eim-macos-aarch64-dmg
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-latest'
+        with:
+          name: eim-macos-aarch64-app
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+          if-no-files-found: error
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-12'
+        with:
+          name: eim-macos-x86_64-dmg
+          path: |
+            src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-12'
+        with:
+          name: eim-macos-x86_64-app
+          path: |
+            src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
+          if-no-files-found: error
+
+      - name: Upload app Windows
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'windows-latest'
+        with:
+          name: eim-windows-msi
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
