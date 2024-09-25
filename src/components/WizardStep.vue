@@ -3,7 +3,7 @@
     <h2>Step {{ currentStep }}: {{ stepTitle }}</h2>
     <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
     <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
-
+    <TargetSelect :nextstep=nextStep v-if="currentStep === 3" />
     <div>
       <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
       <n-button @click="nextStep" :disabled="currentStep === totalSteps" type="primary">
@@ -20,9 +20,10 @@ import { NButton, NCheckbox } from 'naive-ui'
 import Greet from './Greet.vue';
 import PrerequisitiesCheck from './wizard_steps/PrerequisitiesCheck.vue';
 import PythonSanitycheck from './wizard_steps/PythonSanitycheck.vue';
+import TargetSelect from './wizard_steps/TargetSelect.vue';
 
 export default {
-  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck },
+  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck, TargetSelect },
   setup() {
     const store = useWizardStore()
 

@@ -99,6 +99,12 @@ fn python_install() -> bool {
         }
     }
 }
+#[tauri::command]
+async fn get_available_targets() -> Vec<String> {
+    let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await.unwrap();
+    available_targets.insert(0, "all".to_string());
+    available_targets
+}
 
 use tauri::Manager;
 
@@ -117,7 +123,9 @@ pub fn run() {
             check_prequisites,
             get_prequisites,
             get_operating_system,
-            python_sanity_check
+            python_sanity_check,
+            python_install,
+            get_available_targets
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
