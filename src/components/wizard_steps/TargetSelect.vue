@@ -4,7 +4,11 @@
     <n-spin :show="loading">
       <template #default>
         <ul>
-          <li v-for="target in targets" :key="target">{{ target.name }}</li>
+          <li v-for="target in targets" :key="target">
+            <n-checkbox v-model:checked="target.selected" @click="clickOnTarget">
+              {{ target.name }}
+            </n-checkbox>
+          </li>
         </ul>
       </template>
       <template #description>
@@ -12,7 +16,7 @@
       </template>
     </n-spin>
 
-    <n-button @click="nextstep" type="primary">Next</n-button>
+    <n-button @click="processTargets" type="primary">Next</n-button>
   </n-space>
 </template>
 
@@ -40,7 +44,7 @@ export default {
     },
     get_avalible_targets: async function () {
       let targets = await invoke("get_available_targets", {});
-      this.targets = targets.map((target) => {
+      this.targets = targets.sort().map((target) => {
         return {
           name: target,
           selected: target == 'all' ? true : false,
@@ -49,6 +53,21 @@ export default {
       this.loading = false;
       return false;
     },
+    clickOnTarget: function (target) {
+      if (target.target.innerText == 'all') {
+        if (this.targets[0].selected) {
+          this.targets.forEach(t => t.selected = false);
+          this.targets[0].selected = true;
+        }
+      } else {
+        this.targets[0].selected = false;
+      }
+    },
+    processTargets: function () {
+      let selected_targets = this.targets.filter(target => target.selected);
+      // selected_targets TODO: send to backend
+      this.nextstep();
+    }
   },
   mounted() {
     this.get_avalible_targets();
