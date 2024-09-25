@@ -1,13 +1,13 @@
 <template>
   <div class="wizard-container">
     <h2>Step {{ currentStep }}: {{ stepTitle }}</h2>
-    <PrerequisitiesCheck v-if="currentStep === 1" />
+    <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
 
     <div>
-      <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
+      <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
       <n-button @click="nextStep" :disabled="currentStep === totalSteps" type="primary">
         {{ currentStep === totalSteps ? 'Finish' : 'Next' }}
-      </n-button>
+      </n-button> -->
     </div>
   </div>
 </template>
@@ -25,9 +25,6 @@ export default {
     const store = useWizardStore()
 
     const steps = [
-      {
-        title: "Wizard",
-      },
       {
         title: "Prerequisities Check ",
       },
@@ -61,7 +58,7 @@ export default {
     ]; // Add more steps as needed
 
     const stepTitle = computed(() => {
-      steps[store.currentStep - 1].title
+      return steps[store.currentStep - 1].title
     })
 
 

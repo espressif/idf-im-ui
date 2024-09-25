@@ -32,6 +32,29 @@ fn get_prequisites() -> Vec<&'static str> {
 }
 
 #[tauri::command]
+fn get_operating_system() -> String {
+    println!("Get operating system called");
+    std::env::consts::OS.to_string()
+}
+
+#[tauri::command]
+fn install_prerequisites() -> bool {
+    println!("Install prerequisites called");
+    let unsatisfied_prerequisites = idf_im_lib::system_dependencies::check_prerequisites()
+        .unwrap()
+        .into_iter()
+        .map(|p| p.to_string())
+        .collect();
+    match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
+        Ok(_) => true,
+        Err(err) => {
+            eprintln!("Error installing prerequisites: {}", err); //TODO: emit message
+            false
+        }
+    }
+}
+
+#[tauri::command]
 fn check_prequisites() -> Vec<String> {
     match idf_im_lib::system_dependencies::check_prerequisites() {
         Ok(prerequisites) => {
@@ -65,7 +88,8 @@ pub fn run() {
             greet,
             get_settings,
             check_prequisites,
-            get_prequisites
+            get_prequisites,
+            get_operating_system
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
