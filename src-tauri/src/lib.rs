@@ -73,6 +73,33 @@ fn check_prequisites() -> Vec<String> {
     }
 }
 
+#[tauri::command]
+fn python_sanity_check(python: Option<&str>) -> bool {
+    let outpusts = idf_im_lib::python_utils::python_sanity_check(python);
+    let mut all_ok = true;
+    for output in outpusts {
+        match output {
+            Ok(_) => {}
+            Err(err) => {
+                all_ok = false;
+                println!("{:?}", err)
+            }
+        }
+    }
+    all_ok
+}
+
+#[tauri::command]
+fn python_install() -> bool {
+    match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
+        Ok(_) => true,
+        Err(err) => {
+            eprintln!("Error installing prerequisites: {}", err); //TODO: emit message
+            false
+        }
+    }
+}
+
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -89,7 +116,8 @@ pub fn run() {
             get_settings,
             check_prequisites,
             get_prequisites,
-            get_operating_system
+            get_operating_system,
+            python_sanity_check
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

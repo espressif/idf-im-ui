@@ -100,22 +100,3 @@ export default {
   }
 }
 </script>
-
-<!-- <script setup>
-import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-
-const loading = ref(false);
-const loading_list = ref(false);
-const all_prerequisities = ref([]);
-
-async function checkprereq(e) {
-  e.preventDefault();
-  loading.value = true;
-  // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-  greetMsg.value = await invoke("check_prereq", {});
-  loading.value = false;
-  return false;
-} -->
-
-<!-- </script> -->

@@ -2,6 +2,7 @@
   <div class="wizard-container">
     <h2>Step {{ currentStep }}: {{ stepTitle }}</h2>
     <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
+    <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
 
     <div>
       <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
@@ -18,9 +19,10 @@ import { useWizardStore } from '../store'
 import { NButton, NCheckbox } from 'naive-ui'
 import Greet from './Greet.vue';
 import PrerequisitiesCheck from './wizard_steps/PrerequisitiesCheck.vue';
+import PythonSanitycheck from './wizard_steps/PythonSanitycheck.vue';
 
 export default {
-  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck },
+  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck },
   setup() {
     const store = useWizardStore()
 
@@ -29,13 +31,7 @@ export default {
         title: "Prerequisities Check ",
       },
       {
-        title: "Install Prerequisites", // skip on POSIX
-      },
-      {
         title: "Python Sanity check",
-      },
-      {
-        title: "Install Python", // skip is python is sane or on POSIX
       },
       {
         title: "Select Target",
