@@ -5,9 +5,11 @@
       <template #default>
         <ul>
           <li v-for="target in targets" :key="target">
-            <n-checkbox v-model:checked="target.selected" @click="clickOnTarget">
-              {{ target.name }}
-            </n-checkbox>
+            <span @click="clickOnTarget">
+              <n-checkbox v-model:checked="target.selected">
+                {{ target.name }}
+              </n-checkbox>
+            </span>
           </li>
         </ul>
       </template>
@@ -43,20 +45,24 @@ export default {
       return false;
     },
     get_avalible_targets: async function () {
-      let targets = await invoke("get_available_targets", {});
+      const targets = await invoke("get_available_targets", {});
       this.targets = targets.sort().map((target) => {
         return {
           name: target,
-          selected: target == 'all' ? true : false,
+          // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
+          selected: target == 'all',
         }
       });
       this.loading = false;
       return false;
     },
-    clickOnTarget: function (target) {
-      if (target.target.innerText == 'all') {
+    clickOnTarget: async function (event) {
+      if (event.currentTarget.textContent.toLowerCase().includes('all')) {
+        console.log('all targets selected');
         if (this.targets[0].selected) {
-          this.targets.forEach(t => t.selected = false);
+          for (const t of this.targets) {
+            t.selected = false;
+          }
           this.targets[0].selected = true;
         }
       } else {
@@ -64,7 +70,7 @@ export default {
       }
     },
     processTargets: function () {
-      let selected_targets = this.targets.filter(target => target.selected);
+      const selected_targets = this.targets.filter(target => target.selected);
       // selected_targets TODO: send to backend
       this.nextstep();
     }

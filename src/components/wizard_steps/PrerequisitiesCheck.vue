@@ -71,7 +71,7 @@ export default {
     },
     check_prerequisites: async function () {
       this.loading = true;
-      let missing_list = await invoke("check_prequisites", {});
+      const missing_list = await invoke("check_prequisites", {});
       this.missing_prerequisities = missing_list;
       console.log("missing prerequisities: ", missing_list);
       this.display_prerequisities = this.display_prerequisities.map(p => ({
