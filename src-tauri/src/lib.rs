@@ -119,6 +119,16 @@ async fn get_idf_versions() -> Vec<String> {
   available_versions
 }
 
+#[tauri::command]
+fn get_idf_mirror_list() -> &'static [&'static str] {
+  idf_im_lib::get_idf_mirrors_list()
+}
+
+#[tauri::command]
+fn get_tools_mirror_list() -> &'static [&'static str] {
+  idf_im_lib::get_idf_tools_mirrors_list()
+}
+
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -140,7 +150,9 @@ pub fn run() {
             python_sanity_check,
             python_install,
             get_available_targets,
-            get_idf_versions
+            get_idf_versions,
+            get_idf_mirror_list,
+            get_tools_mirror_list
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

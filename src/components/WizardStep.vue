@@ -5,6 +5,7 @@
     <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
     <TargetSelect :nextstep=nextStep v-if="currentStep === 3" />
     <VersionSelect :nextstep=nextStep v-if="currentStep === 4" />
+    <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" />
     <div>
       <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
       <n-button @click="nextStep" :disabled="currentStep === totalSteps" type="primary">
@@ -23,9 +24,10 @@ import PrerequisitiesCheck from './wizard_steps/PrerequisitiesCheck.vue';
 import PythonSanitycheck from './wizard_steps/PythonSanitycheck.vue';
 import TargetSelect from './wizard_steps/TargetSelect.vue';
 import VersionSelect from './wizard_steps/VersionSelect.vue';
+import MirrorSelect from './wizard_steps/MirrorSelect.vue';
 
 export default {
-  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck, TargetSelect, VersionSelect },
+  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck, TargetSelect, VersionSelect, MirrorSelect },
   setup() {
     const store = useWizardStore()
 
