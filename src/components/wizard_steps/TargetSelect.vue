@@ -1,5 +1,5 @@
 <template>
-  <p>Wizard will now check your Python instalation...</p>
+  <p>Please select chips you want to develop for:</p>
   <n-space vertical>
     <n-spin :show="loading">
       <template #default>

@@ -106,6 +106,19 @@ async fn get_available_targets() -> Vec<String> {
     available_targets
 }
 
+#[tauri::command]
+async fn get_idf_versions() -> Vec<String> {
+  let target = "all".to_string(); //todo: get from state or user
+  let mut available_versions = if target == "all" {
+      //todo process vector of targets
+      idf_im_lib::idf_versions::get_idf_names().await
+  } else {
+      idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
+  };
+  available_versions.push("master".to_string());
+  available_versions
+}
+
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -121,11 +134,13 @@ pub fn run() {
             greet,
             get_settings,
             check_prequisites,
+            install_prerequisites,
             get_prequisites,
             get_operating_system,
             python_sanity_check,
             python_install,
-            get_available_targets
+            get_available_targets,
+            get_idf_versions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
