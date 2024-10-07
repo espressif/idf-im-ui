@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use std::fs::File;
+use std::io::Read;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -101,32 +103,43 @@ fn python_install() -> bool {
 }
 #[tauri::command]
 async fn get_available_targets() -> Vec<String> {
-    let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await.unwrap();
+    let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets()
+        .await
+        .unwrap();
     available_targets.insert(0, "all".to_string());
     available_targets
 }
 
 #[tauri::command]
 async fn get_idf_versions() -> Vec<String> {
-  let target = "all".to_string(); //todo: get from state or user
-  let mut available_versions = if target == "all" {
-      //todo process vector of targets
-      idf_im_lib::idf_versions::get_idf_names().await
-  } else {
-      idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
-  };
-  available_versions.push("master".to_string());
-  available_versions
+    let target = "all".to_string(); //todo: get from state or user
+    let mut available_versions = if target == "all" {
+        //todo process vector of targets
+        idf_im_lib::idf_versions::get_idf_names().await
+    } else {
+        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
+    };
+    available_versions.push("master".to_string());
+    available_versions
 }
 
 #[tauri::command]
 fn get_idf_mirror_list() -> &'static [&'static str] {
-  idf_im_lib::get_idf_mirrors_list()
+    idf_im_lib::get_idf_mirrors_list()
 }
 
 #[tauri::command]
 fn get_tools_mirror_list() -> &'static [&'static str] {
-  idf_im_lib::get_idf_tools_mirrors_list()
+    idf_im_lib::get_idf_tools_mirrors_list()
+}
+
+#[tauri::command]
+fn get_file_content(path: &str) -> String {
+  let mut file = File::open(path).expect("Failed to open file");
+  let mut contents = String::new();
+  file.read_to_string(&mut contents).expect("Failed to read file");
+  println!("{}", contents);
+  contents
 }
 
 use tauri::Manager;
@@ -134,6 +147,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let app_state = AppState::default();
             app.manage(app_state);
@@ -152,7 +166,8 @@ pub fn run() {
             get_available_targets,
             get_idf_versions,
             get_idf_mirror_list,
-            get_tools_mirror_list
+            get_tools_mirror_list,
+            get_file_content
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
