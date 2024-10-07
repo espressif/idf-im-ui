@@ -81,6 +81,15 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Upload app Linux binary
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: eim-linux-x86_64-binary
+          path: |
+            src-tauri/target/release/eim
+          if-no-files-found: error
+
       - name: Upload app .deb
         uses: actions/upload-artifact@v3
         if: matrix.platform == 'ubuntu-22.04'
@@ -108,6 +117,15 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
+      - name: Upload app MacOs binary
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-latest'
+        with:
+          name: eim-macos-aarch64-binary
+          path: |
+            src-tauri/target/aarch64-apple-darwin/release/eim
+          if-no-files-found: error
+
       - name: Upload app MacOs
         uses: actions/upload-artifact@v3
         if: matrix.platform == 'macos-latest'
@@ -126,6 +144,15 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
           if-no-files-found: error
 
+      - name: Upload MacOs intel app binary
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'macos-12'
+        with:
+          name: eim-macos-x86_64-dmg
+          path: |
+            src-tauri/target/x86_64-apple-darwin/release/eim
+          if-no-files-found: error
+
       - name: Upload app MacOs
         uses: actions/upload-artifact@v3
         if: matrix.platform == 'macos-12'
@@ -142,6 +169,15 @@ jobs:
           name: eim-macos-x86_64-app
           path: |
             src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
+          if-no-files-found: error
+
+      - name: Upload app Windows binary
+        uses: actions/upload-artifact@v3
+        if: matrix.platform == 'windows-latest'
+        with:
+          name: eim-windows-binary
+          path: |
+            src-tauri/target/release/eim.exe
           if-no-files-found: error
 
       - name: Upload app Windows
