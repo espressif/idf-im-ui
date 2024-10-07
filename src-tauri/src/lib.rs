@@ -6,6 +6,7 @@ use std::io::Read;
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
     wizard_data: Mutex<WizardData>,
+    settings: Mutex<idf_im_lib::settings::Settings>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -134,12 +135,14 @@ fn get_tools_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
-fn get_file_content(path: &str) -> String {
+fn load_settings(path: &str) -> idf_im_lib::settings::Settings { //TODO emit errors to FE
   let mut file = File::open(path).expect("Failed to open file");
   let mut contents = String::new();
   file.read_to_string(&mut contents).expect("Failed to read file");
-  println!("{}", contents);
-  contents
+  let settings: idf_im_lib::settings::Settings = toml::from_str(&contents).expect("Failed to parse config file");
+  println!("settings {:?}", settings); // TODO: remove debug print statement
+  // TODO: load setting to the app state
+  settings
 }
 
 use tauri::Manager;
@@ -167,7 +170,7 @@ pub fn run() {
             get_idf_versions,
             get_idf_mirror_list,
             get_tools_mirror_list,
-            get_file_content
+            load_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

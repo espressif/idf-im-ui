@@ -38,11 +38,15 @@ export default {
     async load_config() {
       console.log('Loading config...');
       const file = await open({
+        title: 'Select installation config file',
         multiple: false,
         directory: false,
+        filters: [
+          { name: '*', extensions: ['toml'] },
+        ],
       });
       console.log(file);
-      const content = await invoke("get_file_content", { path: file });
+      const content = await invoke("load_settings", { path: file });
       console.log(content);
     }
   }
