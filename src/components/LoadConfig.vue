@@ -5,7 +5,7 @@
       <template #1>
         <div :style="{ height: '200px' }">
           ( TODO: put opemn config icon here )
-          <n-button type="primary" ghost>
+          <n-button @click="load_config" type="primary" ghost>
             Load instalation config.
           </n-button>
         </div>
@@ -24,7 +24,9 @@
 </template>
 
 <script>
+import { open } from '@tauri-apps/plugin-dialog';
 import { NSplit, NButton } from 'naive-ui'
+import { invoke } from "@tauri-apps/api/core";
 
 export default {
   name: 'LoadConfig',
@@ -32,6 +34,20 @@ export default {
   methods: {
     startWizard() {
       this.$router.push('/wizard/1');
+    },
+    async load_config() {
+      console.log('Loading config...');
+      const file = await open({
+        title: 'Select installation config file',
+        multiple: false,
+        directory: false,
+        filters: [
+          { name: '*', extensions: ['toml'] },
+        ],
+      });
+      console.log(file);
+      const content = await invoke("load_settings", { path: file });
+      console.log(content);
     }
   }
 }
