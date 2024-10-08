@@ -5,6 +5,7 @@
       <n-layout-content>
         <router-view></router-view>
       </n-layout-content>
+      <message-display />
     </n-layout>
   </n-config-provider>
 </template>
@@ -13,13 +14,15 @@
 import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } from 'naive-ui'
 import { darkTheme } from 'naive-ui'
 import { computed } from 'vue'
+import MessageDisplay from './components/MessageDisplay.vue';
 
 export default {
   components: {
     NConfigProvider,
     NLayout,
     NLayoutHeader,
-    NLayoutContent
+    NLayoutContent,
+    MessageDisplay
   },
   setup() {
     const osTheme = useOsTheme()
