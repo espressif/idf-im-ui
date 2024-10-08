@@ -10,18 +10,16 @@
 import { NMessageProvider } from 'naive-ui'
 import { defineComponent, h } from 'vue'
 import { useMessage } from 'naive-ui'
+import { listen } from '@tauri-apps/api/event'
 
 const MessageConsumer = defineComponent({
   setup() {
     const message = useMessage()
 
-    // Simulating listening to a channel
-    // Replace this with your actual channel listening logic
-    setInterval(() => {
-      const types = ['info', 'success', 'warning', 'error']
-      const type = types[Math.floor(Math.random() * types.length)]
-      message[type](`This is a ${type} message`)
-    }, 5000)
+    listen('user-message', (event) => {
+      console.log('Received message:', event)
+      message[event.payload.type](event.payload.message)
+    })
 
     return () => null
   }

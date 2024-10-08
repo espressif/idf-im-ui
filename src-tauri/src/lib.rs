@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::fs::File;
 use std::io::Read;
+use serde_json::json;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -24,25 +25,25 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn get_settings() -> idf_im_lib::settings::Settings {
-    println!("Get settings called");
+    println!("Get settings called"); // todo remove debug statement
     idf_im_lib::settings::Settings::new(None, None).unwrap()
 }
 
 #[tauri::command]
 fn get_prequisites() -> Vec<&'static str> {
-    println!("Get prerequisites called");
+    println!("Get prerequisites called"); // todo remove debug statement
     idf_im_lib::system_dependencies::get_prequisites()
 }
 
 #[tauri::command]
 fn get_operating_system() -> String {
-    println!("Get operating system called");
+    println!("Get operating system called"); // todo remove debug statement
     std::env::consts::OS.to_string()
 }
 
 #[tauri::command]
-fn install_prerequisites() -> bool {
-    println!("Install prerequisites called");
+fn install_prerequisites(app_handle: AppHandle) -> bool {
+    println!("Install prerequisites called"); // todo remove debug statement
     let unsatisfied_prerequisites = idf_im_lib::system_dependencies::check_prerequisites()
         .unwrap()
         .into_iter()
@@ -51,14 +52,15 @@ fn install_prerequisites() -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
         Ok(_) => true,
         Err(err) => {
-            eprintln!("Error installing prerequisites: {}", err); //TODO: emit message
+          send_message(app_handle.clone(), format!("Error installing prerequisites: {}", err), "error".to_string());
+            eprintln!("Error installing prerequisites: {}", err);
             false
         }
     }
 }
 
 #[tauri::command]
-fn check_prequisites() -> Vec<String> {
+fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
     match idf_im_lib::system_dependencies::check_prerequisites() {
         Ok(prerequisites) => {
             if prerequisites.is_empty() {
@@ -70,6 +72,7 @@ fn check_prequisites() -> Vec<String> {
             }
         }
         Err(err) => {
+          send_message(app_handle.clone(), format!("Error checking prerequisites: {}", err), "error".to_string());
             eprintln!("Error checking prerequisites: {}", err); //TODO: emit message
             vec![]
         }
@@ -77,7 +80,7 @@ fn check_prequisites() -> Vec<String> {
 }
 
 #[tauri::command]
-fn python_sanity_check(python: Option<&str>) -> bool {
+fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
     let outpusts = idf_im_lib::python_utils::python_sanity_check(python);
     let mut all_ok = true;
     for output in outpusts {
@@ -85,6 +88,7 @@ fn python_sanity_check(python: Option<&str>) -> bool {
             Ok(_) => {}
             Err(err) => {
                 all_ok = false;
+                send_message(app_handle.clone(), format!("Python sanity check failed: {}", err), "warning".to_string());
                 println!("{:?}", err)
             }
         }
@@ -93,11 +97,12 @@ fn python_sanity_check(python: Option<&str>) -> bool {
 }
 
 #[tauri::command]
-fn python_install() -> bool {
+fn python_install(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
         Ok(_) => true,
         Err(err) => {
-            eprintln!("Error installing prerequisites: {}", err); //TODO: emit message
+          send_message(app_handle.clone(), format!("Error installing python: {}", err), "error".to_string());
+            eprintln!("Error installing python: {}", err); //TODO: emit message
             false
         }
     }
@@ -135,17 +140,26 @@ fn get_tools_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
-fn load_settings(path: &str) -> idf_im_lib::settings::Settings { //TODO emit errors to FE
-  let mut file = File::open(path).expect("Failed to open file");
+fn load_settings(app_handle: AppHandle, path: &str) -> idf_im_lib::settings::Settings {
+  let mut file = File::open(path).map_err(|_| send_message(app_handle.clone(), format!("Failed to open file: {}", path), "warning".to_string())).expect("Failed to open file");
   let mut contents = String::new();
-  file.read_to_string(&mut contents).expect("Failed to read file");
-  let settings: idf_im_lib::settings::Settings = toml::from_str(&contents).expect("Failed to parse config file");
+  file.read_to_string(&mut contents).map_err(|_| send_message(app_handle.clone(), format!("Failed to read file: {}", path), "warning".to_string())).expect("Failed to read file");
+  let settings: idf_im_lib::settings::Settings = toml::from_str(&contents).map_err(|_| send_message(app_handle.clone(), format!("Failed to parse TOML: {}", path), "warning".to_string())).expect("Failed to parse TOML");
   println!("settings {:?}", settings); // TODO: remove debug print statement
   // TODO: load setting to the app state
+  send_message(app_handle.clone(), format!("Settings loaded from {}", path), "info".to_string());
   settings
 }
 
+fn send_message(app_handle: AppHandle, message: String, message_type: String) {
+  app_handle.emit("user-message", json!({
+    "type": message_type,
+    "message": message
+  }));
+}
+
 use tauri::Manager;
+use tauri::{AppHandle, Emitter};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
