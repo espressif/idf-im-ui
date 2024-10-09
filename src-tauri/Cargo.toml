@@ -22,6 +22,8 @@ serde_json = "1"
 idf-im-lib = { git = "https://github.com/espressif/idf-im-lib.git", branch="master" }
 tauri-plugin-dialog = "2.0.1"
 toml = "0.8"
+tauri-plugin-log = "2"
+log = "0.4"
 
 [dependencies.openssl-sys]
 version = "0.9"

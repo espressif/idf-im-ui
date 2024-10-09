@@ -10,27 +10,16 @@
   </n-config-provider>
 </template>
 
-<script>
+<script setup>
 import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } from 'naive-ui'
 import { darkTheme } from 'naive-ui'
-import { computed } from 'vue'
-import MessageDisplay from './components/MessageDisplay.vue';
+import { computed, onMounted } from 'vue'
+import MessageDisplay from './components/MessageDisplay.vue'
+import { attachConsole } from '@tauri-apps/plugin-log'
+const osTheme = useOsTheme()
+const theme = null // computed(() => (osTheme.value === 'dark' ? darkTheme : null))
 
-export default {
-  components: {
-    NConfigProvider,
-    NLayout,
-    NLayoutHeader,
-    NLayoutContent,
-    MessageDisplay
-  },
-  setup() {
-    const osTheme = useOsTheme()
-    const theme = null // computed(() => (osTheme.value === 'dark' ? darkTheme : null))
-
-    return {
-      theme
-    }
-  }
-}
+onMounted(async () => {
+  const detach = await attachConsole()
+})
 </script>
