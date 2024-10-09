@@ -12,6 +12,7 @@
 	"dependencies": {
 		"@tauri-apps/api": ">=2.0.0",
 		"@tauri-apps/plugin-dialog": "^2.0.0",
+		"@tauri-apps/plugin-log": "~2",
 		"@tauri-apps/plugin-shell": ">=2.0.0",
 		"naive-ui": "^2.39.0",
 		"pinia": "^2.2.2",
