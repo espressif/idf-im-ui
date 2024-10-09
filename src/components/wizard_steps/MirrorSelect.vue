@@ -90,13 +90,14 @@ export default {
       this.loading_tools = false;
       return false;
     },
-    processChoices: function () {
-      // todo: send to backend
+    processChoices: async function () {
       console.log("Mirror choices:", {
         idf_mirror: this.selected_idf_mirror,
         tools_mirror: this.selected_tools_mirror,
       });
       if (!this.loading_idfs && !this.loading_tools) {
+        const _ = await invoke("set_idf_mirror", { mirror: this.selected_idf_mirror });
+        const __ = await invoke("set_tools_mirror", { mirror: this.selected_tools_mirror });
         this.nextstep();
       }
     }

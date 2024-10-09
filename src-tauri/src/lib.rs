@@ -186,7 +186,6 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
     available_versions
 }
 
-// TODO unify the set "something" commands
 #[tauri::command]
 fn set_versions(app_handle: AppHandle, versions: Vec<String>) {
     println!("set_versions called: {:?}", versions); //todo: switch to debug!
@@ -212,8 +211,45 @@ fn get_idf_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
+fn set_idf_mirror(app_handle: AppHandle, mirror: &str) {
+    println!("set_idf_mirror called: {}", mirror); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).idf_mirror = Some(mirror.to_string());
+    println!("Setting after idf_mirror: {:?}", settings); //todo: switch to debug!
+}
+
+#[tauri::command]
 fn get_tools_mirror_list() -> &'static [&'static str] {
     idf_im_lib::get_idf_tools_mirrors_list()
+}
+#[tauri::command]
+fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
+    println!("set_tools_mirror called: {}", mirror); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).mirror = Some(mirror.to_string());
+    println!("Setting after tools_mirror: {:?}", settings); //todo: switch to debug!
 }
 
 #[tauri::command]
@@ -306,7 +342,9 @@ pub fn run() {
             get_idf_versions,
             set_versions,
             get_idf_mirror_list,
+            set_idf_mirror,
             get_tools_mirror_list,
+            set_tools_mirror,
             load_settings
         ])
         .run(tauri::generate_context!())
