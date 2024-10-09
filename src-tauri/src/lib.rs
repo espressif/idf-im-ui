@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use serde_json::json;
 use std::fs::File;
 use std::io::Read;
-use serde_json::json;
+use std::sync::Mutex;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -24,9 +24,10 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn get_settings() -> idf_im_lib::settings::Settings {
-    println!("Get settings called"); // todo remove debug statement
-    idf_im_lib::settings::Settings::new(None, None).unwrap()
+fn get_settings(app_handle: tauri::AppHandle) -> idf_im_lib::settings::Settings {
+    let app_state = app_handle.state::<AppState>();
+    let settings = app_state.settings.lock().expect("Failed to lock settings");
+    (*settings).clone()
 }
 
 #[tauri::command]
@@ -52,7 +53,11 @@ fn install_prerequisites(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
         Ok(_) => true,
         Err(err) => {
-          send_message(app_handle.clone(), format!("Error installing prerequisites: {}", err), "error".to_string());
+            send_message(
+                app_handle.clone(),
+                format!("Error installing prerequisites: {}", err),
+                "error".to_string(),
+            );
             eprintln!("Error installing prerequisites: {}", err);
             false
         }
@@ -72,7 +77,11 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
             }
         }
         Err(err) => {
-          send_message(app_handle.clone(), format!("Error checking prerequisites: {}", err), "error".to_string());
+            send_message(
+                app_handle.clone(),
+                format!("Error checking prerequisites: {}", err),
+                "error".to_string(),
+            );
             eprintln!("Error checking prerequisites: {}", err); //TODO: emit message
             vec![]
         }
@@ -88,7 +97,11 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
             Ok(_) => {}
             Err(err) => {
                 all_ok = false;
-                send_message(app_handle.clone(), format!("Python sanity check failed: {}", err), "warning".to_string());
+                send_message(
+                    app_handle.clone(),
+                    format!("Python sanity check failed: {}", err),
+                    "warning".to_string(),
+                );
                 println!("{:?}", err)
             }
         }
@@ -101,7 +114,11 @@ fn python_install(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
         Ok(_) => true,
         Err(err) => {
-          send_message(app_handle.clone(), format!("Error installing python: {}", err), "error".to_string());
+            send_message(
+                app_handle.clone(),
+                format!("Error installing python: {}", err),
+                "error".to_string(),
+            );
             eprintln!("Error installing python: {}", err); //TODO: emit message
             false
         }
@@ -117,16 +134,75 @@ async fn get_available_targets() -> Vec<String> {
 }
 
 #[tauri::command]
-async fn get_idf_versions() -> Vec<String> {
-    let target = "all".to_string(); //todo: get from state or user
-    let mut available_versions = if target == "all" {
-        //todo process vector of targets
+fn set_targets(app_handle: AppHandle, targets: Vec<String>) {
+    println!("set_targets called: {:?}", targets); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).target = Some(targets);
+    println!("Setting after targets: {:?}", settings); //todo: switch to debug!
+}
+
+#[tauri::command]
+async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    app_handle.clone(),
+                    "Failed to obtain lock on settings".to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let targets = settings
+        .target
+        .clone()
+        .unwrap_or_else(|| vec!["all".to_string()]);
+    let targets_vec: Vec<String> = targets.iter().cloned().collect();
+    let mut available_versions = if targets_vec.contains(&"all".to_string()) {
         idf_im_lib::idf_versions::get_idf_names().await
     } else {
-        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
+        // todo: handle multiple targets
+        idf_im_lib::idf_versions::get_idf_name_by_target(&targets[0].to_string().to_lowercase())
+            .await
     };
     available_versions.push("master".to_string());
     available_versions
+}
+
+#[tauri::command]
+fn set_versions(app_handle: AppHandle, versions: Vec<String>) {
+    println!("set_versions called: {:?}", versions); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).idf_versions = Some(versions);
+    println!("Setting after versions: {:?}", settings); //todo: switch to debug!
 }
 
 #[tauri::command]
@@ -135,27 +211,108 @@ fn get_idf_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
-fn get_tools_mirror_list() -> &'static [&'static str] {
-    idf_im_lib::get_idf_tools_mirrors_list()
+fn set_idf_mirror(app_handle: AppHandle, mirror: &str) {
+    println!("set_idf_mirror called: {}", mirror); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).idf_mirror = Some(mirror.to_string());
+    println!("Setting after idf_mirror: {:?}", settings); //todo: switch to debug!
 }
 
 #[tauri::command]
-fn load_settings(app_handle: AppHandle, path: &str) -> idf_im_lib::settings::Settings {
-  let mut file = File::open(path).map_err(|_| send_message(app_handle.clone(), format!("Failed to open file: {}", path), "warning".to_string())).expect("Failed to open file");
-  let mut contents = String::new();
-  file.read_to_string(&mut contents).map_err(|_| send_message(app_handle.clone(), format!("Failed to read file: {}", path), "warning".to_string())).expect("Failed to read file");
-  let settings: idf_im_lib::settings::Settings = toml::from_str(&contents).map_err(|_| send_message(app_handle.clone(), format!("Failed to parse TOML: {}", path), "warning".to_string())).expect("Failed to parse TOML");
-  println!("settings {:?}", settings); // TODO: remove debug print statement
-  // TODO: load setting to the app state
-  send_message(app_handle.clone(), format!("Settings loaded from {}", path), "info".to_string());
-  settings
+fn get_tools_mirror_list() -> &'static [&'static str] {
+    idf_im_lib::get_idf_tools_mirrors_list()
+}
+#[tauri::command]
+fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
+    println!("set_tools_mirror called: {}", mirror); //todo: switch to debug!
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).mirror = Some(mirror.to_string());
+    println!("Setting after tools_mirror: {:?}", settings); //todo: switch to debug!
+}
+
+#[tauri::command]
+fn load_settings(app_handle: AppHandle, path: &str) {
+    let mut file = File::open(path)
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                format!("Failed to open file: {}", path),
+                "warning".to_string(),
+            )
+        })
+        .expect("Failed to open file");
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                format!("Failed to read file: {}", path),
+                "warning".to_string(),
+            )
+        })
+        .expect("Failed to read file");
+    let settings: idf_im_lib::settings::Settings = toml::from_str(&contents)
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                format!("Failed to parse TOML: {}", path),
+                "warning".to_string(),
+            )
+        })
+        .expect("Failed to parse TOML");
+    println!("settings {:?}", settings); // TODO: remove debug print statement
+                                         // TODO: load setting to the app state
+    let app_state = app_handle.state::<AppState>();
+    let mut state_settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    *state_settings = settings;
+
+    send_message(
+        app_handle.clone(),
+        format!("Settings loaded from {}", path),
+        "info".to_string(),
+    );
 }
 
 fn send_message(app_handle: AppHandle, message: String, message_type: String) {
-  app_handle.emit("user-message", json!({
-    "type": message_type,
-    "message": message
-  }));
+    let _ = app_handle.emit(
+        "user-message",
+        json!({
+          "type": message_type,
+          "message": message
+        }),
+    );
 }
 
 use tauri::Manager;
@@ -181,9 +338,13 @@ pub fn run() {
             python_sanity_check,
             python_install,
             get_available_targets,
+            set_targets,
             get_idf_versions,
+            set_versions,
             get_idf_mirror_list,
+            set_idf_mirror,
             get_tools_mirror_list,
+            set_tools_mirror,
             load_settings
         ])
         .run(tauri::generate_context!())

@@ -69,9 +69,9 @@ export default {
         this.targets[0].selected = false;
       }
     },
-    processTargets: function () {
-      const selected_targets = this.targets.filter(target => target.selected);
-      // selected_targets TODO: send to backend
+    processTargets: async function () {
+      const selected_targets = this.targets.filter(target => target.selected).map(target => target.name);
+      const _ = await invoke("set_targets", { targets: selected_targets });
       this.nextstep();
     }
   },

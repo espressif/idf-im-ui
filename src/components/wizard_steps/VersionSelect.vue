@@ -48,9 +48,10 @@ export default {
       this.loading = false;
       return false;
     },
-    processVersions: function () {
-      const selected_versions = this.versions.filter(version => version.selected);
+    processVersions: async function () {
+      const selected_versions = this.versions.filter(version => version.selected).map(version => version.name);
       // todo: send to backend
+      const _ = await invoke("set_versions", { versions: selected_versions });
       this.nextstep();
     }
   },

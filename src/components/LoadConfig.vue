@@ -1,13 +1,14 @@
 <template>
   <div class="welcome">
     <h1>Please select starting point!</h1>
-    <n-split direction="horizontal" style="height: 200px" :max="0.75" :min="0.25">
+    <n-split direction="horizontal" style="height: 450px" :max="0.75" :min="0.25">
       <template #1>
-        <div :style="{ height: '200px' }">
+        <div :style="{ height: '450px' }">
           ( TODO: put opemn config icon here )
           <n-button @click="load_config" type="primary" ghost>
             Load instalation config.
           </n-button>
+          <pre v-if="rust_settings !== {}">{{ JSON.stringify(rust_settings, null, 2) }}</pre>
         </div>
       </template>
       <template #2>
@@ -31,9 +32,16 @@ import { invoke } from "@tauri-apps/api/core";
 export default {
   name: 'LoadConfig',
   components: { NSplit, NButton },
+  data: () => ({
+    rust_settings: {}
+  }),
   methods: {
     startWizard() {
       this.$router.push('/wizard/1');
+    },
+    async gs() {
+      this.rust_settings = await invoke("get_settings", {});
+      return false;
     },
     async load_config() {
       console.log('Loading config...');
@@ -45,10 +53,12 @@ export default {
           { name: '*', extensions: ['toml'] },
         ],
       });
-      console.log(file);
-      const content = await invoke("load_settings", { path: file });
-      console.log(content);
+      const _ = await invoke("load_settings", { path: file });
+      this.gs();
     }
+  },
+  mounted() {
+    this.gs();
   }
 }
 </script>
