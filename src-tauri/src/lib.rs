@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::fs::File;
 use std::io::Read;
+use std::path::PathBuf;
 use std::sync::Mutex;
 
 #[derive(Default, Serialize, Deserialize)]
@@ -226,16 +227,17 @@ fn set_idf_mirror(app_handle: AppHandle, mirror: &str) {
         })
         .expect("Failed to lock settings");
     (*settings).idf_mirror = Some(mirror.to_string());
-    log::debug!("Setting after idf_mirror: {:?}", settings); //todo: switch to debug!
+    log::debug!("Setting after idf_mirror: {:?}", settings);
 }
 
 #[tauri::command]
 fn get_tools_mirror_list() -> &'static [&'static str] {
     idf_im_lib::get_idf_tools_mirrors_list()
 }
+
 #[tauri::command]
 fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
-    log::info!("set_tools_mirror called: {}", mirror); //todo: switch to debug!
+    log::info!("set_tools_mirror called: {}", mirror);
     let app_state = app_handle.state::<AppState>();
     let mut settings = app_state
         .settings
@@ -249,7 +251,26 @@ fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
         })
         .expect("Failed to lock settings");
     (*settings).mirror = Some(mirror.to_string());
-    log::debug!("Setting after tools_mirror: {:?}", settings); //todo: switch to debug!
+    log::debug!("Setting after tools_mirror: {:?}", settings);
+}
+
+#[tauri::command]
+fn set_installation_path(app_handle: AppHandle, path: &str) {
+    log::info!("set_installation_path called: {}", path);
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    (*settings).path = Some(PathBuf::from(path));
+    log::debug!("Setting after path: {:?}", settings);
 }
 
 #[tauri::command]
@@ -357,7 +378,8 @@ pub fn run() {
             set_idf_mirror,
             get_tools_mirror_list,
             set_tools_mirror,
-            load_settings
+            load_settings,
+            set_installation_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
