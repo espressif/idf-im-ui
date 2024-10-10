@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 export const useWizardStore = defineStore("wizard", {
   state: () => ({
     currentStep: 1,
-    totalSteps: 6,
+    totalSteps: 8,
     wizardData: {},
   }),
   actions: {
