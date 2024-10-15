@@ -335,6 +335,22 @@ fn send_message(app_handle: AppHandle, message: String, message_type: String) {
     );
 }
 
+fn install_single_version(app_handle: AppHandle, version: String) {
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| {
+            send_message(
+                app_handle.clone(),
+                "Failed to obtain lock on settings".to_string(),
+                "error".to_string(),
+            )
+        })
+        .expect("Failed to lock settings");
+    let settings_copy = settings.clone();
+}
+
 use tauri::Manager;
 use tauri::{AppHandle, Emitter};
 
