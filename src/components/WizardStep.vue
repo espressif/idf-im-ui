@@ -7,6 +7,7 @@
     <VersionSelect :nextstep=nextStep v-if="currentStep === 4" />
     <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" />
     <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" />
+    <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" />
     <div>
       <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
       <n-button @click="nextStep" :disabled="currentStep === totalSteps" type="primary">
@@ -27,9 +28,10 @@ import TargetSelect from './wizard_steps/TargetSelect.vue';
 import VersionSelect from './wizard_steps/VersionSelect.vue';
 import MirrorSelect from './wizard_steps/MirrorSelect.vue';
 import InstallationPathSelect from './wizard_steps/InstallationPathSelect.vue';
+import InstalationProgress from './wizard_steps/InstalationProgress.vue';
 
 export default {
-  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck, TargetSelect, VersionSelect, MirrorSelect, InstallationPathSelect },
+  components: { NButton, NCheckbox, Greet, PrerequisitiesCheck, PythonSanitycheck, TargetSelect, VersionSelect, MirrorSelect, InstallationPathSelect, InstalationProgress },
   setup() {
     const store = useWizardStore()
 
@@ -53,7 +55,7 @@ export default {
         title: "Select Installation Path",
       },
       {
-        title: "Install single version",
+        title: "Installation progress",
       },
       {
         title: "Post install steps", // creating desktop shorcut
