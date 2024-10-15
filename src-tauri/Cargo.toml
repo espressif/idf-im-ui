@@ -19,11 +19,12 @@ tauri = { version = "2.0.1", features = [] }
 tauri-plugin-shell = "2.0.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-idf-im-lib = { git = "https://github.com/espressif/idf-im-lib.git", branch="master" }
+idf-im-lib = { git = "https://github.com/espressif/idf-im-lib.git", tag="v0.1.3" } 
 tauri-plugin-dialog = "2.0.1"
 toml = "0.8"
 tauri-plugin-log = "2"
 log = "0.4"
+tokio = "1.41.0"
 
 [dependencies.openssl-sys]
 version = "0.9"

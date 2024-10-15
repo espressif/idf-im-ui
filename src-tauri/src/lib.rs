@@ -1,20 +1,132 @@
+use idf_im_lib::{
+    self, add_path_to_path, download_file, ensure_path, expand_tilde,
+    idf_tools::{get_tools_export_paths, Download},
+    idf_versions,
+    python_utils::run_idf_tools_py,
+    settings::Settings,
+    system_dependencies, verify_file_checksum, DownloadProgress, ProgressMessage,
+};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::fs::File;
-use std::io::Read;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use serde_json::{json, Value};
+use std::{
+    fs::{self, File},
+    io::Read,
+    path::{Path, PathBuf},
+    sync::{mpsc, Arc, Mutex},
+    thread,
+};
+use tauri::{AppHandle, Manager};
 
+// Types and structs
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
     wizard_data: Mutex<WizardData>,
-    settings: Mutex<idf_im_lib::settings::Settings>,
+    settings: Mutex<Settings>,
 }
 
 #[derive(Default, Serialize, Deserialize)]
 struct WizardData {
     // Add fields relevant to your installation process
     step_completed: Vec<bool>,
+}
+
+// Event handling
+fn send_message(app_handle: &AppHandle, message: String, message_type: String) {
+    let _ = emit_to_fe(
+        app_handle,
+        "user-message",
+        json!({ "type": message_type, "message": message }),
+    );
+}
+
+fn send_tools_message(app_handle: &AppHandle, tool: String, action: String) {
+    let _ = emit_to_fe(
+        app_handle,
+        "tools-message",
+        json!({ "tool": tool, "action": action }),
+    );
+}
+
+fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
+    debug!("emit_to_fe: {} {:?}", event_name, json_data);
+    let _ = app_handle.emit(event_name, json_data);
+}
+
+#[derive(Clone)]
+struct ProgressBar {
+    app_handle: AppHandle,
+}
+
+impl<'a> ProgressBar {
+    fn new(app_handle: AppHandle, message: &str) -> Self {
+        let progress = Self { app_handle };
+        progress.create(message);
+        progress
+    }
+
+    fn create(&self, message: &str) {
+        emit_to_fe(
+            &self.app_handle,
+            "progress-message",
+            json!({
+                "message": message,
+                "status": "info",
+                "percentage": 0,
+                "display": true,
+            }),
+        );
+    }
+
+    fn update(&self, percentage: u64, message: Option<&str>) {
+        emit_to_fe(
+            &self.app_handle,
+            "progress-message",
+            json!({
+                "percentage": percentage,
+                "message": message.unwrap_or_default(),
+                "status": "info",
+                "display": true,
+            }),
+        );
+    }
+
+    fn finish(&self) {
+        info!("finish_progress_bar called");
+        emit_to_fe(
+            &self.app_handle,
+            "progress-message",
+            json!({
+                "message": "",
+                "percentage": 100,
+                "display": false,
+            }),
+        );
+    }
+}
+
+// Settings management
+fn get_locked_settings(app_handle: &AppHandle) -> Result<Settings, String> {
+    let app_state = app_handle.state::<AppState>();
+    app_state
+        .settings
+        .lock()
+        .map(|guard| (*guard).clone())
+        .map_err(|_| "Failed to obtain lock on settings".to_string())
+}
+
+fn update_settings<F>(app_handle: &AppHandle, updater: F) -> Result<(), String>
+where
+    F: FnOnce(&mut Settings),
+{
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state
+        .settings
+        .lock()
+        .map_err(|_| "Failed to obtain lock on settings".to_string())?;
+    updater(&mut settings);
+    debug!("Settings after update: {:?}", settings);
+    Ok(())
 }
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -25,10 +137,8 @@ fn greet(name: &str) -> String {
 }
 
 #[tauri::command]
-fn get_settings(app_handle: tauri::AppHandle) -> idf_im_lib::settings::Settings {
-    let app_state = app_handle.state::<AppState>();
-    let settings = app_state.settings.lock().expect("Failed to lock settings");
-    (*settings).clone()
+fn get_settings(app_handle: tauri::AppHandle) -> Settings {
+    get_locked_settings(&app_handle).unwrap_or_default()
 }
 
 #[tauri::command]
@@ -42,7 +152,7 @@ fn get_operating_system() -> String {
     log::info!("Get operating system called"); // todo remove debug statement
     std::env::consts::OS.to_string()
 }
-
+// ----
 #[tauri::command]
 fn install_prerequisites(app_handle: AppHandle) -> bool {
     log::info!("Install prerequisites called"); // todo remove debug statement
@@ -55,7 +165,7 @@ fn install_prerequisites(app_handle: AppHandle) -> bool {
         Ok(_) => true,
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error installing prerequisites: {}", err),
                 "error".to_string(),
             );
@@ -79,7 +189,7 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
         }
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error checking prerequisites: {}", err),
                 "error".to_string(),
             );
@@ -99,7 +209,7 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
             Err(err) => {
                 all_ok = false;
                 send_message(
-                    app_handle.clone(),
+                    &app_handle,
                     format!("Python sanity check failed: {}", err),
                     "warning".to_string(),
                 );
@@ -116,7 +226,7 @@ fn python_install(app_handle: AppHandle) -> bool {
         Ok(_) => true,
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error installing python: {}", err),
                 "error".to_string(),
             );
@@ -135,22 +245,17 @@ async fn get_available_targets() -> Vec<String> {
 }
 
 #[tauri::command]
-fn set_targets(app_handle: AppHandle, targets: Vec<String>) {
-    log::info!("set_targets called: {:?}", targets); //todo: switch to debug!
-    let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| {
-            send_message(
-                app_handle.clone(),
-                "Failed to obtain lock on settings".to_string(),
-                "error".to_string(),
-            )
-        })
-        .expect("Failed to lock settings");
-    (*settings).target = Some(targets);
-    log::debug!("Setting after targets: {:?}", settings); //todo: switch to debug!
+fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), String> {
+    info!("Setting targets: {:?}", targets);
+    update_settings(&app_handle, |settings| {
+        settings.target = Some(targets);
+    })?;
+    send_message(
+        &app_handle,
+        "Targets updated successfully".to_string(),
+        "info".to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -163,7 +268,7 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
             .lock()
             .map_err(|_| {
                 send_message(
-                    app_handle.clone(),
+                    &app_handle,
                     "Failed to obtain lock on settings".to_string(),
                     "error".to_string(),
                 )
@@ -188,22 +293,18 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
 }
 
 #[tauri::command]
-fn set_versions(app_handle: AppHandle, versions: Vec<String>) {
-    log::info!("set_versions called: {:?}", versions); //todo: switch to debug!
-    let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| {
-            send_message(
-                app_handle.clone(),
-                "Failed to obtain lock on settings".to_string(),
-                "error".to_string(),
-            )
-        })
-        .expect("Failed to lock settings");
-    (*settings).idf_versions = Some(versions);
-    log::debug!("Setting after versions: {:?}", settings); //todo: switch to debug!
+fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), String> {
+    info!("Setting IDF versions: {:?}", versions);
+    update_settings(&app_handle, |settings| {
+        settings.idf_versions = Some(versions);
+    })?;
+
+    send_message(
+        &app_handle,
+        "IDF versions updated successfully".to_string(),
+        "info".to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -212,22 +313,18 @@ fn get_idf_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
-fn set_idf_mirror(app_handle: AppHandle, mirror: &str) {
-    log::info!("set_idf_mirror called: {}", mirror); //todo: switch to debug!
-    let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| {
-            send_message(
-                app_handle.clone(),
-                "Failed to obtain lock on settings".to_string(),
-                "error".to_string(),
-            )
-        })
-        .expect("Failed to lock settings");
-    (*settings).idf_mirror = Some(mirror.to_string());
-    log::debug!("Setting after idf_mirror: {:?}", settings);
+fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
+    info!("Setting IDF mirror: {}", mirror);
+    update_settings(&app_handle, |settings| {
+        settings.idf_mirror = Some(mirror);
+    })?;
+
+    send_message(
+        &app_handle,
+        "IDF mirror updated successfully".to_string(),
+        "info".to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -236,41 +333,33 @@ fn get_tools_mirror_list() -> &'static [&'static str] {
 }
 
 #[tauri::command]
-fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
-    log::info!("set_tools_mirror called: {}", mirror);
-    let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| {
-            send_message(
-                app_handle.clone(),
-                "Failed to obtain lock on settings".to_string(),
-                "error".to_string(),
-            )
-        })
-        .expect("Failed to lock settings");
-    (*settings).mirror = Some(mirror.to_string());
-    log::debug!("Setting after tools_mirror: {:?}", settings);
+fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
+    info!("Setting tools mirror: {}", mirror);
+    update_settings(&app_handle, |settings| {
+        settings.mirror = Some(mirror);
+    })?;
+
+    send_message(
+        &app_handle,
+        "Tools mirror updated successfully".to_string(),
+        "info".to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
-fn set_installation_path(app_handle: AppHandle, path: &str) {
-    log::info!("set_installation_path called: {}", path);
-    let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| {
-            send_message(
-                app_handle.clone(),
-                "Failed to obtain lock on settings".to_string(),
-                "error".to_string(),
-            )
-        })
-        .expect("Failed to lock settings");
-    (*settings).path = Some(PathBuf::from(path));
-    log::debug!("Setting after path: {:?}", settings);
+fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), String> {
+    info!("Setting installation path: {}", path);
+    update_settings(&app_handle, |settings| {
+        settings.path = Some(PathBuf::from(path));
+    })?;
+
+    send_message(
+        &app_handle,
+        "Installation path updated successfully".to_string(),
+        "info".to_string(),
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -278,7 +367,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     let mut file = File::open(path)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to open file: {}", path),
                 "warning".to_string(),
             )
@@ -288,7 +377,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     file.read_to_string(&mut contents)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to read file: {}", path),
                 "warning".to_string(),
             )
@@ -297,7 +386,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     let settings: idf_im_lib::settings::Settings = toml::from_str(&contents)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to parse TOML: {}", path),
                 "warning".to_string(),
             )
@@ -310,7 +399,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -319,24 +408,471 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     *state_settings = settings;
 
     send_message(
-        app_handle.clone(),
+        &app_handle,
         format!("Settings loaded from {}", path),
         "info".to_string(),
     );
 }
 
-fn send_message(app_handle: AppHandle, message: String, message_type: String) {
-    let _ = app_handle.emit(
-        "user-message",
-        json!({
-          "type": message_type,
-          "message": message
-        }),
+fn prepare_installation_directories(
+    app_handle: AppHandle,
+    settings: &Settings,
+    version: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut version_path = expand_tilde(settings.path.as_ref().unwrap().as_path());
+    version_path.push(version);
+    // version_path.push("esp-idf");
+
+    ensure_path(version_path.to_str().unwrap())?;
+    send_message(
+        &app_handle,
+        format!(
+            "IDF installation folder created at: {}",
+            version_path.display()
+        ),
+        "info".to_string(),
     );
+
+    Ok(version_path)
 }
 
-use tauri::Manager;
-use tauri::{AppHandle, Emitter};
+fn spawn_progress_monitor(
+    app_handle: AppHandle,
+    version: String,
+    rx: mpsc::Receiver<ProgressMessage>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
+
+        while let Ok(message) = rx.recv() {
+            match message {
+                ProgressMessage::Finish => {
+                    progress.update(100, None);
+                    progress.finish();
+                    break;
+                }
+                ProgressMessage::Update(value) => {
+                    progress.update(value, Some(&format!("Downloading IDF {}...", version)));
+                }
+            }
+        }
+    })
+}
+
+async fn download_idf(
+    app_handle: &AppHandle,
+    settings: &Settings,
+    version: &str,
+    idf_path: &PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (tx, rx) = mpsc::channel();
+    let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
+
+    let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
+
+    match idf_im_lib::get_esp_idf_by_version_and_mirror(
+        idf_path.to_str().unwrap(),
+        version,
+        settings.idf_mirror.as_deref(),
+        tx,
+        settings.recurse_submodules.unwrap_or(false),
+    ) {
+        Ok(_) => {
+            send_message(
+                app_handle,
+                format!(
+                    "IDF {} installed successfully at: {}",
+                    version,
+                    idf_path.display()
+                ),
+                "info".to_string(),
+            );
+            progress.finish();
+        }
+        Err(e) => {
+            send_message(
+                app_handle,
+                format!("Failed to install IDF {}. Reason: {}", version, e),
+                "error".to_string(),
+            );
+            return Err(e.into());
+        }
+    }
+
+    handle.join().unwrap();
+    Ok(())
+}
+
+// Tool installation types
+#[derive(Debug)]
+struct ToolSetup {
+    download_dir: String,
+    install_dir: String,
+    tools_json_path: String,
+}
+
+impl ToolSetup {
+    fn new(settings: &Settings, version_path: &PathBuf) -> Result<Self, String> {
+        let p = version_path;
+        let tools_json_path = p.join(settings.tools_json_file.clone().unwrap_or_default());
+        let download_dir = p.join(
+            settings
+                .tool_download_folder_name
+                .clone()
+                .unwrap_or_default(),
+        );
+        let install_dir = p.join(
+            settings
+                .tool_install_folder_name
+                .clone()
+                .unwrap_or_default(),
+        );
+        Ok(Self {
+            download_dir: download_dir.to_str().unwrap().to_string(),
+            install_dir: install_dir.to_str().unwrap().to_string(),
+            tools_json_path: tools_json_path.to_str().unwrap().to_string(),
+        })
+    }
+
+    fn create_directories(&self, app_handle: &AppHandle) -> Result<(), String> {
+        // Create download directory
+        ensure_path(&self.download_dir).map_err(|e| {
+            send_message(
+                app_handle,
+                format!("Failed to create download directory: {}", e),
+                "error".to_string(),
+            );
+            e.to_string()
+        })?;
+
+        // Create installation directory
+        ensure_path(&self.install_dir).map_err(|e| {
+            send_message(
+                app_handle,
+                format!("Failed to create installation directory: {}", e),
+                "error".to_string(),
+            );
+            e.to_string()
+        })?;
+
+        // Add installation directory to PATH
+        add_path_to_path(&self.install_dir);
+
+        Ok(())
+    }
+
+    fn validate_tools_json(&self) -> Result<(), String> {
+        if fs::metadata(&self.tools_json_path).is_err() {
+            return Err(format!(
+                "tools.json file not found at: {}",
+                self.tools_json_path
+            ));
+        }
+        Ok(())
+    }
+}
+
+struct ToolDownloader<'a> {
+    app_handle: &'a AppHandle,
+    download_dir: String,
+}
+
+impl<'a> ToolDownloader<'a> {
+    fn new(app_handle: &'a AppHandle, download_dir: String) -> Self {
+        Self {
+            app_handle,
+            download_dir,
+        }
+    }
+
+    fn verify_existing_tool(&self, path: &str, expected_sha256: &str) -> Result<bool, String> {
+        match verify_file_checksum(expected_sha256, path) {
+            Ok(true) => {
+                info!("Checksum verified for existing file: {}", path);
+                Ok(true)
+            }
+            Ok(false) => Ok(false),
+            Err(e) => Err(e.to_string()),
+        }
+    }
+}
+
+async fn setup_tools(
+    app_handle: &AppHandle,
+    settings: &Settings,
+    idf_path: &PathBuf,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    info!("Setting up tools...");
+
+    // Initialize tool setup
+    let tool_setup = ToolSetup::new(settings, idf_path)?;
+
+    // Create necessary directories
+    tool_setup.create_directories(app_handle)?;
+
+    // Validate tools.json exists
+    tool_setup.validate_tools_json()?;
+
+    // Parse tools.json and get list of tools to download
+    let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
+        .map_err(|e| {
+            send_message(
+                app_handle,
+                format!("Failed to parse tools.json: {}", e),
+                "error".to_string(),
+            );
+            e
+        })?;
+
+    let tools_to_download = idf_im_lib::idf_tools::get_list_of_tools_to_download(
+        tools.clone(),
+        settings
+            .target
+            .clone()
+            .unwrap_or_else(|| vec!["all".to_string()]),
+        settings.mirror.as_deref(),
+    );
+
+    // TODO: send tools message showing and finishing progress alltogether -> like visual chekbox
+
+    // download tools
+    for (tool_name, download) in tools_to_download {
+        let (progress_tx, progress_rx) = mpsc::channel();
+
+        let progress =
+            ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", tool_name));
+
+        let filename = Path::new(&download.url)
+            .file_name()
+            .and_then(|f| f.to_str())
+            .ok_or_else(|| "Invalid download URL".to_string())?;
+
+        let full_path = Path::new(&tool_setup.download_dir).join(filename);
+        let full_path_str = full_path.to_str().unwrap();
+
+        send_tools_message(app_handle, filename.to_string(), "start".to_string());
+
+        match verify_file_checksum(&download.sha256, full_path_str) {
+            Ok(true) => {
+                info!("Checksum verified for existing file: {}", full_path_str);
+                send_tools_message(app_handle, filename.to_string(), "match".to_string());
+            }
+            _ => {
+                error!(
+                    "Checksum verification failed or file does not exists: {}",
+                    full_path_str
+                );
+            }
+        }
+
+        let progress_handle = {
+            let tool_name = tool_name.clone();
+            let app_handle = app_handle.clone();
+            thread::spawn(move || {
+                while let Ok(progress_msg) = progress_rx.recv() {
+                    match progress_msg {
+                        DownloadProgress::Progress(current, total) => {
+                            let percentage = (current * 100 / total) as u64;
+                            progress.update(
+                                percentage,
+                                Some(&format!("Downloading {}... {}%", tool_name, percentage)),
+                            );
+                        }
+                        DownloadProgress::Complete => {
+                            progress.finish();
+                            break;
+                        }
+                        DownloadProgress::Error(err) => {
+                            send_message(
+                                &app_handle,
+                                format!("Error downloading {}: {}", tool_name, err),
+                                "error".to_string(),
+                            );
+                            break;
+                        }
+                    }
+                }
+            })
+        };
+        info!("Downloading {} to: {}", tool_name, full_path_str);
+        let download_result =
+            download_file(&download.url, &tool_setup.download_dir, progress_tx).await;
+
+        match download_result {
+            Ok(_) => {
+                send_tools_message(app_handle, filename.to_string(), "downloaded".to_string());
+
+                send_message(
+                    app_handle,
+                    format!("Tool {} downloaded successfully", tool_name),
+                    "info".to_string(),
+                );
+            }
+            Err(e) => {
+                send_tools_message(app_handle, filename.to_string(), "error".to_string());
+
+                send_message(
+                    app_handle,
+                    format!("Failed to download {}: {}", tool_name, e),
+                    "error".to_string(),
+                );
+                return Err(e.into());
+            }
+        }
+
+        // extract tool:
+        let out = idf_im_lib::decompress_archive(full_path_str, &tool_setup.install_dir);
+        match out {
+            Ok(_) => {
+                send_tools_message(app_handle, filename.to_string(), "extracted".to_string());
+
+                send_message(
+                    app_handle,
+                    format!("Tool {} extracted successfully", tool_name),
+                    "info".to_string(),
+                );
+            }
+            Err(e) => {
+                send_tools_message(app_handle, filename.to_string(), "error".to_string());
+
+                send_message(
+                    app_handle,
+                    format!("Failed to extract tool {}: {}", tool_name, e),
+                    "error".to_string(),
+                );
+                return Err(e.into());
+            }
+        }
+
+        progress_handle.join().unwrap();
+    }
+
+    let env_vrs = match idf_im_lib::setup_environment_variables(
+        &PathBuf::from(&tool_setup.install_dir),
+        idf_path,
+    ) {
+        Ok(vrs) => vrs,
+        Err(e) => {
+            send_message(
+                app_handle,
+                format!("Failed to setup environment variables: {}", e),
+                "error".to_string(),
+            );
+            return Err(e.into());
+        }
+    };
+
+    // get_and_validate_idf_tools_path
+
+    let mut idf_tools_path = idf_path.clone();
+    idf_tools_path.push(settings.idf_tools_path.clone().unwrap_or_default());
+    if fs::metadata(&idf_tools_path).is_err() {
+        // TODO: let the user navigate to find the file manually
+        error!("IDF tools path does not exist");
+        return Err("IDF tools path does not exist".into());
+    }
+
+    // run_idf_tools_py TODO: replace the python call
+
+    match run_idf_tools_py(idf_tools_path.to_str().unwrap(), &env_vrs) {
+        Ok(_) => {
+            send_message(
+                app_handle,
+                "IDF tools setup completed successfully".to_string(),
+                "info".to_string(),
+            );
+        }
+        Err(e) => {
+            send_message(
+                app_handle,
+                format!("Failed to run IDF tools setup: {}", e),
+                "error".to_string(),
+            );
+            return Err(e.into());
+        }
+    }
+
+    let export_paths: Vec<String> = get_tools_export_paths(
+        tools,
+        settings.target.clone().unwrap(),
+        PathBuf::from(tool_setup.install_dir)
+            .join("tools")
+            .to_str()
+            .unwrap(),
+    )
+    .into_iter()
+    .map(|p| {
+        if std::env::consts::OS == "windows" {
+            idf_im_lib::replace_unescaped_spaces_win(&p)
+        } else {
+            p
+        }
+    })
+    .collect();
+
+    send_message(
+        app_handle,
+        "Tools setup completed successfully".to_string(),
+        "info".to_string(),
+    );
+
+    Ok(export_paths)
+}
+
+async fn install_single_version(
+    app_handle: AppHandle,
+    settings: &Settings,
+    version: String,
+) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Installing IDF version: {}", version);
+
+    let version_path = prepare_installation_directories(app_handle.clone(), settings, &version)?;
+    let idf_path = version_path.clone().join("esp-idf");
+    download_idf(&app_handle, settings, &version, &idf_path).await?;
+    let export_vars = setup_tools(&app_handle, settings, &idf_path).await?;
+    let tools_install_path = version_path.clone().join(
+        settings
+            .tool_install_folder_name
+            .clone()
+            .unwrap_or_default(),
+    );
+    idf_im_lib::single_version_post_install(
+        &version_path.to_str().unwrap(),
+        idf_path.to_str().unwrap(),
+        &version,
+        tools_install_path.to_str().unwrap(),
+        export_vars,
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    info!("Starting installation");
+    let settings = get_locked_settings(&app_handle)?;
+
+    if let Some(versions) = &settings.idf_versions {
+        for version in versions {
+            if let Err(e) =
+                install_single_version(app_handle.clone(), &settings, version.clone()).await
+            {
+                error!("Failed to install version {}: {}", version, e);
+                return Err(format!("Installation failed: {}", e));
+            }
+        }
+    } else {
+        send_message(
+            &app_handle,
+            "No IDF versions were selected".to_string(),
+            "warning".to_string(),
+        );
+    }
+
+    Ok(())
+}
+
+use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -347,6 +883,7 @@ pub fn run() {
                     tauri_plugin_log::TargetKind::Stdout,
                 ))
                 .target(tauri_plugin_log::Target::new(
+                    // this actually can not keep pace with the console, so maybe we should disable it for production build
                     tauri_plugin_log::TargetKind::Webview,
                 ))
                 .level(log::LevelFilter::Error)
@@ -379,7 +916,8 @@ pub fn run() {
             get_tools_mirror_list,
             set_tools_mirror,
             load_settings,
-            set_installation_path
+            set_installation_path,
+            start_installation
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,6 +5,7 @@
       <n-spin :show="loading_idfs">
         <template #default>
           <n-radio-group v-model:value="selected_idf_mirror" name="radiogroup">
+            <span>Select the mirror from which the IDF repository will be downloaded:</span>
             <ul>
               <n-space>
                 <li v-for="mirror in idf_mirrors" :key="mirror.value">
@@ -23,6 +24,7 @@
       <n-spin :show="loading_tools">
         <template #default>
           <n-radio-group v-model:value="selected_tools_mirror" name="radiogroup">
+            <span>Select the mirror from which the tools will be downloaded:</span>
             <ul>
               <n-space>
                 <li v-for="mirror in tools_mirrors" :key="mirror.value">
