@@ -6,6 +6,7 @@
         <router-view></router-view>
       </n-layout-content>
       <message-display />
+      <global-progress />
     </n-layout>
   </n-config-provider>
 </template>
@@ -15,6 +16,7 @@ import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } f
 import { darkTheme } from 'naive-ui'
 import { computed, onMounted } from 'vue'
 import MessageDisplay from './components/MessageDisplay.vue'
+import GlobalProgress from './components/GlobalProgress.vue'
 import { attachConsole } from '@tauri-apps/plugin-log'
 const osTheme = useOsTheme()
 const theme = null // computed(() => (osTheme.value === 'dark' ? darkTheme : null))
