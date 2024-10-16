@@ -23,6 +23,7 @@ export default {
   }),
   methods: {
     startListening() {
+      console.log('Listening for progress messages...');
       listen('progress-message', (event) => {
         console.log('Received progress message:', event);
         this.message = event.payload.message || "";
@@ -34,7 +35,7 @@ export default {
     }
   },
   mounted() {
-    this.get_avalible_targets();
+    this.startListening();
   }
 }
 

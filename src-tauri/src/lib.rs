@@ -1,9 +1,13 @@
+use log::debug;
+use log::error;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
+use serde_json::{json, Value};
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
+use std::sync::mpsc;
 use std::sync::Mutex;
+use std::thread;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
@@ -55,7 +59,7 @@ fn install_prerequisites(app_handle: AppHandle) -> bool {
         Ok(_) => true,
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error installing prerequisites: {}", err),
                 "error".to_string(),
             );
@@ -79,7 +83,7 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
         }
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error checking prerequisites: {}", err),
                 "error".to_string(),
             );
@@ -99,7 +103,7 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
             Err(err) => {
                 all_ok = false;
                 send_message(
-                    app_handle.clone(),
+                    &app_handle,
                     format!("Python sanity check failed: {}", err),
                     "warning".to_string(),
                 );
@@ -116,7 +120,7 @@ fn python_install(app_handle: AppHandle) -> bool {
         Ok(_) => true,
         Err(err) => {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Error installing python: {}", err),
                 "error".to_string(),
             );
@@ -143,7 +147,7 @@ fn set_targets(app_handle: AppHandle, targets: Vec<String>) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -163,7 +167,7 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
             .lock()
             .map_err(|_| {
                 send_message(
-                    app_handle.clone(),
+                    &app_handle,
                     "Failed to obtain lock on settings".to_string(),
                     "error".to_string(),
                 )
@@ -196,7 +200,7 @@ fn set_versions(app_handle: AppHandle, versions: Vec<String>) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -220,7 +224,7 @@ fn set_idf_mirror(app_handle: AppHandle, mirror: &str) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -244,7 +248,7 @@ fn set_tools_mirror(app_handle: AppHandle, mirror: &str) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -263,7 +267,7 @@ fn set_installation_path(app_handle: AppHandle, path: &str) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -278,7 +282,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     let mut file = File::open(path)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to open file: {}", path),
                 "warning".to_string(),
             )
@@ -288,7 +292,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     file.read_to_string(&mut contents)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to read file: {}", path),
                 "warning".to_string(),
             )
@@ -297,7 +301,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     let settings: idf_im_lib::settings::Settings = toml::from_str(&contents)
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 format!("Failed to parse TOML: {}", path),
                 "warning".to_string(),
             )
@@ -310,7 +314,7 @@ fn load_settings(app_handle: AppHandle, path: &str) {
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle,
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
@@ -319,36 +323,189 @@ fn load_settings(app_handle: AppHandle, path: &str) {
     *state_settings = settings;
 
     send_message(
-        app_handle.clone(),
+        &app_handle,
         format!("Settings loaded from {}", path),
         "info".to_string(),
     );
 }
 
-fn send_message(app_handle: AppHandle, message: String, message_type: String) {
-    let _ = app_handle.emit(
+fn send_message(app_handle: &AppHandle, message: String, message_type: String) {
+    let _ = emit_to_fe(
+        app_handle,
         "user-message",
+        json!({ "type": message_type, "message": message }),
+    );
+}
+
+fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
+    log::debug!("emit_to_fe: {} {:?}", event_name, json_data);
+    let _ = app_handle.emit(event_name, json_data);
+}
+
+fn create_progress_bar(app_handle: &AppHandle, message: &str) {
+    let _ = emit_to_fe(
+        app_handle,
+        "progress-message",
         json!({
-          "type": message_type,
-          "message": message
+          "message": message,
+          "status": "info",
+          "percentage": 0,
+          "display": true,
         }),
     );
 }
 
-fn install_single_version(app_handle: AppHandle, version: String) {
+fn update_progress_bar_number(app_handle: &AppHandle, percentage: u64) {
+    let _ = emit_to_fe(
+        app_handle,
+        "progress-message",
+        json!({
+          "percentage": percentage,
+          "display": true,
+        }),
+    );
+}
+
+fn finish_progress_bar(app_handle: &AppHandle) {
+    let _ = emit_to_fe(
+        app_handle,
+        "progress-message",
+        json!({
+          "display": false,
+        }),
+    );
+}
+
+fn install_single_version(
+    app_handle: AppHandle,
+    settings: &idf_im_lib::settings::Settings,
+    version: String,
+) {
+    log::info!("install_single_version called: {}", version);
+    let settings_copy = settings.clone();
+
+    let mut version_instalation_path = settings_copy.path.clone().unwrap();
+    version_instalation_path = idf_im_lib::expand_tilde(version_instalation_path.as_path());
+    version_instalation_path.push(&version);
+    let mut idf_path = version_instalation_path.clone();
+    idf_path.push("esp-idf");
+
+    // download IDF
+    match idf_im_lib::ensure_path(idf_path.to_str().unwrap()) {
+        Ok(_) => {
+            send_message(
+                &app_handle.clone(),
+                format!("IDF instalation folder created at: {}", idf_path.display()),
+                "info".to_string(),
+            );
+        }
+        Err(e) => {
+            send_message(
+                &app_handle.clone(),
+                format!("Failed to crerate folder at: {:?}. Reason: {}", idf_path, e),
+                "error".to_string(),
+            );
+        }
+    }
+    log::info!("instalation folder created at: {}", idf_path.display());
+
+    let (tx, rx) = mpsc::channel();
+
+    let ap_h_c = app_handle.clone();
+    let version_clone = version.clone();
+    // Spawn a thread to handle progress bar updates
+    let handle = thread::spawn(move || {
+        create_progress_bar(&ap_h_c, &format!("Installing IDF {}", version_clone));
+
+        loop {
+            match rx.recv() {
+                Ok(idf_im_lib::ProgressMessage::Finish) => {
+                    log::info!("Download finished");
+                    update_progress_bar_number(&ap_h_c, 100);
+                    finish_progress_bar(&ap_h_c);
+                }
+                Ok(idf_im_lib::ProgressMessage::Update(value)) => {
+                    log::info!("Download progress: {}", value);
+                    update_progress_bar_number(&ap_h_c, value);
+                }
+                Err(e) => {
+                    log::error!("Error while receiving progress message: {}", e);
+                    // break;
+                }
+            }
+        }
+    });
+    log::info!("download starting");
+    create_progress_bar(&app_handle.clone(), &format!("Downloading IDF {}", version));
+
+    thread::spawn(move || {
+        match idf_im_lib::get_esp_idf_by_version_and_mirror(
+            idf_path.to_str().unwrap(),
+            &version,
+            settings_copy.idf_mirror.as_deref().clone(),
+            tx,
+            settings_copy.recurse_submodules.clone().unwrap_or(false),
+        ) {
+            Ok(_) => {
+                log::info!(
+                    "IDF {} installed successfully at: {}",
+                    version,
+                    idf_path.display()
+                );
+                send_message(
+                    &app_handle.clone(),
+                    format!(
+                        "IDF {} installed successfully at: {}",
+                        version,
+                        idf_path.display()
+                    ),
+                    "info".to_string(),
+                );
+            }
+            Err(e) => {
+                log::error!("Failed to install IDF {}: {}", version, e);
+                send_message(
+                    &app_handle.clone(),
+                    format!("Failed to install IDF {}. Reason: {}", version, e),
+                    "error".to_string(),
+                );
+            }
+        }
+    });
+    log::info!("download finished");
+    handle.join().unwrap();
+}
+
+#[tauri::command]
+fn start_instalation(app_handle: AppHandle) {
+    log::info!("start_instalation called");
     let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
+    let settings = app_state
         .settings
         .lock()
         .map_err(|_| {
             send_message(
-                app_handle.clone(),
+                &app_handle.clone(),
                 "Failed to obtain lock on settings".to_string(),
                 "error".to_string(),
             )
         })
         .expect("Failed to lock settings");
     let settings_copy = settings.clone();
+    match &settings_copy.idf_versions {
+        Some(versions) => {
+            for version in versions {
+                install_single_version(app_handle.clone(), &settings_copy, version.clone());
+            }
+        }
+        None => {
+            send_message(
+                &app_handle.clone(),
+                "No IDF versions was selected".to_string(),
+                "warning".to_string(),
+            );
+        }
+    }
 }
 
 use tauri::Manager;
@@ -395,7 +552,8 @@ pub fn run() {
             get_tools_mirror_list,
             set_tools_mirror,
             load_settings,
-            set_installation_path
+            set_installation_path,
+            start_instalation
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

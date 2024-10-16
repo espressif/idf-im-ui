@@ -24,6 +24,7 @@ export default {
   }),
   methods: {
     startInstalation: async function () {
+      let _ = await invoke("start_instalation", {});
       return false;
     },
     get_settings: async function () {
