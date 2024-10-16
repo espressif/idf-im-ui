@@ -16,6 +16,7 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin },
+
   data: () => ({
     os: undefined,
     all_settings: undefined,
@@ -33,6 +34,11 @@ export default {
       this.os = await invoke("get_operating_system", {});;
       return false;
     },
+  },
+  computed: {
+    idf_versions() {
+      return this.all_settings.idf_versions;
+    }
   },
   mounted() {
     this.get_os();
