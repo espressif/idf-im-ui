@@ -1,5 +1,5 @@
 <template>
-  <p>Wizard will now check your Python instalation...</p>
+  <p>Wizard will now check your Python instalation on your system.</p>
   <n-space vertical>
     <n-spin :show="loading">
       <p v-if=python_sane>Your Python meets the requirements!</p>
@@ -8,10 +8,13 @@
         checking Python sanity...
       </template>
     </n-spin>
-    <div v-if="!python_sane && !loading && os == 'Windows'">
-      <p> The installer can attempt to install and setup Python for you.</p>
-      <n-button @click="install_prerequisites" type="warning">Install Prerequisites</n-button>
-    </div>
+    <n-spin :show="installing_python == true">
+      <div v-if="!python_sane && os == 'windows'">
+        <p> The installer can attempt to install and setup Python for you.</p>
+        <n-button @click="install_python" type="warning">Install Python</n-button>
+      </div>
+      <p v-if="installing_python">Installing Python...</p>
+    </n-spin>
     <n-button v-if="python_sane" @click="nextstep" type="primary">Next</n-button>
   </n-space>
 </template>
@@ -31,16 +34,26 @@ export default {
   data: () => ({
     os: undefined,
     loading: true,
-    python_sane: false
+    python_sane: false,
+    installing_python: false,
   }),
   methods: {
     check_python_sanity: async function () {
+      this.loading = true;
       this.python_sane = await invoke("python_sanity_check", {});;
       this.loading = false;
       return false;
     },
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});;
+      this.os = await invoke("get_operating_system", {});
+      this.os = this.os.toLowerCase();
+      return false;
+    },
+    install_python: async function () {
+      this.installing_python = true;
+      await invoke("python_install", {});
+      this.installing_python = false;
+      this.check_python_sanity();
       return false;
     },
   },
