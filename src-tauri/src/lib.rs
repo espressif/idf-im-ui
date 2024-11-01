@@ -48,6 +48,14 @@ fn send_tools_message(app_handle: &AppHandle, tool: String, action: String) {
     );
 }
 
+fn send_install_progress_message(app_handle: &AppHandle, version: String, state: String) {
+    let _ = emit_to_fe(
+        app_handle,
+        "install-progress-message",
+        json!({ "version": version, "state": state }),
+    );
+}
+
 fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
     debug!("emit_to_fe: {} {:?}", event_name, json_data);
     let _ = app_handle.emit(event_name, json_data);
@@ -854,11 +862,16 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
     if let Some(versions) = &settings.idf_versions {
         for version in versions {
+            send_install_progress_message(&app_handle, version.clone(), "started".to_string());
             if let Err(e) =
                 install_single_version(app_handle.clone(), &settings, version.clone()).await
             {
+                send_install_progress_message(&app_handle, version.clone(), "failed".to_string());
+
                 error!("Failed to install version {}: {}", version, e);
                 return Err(format!("Installation failed: {}", e));
+            } else {
+                send_install_progress_message(&app_handle, version.clone(), "finished".to_string());
             }
         }
     } else {
