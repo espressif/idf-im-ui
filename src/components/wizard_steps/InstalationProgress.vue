@@ -1,38 +1,50 @@
 <template>
   <p>Instalation:</p>
   <p v-if="all_settings">The following versions will be installed:<span>{{ idf_versions.join(", ") }}</span></p>
-  <n-button @click="startInstalation()">Start Installation</n-button>
+  <n-button @click="startInstalation()" :disabled="instalation_running">Start Installation</n-button>
   <hr>
-  <div v-if="tools">
-    <p>Tools:</p>
-    <table>
-      <tr>
-        <th>Name</th>
-        <th>Downloaded</th>
-        <th>Extracted</th>
-        <th>Finished</th>
-        <th>Error</th>
-      </tr>
-      <tr v-for="tool in tools">
-        <td>
-          {{ tool.name }}
-        </td>
-        <td>
-          {{ tool.downloaded ? 'yes' : 'no' }}
-        </td>
-        <td>
-          {{ tool.extracted ? 'yes' : 'no' }}
-        </td>
-        <td>
-          {{ tool.finished ? 'yes' : 'no' }}
-        </td>
-        <td>
-          {{ tool.error ? 'yes' : 'no' }}
-        </td>
-      </tr>
-    </table>
-  </div>
+  <p v-if="!!curently_installing_version">Now installing: <span>{{ curently_installing_version }}</span></p>
+  <p v-if="versions_finished.length > 0">Finished: <span>{{ versions_finished.join(", ") }}</span></p>
+  <p v-if="versions_failed.length > 0">Failed: <span>{{ versions_failed.join(", ") }}</span></p>
+
   <hr>
+  <n-tabs type="card" animated tab-style="min-width: 120px;" v-if="tools_tabs.length > 0">
+    <n-tab-pane v-for="tab in tools_tabs" :key="tab" :tab="tab" :name="tab">
+      <div v-if="tools[tab]">
+        <p>Tools:</p>
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Downloaded</th>
+              <th>Extracted</th>
+              <th>Finished</th>
+              <th>Error</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="tool in tools[tab]">
+              <td>
+                {{ tool.name }}
+              </td>
+              <td>
+                {{ tool.downloaded ? 'yes' : 'no' }}
+              </td>
+              <td>
+                {{ tool.extracted ? 'yes' : 'no' }}
+              </td>
+              <td>
+                {{ tool.finished ? 'yes' : 'no' }}
+              </td>
+              <td>
+                {{ tool.error ? 'yes' : 'no' }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </n-tab-pane>
+  </n-tabs>
 </template>
 
 <script>
@@ -54,18 +66,25 @@ export default {
     loading: true,
     tools: {},
     unlisten: undefined,
+    unlistenTools: undefined,
+    instalation_running: false,
+    curently_installing_version: undefined,
+    versions_finished: [],
+    versions_failed: [],
   }),
   methods: {
-    startInstalation: async () => {
-      const _ = invoke("start_installation", {});
+    startInstalation: async function () {
+      this.instalation_running = true;
+      const _ = await invoke("start_installation", {});
+      this.instalation_running = false;
       return false;
     },
     startListening: async function () {
       console.log('Listening for tools messages...');
-      this.unlisten = await listen('tools-message', (event) => {
+      this.unlistenTools = await listen('tools-message', (event) => {
         switch (event.payload.action) {
           case 'start':
-            this.tools[event.payload.tool] = {
+            this.tools[this.curently_installing_version][event.payload.tool] = {
               name: event.payload.tool,
               started: true,
               downloaded: false,
@@ -75,19 +94,19 @@ export default {
             };
             break;
           case 'match':
-            this.tools[event.payload.tool].finished = true;
+            this.tools[this.curently_installing_version][event.payload.tool].finished = true;
             break;
           case 'downloaded':
-            this.tools[event.payload.tool].downloaded = true;
+            this.tools[this.curently_installing_version][event.payload.tool].downloaded = true;
 
             break;
           case 'extracted':
-            this.tools[event.payload.tool].extracted = true;
-            this.tools[event.payload.tool].finished = true;
+            this.tools[this.curently_installing_version][event.payload.tool].extracted = true;
+            this.tools[this.curently_installing_version][event.payload.tool].finished = true;
 
             break;
           case 'error':
-            this.tools[event.payload.tool].error = true;
+            this.tools[this.curently_installing_version][event.payload.tool].error = true;
 
             break;
           default:
@@ -95,10 +114,28 @@ export default {
         }
 
       });
+      this.unlisten = await listen('install-progress-message', (event) => {
+        switch (event.payload.state) {
+          case 'started':
+            this.tools[event.payload.version] = {};
+            this.curently_installing_version = event.payload.version;
+            break;
+          case 'finished':
+            this.versions_finished.push(event.payload.version);
+            this.curently_installing_version = undefined;
+            break;
+          case 'failed':
+            this.versions_failed.push(event.payload.version);
+            this.curently_installing_version = undefined;
+            console.error('Error during installation:', event.payload.version);
+            break;
+          default:
+            console.warn('Unknown state:', event.payload.state);
+        }
+      });
     },
     get_settings: async function () {
       this.all_settings = await invoke("get_settings", {});;
-      return false;
     },
     get_os: async function () {
       this.os = await invoke("get_operating_system", {});;
@@ -108,6 +145,9 @@ export default {
   computed: {
     idf_versions() {
       return this.all_settings ? this.all_settings.idf_versions : [];
+    },
+    tools_tabs() {
+      return this.versions_finished.concat(this.versions_failed).concat(this.curently_installing_version);
     }
   },
   mounted() {
@@ -118,6 +158,9 @@ export default {
   beforeDestroy() {
     if (this.unlisten) {
       this.unlisten();
+    }
+    if (this.unlistenTools) {
+      this.unlistenTools();
     }
   }
 
