@@ -39,12 +39,13 @@ export default {
   methods: {
     get_avalible_versions: async function () {
       const versions = await invoke("get_idf_versions", {});
-      this.versions = versions.sort().reverse().map((version, index) => {
-        return {
-          name: version,
-          selected: index === 0,
-        }
-      });
+      this.versions = versions;
+      // .sort().reverse().map((version, index) => {
+      //   return {
+      //     name: version,
+      //     selected: index === 0,
+      //   }
+      // });
       this.loading = false;
       return false;
     },

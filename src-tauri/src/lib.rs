@@ -292,7 +292,7 @@ fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), String
 }
 
 #[tauri::command]
-async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
+async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
     let app_state = app_handle.state::<AppState>();
     // Clone the settings to avoid holding the MutexGuard across await points
     let settings = {
@@ -310,6 +310,8 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
         guard.clone()
     };
     let targets = settings.target.clone().unwrap_or_default();
+    let versions = settings.idf_versions.clone().unwrap_or_default();
+
     let targets_vec: Vec<String> = targets.iter().cloned().collect();
     let mut available_versions = if targets_vec.contains(&"all".to_string()) {
         idf_im_lib::idf_versions::get_idf_names().await
@@ -320,6 +322,14 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
     };
     available_versions.push("master".to_string());
     available_versions
+        .into_iter()
+        .map(|v| {
+            json!({
+              "name": v,
+              "selected": versions.contains(&v),
+            })
+        })
+        .collect()
 }
 
 #[tauri::command]
