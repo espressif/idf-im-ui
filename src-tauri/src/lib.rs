@@ -440,6 +440,28 @@ fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String>
 }
 
 #[tauri::command]
+fn get_installation_path(app_handle: AppHandle) -> String {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on settings".to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let path = settings.path.clone().unwrap_or_default();
+    path.to_str().unwrap().to_string()
+}
+
+#[tauri::command]
 fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), String> {
     info!("Setting installation path: {}", path);
     update_settings(&app_handle, |settings| {
@@ -1013,6 +1035,7 @@ pub fn run() {
             get_tools_mirror_list,
             set_tools_mirror,
             load_settings,
+            get_installation_path,
             set_installation_path,
             start_installation
         ])
