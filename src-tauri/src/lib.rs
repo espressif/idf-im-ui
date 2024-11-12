@@ -244,12 +244,37 @@ fn python_install(app_handle: AppHandle) -> bool {
     }
 }
 #[tauri::command]
-async fn get_available_targets() -> Vec<String> {
+async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on settings".to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let targets = settings.target.clone().unwrap_or_default();
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets()
         .await
         .unwrap();
     available_targets.insert(0, "all".to_string());
     available_targets
+        .into_iter()
+        .map(|t| {
+            json!({
+              "name": t,
+              "selected": targets.contains(&t),
+            })
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -284,10 +309,7 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
             .expect("Failed to lock settings");
         guard.clone()
     };
-    let targets = settings
-        .target
-        .clone()
-        .unwrap_or_else(|| vec!["all".to_string()]);
+    let targets = settings.target.clone().unwrap_or_default();
     let targets_vec: Vec<String> = targets.iter().cloned().collect();
     let mut available_versions = if targets_vec.contains(&"all".to_string()) {
         idf_im_lib::idf_versions::get_idf_names().await

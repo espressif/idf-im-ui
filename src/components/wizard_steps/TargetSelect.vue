@@ -46,13 +46,14 @@ export default {
     },
     get_avalible_targets: async function () {
       const targets = await invoke("get_available_targets", {});
-      this.targets = targets.sort().map((target) => {
-        return {
-          name: target,
-          // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
-          selected: target == 'all',
-        }
-      });
+      this.targets = targets;
+      // .sort().map((target) => {
+      //   return {
+      //     name: target,
+      //     // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
+      //     selected: target == 'all',
+      //   }
+      // });
       this.loading = false;
       return false;
     },
