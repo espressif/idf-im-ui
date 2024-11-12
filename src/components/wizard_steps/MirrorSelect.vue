@@ -70,25 +70,25 @@ export default {
   methods: {
     get_avalible_idf_mirrors: async function () {
       const idf_mirrors = await invoke("get_idf_mirror_list", {});
-      this.idf_mirrors = idf_mirrors.map((mirror, index) => {
+      this.idf_mirrors = idf_mirrors.mirrors.map((mirror, index) => {
         return {
           value: mirror,
           label: mirror,
         }
       });
-      this.selected_idf_mirror = this.idf_mirrors[0].value;
+      this.selected_idf_mirror = idf_mirrors.selected;
       this.loading_idfs = false;
       return false;
     },
     get_avalible_tools_mirrors: async function () {
       const tools_mirrors = await invoke("get_tools_mirror_list", {});
-      this.tools_mirrors = tools_mirrors.map((mirror, index) => {
+      this.tools_mirrors = tools_mirrors.mirrors.map((mirror, index) => {
         return {
           value: mirror,
           label: mirror,
         }
       });
-      this.selected_tools_mirror = this.tools_mirrors[0].value;
+      this.selected_tools_mirror = tools_mirrors.selected;
       this.loading_tools = false;
       return false;
     },

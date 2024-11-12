@@ -348,8 +348,34 @@ fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn get_idf_mirror_list() -> &'static [&'static str] {
-    idf_im_lib::get_idf_mirrors_list()
+fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on settings".to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let mirror = settings.idf_mirror.clone().unwrap_or_default();
+    let mut avalible_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
+    if !avalible_mirrors.contains(&mirror.as_str()) {
+        let mut new_mirrors = vec![mirror.as_str()];
+        new_mirrors.extend(avalible_mirrors);
+        avalible_mirrors = new_mirrors;
+    }
+    json!({
+      "mirrors":avalible_mirrors,
+      "selected": mirror,
+    })
 }
 
 #[tauri::command]
@@ -368,8 +394,34 @@ fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_tools_mirror_list() -> &'static [&'static str] {
-    idf_im_lib::get_idf_tools_mirrors_list()
+fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on settings".to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let mirror = settings.mirror.clone().unwrap_or_default();
+    let mut avalible_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
+    if !avalible_mirrors.contains(&mirror.as_str()) {
+        let mut new_mirrors = vec![mirror.as_str()];
+        new_mirrors.extend(avalible_mirrors);
+        avalible_mirrors = new_mirrors;
+    }
+    json!({
+      "mirrors":avalible_mirrors,
+      "selected": mirror,
+    })
 }
 
 #[tauri::command]
