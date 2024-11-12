@@ -589,7 +589,7 @@ async fn download_idf(
         version,
         settings.idf_mirror.as_deref(),
         tx,
-        settings.recurse_submodules.unwrap_or(false),
+        settings.recurse_submodules.unwrap_or_default(),
     ) {
         Ok(_) => {
             send_message(
@@ -740,10 +740,7 @@ async fn setup_tools(
 
     let tools_to_download = idf_im_lib::idf_tools::get_list_of_tools_to_download(
         tools.clone(),
-        settings
-            .target
-            .clone()
-            .unwrap_or_else(|| vec!["all".to_string()]),
+        settings.target.clone().unwrap_or_default(),
         settings.mirror.as_deref(),
     );
 
