@@ -80,7 +80,7 @@ export default {
       this.loading_idfs = false;
       return false;
     },
-    get_avalible_tools_mirrors: async function () {
+    get_available_tools_mirrors: async function () {
       const tools_mirrors = await invoke("get_tools_mirror_list", {});
       this.tools_mirrors = tools_mirrors.mirrors.map((mirror, index) => {
         return {
@@ -106,7 +106,7 @@ export default {
   },
   mounted() {
     this.get_avalible_idf_mirrors();
-    this.get_avalible_tools_mirrors();
+    this.get_available_tools_mirrors();
   }
 }
 </script>

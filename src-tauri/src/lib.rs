@@ -120,7 +120,9 @@ fn get_locked_settings(app_handle: &AppHandle) -> Result<Settings, String> {
         .settings
         .lock()
         .map(|guard| (*guard).clone())
-        .map_err(|_| "Failed to obtain lock on settings".to_string())
+        .map_err(|_| {
+            "Failed to obtain lock on AppState. Please retry the last action later.".to_string()
+        })
 }
 
 fn update_settings<F>(app_handle: &AppHandle, updater: F) -> Result<(), String>
@@ -128,10 +130,9 @@ where
     F: FnOnce(&mut Settings),
 {
     let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| "Failed to obtain lock on settings".to_string())?;
+    let mut settings = app_state.settings.lock().map_err(|_| {
+        "Failed to obtain lock on AppState. Please retry the last action later.".to_string()
+    })?;
     updater(&mut settings);
     debug!("Settings after update: {:?}", settings);
     Ok(())
@@ -254,7 +255,8 @@ async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
@@ -302,7 +304,8 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
@@ -358,7 +361,8 @@ fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
@@ -404,7 +408,8 @@ fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
@@ -450,7 +455,8 @@ fn get_installation_path(app_handle: AppHandle) -> String {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
@@ -514,7 +520,8 @@ fn load_settings(app_handle: AppHandle, path: &str) {
         .map_err(|_| {
             send_message(
                 &app_handle,
-                "Failed to obtain lock on settings".to_string(),
+                "Failed to obtain lock on AppState. Please retry the last action later."
+                    .to_string(),
                 "error".to_string(),
             )
         })

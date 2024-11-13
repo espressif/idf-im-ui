@@ -44,7 +44,7 @@ export default {
 
       return false;
     },
-    get_avalible_targets: async function () {
+    get_available_targets: async function () {
       const targets = await invoke("get_available_targets", {});
       this.targets = targets;
       this.loading = false;
@@ -70,7 +70,7 @@ export default {
     }
   },
   mounted() {
-    this.get_avalible_targets();
+    this.get_available_targets();
   }
 }
 </script>
