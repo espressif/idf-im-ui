@@ -44,15 +44,9 @@ export default {
 
       return false;
     },
-    get_avalible_targets: async function () {
+    get_available_targets: async function () {
       const targets = await invoke("get_available_targets", {});
-      this.targets = targets.sort().map((target) => {
-        return {
-          name: target,
-          // biome-ignore lint/suspicious/noDoubleEquals: <explanation>
-          selected: target == 'all',
-        }
-      });
+      this.targets = targets;
       this.loading = false;
       return false;
     },
@@ -76,7 +70,7 @@ export default {
     }
   },
   mounted() {
-    this.get_avalible_targets();
+    this.get_available_targets();
   }
 }
 </script>

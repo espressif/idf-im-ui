@@ -18,7 +18,7 @@ const MessageConsumer = defineComponent({
 
     listen('user-message', (event) => {
       console.log('Received message:', event)
-      message[event.payload.type](event.payload.message)
+      message[event.payload.type](event.payload.message, { duration: 10000 })
     })
 
     return () => null

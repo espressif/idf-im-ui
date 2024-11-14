@@ -37,14 +37,9 @@ export default {
     versions: [],
   }),
   methods: {
-    get_avalible_versions: async function () {
+    get_available_versions: async function () {
       const versions = await invoke("get_idf_versions", {});
-      this.versions = versions.sort().reverse().map((version, index) => {
-        return {
-          name: version,
-          selected: index === 0,
-        }
-      });
+      this.versions = versions;
       this.loading = false;
       return false;
     },
@@ -56,7 +51,7 @@ export default {
     }
   },
   mounted() {
-    this.get_avalible_versions();
+    this.get_available_versions();
   }
 }
 </script>

@@ -120,7 +120,9 @@ fn get_locked_settings(app_handle: &AppHandle) -> Result<Settings, String> {
         .settings
         .lock()
         .map(|guard| (*guard).clone())
-        .map_err(|_| "Failed to obtain lock on settings".to_string())
+        .map_err(|_| {
+            "Failed to obtain lock on AppState. Please retry the last action later.".to_string()
+        })
 }
 
 fn update_settings<F>(app_handle: &AppHandle, updater: F) -> Result<(), String>
@@ -128,10 +130,9 @@ where
     F: FnOnce(&mut Settings),
 {
     let app_state = app_handle.state::<AppState>();
-    let mut settings = app_state
-        .settings
-        .lock()
-        .map_err(|_| "Failed to obtain lock on settings".to_string())?;
+    let mut settings = app_state.settings.lock().map_err(|_| {
+        "Failed to obtain lock on AppState. Please retry the last action later.".to_string()
+    })?;
     updater(&mut settings);
     debug!("Settings after update: {:?}", settings);
     Ok(())
@@ -244,12 +245,38 @@ fn python_install(app_handle: AppHandle) -> bool {
     }
 }
 #[tauri::command]
-async fn get_available_targets() -> Vec<String> {
+async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let targets = settings.target.clone().unwrap_or_default();
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets()
         .await
         .unwrap();
     available_targets.insert(0, "all".to_string());
     available_targets
+        .into_iter()
+        .map(|t| {
+            json!({
+              "name": t,
+              "selected": targets.contains(&t),
+            })
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -267,7 +294,7 @@ fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), String
 }
 
 #[tauri::command]
-async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
+async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
     let app_state = app_handle.state::<AppState>();
     // Clone the settings to avoid holding the MutexGuard across await points
     let settings = {
@@ -277,17 +304,17 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
             .map_err(|_| {
                 send_message(
                     &app_handle,
-                    "Failed to obtain lock on settings".to_string(),
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
                     "error".to_string(),
                 )
             })
             .expect("Failed to lock settings");
         guard.clone()
     };
-    let targets = settings
-        .target
-        .clone()
-        .unwrap_or_else(|| vec!["all".to_string()]);
+    let targets = settings.target.clone().unwrap_or_default();
+    let versions = settings.idf_versions.clone().unwrap_or_default();
+
     let targets_vec: Vec<String> = targets.iter().cloned().collect();
     let mut available_versions = if targets_vec.contains(&"all".to_string()) {
         idf_im_lib::idf_versions::get_idf_names().await
@@ -298,6 +325,14 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<String> {
     };
     available_versions.push("master".to_string());
     available_versions
+        .into_iter()
+        .map(|v| {
+            json!({
+              "name": v,
+              "selected": versions.contains(&v),
+            })
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -316,8 +351,35 @@ fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), Stri
 }
 
 #[tauri::command]
-fn get_idf_mirror_list() -> &'static [&'static str] {
-    idf_im_lib::get_idf_mirrors_list()
+fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let mirror = settings.idf_mirror.clone().unwrap_or_default();
+    let mut avalible_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
+    if !avalible_mirrors.contains(&mirror.as_str()) {
+        let mut new_mirrors = vec![mirror.as_str()];
+        new_mirrors.extend(avalible_mirrors);
+        avalible_mirrors = new_mirrors;
+    }
+    json!({
+      "mirrors":avalible_mirrors,
+      "selected": mirror,
+    })
 }
 
 #[tauri::command]
@@ -336,8 +398,35 @@ fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn get_tools_mirror_list() -> &'static [&'static str] {
-    idf_im_lib::get_idf_tools_mirrors_list()
+fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let mirror = settings.mirror.clone().unwrap_or_default();
+    let mut avalible_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
+    if !avalible_mirrors.contains(&mirror.as_str()) {
+        let mut new_mirrors = vec![mirror.as_str()];
+        new_mirrors.extend(avalible_mirrors);
+        avalible_mirrors = new_mirrors;
+    }
+    json!({
+      "mirrors":avalible_mirrors,
+      "selected": mirror,
+    })
 }
 
 #[tauri::command]
@@ -353,6 +442,29 @@ fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String>
         "info".to_string(),
     );
     Ok(())
+}
+
+#[tauri::command]
+fn get_installation_path(app_handle: AppHandle) -> String {
+    let app_state = app_handle.state::<AppState>();
+    // Clone the settings to avoid holding the MutexGuard across await points
+    let settings = {
+        let guard = app_state
+            .settings
+            .lock()
+            .map_err(|_| {
+                send_message(
+                    &app_handle,
+                    "Failed to obtain lock on AppState. Please retry the last action later."
+                        .to_string(),
+                    "error".to_string(),
+                )
+            })
+            .expect("Failed to lock settings");
+        guard.clone()
+    };
+    let path = settings.path.clone().unwrap_or_default();
+    path.to_str().unwrap().to_string()
 }
 
 #[tauri::command]
@@ -408,7 +520,8 @@ fn load_settings(app_handle: AppHandle, path: &str) {
         .map_err(|_| {
             send_message(
                 &app_handle,
-                "Failed to obtain lock on settings".to_string(),
+                "Failed to obtain lock on AppState. Please retry the last action later."
+                    .to_string(),
                 "error".to_string(),
             )
         })
@@ -483,7 +596,7 @@ async fn download_idf(
         version,
         settings.idf_mirror.as_deref(),
         tx,
-        settings.recurse_submodules.unwrap_or(false),
+        settings.recurse_submodules.unwrap_or_default(),
     ) {
         Ok(_) => {
             send_message(
@@ -634,10 +747,7 @@ async fn setup_tools(
 
     let tools_to_download = idf_im_lib::idf_tools::get_list_of_tools_to_download(
         tools.clone(),
-        settings
-            .target
-            .clone()
-            .unwrap_or_else(|| vec!["all".to_string()]),
+        settings.target.clone().unwrap_or_default(),
         settings.mirror.as_deref(),
     );
 
@@ -929,6 +1039,7 @@ pub fn run() {
             get_tools_mirror_list,
             set_tools_mirror,
             load_settings,
+            get_installation_path,
             set_installation_path,
             start_installation
         ])

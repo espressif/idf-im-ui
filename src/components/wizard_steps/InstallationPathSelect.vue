@@ -27,8 +27,9 @@ export default {
     const installPath = ref('');
 
     onMounted(async () => {
-      const homePath = await homeDir();
-      installPath.value = await path.join(homePath, '.espressif');
+      const path = await invoke("get_installation_path");
+      console.log("Installation path:", path);
+      installPath.value = path;
     });
 
     const openFolderDialog = async () => {
@@ -42,10 +43,7 @@ export default {
     };
 
     const processInstallPath = async () => {
-      // Here you would typically send the selected path to the backend
-      // For now, we'll just log it and move to the next step
       console.log("Selected installation path:", installPath.value);
-      // You might want to add a Tauri command to save this path
       await invoke("set_installation_path", { path: installPath.value });
       props.nextstep();
     };

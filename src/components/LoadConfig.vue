@@ -8,7 +8,7 @@
           <n-button @click="load_config" type="primary" ghost>
             Load instalation config.
           </n-button>
-          <pre v-if="rust_settings !== {}">{{ JSON.stringify(rust_settings, null, 2) }}</pre>
+          <pre v-if="Object.keys(rust_settings).length > 0">{{ JSON.stringify(rust_settings, null, 2) }}</pre>
         </div>
       </template>
       <template #2>
