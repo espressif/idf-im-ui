@@ -16,7 +16,7 @@
       </template>
     </n-spin>
 
-    <n-button @click="processVersions" type="primary">Next</n-button>
+    <n-button @click="processVersions" type="primary" :disabled="selected_versions.length == 0">Next</n-button>
   </n-space>
 </template>
 
@@ -44,11 +44,18 @@ export default {
       return false;
     },
     processVersions: async function () {
-      const selected_versions = this.versions.filter(version => version.selected).map(version => version.name);
-      // todo: send to backend
-      const _ = await invoke("set_versions", { versions: selected_versions });
-      this.nextstep();
+      if (this.selected_versions.length !== 0) {
+        const _ = await invoke("set_versions", { versions: this.selected_versions });
+        this.nextstep();
+      } else {
+        alert("Please select at least one IDF version.");
+      }
     }
+  },
+  computed: {
+    selected_versions() {
+      return this.versions.filter(version => version.selected).map(version => version.name);
+    },
   },
   mounted() {
     this.get_available_versions();
