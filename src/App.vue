@@ -1,14 +1,17 @@
 <template>
-  <n-config-provider :theme="theme">
-    <n-layout>
-      <n-layout-header>ESP-IDF Installation Manager(EIM)</n-layout-header>
-      <n-layout-content>
-        <router-view></router-view>
-      </n-layout-content>
-      <message-display />
-      <global-progress />
-    </n-layout>
-  </n-config-provider>
+  <div class="installer">
+    <!-- Header -->
+    <header class="header">
+      <h2>ESP-IDF Installation Manager</h2>
+    </header>
+    <router-view></router-view>
+    <message-display />
+    <global-progress />
+    <!-- Footer -->
+    <footer class="footer">
+      ESP-IDF Installation Manager v1.0.0 (TODO:INSERT VERSION)
+    </footer>
+  </div>
 </template>
 
 <script setup>

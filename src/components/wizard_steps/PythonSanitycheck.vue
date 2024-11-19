@@ -1,22 +1,43 @@
 <template>
-  <p>Wizard will now check your Python instalation on your system.</p>
-  <n-space vertical>
-    <n-spin :show="loading">
-      <p v-if=python_sane>Your Python meets the requirements!</p>
-      <p v-else>Python is not sane. Please install Python 3.10 or later with pip, virtualenv and support for ssl.</p>
-      <template #description>
-        checking Python sanity...
-      </template>
-    </n-spin>
-    <n-spin :show="installing_python == true">
-      <div v-if="!python_sane && os == 'windows'">
-        <p> The installer can attempt to install and setup Python for you.</p>
-        <n-button @click="install_python" type="warning">Install Python</n-button>
-      </div>
-      <p v-if="installing_python">Installing Python...</p>
-    </n-spin>
-    <n-button v-if="python_sane" @click="nextstep" type="primary">Next</n-button>
-  </n-space>
+  <div class="python-check">
+    <h1 class="title">Python Environment Check</h1>
+
+    <n-card class="status-card">
+      <n-spin :show="loading">
+        <div v-if="!loading" class="status-content">
+          <n-result :status="python_sane ? 'success' : 'warning'"
+            :title="python_sane ? 'Python Environment Ready' : 'Python Setup Required'"
+            :description="python_sane ? 'Your Python installation meets all requirements' : 'Python 3.10+ with pip, virtualenv, and SSL support is required'">
+            <template #footer>
+              <div class="action-buttons">
+                <div v-if="!python_sane && os === 'windows'" class="install-section">
+                  <n-button @click="install_python" type="warning" :loading="installing_python" :disabled="loading">
+                    {{ installing_python ? 'Installing Python...' : 'Install Python' }}
+                  </n-button>
+                  <p class="install-note">This will install Python with all required components</p>
+                </div>
+
+                <n-button v-if="python_sane" @click="nextstep" type="error" :disabled="loading">
+                  Continue to Next Step
+                </n-button>
+              </div>
+            </template>
+          </n-result>
+
+          <div v-if="!python_sane && os !== 'windows'" class="manual-instructions">
+            <h3>Manual Installation Required</h3>
+            <p>Please install:</p>
+            <ul>
+              <li>Python 3.10 or later</li>
+              <li>pip package manager</li>
+              <li>virtualenv module</li>
+              <li>SSL support</li>
+            </ul>
+          </div>
+        </div>
+      </n-spin>
+    </n-card>
+  </div>
 </template>
 
 <script>
@@ -63,3 +84,65 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.python-check {
+  padding: 2rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.8rem;
+  color: #374151;
+  margin-bottom: 2rem;
+}
+
+.status-card {
+  background: white;
+  min-height: 300px;
+}
+
+.status-content {
+  padding: 1rem;
+}
+
+.action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+}
+
+.install-section {
+  text-align: center;
+}
+
+.install-note {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+}
+
+.manual-instructions {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #fee2e2;
+  border-radius: 0.5rem;
+}
+
+.manual-instructions h3 {
+  color: #991b1b;
+  margin-bottom: 1rem;
+}
+
+.manual-instructions ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+  color: #374151;
+}
+
+.manual-instructions li {
+  margin-bottom: 0.5rem;
+}
+</style>

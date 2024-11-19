@@ -1,23 +1,43 @@
 <template>
-  <div class="welcome">
-    <h1>Please select starting point!</h1>
-    <n-split direction="horizontal" style="height: 450px" :max="0.75" :min="0.25">
+  <div class="load-config">
+    <h1 class="title">Please select starting point!</h1>
+    <n-split direction="horizontal" class="content-split">
       <template #1>
-        <div :style="{ height: '450px' }">
-          ( TODO: put opemn config icon here )
-          <n-button @click="load_config" type="primary" ghost>
-            Load instalation config.
-          </n-button>
-          <pre v-if="Object.keys(rust_settings).length > 0">{{ JSON.stringify(rust_settings, null, 2) }}</pre>
+        <div class="option-panel">
+          <div class="option-content">
+            <div class="icon-container">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <h2 class="option-title">Load Configuration</h2>
+            <p class="option-description">Load an existing configuration file to start the installation process</p>
+            <n-button @click="load_config" type="error" ghost class="action-button">
+              Load Installation Config
+            </n-button>
+            <div v-if="Object.keys(rust_settings).length > 0" class="config-preview">
+              <h3 class="preview-title">Current Configuration:</h3>
+              <pre>{{ JSON.stringify(rust_settings, null, 2) }}</pre>
+            </div>
+          </div>
         </div>
       </template>
       <template #2>
-        <div :style="{ height: '200px' }">
-
-          ( TODO: put mighty wizard icon here )
-          <n-button @click="startWizard" type="primary" ghost>
-            Start Wizard.
-          </n-button>
+        <div class="option-panel">
+          <div class="option-content">
+            <div class="icon-container">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+            </div>
+            <h2 class="option-title">Installation Wizard</h2>
+            <p class="option-description">Let our wizard guide you through the installation process step by step</p>
+            <n-button @click="startWizard" type="error" ghost class="action-button">
+              Start Wizard
+            </n-button>
+          </div>
         </div>
       </template>
     </n-split>
@@ -64,12 +84,92 @@ export default {
 </script>
 
 <style scoped>
-.welcome {
+.load-config {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.title {
+  font-size: 1.8rem;
+  color: #374151;
+  margin-bottom: 2rem;
   text-align: center;
-  padding: 20px;
-  margin-bottom: 30px;
-  border: 1px 0px 1px 0px solid #ccc;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.content-split {
+  height: 500px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.option-panel {
+  height: 100%;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.option-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.icon-container {
+  background-color: #fee2e2;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  color: #dc2626;
+}
+
+.option-title {
+  font-size: 1.5rem;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.option-description {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+  line-height: 1.5;
+}
+
+.action-button {
+  min-width: 200px;
+}
+
+.config-preview {
+  margin-top: 2rem;
+  text-align: left;
+  background: #f3f4f6;
+  padding: 1rem;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.preview-title {
+  font-size: 0.875rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.config-preview pre {
+  font-size: 0.75rem;
+  color: #4b5563;
+  white-space: pre-wrap;
 }
 </style>

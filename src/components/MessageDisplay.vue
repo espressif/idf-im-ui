@@ -16,9 +16,20 @@ const MessageConsumer = defineComponent({
   setup() {
     const message = useMessage()
 
+    // listen('user-message', (event) => {
+    //   console.log('Received message:', event)
+    //   message[event.payload.type](event.payload.message, { duration: 10000 })
+    // })
+
     listen('user-message', (event) => {
-      console.log('Received message:', event)
-      message[event.payload.type](event.payload.message, { duration: 10000 })
+      const duration = event.payload.type === 'error' ? 0 : 10000
+      const options = {
+        duration,
+        closable: event.payload.type === 'error',
+        keepAliveOnHover: true
+      }
+
+      message[event.payload.type](event.payload.message, options)
     })
 
     return () => null
@@ -39,5 +50,10 @@ export default defineComponent({
   top: 20px;
   right: 20px;
   z-index: 1000;
+  pointer-events: none;
+}
+
+:deep(.n-message) {
+  pointer-events: auto;
 }
 </style>
