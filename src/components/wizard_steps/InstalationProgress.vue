@@ -2,6 +2,8 @@
   <p>Instalation:</p>
   <p v-if="all_settings">The following versions will be installed:<span>{{ idf_versions.join(", ") }}</span></p>
   <n-button @click="startInstalation()" :disabled="instalation_running">Start Installation</n-button>
+  <n-spin size="large" v-if="instalation_running" />
+  <n-button @click="nextstep" type="primary" v-if="instalation_finished">Finish</n-button>
   <hr>
   <p v-if="!!curently_installing_version">Now installing: <span>{{ curently_installing_version }}</span></p>
   <p v-if="versions_finished.length > 0">Finished: <span>{{ versions_finished.join(", ") }}</span></p>
@@ -45,6 +47,8 @@
       </div>
     </n-tab-pane>
   </n-tabs>
+  <hr>
+  <n-button @click="nextstep" type="primary" v-if="instalation_finished">Finish</n-button>
 </template>
 
 <script>
@@ -68,6 +72,7 @@ export default {
     unlisten: undefined,
     unlistenTools: undefined,
     instalation_running: false,
+    instalation_finished: false,
     curently_installing_version: undefined,
     versions_finished: [],
     versions_failed: [],
@@ -77,6 +82,8 @@ export default {
       this.instalation_running = true;
       const _ = await invoke("start_installation", {});
       this.instalation_running = false;
+      console.log('### Installation Finished ###');
+      this.instalation_finished = true;
       return false;
     },
     startListening: async function () {
@@ -147,7 +154,7 @@ export default {
       return this.all_settings ? this.all_settings.idf_versions : [];
     },
     tools_tabs() {
-      return this.versions_finished.concat(this.versions_failed).concat(this.curently_installing_version);
+      return this.versions_finished.concat(this.versions_failed).concat(this.curently_installing_version ? this.curently_installing_version : []);
     }
   },
   mounted() {
