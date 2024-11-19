@@ -1,10 +1,7 @@
 use idf_im_lib::{
     self, add_path_to_path, download_file, ensure_path, expand_tilde,
-    idf_tools::{get_tools_export_paths, Download},
-    idf_versions,
-    python_utils::run_idf_tools_py,
-    settings::Settings,
-    system_dependencies, verify_file_checksum, DownloadProgress, ProgressMessage,
+    idf_tools::get_tools_export_paths, python_utils::run_idf_tools_py, settings::Settings,
+    verify_file_checksum, DownloadProgress, ProgressMessage,
 };
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
@@ -13,7 +10,7 @@ use std::{
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
-    sync::{mpsc, Arc, Mutex},
+    sync::{mpsc, Mutex},
     thread,
 };
 use tauri::{AppHandle, Manager};
@@ -995,6 +992,28 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn quit_app(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
+}
+
+#[tauri::command]
+fn save_config(app_handle: tauri::AppHandle, path: String) {
+    let mut settings = match get_locked_settings(&app_handle) {
+        Ok(s) => s,
+        Err(_) => {
+            return send_message(
+                &app_handle,
+                "Instalation config can not be saved. Please try again later.".to_string(),
+                "error".to_string(),
+            )
+        }
+    };
+
+    settings.config_file_save_path = Some(PathBuf::from(path));
+    let _ = settings.save();
+}
+
 use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1041,7 +1060,9 @@ pub fn run() {
             load_settings,
             get_installation_path,
             set_installation_path,
-            start_installation
+            start_installation,
+            quit_app,
+            save_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
