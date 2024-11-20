@@ -17,6 +17,8 @@
 <script>
 import { NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
+import { useThemeVars } from "naive-ui";
+
 
 export default {
   name: 'GlobalProgress',
@@ -28,6 +30,7 @@ export default {
     targets: [],
     display_progress: false,
     unlisten: undefined,
+    themeVars: useThemeVars()
   }),
   methods: {
     startListening: async function () {

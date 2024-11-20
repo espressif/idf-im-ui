@@ -13,10 +13,17 @@
           </div>
         </div>
         <!-- todo replace with complete instalation button -->
-        <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
-          :disabled="instalation_running">
-          {{ instalation_running ? 'Installing...' : 'Start Installation' }}
-        </n-button>
+        <div v-if="instalation_finished">
+          <n-button @click="nextstep" type="error" size="large">
+            Complete Installation
+          </n-button>
+        </div>
+        <div v-else>
+          <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
+            :disabled="instalation_running">
+            {{ instalation_running ? 'Installing...' : 'Start Installation' }}
+          </n-button>
+        </div>
       </div>
 
       <div v-if="instalation_running || instalation_finished" class="status-section">
