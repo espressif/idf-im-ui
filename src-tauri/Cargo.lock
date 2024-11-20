@@ -2211,13 +2211,8 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idf-im-lib"
-<<<<<<< HEAD
 version = "0.1.8"
 source = "git+https://github.com/espressif/idf-im-lib.git?tag=v0.1.8#395f0f8c72c442054686a08e5d1602c222e6e1f5"
-=======
-version = "0.1.7"
-source = "git+https://github.com/espressif/idf-im-lib.git?rev=3e8b7b095f5e77caa1482169d0e79d522b05f4d5#3e8b7b095f5e77caa1482169d0e79d522b05f4d5"
->>>>>>> 0afb3a5 (EIM-45 basic post install step is added)
 dependencies = [
  "colored",
  "config",
