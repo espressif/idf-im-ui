@@ -88,6 +88,9 @@ export default {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
 }
 
 .title {
@@ -98,7 +101,7 @@ export default {
 }
 
 .content-split {
-  height: 500px;
+  height: 550px;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -110,7 +113,7 @@ export default {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: top;
 }
 
 .option-content {

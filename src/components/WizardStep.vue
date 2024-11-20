@@ -1,19 +1,15 @@
 <template>
   <div class="wizard-container">
-    <h2>Step {{ currentStep }}: {{ stepTitle }}</h2>
-    <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
-    <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
-    <TargetSelect :nextstep=nextStep v-if="currentStep === 3" />
-    <VersionSelect :nextstep=nextStep v-if="currentStep === 4" />
-    <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" />
-    <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" />
-    <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" />
-    <Complete v-if="currentStep === 8" />
-    <div>
-      <!-- <n-button @click="previousStep" :disabled="currentStep === 1">Previous</n-button>
-      <n-button @click="nextStep" :disabled="currentStep === totalSteps" type="primary">
-        {{ currentStep === totalSteps ? 'Finish' : 'Next' }}
-      </n-button> -->
+    <div class="wizard-step-container">
+      <!-- <h2>Step {{ currentStep }}: {{ stepTitle }}</h2> -->
+      <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
+      <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
+      <TargetSelect :nextstep=nextStep v-if="currentStep === 3" />
+      <VersionSelect :nextstep=nextStep v-if="currentStep === 4" />
+      <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" />
+      <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" />
+      <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" />
+      <Complete v-if="currentStep === 8" />
     </div>
   </div>
 </template>

@@ -8,9 +8,7 @@
         <template #header>
           <div class="card-header">
             <span class="header-title">Required Prerequisites</span>
-            <n-button @click="check_prerequisites" type="error" :loading="loading">
-              {{ loading ? 'Checking...' : 'Check Prerequisites' }}
-            </n-button>
+
           </div>
         </template>
 
@@ -23,7 +21,11 @@
             </li>
           </ul>
         </n-spin>
+
       </n-card>
+      <n-button @click="check_prerequisites" type="error" :loading="loading">
+        {{ loading ? 'Checking...' : 'Check Prerequisites' }}
+      </n-button>
 
       <!-- Results Section -->
       <div v-if="did_the_check_run" class="results-section">
@@ -126,8 +128,11 @@ export default {
 <style scoped>
 .prerequisites {
   padding: 2rem;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
 .title {
@@ -153,7 +158,7 @@ export default {
 
 .card-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
 }
 

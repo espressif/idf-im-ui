@@ -9,7 +9,7 @@
           <p class="info-desc">Choose where to install ESP-IDF and its tools. Ensure you have sufficient disk space.</p>
         </div>
 
-        <div class="space-required">
+        <!-- <div class="space-required">
           <div class="space-icon">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -20,7 +20,7 @@
             <span class="space-label">Required Space:</span>
             <span class="space-value">2.5 GB TODO: add some real value</span>
           </div>
-        </div>
+        </div> -->
 
         <div class="path-input">
           <n-input-group>

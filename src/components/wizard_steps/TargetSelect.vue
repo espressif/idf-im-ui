@@ -107,18 +107,18 @@ export default {
 
 .selection-card {
   background: white;
-  padding: 1rem;
+  padding: 0.001rem;
 }
 
 .targets-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 0.3rem;
+  margin-bottom: 0.5rem;
 }
 
 .target-item {
-  padding: 1rem;
+  padding: 0.5rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
   cursor: pointer;
@@ -138,7 +138,7 @@ export default {
 .target-content {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0rem;
 }
 
 .target-name {

@@ -33,6 +33,16 @@ body {
 }
 
 .wizard-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+}
+
+.wizard-step-container {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
