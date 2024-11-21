@@ -149,19 +149,16 @@ fn get_settings(app_handle: tauri::AppHandle) -> Settings {
 
 #[tauri::command]
 fn get_prequisites() -> Vec<&'static str> {
-    log::info!("Get prerequisites called"); // todo remove debug statement
     idf_im_lib::system_dependencies::get_prequisites()
 }
 
 #[tauri::command]
 fn get_operating_system() -> String {
-    log::info!("Get operating system called"); // todo remove debug statement
     std::env::consts::OS.to_string()
 }
 // ----
 #[tauri::command]
 fn install_prerequisites(app_handle: AppHandle) -> bool {
-    log::info!("Install prerequisites called"); // todo remove debug statement
     let unsatisfied_prerequisites = idf_im_lib::system_dependencies::check_prerequisites()
         .unwrap()
         .into_iter()
@@ -186,10 +183,8 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
     match idf_im_lib::system_dependencies::check_prerequisites() {
         Ok(prerequisites) => {
             if prerequisites.is_empty() {
-                // debug!("{}", t!("prerequisites.ok"));
                 vec![]
             } else {
-                // info!("{} {:?}", t!("prerequisites.missing"), prerequisites);
                 prerequisites.into_iter().map(|p| p.to_string()).collect()
             }
         }
@@ -199,7 +194,7 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
                 format!("Error checking prerequisites: {}", err),
                 "error".to_string(),
             );
-            log::error!("Error checking prerequisites: {}", err); //TODO: emit message
+            log::error!("Error checking prerequisites: {}", err);
             vec![]
         }
     }
@@ -539,7 +534,6 @@ fn prepare_installation_directories(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut version_path = expand_tilde(settings.path.as_ref().unwrap().as_path());
     version_path.push(version);
-    // version_path.push("esp-idf");
 
     ensure_path(version_path.to_str().unwrap())?;
     send_message(

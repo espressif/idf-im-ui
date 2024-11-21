@@ -139,7 +139,7 @@ export default {
 .space-icon {
   width: 2.5rem;
   height: 2.5rem;
-  color: #dc2626;
+  color: #e7352c;
 }
 
 .space-text {
@@ -167,7 +167,7 @@ export default {
 }
 
 .error-message {
-  color: #dc2626;
+  color: #e7352c;
   font-size: 0.875rem;
 }
 

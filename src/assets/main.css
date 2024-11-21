@@ -109,7 +109,7 @@ h2 {
 }
 
 .header {
-  background-color: #dc2626;
+  background-color: #e7352c;
   color: white;
   padding: 1rem;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -167,7 +167,7 @@ h2 {
 
 .feature-icon {
   background-color: #fee2e2;
-  color: #dc2626;
+  color: #e7352c;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;

@@ -166,7 +166,7 @@ export default {
 }
 
 .dragging .drop-zone {
-  border-color: #dc2626;
+  border-color: #e7352c;
   background-color: #fee2e2;
 }
 
@@ -203,7 +203,7 @@ export default {
 .icon {
   width: 32px;
   height: 32px;
-  color: #dc2626;
+  color: #e7352c;
 }
 
 .option-title {

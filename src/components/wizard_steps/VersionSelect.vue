@@ -132,12 +132,12 @@ export default {
 }
 
 .version-item:hover {
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .version-item.selected {
   background-color: #fee2e2;
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .version-content {

@@ -7,7 +7,7 @@
       <n-card class="prerequisites-list">
         <template #header>
           <div class="card-header">
-            <span class="header-title">Required Prerequisites</span>
+            <span class="header-title">Prerequisites</span>
 
           </div>
         </template>
@@ -214,7 +214,7 @@ export default {
 .missing-list {
   list-style: disc;
   padding-left: 1.5rem;
-  color: #dc2626;
+  color: #e7352c;
 }
 
 .hint {

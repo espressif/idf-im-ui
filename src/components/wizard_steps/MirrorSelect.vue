@@ -185,12 +185,12 @@ export default {
 }
 
 .mirror-option:hover {
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .mirror-option.selected {
   background-color: #fee2e2;
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .mirror-content {
@@ -209,7 +209,7 @@ export default {
 .mirror-tag {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
-  background-color: #dc2626;
+  background-color: #e7352c;
   color: white;
   border-radius: 0.25rem;
   white-space: nowrap;

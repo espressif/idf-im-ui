@@ -127,12 +127,12 @@ export default {
 
 .target-item:hover {
   background-color: #f9fafb;
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .target-item.selected {
   background-color: #fee2e2;
-  border-color: #dc2626;
+  border-color: #e7352c;
 }
 
 .target-content {

@@ -1,6 +1,6 @@
 <template>
   <div class="installation-progress">
-    <h1 class="title">ESP-IDF Installation Progress</h1>
+    <h1 class="title">Installation Progress</h1>
 
     <n-card class="progress-card">
       <div class="summary-section">
