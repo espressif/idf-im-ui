@@ -76,7 +76,7 @@ export default {
     }
   }),
   methods: {
-    get_avalible_idf_mirrors: async function () {
+    get_available_idf_mirrors: async function () {
       const idf_mirrors = await invoke("get_idf_mirror_list", {});
       this.idf_mirrors = idf_mirrors.mirrors.map((mirror, index) => {
         return {
@@ -122,7 +122,7 @@ export default {
     }
   },
   mounted() {
-    this.get_avalible_idf_mirrors();
+    this.get_available_idf_mirrors();
     this.get_available_tools_mirrors();
   }
 }

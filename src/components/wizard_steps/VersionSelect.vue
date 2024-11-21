@@ -18,10 +18,6 @@
                 <span v-if="version.description" class="version-description">
                   {{ version.description }}
                 </span>
-                <!-- <div class="version-meta">
-                  <span class="release-date">Released: {{ version.releaseDate }}</span>
-                  <span class="version-size">Size: {{ version.size }}</span>
-                </div> -->
               </div>
             </n-checkbox>
           </div>

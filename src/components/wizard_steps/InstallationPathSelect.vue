@@ -9,19 +9,6 @@
           <p class="info-desc">Choose where to install ESP-IDF and its tools. Ensure you have sufficient disk space.</p>
         </div>
 
-        <!-- <div class="space-required">
-          <div class="space-icon">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-            </svg>
-          </div>
-          <div class="space-text">
-            <span class="space-label">Required Space:</span>
-            <span class="space-value">2.5 GB TODO: add some real value</span>
-          </div>
-        </div> -->
-
         <div class="path-input">
           <n-input-group>
             <n-input v-model:value="installPath" placeholder="Choose installation directory" class="path-field" />
@@ -37,9 +24,7 @@
       </div>
 
       <div class="action-footer">
-        <!-- <n-button @click="processInstallPath" type="error" size="large" :disabled="!isValidPath"> -->
         <n-button @click="processInstallPath" type="error" size="large">
-
           Continue
         </n-button>
       </div>
