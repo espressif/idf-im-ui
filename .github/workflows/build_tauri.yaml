@@ -81,8 +81,14 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      - name: Add +x permission to the binary
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          chmod +x src-tauri/target/release/eim
+          chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+
       - name: Upload app Linux binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
           name: eim-linux-x86_64-binary
@@ -91,7 +97,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app .deb
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
           name: eim-linux-x86_64-deb
@@ -100,7 +106,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app .rpm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
           name: eim-linux-x86_64-rpm
@@ -109,7 +115,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app .AppImage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
           name: eim-linux-x86_64-AppImage
@@ -117,8 +123,13 @@ jobs:
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
+      - name: Add +x permission to the binary
+        if: matrix.platform == 'macos-latest'
+        run: |
+          chmod +x src-tauri/target/aarch64-apple-darwin/release/eim
+
       - name: Upload app MacOs binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-latest'
         with:
           name: eim-macos-aarch64-binary
@@ -127,7 +138,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app MacOs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-latest'
         with:
           name: eim-macos-aarch64-dmg
@@ -136,7 +147,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app MacOs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-latest'
         with:
           name: eim-macos-aarch64-app
@@ -144,17 +155,22 @@ jobs:
             src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
           if-no-files-found: error
 
+      - name: Add +x permission to the binary
+        if: matrix.platform == 'macos-12'
+        run: |
+          chmod +x src-tauri/target/x86_64-apple-darwin/release/eim
+
       - name: Upload MacOs intel app binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-12'
         with:
-          name: eim-macos-x86_64-dmg
+          name: eim-macos-x86_64-binary
           path: |
             src-tauri/target/x86_64-apple-darwin/release/eim
           if-no-files-found: error
 
       - name: Upload app MacOs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-12'
         with:
           name: eim-macos-x86_64-dmg
@@ -163,7 +179,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app MacOs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-12'
         with:
           name: eim-macos-x86_64-app
@@ -172,7 +188,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app Windows binary
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'windows-latest'
         with:
           name: eim-windows-binary
@@ -181,7 +197,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload app Windows
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.platform == 'windows-latest'
         with:
           name: eim-windows-msi
