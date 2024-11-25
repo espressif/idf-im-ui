@@ -11,12 +11,13 @@
             <h2 class="section-title">Load Configuration</h2>
             <p class="section-description">Drag & drop TOML file or click to load existing configuration</p>
           </div>
+          <div v-if="config_loaded" class="config-status">
+            ✓ Config loaded
+          </div>
           <n-button @click="load_config" type="error" ghost class="action-button">
             Load Config
           </n-button>
-          <div v-if="Object.keys(rust_settings).length > 0" class="config-status">
-            ✓ Config loaded
-          </div>
+
         </div>
       </div>
     </div>
@@ -79,7 +80,8 @@ export default {
   data: () => ({
     rust_settings: {},
     unlisten_drag_drop: undefined,
-    isDragging: false
+    isDragging: false,
+    config_loaded: false
   }),
   methods: {
     startWizard() {
@@ -104,6 +106,7 @@ export default {
       });
       const _ = await invoke("load_settings", { path: file });
       this.gs();
+      this.config_loaded = true;
     }
   },
   mounted: async function () {
@@ -120,6 +123,7 @@ export default {
         if (file && file.endsWith('.toml')) {
           const _ = await invoke("load_settings", { path: file });
           this.gs();
+          this.config_loaded = true;
         } else {
           emit('user-message', {
             type: 'error',

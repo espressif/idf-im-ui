@@ -53,6 +53,14 @@ fn send_install_progress_message(app_handle: &AppHandle, version: String, state:
     );
 }
 
+fn send_simple_setup_message(app_handle: &AppHandle, message_code: i32, message: String) {
+    let _ = emit_to_fe(
+        app_handle,
+        "simple-setup-message",
+        json!({ "code": message_code, "message": message }),
+    );
+}
+
 fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
     debug!("emit_to_fe: {} {:?}", event_name, json_data);
     let _ = app_handle.emit(event_name, json_data);
@@ -607,6 +615,7 @@ async fn download_idf(
                 format!("Failed to install IDF {}. Reason: {}", version, e),
                 "error".to_string(),
             );
+            progress.finish();
             return Err(e.into());
         }
     }
@@ -1008,6 +1017,73 @@ fn save_config(app_handle: tauri::AppHandle, path: String) {
     let _ = settings.save();
 }
 
+#[tauri::command]
+async fn start_simple_setup(app_handle: tauri::AppHandle) {
+    let mut settings = get_locked_settings(&app_handle).unwrap();
+    let state_settings = app_handle.state::<AppState>();
+    send_simple_setup_message(&app_handle, 1, "started".to_string());
+    // prerequisities check
+    let mut prerequisities = check_prequisites(app_handle.clone());
+    let os = get_operating_system().to_lowercase();
+    if prerequisities.len() > 0 && os == "windows" {
+        send_simple_setup_message(&app_handle, 2, "installing prerequisites".to_string());
+        prerequisities = check_prequisites(app_handle.clone());
+        if !install_prerequisites(app_handle.clone()) {
+            send_simple_setup_message(&app_handle, 3, prerequisities.join(", "));
+            return;
+        }
+        prerequisities = check_prequisites(app_handle.clone());
+    }
+    if prerequisities.len() > 0 {
+        send_simple_setup_message(&app_handle, 4, prerequisities.join(", "));
+        return;
+    }
+    // python check
+    let mut python_found = python_sanity_check(app_handle.clone(), None);
+    if !python_found && os == "windows" {
+        send_simple_setup_message(&app_handle, 5, "Installing Python".to_string());
+        if !python_install(app_handle.clone()) {
+            send_simple_setup_message(&app_handle, 6, "Failed to install Python".to_string());
+            return;
+        }
+    }
+    python_found = python_sanity_check(app_handle.clone(), None);
+    if !python_found {
+        send_simple_setup_message(
+            &app_handle,
+            7,
+            "Python not found. Please install it manually".to_string(),
+        );
+        return;
+    }
+    // version check get_idf_versions
+    if settings.idf_versions.is_none() {
+        send_simple_setup_message(&app_handle, 8, "Getting IDF versions".to_string());
+        let versions = get_idf_versions(app_handle.clone()).await;
+        let version = versions[0]["name"]
+            .clone()
+            .to_string()
+            .trim_matches('"')
+            .to_string();
+        if set_versions(app_handle.clone(), vec![version]).is_err() {
+            send_simple_setup_message(&app_handle, 9, "Failed to set IDF versions".to_string());
+            return;
+        }
+    }
+    settings = get_locked_settings(&app_handle).unwrap();
+    // install
+    send_simple_setup_message(&app_handle, 10, "Installing IDF".to_string());
+    let res = start_installation(app_handle.clone()).await;
+    match res {
+        Ok(_) => {
+            send_simple_setup_message(&app_handle, 11, "Installation completed".to_string());
+        }
+        Err(e) => {
+            send_simple_setup_message(&app_handle, 12, "Failed to install IDF".to_string());
+        }
+    }
+}
+
 use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1055,6 +1131,7 @@ pub fn run() {
             get_installation_path,
             set_installation_path,
             start_installation,
+            start_simple_setup,
             quit_app,
             save_config
         ])
