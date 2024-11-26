@@ -988,6 +988,25 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             "warning".to_string(),
         );
     }
+    let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+    let _ = ensure_path(&ide_json_path);
+    let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
+    match settings.save_esp_ide_json(filepath.to_str().unwrap()) {
+        Ok(_) => {
+            send_message(
+                &app_handle,
+                format!("IDE JSON file saved to: {}", filepath.to_str().unwrap()),
+                "info".to_string(),
+            );
+        }
+        Err(e) => {
+            send_message(
+                &app_handle,
+                format!("Failed to save IDE JSON file: {}", e),
+                "error".to_string(),
+            );
+        }
+    }
 
     Ok(())
 }
