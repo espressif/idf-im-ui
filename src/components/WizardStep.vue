@@ -4,8 +4,10 @@
       <div class="steps-list">
         <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
           'active': currentStep === index + 1,
-          'completed': currentStep > index + 1
-        }">
+          'completed': currentStep > index + 1,
+          'disabled': currentStep === 7 || currentStep === 8,
+          'clickable': currentStep > index + 1 && currentStep < 7
+        }" @click="handleStepClick(index + 1)">
           <div class="step-number">
             <template v-if="currentStep > index + 1">
               <svg class="checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -106,6 +108,15 @@ export default {
         { title: "Instalation Complete" }
       ];
     },
+    handleStepClick(stepNumber) {
+      // Only allow navigation if:
+      // 1. The step has been completed (currentStep > stepNumber)
+      // 2. We're not in the installation or completion steps (currentStep < 7)
+      // 3. We're not trying to navigate to a step after our current position
+      if (this.currentStep > stepNumber && this.currentStep < 7) {
+        this.store.setStep(stepNumber);
+      }
+    },
     nextStep() {
       if (this.store.currentStep === 1) {
         // this.store.updateData({ deviceName: deviceName.value })
@@ -156,7 +167,7 @@ export default {
   color: #666;
 }
 
-.step-item:hover {
+.step-item:hover:not(.disabled) {
   background-color: #e8e8e8;
 }
 
@@ -167,6 +178,19 @@ export default {
 
 .step-item.completed {
   color: #666;
+}
+
+.step-item.disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.step-item.clickable {
+  cursor: pointer;
+}
+
+.step-item.clickable:hover {
+  background-color: #e8e8e8;
 }
 
 .step-number {
