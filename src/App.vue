@@ -3,6 +3,7 @@
     <!-- Header -->
     <header class="header">
       <h2>ESP-IDF Installation Manager</h2>
+      <img src="./assets/espressif_logo_white.svg" alt="ESP-IDF Logo" />
     </header>
     <router-view></router-view>
     <message-display />

@@ -115,6 +115,23 @@ h2 {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+.header {
+  background-color: #e7352c;
+  color: white;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header img {
+  height: 40px;
+  padding: -1rem;
+  width: auto; 
+  object-fit: contain;
+}
+
 .header h2 {
   margin: 0;
   font-size: 1.25rem;
