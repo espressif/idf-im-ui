@@ -96,6 +96,17 @@ jobs:
             src-tauri/target/release/eim
           if-no-files-found: error
 
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim
+          asset_name: eim-linux
+          asset_content_type: application/octet-stream
+
       - name: Upload app .deb
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
@@ -128,6 +139,50 @@ jobs:
         run: |
           chmod +x src-tauri/target/aarch64-apple-darwin/release/eim
 
+      - name: Codesign macOS eim executables
+        if: matrix.platform == 'macos-latest'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          /usr/bin/security create-keychain -p espressif build.keychain
+          /usr/bin/security default-keychain -s build.keychain
+          /usr/bin/security unlock-keychain -p espressif build.keychain
+          /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+
+          /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" src-tauri/target/aarch64-apple-darwin/release/eim -v
+          /usr/bin/codesign -v -vvv --deep src-tauri/target/aarch64-apple-darwin/release/eim
+
+      - name: Zip eim executable for notarization
+        if: matrix.platform == 'macos-latest'
+        run: |
+          cd src-tauri/target/aarch64-apple-darwin/release
+          zip -r eim.zip eim
+
+      - name: Notarization of macOS eim executables
+        if: matrix.platform == 'macos-latest'
+        env:
+          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          echo "Create notary keychain"
+          /usr/bin/security create-keychain -p espressif notary.keychain
+          /usr/bin/security default-keychain -s notary.keychain
+          /usr/bin/security unlock-keychain -p espressif notary.keychain
+
+          echo "Create keychain profile"
+          xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
+          xcrun notarytool submit src-tauri/target/aarch64-apple-darwin/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
+
+          echo "Unzipping the executable"
+          unzip -o src-tauri/target/aarch64-apple-darwin/release/eim.zip -d src-tauri/target/aarch64-apple-darwin/release
+
+          # echo "Attach staple for eim executable"
+          # xcrun stapler staple src-tauri/target/aarch64-apple-darwin/release/eim
+
       - name: Upload app MacOs binary
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-latest'
@@ -136,6 +191,17 @@ jobs:
           path: |
             src-tauri/target/aarch64-apple-darwin/release/eim
           if-no-files-found: error
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/aarch64-apple-darwin/release/eim
+          asset_name: eim-macos-aarm64
+          asset_content_type: application/octet-stream
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
@@ -160,6 +226,50 @@ jobs:
         run: |
           chmod +x src-tauri/target/x86_64-apple-darwin/release/eim
 
+      - name: Codesign macOS eim executables
+        if: matrix.platform == 'macos-12'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          /usr/bin/security create-keychain -p espressif build.keychain
+          /usr/bin/security default-keychain -s build.keychain
+          /usr/bin/security unlock-keychain -p espressif build.keychain
+          /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+
+          /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" src-tauri/target/x86_64-apple-darwin/release/eim -v
+          /usr/bin/codesign -v -vvv --deep src-tauri/target/x86_64-apple-darwin/release/eim
+
+      - name: Zip eim executable for notarization
+        if: matrix.platform == 'macos-12'
+        run: |
+          cd src-tauri/target/x86_64-apple-darwin/release
+          zip -r eim.zip eim
+
+      - name: Notarization of macOS eim executables
+        if: matrix.platform == 'macos-12'
+        env:
+          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          echo "Create notary keychain"
+          /usr/bin/security create-keychain -p espressif notary.keychain
+          /usr/bin/security default-keychain -s notary.keychain
+          /usr/bin/security unlock-keychain -p espressif notary.keychain
+
+          echo "Create keychain profile"
+          xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
+          xcrun notarytool submit src-tauri/target/x86_64-apple-darwin/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
+
+          echo "Unzipping the executable"
+          unzip -o src-tauri/target/x86_64-apple-darwin/release/eim.zip -d src-tauri/target/x86_64-apple-darwin/release
+
+          # echo "Attach staple for eim executable"
+          # xcrun stapler staple src-tauri/target/x86_64-apple-darwin/release/eim
+
       - name: Upload MacOs intel app binary
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'macos-13'
@@ -168,6 +278,17 @@ jobs:
           path: |
             src-tauri/target/x86_64-apple-darwin/release/eim
           if-no-files-found: error
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-12'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/x86_64-apple-darwin/release/eim
+          asset_name: eim-macos-intel
+          asset_content_type: application/octet-stream
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
@@ -195,6 +316,17 @@ jobs:
           path: |
             src-tauri/target/release/eim.exe
           if-no-files-found: error
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim.exe
+          asset_name: eim.exe
+          asset_content_type: application/octet-stream
 
       - name: Upload app Windows
         uses: actions/upload-artifact@v4
