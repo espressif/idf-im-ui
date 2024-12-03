@@ -26,7 +26,7 @@ jobs:
         include:
           - platform: "macos-latest" # for Arm based macs (M1 and above).
             args: "--target aarch64-apple-darwin"
-          - platform: "macos-12" # for Intel based macs.
+          - platform: "macos-13" # for Intel based macs.
             args: "--target x86_64-apple-darwin"
           - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
             args: ""
@@ -156,13 +156,13 @@ jobs:
           if-no-files-found: error
 
       - name: Add +x permission to the binary
-        if: matrix.platform == 'macos-12'
+        if: matrix.platform == 'macos-13'
         run: |
           chmod +x src-tauri/target/x86_64-apple-darwin/release/eim
 
       - name: Upload MacOs intel app binary
         uses: actions/upload-artifact@v4
-        if: matrix.platform == 'macos-12'
+        if: matrix.platform == 'macos-13'
         with:
           name: eim-macos-x86_64-binary
           path: |
@@ -171,7 +171,7 @@ jobs:
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
-        if: matrix.platform == 'macos-12'
+        if: matrix.platform == 'macos-13'
         with:
           name: eim-macos-x86_64-dmg
           path: |
@@ -180,7 +180,7 @@ jobs:
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
-        if: matrix.platform == 'macos-12'
+        if: matrix.platform == 'macos-13'
         with:
           name: eim-macos-x86_64-app
           path: |

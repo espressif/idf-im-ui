@@ -12,6 +12,9 @@ export const useWizardStore = defineStore("wizard", {
         this.currentStep++;
       }
     },
+    setStep(step) {
+      this.currentStep = step;
+    },
     previousStep() {
       if (this.currentStep > 1) {
         this.currentStep--;

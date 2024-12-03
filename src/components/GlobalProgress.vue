@@ -1,14 +1,24 @@
 <template>
-  <div class="progress-display" v-if="display_progress">
-    <p class="caption">{{ message }}</p>
-    <n-progress type="line" :status="status" :percentage="percentage" indicator-placement="inside"
-      :show-indicator="false" :height="30" border-radius="2px" fill-border-radius="2px"></n-progress>
-  </div>
+  <transition name="slide">
+    <div class="progress-container" v-if="display_progress">
+      <div class="progress-content">
+        <span class="progress-message">{{ message }}</span>
+        <n-progress type="line" :color="themeVars.errorColor" :status="status" :percentage="percentage" :height="36"
+          :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
+          <template #indicator>
+            {{ percentage }}%
+          </template>
+        </n-progress>
+      </div>
+    </div>
+  </transition>
 </template>
 
 <script>
 import { NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
+import { useThemeVars } from "naive-ui";
+
 
 export default {
   name: 'GlobalProgress',
@@ -20,6 +30,7 @@ export default {
     targets: [],
     display_progress: false,
     unlisten: undefined,
+    themeVars: useThemeVars()
   }),
   methods: {
     startListening: async function () {
@@ -47,21 +58,42 @@ export default {
 </script>
 
 <style scoped>
-.progress-display {
+.progress-container {
   position: fixed;
-  background-color: #9e9a9a;
-  bottom: 0px;
-  left: 0px;
+  bottom: 0;
+  left: 0;
   width: 100%;
-  /* height: 60px; */
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
   z-index: 999;
+  padding: 1rem;
 }
 
-.caption {
+.progress-content {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.progress-message {
+  display: block;
   color: white;
-  font-size: 18px;
-  font-weight: bold;
-  margin: 10px;
+  font-size: 1rem;
+  font-weight: 500;
+  margin-bottom: 0.75rem;
   text-align: center;
+}
+
+.progress-bar {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.slide-enter-active,
+.slide-leave-active {
+  transition: transform 0.3s ease-in-out;
+}
+
+.slide-enter-from,
+.slide-leave-to {
+  transform: translateY(100%);
 }
 </style>

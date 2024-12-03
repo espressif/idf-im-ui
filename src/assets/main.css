@@ -1,7 +1,7 @@
 :root {
   --background-color: #f0f0f0;
   --text-color: #333333;
-  --primary-color: #007AFF;
+  --primary-color: #f0f0f0;
   --secondary-color: #5AC8FA;
   --border-color: #d1d1d1;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
@@ -33,6 +33,16 @@ body {
 }
 
 .wizard-container {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+  text-align: center;
+}
+
+.wizard-step-container {
   background-color: white;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -89,4 +99,109 @@ h2 {
   outline: none;
   border-color: var(--primary-color);
   box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
+}
+
+.installer {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f5f5;
+}
+
+.header {
+  background-color: #e7352c;
+  color: white;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header {
+  background-color: #e7352c;
+  color: white;
+  padding: 1rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header img {
+  height: 40px;
+  padding: -1rem;
+  width: auto; 
+  object-fit: contain;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.welcome-card {
+  background: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 100%;
+}
+
+.welcome-card h1 {
+  font-size: 1.875rem;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+.content {
+  margin-bottom: 2rem;
+}
+
+.content p {
+  color: #4b5563;
+  font-size: 1.125rem;
+  margin-bottom: 1.5rem;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.feature {
+  display: flex;
+  align-items: center;
+  color: #4b5563;
+}
+
+.feature-icon {
+  background-color: #fee2e2;
+  color: #e7352c;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.75rem;
+}
+
+.get-started {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+.footer {
+  padding: 1rem;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.875rem;
 }

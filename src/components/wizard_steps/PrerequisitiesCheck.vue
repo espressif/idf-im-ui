@@ -1,40 +1,64 @@
 <template>
-  <p>Wizard will now check for the IDF Prerequisites...</p>
-  <n-space vertical>
-    <n-spin :show="loading">
-      <n-alert title="List of needed Prerequisities" type="default">
-        <ul>
-          <li v-for="p in display_prerequisities" :key="p.name">{{ p.icon }} III {{ p.name }}</li>
-        </ul>
-      </n-alert>
-      <template #description>
-        Loading list of prerequisites...
-      </template>
-    </n-spin>
-    <n-button @click="check_prerequisites" type="primary">Check Prerequisites</n-button>
-    <n-divider />
-    <div v-if="did_the_check_run && missing_prerequisities.length == 0"> <!-- if no missing prerequisities -->
-      <p>Prerequisites check passed. You can now continue to next step.</p>
-      <n-button @click="nextstep" type="primary">Next</n-button>
-    </div>
-    <div v-if="did_the_check_run && missing_prerequisities.length != 0"> <!-- Some missing prerequisities -->
-      <p>The following prerequisites are missing:</p>
-      <ul>
-        <li v-for="p in missing_prerequisities" :key="p">{{ p }}</li>
-      </ul>
-      <div v-if="os == 'windows'">
-        <p> The installer can attempt to install the missing prerequisites.</p>
-        <p> If you want the installer to install the prerequisites, click on the install button.</p>
-        <n-button @click="install_prerequisites" type="warning">Install Prerequisites</n-button>
-        <n-spin :show="installing_prerequisities">
-          <template #description>
-            Installing prerequisites...
-          </template>
+  <div class="prerequisites">
+    <h1 class="title">Prerequisites Check</h1>
+    <p class="description">The installer will now verify required components for ESP-IDF...</p>
+
+    <div class="check-section">
+      <n-card class="prerequisites-list">
+        <template #header>
+          <div class="card-header">
+            <span class="header-title">Prerequisites</span>
+
+          </div>
+        </template>
+
+        <n-spin :show="loading">
+          <ul class="items-list">
+            <li v-for="p in display_prerequisities" :key="p.name"
+              :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }">
+              <span class="item-icon">{{ p.icon }}</span>
+              <span class="item-name">{{ p.name }}</span>
+            </li>
+          </ul>
         </n-spin>
+
+      </n-card>
+      <n-button @click="check_prerequisites" type="error" :loading="loading">
+        {{ loading ? 'Checking...' : 'Check Prerequisites' }}
+      </n-button>
+
+      <!-- Results Section -->
+      <div v-if="did_the_check_run" class="results-section">
+        <n-result v-if="missing_prerequisities.length === 0" status="success" title="All Prerequisites Installed"
+          description="Your system is ready for ESP-IDF installation">
+          <template #footer>
+            <n-button @click="nextstep" type="error">
+              Continue to Next Step
+            </n-button>
+          </template>
+        </n-result>
+
+        <n-result v-else status="warning" title="Missing Prerequisites"
+          :description="os === 'windows' ? 'Click below to automatically install missing components' : 'Please install the following components manually'">
+          <template #footer>
+            <div class="missing-items">
+              <div v-if="os === 'windows'" class="windows-install">
+                <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities">
+                  Install Missing Prerequisites
+                </n-button>
+              </div>
+              <div v-else class="manual-install">
+                <p class="hint">Please install these components and run the check again:</p>
+                <ul class="missing-list">
+                  <li v-for="p in missing_prerequisities" :key="p">{{ p }}</li>
+                </ul>
+              </div>
+            </div>
+          </template>
+        </n-result>
       </div>
-      <p v-else>Please install the missing prerequisites and rerun the check.</p>
     </div>
-  </n-space>
+  </div>
 </template>
 
 <script>
@@ -100,3 +124,101 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.prerequisites {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.title {
+  font-size: 1.8rem;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.description {
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+.check-section {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.prerequisites-list {
+  background: white;
+}
+
+.card-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.header-title {
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+.items-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.item:last-child {
+  border-bottom: none;
+}
+
+.item-icon {
+  margin-right: 1rem;
+  font-size: 1.2rem;
+}
+
+.item-name {
+  color: #374151;
+}
+
+.missing {
+  background-color: #fee2e2;
+}
+
+.installed {
+  background-color: #ecfdf5;
+}
+
+.results-section {
+  margin-top: 2rem;
+}
+
+.missing-items {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.missing-list {
+  list-style: disc;
+  padding-left: 1.5rem;
+  color: #e7352c;
+}
+
+.hint {
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+</style>
