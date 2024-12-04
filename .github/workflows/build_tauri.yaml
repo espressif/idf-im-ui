@@ -308,6 +308,18 @@ jobs:
             src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
           if-no-files-found: error
 
+      - name: Sign Windows Binary
+        if: matrix.platform == 'windows-latest'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+          WINDOWS_SIGN_TOOL_PATH: 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe'
+        run: |
+          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+          certutil -decode cert.b64 cert.pfx
+          Remove-Item cert.b64
+          & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
+
       - name: Upload app Windows binary
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'windows-latest'
