@@ -23,7 +23,7 @@
           </div>
         </div>
 
-        <div class="summary-section" v-if="selectedVersions.length > 0">
+        <!-- <div class="summary-section" v-if="selectedVersions.length > 0">
           <div class="summary-content">
             <span class="summary-label">Selected versions:</span>
             <div class="selected-tags">
@@ -33,7 +33,7 @@
               </n-tag>
             </div>
           </div>
-        </div>
+        </div> -->
 
         <div class="action-footer">
           <n-button @click="processVersions" type="error" size="large" :disabled="!hasSelectedVersions">
