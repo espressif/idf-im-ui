@@ -635,7 +635,9 @@ struct ToolSetup {
 impl ToolSetup {
     fn new(settings: &Settings, version_path: &PathBuf) -> Result<Self, String> {
         let p = version_path;
-        let tools_json_path = p.join(settings.tools_json_file.clone().unwrap_or_default());
+        let tools_json_path = p
+            .join("esp-idf")
+            .join(settings.tools_json_file.clone().unwrap_or_default());
         let download_dir = p.join(
             settings
                 .tool_download_folder_name
@@ -725,8 +727,10 @@ async fn setup_tools(
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     info!("Setting up tools...");
 
+    let version_path = PathBuf::from(idf_path.parent().unwrap());
+
     // Initialize tool setup
-    let tool_setup = ToolSetup::new(settings, idf_path)?;
+    let tool_setup = ToolSetup::new(settings, &version_path)?;
 
     // Create necessary directories
     tool_setup.create_directories(app_handle)?;
