@@ -120,7 +120,7 @@ export default {
         return `Missing prerequisites: ${this.messages[this.messages.length - 1]}`;
       }
       if ([6, 7].includes(this.current_state_code)) {
-        return 'Please install Python 3.10 or later with venv and SSL support';
+        return 'Please install Python 3.10 or later with pip, venv and SSL support';
       }
       if (this.current_state_code === 9) {
         return 'Please use expert mode to manually select ESP-IDF version';
