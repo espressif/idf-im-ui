@@ -31,6 +31,9 @@ jobs:
       - name: Build the book
         run: |
           cd docs && ls -la
+          git clone https://github.com/espressif/esp-docs-mdbook.git
+          cp -r ./esp-docs-mdbook/theme ./theme
+          rm -rf ./esp-docs-mdbook
           mdbook build
           zip -r docs.zip ./book/
 
