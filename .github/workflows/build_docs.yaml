@@ -1,0 +1,42 @@
+on:
+  release:
+    types:
+      - created
+  push:
+    branches:
+      - master
+      - release/*
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs_build.yml"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs_build.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: "0.4.43"
+
+      - name: Build the book
+        run: |
+          cd docs && ls -la
+          mdbook build
+          zip -r docs.zip ./book/
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-docs
+          path: docs/docs.zip
+          if-no-files-found: error
