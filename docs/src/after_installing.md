@@ -9,4 +9,4 @@ On Windows, the installer creates an icon on your desktop labeled IDF_PowerShell
 In the installation directory you selected, there will be a .sh script that, when sourced, activates the ESP-IDF environment in your current shell. It’s important to note that this script should be sourced, not executed directly. If you’ve installed multiple versions of ESP-IDF, there will be a separate script for each version.
 
 > **Note**  
-> The script should be really sourced and not executed
+> The script must be sourced and not executed!

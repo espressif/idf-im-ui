@@ -6,7 +6,7 @@ Below are the minimum requirements for running the ESP-IDF. The Installation Man
 
 To get started with ESP-IDF, you need Git, CMake, Ninja, and Python. The ESP-IDF Installation Manager will verify the required prerequisites on your system and install any that are missing.
 
-For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF prerequisites documentation](https://docs.espressif.com/projects/esp-idf/en/v4.2.2/esp32/get-started/windows-setup.html).
+For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF documentation](https://docs.espressif.com/projects/esp-idf/en/v4.2.2/esp32/get-started/windows-setup.html).
 
 > **Note**  
 > If any of these prerequisites are missing, the installer will prompt you to install them. If you agree, the installer will automatically install and configure everything required to run ESP-IDF.
