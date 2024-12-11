@@ -1,12 +1,12 @@
 # Configuration
 
-you can open configuration file and than either proceed with simplified instalation or go trought wizard.
+You can open the configuration file and proceed with simplified installation or go through the wizard.
 
 ![Instalation setup](./screenshots/instal_setup.png)
 
 #### Config File
 
-The installer can use a TOML configuration file. the file can be loaded (or drag&dropped) just before choosing between simplified or wizard installation.
+The installer can use a TOML configuration file. the file can be loaded (or draged & dropped) just before choosing between simplified or wizard installation.
 
 Here is an example of what a configuration file might look like:
 

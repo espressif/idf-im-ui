@@ -18,3 +18,4 @@ smart-punctuation = true
 git-repository-url="https://github.com/espressif/idf-im-ui.git"
 copy-theme = true
 additional-files = ["theme"]
+site-url = "https://docs.espressif.com/projects/idf-im-ui/en/latest/"
