@@ -16,8 +16,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    runs-on: ubuntu-20.04
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -36,6 +36,7 @@ jobs:
           rm -rf ./esp-docs-mdbook
           mdbook build
           zip -r docs.zip ./book/
+          tar -czf docs.tar.gz ./book/
 
       - name: Upload docs artifact
         uses: actions/upload-artifact@v4
@@ -43,3 +44,36 @@ jobs:
           name: eim-docs
           path: docs/docs.zip
           if-no-files-found: error
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DOCS_PROD_PRIVATEKEY }}" | base64 -d > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "StrictHostKeyChecking no" > ~/.ssh/config
+          ssh-keyscan -H ${{ secrets.DOCS_PROD_SERVER }} >> ~/.ssh/known_hosts
+          eval "$(ssh-agent -s)"
+          ssh-add ~/.ssh/id_rsa
+
+      - name: Create remote directory
+        run: ssh -o BatchMode=yes ${{ secrets.DOCS_PROD_SERVER_USER }}@${{ secrets.DOCS_PROD_SERVER }} "mkdir -p ${{ secrets.DOCS_PROD_PATH }}"
+
+      - name: Copy tarball to server
+        run: |
+          scp -B docs/docs.tar.gz ${{ secrets.DOCS_PROD_SERVER_USER }}@${{ secrets.DOCS_PROD_SERVER }}:${{ secrets.DOCS_PROD_PATH }}/docs.tar.gz
+
+      - name: Extract and cleanup
+        run: |
+          TARBALL_NAME=$(basename docs/docs.tar.gz)
+          ssh -o BatchMode=yes ${{ secrets.DOCS_PROD_SERVER_USER }}@${{ secrets.DOCS_PROD_SERVER }} "cd ${{ secrets.DOCS_PROD_PATH }} && \
+            rm -rf ./*/${{ github.event.inputs.version }} && \
+            tar -zxvf ${TARBALL_NAME} && \
+            rm -rf ./en && \
+            mkdir -p ./en/latest && \
+            cp -r ./book/* ./en/latest/ && \
+            rm -rf ./book && \
+            rm ${TARBALL_NAME}"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/id_rsa
