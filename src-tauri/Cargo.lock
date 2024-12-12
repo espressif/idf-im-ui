@@ -2231,8 +2231,8 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idf-im-lib"
-version = "0.1.9"
-source = "git+https://github.com/espressif/idf-im-lib.git?tag=v0.1.9#3d6b712f85e16ede07eeee53f5c68f1458118cc7"
+version = "0.1.10"
+source = "git+https://github.com/espressif/idf-im-lib.git?tag=v0.1.10#2371d3cf4604149bc2c1c54dd0b03bd54d62488d"
 dependencies = [
  "anyhow",
  "colored",
