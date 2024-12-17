@@ -158,6 +158,7 @@ jobs:
       - name: Zip eim executable for notarization
         if: matrix.platform == 'macos-latest'
         run: |
+          chmod +x src-tauri/target/aarch64-apple-darwin/release/eim
           cd src-tauri/target/aarch64-apple-darwin/release
           zip -r eim.zip eim
 
@@ -245,6 +246,7 @@ jobs:
       - name: Zip eim executable for notarization
         if: matrix.platform == 'macos-12'
         run: |
+          chmod +x src-tauri/target/x86_64-apple-darwin/release
           cd src-tauri/target/x86_64-apple-darwin/release
           zip -r eim.zip eim
 
@@ -280,7 +282,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-12'
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-13'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -348,3 +350,21 @@ jobs:
           path: |
             src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
+
+  fetch-latest-release:
+    name: Fetch Latest Release Info
+    needs: [publish-tauri]
+    runs-on: ubuntu-latest
+    # This ensures the job runs after a release is created or when manually triggered
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Fetch latest release
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-east-1
+        run: |
+          curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_gui_release.json
+          echo "Latest release tag: $(jq -r .tag_name eim_gui_release.json)"
+          aws s3 cp --acl=public-read "eim_gui_release.json" s3://espdldata/dl/eim/eim_gui_release.json
