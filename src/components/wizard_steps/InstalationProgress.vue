@@ -1,51 +1,52 @@
 <template>
-  <div class="installation-progress">
-    <h1 class="title">Installation Progress</h1>
+  <div class="installation-progress" data-id="installation-progress">
+    <h1 class="title" data-id="installation-title">Installation Progress</h1>
 
-    <n-card class="progress-card">
-      <div class="summary-section">
-        <div class="versions-info" v-if="all_settings">
-          <h3>Installing ESP-IDF Versions:</h3>
-          <div class="version-chips">
-            <n-tag v-for="version in idf_versions" :key="version" type="info">
+    <n-card class="progress-card" data-id="progress-card">
+      <div class="summary-section" data-id="installation-summary">
+        <div class="versions-info" v-if="all_settings" data-id="versions-info">
+          <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
+          <div class="version-chips" data-id="version-chips">
+            <n-tag v-for="version in idf_versions" :key="version" type="info" :data-id="`version-tag-${version}`">
               {{ version }}
             </n-tag>
           </div>
         </div>
-        <!-- todo replace with complete instalation button -->
-        <div v-if="instalation_finished">
-          <n-button @click="nextstep" type="error" size="large">
+        <div v-if="instalation_finished" data-id="complete-button-container">
+          <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button">
             Complete Installation
           </n-button>
         </div>
-        <div v-else>
+        <div v-else data-id="start-button-container">
           <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
-            :disabled="instalation_running">
+            :disabled="instalation_running" data-id="start-installation-button">
             {{ instalation_running ? 'Installing...' : 'Start Installation' }}
           </n-button>
         </div>
       </div>
 
-      <div v-if="instalation_running || instalation_finished" class="status-section">
-        <div class="status-grid">
-          <div class="status-item" v-if="curently_installing_version">
-            <span class="status-label">Currently Installing:</span>
-            <n-tag type="warning">{{ curently_installing_version }}</n-tag>
+      <div v-if="instalation_running || instalation_finished" class="status-section" data-id="status-section">
+        <div class="status-grid" data-id="status-grid">
+          <div class="status-item" v-if="curently_installing_version" data-id="current-version-status">
+            <span class="status-label" data-id="current-version-label">Currently Installing:</span>
+            <n-tag type="warning" data-id="current-version-tag">{{ curently_installing_version }}</n-tag>
           </div>
 
-          <div class="status-item" v-if="versions_finished.length > 0">
-            <span class="status-label">Completed:</span>
-            <div class="version-chips">
-              <n-tag v-for="version in versions_finished" :key="version" type="success">
+          <div class="status-item" v-if="versions_finished.length > 0" data-id="completed-versions-status">
+            <span class="status-label" data-id="completed-versions-label">Completed:</span>
+            <div class="version-chips" data-id="completed-version-chips">
+              <n-tag v-for="version in versions_finished" :key="version" type="success"
+                :data-id="`completed-version-${version}`">
                 {{ version }}
               </n-tag>
             </div>
           </div>
 
-          <div class="status-item" v-if="versions_failed.length > 0">
-            <span class="status-label">Failed:</span>
-            <div class="version-chips">
-              <n-tag v-for="version in versions_failed" :key="version" type="error">
+          <div class="status-item" v-if="versions_failed.length > 0" data-id="failed-versions-status">
+            <span class="status-label" data-id="failed-versions-label">Failed:</span>
+            <div class="version-chips" data-id="failed-version-chips">
+              <n-tag v-for="version in versions_failed" :key="version" type="error"
+                :data-id="`failed-version-${version}`">
                 {{ version }}
               </n-tag>
             </div>
@@ -53,12 +54,13 @@
         </div>
       </div>
 
-      <div v-if="tools_tabs.length > 0" class="tools-section">
-        <n-tabs type="card" class="tools-tabs">
-          <n-tab-pane v-for="version in tools_tabs" :key="version" :tab="version" :name="version">
-            <n-table striped>
+      <div v-if="tools_tabs.length > 0" class="tools-section" data-id="tools-section">
+        <n-tabs type="card" class="tools-tabs" data-id="tools-tabs">
+          <n-tab-pane v-for="version in tools_tabs" :key="version" :tab="version" :name="version"
+            :data-id="`tools-tab-${version}`">
+            <n-table striped data-id="tools-table">
               <thead>
-                <tr>
+                <tr data-id="tools-table-header">
                   <th>Tool</th>
                   <th>Downloaded</th>
                   <th>Extracted</th>
@@ -67,15 +69,16 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="(tool, name) in tools[version]" :key="name">
-                  <td>{{ tool.name }}</td>
-                  <td><n-tag :type="tool.downloaded ? 'success' : 'default'">{{ tool.downloaded ? 'Yes' : 'No'
-                      }}</n-tag></td>
-                  <td><n-tag :type="tool.extracted ? 'success' : 'default'">{{ tool.extracted ? 'Yes' : 'No' }}</n-tag>
-                  </td>
-                  <td><n-tag :type="tool.finished ? 'success' : 'default'">{{ tool.finished ? 'Yes' : 'No' }}</n-tag>
-                  </td>
-                  <td><n-tag :type="tool.error ? 'error' : 'default'">{{ tool.error ? 'Yes' : 'No' }}</n-tag></td>
+                <tr v-for="(tool, name) in tools[version]" :key="name" :data-id="`tool-row-${version}-${name}`">
+                  <td data-id="tool-name">{{ tool.name }}</td>
+                  <td><n-tag :type="tool.downloaded ? 'success' : 'default'"
+                      :data-id="`tool-downloaded-${version}-${name}`">{{ tool.downloaded ? 'Yes' : 'No' }}</n-tag></td>
+                  <td><n-tag :type="tool.extracted ? 'success' : 'default'"
+                      :data-id="`tool-extracted-${version}-${name}`">{{ tool.extracted ? 'Yes' : 'No' }}</n-tag></td>
+                  <td><n-tag :type="tool.finished ? 'success' : 'default'"
+                      :data-id="`tool-finished-${version}-${name}`">{{ tool.finished ? 'Yes' : 'No' }}</n-tag></td>
+                  <td><n-tag :type="tool.error ? 'error' : 'default'" :data-id="`tool-error-${version}-${name}`">{{
+                    tool.error ? 'Yes' : 'No' }}</n-tag></td>
                 </tr>
               </tbody>
             </n-table>
@@ -83,8 +86,8 @@
         </n-tabs>
       </div>
 
-      <div class="action-footer" v-if="instalation_finished">
-        <n-button @click="nextstep" type="error" size="large">
+      <div class="action-footer" v-if="instalation_finished" data-id="action-footer">
+        <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button-footer">
           Complete Installation
         </n-button>
       </div>

@@ -1,56 +1,59 @@
 <template>
-  <div class="prerequisites">
-    <h1 class="title">Prerequisites Check</h1>
-    <p class="description">The installer will now verify required components for ESP-IDF...</p>
+  <div class="prerequisites" data-id="prerequisites-check">
+    <h1 class="title" data-id="prerequisites-title">Prerequisites Check</h1>
+    <p class="description" data-id="prerequisites-description">The installer will now verify required components for
+      ESP-IDF...</p>
 
-    <div class="check-section">
-      <n-card class="prerequisites-list">
+    <div class="check-section" data-id="check-section">
+      <n-card class="prerequisites-list" data-id="prerequisites-card">
         <template #header>
-          <div class="card-header">
-            <span class="header-title">Prerequisites</span>
-
+          <div class="card-header" data-id="prerequisites-card-header">
+            <span class="header-title" data-id="prerequisites-header-title">Prerequisites</span>
           </div>
         </template>
 
-        <n-spin :show="loading">
-          <ul class="items-list">
+        <n-spin :show="loading" data-id="prerequisites-spinner">
+          <ul class="items-list" data-id="prerequisites-items-list">
             <li v-for="p in display_prerequisities" :key="p.name"
-              :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }">
-              <span class="item-icon">{{ p.icon }}</span>
-              <span class="item-name">{{ p.name }}</span>
+              :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }"
+              :data-id="`prerequisite-item-${p.name}`">
+              <span class="item-icon" :data-id="`prerequisite-icon-${p.name}`">{{ p.icon }}</span>
+              <span class="item-name" :data-id="`prerequisite-name-${p.name}`">{{ p.name }}</span>
             </li>
           </ul>
         </n-spin>
-
       </n-card>
-      <n-button @click="check_prerequisites" type="error" :loading="loading">
+      <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
         {{ loading ? 'Checking...' : 'Check Prerequisites' }}
       </n-button>
 
       <!-- Results Section -->
-      <div v-if="did_the_check_run" class="results-section">
+      <div v-if="did_the_check_run" class="results-section" data-id="prerequisites-results">
         <n-result v-if="missing_prerequisities.length === 0" status="success" title="All Prerequisites Installed"
-          description="Your system is ready for ESP-IDF installation">
+          description="Your system is ready for ESP-IDF installation" data-id="prerequisites-success-result">
           <template #footer>
-            <n-button @click="nextstep" type="error">
+            <n-button @click="nextstep" type="error" data-id="continue-button">
               Continue to Next Step
             </n-button>
           </template>
         </n-result>
 
         <n-result v-else status="warning" title="Missing Prerequisites"
-          :description="os === 'windows' ? 'Click below to automatically install missing components' : 'Please install the following components manually'">
+          :description="os === 'windows' ? 'Click below to automatically install missing components' : 'Please install the following components manually'"
+          data-id="prerequisites-warning-result">
           <template #footer>
-            <div class="missing-items">
-              <div v-if="os === 'windows'" class="windows-install">
-                <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities">
+            <div class="missing-items" data-id="missing-prerequisites">
+              <div v-if="os === 'windows'" class="windows-install" data-id="windows-install-section">
+                <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities"
+                  data-id="install-prerequisites-button">
                   Install Missing Prerequisites
                 </n-button>
               </div>
-              <div v-else class="manual-install">
-                <p class="hint">Please install these components and run the check again:</p>
-                <ul class="missing-list">
-                  <li v-for="p in missing_prerequisities" :key="p">{{ p }}</li>
+              <div v-else class="manual-install" data-id="manual-install-section">
+                <p class="hint" data-id="manual-install-hint">Please install these components and run the check again:
+                </p>
+                <ul class="missing-list" data-id="missing-prerequisites-list">
+                  <li v-for="p in missing_prerequisities" :key="p" :data-id="`missing-prerequisite-${p}`">{{ p }}</li>
                 </ul>
               </div>
             </div>

@@ -1,21 +1,24 @@
 <template>
-  <div class="version-select">
-    <h1 class="title">Select ESP-IDF Versions</h1>
-    <p class="description">Choose which ESP-IDF SDK versions to install:</p>
+  <div class="version-select" data-id="version-select">
+    <h1 class="title" data-id="version-select-title">Select ESP-IDF Versions</h1>
+    <p class="description" data-id="version-select-description">Choose which ESP-IDF SDK versions to install:</p>
 
-    <n-card class="selection-card">
-      <n-spin :show="loading">
-        <div class="versions-grid">
+    <n-card class="selection-card" data-id="version-selection-card">
+      <n-spin :show="loading" data-id="version-loading-spinner">
+        <div class="versions-grid" data-id="versions-grid">
           <div v-for="version in versions" :key="version.name" class="version-item"
-            :class="{ 'selected': version.selected }">
-            <n-checkbox v-model:checked="version.selected">
-              <div class="version-content">
-                <div class="version-header">
-                  <span class="version-name">{{ version.name }}</span>
-                  <n-tag v-if="version.latest" type="error" size="small">Latest</n-tag>
-                  <n-tag v-if="version.lts" type="success" size="small">LTS</n-tag>
+            :class="{ 'selected': version.selected }" :data-id="`version-item-${version.name}`">
+            <n-checkbox v-model:checked="version.selected" :data-id="`version-checkbox-${version.name}`">
+              <div class="version-content" :data-id="`version-content-${version.name}`">
+                <div class="version-header" :data-id="`version-header-${version.name}`">
+                  <span class="version-name" :data-id="`version-name-${version.name}`">{{ version.name }}</span>
+                  <n-tag v-if="version.latest" type="error" size="small"
+                    :data-id="`version-latest-tag-${version.name}`">Latest</n-tag>
+                  <n-tag v-if="version.lts" type="success" size="small"
+                    :data-id="`version-lts-tag-${version.name}`">LTS</n-tag>
                 </div>
-                <span v-if="version.description" class="version-description">
+                <span v-if="version.description" class="version-description"
+                  :data-id="`version-description-${version.name}`">
                   {{ version.description }}
                 </span>
               </div>
@@ -23,20 +26,9 @@
           </div>
         </div>
 
-        <!-- <div class="summary-section" v-if="selectedVersions.length > 0">
-          <div class="summary-content">
-            <span class="summary-label">Selected versions:</span>
-            <div class="selected-tags">
-              <n-tag v-for="version in selectedVersions" :key="version" type="error" closable
-                @close="deselectVersion(version)">
-                {{ version }}
-              </n-tag>
-            </div>
-          </div>
-        </div> -->
-
-        <div class="action-footer">
-          <n-button @click="processVersions" type="error" size="large" :disabled="!hasSelectedVersions">
+        <div class="action-footer" data-id="version-action-footer">
+          <n-button @click="processVersions" type="error" size="large" :disabled="!hasSelectedVersions"
+            data-id="continue-installation-button">
             Continue Installation
           </n-button>
         </div>
