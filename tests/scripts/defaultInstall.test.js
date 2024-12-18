@@ -5,13 +5,20 @@ import { describe, it, before, after, beforeEach, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-const application = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+let pathToEim;
+
+if (process.env.EIM_GUI_PATH) {
+    pathToEim = process.env.EIM_GUI_PATH;
+} else {
+    pathToEim = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+}
+
 let eimRunner = "";
 
 describe("EIM Application Launch", () => {
     before(async function () {
         this.timeout(10000);
-        eimRunner = new EIMRunner(application);
+        eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();
         } catch (err) {
@@ -87,6 +94,7 @@ describe("EIM Application Launch", () => {
             const completed = await eimRunner.findByText(
                 "installation completed"
             );
+            expect(completed).to.not.be.false;
             expect(await completed.isDisplayed()).to.be.true;
         } catch (error) {
             logger.info("Failed to complete installation", error);

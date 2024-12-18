@@ -4,8 +4,8 @@
     "version": "0.0.1",
     "main": "index.js",
     "scripts": {
-        "startup": "mocha scripts/startup.test.js",
-        "default": "mocha --bail scripts/defaultInstall.test.js"
+        "startup": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-startup.xml scripts/startup.test.js",
+        "default": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-default.xml scripts/defaultInstall.test.js"
     },
     "author": "",
     "license": "ISC",
@@ -13,6 +13,7 @@
     "dependencies": {
         "chai": "^5.1.2",
         "mocha": "^11.0.1",
+        "mocha-junit-reporter": "^2.2.1",
         "selenium-webdriver": "^4.27.0",
         "winston": "^3.17.0"
     }
