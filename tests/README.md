@@ -39,9 +39,14 @@ Install the tauri-driver using Cargo:
 Test scripts are created to allow launching and running the tests. These scripts do not build the Tauri application, it is necessary to have them compiled before running the tests.
 
 Tests can be executed using npm scripts. Navigate to the `/tests` folder and run:
-`npm run startup`
-`npm run default`
+`npx mocha scripts/startup.test.js`
+`npx mocha scripts/defaultInstall.test.js`
 
 TODO: The path for the compiled application can be passed as an argument for the test script. The default location used by the scripts is `~/eim-gui/eim`, make sure the file is available in the location.
+
+To execute tests on windows, use the script  
+`.\tests\run_test.ps1 "<PATH TO EIM.EXE>" "<Version being tested>"`  
+Default arguments are:  
+`.\tests\run_test.ps1 "$env:USERPROFILE\eim-gui\eim.exe" "0.1.0"`
 
 ## References

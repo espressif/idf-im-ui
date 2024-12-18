@@ -5,14 +5,27 @@ import { describe, it, before, after, beforeEach, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-const eimVersion = "0.1.0";
-const application = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+let pathToEim;
+let eimVersion;
+
+if (process.env.EIM_GUI_PATH) {
+    pathToEim = process.env.EIM_GUI_PATH;
+} else {
+    pathToEim = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+}
+
+if (process.env.EIM_GUI_VERSION) {
+    eimVersion = process.env.EIM_GUI_VERSION;
+} else {
+    eimVersion = "0.1.0";
+}
+
 let eimRunner = "";
 
 describe("EIM Application Launch", () => {
     before(async function () {
         this.timeout(10000);
-        eimRunner = new EIMRunner(application);
+        eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();
         } catch (err) {
