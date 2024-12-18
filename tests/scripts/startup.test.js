@@ -5,6 +5,7 @@ import { describe, it, before, after, beforeEach, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
+const eimVersion = "0.1.0";
 const application = path.resolve(os.homedir(), "eim-gui", "eim.exe");
 let eimRunner = "";
 
@@ -38,6 +39,17 @@ describe("EIM Application Launch", () => {
             expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
         } catch (error) {
             logger.info("Failed to get Welcome header", error);
+            throw error;
+        }
+    });
+
+    it("Should show correct version number", async function () {
+        try {
+            const footer = await eimRunner.findByClass("footer");
+            const text = await footer.getText();
+            expect(text).to.equal(`ESP-IDF Installation Manager ${eimVersion}`);
+        } catch (error) {
+            logger.info("Failed to get EIM version footer", error);
             throw error;
         }
     });

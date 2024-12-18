@@ -4,7 +4,8 @@
     "version": "0.0.1",
     "main": "index.js",
     "scripts": {
-        "test": "mocha scripts/startup.test.js"
+        "startup": "mocha scripts/startup.test.js",
+        "default": "mocha --bail scripts/defaultInstall.test.js"
     },
     "author": "",
     "license": "ISC",
