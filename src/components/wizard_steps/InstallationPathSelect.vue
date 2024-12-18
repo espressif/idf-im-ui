@@ -1,30 +1,32 @@
 <template>
-  <div class="install-path">
-    <h1 class="title">Select Installation Location</h1>
+  <div class="install-path" data-id="install-path">
+    <h1 class="title" data-id="install-path-title">Select Installation Location</h1>
 
-    <n-card class="path-card">
-      <div class="card-content">
-        <div class="path-info">
-          <h3 class="info-title">ESP-IDF Installation Directory</h3>
-          <p class="info-desc">Choose where to install ESP-IDF and its tools. Ensure you have sufficient disk space.</p>
+    <n-card class="path-card" data-id="path-selection-card">
+      <div class="card-content" data-id="path-card-content">
+        <div class="path-info" data-id="path-info-section">
+          <h3 class="info-title" data-id="path-info-title">ESP-IDF Installation Directory</h3>
+          <p class="info-desc" data-id="path-info-description">Choose where to install ESP-IDF and its tools. Ensure you
+            have sufficient disk space.</p>
         </div>
 
-        <div class="path-input">
-          <n-input-group>
-            <n-input v-model:value="installPath" placeholder="Choose installation directory" class="path-field" />
-            <n-button @click="openFolderDialog" type="error">
+        <div class="path-input" data-id="path-input-section">
+          <n-input-group data-id="path-input-group">
+            <n-input v-model:value="installPath" placeholder="Choose installation directory" class="path-field"
+              data-id="installation-path-input" />
+            <n-button @click="openFolderDialog" type="error" data-id="browse-button">
               Browse
             </n-button>
           </n-input-group>
         </div>
 
-        <div class="path-validation" v-if="pathError">
-          <p class="error-message">{{ pathError }}</p>
+        <div class="path-validation" v-if="pathError" data-id="path-validation-section">
+          <p class="error-message" data-id="path-error-message">{{ pathError }}</p>
         </div>
       </div>
 
-      <div class="action-footer">
-        <n-button @click="processInstallPath" type="error" size="large">
+      <div class="action-footer" data-id="path-action-footer">
+        <n-button @click="processInstallPath" type="error" size="large" data-id="continue-path-button">
           Continue
         </n-button>
       </div>

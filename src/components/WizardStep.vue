@@ -1,16 +1,16 @@
 <template>
-  <div class="wizard-layout">
-    <div class="wizard-sidebar">
-      <div class="steps-list">
+  <div class="wizard-layout" data-id="wizard-layout">
+    <div class="wizard-sidebar" data-id="wizard-sidebar">
+      <div class="steps-list" data-id="steps-list">
         <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
           'active': currentStep === index + 1,
           'completed': currentStep > index + 1,
           'disabled': currentStep === 7 || currentStep === 8,
           'clickable': currentStep > index + 1 && currentStep < 7
-        }" @click="handleStepClick(index + 1)">
-          <div class="step-number">
+        }" @click="handleStepClick(index + 1)" :data-id="`step-item-${index + 1}`">
+          <div class="step-number" :data-id="`step-number-${index + 1}`">
             <template v-if="currentStep > index + 1">
-              <svg class="checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <svg class="checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="step-checkmark">
                 <path d="M20 6L9 17L4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
               </svg>
             </template>
@@ -18,22 +18,22 @@
               {{ index + 1 }}
             </template>
           </div>
-          <div class="step-title">{{ step.title }}</div>
+          <div class="step-title" :data-id="`step-title-${index + 1}`">{{ step.title }}</div>
         </div>
       </div>
     </div>
 
     <!-- Main content -->
-    <div class="wizard-container">
-      <div class="wizard-step-container">
-        <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" />
-        <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" />
-        <TargetSelect :nextstep=nextStep v-if="currentStep === 3" />
-        <VersionSelect :nextstep=nextStep v-if="currentStep === 4" />
-        <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" />
-        <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" />
-        <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" />
-        <Complete v-if="currentStep === 8" />
+    <div class="wizard-container" data-id="wizard-container">
+      <div class="wizard-step-container" data-id="wizard-step-content">
+        <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" data-id="prerequisites-check" />
+        <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" data-id="python-sanity-check" />
+        <TargetSelect :nextstep=nextStep v-if="currentStep === 3" data-id="target-select" />
+        <VersionSelect :nextstep=nextStep v-if="currentStep === 4" data-id="version-select" />
+        <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" data-id="mirror-select" />
+        <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" data-id="installation-path-select" />
+        <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" data-id="installation-progress" />
+        <Complete v-if="currentStep === 8" data-id="complete" />
       </div>
     </div>
   </div>

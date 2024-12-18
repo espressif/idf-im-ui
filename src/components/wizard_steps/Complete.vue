@@ -1,14 +1,14 @@
 <template>
-  <div class="complete-screen">
+  <div class="complete-screen" data-id="complete-screen">
     <n-result status="success" title="Installation Complete!"
-      description="ESP-IDF has been successfully installed on your system">
+      description="ESP-IDF has been successfully installed on your system" data-id="completion-result">
       <template #footer>
-        <div class="actions">
-          <div class="info-section">
-            <div v-if="os === 'windows'" class="windows-info">
-              <n-alert type="info">
+        <div class="actions" data-id="completion-actions">
+          <div class="info-section" data-id="info-section">
+            <div v-if="os === 'windows'" class="windows-info" data-id="windows-info">
+              <n-alert type="info" data-id="powershell-shortcut-alert">
                 <template #icon>
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="shortcut-icon">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
@@ -17,10 +17,10 @@
               </n-alert>
             </div>
 
-            <div class="config-save">
-              <n-alert type="info">
+            <div class="config-save" data-id="config-save-section">
+              <n-alert type="info" data-id="save-config-alert">
                 <template #icon>
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="save-icon">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                   </svg>
@@ -30,11 +30,11 @@
             </div>
           </div>
 
-          <div class="buttons">
-            <n-button @click="save_config" type="info" class="save-button">
+          <div class="buttons" data-id="action-buttons">
+            <n-button @click="save_config" type="info" class="save-button" data-id="save-config-button">
               Save Configuration
             </n-button>
-            <n-button @click="quit" type="error">
+            <n-button @click="quit" type="error" data-id="exit-button">
               Exit Installer
             </n-button>
           </div>

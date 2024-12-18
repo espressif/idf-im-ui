@@ -1,17 +1,18 @@
 <template>
-  <div class="target-select">
-    <h1 class="title">Select Target Chips</h1>
-    <p class="description">Choose the ESP chips you'll be developing for:</p>
+  <div class="target-select" data-id="target-select">
+    <h1 class="title" data-id="target-select-title">Select Target Chips</h1>
+    <p class="description" data-id="target-select-description">Choose the ESP chips you'll be developing for:</p>
 
-    <n-card class="selection-card">
-      <n-spin :show="loading">
-        <div class="targets-grid">
+    <n-card class="selection-card" data-id="target-selection-card">
+      <n-spin :show="loading" data-id="target-loading-spinner">
+        <div class="targets-grid" data-id="targets-grid">
           <div v-for="target in targets" :key="target.name" class="target-item" :class="{ 'selected': target.selected }"
-            @click="clickOnTarget">
-            <n-checkbox v-model:checked="target.selected">
-              <div class="target-content">
-                <span class="target-name">{{ target.name }}</span>
-                <span class="target-description" v-if="target.description">
+            :data-id="`target-item-${target.name}`" @click="clickOnTarget">
+            <n-checkbox v-model:checked="target.selected" :data-id="`target-checkbox-${target.name}`">
+              <div class="target-content" :data-id="`target-content-${target.name}`">
+                <span class="target-name" :data-id="`target-name-${target.name}`">{{ target.name }}</span>
+                <span class="target-description" v-if="target.description"
+                  :data-id="`target-description-${target.name}`">
                   {{ target.description }}
                 </span>
               </div>
@@ -19,8 +20,9 @@
           </div>
         </div>
 
-        <div class="action-footer">
-          <n-button @click="processTargets" type="error" size="large" :disabled="!hasSelectedTargets">
+        <div class="action-footer" data-id="target-action-footer">
+          <n-button @click="processTargets" type="error" size="large" :disabled="!hasSelectedTargets"
+            data-id="continue-targets-button">
             Continue with Selected Targets
           </n-button>
         </div>
