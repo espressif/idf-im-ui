@@ -5,7 +5,8 @@
     "main": "index.js",
     "scripts": {
         "startup": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-startup.xml scripts/startup.test.js",
-        "default": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-default.xml scripts/defaultInstall.test.js"
+        "default": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-default.xml scripts/defaultInstall.test.js",
+        "expert": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-expert.xml scripts/expertInstall.test.js"
     },
     "author": "",
     "license": "ISC",
