@@ -25,3 +25,4 @@ Set-Location -Path "./tests"
 # Run tests using npm run <test file>
 npm run startup
 npm run default
+npm run expert
