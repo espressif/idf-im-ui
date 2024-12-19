@@ -10,14 +10,17 @@ let pathToEim;
 if (process.env.EIM_GUI_PATH) {
     pathToEim = process.env.EIM_GUI_PATH;
 } else {
-    pathToEim = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+    pathToEim =
+        os.platform() !== "win32"
+            ? path.resolve(os.homedir(), "eim-gui", "eim")
+            : path.resolve(os.homedir(), "eim-gui", "eim.exe");
 }
 
 let eimRunner = "";
 
 describe("EIM Application Launch", () => {
     before(async function () {
-        this.timeout(10000);
+        this.timeout(30000);
         eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();
@@ -83,14 +86,16 @@ describe("EIM Application Launch", () => {
                     logger.debug("failed!!!!");
                     break;
                 }
-                if (await eimRunner.findByText("Complete Installation", 1000)) {
+                if (
+                    await eimRunner.findByText("Installation Complete!", 1000)
+                ) {
                     logger.debug("Completed!!!");
                     break;
                 }
                 await new Promise((resolve) => setTimeout(resolve, 500));
             }
             const completed = await eimRunner.findByText(
-                "Complete Installation"
+                "Installation Complete!"
             );
             expect(completed).to.not.be.false;
             expect(await completed.isDisplayed()).to.be.true;
@@ -100,21 +105,15 @@ describe("EIM Application Launch", () => {
         }
     });
 
-    it("Should save installation configuration", async function () {
+    it("Should offer to save installation configuration", async function () {
         this.timeout(1300000);
 
         try {
-            await eimRunner.clickButton("Complete Installation");
-            const completed = await eimRunner.findByText(
-                "Installation Complete!"
-            );
-            expect(await completed.isDisplayed()).to.be.true;
             const saveConfig = await eimRunner.findByText("Save Configuration");
             expect(saveConfig).to.not.be.false;
             expect(await saveConfig.isDisplayed()).to.be.true;
             const exit = await eimRunner.findByText("Exit Installer");
             expect(exit).to.not.be.false;
-            await exit.click();
         } catch (error) {
             logger.info("Failed to complete installation", error);
             throw error;

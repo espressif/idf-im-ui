@@ -27,7 +27,7 @@ Install WebKitWebDriver ( use command `which WebKitWebDriver` to check if availa
 Windows:
 Download [Microsoft Edge Driver](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver) at the same version from Microsoft Edge installed in the system (Please double check version)
 The Edge Driver must be copied on system path, either add the file location to path, or copy it to a valid windows PATH folder (c:\windows)
-If changing path note that thi sis not a permanent change and need to be redone for every new shell, or added to the $profile
+If changing path note that this is not a permanent change and need to be redone for every new shell, or added to the $profile
 `$env:Path += ';C:\<your_folder>'`
 `$env:Path += ';'+$env:USERPROFILE+'\EdgeDriver'`
 
