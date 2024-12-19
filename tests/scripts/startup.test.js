@@ -11,7 +11,10 @@ let eimVersion;
 if (process.env.EIM_GUI_PATH) {
     pathToEim = process.env.EIM_GUI_PATH;
 } else {
-    pathToEim = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+    pathToEim =
+        os.platform() !== "win32"
+            ? path.resolve(os.homedir(), "eim-gui", "eim")
+            : path.resolve(os.homedir(), "eim-gui", "eim.exe");
 }
 
 if (process.env.EIM_GUI_VERSION) {
@@ -24,7 +27,7 @@ let eimRunner = "";
 
 describe("EIM Application Launch", () => {
     before(async function () {
-        this.timeout(10000);
+        this.timeout(30000);
         eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();

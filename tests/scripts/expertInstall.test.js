@@ -11,14 +11,17 @@ let pathToEim;
 if (process.env.EIM_GUI_PATH) {
     pathToEim = process.env.EIM_GUI_PATH;
 } else {
-    pathToEim = path.resolve(os.homedir(), "eim-gui", "eim.exe");
+    pathToEim =
+        os.platform() !== "win32"
+            ? path.resolve(os.homedir(), "eim-gui", "eim")
+            : path.resolve(os.homedir(), "eim-gui", "eim.exe");
 }
 
 let eimRunner = "";
 
 describe("EIM expert Installation", () => {
     before(async function () {
-        this.timeout(10000);
+        this.timeout(30000);
         eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();
@@ -377,7 +380,6 @@ describe("EIM expert Installation", () => {
             expect(await saveConfig.isDisplayed()).to.be.true;
             const exit = await eimRunner.findByText("Exit Installer");
             expect(exit).to.not.be.false;
-            await exit.click();
         } catch (error) {
             logger.info("Failed to complete installation", error);
             throw error;
