@@ -56,7 +56,7 @@ jobs:
               if: runner.os != 'Windows'
               run: |
                   mkdir -p test-bin
-                  unzip ./artifacts/eim-linux-x86_64-binary -d test-bin
+                  unzip ./artifacts/eim-linux-x86_64-binary/eim -d test-bin
 
             - name: Set executable permissions (non-Windows)
               if: runner.os != 'Windows'
@@ -73,7 +73,7 @@ jobs:
               run: |
                   export LOG_TO_FILE="true"
                   chmod +x ./tests/run_test.sh
-                  . ./tests/run_test.sh "../test-bin/eim" "${{ env.CLI_TAG }}"
+                  . ./tests/run_test.sh "../../test-bin/eim" "${{ env.CLI_TAG }}"
 
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -101,7 +101,7 @@ jobs:
               if: runner.os == 'Windows'
               run: |
                   $env:LOG_TO_FILE="true"
-                  .\tests\run_test.ps1 "..\test-bin\eim.exe" "eim ${{ env.CLI_TAG }}"
+                  .\tests\run_test.ps1 "..\..\test-bin\eim.exe" "eim ${{ env.CLI_TAG }}"
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
