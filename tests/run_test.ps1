@@ -20,7 +20,7 @@ Set-Location -Path "./tests"
 
 # Install node modules using npm ci
 # This can be used if the node modules folder is not packed with the repo
-# npm ci
+npm ci
 
 # Run tests using npm run <test file>
 npm run startup
