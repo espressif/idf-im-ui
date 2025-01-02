@@ -99,7 +99,7 @@ jobs:
               run: |
                 # Update Microsoft Edge
                 $ErrorActionPreference = "Stop"
-                $EdgeUpdate = Start-Process msedge --ArgumentList '--update' -NoNewWindow -Wait -PassThru
+                $EdgeUpdate = Start-Process "powershell" -ArgumentList "winget install --id Microsoft.Edge -e --source winget" -NoNewWindow -Wait -PassThru
                 if ($EdgeUpdate.ExitCode -ne 0) {
                     Write-Error "Failed to update Microsoft Edge"
                 }
