@@ -59,6 +59,7 @@ describe("EIM Application Launch", () => {
 
         try {
             await eimRunner.clickButton("Get Started");
+            await new Promise((resolve) => setTimeout(resolve, 2000));
             const header = await eimRunner.findByCSS("h1");
             const text = await header.getText();
             expect(text, "Expected installation setup screen").to.equal(
