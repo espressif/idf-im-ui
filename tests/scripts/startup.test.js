@@ -52,7 +52,9 @@ describe("EIM Application Launch", () => {
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
             const text = await header.getText();
-            expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
+            expect(text, "Expected welcome text").to.equal(
+                "Welcome to ESP-IDF Installation Manager!"
+            );
         } catch (error) {
             logger.info("Failed to get Welcome header", error);
             throw error;
@@ -63,7 +65,9 @@ describe("EIM Application Launch", () => {
         try {
             const footer = await eimRunner.findByClass("footer");
             const text = await footer.getText();
-            expect(text).to.equal(`ESP-IDF Installation Manager ${eimVersion}`);
+            expect(text, "Expected correct version shown on page").to.equal(
+                `ESP-IDF Installation Manager ${eimVersion}`
+            );
         } catch (error) {
             logger.info("Failed to get EIM version footer", error);
             throw error;

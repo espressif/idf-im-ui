@@ -45,7 +45,9 @@ describe("EIM Application Launch", () => {
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
             const text = await header.getText();
-            expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
+            expect(text, "Expected welcome text").to.equal(
+                "Welcome to ESP-IDF Installation Manager!"
+            );
         } catch (error) {
             logger.info("Failed to get Welcome header", error);
             throw error;
@@ -59,11 +61,16 @@ describe("EIM Application Launch", () => {
             await eimRunner.clickButton("Get Started");
             const header = await eimRunner.findByCSS("h1");
             const text = await header.getText();
-            expect(text).to.equal("Installation Setup");
+            expect(text, "Expected installation setup screen").to.equal(
+                "Installation Setup"
+            );
             const simplified = await eimRunner.findByText(
                 "Simplified Installation"
             );
-            expect(await simplified.isDisplayed()).to.be.true;
+            expect(
+                await simplified.isDisplayed(),
+                "Expected option for simplified installation"
+            ).to.be.true;
         } catch (error) {
             logger.info("Failed to locate get started button", error);
             throw error;
@@ -78,7 +85,10 @@ describe("EIM Application Launch", () => {
             const installing = await eimRunner.findByText(
                 "Please wait while the installation progresses..."
             );
-            expect(await installing.isDisplayed()).to.be.true;
+            expect(
+                await installing.isDisplayed(),
+                "Expected installation progress screen"
+            ).to.be.true;
             const startTime = Date.now();
 
             while (Date.now() - startTime < 1200000) {
@@ -97,8 +107,12 @@ describe("EIM Application Launch", () => {
             const completed = await eimRunner.findByText(
                 "Installation Complete!"
             );
-            expect(completed).to.not.be.false;
-            expect(await completed.isDisplayed()).to.be.true;
+            expect(completed, "Expected installation to be completed").to.not.be
+                .false;
+            expect(
+                await completed.isDisplayed(),
+                "Expected 'Installation Complete' text displayed"
+            ).to.be.true;
         } catch (error) {
             logger.info("Failed to complete installation", error);
             throw error;
@@ -110,10 +124,14 @@ describe("EIM Application Launch", () => {
 
         try {
             const saveConfig = await eimRunner.findByText("Save Configuration");
-            expect(saveConfig).to.not.be.false;
-            expect(await saveConfig.isDisplayed()).to.be.true;
+            expect(saveConfig, "Expected screen for saving configuration").to
+                .not.be.false;
+            expect(
+                await saveConfig.isDisplayed(),
+                "Expected option to save configuration to be displayed"
+            ).to.be.true;
             const exit = await eimRunner.findByText("Exit Installer");
-            expect(exit).to.not.be.false;
+            expect(exit, "Expected option to exit installer").to.not.be.false;
         } catch (error) {
             logger.info("Failed to complete installation", error);
             throw error;

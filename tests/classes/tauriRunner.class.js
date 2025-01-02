@@ -68,7 +68,7 @@ export class EIMRunner {
                 timeout,
                 `Element with id ${id} not found`
             );
-            logger.debug(`Selected element ${element}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -83,7 +83,7 @@ export class EIMRunner {
                 timeout,
                 `Element with class ${className} not found`
             );
-            logger.debug(`Selected element ${element}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -98,7 +98,7 @@ export class EIMRunner {
                 timeout,
                 `Element with attribute ${cssAttribute} not found`
             );
-            logger.debug(`Selected element ${element}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -113,7 +113,7 @@ export class EIMRunner {
                 timeout,
                 `Element with test ID ${dataId} not found`
             );
-            logger.debug(`Selected element ${element}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -130,7 +130,7 @@ export class EIMRunner {
                 timeout,
                 `Element containing text "${text}" not found`
             );
-            logger.debug(`Selected element ${element}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -147,7 +147,7 @@ export class EIMRunner {
                 timeout,
                 `Button with text "${text}" not found`
             );
-            logger.debug(`Selected button ${button}`);
+            logger.debug(`Selected element at ${await element.getRect()}`);
             await button.click();
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
