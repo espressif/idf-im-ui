@@ -67,6 +67,7 @@ jobs:
             - name: Install dependencies (Ubuntu)
               if: runner.os == 'Linux'
               run: |
+                  sudo apt-get update
                   sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip webkit2gtk-driver
 
             - name: Run IDF installation and post install test script (non-Windows)
@@ -93,6 +94,27 @@ jobs:
                   mkdir -p test-bin
                   Copy-Item .\Artifacts\eim-windows-binary\eim.exe -Destination test-bin
                   # 7z x ./artifacts/eim-windows-binary -otest-bin
+
+            - name: Update Microsoft Edge
+              run: |
+                # Update Microsoft Edge
+                $ErrorActionPreference = "Stop"
+                $EdgeUpdate = Start-Process msedge --ArgumentList '--update' -NoNewWindow -Wait -PassThru
+                if ($EdgeUpdate.ExitCode -ne 0) {
+                    Write-Error "Failed to update Microsoft Edge"
+                }
+
+            # - name: Update Edge WebDriver
+            #   run: |
+            #     # Update Edge WebDriver
+            #     $ErrorActionPreference = "Stop"
+            #     $LatestVersion = (Invoke-WebRequest -Uri "https://msedgewebdriverstorage.blob.core.windows.net/edgewebdriver/LATEST_STABLE").Content.Trim()
+            #     $DriverZipUrl = "https://msedgewebdriverstorage.blob.core.windows.net/edgewebdriver/${LatestVersion}/edgedriver_win64.zip"
+            #     $DriverZipPath = "$env:USERPROFILE\Downloads\edgedriver.zip"
+            #     $DriverExtractPath = "$env:USERPROFILE\edgedriver"
+            #     Invoke-WebRequest -Uri $DriverZipUrl -OutFile $DriverZipPath
+            #     Expand-Archive -Path $DriverZipPath -DestinationPath $DriverExtractPath -Force
+            #     $Env:PATH += ";$DriverExtractPath"
 
             - name: Install dependencies (Windows)
               if: runner.os == 'windows'
