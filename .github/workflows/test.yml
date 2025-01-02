@@ -74,11 +74,12 @@ jobs:
               if: runner.os == 'Linux'
               run: |
                   sudo Xvfb :99 -ac -screen 0 1920x1080x24 &
-                  export DISPLAY=:99
+                  echo "DISPLAY=:99" >> $GITHUB_ENV
 
             - name: Run IDF installation and post install test script (non-Windows)
               if: runner.os != 'Windows'
               run: |
+                  export DEBUG="true"
                   export LOG_TO_FILE="true"
                   chmod +x ./tests/run_test.sh
                   . ./tests/run_test.sh "../test-bin/eim" "${{ env.CLI_TAG }}"
@@ -115,8 +116,9 @@ jobs:
             - name: Run IDF installation and post install test script (Windows)
               if: runner.os == 'Windows'
               run: |
+                  $env:DEBUG="true"
                   $env:LOG_TO_FILE="true"
-                  .\tests\run_test.ps1 "..\test-bin\eim.exe" "eim ${{ env.CLI_TAG }}"
+                  .\tests\run_test.ps1 "..\test-bin\eim.exe" "${{ env.CLI_TAG }}"
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
