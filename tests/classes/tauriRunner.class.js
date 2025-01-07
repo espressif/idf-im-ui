@@ -147,7 +147,7 @@ export class EIMRunner {
                 timeout,
                 `Button with text "${text}" not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected element at ${await button.getRect()}`);
             await button.click();
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
