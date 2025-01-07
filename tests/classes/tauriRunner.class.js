@@ -68,7 +68,7 @@ export class EIMRunner {
                 timeout,
                 `Element with id ${id} not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -83,7 +83,7 @@ export class EIMRunner {
                 timeout,
                 `Element with class ${className} not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -113,7 +113,7 @@ export class EIMRunner {
                 timeout,
                 `Element with test ID ${dataId} not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -130,7 +130,7 @@ export class EIMRunner {
                 timeout,
                 `Element containing text "${text}" not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -147,7 +147,9 @@ export class EIMRunner {
                 timeout,
                 `Button with text "${text}" not found`
             );
-            logger.debug(`Selected element at ${await button.getRect()}`);
+            logger.debug(
+                `Selected button element with text ${await button.getText()}`
+            );
             await button.click();
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);

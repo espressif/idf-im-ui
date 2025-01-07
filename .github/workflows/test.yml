@@ -123,11 +123,11 @@ jobs:
               uses: actions/upload-artifact@v4
               if: always()
               with:
-                  name: test-results-${{ matrix.package_name }}-${{inputs.run_id}}.zip
+                  name: test-results-${{ matrix.package_name }}.zip
                   path: |
-                      ./tests/results-startup.xml
-                      ./tests/results-default.xml
-                      ./tests/results-expert.xml
+                      ./tests/results-startup.json
+                      ./tests/results-default.json
+                      ./tests/results-expert.json
                       ./tests/test.log
 
     publish-test-results:
@@ -137,16 +137,12 @@ jobs:
         if: always()
 
         steps:
-            - name: Download Artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  path: ./artifacts
-
             - name: Publish Test Results
               uses: dorny/test-reporter@v1
               with:
-                  name: Auto Tests
-                  path: "./artifacts/**/*.json"
+                  artifact: /test-results-(.*)/
+                  name: "Auto Tests $1"
+                  path: "*.json"
                   reporter: mocha-json
                   fail-on-empty: "true"
 

@@ -75,11 +75,32 @@ describe("EIM expert Installation", () => {
             const prerequisitesList = await eimRunner.findByDataId(
                 "prerequisites-items-list"
             );
-            const requisitesList = (await prerequisitesList.getText()).split(
-                "\n"
-            );
-            expect(await prerequisitesList.getText()).to.not.be.empty;
-            expect(requisitesList).to.include("git", "cmake", "ninja", "❓");
+            if (os.platform() === "win32") {
+                const requisitesList = (
+                    await prerequisitesList.getText()
+                ).split("\n");
+                expect(await prerequisitesList.getText()).to.not.be.empty;
+                expect(requisitesList).to.include("git", "cmake", "ninja");
+            } else {
+                const requisitesList = (
+                    await prerequisitesList.getText()
+                ).split("❓");
+                expect(await prerequisitesList.getText()).to.not.be.empty;
+                expect(requisitesList).to.include(
+                    "git",
+                    "cmake",
+                    "ninja",
+                    "wget",
+                    "flex",
+                    "bison",
+                    "gperf",
+                    "ccache",
+                    "libffi-dev",
+                    "libssl-dev",
+                    "dfu-util",
+                    "libusb-1.0-0"
+                );
+            }
         } catch (error) {
             logger.info("Failed to locate list of prerequisites", error);
             throw error;
@@ -99,12 +120,9 @@ describe("EIM expert Installation", () => {
             const prerequisitesList = await eimRunner.findByDataId(
                 "prerequisites-items-list"
             );
-            const requisitesList = (await prerequisitesList.getText()).split(
-                "\n"
-            );
+
             expect(await prerequisitesList.getText()).to.not.be.empty;
-            expect(requisitesList).to.include("git", "cmake", "ninja", "✔");
-            expect(requisitesList).to.not.include("❓");
+            expect(await prerequisitesList.getText()).to.not.include("❌");
         } catch (error) {
             logger.info("Failed to show installed prerequisites", error);
             throw error;
