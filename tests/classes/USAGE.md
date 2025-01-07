@@ -19,3 +19,5 @@ const application = path.resolve(os.homedir(), "eim-gui", "eim");
 const {EIMRunner}= await import("./classes/tauriRunner.class.js");
 let eimRunner = new EIMRunner(application);
 eimRunner.launchEIM();
+
+eimRunner.closeEIM()

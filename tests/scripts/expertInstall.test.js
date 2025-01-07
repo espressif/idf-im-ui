@@ -149,18 +149,18 @@ describe("EIM expert Installation", () => {
             await eimRunner.clickButton("Continue to Next Step");
             await new Promise((resolve) => setTimeout(resolve, 2000));
             const targetsList = await eimRunner.findByDataId("targets-grid");
-            const list = (await targetsList.getText()).split("\n");
-            expect(list).to.include(
-                " all",
-                " esp32",
-                " esp32c2",
-                " esp32c3",
-                " esp32c5",
-                " esp32c6",
-                " esp32h2",
-                " esp32p4",
-                " esp32s2",
-                " esp32s3"
+            const targetsText = await targetsList.getText();
+            expect(targetsText).to.include(
+                "all",
+                "esp32",
+                "esp32c2",
+                "esp32c3",
+                "esp32c5",
+                "esp32c6",
+                "esp32h2",
+                "esp32p4",
+                "esp32s2",
+                "esp32s3"
             );
             let targetAll = await eimRunner.findByDataId("target-item-all");
             expect(await targetAll.getAttribute("class")).to.include(
@@ -189,8 +189,8 @@ describe("EIM expert Installation", () => {
             await eimRunner.clickButton("Continue with Selected Targets");
             await new Promise((resolve) => setTimeout(resolve, 2000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
-            const list = (await IDFList.getText()).split("\n");
-            expect(list).to.include(" v5.3.2", " v5.1.5", " master");
+            const list = await IDFList.getText();
+            expect(list).to.include("v5.3.2", "v5.1.5", "master");
             let IDFMaster = await eimRunner.findByDataId("version-item-master");
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
@@ -216,10 +216,10 @@ describe("EIM expert Installation", () => {
             const IDFMirrors = await eimRunner.findByDataId(
                 "idf-mirror-radio-group"
             );
-            let mirrorList = (await IDFMirrors.getText()).split("\n");
-            expect(mirrorList).to.include(
-                " https://github.com",
-                " https://jihulab.com/esp-mirror"
+            let idfMList = await IDFMirrors.getText();
+            expect(idfMList).to.include(
+                "https://github.com",
+                "https://jihulab.com/esp-mirror"
             );
             let githubMirror = await eimRunner.findByDataId(
                 "idf-mirror-option-https://github.com"
@@ -253,11 +253,11 @@ describe("EIM expert Installation", () => {
             const toolsMirrors = await eimRunner.findByDataId(
                 "tools-mirror-radio-group"
             );
-            let mirrorList = (await toolsMirrors.getText()).split("\n");
-            expect(mirrorList).to.include(
-                " https://github.com",
-                " https://dl.espressif.com/github_assets",
-                " https://dl.espressif.cn/github_assets"
+            let toolsMList = await toolsMirrors.getText();
+            expect(toolsMList).to.include(
+                "https://github.com",
+                "https://dl.espressif.com/github_assets",
+                "https://dl.espressif.cn/github_assets"
             );
             let githubMirror = await eimRunner.findByDataId(
                 "tools-mirror-option-https://github.com"
@@ -319,7 +319,9 @@ describe("EIM expert Installation", () => {
                 "installation-path-input"
             );
             const input = await pathInput.findElement(By.tagName("input"));
-            expect(await input.getAttribute("value")).to.equal("C:\\esp");
+            const defaultInput =
+                os.platform() === "win32" ? "C:\\esp" : "/.espressif";
+            expect(await input.getAttribute("value")).to.include(defaultInput);
             await input.sendKeys(Key.CONTROL + "a");
             await input.sendKeys(Key.CONTROL + "a");
             await input.sendKeys(Key.BACK_SPACE);
