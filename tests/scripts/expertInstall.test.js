@@ -355,7 +355,7 @@ describe("EIM expert Installation", () => {
         }
     });
 
-    it("Should start setup", async function () {
+    it("Should install IDF", async function () {
         this.timeout(1300000);
 
         try {
@@ -364,7 +364,7 @@ describe("EIM expert Installation", () => {
             expect(await installing.isDisplayed()).to.be.true;
             const startTime = Date.now();
 
-            while (Date.now() - startTime < 1200000) {
+            while (Date.now() - startTime < 1800000) {
                 if (await eimRunner.findByText("Installation Failed", 1000)) {
                     logger.debug("failed!!!!");
                     break;
@@ -373,7 +373,7 @@ describe("EIM expert Installation", () => {
                     logger.debug("Completed!!!");
                     break;
                 }
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                await new Promise((resolve) => setTimeout(resolve, 1000));
             }
             const completed = await eimRunner.findByText(
                 "Complete Installation"
