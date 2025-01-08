@@ -326,7 +326,9 @@ describe("EIM expert Installation", () => {
             await input.sendKeys(Key.CONTROL + "a");
             await input.sendKeys(Key.BACK_SPACE);
             const customFolder =
-                os.platform() === "win32" ? "C:\\.espressif" : "/.espressif2";
+                os.platform() === "win32"
+                    ? "C:\\.espressif"
+                    : `${os.homedir()}/.espressif2`;
             await input.sendKeys(customFolder);
             expect(await input.getAttribute("value")).to.equal(customFolder);
         } catch (error) {
