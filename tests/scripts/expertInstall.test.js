@@ -325,10 +325,10 @@ describe("EIM expert Installation", () => {
             await input.sendKeys(Key.CONTROL + "a");
             await input.sendKeys(Key.CONTROL + "a");
             await input.sendKeys(Key.BACK_SPACE);
-            await input.sendKeys("C:\\.espressif");
-            expect(await input.getAttribute("value")).to.equal(
-                "C:\\.espressif"
-            );
+            const customFolder =
+                os.platform() === "win32" ? "C:\\.espressif" : "/.espressif2";
+            await input.sendKeys(customFolder);
+            expect(await input.getAttribute("value")).to.equal(customFolder);
         } catch (error) {
             logger.info("Failed to show option for installation path", error);
             throw error;
