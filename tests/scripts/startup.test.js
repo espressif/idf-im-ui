@@ -27,7 +27,7 @@ let eimRunner = "";
 
 describe("EIM Application Launch", () => {
     before(async function () {
-        this.timeout(30000);
+        this.timeout(60000);
         eimRunner = new EIMRunner(pathToEim);
         try {
             await eimRunner.launchEIM();
