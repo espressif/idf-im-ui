@@ -1,0 +1,24 @@
+{
+    "name": "eimtest-selenium",
+    "type": "module",
+    "version": "0.0.1",
+    "main": "index.js",
+    "scripts": {
+        "startup": "mocha --exit --bail --reporter json --reporter-options output=./results-startup.json scripts/startup.test.js",
+        "default": "mocha --exit --bail --reporter json --reporter-options output=./results-default.json scripts/defaultInstall.test.js",
+        "expert": "mocha --exit --bail --reporter json --reporter-options output=./results-expert.json scripts/expertInstall.test.js",
+        "startup-junit": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-startup.xml scripts/startup.test.js",
+        "default-junit": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-default.xml scripts/defaultInstall.test.js",
+        "expert-junit": "mocha --exit --bail --reporter mocha-junit-reporter --reporter-options mochaFile=./results-expert.xml scripts/expertInstall.test.js"
+    },
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "dependencies": {
+        "chai": "^5.1.2",
+        "mocha": "^11.0.1",
+        "mocha-junit-reporter": "^2.2.1",
+        "selenium-webdriver": "^4.27.0",
+        "winston": "^3.17.0"
+    }
+}
