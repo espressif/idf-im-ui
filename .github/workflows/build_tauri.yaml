@@ -1,377 +1,284 @@
 name: Tauri build
 
 on:
-    push:
-        tags:
-            - "v*"
-        branches:
-            - master
-    pull_request:
-        branches:
-            - master
-    release:
-        types:
-            - created
-    workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - created
+  workflow_dispatch:
 
 # This workflow will trigger on each push to the `release` branch to create or update a GitHub release, build your app, and upload the artifacts to the release.
 
 jobs:
-    publish-tauri:
-        permissions:
-            contents: write
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - platform: "macos-latest" # for Arm based macs (M1 and above).
-                      args: "--target aarch64-apple-darwin"
-                    - platform: "macos-13" # for Intel based macs.
-                      args: "--target x86_64-apple-darwin"
-                    - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
-                      args: ""
-                    - platform: "windows-latest"
-                      args: ""
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # for Arm based macs (M1 and above).
+            binname: "eim-macos-aarm64"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-13" # for Intel based macs.
+            args: "--target x86_64-apple-darwin"
+            binname: "eim-macos-x86_64"
+          - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
+            args: ""
+            binname: "eim-linux-x86_64"
+          - platform: "windows-latest"
+            args: ""
+            binname: "eim-windows-x86_64"
 
-        runs-on: ${{ matrix.platform }}
-        steps:
-            - uses: actions/checkout@v4
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
 
-            - name: Install OpenSSL (Windows)
-              if: runner.os == 'Windows'
-              shell: powershell
-              run: |
-                  echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  vcpkg install openssl:x64-windows-static-md
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          vcpkg install openssl:x64-windows-static-md
 
-            - name: Install OpenSSL (Macos)
-              if: matrix.os == 'macos-latest'
-              run: brew install openssl
+      - name: Install OpenSSL (Macos)
+        if: matrix.os == 'macos-latest'
+        run: brew install openssl
 
-            - name: setup node
-              uses: actions/setup-node@v4
-              with:
-                  node-version: lts/*
-
-            - name: install Rust stable
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-                  targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-            - name: install dependencies (ubuntu only)
-              if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
-              # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
-              # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
-
-            - name: install frontend dependencies
-              run: yarn install # change this to npm, pnpm or bun depending on which one you use.
-
-            - uses: tauri-apps/tauri-action@v0
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-                  releaseName: "App v__VERSION__"
-                  releaseBody: "See the assets to download this version and install."
-                  releaseDraft: true
-                  prerelease: false
-                  args: ${{ matrix.args }}
-
-            - name: Add +x permission to the binary
-              if: matrix.platform == 'ubuntu-22.04'
-              run: |
-                  chmod +x src-tauri/target/release/eim
-                  chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
-
-            - name: Upload app Linux binary
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'ubuntu-22.04'
-              with:
-                  name: eim-linux-x86_64-binary
-                  path: |
-                      src-tauri/target/release/eim
-                  if-no-files-found: error
-
-            - name: Upload Release Asset
-              if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'ubuntu-22.04'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/release/eim
-                  asset_name: eim-linux
-                  asset_content_type: application/octet-stream
-
-            - name: Upload app .deb
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'ubuntu-22.04'
-              with:
-                  name: eim-linux-x86_64-deb
-                  path: |
-                      src-tauri/target/release/bundle/deb/*.deb
-                  if-no-files-found: error
-
-            - name: Upload app .rpm
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'ubuntu-22.04'
-              with:
-                  name: eim-linux-x86_64-rpm
-                  path: |
-                      src-tauri/target/release/bundle/rpm/*.rpm
-                  if-no-files-found: error
-
-            - name: Upload app .AppImage
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'ubuntu-22.04'
-              with:
-                  name: eim-linux-x86_64-AppImage
-                  path: |
-                      src-tauri/target/release/bundle/appimage/*.AppImage
-                  if-no-files-found: error
-
-            - name: Add +x permission to the binary
-              if: matrix.platform == 'macos-latest'
-              run: |
-                  chmod +x src-tauri/target/aarch64-apple-darwin/release/eim
-
-            - name: Codesign macOS eim executables
-              if: matrix.platform == 'macos-latest'
-              env:
-                  MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-                  MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-              run: |
-                  echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-                  /usr/bin/security create-keychain -p espressif build.keychain
-                  /usr/bin/security default-keychain -s build.keychain
-                  /usr/bin/security unlock-keychain -p espressif build.keychain
-                  /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-                  /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
-
-                  /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" src-tauri/target/aarch64-apple-darwin/release/eim -v
-                  /usr/bin/codesign -v -vvv --deep src-tauri/target/aarch64-apple-darwin/release/eim
-
-            - name: Zip eim executable for notarization
-              if: matrix.platform == 'macos-latest'
-              run: |
-                  chmod +x src-tauri/target/aarch64-apple-darwin/release/eim
-                  cd src-tauri/target/aarch64-apple-darwin/release
-                  zip -r eim.zip eim
-
-            - name: Notarization of macOS eim executables
-              if: matrix.platform == 'macos-latest'
-              env:
-                  NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-                  NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-                  NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-              run: |
-                  echo "Create notary keychain"
-                  /usr/bin/security create-keychain -p espressif notary.keychain
-                  /usr/bin/security default-keychain -s notary.keychain
-                  /usr/bin/security unlock-keychain -p espressif notary.keychain
-
-                  echo "Create keychain profile"
-                  xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-                  xcrun notarytool submit src-tauri/target/aarch64-apple-darwin/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
-
-                  echo "Unzipping the executable"
-                  unzip -o src-tauri/target/aarch64-apple-darwin/release/eim.zip -d src-tauri/target/aarch64-apple-darwin/release
-
-                  # echo "Attach staple for eim executable"
-                  # xcrun stapler staple src-tauri/target/aarch64-apple-darwin/release/eim
-
-            - name: Upload app MacOs binary
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-latest'
-              with:
-                  name: eim-macos-aarch64-binary
-                  path: |
-                      src-tauri/target/aarch64-apple-darwin/release/eim
-                  if-no-files-found: error
-
-            - name: Upload Release Asset
-              if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-latest'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/aarch64-apple-darwin/release/eim
-                  asset_name: eim-macos-aarm64
-                  asset_content_type: application/octet-stream
-
-            - name: Upload app MacOs
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-latest'
-              with:
-                  name: eim-macos-aarch64-dmg
-                  path: |
-                      src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-                  if-no-files-found: error
-
-            - name: Upload app MacOs
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-latest'
-              with:
-                  name: eim-macos-aarch64-app
-                  path: |
-                      src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-                  if-no-files-found: error
-
-            - name: Add +x permission to the binary
-              if: matrix.platform == 'macos-13'
-              run: |
-                  chmod +x src-tauri/target/x86_64-apple-darwin/release/eim
-
-            - name: Codesign macOS eim executables
-              if: matrix.platform == 'macos-12'
-              env:
-                  MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-                  MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-              run: |
-                  echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-                  /usr/bin/security create-keychain -p espressif build.keychain
-                  /usr/bin/security default-keychain -s build.keychain
-                  /usr/bin/security unlock-keychain -p espressif build.keychain
-                  /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-                  /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
-
-                  /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" src-tauri/target/x86_64-apple-darwin/release/eim -v
-                  /usr/bin/codesign -v -vvv --deep src-tauri/target/x86_64-apple-darwin/release/eim
-
-            - name: Zip eim executable for notarization
-              if: matrix.platform == 'macos-12'
-              run: |
-                  chmod +x src-tauri/target/x86_64-apple-darwin/release
-                  cd src-tauri/target/x86_64-apple-darwin/release
-                  zip -r eim.zip eim
-
-            - name: Notarization of macOS eim executables
-              if: matrix.platform == 'macos-12'
-              env:
-                  NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-                  NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-                  NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-              run: |
-                  echo "Create notary keychain"
-                  /usr/bin/security create-keychain -p espressif notary.keychain
-                  /usr/bin/security default-keychain -s notary.keychain
-                  /usr/bin/security unlock-keychain -p espressif notary.keychain
-
-                  echo "Create keychain profile"
-                  xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-                  xcrun notarytool submit src-tauri/target/x86_64-apple-darwin/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
-
-                  echo "Unzipping the executable"
-                  unzip -o src-tauri/target/x86_64-apple-darwin/release/eim.zip -d src-tauri/target/x86_64-apple-darwin/release
-
-                  # echo "Attach staple for eim executable"
-                  # xcrun stapler staple src-tauri/target/x86_64-apple-darwin/release/eim
-
-            - name: Upload MacOs intel app binary
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-13'
-              with:
-                  name: eim-macos-x86_64-binary
-                  path: |
-                      src-tauri/target/x86_64-apple-darwin/release/eim
-                  if-no-files-found: error
-
-            - name: Upload Release Asset
-              if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'macos-13'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/x86_64-apple-darwin/release/eim
-                  asset_name: eim-macos-intel
-                  asset_content_type: application/octet-stream
-
-            - name: Upload app MacOs
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-13'
-              with:
-                  name: eim-macos-x86_64-dmg
-                  path: |
-                      src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-                  if-no-files-found: error
-
-            - name: Upload app MacOs
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'macos-13'
-              with:
-                  name: eim-macos-x86_64-app
-                  path: |
-                      src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app
-                  if-no-files-found: error
-
-            - name: Sign Windows Binary
-              if: matrix.platform == 'windows-latest'
-              env:
-                  WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-                  WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-                  WINDOWS_SIGN_TOOL_PATH: 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe'
-              run: |
-                  echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-                  certutil -decode cert.b64 cert.pfx
-                  Remove-Item cert.b64
-                  & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
-
-            - name: Upload app Windows binary
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'windows-latest'
-              with:
-                  name: eim-windows-binary
-                  path: |
-                      src-tauri/target/release/eim.exe
-                  if-no-files-found: error
-
-            - name: Upload Release Asset
-              if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'windows-latest'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/release/eim.exe
-                  asset_name: eim.exe
-                  asset_content_type: application/octet-stream
-
-            - name: Upload app Windows
-              uses: actions/upload-artifact@v4
-              if: matrix.platform == 'windows-latest'
-              with:
-                  name: eim-windows-msi
-                  path: |
-                      src-tauri/target/release/bundle/msi/*.msi
-                  if-no-files-found: error
-
-    fetch-latest-release:
-        name: Fetch Latest Release Info
-        needs: [publish-tauri]
-        runs-on: ubuntu-latest
-        # This ensures the job runs after a release is created or when manually triggered
-        if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-
-        steps:
-            - name: Fetch latest release
-              env:
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  AWS_DEFAULT_REGION: ap-east-1
-              run: |
-                  curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_gui_release.json
-                  echo "Latest release tag: $(jq -r .tag_name eim_gui_release.json)"
-                  aws s3 cp --acl=public-read "eim_gui_release.json" s3://espdldata/dl/eim/eim_gui_release.json
-
-    call-test-workflow:
-        needs: publish-tauri
-        uses: ./.github/workflows/test.yml
+      - name: setup node
+        uses: actions/setup-node@v4
         with:
-            run_id: ${{ github.run_id }}
-            ref: ${{ github.event.pull_request.head.ref }}
+          node-version: lts/*
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
+
+      - name: install frontend dependencies
+        run: yarn install # change this to npm, pnpm or bun depending on which one you use.
+
+      - name: build app
+        run: |
+          yarn tauri build
+
+      - name: Add +x permission to the binary
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          chmod +x src-tauri/target/release/eim
+          chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+
+      - name: Upload app Linux binary
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: ${{ matrix.binname }}-${{ github.run_number }}
+          path: |
+            src-tauri/target/release/eim
+          if-no-files-found: error
+
+      - name: Upload Release Asset Linux
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'ubuntu-22.04'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim
+          asset_name: ${{ matrix.binname }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload app .deb
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: ${{ matrix.binname }}-deb
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+          if-no-files-found: error
+
+      - name: Upload app .rpm
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: ${{ matrix.binname }}-rpm
+          path: |
+            src-tauri/target/release/bundle/rpm/*.rpm
+          if-no-files-found: error
+
+      - name: Upload app .AppImage
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'ubuntu-22.04'
+        with:
+          name: ${{ matrix.binname }}-AppImage
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
+
+      - name: Add +x permission to the binary
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          chmod +x ./src-tauri/target/release/eim
+
+      - name: Codesign macOS eim executables
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          /usr/bin/security create-keychain -p espressif build.keychain
+          /usr/bin/security default-keychain -s build.keychain
+          /usr/bin/security unlock-keychain -p espressif build.keychain
+          /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+
+          /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" ./src-tauri/target/release/eim -v
+          /usr/bin/codesign -v -vvv --deep ./src-tauri/target/release/eim
+
+      - name: Zip eim executable for notarization
+        if: startsWith(matrix.platform, 'macos')
+        run: |
+          chmod +x ./src-tauri/target/release/eim
+          cd ./src-tauri/target/release
+          zip -r eim.zip eim
+
+      - name: Notarization of macOS eim executables
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          echo "Create notary keychain"
+          /usr/bin/security create-keychain -p espressif notary.keychain
+          /usr/bin/security default-keychain -s notary.keychain
+          /usr/bin/security unlock-keychain -p espressif notary.keychain
+
+          echo "Create keychain profile"
+          xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
+          xcrun notarytool submit ./src-tauri/target/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
+
+          echo "Unzipping the executable"
+          unzip -o ./src-tauri/target/release/eim.zip -d ./src-tauri/target/release/
+
+          # echo "Attach staple for eim executable"
+          # xcrun stapler staple ./src-tauri/target/release/eim
+
+      - name: Upload app MacOs binary
+        uses: actions/upload-artifact@v4
+        if: startsWith(matrix.platform, 'macos')
+        with:
+          name: ${{ matrix.binname }}-${{ github.run_number	}}
+          path: |
+            src-tauri/target/release/eim.zip
+          if-no-files-found: error
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && ( startsWith(matrix.platform, 'macos') )
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim.zip
+          asset_name: ${{ matrix.binname }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v4
+        if: startsWith(matrix.platform, 'macos')
+        with:
+          name: ${{ matrix.binname }}-dmg
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: error
+
+      - name: Upload app MacOs
+        uses: actions/upload-artifact@v4
+        if: startsWith(matrix.platform, 'macos')
+        with:
+          name: ${{ matrix.binname }}-app
+          path: |
+            src-tauri/target/release/bundle/macos/*.app
+          if-no-files-found: error
+
+      - name: Sign Windows Binary
+        if: matrix.platform == 'windows-latest'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+          WINDOWS_SIGN_TOOL_PATH: 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe'
+        run: |
+          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+          certutil -decode cert.b64 cert.pfx
+          Remove-Item cert.b64
+          & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
+
+      - name: Upload app Windows binary
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'windows-latest'
+        with:
+          name: ${{ matrix.binname }}-${{ github.run_number	}}
+          path: |
+            src-tauri/target/release/eim.exe
+          if-no-files-found: error
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && matrix.platform == 'windows-latest'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim.exe
+          asset_name: ${{ matrix.binname }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload app Windows
+        uses: actions/upload-artifact@v4
+        if: matrix.platform == 'windows-latest'
+        with:
+          name: eim-windows-msi
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
+
+  fetch-latest-release:
+    name: Fetch Latest Release Info
+    needs: [publish-tauri]
+    runs-on: ubuntu-latest
+    # This ensures the job runs after a release is created or when manually triggered
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Fetch latest release
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-east-1
+        run: |
+          curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_gui_release.json
+          echo "Latest release tag: $(jq -r .tag_name eim_gui_release.json)"
+          aws s3 cp --acl=public-read "eim_gui_release.json" s3://espdldata/dl/eim/eim_gui_release.json
+
+  call-test-workflow:
+    needs: publish-tauri
+    uses: ./.github/workflows/test.yml
+    with:
+      run_id: ${{ github.run_id }}
+      ref: ${{ github.event.pull_request.head.ref }}
