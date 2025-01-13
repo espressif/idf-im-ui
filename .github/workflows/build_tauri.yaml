@@ -25,13 +25,17 @@ jobs:
       matrix:
         include:
           - platform: "macos-latest" # for Arm based macs (M1 and above).
+            binname: "eim-macos-aarm64"
             args: "--target aarch64-apple-darwin"
           - platform: "macos-13" # for Intel based macs.
             args: "--target x86_64-apple-darwin"
+            binname: "eim-macos-x86_64"
           - platform: "ubuntu-22.04" # for Tauri v1 you could replace this with ubuntu-20.04.
             args: ""
+            binname: "eim-linux-x86_64"
           - platform: "windows-latest"
             args: ""
+            binname: "eim-windows-x86_64.exe"
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -64,22 +68,9 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
-        # webkitgtk 4.0 is for Tauri v1 - webkitgtk 4.1 is for Tauri v2.
-        # You can remove the one that doesn't apply to your app to speed up the workflow a bit.
 
       - name: install frontend dependencies
         run: yarn install # change this to npm, pnpm or bun depending on which one you use.
-
-      # - uses: tauri-apps/tauri-action@v0
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
-      #     releaseName: "App v__VERSION__"
-      #     releaseBody: "See the assets to download this version and install."
-      #     releaseDraft: true
-      #     prerelease: false
-      #     args: ${{ matrix.args }}
 
       - name: build app
         run: |
@@ -95,7 +86,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
-          name: eim-linux-x86_64-binary
+          name: ${{ matrix.binname }}-${{ github.run_number }}
           path: |
             src-tauri/target/release/eim
           if-no-files-found: error
@@ -108,14 +99,14 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: src-tauri/target/release/eim
-          asset_name: eim-linux
+          asset_name: ${{ matrix.binname }}
           asset_content_type: application/octet-stream
 
       - name: Upload app .deb
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
-          name: eim-linux-x86_64-deb
+          name: ${{ matrix.binname }}-deb
           path: |
             src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
@@ -124,7 +115,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
-          name: eim-linux-x86_64-rpm
+          name: ${{ matrix.binname }}-rpm
           path: |
             src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: error
@@ -133,7 +124,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'ubuntu-22.04'
         with:
-          name: eim-linux-x86_64-AppImage
+          name: ${{ matrix.binname }}-AppImage
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
@@ -192,7 +183,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: startsWith(matrix.platform, 'macos')
         with:
-          name: eim-macos-${{ matrix.platform }}-binary
+          name: ${{ matrix.binname }}-${{ github.run_number	}}
           path: |
             src-tauri/target/release/eim.zip
           if-no-files-found: error
@@ -205,14 +196,14 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: src-tauri/target/release/eim.zip
-          asset_name: eim-macos-aarm64
+          asset_name: ${{ matrix.binname }}
           asset_content_type: application/octet-stream
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
         if: startsWith(matrix.platform, 'macos')
         with:
-          name: eim-macos-${{ matrix.platform }}-dmg
+          name: ${{ matrix.binname }}-dmg
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
@@ -221,7 +212,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: startsWith(matrix.platform, 'macos')
         with:
-          name: eim-macos-${{ matrix.platform }}-app
+          name: ${{ matrix.binname }}-app
           path: |
             src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
@@ -242,7 +233,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.platform == 'windows-latest'
         with:
-          name: eim-windows-binary
+          name: ${{ matrix.binname }}-${{ github.run_number	}}
           path: |
             src-tauri/target/release/eim.exe
           if-no-files-found: error
@@ -255,7 +246,7 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: src-tauri/target/release/eim.exe
-          asset_name: eim.exe
+          asset_name: ${{ matrix.binname }}
           asset_content_type: application/octet-stream
 
       - name: Upload app Windows
