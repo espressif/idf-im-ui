@@ -35,7 +35,7 @@ jobs:
             binname: "eim-linux-x86_64"
           - platform: "windows-latest"
             args: ""
-            binname: "eim-windows-x86_64.exe"
+            binname: "eim-windows-x86_64"
 
     runs-on: ${{ matrix.platform }}
     steps:

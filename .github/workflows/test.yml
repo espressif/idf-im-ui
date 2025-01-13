@@ -1,165 +1,165 @@
 name: Autotest
 
 on:
-    workflow_call:
-        inputs:
-            run_id:
-                required: true
-                type: string
-            ref:
-                required: true
-                type: string
+  workflow_call:
+    inputs:
+      run_id:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
 
 jobs:
-    test:
-        name: Automated test scripts
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - os: ubuntu-latest
-                      package_name: linux-x64
-                      run_on: GitHub
-                    - os: windows-latest
-                      package_name: windows-x64
-                      run_on: GitHub
+  test:
+    name: Automated test scripts
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            run_on: GitHub
+          - os: windows-latest
+            package_name: windows-x64
+            run_on: GitHub
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  ref: ${{ inputs.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
 
-            - name: Download artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  path: ./artifacts
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./artifacts
 
-            - name: Install Tauri-Driver
-              run: |
-                  cargo install tauri-driver
+      - name: Install Tauri-Driver
+        run: |
+          cargo install tauri-driver
 
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-            - name: Get CLI application version number (non-Windows)
-              if: runner.os != 'Windows'
-              run: |
-                  git fetch --tags
-                  LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
-                  STRIPPED_TAG=${LATEST_TAG#v}
-                  echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+      - name: Get CLI application version number (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
+          STRIPPED_TAG=${LATEST_TAG#v}
+          echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
 
-            - name: Extract artifact (non-Windows)
-              if: runner.os != 'Windows'
-              run: |
-                  mkdir -p test-bin
-                  cp artifacts/eim-linux-x86_64-binary/eim test-bin
-                  # unzip ./artifacts/eim-linux-x86_64-binary -d test-bin
+      - name: Extract artifact (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p test-bin
+          cp artifacts/eim-linux-x86_64-${{ github.run_number }}/eim test-bin
+          # unzip ./artifacts/eim-linux-x86_64-${{ github.run_number }} -d test-bin
 
-            - name: Set executable permissions (non-Windows)
-              if: runner.os != 'Windows'
-              run: |
-                  chmod +x ./test-bin/eim
+      - name: Set executable permissions (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./test-bin/eim
 
-            - name: Install dependencies (Ubuntu)
-              if: runner.os == 'Linux'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip webkit2gtk-driver xvfb
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip webkit2gtk-driver xvfb
 
-            - name: Start XVFB (Ubuntu)
-              if: runner.os == 'Linux'
-              run: |
-                  sudo Xvfb :99 -ac -screen 0 1920x1080x24 &
-                  echo "DISPLAY=:99" >> $GITHUB_ENV
+      - name: Start XVFB (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo Xvfb :99 -ac -screen 0 1920x1080x24 &
+          echo "DISPLAY=:99" >> $GITHUB_ENV
 
-            - name: Run IDF installation and post install test script (non-Windows)
-              if: runner.os != 'Windows'
-              run: |
-                  export DEBUG="true"
-                  export LOG_TO_FILE="true"
-                  chmod +x ./tests/run_test.sh
-                  . ./tests/run_test.sh "../test-bin/eim" "${{ env.CLI_TAG }}"
+      - name: Run IDF installation and post install test script (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          export DEBUG="true"
+          export LOG_TO_FILE="true"
+          chmod +x ./tests/run_test.sh
+          . ./tests/run_test.sh "../test-bin/eim" "${{ env.CLI_TAG }}"
 
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-            - name: Get CLI application version number (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  git fetch --tags
-                  $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
-                  $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
-                  echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Get CLI application version number (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          git fetch --tags
+          $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
+          $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
+          echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-            - name: Extract artifact (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  mkdir -p test-bin
-                  Copy-Item .\Artifacts\eim-windows-binary\eim.exe -Destination test-bin
-                  # 7z x ./artifacts/eim-windows-binary -otest-bin
+      - name: Extract artifact (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir -p test-bin
+          Copy-Item .\Artifacts\eim-windows-x86_64-${{ github.run_number }}\eim.exe -Destination test-bin
+          # 7z x ./artifacts/eim-windows-binary -otest-bin
 
-            - name: Update WebView2 Runtime
-              if: runner.os == 'Windows'
-              run: |
-                  Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
-                  Start-Process -FilePath setup.exe -Verb RunAs -Wait
+      - name: Update WebView2 Runtime
+        if: runner.os == 'Windows'
+        run: |
+          Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
+          Start-Process -FilePath setup.exe -Verb RunAs -Wait
 
-            - name: Install dependencies (Windows)
-              if: runner.os == 'windows'
-              run: |
-                  choco install ninja -y
+      - name: Install dependencies (Windows)
+        if: runner.os == 'windows'
+        run: |
+          choco install ninja -y
 
-            - name: Run IDF installation and post install test script (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  $env:DEBUG="true"
-                  $env:LOG_TO_FILE="true"
-                  .\tests\run_test.ps1 "..\test-bin\eim.exe" "${{ env.CLI_TAG }}"
+      - name: Run IDF installation and post install test script (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $env:DEBUG="true"
+          $env:LOG_TO_FILE="true"
+          .\tests\run_test.ps1 "..\test-bin\eim.exe" "${{ env.CLI_TAG }}"
 
-            # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+      # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-            - name: Upload test results
-              uses: actions/upload-artifact@v4
-              if: always()
-              with:
-                  name: test-results-${{ matrix.package_name }}.zip
-                  path: |
-                      ./tests/results-startup.json
-                      ./tests/results-default.json
-                      ./tests/results-expert.json
-                      ./tests/test.log
-
-    publish-test-results:
-        name: Automated Test Results
-        needs: test
-        runs-on: ubuntu-latest
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
         if: always()
+        with:
+          name: test-results-${{ matrix.package_name }}.zip
+          path: |
+            ./tests/results-startup.json
+            ./tests/results-default.json
+            ./tests/results-expert.json
+            ./tests/test.log
 
-        steps:
-            - name: Publish Test Results
-              uses: dorny/test-reporter@v1
-              with:
-                  artifact: /test-results-(.*)/
-                  name: "Auto Tests $1"
-                  path: "*.json"
-                  reporter: mocha-json
-                  fail-on-empty: "true"
+  publish-test-results:
+    name: Automated Test Results
+    needs: test
+    runs-on: ubuntu-latest
+    if: always()
 
-    # publish-test-results:
-    #     name: Automated Test Results
-    #     needs: test
-    #     runs-on: ubuntu-latest
-    #     if: always()
+    steps:
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v1
+        with:
+          artifact: /test-results-(.*)/
+          name: "Auto Tests $1"
+          path: "*.json"
+          reporter: mocha-json
+          fail-on-empty: "true"
 
-    #     steps:
-    #         - name: Download Artifacts
-    #           uses: actions/download-artifact@v4
-    #           with:
-    #               path: ./artifacts
+  # publish-test-results:
+  #     name: Automated Test Results
+  #     needs: test
+  #     runs-on: ubuntu-latest
+  #     if: always()
 
-    #         - name: Publish Test Results
-    #           uses: EnricoMi/publish-unit-test-result-action@v2
-    #           with:
-    #               action_fail: true
-    #               files: "./artifacts/**/*.xml"
+  #     steps:
+  #         - name: Download Artifacts
+  #           uses: actions/download-artifact@v4
+  #           with:
+  #               path: ./artifacts
+
+  #         - name: Publish Test Results
+  #           uses: EnricoMi/publish-unit-test-result-action@v2
+  #           with:
+  #               action_fail: true
+  #               files: "./artifacts/**/*.xml"
