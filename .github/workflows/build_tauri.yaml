@@ -196,8 +196,8 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: src-tauri/target/release/eim.zip
-          asset_name: ${{ matrix.binname }}
-          asset_content_type: application/octet-stream
+          asset_name: ${{ matrix.binname }}.zip
+          asset_content_type: application/zip
 
       - name: Upload app MacOs
         uses: actions/upload-artifact@v4
