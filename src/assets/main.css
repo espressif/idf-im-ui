@@ -3,6 +3,7 @@
   --text-color: #333333;
   --primary-color: #f0f0f0;
   --secondary-color: #5AC8FA;
+  --espressif-red-color: #E8362D;
   --border-color: #d1d1d1;
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
@@ -109,16 +110,11 @@ h2 {
 }
 
 .header {
-  background-color: #e7352c;
+  background-color: var(--espressif-red-color);
   color: white;
   padding: 1rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.header {
-  background-color: #e7352c;
-  color: white;
-  padding: 1rem;
+  padding-left: 80px;
+  padding-right: 80px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   display: flex;
   justify-content: space-between;
@@ -184,7 +180,7 @@ h2 {
 
 .feature-icon {
   background-color: #fee2e2;
-  color: #e7352c;
+  color: var(--espressif-red-color);
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
