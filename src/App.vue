@@ -2,8 +2,8 @@
   <div class="installer">
     <!-- Header -->
     <header class="header">
+      <img src="./assets/Espressif_White_Logo_EN_Horizontal.svg" alt="ESP-IDF Logo" />
       <h2>ESP-IDF Installation Manager</h2>
-      <img src="./assets/espressif_logo_white.svg" alt="ESP-IDF Logo" />
     </header>
     <router-view></router-view>
     <message-display />
