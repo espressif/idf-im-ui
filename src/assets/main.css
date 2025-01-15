@@ -28,7 +28,9 @@
   font-weight: bold;
   font-style: normal;
 }
-
+.n-result .n-result-icon .n-base-icon {
+  color: #1290d8;
+}
 body {
   font-family: 'Trueno-regular', var(--font-family);
   background-color: var(--background-color);

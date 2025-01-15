@@ -1,6 +1,5 @@
 <template>
   <div class="python-check" data-id="python-check">
-    <h1 class="title" data-id="python-check-title">Python Environment Check</h1>
 
     <n-card class="status-card" data-id="python-status-card">
       <n-spin :show="loading" data-id="python-check-spinner">
@@ -149,5 +148,17 @@ export default {
 
 .manual-instructions li {
   margin-bottom: 0.5rem;
+}
+
+.n-card {
+  border: none;
+}
+
+.n-result .n-result-icon .n-base-icon {
+  color: blue;
+}
+
+.n-button {
+  background-color: #E8362D;
 }
 </style>
