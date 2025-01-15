@@ -2,36 +2,16 @@
   <div class="load-config" data-id="load-config">
     <h1 class="title" data-id="main-title">Installation Setup</h1>
 
-    <!-- Compact Config Loading Section -->
-    <div class="config-section" data-id="config-section" @dragover.prevent="handleDragOver"
-      @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop" :class="{ 'dragging': isDragging }">
-      <div class="config-content" data-id="config-content">
-        <div class="config-layout" data-id="config-layout">
-          <div class="config-text" data-id="config-text">
-            <h2 class="section-title" data-id="config-section-title">Load Configuration</h2>
-            <p class="section-description" data-id="config-description">Drag & drop TOML file or click to load existing
-              configuration</p>
-          </div>
-          <div v-if="config_loaded" class="config-status" data-id="config-status">
-            ✓ Config loaded
-          </div>
-          <n-button @click="load_config" type="error" ghost class="action-button" data-id="load-config-button">
-            Load Config
-          </n-button>
-        </div>
-      </div>
-    </div>
-
     <!-- Installation Options -->
     <div class="installation-options" data-id="installation-options">
       <!-- Simplified Installation -->
       <div class="option-panel" data-id="simplified-installation-panel">
         <div class="option-content" data-id="simplified-installation-content">
-          <div class="icon-container" data-id="simplified-icon-container">
+          <!-- <div class="icon-container" data-id="simplified-icon-container">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="simplified-icon">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-          </div>
+          </div> -->
           <h2 class="option-title" data-id="simplified-title">Simplified Installation</h2>
           <p class="option-description" data-id="simplified-description">
             The installer will take care of all the necessary steps for you, including installing the required
@@ -47,20 +27,40 @@
       <!-- Expert Installation -->
       <div class="option-panel" data-id="expert-installation-panel">
         <div class="option-content" data-id="expert-installation-content">
-          <div class="icon-container" data-id="expert-icon-container">
+          <!-- <div class="icon-container" data-id="expert-icon-container">
             <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="expert-icon">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
-          </div>
+          </div> -->
           <h2 class="option-title" data-id="expert-title">Expert Installation</h2>
           <p class="option-description" data-id="expert-description">
             Let our wizard guide you through a streamlined installation process where you can configure every step.
           </p>
           <n-button @click="startWizard" type="error" ghost class="action-button" data-id="start-expert-button">
             Start Expert Setup
+          </n-button>
+        </div>
+      </div>
+    </div>
+    <!-- Compact Config Loading Section -->
+    <div class="config-section" data-id="config-section" @dragover.prevent="handleDragOver"
+      @dragleave.prevent="handleDragLeave" @drop.prevent="handleDrop" :class="{ 'dragging': isDragging }">
+      <div class="config-content" data-id="config-content">
+        <div class="config-layout" data-id="config-layout">
+          <div class="config-text" data-id="config-text">
+            <h2 class="section-title" data-id="config-section-title">Reuse Configuration from previous installation
+              installation</h2>
+            <p class="section-description" data-id="config-description">Drag & drop TOML file or click to load existing
+              configuration</p>
+          </div>
+          <div v-if="config_loaded" class="config-status" data-id="config-status">
+            ✓ Config loaded
+          </div>
+          <n-button @click="load_config" type="error" class="action-button" data-id="load-config-button">
+            Load Config
           </n-button>
         </div>
       </div>
@@ -147,9 +147,15 @@ export default {
 </script>
 
 <style scoped>
+.main-content {
+  display: flex;
+
+}
+
 .load-config {
   padding: 2rem;
   max-width: 1200px;
+  max-width: 948px;
   margin: 0 auto;
   flex: 1;
   align-items: center;
@@ -157,8 +163,10 @@ export default {
 }
 
 .title {
-  font-size: 2rem;
-  color: #374151;
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.8rem;
+  color: black;
+  ;
   margin-bottom: 1.5rem;
   text-align: center;
 }
@@ -170,7 +178,7 @@ export default {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   padding: 1rem 2rem;
   transition: all 0.3s ease;
-  border: 2px solid transparent;
+  border: 2px dashed #7E7E7E;
 }
 
 .config-section.dragging {
@@ -184,39 +192,43 @@ export default {
 
 .config-layout {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.5rem;
 }
 
 .config-text {
-  text-align: left;
+  text-align: center;
 }
 
 .section-title {
+  font-family: 'Trueno-bold';
   font-size: 1.2rem;
   color: #374151;
   margin: 0;
+  margin-bottom: 1rem;
 }
 
 .section-description {
-  color: #6b7280;
+  color: #bec1c5;
   margin: 0.25rem 0 0 0;
   font-size: 0.9rem;
+  font-family: 'Trueno-light';
 }
 
 .installation-options {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2rem;
-  margin-top: 2rem;
+  margin-bottom: 4rem;
 }
 
 .option-panel {
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  padding: 2rem;
+  padding: 1rem;
   height: 100%;
 }
 
@@ -242,19 +254,23 @@ export default {
 }
 
 .option-title {
+  font-family: 'Trueno-bold';
   font-size: 1.5rem;
   color: #374151;
   margin-bottom: 1rem;
 }
 
 .option-description {
-  color: #6b7280;
-  margin-bottom: 1.5rem;
+  font-family: 'Trueno-light';
+  color: #9d9fa4;
+  margin-bottom: 2rem;
   line-height: 1.5;
 }
 
 .action-button {
   white-space: nowrap;
+  background-color: #E8362D;
+  color: white;
 }
 
 .config-status {
