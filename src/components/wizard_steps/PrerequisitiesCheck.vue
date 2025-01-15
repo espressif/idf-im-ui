@@ -17,65 +17,58 @@
             <li v-for="p in display_prerequisities" :key="p.name"
               :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }"
               :data-id="`prerequisite-item-${p.name}`">
-              <span class="item-icon" :data-id="`prerequisite-icon-${p.name}`">{{ p.icon }}</span>
               <span class="item-name" :data-id="`prerequisite-name-${p.name}`">{{ p.name }}</span>
+              <span class="item-icon" :data-id="`prerequisite-icon-${p.name}`">{{ p.icon }}</span>
             </li>
           </ul>
+          <n-progress type="line" color="#ff0000" rail-color="#ffgg00" :percentage="percentage" />
         </n-spin>
       </n-card>
-      <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
-        {{ loading ? 'Checking...' : 'Check Prerequisites' }}
-      </n-button>
+      <div v-if="did_the_check_run">
+        <div v-if="missing_prerequisities.length === 0">
+          <n-button @click="nextstep" type="error" data-id="continue-button">
+            Continue to Next Step
+          </n-button>
+        </div>
 
-      <!-- Results Section -->
-      <div v-if="did_the_check_run" class="results-section" data-id="prerequisites-results">
-        <n-result v-if="missing_prerequisities.length === 0" status="success" title="All Prerequisites Installed"
-          description="Your system is ready for ESP-IDF installation" data-id="prerequisites-success-result">
-          <template #footer>
-            <n-button @click="nextstep" type="error" data-id="continue-button">
-              Continue to Next Step
+        <div v-else>
+          <p>{{ os === 'windows' ? 'Click below to automatically install missing components' :
+            'Please install the following components manually' }}</p>
+          <div v-if="os === 'windows'" class="windows-install" data-id="windows-install-section">
+            <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities"
+              data-id="install-prerequisites-button">
+              Install Missing Prerequisites
             </n-button>
-          </template>
-        </n-result>
-
-        <n-result v-else status="warning" title="Missing Prerequisites"
-          :description="os === 'windows' ? 'Click below to automatically install missing components' : 'Please install the following components manually'"
-          data-id="prerequisites-warning-result">
-          <template #footer>
-            <div class="missing-items" data-id="missing-prerequisites">
-              <div v-if="os === 'windows'" class="windows-install" data-id="windows-install-section">
-                <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities"
-                  data-id="install-prerequisites-button">
-                  Install Missing Prerequisites
-                </n-button>
-              </div>
-              <div v-else class="manual-install" data-id="manual-install-section">
-                <p class="hint" data-id="manual-install-hint">Please install these components and run the check again:
-                </p>
-                <ul class="missing-list" data-id="missing-prerequisites-list">
-                  <li v-for="p in missing_prerequisities" :key="p" :data-id="`missing-prerequisite-${p}`">{{ p }}</li>
-                </ul>
-              </div>
-            </div>
-          </template>
-        </n-result>
+          </div>
+          <div v-else class="manual-install" data-id="manual-install-section">
+            <p class="hint" data-id="manual-install-hint">Please install these components and run the check again:
+            </p>
+            <ul class="missing-list" data-id="missing-prerequisites-list">
+              <li v-for="p in missing_prerequisities" :key="p" :data-id="`missing-prerequisite-${p}`">{{ p }}</li>
+            </ul>
+          </div>
+        </div>
       </div>
+      <div v-else>
+        <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
+          {{ loading ? 'Checking...' : 'Check Prerequisites' }}
+        </n-button>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script>
-import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
-import { NButton, NSpin } from 'naive-ui'
-import loading from "naive-ui/es/_internal/loading";
+import { NButton, NSpin, NProgress } from 'naive-ui'
 
 export default {
   name: 'PrerequisitiesCheck',
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin },
+  components: { NButton, NSpin, NProgress },
   data: () => ({
     loading: false,
     installing_prerequisities: false,
@@ -121,9 +114,15 @@ export default {
       return false;
     },
   },
+  computed: {
+    percentage() {
+      return this.all_prerequisities.length === 0 ? 0 : ((this.all_prerequisities.length - this.missing_prerequisities.length) / this.all_prerequisities.length) * 100;
+    }
+  },
   mounted() {
     this.get_prerequisities_list();
     this.get_os();
+    this.check_prerequisites();
   }
 }
 </script>
@@ -139,6 +138,7 @@ export default {
 }
 
 .title {
+  font-family: 'Trueno-bold';
   font-size: 1.8rem;
   color: #374151;
   margin-bottom: 0.5rem;
@@ -156,6 +156,7 @@ export default {
 }
 
 .prerequisites-list {
+  border: none;
   background: white;
 }
 
@@ -178,9 +179,11 @@ export default {
 
 .item {
   display: flex;
+  margin-bottom: 5px;
   align-items: center;
   padding: 0.75rem;
   border-bottom: 1px solid #e5e7eb;
+  text-align: center;
 }
 
 .item:last-child {
@@ -188,20 +191,26 @@ export default {
 }
 
 .item-icon {
-  margin-right: 1rem;
+  margin-left: 1rem;
   font-size: 1.2rem;
+  border: 1px solid #6da4d0;
+  border-radius: 50%;
+  width: 1.8rem;
+  text-align: center;
+  color: #6da4d0;
 }
 
 .item-name {
+  flex-grow: 5;
   color: #374151;
 }
 
 .missing {
-  background-color: #fee2e2;
+  background-color: #feeaea;
 }
 
 .installed {
-  background-color: #ecfdf5;
+  background-color: #fafafa;
 }
 
 .results-section {
@@ -223,5 +232,11 @@ export default {
 .hint {
   color: #6b7280;
   margin-bottom: 0.5rem;
+}
+
+.n-progress {
+  width: 50%;
+  margin: auto;
+  margin-top: 2rem;
 }
 </style>
