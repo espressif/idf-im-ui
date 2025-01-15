@@ -130,7 +130,7 @@ export default {
 
 .feature span {
 
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   color: #4b5563;
 }
 

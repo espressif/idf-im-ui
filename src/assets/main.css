@@ -22,8 +22,15 @@
   font-style: normal;
 }
 
+@font-face {
+  font-family: 'Trueno-light';
+  src: url('./trueno/TruenoLt.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
 body {
-  font-family: var(--font-family);
+  font-family: 'Trueno-regular', var(--font-family);
   background-color: var(--background-color);
   color: var(--text-color);
   margin: 0;
@@ -120,7 +127,6 @@ h2 {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
 }
 
 .header {
@@ -147,15 +153,20 @@ h2 {
   font-size: 1.25rem;
 }
 
+#app {
+  background-color: #f5f5f5;
+  background-image: url('./bg.png');
+  background-size: cover;
+  background-position: center;
+}
+
 .main-content {
   flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  background-image: url('./bg.png');
-  background-size: cover;
-  background-position: center;
+  
 }
 
 .welcome-card {
