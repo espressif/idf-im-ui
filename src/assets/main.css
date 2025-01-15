@@ -139,6 +139,9 @@ h2 {
   align-items: center;
   justify-content: center;
   padding: 2rem;
+  background-image: url('./bg.png');
+  background-size: cover;
+  background-position: center;
 }
 
 .welcome-card {

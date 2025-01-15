@@ -72,13 +72,6 @@ export default {
   font-size: 1.25rem;
 }
 
-.main-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-}
 
 .welcome-card {
   background: white;
