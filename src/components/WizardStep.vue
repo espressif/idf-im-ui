@@ -1,43 +1,53 @@
 <template>
   <div class="wizard-layout" data-id="wizard-layout">
-    <div class="wizard-sidebar" data-id="wizard-sidebar">
-      <div class="steps-list" data-id="steps-list">
-        <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
-          'active': currentStep === index + 1,
-          'completed': currentStep > index + 1,
-          'disabled': currentStep === 7 || currentStep === 8,
-          'clickable': currentStep > index + 1 && currentStep < 7
-        }" @click="handleStepClick(index + 1)" :data-id="`step-item-${index + 1}`">
-          <div class="step-number" :data-id="`step-number-${index + 1}`">
-            <template v-if="currentStep > index + 1">
-              <svg class="checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="step-checkmark">
-                <path d="M20 6L9 17L4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </template>
-            <template v-else>
-              {{ index + 1 }}
-            </template>
-          </div>
-          <div class="step-title" :data-id="`step-title-${index + 1}`">{{ step.title }}</div>
-        </div>
-      </div>
+    <!-- Expert Installation Step Header -->
+    <div class="wizard-header">
+      <h1 class="header-title">Expert Installation Step</h1>
+      <div class="step-indicator">Step {{ currentStep }}</div>
     </div>
 
-    <!-- Main content -->
-    <div class="wizard-container" data-id="wizard-container">
-      <div class="wizard-step-container" data-id="wizard-step-content">
-        <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" data-id="prerequisites-check" />
-        <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" data-id="python-sanity-check" />
-        <TargetSelect :nextstep=nextStep v-if="currentStep === 3" data-id="target-select" />
-        <VersionSelect :nextstep=nextStep v-if="currentStep === 4" data-id="version-select" />
-        <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" data-id="mirror-select" />
-        <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" data-id="installation-path-select" />
-        <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" data-id="installation-progress" />
-        <Complete v-if="currentStep === 8" data-id="complete" />
+    <div class="wizard-content">
+      <!-- Moved sidebar -->
+      <div class="wizard-sidebar" data-id="wizard-sidebar">
+        <div class="steps-list" data-id="steps-list">
+          <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
+            'active': currentStep === index + 1,
+            'completed': currentStep > index + 1,
+            'disabled': currentStep === 7 || currentStep === 8,
+            'clickable': currentStep > index + 1 && currentStep < 7
+          }" @click="handleStepClick(index + 1)" :data-id="`step-item-${index + 1}`">
+            <div class="step-number" :data-id="`step-number-${index + 1}`">
+              <template v-if="currentStep > index + 1">
+                <svg class="checkmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="step-checkmark">
+                  <path d="M20 6L9 17L4 12" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+              </template>
+              <template v-else>
+                {{ index + 1 }}
+              </template>
+            </div>
+            <div class="step-title" :data-id="`step-title-${index + 1}`">{{ step.title }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main content area -->
+      <div class="wizard-container" data-id="wizard-container">
+        <div class="wizard-step-container" data-id="wizard-step-content">
+          <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" data-id="prerequisites-check" />
+          <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" data-id="python-sanity-check" />
+          <TargetSelect :nextstep=nextStep v-if="currentStep === 3" data-id="target-select" />
+          <VersionSelect :nextstep=nextStep v-if="currentStep === 4" data-id="version-select" />
+          <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" data-id="mirror-select" />
+          <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" data-id="installation-path-select" />
+          <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" data-id="installation-progress" />
+          <Complete v-if="currentStep === 8" data-id="complete" />
+        </div>
       </div>
     </div>
   </div>
 </template>
+
 
 <script>
 import { ref, computed } from 'vue'
@@ -140,86 +150,149 @@ export default {
 
 <style scoped>
 .wizard-layout {
+  min-height: calc(100vh - 130px);
+}
+
+.wizard-header {
+  padding: 24px 32px;
+  padding-bottom: 0px;
+  margin: 0 auto;
+  max-width: 1136px;
+  border-bottom: 1px solid #E5E7EB;
   display: flex;
-  min-height: 100vh;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.header-title {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 36px;
+  font-weight: 500;
+  color: #111827;
+}
+
+.step-indicator {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 48px;
+  color: #e1e1e1;
+  font-weight: 500;
+}
+
+.wizard-content {
+  display: flex;
+  padding: 0px;
+  padding-top: 0px;
+  ;
+  gap: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .wizard-sidebar {
   width: 280px;
-  background-color: #f5f5f5;
-  padding: 20px;
-  border-right: 1px solid #e0e0e0;
+  padding: 24px;
+
 }
 
 .steps-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  position: relative;
 }
 
 .step-item {
   display: flex;
-  align-items: center;
-  padding: 12px;
-  border-radius: 8px;
+  align-items: flex-start;
+  padding: 0 0 32px 0;
+  position: relative;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: #666;
 }
 
-.step-item:hover:not(.disabled) {
-  background-color: #e8e8e8;
+/* Vertical line connecting steps */
+.step-item:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 32px;
+  width: 2px;
+  height: calc(100% - 32px);
+  background-color: #E5E7EB;
+  z-index: 1;
 }
 
-.step-item.active {
-  background-color: #ffeeed;
-  color: #e7352c;
+.step-item.completed:not(:last-child)::after {
+  background-color: #3B82F6;
 }
 
-.step-item.completed {
-  color: #666;
+.step-number {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: white;
+  border: 2px solid #E5E7EB;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 16px;
+  font-size: 17px;
+  color: #6B7280;
+  flex-shrink: 0;
+  z-index: 2;
+}
+
+.step-item.active .step-number {
+  border-color: #3B82F6;
+  background-color: #3B82F6;
+  color: white;
+}
+
+.step-item.completed .step-number {
+  border-color: #3B82F6;
+  background-color: #3B82F6;
+  color: white;
+}
+
+.checkmark {
+  width: 16px;
+  height: 16px;
+  stroke: white;
+}
+
+.step-title {
+  font-size: 14px;
+  padding-top: 4px;
+  color: #6B7280;
+}
+
+.step-item.active .step-title {
+  color: #3B82F6;
+  font-weight: 500;
+}
+
+.step-item.completed .step-title {
+  color: #374151;
 }
 
 .step-item.disabled {
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .step-item.clickable {
   cursor: pointer;
 }
 
-.step-item.clickable:hover {
-  background-color: #e8e8e8;
-}
-
-.step-number {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #fff;
-  border: 1px solid currentColor;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 12px;
-  font-size: 14px;
-  position: relative;
-}
-
-.checkmark {
-  width: 16px;
-  height: 16px;
-}
-
-.step-title {
-  font-size: 14px;
-  font-weight: 500;
+.step-item.clickable:hover .step-title {
+  color: #3B82F6;
 }
 
 .wizard-container {
   flex: 1;
-  padding: 20px;
+  padding: 24px;
 }
 
 .wizard-step-container {
@@ -227,17 +300,10 @@ export default {
   margin: 0 auto;
 }
 
-/* Add smooth transitions */
-.step-item {
+/* Transitions */
+.step-item,
+.step-number,
+.step-title {
   transition: all 0.3s ease;
-}
-
-.step-number {
-  transition: all 0.3s ease;
-}
-
-/* Add subtle shadow to active step */
-.step-item.active {
-  box-shadow: 0 2px 4px rgba(231, 53, 44, 0.1);
 }
 </style>
