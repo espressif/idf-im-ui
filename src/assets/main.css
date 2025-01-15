@@ -8,6 +8,20 @@
   --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
 }
 
+@font-face {
+  font-family: 'Trueno-bold';
+  src: url('./trueno/TruenoBd.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: 'Trueno-regular';
+  src: url('./trueno/TruenoRg.otf') format('opentype');
+  font-weight: bold;
+  font-style: normal;
+}
+
 body {
   font-family: var(--font-family);
   background-color: var(--background-color);

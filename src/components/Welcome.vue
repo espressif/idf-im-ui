@@ -4,7 +4,7 @@
   <!-- Main content -->
   <main class="main-content">
     <div class="welcome-card">
-      <h1>Welcome to ESP-IDF Installation Manager!</h1>
+      <h1>Welcome to <span>ESP-IDF</span> Installation Manager!</h1>
 
       <div class="content">
         <p>This tool will guide you through the installation process.</p>
@@ -78,14 +78,21 @@ export default {
   padding: 2rem;
   border-radius: 0.5rem;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  max-width: 600px;
+  max-width: 948px;
   width: 100%;
+  text-align: center;
 }
 
 .welcome-card h1 {
-  font-size: 1.875rem;
+  font-family: 'Trueno-bold', sans-serif;
+  font-weight: bold;
+  font-size: 2rem;
   color: #1f2937;
   margin-bottom: 1.5rem;
+}
+
+.welcome-card h1 span {
+  color: #E8362D
 }
 
 .content {
@@ -94,37 +101,70 @@ export default {
 
 .content p {
   color: #4b5563;
-  font-size: 1.125rem;
+  font-family: 'Trueno-regular', sans-serif;
+  font-size: 1.5rem;
+  font-weight: bold;
   margin-bottom: 1.5rem;
 }
 
 .features {
   display: flex;
-  flex-direction: column;
-  gap: 1rem;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  position: relative;
 }
 
 .feature {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  text-align: center;
+  position: relative;
+  width: 250px;
+  height: 65px;
+}
+
+.feature span {
+
+  font-size: 1.4rem;
   color: #4b5563;
 }
 
 .feature-icon {
-  background-color: #fee2e2;
-  color: #dc2626;
+  background-color: #1290d8;
+  font-size: 1.6rem;
+  color: white;
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 0.75rem;
+  margin-bottom: 10px;
+  z-index: 1;
+}
+
+.feature:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 65%;
+  width: calc(100% - 65px);
+  height: 4px;
+  border-radius: 2px;
+  background-color: #2196F3;
 }
 
 .get-started {
   width: 100%;
+  max-width: 175px;
+  margin: 0 auto;
   margin-top: 1.5rem;
+  background-color: #E8362D;
 }
 
 .footer {
