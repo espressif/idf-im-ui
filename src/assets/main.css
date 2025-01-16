@@ -38,6 +38,10 @@
 .n-button {
   background-color: var(--espressif-red-color)
 }
+.n-card {
+  border: none;
+}
+
 body {
   font-family: 'Trueno-regular', var(--font-family);
   background-color: var(--background-color);

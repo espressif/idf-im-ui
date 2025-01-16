@@ -141,16 +141,14 @@ hr {
   /* Use flexbox */
   flex-wrap: wrap;
   /* Allow items to wrap to the next line */
-  gap: 15px;
+  gap: 13px;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 0.3rem;
   margin-bottom: 0.5rem;
 }
 
 .target-item {
   width: 125px;
   height: 40px;
-  margin: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
