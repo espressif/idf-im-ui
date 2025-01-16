@@ -41,7 +41,9 @@
 .n-card {
   border: none;
 }
-
+.n-radio .n-radio__dot {
+  display: none;
+}
 body {
   font-family: 'Trueno-regular', var(--font-family);
   background-color: var(--background-color);
