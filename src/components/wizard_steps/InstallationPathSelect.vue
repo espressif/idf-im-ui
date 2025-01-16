@@ -191,7 +191,7 @@ export default {
   height: 100%;
 }
 
-.b-button {
+.n-button {
   background: #E8362D;
 }
 
