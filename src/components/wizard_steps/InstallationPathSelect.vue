@@ -23,6 +23,9 @@
         <div class="path-validation" v-if="pathError" data-id="path-validation-section">
           <p class="error-message" data-id="path-error-message">{{ pathError }}</p>
         </div>
+        <div v-if="pathSelected" class="path-validation" data-id="path-validation-section-succes">
+          <p class="sucess-message" data-id="path-success-message">Instalation path updated successfully! </p>
+        </div>
       </div>
 
       <div class="action-footer" data-id="path-action-footer">
@@ -47,46 +50,43 @@ export default {
     nextstep: Function
   },
   components: { NButton, NInput, NInputGroup, NSpace, NCard },
-  setup(props) {
-    const installPath = ref('');
-    const pathError = ref('');
-
-    const isValidPath = computed(() => {
+  data() {
+    return {
+      installPath: '',
+      pathError: '',
+      pathSelected: false
+    };
+  },
+  computed: {
+    isValidPath() {
       return true; // TODO: add some validation logic here
-      // return installPath.value.length > 0 && !pathError.value;
-    });
-
-    onMounted(async () => {
-      const path = await invoke("get_installation_path");
-      installPath.value = path;
-    });
-
-    const validatePath = (path) => {
+      // return this.installPath.length > 0 && !this.pathError;
+    }
+  },
+  methods: {
+    validatePath(path) {
       // Add path validation logic here if needed
       return true;
-    };
-
-    const openFolderDialog = async () => {
+    },
+    async openFolderDialog() {
       const selected = await open({
         directory: true,
         multiple: false,
       });
       if (selected) {
-        installPath.value = await path.join(selected, '.espressif');
+        this.installPath = await path.join(selected, '.espressif');
+        this.pathSelected = true;
       }
-    };
-
-    const processInstallPath = async () => {
-      console.log("Selected installation path:", installPath.value);
-      await invoke("set_installation_path", { path: installPath.value });
-      props.nextstep();
-    };
-
-    return {
-      installPath,
-      openFolderDialog,
-      processInstallPath
-    };
+    },
+    async processInstallPath() {
+      console.log("Selected installation path:", this.installPath);
+      await invoke("set_installation_path", { path: this.installPath });
+      this.nextstep();
+    }
+  },
+  async mounted() {
+    const path = await invoke("get_installation_path");
+    this.installPath = path;
   }
 }
 </script>
@@ -99,9 +99,10 @@ export default {
 }
 
 .title {
-  font-size: 1.8rem;
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
   color: #374151;
-  margin-bottom: 2rem;
+  margin-bottom: 0.5rem;
 }
 
 .path-card {
@@ -173,16 +174,30 @@ export default {
   font-size: 0.875rem;
 }
 
+.sucess-message {
+  color: #5AC8FA;
+  font-size: 0.875rem;
+}
+
 .action-footer {
   display: flex;
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
 }
 
 .icon {
   width: 100%;
   height: 100%;
+}
+
+.b-button {
+  background: #E8362D;
+}
+
+.n-card {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+
 }
 </style>
