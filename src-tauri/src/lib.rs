@@ -267,7 +267,7 @@ async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets()
         .await
         .unwrap();
-    available_targets.insert(0, "all".to_string());
+    // available_targets.insert(0, "all".to_string());
     available_targets
         .into_iter()
         .map(|t| {
