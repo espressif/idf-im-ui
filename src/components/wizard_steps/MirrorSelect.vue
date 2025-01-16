@@ -142,12 +142,15 @@ export default {
 }
 
 .title {
-  font-size: 1.8rem;
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
   color: #374151;
   margin-bottom: 0.5rem;
 }
 
 .description {
+  font-size: 21px;
+  font-family: 'Trueno-light', sans-serif;
   color: #6b7280;
   margin-bottom: 2rem;
 }
@@ -158,8 +161,7 @@ export default {
 }
 
 .mirrors-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  display: flex;
   gap: 2rem;
   margin-bottom: 2rem;
 }
@@ -226,6 +228,19 @@ export default {
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
+}
+
+.n-card {
+  border: none;
   border-top: 1px solid #e5e7eb;
+  padding: 0px;
+}
+
+.n-card__content {
+  padding: 0px;
+}
+
+.n-radio .n-radio__dot.n-radio__dot--checked {
+  display: none;
 }
 </style>
