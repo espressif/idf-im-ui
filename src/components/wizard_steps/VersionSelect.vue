@@ -7,22 +7,30 @@
       <n-spin :show="loading" data-id="version-loading-spinner">
         <div class="versions-grid" data-id="versions-grid">
           <div v-for="version in versions" :key="version.name" class="version-item"
-            :class="{ 'selected': version.selected }" :data-id="`version-item-${version.name}`">
-            <n-checkbox v-model:checked="version.selected" :data-id="`version-checkbox-${version.name}`">
-              <div class="version-content" :data-id="`version-content-${version.name}`">
-                <div class="version-header" :data-id="`version-header-${version.name}`">
-                  <span class="version-name" :data-id="`version-name-${version.name}`">{{ version.name }}</span>
-                  <n-tag v-if="version.latest" type="error" size="small"
-                    :data-id="`version-latest-tag-${version.name}`">Latest</n-tag>
-                  <n-tag v-if="version.lts" type="success" size="small"
-                    :data-id="`version-lts-tag-${version.name}`">LTS</n-tag>
-                </div>
-                <span v-if="version.description" class="version-description"
-                  :data-id="`version-description-${version.name}`">
-                  {{ version.description }}
-                </span>
+            :class="{ 'selected': selected_versions.includes(version.name) }" :data-id="`version-item-${version.name}`"
+            @click="clickOnVersion">
+            <div class="version-content" :data-id="`version-content-${version.name}`">
+              <div class="version-header" :data-id="`version-header-${version.name}`">
+                <span class="version-name" :data-id="`version-name-${version.name}`">{{ version.name }}</span>
+                <n-tag v-if="version.latest" type="error" size="small"
+                  :data-id="`version-latest-tag-${version.name}`">Latest</n-tag>
+                <n-tag v-if="version.lts" type="success" size="small"
+                  :data-id="`version-lts-tag-${version.name}`">LTS</n-tag>
               </div>
-            </n-checkbox>
+              <span v-if="version.description" class="version-description"
+                :data-id="`version-description-${version.name}`">
+                {{ version.description }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="selected-versions-summary" v-if="selected_versions.length > 0">
+          Selected versions:
+          <div class="selected-tags" data-id="selected-tags">
+            <n-tag v-for="version in selected_versions" :key="version" closable round="true" size="medium"
+              :data-id="`selected-tag-${version}`" @close="deselectVersion(version)">
+              {{ version }}
+            </n-tag>
           </div>
         </div>
 
@@ -52,6 +60,7 @@ export default {
   data: () => ({
     loading: true,
     versions: [],
+    selected_versions: []
   }),
   methods: {
     get_available_versions: async function () {
@@ -64,10 +73,17 @@ export default {
       this.nextstep();
     },
     deselectVersion(versionName) {
-      const version = this.versions.find(v => v.name === versionName);
-      if (version) {
-        version.selected = false;
+      this.selected_versions.splice(this.selected_versions.indexOf(versionName), 1);
+    },
+    clickOnVersion(event) {
+      let version_name = event.currentTarget.textContent.trim();
+      console.log('target clicked', version_name);
+      if (this.selected_versions.includes(version_name)) {
+        this.selected_versions.splice(this.selected_versions.indexOf(version_name), 1);
+      } else {
+        this.selected_versions.push(version_name);
       }
+      console.log('selected versions', this.selected_versions);
     }
   },
   computed: {
@@ -75,9 +91,7 @@ export default {
       return this.versions.some(version => version.selected);
     },
     selectedVersions() {
-      return this.versions
-        .filter(version => version.selected)
-        .map(version => version.name);
+      return this.selected_versions
     }
   },
   mounted() {
@@ -94,7 +108,8 @@ export default {
 }
 
 .title {
-  font-size: 1.8rem;
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
   color: #374151;
   margin-bottom: 0.5rem;
 }
@@ -110,26 +125,35 @@ export default {
 }
 
 .versions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+  display: flex;
+  /* Use flexbox */
+  flex-wrap: wrap;
+  /* Allow items to wrap to the next line */
+  gap: 12px;
   margin-bottom: 2rem;
 }
 
 .version-item {
-  padding: 1rem;
+  width: 125px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
+  cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .version-item:hover {
-  border-color: #e7352c;
+  border-color: #1290d8;
 }
 
 .version-item.selected {
-  background-color: #fee2e2;
-  border-color: #e7352c;
+  background-color: #1290d8;
+  border-color: #1290d8;
+  color: white
 }
 
 .version-content {
@@ -147,6 +171,10 @@ export default {
 .version-name {
   font-weight: 500;
   color: #374151;
+}
+
+.version-item.selected .version-name {
+  color: white;
 }
 
 .version-description {
@@ -190,6 +218,30 @@ export default {
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
+}
+
+.n-card {
+  border: none;
   border-top: 1px solid #e5e7eb;
+
+}
+
+.selected-versions-summary {
+  font-family: 'Trueno-light';
+  display: flex;
+  font-size: 21px;
+  line-height: 23px;
+  vertical-align: baseline;
+}
+
+.selected-tags {
+  margin-left: 1rem;
+}
+
+.n-tag {
+  color: #1290d8;
+  border-color: #1290d8;
+  border-radius: 3px;
+
 }
 </style>
