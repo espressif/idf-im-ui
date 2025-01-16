@@ -241,3 +241,10 @@ h2 {
   color: #6b7280;
   font-size: 0.875rem;
 }
+
+.title {
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}

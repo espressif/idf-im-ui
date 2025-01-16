@@ -3,13 +3,14 @@
     <h1 class="title" data-id="installation-title">Installation Progress</h1>
 
     <n-card class="progress-card" data-id="progress-card">
-      <div class="summary-section" data-id="installation-summary">
+      <div class="summary-section" data-id="installation-summary" v-if="!instalation_running">
         <div class="versions-info" v-if="all_settings" data-id="versions-info">
           <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
           <div class="version-chips" data-id="version-chips">
-            <n-tag v-for="version in idf_versions" :key="version" type="info" :data-id="`version-tag-${version}`">
+            <div v-for="version in idf_versions" :key="version" type="info" :data-id="`version-tag-${version}`"
+              class="idf-version">
               {{ version }}
-            </n-tag>
+            </div>
           </div>
         </div>
         <div v-if="instalation_finished" data-id="complete-button-container">
@@ -25,34 +26,6 @@
         </div>
       </div>
 
-      <div v-if="instalation_running || instalation_finished" class="status-section" data-id="status-section">
-        <div class="status-grid" data-id="status-grid">
-          <div class="status-item" v-if="curently_installing_version" data-id="current-version-status">
-            <span class="status-label" data-id="current-version-label">Currently Installing:</span>
-            <n-tag type="warning" data-id="current-version-tag">{{ curently_installing_version }}</n-tag>
-          </div>
-
-          <div class="status-item" v-if="versions_finished.length > 0" data-id="completed-versions-status">
-            <span class="status-label" data-id="completed-versions-label">Completed:</span>
-            <div class="version-chips" data-id="completed-version-chips">
-              <n-tag v-for="version in versions_finished" :key="version" type="success"
-                :data-id="`completed-version-${version}`">
-                {{ version }}
-              </n-tag>
-            </div>
-          </div>
-
-          <div class="status-item" v-if="versions_failed.length > 0" data-id="failed-versions-status">
-            <span class="status-label" data-id="failed-versions-label">Failed:</span>
-            <div class="version-chips" data-id="failed-version-chips">
-              <n-tag v-for="version in versions_failed" :key="version" type="error"
-                :data-id="`failed-version-${version}`">
-                {{ version }}
-              </n-tag>
-            </div>
-          </div>
-        </div>
-      </div>
 
       <div v-if="tools_tabs.length > 0" class="tools-section" data-id="tools-section">
         <n-tabs type="card" class="tools-tabs" data-id="tools-tabs">
@@ -71,14 +44,14 @@
               <tbody>
                 <tr v-for="(tool, name) in tools[version]" :key="name" :data-id="`tool-row-${version}-${name}`">
                   <td data-id="tool-name">{{ tool.name }}</td>
-                  <td><n-tag :type="tool.downloaded ? 'success' : 'default'"
-                      :data-id="`tool-downloaded-${version}-${name}`">{{ tool.downloaded ? 'Yes' : 'No' }}</n-tag></td>
-                  <td><n-tag :type="tool.extracted ? 'success' : 'default'"
-                      :data-id="`tool-extracted-${version}-${name}`">{{ tool.extracted ? 'Yes' : 'No' }}</n-tag></td>
-                  <td><n-tag :type="tool.finished ? 'success' : 'default'"
-                      :data-id="`tool-finished-${version}-${name}`">{{ tool.finished ? 'Yes' : 'No' }}</n-tag></td>
-                  <td><n-tag :type="tool.error ? 'error' : 'default'" :data-id="`tool-error-${version}-${name}`">{{
-                    tool.error ? 'Yes' : 'No' }}</n-tag></td>
+                  <td><span :type="tool.downloaded ? 'success' : 'default'"
+                      :data-id="`tool-downloaded-${version}-${name}`">{{ tool.downloaded ? '✓' : '✗' }}</span></td>
+                  <td><span :type="tool.extracted ? 'success' : 'default'"
+                      :data-id="`tool-extracted-${version}-${name}`">{{ tool.extracted ? '✓' : '✗' }}</span></td>
+                  <td><span :type="tool.finished ? 'success' : 'default'"
+                      :data-id="`tool-finished-${version}-${name}`">{{ tool.finished ? '✓' : '✗' }}</span></td>
+                  <td><span :type="tool.error ? 'error' : 'default'" :data-id="`tool-error-${version}-${name}`">{{
+                    tool.error ? '✓' : '✗' }}</span></td>
                 </tr>
               </tbody>
             </n-table>
@@ -219,15 +192,11 @@ export default {
   margin: 0 auto;
 }
 
-.title {
-  font-size: 1.8rem;
-  color: #374151;
-  margin-bottom: 2rem;
-}
-
 .progress-card {
   background: white;
   padding: 1.5rem;
+  display: flex;
+  align-content: center;
 }
 
 .summary-section {
@@ -246,13 +215,9 @@ export default {
 .version-chips {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-}
-
-.status-section {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 1.5rem;
-  margin-bottom: 2rem;
 }
 
 .status-grid {
@@ -272,8 +237,8 @@ export default {
 }
 
 .tools-section {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 1.5rem;
+  /* border-top: 1px solid #e5e7eb; */
+  margin-top: -2.5rem;
 }
 
 .tools-tabs {
@@ -286,5 +251,45 @@ export default {
   margin-top: 2rem;
   padding-top: 1rem;
   border-top: 1px solid #e5e7eb;
+}
+
+.idf-version {
+  border: 1px solid #428ED2;
+  border-radius: 4px;
+  width: 124px;
+  height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.n-button {
+  background: #E8362D;
+}
+
+.n-card {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0xp;
+}
+
+.n-card__content {
+  padding-top: 0px;
+}
+
+tbody span {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 20px;
+  color: #428ED2
+}
+
+
+
+tr>td {
+  text-align: center;
+}
+
+tr>td:first-child {
+  text-align: left;
 }
 </style>
