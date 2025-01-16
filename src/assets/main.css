@@ -31,6 +31,13 @@
 .n-result .n-result-icon .n-base-icon {
   color: #1290d8;
 }
+.n-checkbox.n-checkbox--checked .n-checkbox-box,
+.n-checkbox.n-checkbox--indeterminate .n-checkbox-box {
+  background-color: #1290d8;
+}
+.n-button {
+  background-color: var(--espressif-red-color)
+}
 body {
   font-family: 'Trueno-regular', var(--font-family);
   background-color: var(--background-color);

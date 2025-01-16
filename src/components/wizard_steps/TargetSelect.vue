@@ -2,21 +2,27 @@
   <div class="target-select" data-id="target-select">
     <h1 class="title" data-id="target-select-title">Select Target Chips</h1>
     <p class="description" data-id="target-select-description">Choose the ESP chips you'll be developing for:</p>
-
+    <div class="selection_header">
+      Target Chips:
+      <span @click="clickOnAll">
+        All
+        <n-checkbox :checked="all" id="select_all_targets" size="large"></n-checkbox>
+      </span>
+    </div>
     <n-card class="selection-card" data-id="target-selection-card">
       <n-spin :show="loading" data-id="target-loading-spinner">
         <div class="targets-grid" data-id="targets-grid">
-          <div v-for="target in targets" :key="target.name" class="target-item" :class="{ 'selected': target.selected }"
-            :data-id="`target-item-${target.name}`" @click="clickOnTarget">
-            <n-checkbox v-model:checked="target.selected" :data-id="`target-checkbox-${target.name}`">
-              <div class="target-content" :data-id="`target-content-${target.name}`">
-                <span class="target-name" :data-id="`target-name-${target.name}`">{{ target.name }}</span>
-                <span class="target-description" v-if="target.description"
-                  :data-id="`target-description-${target.name}`">
-                  {{ target.description }}
-                </span>
-              </div>
-            </n-checkbox>
+          <div v-for="target in targets" :key="target.name" class="target-item"
+            :class="{ 'selected': selected_targets.includes(target.name) }" :data-id="`target-item-${target.name}`"
+            @click="clickOnTarget">
+
+            <div class="target-content" :data-id="`target-content-${target.name}`">
+              <span class="target-name" :data-id="`target-name-${target.name}`">{{ target.name }}</span>
+              <span class="target-description" v-if="target.description" :data-id="`target-description-${target.name}`">
+                {{ target.description }}
+              </span>
+            </div>
+
           </div>
         </div>
 
@@ -46,6 +52,8 @@ export default {
   data: () => ({
     loading: true,
     targets: [],
+    selected_targets: [],
+    all: true,
   }),
   methods: {
     check_python_sanity: async function () {
@@ -55,32 +63,40 @@ export default {
     },
     get_available_targets: async function () {
       const targets = await invoke("get_available_targets", {});
+      console.log('available targets', targets);
       this.targets = targets;
       this.loading = false;
       return false;
     },
     clickOnTarget: async function (event) {
-      if (event.currentTarget.textContent.toLowerCase().includes('all')) {
-        console.log('all targets selected');
-        if (this.targets[0].selected) {
-          for (const t of this.targets) {
-            t.selected = false;
-          }
-          this.targets[0].selected = true;
-        }
+      let chip_name = event.currentTarget.textContent.trim();
+      console.log('target clicked', chip_name);
+      if (this.selected_targets.includes(chip_name)) {
+        this.selected_targets.splice(this.selected_targets.indexOf(chip_name), 1);
       } else {
-        this.targets[0].selected = false;
+        this.selected_targets.push(chip_name);
+      }
+      console.log('selected targets', this.selected_targets);
+      if (this.selected_targets.length > 0) {
+        this.all = false;
+      } else {
+        this.all = true;
       }
     },
+    clickOnAll: async function (event) {
+      console.log('all clicked', this.all);
+      this.all = !this.all;
+      this.selected_targets = this.all ? [] : this.selected_targets;
+    },
     processTargets: async function () {
-      const selected_targets = this.targets.filter(target => target.selected).map(target => target.name);
+      const selected_targets = this.all ? ["all"] : this.selected_targets;
       const _ = await invoke("set_targets", { targets: selected_targets });
       this.nextstep();
     }
   },
   computed: {
     hasSelectedTargets() {
-      return this.targets.some(target => target.selected);
+      return this.selected_targets.length > 0 || this.all;
     }
   },
   mounted() {
@@ -97,14 +113,22 @@ export default {
 }
 
 .title {
-  font-size: 1.8rem;
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
   color: #374151;
   margin-bottom: 0.5rem;
 }
 
 .description {
+  font-size: 21px;
+  font-family: 'Trueno-light', sans-serif;
   color: #6b7280;
   margin-bottom: 2rem;
+}
+
+hr {
+  background-color: #6b7280;
+  color: #6b7280;
 }
 
 .selection-card {
@@ -113,13 +137,23 @@ export default {
 }
 
 .targets-grid {
-  display: grid;
+  display: flex;
+  /* Use flexbox */
+  flex-wrap: wrap;
+  /* Allow items to wrap to the next line */
+  gap: 15px;
   grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 0.3rem;
   margin-bottom: 0.5rem;
 }
 
 .target-item {
+  width: 125px;
+  height: 40px;
+  margin: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 0.5rem;
   border: 1px solid #e5e7eb;
   border-radius: 0.5rem;
@@ -129,12 +163,13 @@ export default {
 
 .target-item:hover {
   background-color: #f9fafb;
-  border-color: #e7352c;
+  border-color: #1290d8;
 }
 
 .target-item.selected {
-  background-color: #fee2e2;
-  border-color: #e7352c;
+  background-color: #1290d8;
+  border-color: #1290d8;
+  color: white
 }
 
 .target-content {
@@ -148,6 +183,10 @@ export default {
   color: #374151;
 }
 
+.selected .target-name {
+  color: white;
+}
+
 .target-description {
   font-size: 0.875rem;
   color: #6b7280;
@@ -158,6 +197,18 @@ export default {
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
+}
+
+.n-card {
+  border: none;
+}
+
+.selection_header {
   border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 21px;
 }
 </style>
