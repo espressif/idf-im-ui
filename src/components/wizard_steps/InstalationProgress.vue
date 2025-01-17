@@ -239,6 +239,7 @@ export default {
 .tools-section {
   /* border-top: 1px solid #e5e7eb; */
   margin-top: -2.5rem;
+
 }
 
 .tools-tabs {
@@ -291,5 +292,10 @@ tr>td {
 
 tr>td:first-child {
   text-align: left;
+}
+
+.n-tab-pane {
+  max-height: 300px;
+  overflow-y: auto;
 }
 </style>
