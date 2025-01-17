@@ -6,7 +6,6 @@
       <h2>ESP-IDF Installation Manager</h2>
     </header>
     <router-view></router-view>
-    <message-display />
     <global-progress />
     <!-- Footer -->
     <footer class="footer">
