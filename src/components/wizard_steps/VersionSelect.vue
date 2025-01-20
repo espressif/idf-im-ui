@@ -27,7 +27,7 @@
         <div class="selected-versions-summary" v-if="selected_versions.length > 0">
           Selected versions:
           <div class="selected-tags" data-id="selected-tags">
-            <n-tag v-for="version in selected_versions" :key="version" closable round="true" size="medium"
+            <n-tag v-for="version in selected_versions" :key="version" closable round size="medium"
               :data-id="`selected-tag-${version}`" @close="deselectVersion(version)">
               {{ version }}
             </n-tag>
@@ -88,7 +88,7 @@ export default {
   },
   computed: {
     hasSelectedVersions() {
-      return this.versions.some(version => version.selected);
+      return this.selected_versions.length > 0;
     },
     selectedVersions() {
       return this.selected_versions
