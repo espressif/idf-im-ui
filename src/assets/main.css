@@ -255,3 +255,24 @@ h2 {
   text-align: center;
   align-content: center;
 }
+
+.n-result.simple_install_result_positive .n-base-icon svg {
+  margin-top: 15px;
+  width: 60px;
+  text-align: center;
+  align-content: center;
+}
+
+.n-result.simple_install_result_negative .n-base-icon svg {
+  color: var(--espressif-red-color);
+  margin-top: 15px;
+  width: 60px;
+  text-align: center;
+  align-content: center;
+}
+
+.n-result.simple_install_result_negative .n-button--ghost {
+  background-color: white;
+  border-color: var(--espressif-red-color);
+  color: black;
+}
