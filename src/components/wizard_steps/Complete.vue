@@ -17,26 +17,27 @@
               </n-alert>
             </div>
 
-            <div class="config-save" data-id="config-save-section">
-              <n-alert type="info" data-id="save-config-alert">
-                <template #icon>
-                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="save-icon">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                  </svg>
-                </template>
-                Save your configuration to reproduce this installation on other machines
-              </n-alert>
-            </div>
+
           </div>
 
           <div class="buttons" data-id="action-buttons">
-            <n-button @click="save_config" type="info" class="save-button" data-id="save-config-button">
+            <n-button @click="save_config" type="info" class="save-button" dashed data-id="save-config-button">
               Save Configuration
             </n-button>
-            <n-button @click="quit" type="error" data-id="exit-button">
+            <n-button @click="quit" class="exit-button" type="info" data-id="exit-button">
               Exit Installer
             </n-button>
+          </div>
+          <div class="config-save" data-id="config-save-section">
+            <n-alert type="info" data-id="save-config-alert">
+              <template #icon>
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" data-id="save-icon">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                </svg>
+              </template>
+              Save your configuration to reproduce this installation on other machines
+            </n-alert>
           </div>
         </div>
       </template>
@@ -122,7 +123,62 @@ export default {
   justify-content: center;
 }
 
+.n-button {
+  background-color: white;
+}
+
+.n-button.exit-button {
+  background-color: #1290d8;
+}
+
 .save-button {
   min-width: 160px;
 }
+
+.n-result {
+  display: flex;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+/* First row containing icon and header */
+.n-result-icon,
+.n-result-header {
+  display: flex;
+  align-items: center;
+  /* vertical centering */
+  justify-content: center;
+  /* horizontal centering */
+}
+
+.n-result-icon {
+  flex: 0 0 auto;
+  width: 50px;
+  /* or whatever width you need */
+}
+
+.n-result-header {
+  flex: 1;
+  /* takes remaining space */
+}
+
+/* Footer row */
+.n-result-footer {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* .exit-button {
+  color: black;
+  background-color: #1290d8;
+  border-color: #5AC8FA;
+}
+
+.exit-button:hover {
+  color: black;
+  background-color: #429acd;
+  border-color: #5AC8FA;
+} */
 </style>

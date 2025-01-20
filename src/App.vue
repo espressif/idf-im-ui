@@ -6,7 +6,6 @@
       <h2>ESP-IDF Installation Manager</h2>
     </header>
     <router-view></router-view>
-    <global-progress />
     <!-- Footer -->
     <footer class="footer">
       ESP-IDF Installation Manager {{ appVersion }}
@@ -18,8 +17,6 @@
 import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } from 'naive-ui'
 import { darkTheme } from 'naive-ui'
 import { ref, onMounted } from 'vue'
-import MessageDisplay from './components/MessageDisplay.vue'
-import GlobalProgress from './components/GlobalProgress.vue'
 import { attachConsole } from '@tauri-apps/plugin-log'
 import { getVersion } from '@tauri-apps/api/app';
 

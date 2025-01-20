@@ -3,7 +3,7 @@
     <h1 class="title" data-id="installation-title">Installation Progress</h1>
 
     <n-card class="progress-card" data-id="progress-card">
-      <div class="summary-section" data-id="installation-summary" v-if="!instalation_running">
+      <div class="summary-section" data-id="installation-summary" v-if="!instalation_running && !instalation_finished">
         <div class="versions-info" v-if="all_settings" data-id="versions-info">
           <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
           <div class="version-chips" data-id="version-chips">
@@ -13,12 +13,7 @@
             </div>
           </div>
         </div>
-        <div v-if="instalation_finished" data-id="complete-button-container">
-          <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button">
-            Complete Installation
-          </n-button>
-        </div>
-        <div v-else data-id="start-button-container">
+        <div data-id="start-button-container">
           <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
             :disabled="instalation_running" data-id="start-installation-button">
             {{ instalation_running ? 'Installing...' : 'Start Installation' }}
@@ -57,6 +52,18 @@
             </n-table>
           </n-tab-pane>
         </n-tabs>
+        <div class="progress-container">
+          <div class="progress-content">
+            <n-progress type="line" color="#E8362D" :status="progressStatus" :percentage="progressPercentage"
+              :height="10" :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
+              <template #indicator>
+                {{ progressPercentage }}%
+              </template>
+            </n-progress>
+            <span class="progress-message">{{ progressMessage }}</span>
+
+          </div>
+        </div>
       </div>
 
       <div class="action-footer" v-if="instalation_finished" data-id="action-footer">
@@ -89,6 +96,11 @@ export default {
     tools: {},
     unlisten: undefined,
     unlistenTools: undefined,
+    unlistenProgress: undefined,
+    progressMessage: "",
+    progressStatus: "info",
+    progressPercentage: "0",
+    progressDisplay_progress: true,
     instalation_running: false,
     instalation_finished: false,
     curently_installing_version: undefined,
@@ -156,6 +168,16 @@ export default {
         }
       });
     },
+    startListeningToInstalationProgress: async function () {
+      console.log('Listening for progress messages...');
+      this.progressDisplay_progress = true;
+      this.unlistenProgress = await listen('progress-message', (event) => {
+        this.progressMessage = event.payload.message;
+        this.progressStatus = event.payload.status;
+        this.progressPercentage = event.payload.percentage;
+      })
+      this.progressDisplay_progress = false;
+    },
     get_settings: async function () {
       this.all_settings = await invoke("get_settings", {});;
     },
@@ -176,10 +198,12 @@ export default {
     this.get_os();
     this.get_settings();
     this.startListening();
+    this.startListeningToInstalationProgress();
   },
   beforeDestroy() {
     if (this.unlisten) this.unlisten();
     if (this.unlistenTools) this.unlistenTools();
+    if (this.unlistenProgress) this.unlistenProgress();
   },
 
 }
@@ -251,7 +275,6 @@ export default {
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
-  border-top: 1px solid #e5e7eb;
 }
 
 .idf-version {
@@ -297,5 +320,24 @@ tr>td:first-child {
 .n-tab-pane {
   max-height: 300px;
   overflow-y: auto;
+}
+
+.progress-container {
+  width: 75%;
+  margin: auto;
+  margin-top: 20px;
+}
+
+.progress-content {
+  display: flex;
+  vertical-align: middle;
+  justify-content: center;
+}
+
+.n-progress {
+  width: 50%;
+  margin-top: 6px;
+  margin-right: 6px;
+  ;
 }
 </style>
