@@ -248,3 +248,10 @@ h2 {
   color: #374151;
   margin-bottom: 0.5rem;
 }
+
+.n-result.complete-result .n-base-icon svg {
+  margin-top: 15px;
+  width: 60px;
+  text-align: center;
+  align-content: center;
+}
