@@ -1,5 +1,8 @@
 <template>
   <div class="simple-setup">
+    <div class="wizard-header">
+      <h1 class="header-title">Simplified Mode</h1>
+    </div>
     <n-card class="status-card">
       <div class="status-content">
         <!-- Installation Progress Spinner -->
@@ -17,11 +20,11 @@
 
         <!-- Status Messages -->
         <div v-if="showStatusMessage" class="status-message">
-          <n-result :status="getCurrentStateStatus" :title="getCurrentStateTitle"
+          <n-result :class="getCurentClass" :status="getCurrentStateStatus" :title="getCurrentStateTitle"
             :description="getCurrentStateDescription">
             <template #footer>
               <div class="action-buttons">
-                <n-button v-if="showRetryButton" @click="startInstalation" type="error">
+                <n-button v-if="showRetryButton" @click="startInstalation" ghost type="error">
                   Try Again
                 </n-button>
                 <n-button v-if="showExpertButton" @click="$router.push('/wizard/1')" type="info">
@@ -38,7 +41,7 @@
         </div>
 
         <!-- Installation Log -->
-        <n-collapse v-if="messages.length > 0">
+        <n-collapse arrow-placement="right" v-if="messages.length > 0">
           <n-collapse-item title="Installation Log" name="1">
             <div class="log-container">
               <pre v-for="message in messages" :key="message" class="log-message">{{ message }}</pre>
@@ -93,6 +96,9 @@ export default {
         default:
           return 'error';
       }
+    },
+    getCurentClass() {
+      return "simple_install_result_negative";
     },
     getCurrentStateMessage() {
       const messages = {
@@ -159,10 +165,19 @@ export default {
 </script>
 
 <style scoped>
+.header-title {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 36px;
+  font-weight: 500;
+  color: #111827;
+}
+
 .simple-setup {
   padding: 2rem;
-  max-width: 800px;
+  max-width: 1440px;
   margin: 0 auto;
+  margin-left: 80px;
+  margin-right: 80px;
 }
 
 .status-card {
@@ -228,5 +243,20 @@ export default {
   font-size: 0.875rem;
   color: #374151;
   white-space: pre-wrap;
+}
+
+.n-collapse {
+  background-color: #FAFAFA;
+  border: 1px solid #D5D5D5;
+}
+
+.n-collapse-item__header-main {
+  display: flex;
+  align-items: center;
+}
+
+.log-container {
+  text-align: left;
+  background-color: white;
 }
 </style>
