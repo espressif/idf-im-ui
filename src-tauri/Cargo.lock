@@ -726,16 +726,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8"
-dependencies = [
- "lazy_static",
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2231,27 +2221,23 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
 name = "idf-im-lib"
-version = "0.1.11"
-source = "git+https://github.com/espressif/idf-im-lib.git?tag=v0.1.11#0c133ffd64ea51dfe91cbccea564d835c086128c"
+version = "0.1.12"
+source = "git+https://github.com/espressif/idf-im-lib.git?tag=v0.1.12#fb6890a41a4d333b737ac4ade413e347904167ab"
 dependencies = [
  "anyhow",
- "colored",
  "config",
  "decompress",
  "dirs 5.0.1",
  "git2",
  "log",
- "regex",
  "reqwest",
  "rust_search",
  "serde",
  "serde_derive",
  "serde_json",
  "sha2",
- "sys-info",
  "tempfile",
  "tera",
- "tokio",
  "toml 0.8.2",
  "uuid",
 ]
@@ -4676,16 +4662,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sys-info"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
-dependencies = [
- "cc",
- "libc",
-]
-
-[[package]]
 name = "system-configuration"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5234,24 +5210,11 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros",
  "tracing",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "693d596312e88961bc67d7f1f97af8a70227d9f90c31bba5806eec004978d752"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.77",
 ]
 
 [[package]]
