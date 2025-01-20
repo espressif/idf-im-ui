@@ -780,7 +780,7 @@ async fn setup_tools(
                 send_tools_message(app_handle, filename.to_string(), "match".to_string());
             }
             _ => {
-                error!(
+                debug!(
                     "Checksum verification failed or file does not exists: {}",
                     full_path_str
                 );

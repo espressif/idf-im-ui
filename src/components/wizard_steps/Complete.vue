@@ -1,6 +1,6 @@
 <template>
   <div class="complete-screen" data-id="complete-screen">
-    <n-result status="success" title="Installation Complete!"
+    <n-result class="complete-result" status="success" title="Installation Complete!"
       description="ESP-IDF has been successfully installed on your system" data-id="completion-result">
       <template #footer>
         <div class="actions" data-id="completion-actions">
@@ -155,6 +155,12 @@ export default {
   flex: 0 0 auto;
   width: 50px;
   /* or whatever width you need */
+}
+
+.n-result-icon svg {
+  width: 40px;
+  color: red;
+  ;
 }
 
 .n-result-header {
