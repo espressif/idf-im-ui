@@ -132,7 +132,7 @@ jobs:
       - name: Add +x permission to the binary
         if: startsWith(matrix.platform, 'macos')
         run: |
-          chmod +x ./src-tauri/target/release/eim
+          chmod +x ./src-tauri/target/release/bundle/macos/eim.app
 
       - name: Codesign macOS eim executables
         if: startsWith(matrix.platform, 'macos')
@@ -147,15 +147,15 @@ jobs:
           /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
           /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
 
-          /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" ./src-tauri/target/release/eim -v
-          /usr/bin/codesign -v -vvv --deep ./src-tauri/target/release/eim
+          /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" ./src-tauri/target/release/bundle/macos/eim.app -v
+          /usr/bin/codesign -v -vvv --deep ./src-tauri/target/release/bundle/macos/eim.app
 
       - name: Zip eim executable for notarization
         if: startsWith(matrix.platform, 'macos')
         run: |
-          chmod +x ./src-tauri/target/release/eim
-          cd ./src-tauri/target/release
-          zip -r eim.zip eim
+          chmod +x ./src-tauri/target/release/bundle/macos/eim.app
+          cd ./src-tauri/target/release/bundle/macos/
+          zip -r eim.zip eim.app
 
       - name: Notarization of macOS eim executables
         if: startsWith(matrix.platform, 'macos')
@@ -171,13 +171,13 @@ jobs:
 
           echo "Create keychain profile"
           xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-          xcrun notarytool submit ./src-tauri/target/release/eim.zip --keychain-profile "eim-notarytool-profile" --wait
+          xcrun notarytool submit ./src-tauri/target/release/bundle/macos/eim.zip --keychain-profile "eim-notarytool-profile" --wait
 
           echo "Unzipping the executable"
-          unzip -o ./src-tauri/target/release/eim.zip -d ./src-tauri/target/release/
+          unzip -o ./src-tauri/target/release/bundle/macos/eim.zip -d ./src-tauri/target/release/bundle/macos/
 
           # echo "Attach staple for eim executable"
-          # xcrun stapler staple ./src-tauri/target/release/eim
+          # xcrun stapler staple ./src-tauri/target/release/bundle/macos/eim.app
 
       - name: Upload app MacOs binary
         uses: actions/upload-artifact@v4
@@ -185,7 +185,7 @@ jobs:
         with:
           name: ${{ matrix.binname }}-${{ github.run_number	}}
           path: |
-            src-tauri/target/release/eim.zip
+            src-tauri/target/release/bundle/macos/eim.zip
           if-no-files-found: error
 
       - name: Upload Release Asset
@@ -195,7 +195,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/eim.zip
+          asset_path: src-tauri/target/release/bundle/macos/eim.zip
           asset_name: ${{ matrix.binname }}.zip
           asset_content_type: application/zip
 
