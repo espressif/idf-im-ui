@@ -249,21 +249,21 @@ h2 {
   margin-bottom: 0.5rem;
 }
 
-.n-result.complete-result .n-base-icon svg {
+.complete-result .n-base-icon svg {
   margin-top: 15px;
   width: 60px;
   text-align: center;
   align-content: center;
 }
 
-.n-result.simple_install_result_positive .n-base-icon svg {
+.simple_install_result_positive .n-base-icon svg {
   margin-top: 15px;
   width: 60px;
   text-align: center;
   align-content: center;
 }
 
-.n-result.simple_install_result_negative .n-base-icon svg {
+.status-message .n-base-icon svg {
   color: var(--espressif-red-color);
   margin-top: 15px;
   width: 60px;
@@ -271,7 +271,7 @@ h2 {
   align-content: center;
 }
 
-.n-result.simple_install_result_negative .n-button--ghost {
+.status-message .n-button--ghost {
   background-color: white;
   border-color: var(--espressif-red-color);
   color: black;

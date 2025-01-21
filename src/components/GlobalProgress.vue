@@ -1,17 +1,15 @@
 <template>
-  <transition name="slide">
-    <div class="progress-container" v-if="display_progress">
-      <div class="progress-content">
-        <span class="progress-message">{{ message }}</span>
-        <n-progress type="line" :color="themeVars.errorColor" :status="status" :percentage="percentage" :height="36"
-          :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
-          <template #indicator>
-            {{ percentage }}%
-          </template>
-        </n-progress>
-      </div>
+  <div class="progress-container" v-if="display_progress">
+    <div class="progress-content">
+      <span class="progress-message">{{ message }}</span>
+      <n-progress type="line" :color="themeVars.errorColor" :status="status" :percentage="percentage" :height="36"
+        :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
+        <template #indicator>
+          {{ percentage }}%
+        </template>
+      </n-progress>
     </div>
-  </transition>
+  </div>
 </template>
 
 <script>
@@ -41,7 +39,6 @@ export default {
         this.status = event.payload.status;
         this.percentage = event.payload.percentage;
         this.display_progress = event.payload.display;
-
       })
     }
   },

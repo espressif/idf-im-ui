@@ -95,6 +95,7 @@ export default {
 
 <style scoped>
 .complete-screen {
+  text-align: center;
   padding: 2rem;
   max-width: 800px;
   margin: 0 auto;

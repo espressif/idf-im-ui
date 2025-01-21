@@ -20,19 +20,26 @@
 
         <!-- Status Messages -->
         <div v-if="showStatusMessage" class="status-message">
-          <n-result :class="getCurentClass" :status="getCurrentStateStatus" :title="getCurrentStateTitle"
-            :description="getCurrentStateDescription">
-            <template #footer>
-              <div class="action-buttons">
-                <n-button v-if="showRetryButton" @click="startInstalation" ghost type="error">
-                  Try Again
-                </n-button>
-                <n-button v-if="showExpertButton" @click="$router.push('/wizard/1')" type="info">
-                  Expert Mode
-                </n-button>
-              </div>
-            </template>
-          </n-result>
+          <div class="status-message-header">
+            <n-icon :size="32" :class="getCurrentStateStatus" class="icon">
+              <ExclamationCircleFilled />
+            </n-icon>
+            <h1 class="title" data-id="target-select-title">{{ getCurrentStateTitle }}</h1>
+          </div>
+          <div class="status-message-body">
+            <p class="description" data-id="target-select-description">{{ getCurrentStateDescription }}</p>
+          </div>
+          <div :class="['user-message', 'user-message-' + last_user_message_type]" v-if="last_user_message.length > 0">
+            {{ last_user_message }}
+          </div>
+          <div class="action-buttons">
+            <n-button v-if="showRetryButton" @click="startInstalation" ghost type="error">
+              Try Again
+            </n-button>
+            <n-button v-if="showExpertButton" @click="$router.push('/wizard/1')" type="info">
+              Expert Mode
+            </n-button>
+          </div>
         </div>
 
         <!-- Complete Component -->
@@ -58,15 +65,18 @@ import { NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem } f
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from "@tauri-apps/api/core";
 import Complete from './wizard_steps/Complete.vue';
+import { ExclamationCircleFilled } from '@vicons/antd'
 
 export default {
   name: 'SimpleSetup',
   components: {
-    Complete, NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem
+    Complete, NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem, ExclamationCircleFilled
   },
   data: () => ({
     messages: [],
     current_state_code: 0,
+    last_user_message: '',
+    last_user_message_type: 0,
     unlisten: undefined,
     user_message_unlisten: undefined
   }),
@@ -112,11 +122,17 @@ export default {
     },
     getCurrentStateTitle() {
       const titles = {
+        1: 'Starting Installation...',
+        2: 'Installing Prerequisites...',
         3: 'Prerequisites Installation Failed',
         4: 'Missing Prerequisites',
+        5: 'Python Setup...',
         6: 'Python Setup Failed',
         7: 'Python Version Not Found',
+        8: 'Getting ESP-IDF Versions...',
         9: 'Version Selection Failed',
+        10: 'Installing ESP-IDF...',
+        11: 'Installation Complete',
         12: 'Installation Failed'
       };
       return titles[this.current_state_code] || '';
@@ -141,10 +157,12 @@ export default {
         this.messages.push(event.payload.message);
         this.current_state_code = event.payload.code;
       });
-      await this.startInstalation();
+      // await this.startInstalation();
     },
     startInstalation: async function () {
-      const listener = listen('user-message', (event) => {
+      const listener = await listen('user-message', (event) => {
+        this.last_user_message = event.payload.message;
+        this.last_user_message_type = event.payload.type;
         this.messages.push(event.payload.message);
       });
       await invoke("start_simple_setup", {});
@@ -155,6 +173,7 @@ export default {
   },
   mounted() {
     this.startListening();
+    this.startInstalation();
   },
   beforeUnmount() {
     if (this.unlisten) {
@@ -258,5 +277,54 @@ export default {
 .log-container {
   text-align: left;
   background-color: white;
+}
+
+.title {
+  font-size: 27px;
+}
+
+.n-icon {
+  margin-top: 10px;
+  margin-right: 16px;
+}
+
+.n-icon.error {
+  color: #E8362D;
+}
+
+.n-icon.success {
+  color: #5AC8FA;
+}
+
+.n-icon.info {
+  color: #5AC8FA;
+}
+
+.status-message-header {
+  width: 100%;
+  display: flex;
+  vertical-align: middle;
+  justify-content: center;
+  align-items: center;
+}
+
+.status-message-body {
+  width: 100%;
+  display: flex;
+  vertical-align: middle;
+  justify-content: center;
+  align-items: center;
+}
+
+.user-message {
+  margin-left: 20%;
+  margin-right: 20%;
+  margin-bottom: 20px;
+  padding: 10px;
+}
+
+.user-message-error {
+  background-color: #fdeae8;
+  border-left: 4px solid #E8362D;
 }
 </style>
