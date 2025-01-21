@@ -338,6 +338,5 @@ tr>td:first-child {
   width: 50%;
   margin-top: 6px;
   margin-right: 6px;
-  ;
 }
 </style>
