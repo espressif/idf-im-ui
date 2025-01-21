@@ -52,18 +52,7 @@
             </n-table>
           </n-tab-pane>
         </n-tabs>
-        <div class="progress-container">
-          <div class="progress-content">
-            <n-progress type="line" color="#E8362D" :status="progressStatus" :percentage="progressPercentage"
-              :height="10" :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
-              <template #indicator>
-                {{ progressPercentage }}%
-              </template>
-            </n-progress>
-            <span class="progress-message">{{ progressMessage }}</span>
-
-          </div>
-        </div>
+        <GlobalProgress messagePosition="right" v-if="!instalation_finished" />
       </div>
 
       <div class="action-footer" v-if="instalation_finished" data-id="action-footer">
@@ -80,6 +69,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
+import GlobalProgress from "./../GlobalProgress.vue";
 
 
 export default {
@@ -87,7 +77,7 @@ export default {
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable },
+  components: { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, GlobalProgress },
 
   data: () => ({
     os: undefined,
