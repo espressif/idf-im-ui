@@ -5,21 +5,13 @@
     </div>
     <n-card class="status-card">
       <div class="status-content">
-        <!-- Installation Progress Spinner -->
-        <div v-if="isInProgress" class="progress-spinner">
-          <n-spin size="large">
-            <div class="spinner-content">
-              <img src="../assets/espressif_logo.svg" alt="ESP-IDF Logo" />
-              <div class="spinner-text">
-                <h3>{{ getCurrentStateMessage }}</h3>
-                <p>Please wait while the installation progresses...</p>
-              </div>
-            </div>
-          </n-spin>
+        <!-- Complete Component -->
+        <div v-if="current_state_code === 11">
+          <Complete />
         </div>
 
         <!-- Status Messages -->
-        <div v-if="showStatusMessage" class="status-message">
+        <div class="status-message" v-else>
           <div class="status-message-header">
             <n-icon :size="32" :class="getCurrentStateStatus" class="icon">
               <ExclamationCircleFilled />
@@ -42,10 +34,9 @@
           </div>
         </div>
 
-        <!-- Complete Component -->
-        <div v-if="current_state_code === 11">
-          <Complete />
-        </div>
+
+
+        <GlobalProgress messagePosition="left" v-if="current_state_code > 0 && current_state_code < 11" />
 
         <!-- Installation Log -->
         <n-collapse arrow-placement="right" v-if="messages.length > 0">
@@ -65,12 +56,13 @@ import { NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem } f
 import { listen } from '@tauri-apps/api/event'
 import { invoke } from "@tauri-apps/api/core";
 import Complete from './wizard_steps/Complete.vue';
+import GlobalProgress from './GlobalProgress.vue';
 import { ExclamationCircleFilled } from '@vicons/antd'
 
 export default {
   name: 'SimpleSetup',
   components: {
-    Complete, NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem, ExclamationCircleFilled
+    Complete, NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem, ExclamationCircleFilled, GlobalProgress
   },
   data: () => ({
     messages: [],
@@ -147,7 +139,11 @@ export default {
       if (this.current_state_code === 9) {
         return 'Please use expert mode to manually select ESP-IDF version';
       }
-      return 'Please try again or switch to expert mode for more control';
+      if (this.getCurrentStateStatus === 'error') {
+        return 'Please try again or switch to expert mode for more control';
+      } else {
+        return '';
+      }
     }
   },
   methods: {
@@ -319,12 +315,17 @@ export default {
 .user-message {
   margin-left: 20%;
   margin-right: 20%;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   padding: 10px;
 }
 
 .user-message-error {
   background-color: #fdeae8;
   border-left: 4px solid #E8362D;
+}
+
+.user-message-info {
+  background-color: #eaf3fb;
+  border-left: 4px solid #5AC8FA;
 }
 </style>

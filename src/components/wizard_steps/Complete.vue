@@ -101,6 +101,11 @@ export default {
   margin: 0 auto;
 }
 
+.complete-result {
+  margin: 0 auto;
+  max-width: 800px;
+}
+
 .actions {
   display: flex;
   flex-direction: column;
@@ -140,6 +145,8 @@ export default {
   display: flex;
   flex-wrap: wrap;
   width: 100%;
+  justify-content: center;
+  align-items: center;
 }
 
 /* First row containing icon and header */

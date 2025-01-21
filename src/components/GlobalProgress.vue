@@ -1,13 +1,15 @@
 <template>
-  <div class="progress-container" v-if="display_progress">
+  <div class="progress-container">
     <div class="progress-content">
-      <span class="progress-message">{{ message }}</span>
-      <n-progress type="line" :color="themeVars.errorColor" :status="status" :percentage="percentage" :height="36"
-        :show-indicator="true" indicator-placement="inside" class="progress-bar" processing>
+      <span v-if="messagePosition === 'left'" class="progress-message">{{ message }}</span>
+      <n-progress type="line" color="#E8362D" :status="status" :percentage="percentage" :height="16"
+        :show-indicator="false" class="progress-bar" processing v-if="message.length > 0">
         <template #indicator>
           {{ percentage }}%
         </template>
       </n-progress>
+      <n-spin size="small" v-else stroke="#E8362D" />
+      <span v-if="messagePosition === 'right'" class="progress-message">{{ message }}</span>
     </div>
   </div>
 </template>
@@ -21,6 +23,13 @@ import { useThemeVars } from "naive-ui";
 export default {
   name: 'GlobalProgress',
   components: { NProgress },
+  props: {
+    messagePosition: {
+      type: String,
+      default: 'left',
+      validator: (value) => ['left', 'right'].includes(value)
+    }
+  },
   data: () => ({
     percentage: "0",
     status: "info",
@@ -56,26 +65,29 @@ export default {
 
 <style scoped>
 .progress-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 999;
-  padding: 1rem;
+  width: 75%;
+  margin: auto;
 }
 
 .progress-content {
-  max-width: 800px;
-  margin: 0 auto;
+  display: flex;
+  vertical-align: middle;
+  justify-content: center;
+}
+
+.n-progress {
+  width: 50%;
+  margin-top: 6px;
+  margin-right: 6px;
+  ;
 }
 
 .progress-message {
   display: block;
-  color: white;
   font-size: 1rem;
   font-weight: 500;
+  margin-right: 5px;
+  margin-left: 5px;
   margin-bottom: 0.75rem;
   text-align: center;
 }
