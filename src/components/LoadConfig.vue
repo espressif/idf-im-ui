@@ -51,8 +51,7 @@
       <div class="config-content" data-id="config-content">
         <div class="config-layout" data-id="config-layout">
           <div class="config-text" data-id="config-text">
-            <h2 class="section-title" data-id="config-section-title">Reuse Configuration from previous installation
-              installation</h2>
+            <h2 class="section-title" data-id="config-section-title">Reuse Configuration from previous installation</h2>
             <p class="section-description" data-id="config-description">Drag & drop TOML file or click to load existing
               configuration</p>
           </div>

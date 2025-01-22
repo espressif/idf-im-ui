@@ -71,6 +71,8 @@ body {
 
 .wizard-container {
   padding: 2rem;
+  padding-top: 0px;
+  padding-bottom: 0px;
   max-width: 1200px;
   margin: 0 auto;
   align-items: center;

@@ -43,9 +43,6 @@
           <div v-else class="manual-install" data-id="manual-install-section">
             <p class="hint" data-id="manual-install-hint">Please install these components and run the check again:
             </p>
-            <ul class="missing-list" data-id="missing-prerequisites-list">
-              <li v-for="p in missing_prerequisities" :key="p" :data-id="`missing-prerequisite-${p}`">{{ p }}</li>
-            </ul>
           </div>
         </div>
       </div>
@@ -130,6 +127,7 @@ export default {
 <style scoped>
 .prerequisites {
   padding: 2rem;
+  padding-top: 0px;
   max-width: 1200px;
   margin: 0 auto;
   align-items: center;
