@@ -14,6 +14,7 @@ use std::{
     thread,
 };
 use tauri::{AppHandle, Manager};
+use tauri::shell;
 
 // Types and structs
 #[derive(Default, Serialize, Deserialize)]
@@ -207,6 +208,38 @@ fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
         }
     }
 }
+
+#[tauri::command]
+fn open_log_folder(app_handle: AppHandle) {
+  let log_folder = match idf_im_lib::get_log_directory() {
+    Some(folder) => folder,
+    None => {
+        send_message(
+            &app_handle,
+            "Failed to open log folder. Please check if the log directory exists and is readable.".to_string(),
+            "error".to_string(),
+        );
+        return;
+    }
+  };
+  match shell::open(log_folder) {
+    Ok(_) => {
+        send_message(
+            &app_handle,
+            "Log folder opened successfully".to_string(),
+            "info".to_string(),
+        );
+    }
+    Err(err) => {
+        send_message(
+            &app_handle,
+            format!("Failed to open log folder: {}", err),
+            "error".to_string(),
+        );
+    }
+  }
+}
+  
 
 #[tauri::command]
 fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
@@ -1156,7 +1189,8 @@ pub fn run() {
             start_installation,
             start_simple_setup,
             quit_app,
-            save_config
+            save_config,
+            open_log_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
