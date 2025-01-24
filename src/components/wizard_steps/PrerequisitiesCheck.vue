@@ -113,7 +113,7 @@ export default {
   },
   computed: {
     percentage() {
-      return this.all_prerequisities.length === 0 ? 0 : ((this.all_prerequisities.length - this.missing_prerequisities.length) / this.all_prerequisities.length) * 100;
+      return Math.ceil(this.all_prerequisities.length === 0 ? 0 : ((this.all_prerequisities.length - this.missing_prerequisities.length) / this.all_prerequisities.length) * 100);
     }
   },
   mounted() {
