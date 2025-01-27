@@ -2,6 +2,9 @@
   <div class="target-select" data-id="target-select">
     <h1 class="title" data-id="target-select-title">Select Target Chips</h1>
     <p class="description" data-id="target-select-description">Choose the ESP chips you'll be developing for:</p>
+    <p class="description" data-id="target-select-description-second-line">If you are not sure, you can consult our <a
+        href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
+        target="_blank">Product Selector</a></p>
     <div class="selection_header">
       Target Chips:
       <span @click="clickOnAll">
