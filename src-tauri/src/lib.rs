@@ -230,6 +230,22 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
 }
 
 #[tauri::command]
+fn get_logs_folder(app_handle: AppHandle) -> PathBuf {
+  match idf_im_lib::get_log_directory() {
+    Some(folder) => folder,
+    None => {
+      send_message(
+          &app_handle,
+          format!("Error getting log folder"),
+          "error".to_string(),
+      );
+      log::error!("Error getting log folder"); //TODO: emit message
+      PathBuf::new()
+  }
+}}
+
+
+#[tauri::command]
 fn python_install(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
         Ok(_) => true,
@@ -1156,7 +1172,8 @@ pub fn run() {
             start_installation,
             start_simple_setup,
             quit_app,
-            save_config
+            save_config,
+            get_logs_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
