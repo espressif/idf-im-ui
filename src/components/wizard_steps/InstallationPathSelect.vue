@@ -21,7 +21,7 @@
         </div>
 
         <div class="path-validation" v-if="pathError" data-id="path-validation-section">
-          <p class="error-message" data-id="path-error-message">{{ pathError }}</p>
+          <p :class="['error-message', 'error-message-' + pathIsValid]" data-id="path-error-message">{{ pathError }}</p>
         </div>
         <div v-if="pathSelected" class="path-validation" data-id="path-validation-section-succes">
           <p class="sucess-message" data-id="path-success-message">Instalation path updated successfully! </p>
@@ -54,19 +54,36 @@ export default {
     return {
       installPath: '',
       pathError: '',
+      pathIsValid: false,
       pathSelected: false
     };
   },
+  watch: {
+    async installPath(newValue, oldValue) {
+      console.log("installPath changed from", oldValue, "to", newValue);
+      // This function will run every time installPath changes
+      let result = await this.validatePath(newValue);
+      if (!result) {
+        this.pathError = `Path ${newValue} is not valid. Please choose a empty or non-existent directory.`;
+        this.pathIsValid = false;
+      } else {
+        this.pathError = `Path ${newValue} is valid.`;
+        this.pathIsValid = true;
+      }
+    }
+  },
   computed: {
-    isValidPath() {
-      return true; // TODO: add some validation logic here
+    async isValidPath() {
+      console.log("Validating path:", path);
+      return this.installPath.length > 0 && this.validatePath(this.installPath);
       // return this.installPath.length > 0 && !this.pathError;
     }
   },
   methods: {
-    validatePath(path) {
-      // Add path validation logic here if needed
-      return true;
+    async validatePath(path) {
+      let result = await invoke("is_path_empty_or_nonexistent", { path: path });
+      console.log("Validating path:", path, "result:", result);
+      return result;
     },
     async openFolderDialog() {
       const selected = await open({
@@ -79,6 +96,10 @@ export default {
       }
     },
     async processInstallPath() {
+      if (!this.isValidPath) {
+        this.pathError = "Invalid path. Please choose a valid directory.";
+        return;
+      }
       console.log("Selected installation path:", this.installPath);
       await invoke("set_installation_path", { path: this.installPath });
       this.nextstep();
@@ -199,5 +220,23 @@ export default {
   border: none;
   border-top: 1px solid #e5e7eb;
 
+}
+
+.error-message {
+  margin-left: 20%;
+  margin-right: 20%;
+  margin-bottom: 10px;
+  padding: 10px;
+}
+
+.error-message-false {
+  background-color: #fdeae8;
+  border-left: 4px solid #E8362D;
+}
+
+.error-message-true {
+  background-color: #eaf3fb;
+  border-left: 4px solid #5AC8FA;
+  color: #374151
 }
 </style>
