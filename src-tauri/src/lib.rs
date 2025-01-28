@@ -1133,46 +1133,65 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
 fn show_in_folder(path: String) {
   #[cfg(target_os = "windows")]
   {
-    Command::new("explorer")
+    match Command::new("explorer")
         .args(["/select,", &path]) // The comma after select is not a typo
-        .spawn()
-        .unwrap();
+        .spawn() {
+          Ok(_) => {},
+          Err(e) => {
+            error!("Failed to open folder with explorer: {}", e);
+          }
+        }
+        
   }
 
   #[cfg(target_os = "linux")]
-  {
-    if path.contains(",") {
-      // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
-      let new_path = match metadata(&path).unwrap().is_dir() {
-        true => path,
-        false => {
-          let mut path2 = PathBuf::from(path);
-          path2.pop();
-          path2.into_os_string().into_string().unwrap()
-        }
-      };
-      Command::new("xdg-open")
-          .arg(&new_path)
-          .spawn()
-          .unwrap();
-    } else {
-      if let Ok(Fork::Child) = daemon(false, false) {
-        Command::new("dbus-send")
-            .args(["--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
-                  "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
-                  format!("array:string:\"file://{path}\"").as_str(), "string:\"\""])
+    {
+        let path = if path.contains(",") {
+            // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
+            match metadata(&path).unwrap().is_dir() {
+                true => path,
+                false => {
+                    let mut path2 = PathBuf::from(path);
+                    path2.pop();
+                    path2.into_os_string().into_string().unwrap()
+                }
+            }
+        } else {
+            path
+        };
+
+        // Try using xdg-open first
+        if Command::new("xdg-open")
+            .arg(&path)
             .spawn()
-            .unwrap();
-      }
+            .is_err()
+        {
+            // Fallback to dbus-send if xdg-open fails
+            let uri = format!("file://{}", path);
+            match Command::new("dbus-send")
+                .args(["--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                      "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                      format!("array:string:\"{}\"", uri).as_str(), "string:\"\""])
+                .spawn() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!("Failed to open file with dbus-send: {}", e);
+                    }
+                }
+        }
     }
-  }
 
   #[cfg(target_os = "macos")]
   {
-    Command::new("open")
+    match Command::new("open")
         .args(["-R", &path])
-        .spawn()
-        .unwrap();
+        .spawn() {
+            Ok(_) => {},
+            Err(e) => {
+                error!("Failed to open file with open: {}", e);
+            }
+        }
+        
   }
 }
 
