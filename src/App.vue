@@ -8,8 +8,12 @@
     <router-view></router-view>
     <!-- Footer -->
     <footer class="footer">
-      ESP-IDF Installation Manager {{ appVersion }}
-      <LogLink />
+      <div class="footer-content">
+        <div class="version">ESP-IDF Installation Manager {{ appVersion }}</div>
+        <div class="log-link">
+          <LogLink />
+        </div>
+      </div>
     </footer>
   </div>
 </template>

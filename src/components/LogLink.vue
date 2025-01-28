@@ -14,9 +14,10 @@ export default {
     this.LogPath = await invoke("get_logs_folder", {});
   },
   methods: {
-    open_logs() {
+    async open_logs() {
       console.log("Opening logs folder: " + this.LogPath);
-      window.open(this.LogPath, '_blank');
+      await invoke("show_in_folder", { path: this.LogPath });
+      console.log("Logs folder opened.");
     }
   }
 }
