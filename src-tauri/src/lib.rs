@@ -503,6 +503,25 @@ fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), Stri
     );
     Ok(())
 }
+#[tauri::command]
+fn is_path_empty_or_nonexistent(path: String) -> bool {
+  let path = Path::new(&path);
+  
+  // If path doesn't exist, return true
+  if !path.exists() {
+      return true;
+  }
+  
+  // If path exists, check if it's a directory and if it's empty
+  if path.is_dir() {
+      match fs::read_dir(path) {
+          Ok(mut entries) => entries.next().is_none(), // true if directory is empty
+          Err(_) => false, // return false if we can't read the directory
+      }
+  } else {
+      false // return false if it's not a directory
+  }
+}
 
 #[tauri::command]
 fn load_settings(app_handle: AppHandle, path: &str) {
@@ -1246,7 +1265,8 @@ pub fn run() {
             quit_app,
             save_config,
             get_logs_folder,
-            show_in_folder
+            show_in_folder,
+            is_path_empty_or_nonexistent,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
