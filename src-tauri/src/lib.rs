@@ -15,6 +15,10 @@ use std::{
 };
 use tauri::{AppHandle, Manager};
 use std::process::Command;
+use std::fs::metadata;
+#[cfg(target_os = "linux")]
+use fork::{daemon, Fork}; // dep: fork = "0.1"
+
 
 
 // Types and structs

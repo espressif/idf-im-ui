@@ -26,6 +26,10 @@ tauri-plugin-log = "2"
 log = "0.4"
 tokio = "1.41.0"
 
+# OS-specific dependency
+[target.'cfg(target_os = "linux")'.dependencies]
+fork = "0.1"
+
 [dependencies.openssl-sys]
 version = "0.9"
 features = ["vendored"]
