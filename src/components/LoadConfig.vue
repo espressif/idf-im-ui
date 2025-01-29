@@ -229,10 +229,19 @@ export default {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   padding: 1rem;
   height: 100%;
+  position: relative;
 }
 
 .option-content {
   text-align: center;
+}
+
+.option-content .action-button {
+  width: 50%;
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
 .icon-container {
