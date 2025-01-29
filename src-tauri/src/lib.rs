@@ -1,3 +1,5 @@
+#[cfg(target_os = "linux")]
+use fork::{daemon, Fork};
 use idf_im_lib::{
     self, add_path_to_path, download_file, ensure_path, expand_tilde,
     idf_tools::get_tools_export_paths, python_utils::run_idf_tools_py, settings::Settings,
@@ -6,6 +8,8 @@ use idf_im_lib::{
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::fs::metadata;
+use std::process::Command;
 use std::{
     fs::{self, File},
     io::Read,
@@ -13,13 +17,7 @@ use std::{
     sync::{mpsc, Mutex},
     thread,
 };
-use tauri::{AppHandle, Manager};
-use std::process::Command;
-use std::fs::metadata;
-#[cfg(target_os = "linux")]
-use fork::{daemon, Fork}; // dep: fork = "0.1"
-
-
+use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
 
 // Types and structs
 #[derive(Default, Serialize, Deserialize)]
@@ -237,19 +235,19 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
 
 #[tauri::command]
 fn get_logs_folder(app_handle: AppHandle) -> PathBuf {
-  match idf_im_lib::get_log_directory() {
-    Some(folder) => folder,
-    None => {
-      send_message(
-          &app_handle,
-          format!("Error getting log folder"),
-          "error".to_string(),
-      );
-      log::error!("Error getting log folder"); //TODO: emit message
-      PathBuf::new()
-  }
-}}
-
+    match idf_im_lib::get_log_directory() {
+        Some(folder) => folder,
+        None => {
+            send_message(
+                &app_handle,
+                format!("Error getting log folder"),
+                "error".to_string(),
+            );
+            log::error!("Error getting log folder"); //TODO: emit message
+            PathBuf::new()
+        }
+    }
+}
 
 #[tauri::command]
 fn python_install(app_handle: AppHandle) -> bool {
@@ -504,23 +502,50 @@ fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), Stri
     Ok(())
 }
 #[tauri::command]
-fn is_path_empty_or_nonexistent(path: String) -> bool {
-  let path = Path::new(&path);
-  
-  // If path doesn't exist, return true
-  if !path.exists() {
-      return true;
-  }
-  
-  // If path exists, check if it's a directory and if it's empty
-  if path.is_dir() {
-      match fs::read_dir(path) {
-          Ok(mut entries) => entries.next().is_none(), // true if directory is empty
-          Err(_) => false, // return false if we can't read the directory
-      }
-  } else {
-      false // return false if it's not a directory
-  }
+async fn is_path_empty_or_nonexistent(app_handle: AppHandle, path: String) -> bool {
+    let path = Path::new(&path);
+
+    // If path doesn't exist, return true
+    if !path.exists() {
+        return true;
+    }
+
+    // If path exists, check if it's a directory and if it's empty
+    if path.is_dir() {
+        match fs::read_dir(path) {
+            Ok(mut entries) => {
+                if entries.next().is_none() {
+                    //it's empty
+                    return true;
+                }
+                let settings = get_locked_settings(&app_handle).unwrap();
+
+                let vers = match &settings.idf_versions {
+                    Some(v) => v,
+                    None => {
+                        send_message(
+                            &app_handle,
+                            "No IDF versions selected. Please select at least one version to continue."
+                                .to_string(),
+                            "error".to_string(),
+                        );
+                        return false; // something is broken we don't have any versions selected
+                    }
+                };
+                for v in vers {
+                    let new_path = path.join(v);
+                    if new_path.exists() {
+                        return false;
+                    }
+                }
+                return true;
+            } // true if directory is empty
+            Err(_) => false, // return false if we can't read the directory
+        }
+    } else {
+        //path is file which is conflicting with the directory
+        false // return false if it's not a directory
+    }
 }
 
 #[tauri::command]
@@ -1150,20 +1175,20 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn show_in_folder(path: String) {
-  #[cfg(target_os = "windows")]
-  {
-    match Command::new("explorer")
-        .args(["/select,", &path]) // The comma after select is not a typo
-        .spawn() {
-          Ok(_) => {},
-          Err(e) => {
-            error!("Failed to open folder with explorer: {}", e);
-          }
+    #[cfg(target_os = "windows")]
+    {
+        match Command::new("explorer")
+            .args(["/select,", &path]) // The comma after select is not a typo
+            .spawn()
+        {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Failed to open folder with explorer: {}", e);
+            }
         }
-        
-  }
+    }
 
-  #[cfg(target_os = "linux")]
+    #[cfg(target_os = "linux")]
     {
         let path = if path.contains(",") {
             // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
@@ -1180,38 +1205,38 @@ fn show_in_folder(path: String) {
         };
 
         // Try using xdg-open first
-        if Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .is_err()
-        {
+        if Command::new("xdg-open").arg(&path).spawn().is_err() {
             // Fallback to dbus-send if xdg-open fails
             let uri = format!("file://{}", path);
             match Command::new("dbus-send")
-                .args(["--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
-                      "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
-                      format!("array:string:\"{}\"", uri).as_str(), "string:\"\""])
-                .spawn() {
-                    Ok(_) => {},
-                    Err(e) => {
-                        error!("Failed to open file with dbus-send: {}", e);
-                    }
+                .args([
+                    "--session",
+                    "--dest=org.freedesktop.FileManager1",
+                    "--type=method_call",
+                    "/org/freedesktop/FileManager1",
+                    "org.freedesktop.FileManager1.ShowItems",
+                    format!("array:string:\"{}\"", uri).as_str(),
+                    "string:\"\"",
+                ])
+                .spawn()
+            {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Failed to open file with dbus-send: {}", e);
                 }
+            }
         }
     }
 
-  #[cfg(target_os = "macos")]
-  {
-    match Command::new("open")
-        .args(["-R", &path])
-        .spawn() {
-            Ok(_) => {},
+    #[cfg(target_os = "macos")]
+    {
+        match Command::new("open").args(["-R", &path]).spawn() {
+            Ok(_) => {}
             Err(e) => {
                 error!("Failed to open file with open: {}", e);
             }
         }
-        
-  }
+    }
 }
 
 use tauri::Emitter;
