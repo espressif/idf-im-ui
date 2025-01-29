@@ -29,7 +29,8 @@
       </div>
 
       <div class="action-footer" data-id="path-action-footer">
-        <n-button @click="processInstallPath" type="error" size="large" data-id="continue-path-button">
+        <n-button @click="processInstallPath" :disabled="!pathIsValid" type="error" size="large"
+          data-id="continue-path-button">
           Continue
         </n-button>
       </div>
@@ -64,7 +65,7 @@ export default {
       // This function will run every time installPath changes
       let result = await this.validatePath(newValue);
       if (!result) {
-        this.pathError = `Path ${newValue} is not valid. Please choose a empty or non-existent directory.`;
+        this.pathError = `Path ${newValue} is not valid because it contains conflicting files or directories. Please choose a empty or non-existent directory.`;
         this.pathIsValid = false;
       } else {
         this.pathError = `Path ${newValue} is valid.`;
@@ -76,13 +77,11 @@ export default {
     async isValidPath() {
       console.log("Validating path:", path);
       return this.installPath.length > 0 && this.validatePath(this.installPath);
-      // return this.installPath.length > 0 && !this.pathError;
     }
   },
   methods: {
     async validatePath(path) {
       let result = await invoke("is_path_empty_or_nonexistent", { path: path });
-      console.log("Validating path:", path, "result:", result);
       return result;
     },
     async openFolderDialog() {
