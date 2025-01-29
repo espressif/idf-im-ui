@@ -68,10 +68,13 @@ export default {
     },
     save_config: async () => {
       const selected = await save({
+        title: 'Save installation config file',
+        defaultPath: '/tmp/eim_config.toml',
         filters: [
           {
-            name: 'eim_config',
+            name: 'eim_config.toml',
             extensions: ['toml'],
+
           },
         ],
       });
