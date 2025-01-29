@@ -14,6 +14,12 @@ use std::{
     thread,
 };
 use tauri::{AppHandle, Manager};
+use std::process::Command;
+use std::fs::metadata;
+#[cfg(target_os = "linux")]
+use fork::{daemon, Fork}; // dep: fork = "0.1"
+
+
 
 // Types and structs
 #[derive(Default, Serialize, Deserialize)]
@@ -228,6 +234,22 @@ fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
     }
     all_ok
 }
+
+#[tauri::command]
+fn get_logs_folder(app_handle: AppHandle) -> PathBuf {
+  match idf_im_lib::get_log_directory() {
+    Some(folder) => folder,
+    None => {
+      send_message(
+          &app_handle,
+          format!("Error getting log folder"),
+          "error".to_string(),
+      );
+      log::error!("Error getting log folder"); //TODO: emit message
+      PathBuf::new()
+  }
+}}
+
 
 #[tauri::command]
 fn python_install(app_handle: AppHandle) -> bool {
@@ -1107,6 +1129,72 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
     }
 }
 
+#[tauri::command]
+fn show_in_folder(path: String) {
+  #[cfg(target_os = "windows")]
+  {
+    match Command::new("explorer")
+        .args(["/select,", &path]) // The comma after select is not a typo
+        .spawn() {
+          Ok(_) => {},
+          Err(e) => {
+            error!("Failed to open folder with explorer: {}", e);
+          }
+        }
+        
+  }
+
+  #[cfg(target_os = "linux")]
+    {
+        let path = if path.contains(",") {
+            // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
+            match metadata(&path).unwrap().is_dir() {
+                true => path,
+                false => {
+                    let mut path2 = PathBuf::from(path);
+                    path2.pop();
+                    path2.into_os_string().into_string().unwrap()
+                }
+            }
+        } else {
+            path
+        };
+
+        // Try using xdg-open first
+        if Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .is_err()
+        {
+            // Fallback to dbus-send if xdg-open fails
+            let uri = format!("file://{}", path);
+            match Command::new("dbus-send")
+                .args(["--session", "--dest=org.freedesktop.FileManager1", "--type=method_call",
+                      "/org/freedesktop/FileManager1", "org.freedesktop.FileManager1.ShowItems",
+                      format!("array:string:\"{}\"", uri).as_str(), "string:\"\""])
+                .spawn() {
+                    Ok(_) => {},
+                    Err(e) => {
+                        error!("Failed to open file with dbus-send: {}", e);
+                    }
+                }
+        }
+    }
+
+  #[cfg(target_os = "macos")]
+  {
+    match Command::new("open")
+        .args(["-R", &path])
+        .spawn() {
+            Ok(_) => {},
+            Err(e) => {
+                error!("Failed to open file with open: {}", e);
+            }
+        }
+        
+  }
+}
+
 use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1156,7 +1244,9 @@ pub fn run() {
             start_installation,
             start_simple_setup,
             quit_app,
-            save_config
+            save_config,
+            get_logs_folder,
+            show_in_folder
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

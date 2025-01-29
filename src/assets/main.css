@@ -239,9 +239,25 @@ h2 {
 
 .footer {
   padding: 1rem;
-  text-align: center;
   color: #6b7280;
   font-size: 0.875rem;
+}
+
+.footer-content {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  max-width: 100%;
+}
+
+.version {
+  text-align: center;
+}
+
+.log-link {
+  position: absolute;
+  right: 0;
 }
 
 .title {

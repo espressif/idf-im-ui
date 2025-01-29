@@ -8,25 +8,48 @@
     <router-view></router-view>
     <!-- Footer -->
     <footer class="footer">
-      ESP-IDF Installation Manager {{ appVersion }}
+      <div class="footer-content">
+        <div class="version">ESP-IDF Installation Manager {{ appVersion }}</div>
+        <div class="log-link">
+          <LogLink />
+        </div>
+      </div>
     </footer>
   </div>
 </template>
 
-<script setup>
+<script>
 import { NConfigProvider, NLayout, NLayoutHeader, NLayoutContent, useOsTheme } from 'naive-ui'
 import { darkTheme } from 'naive-ui'
 import { ref, onMounted } from 'vue'
 import { attachConsole } from '@tauri-apps/plugin-log'
-import { getVersion } from '@tauri-apps/api/app';
+import { getVersion } from '@tauri-apps/api/app'
+import LogLink from './components/LogLink.vue'
 
+export default {
+  name: 'App',
+  components: {
+    NConfigProvider,
+    NLayout,
+    NLayoutHeader,
+    NLayoutContent,
+    LogLink
+  },
+  setup() {
+    const osTheme = useOsTheme()
+    const theme = null // If you want to use computed: const theme = computed(() => (osTheme.value === 'dark' ? darkTheme : null))
+    const appVersion = ref('')
 
-const osTheme = useOsTheme()
-const theme = null // computed(() => (osTheme.value === 'dark' ? darkTheme : null))
-const appVersion = ref('');
+    onMounted(async () => {
+      const detach = await attachConsole()
+      appVersion.value = await getVersion()
+    })
 
-onMounted(async () => {
-  const detach = await attachConsole();
-  appVersion.value = await getVersion();
-})
+    return {
+      osTheme,
+      theme,
+      appVersion
+    }
+  }
+}
 </script>
