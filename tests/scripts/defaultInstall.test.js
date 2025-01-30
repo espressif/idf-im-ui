@@ -83,7 +83,7 @@ describe("EIM Application Launch", () => {
         try {
             await eimRunner.clickButton("Start Simplified Setup");
             const installing = await eimRunner.findByText(
-                "Please wait while the installation progresses..."
+                "Installing ESP-IDF..."
             );
             expect(
                 await installing.isDisplayed(),
