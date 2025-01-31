@@ -30,6 +30,13 @@ describe("EIM expert Installation", () => {
         }
     });
 
+    afterEach(async function () {
+        if (this.currentTest.state === "failed") {
+            await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+            logger.info(`Screenshot saved as ${this.currentTest.title}.png`);
+        }
+    });
+
     after(async function () {
         this.timeout(5000);
         try {

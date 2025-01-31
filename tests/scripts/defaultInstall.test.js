@@ -29,6 +29,13 @@ describe("EIM Application Launch", () => {
         }
     });
 
+    afterEach(async function () {
+        if (this.currentTest.state === "failed") {
+            await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+            logger.info(`Screenshot saved as ${this.currentTest.title}.png`);
+        }
+    });
+
     after(async function () {
         this.timeout(5000);
         try {
@@ -77,7 +84,7 @@ describe("EIM Application Launch", () => {
         }
     });
 
-    it("Should start simplified setup", async function () {
+    it("Should install IDF using simplified setup", async function () {
         this.timeout(1300000);
 
         try {
