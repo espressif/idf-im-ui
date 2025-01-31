@@ -99,7 +99,7 @@ export class EIMRunner {
                 timeout,
                 `Element with attribute ${cssAttribute} not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);

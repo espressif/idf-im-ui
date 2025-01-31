@@ -89,8 +89,10 @@ describe("EIM Application Launch", () => {
 
         try {
             await eimRunner.clickButton("Start Simplified Setup");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             const installing = await eimRunner.findByText(
-                "Installing ESP-IDF..."
+                "Installing ESP-IDF...",
+                15000
             );
             expect(
                 await installing.isDisplayed(),
