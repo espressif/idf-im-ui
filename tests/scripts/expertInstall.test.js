@@ -79,6 +79,7 @@ describe("EIM expert Installation", () => {
 
         try {
             await eimRunner.clickButton("Start Expert Setup");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             const prerequisitesList = await eimRunner.findByDataId(
                 "prerequisites-items-list"
             );
@@ -119,6 +120,7 @@ describe("EIM expert Installation", () => {
         this.timeout(10000);
         try {
             await eimRunner.clickButton("Continue to Next Step");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             const result = await eimRunner.findByDataId("python-check-result");
             expect(await result.getText()).to.include(
                 "Python Environment Ready"

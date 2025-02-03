@@ -128,6 +128,7 @@ jobs:
                       ./tests/results-*.json
                       ./tests/*.png
                       ./tests/test.log
+                      ~/AppData/Local/eim/logs/**/*
 
     publish-test-results:
         name: Automated Test Results
@@ -144,21 +145,3 @@ jobs:
                   path: "*.json"
                   reporter: mocha-json
                   fail-on-empty: "true"
-
-    # publish-test-results:
-    #     name: Automated Test Results
-    #     needs: test
-    #     runs-on: ubuntu-latest
-    #     if: always()
-
-    #     steps:
-    #         - name: Download Artifacts
-    #           uses: actions/download-artifact@v4
-    #           with:
-    #               path: ./artifacts
-
-    #         - name: Publish Test Results
-    #           uses: EnricoMi/publish-unit-test-result-action@v2
-    #           with:
-    #               action_fail: true
-    #               files: "./artifacts/**/*.xml"
