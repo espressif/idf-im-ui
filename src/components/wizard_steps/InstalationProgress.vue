@@ -31,6 +31,7 @@
                 <tr data-id="tools-table-header">
                   <th>Tool</th>
                   <th>Downloaded</th>
+                  <th>SHA</th>
                   <th>Extracted</th>
                   <th>Finished</th>
                   <th>Error</th>
@@ -41,6 +42,8 @@
                   <td data-id="tool-name">{{ tool.name }}</td>
                   <td><span :type="tool.downloaded ? 'success' : 'default'"
                       :data-id="`tool-downloaded-${version}-${name}`">{{ tool.downloaded ? '✓' : '✗' }}</span></td>
+                  <td><span :type="tool.verified ? 'success' : 'default'"
+                      :data-id="`tool-verified-${version}-${name}`">{{ tool.verified ? '✓' : '✗' }}</span></td>
                   <td><span :type="tool.extracted ? 'success' : 'default'"
                       :data-id="`tool-extracted-${version}-${name}`">{{ tool.extracted ? '✓' : '✗' }}</span></td>
                   <td><span :type="tool.finished ? 'success' : 'default'"
@@ -106,12 +109,14 @@ export default {
     },
     startListening: async function () {
       this.unlistenTools = await listen('tools-message', (event) => {
+        console.log('### Received tools message:', event.payload);
         switch (event.payload.action) {
           case 'start':
             this.tools[this.curently_installing_version][event.payload.tool] = {
               name: event.payload.tool,
               started: true,
               downloaded: false,
+              verified: false,
               extracted: false,
               error: false,
               finished: false,
@@ -132,6 +137,12 @@ export default {
           case 'error':
             this.tools[this.curently_installing_version][event.payload.tool].error = true;
 
+            break;
+          case 'download_verified':
+            this.tools[this.curently_installing_version][event.payload.tool].verified = true;
+            break;
+          case 'download_verification_failed':
+            this.tools[this.curently_installing_version][event.payload.tool].verified = false;
             break;
           default:
             console.warn('Unknown action:', event.payload.action);
