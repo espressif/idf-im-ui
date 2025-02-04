@@ -25,6 +25,7 @@ toml = "0.8"
 tauri-plugin-log = "2"
 log = "0.4"
 tokio = "1.41.0"
+anyhow = "^1.0"
 
 # OS-specific dependency
 [target.'cfg(target_os = "linux")'.dependencies]
