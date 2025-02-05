@@ -1,5 +1,6 @@
 import os from "os";
 import path from "path";
+import fs from "fs";
 import logger from "./logger.class.js";
 import { spawn } from "child_process";
 import { Builder, By, Capabilities, until } from "selenium-webdriver";
@@ -98,7 +99,7 @@ export class EIMRunner {
                 timeout,
                 `Element with attribute ${cssAttribute} not found`
             );
-            logger.debug(`Selected element at ${await element.getRect()}`);
+            logger.debug(`Selected html element ${await element.getTagName()}`);
             return element;
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
@@ -154,6 +155,16 @@ export class EIMRunner {
         } catch (error) {
             logger.debug(`Error during selection: ${error}`);
             return false;
+        }
+    }
+
+    async takeScreenshot(filename) {
+        try {
+            const screenshot = await this.driver.takeScreenshot();
+            fs.writeFileSync(filename, screenshot, "base64");
+        } catch (error) {
+            logger.info("Error taking screenshot:", error);
+            throw error;
         }
     }
 }

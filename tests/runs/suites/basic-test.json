@@ -1,0 +1,30 @@
+[
+    {
+        "id": 1,
+        "type": "startup",
+        "name": "Startup test and version check"
+    },
+    {
+        "id": 2,
+        "type": "default",
+        "name": "Simplified installation"
+    },
+    {
+        "id": 3,
+        "type": "custom",
+        "name": "Expert installation using default parameters",
+        "data": {}
+    },
+    {
+        "id": 4,
+        "type": "custom",
+        "name": "non-interactive-full-parameters",
+        "data": {
+            "targetList": "esp32s3",
+            "idfList": "v5.2.3",
+            "installFolder": ".espcustom",
+            "idfMirror": "github",
+            "toolsMirror": "github"
+        }
+    }
+]
