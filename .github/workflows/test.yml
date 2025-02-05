@@ -42,13 +42,22 @@ jobs:
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-            - name: Get CLI application version number (non-Windows)
+            - name: Get GUI application version number (non-Windows)
               if: runner.os != 'Windows'
               run: |
                   git fetch --tags
                   LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
                   STRIPPED_TAG=${LATEST_TAG#v}
-                  echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+                  echo "GUI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+                  echo "Latest GUI tag to validate: $GUI_TAG"
+
+            - name: Fetch latest IDF release
+              if: runner.os != 'Windows'
+              run: |
+                  curl -v -s https://dl.espressif.com/dl/esp-idf/idf_versions.json > IDF_latest_release.json
+                  IDF_TAG=$(jq -r .VERSIONS[1].name IDF_latest_release.json)
+                  echo "IDF_TAG=$IDF_TAG" >> $GITHUB_ENV
+                  echo "Latest IDF for default install: $IDF_TAG"
 
             - name: Extract artifact (non-Windows)
               if: runner.os != 'Windows'
@@ -79,18 +88,31 @@ jobs:
               run: |
                   export DEBUG="true"
                   export LOG_TO_FILE="true"
-                  chmod +x ./tests/run_test.sh
-                  . ./tests/run_test.sh "../test-bin/eim" "${{ env.CLI_TAG }}"
+                  export EIM_GUI_PATH="../test-bin/eim"
+                  export EIM_GUI_VERSION="eim ${{ env.GUI_TAG }}"
+                  export IDF_VERSION="${{ env.IDF_TAG }}"
+                  cd tests
+                  npm ci
+                  npm run test --file=basic-test
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-            - name: Get CLI application version number (Windows)
+            - name: Get GUI application version number (Windows)
               if: runner.os == 'Windows'
               run: |
                   git fetch --tags
                   $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
                   $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
-                  echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  echo "GUI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  echo "Latest GUI tag to validate: $GUI_TAG"
+
+            - name: Fetch latest IDF release
+              if: runner.os == 'Windows'
+              run: |
+                  $json = Invoke-RestMethod -Uri "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
+                  $IDF_TAG = $json.VERSIONS[1].name
+                  echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  echo "Latest IDF for default install: $IDF_TAG"
 
             - name: Extract artifact (Windows)
               if: runner.os == 'Windows'
@@ -115,7 +137,12 @@ jobs:
               run: |
                   $env:DEBUG="true"
                   $env:LOG_TO_FILE="true"
-                  .\tests\run_test.ps1 "..\test-bin\eim.exe" "${{ env.CLI_TAG }}"
+                  $env:EIM_GUI_PATH = "..\test-bin\eim.exe"
+                  $env:EIM_GUI_VERSION = "eim ${{ env.GUI_TAG }}"
+                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"                  
+                  Set-Location -Path "./tests"
+                  npm ci
+                  npm run test-win --file=basic-test
 
             # ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
