@@ -188,6 +188,7 @@ export default {
 }
 
 .simple-setup {
+  min-height: calc(100vh - 130px - 4rem);
   padding: 2rem;
   max-width: 1440px;
   margin: 0 auto;
