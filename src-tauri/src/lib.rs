@@ -1243,6 +1243,10 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
+        error!("Failed to get log directory.");
+        PathBuf::from("")
+    });
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -1253,7 +1257,14 @@ pub fn run() {
                     // this actually can not keep pace with the console, so maybe we should disable it for production build
                     tauri_plugin_log::TargetKind::Webview,
                 ))
-                .level(log::LevelFilter::Error)
+                // Add new file target with path configuration
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::Folder {
+                        path: log_dir,
+                        file_name: Some("eim_gui_log".to_string()),
+                    },
+                ))
+                .level(log::LevelFilter::Debug)
                 .level_for("idf_im_lib", log::LevelFilter::Info)
                 .level_for("eim_lib", log::LevelFilter::Info)
                 .build(),
