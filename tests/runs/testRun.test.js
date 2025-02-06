@@ -25,6 +25,9 @@ import { runInstallSimplified } from "../scripts/defaultInstall.test.js";
 import { runInstallCustom } from "../scripts/customInstall.test.js";
 import { runPostInstallCleanUp } from "../scripts/postInstall.test.js";
 
+logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
+logger.debug(`Execution folder: ${import.meta.dirname}`);
+
 const jsonFilePath = path.join(
     import.meta.dirname,
     "suites",
@@ -36,10 +39,16 @@ logger.info(`Running test script: ${jsonFilePath}`);
 testRun(testScript);
 
 function testRun(script) {
-    const pathToEIM =
-        process.env.EIM_GUI_PATH || os.platform() !== "win32"
-            ? path.resolve(os.homedir(), "eim-gui", "eim")
-            : path.resolve(os.homedir(), "eim-gui", "eim.exe");
+    logger.debug(process.env.EIM_GUI_PATH);
+    let pathToEIM;
+    if (process.env.EIM_GUI_PATH) {
+        pathToEIM = process.env.EIM_GUI_PATH;
+    } else {
+        os.platform() !== "win32"
+            ? (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim"))
+            : (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim.exe"));
+    }
+    logger.debug(pathToEIM);
 
     const EIMVersion = process.env.EIM_GUI_VERSION || "0.1.2";
 

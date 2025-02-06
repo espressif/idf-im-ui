@@ -31,6 +31,11 @@ jobs:
               with:
                   ref: ${{ inputs.ref }}
 
+            - name: Set up Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "20"
+
             - name: Download artifacts
               uses: actions/download-artifact@v4
               with:
@@ -47,8 +52,8 @@ jobs:
               run: |
                   git fetch --tags
                   LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
-                  STRIPPED_TAG=${LATEST_TAG#v}
-                  echo "GUI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+                  GUI_TAG=${LATEST_TAG#v}
+                  echo "GUI_TAG=$GUI_TAG" >> $GITHUB_ENV
                   echo "Latest GUI tag to validate: $GUI_TAG"
 
             - name: Fetch latest IDF release
@@ -89,7 +94,7 @@ jobs:
                   export DEBUG="true"
                   export LOG_TO_FILE="true"
                   export EIM_GUI_PATH="../test-bin/eim"
-                  export EIM_GUI_VERSION="eim ${{ env.GUI_TAG }}"
+                  export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
                   export IDF_VERSION="${{ env.IDF_TAG }}"
                   cd tests
                   npm ci
@@ -102,8 +107,8 @@ jobs:
               run: |
                   git fetch --tags
                   $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
-                  $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
-                  echo "GUI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  $GUI_TAG = $LATEST_TAG -replace '^v', ''
+                  echo "GUI_TAG=$GUI_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
                   echo "Latest GUI tag to validate: $GUI_TAG"
 
             - name: Fetch latest IDF release
@@ -138,7 +143,7 @@ jobs:
                   $env:DEBUG="true"
                   $env:LOG_TO_FILE="true"
                   $env:EIM_GUI_PATH = "..\test-bin\eim.exe"
-                  $env:EIM_GUI_VERSION = "eim ${{ env.GUI_TAG }}"
+                  $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
                   $env:IDF_VERSION = "${{ env.IDF_TAG }}"                  
                   Set-Location -Path "./tests"
                   npm ci
