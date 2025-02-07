@@ -1,6 +1,6 @@
 # Expert Installation
 
-Expert installation is wizard which will guide you through the installation process step by step and enable the user to tweek instalation settings as needed. First step is checking if all neede prerequsities are met.
+Expert installation is wizard which will guide you through the installation process step by step and enable the user to tweek installation settings as needed. First step is checking if all neede prerequsities are met.
 
 ## Prerequisities check
 
@@ -32,12 +32,12 @@ You will then be prompted to select a mirror from which the ESP-IDF should be do
 
 ![Mirrors selections](./screenshots/mirrors_selection.png)
 
-## Instalation path selections
+## Installation path selections
 
 In the next step, you will be prompted to enter the installation path for the ESP-IDF. The default path is `C:\esp` on Windows and `~\.espressif` on POSIX systems. It is recommended to use the folder browser for selecting the path.
 
 ![Instalation path selections](./screenshots/installation_path_selection.png)
 
-## Instalation Progress
+## Installation Progress
 
-in the nexst step you can start the actuall instalation and than watch it's progress.
+in the next step you can start the actuall installation and than watch it's progress.

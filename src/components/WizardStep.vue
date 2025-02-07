@@ -87,7 +87,7 @@ export default {
         { title: "Select mirror" },
         { title: "Select Installation Path" },
         { title: "Installation progress" },
-        { title: "Instalation Complete" }
+        { title: "Installation Complete" }
       ]
     }
   },
