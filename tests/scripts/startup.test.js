@@ -20,7 +20,7 @@ if (process.env.EIM_GUI_PATH) {
 if (process.env.EIM_GUI_VERSION) {
     eimVersion = process.env.EIM_GUI_VERSION;
 } else {
-    eimVersion = "0.1.0";
+    eimVersion = "0.1.2";
 }
 
 let eimRunner = "";
@@ -33,6 +33,13 @@ describe("EIM Application Launch", () => {
             await eimRunner.launchEIM();
         } catch (err) {
             logger.info("Error starting EIM application");
+        }
+    });
+
+    afterEach(async function () {
+        if (this.currentTest.state === "failed") {
+            await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+            logger.info(`Screenshot saved as ${this.currentTest.title}.png`);
         }
     });
 
@@ -65,7 +72,7 @@ describe("EIM Application Launch", () => {
         try {
             const footer = await eimRunner.findByClass("footer");
             const text = await footer.getText();
-            expect(text, "Expected correct version shown on page").to.equal(
+            expect(text, "Expected correct version shown on page").to.include(
                 `ESP-IDF Installation Manager ${eimVersion}`
             );
         } catch (error) {

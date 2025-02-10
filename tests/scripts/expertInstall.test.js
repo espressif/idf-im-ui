@@ -30,6 +30,13 @@ describe("EIM expert Installation", () => {
         }
     });
 
+    afterEach(async function () {
+        if (this.currentTest.state === "failed") {
+            await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+            logger.info(`Screenshot saved as ${this.currentTest.title}.png`);
+        }
+    });
+
     after(async function () {
         this.timeout(5000);
         try {
@@ -67,14 +74,16 @@ describe("EIM expert Installation", () => {
         }
     });
 
-    it("Should show list of prerequisites", async function () {
+    it("Should check prerequisites", async function () {
         this.timeout(10000);
 
         try {
             await eimRunner.clickButton("Start Expert Setup");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             const prerequisitesList = await eimRunner.findByDataId(
                 "prerequisites-items-list"
             );
+            expect(await prerequisitesList.getText()).to.not.include("❌");
             if (os.platform() === "win32") {
                 const requisitesList = (
                     await prerequisitesList.getText()
@@ -84,7 +93,7 @@ describe("EIM expert Installation", () => {
             } else {
                 const requisitesList = (
                     await prerequisitesList.getText()
-                ).split("❓");
+                ).split("✔");
                 expect(await prerequisitesList.getText()).to.not.be.empty;
                 expect(requisitesList).to.include(
                     "git",
@@ -102,28 +111,6 @@ describe("EIM expert Installation", () => {
                 );
             }
         } catch (error) {
-            logger.info("Failed to locate list of prerequisites", error);
-            throw error;
-        }
-    });
-
-    it("Should check prerequisites", async function () {
-        this.timeout(10000);
-        try {
-            await eimRunner.clickButton("Check Prerequisites");
-            const result = await eimRunner.findByDataId(
-                "prerequisites-success-result"
-            );
-            expect(await result.getText()).to.include(
-                "All Prerequisites Installed"
-            );
-            const prerequisitesList = await eimRunner.findByDataId(
-                "prerequisites-items-list"
-            );
-
-            expect(await prerequisitesList.getText()).to.not.be.empty;
-            expect(await prerequisitesList.getText()).to.not.include("❌");
-        } catch (error) {
             logger.info("Failed to show installed prerequisites", error);
             throw error;
         }
@@ -133,6 +120,7 @@ describe("EIM expert Installation", () => {
         this.timeout(10000);
         try {
             await eimRunner.clickButton("Continue to Next Step");
+            await new Promise((resolve) => setTimeout(resolve, 5000));
             const result = await eimRunner.findByDataId("python-check-result");
             expect(await result.getText()).to.include(
                 "Python Environment Ready"
@@ -151,7 +139,6 @@ describe("EIM expert Installation", () => {
             const targetsList = await eimRunner.findByDataId("targets-grid");
             const targetsText = await targetsList.getText();
             expect(targetsText).to.include(
-                "all",
                 "esp32",
                 "esp32c2",
                 "esp32c3",
@@ -162,21 +149,25 @@ describe("EIM expert Installation", () => {
                 "esp32s2",
                 "esp32s3"
             );
-            let targetAll = await eimRunner.findByDataId("target-item-all");
-            expect(await targetAll.getAttribute("class")).to.include(
-                "selected"
-            );
+            let targetAll = await eimRunner.findByText("All");
+            expect(
+                await targetAll.findElement(By.css("Div")).getAttribute("class")
+            ).to.include("checked");
             let targetESP32 = await eimRunner.findByDataId("target-item-esp32");
             expect(await targetESP32.getAttribute("class")).to.not.include(
                 "selected"
             );
-            await targetESP32.click();
-            expect(await targetAll.getAttribute("class")).to.not.include(
-                "selected"
-            );
+            await eimRunner.clickButton("esp32");
+            expect(
+                await targetAll.findElement(By.css("Div")).getAttribute("class")
+            ).not.to.include("checked");
             expect(await targetESP32.getAttribute("class")).to.include(
                 "selected"
             );
+            await eimRunner.clickButton("esp32");
+            expect(
+                await targetAll.findElement(By.css("Div")).getAttribute("class")
+            ).to.include("checked");
         } catch (error) {
             logger.info("Failed to list of available targets", error);
             throw error;
@@ -190,18 +181,30 @@ describe("EIM expert Installation", () => {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
             const list = await IDFList.getText();
-            expect(list).to.include("v5.3.2", "v5.1.5", "master");
+            expect(list).to.include("v5.4", "v5.3.2", "v5.1.5", "master");
             let IDFMaster = await eimRunner.findByDataId("version-item-master");
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
             );
-            await IDFMaster.click();
+            await eimRunner.clickButton("master");
             expect(await IDFMaster.getAttribute("class")).to.include(
                 "selected"
             );
-            await IDFMaster.click();
-            let IDF515 = await eimRunner.findByDataId("version-item-v5.1.5");
-            await IDF515.click();
+            const selectedMaster = await eimRunner.findByDataId(
+                "selected-tag-master"
+            );
+            await selectedMaster.findElement(By.css("button")).click();
+            expect(await IDFMaster.getAttribute("class")).to.not.include(
+                "selected"
+            );
+            await eimRunner.clickButton("v5.2.3");
+            const selectedVersions = await eimRunner.findByText(
+                "Selected versions:"
+            );
+            expect(await selectedVersions.getText()).to.include(
+                "Selected versions:",
+                "v5.2.3"
+            );
         } catch (error) {
             logger.info("Failed to list of available IDF versions", error);
             throw error;
@@ -233,14 +236,14 @@ describe("EIM expert Installation", () => {
             expect(await jihulabMirror.getAttribute("class")).to.not.include(
                 "selected"
             );
-            await jihulabMirror.click();
+            await jihulabMirror.findElement(By.css("input")).click();
             expect(await githubMirror.getAttribute("class")).to.not.include(
                 "selected"
             );
             expect(await jihulabMirror.getAttribute("class")).to.include(
                 "selected"
             );
-            await githubMirror.click();
+            await githubMirror.findElement(By.css("input")).click();
         } catch (error) {
             logger.info("Failed to list available IDF download mirrors", error);
             throw error;
@@ -277,7 +280,7 @@ describe("EIM expert Installation", () => {
             expect(
                 await espressifCnMirror.getAttribute("class")
             ).to.not.include("selected");
-            await espressifComMirror.click();
+            await espressifComMirror.findElement(By.css("input")).click();
             expect(await githubMirror.getAttribute("class")).to.not.include(
                 "selected"
             );
@@ -287,7 +290,7 @@ describe("EIM expert Installation", () => {
             expect(
                 await espressifCnMirror.getAttribute("class")
             ).to.not.include("selected");
-            await espressifCnMirror.click();
+            await espressifCnMirror.findElement(By.css("input")).click();
             expect(await githubMirror.getAttribute("class")).to.not.include(
                 "selected"
             );
@@ -298,7 +301,7 @@ describe("EIM expert Installation", () => {
                 "selected"
             );
 
-            await githubMirror.click();
+            await githubMirror.findElement(By.css("input")).click();
         } catch (error) {
             logger.info("Failed to list available IDF download mirrors", error);
             throw error;
@@ -318,7 +321,7 @@ describe("EIM expert Installation", () => {
             const pathInput = await eimRunner.findByDataId(
                 "installation-path-input"
             );
-            const input = await pathInput.findElement(By.tagName("input"));
+            const input = await pathInput.findElement(By.css("input"));
             const defaultInput =
                 os.platform() === "win32" ? "C:\\esp" : "/.espressif";
             expect(await input.getAttribute("value")).to.include(defaultInput);
@@ -350,7 +353,7 @@ describe("EIM expert Installation", () => {
             const selectedVersions = await eimRunner.findByDataId(
                 "version-chips"
             );
-            expect(await selectedVersions.getText()).to.equal("v5.1.5");
+            expect(await selectedVersions.getText()).to.equal("v5.2.3");
         } catch (error) {
             logger.info("Failed to show installation summary", error);
             throw error;
@@ -362,7 +365,9 @@ describe("EIM expert Installation", () => {
 
         try {
             await eimRunner.clickButton("Start Installation");
-            const installing = await eimRunner.findByText("Installing...");
+            const installing = await eimRunner.findByText(
+                "Installation Progress"
+            );
             expect(await installing.isDisplayed()).to.be.true;
             const startTime = Date.now();
 
