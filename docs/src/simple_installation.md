@@ -6,7 +6,7 @@ The use can watch progress of the installation on progress bar with regular mess
 
 ![Installation progress](./screenshots/simple_installation_progress.png)
 
-For more detailed information about the installation process, user can open the installation log window by clicking on the "Installation log" button.
+For more detailed information about the installation process, user can open the installation log window by clicking on the "Installation log" button. The frame with the logs is scrollable and can be closed by clicking again on the button.
 
 ![Installation log](./screenshots/simple_installation_log.png)
 
@@ -19,3 +19,7 @@ In case of any issues during the installation process, user can consult the inst
 In that case user can try to re-run the installation process clicking on the "Try again" button (usually after he resolves the issue manualy) or try to switch to the advanced installation option by clicking on the "Expert mode" button.
 
 ![Instalation Failure](./screenshots/simple_installation_failure.png)
+
+For troubleshhoting and more information about the installation process, there is added button in the bottom right corner of the installation window. Clicking on the "Logs folder" button will open the window with the installation log files. This button is avalible on any screen of the installation process.
+
+![Logs folder](./screenshots/logs_folder.png)
