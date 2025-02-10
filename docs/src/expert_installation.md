@@ -1,10 +1,12 @@
 # Expert Installation
 
-Expert installation is wizard which will guide you through the installation process step by step and enable the user to tweek installation settings as needed. First step is checking if all neede prerequsities are met.
+Expert installation is wizard which will guide you through the installation process step by step and enable the user to tweek installation settings as needed. If the process hits a wall and you need more information for further troubleshooting, there is button in bottom right corner of the installation window. Clicking on the "Logs folder" button will open the window with the installation log files. This button is avalible on any screen of the installation process.
+
+![Logs folder](./screenshots/logs_folder.png)
 
 ## Prerequisities check
 
-The installer will first verify that all prerequisites are met. If any prerequisites are not satisfied, the installer will either prompt you to address them manually (on POSIX systems) or offer an option for automatic installation.
+The installer will first verify that all prerequisites are met. If any prerequisites are not satisfied, the installer will either prompt you to address them manually (on POSIX systems) or offer an option for automatic installation (only on Windows).
 
 ![Prerequisities check](./screenshots/prerequisities.png)
 
@@ -40,4 +42,12 @@ In the next step, you will be prompted to enter the installation path for the ES
 
 ## Installation Progress
 
-in the next step you can start the actuall installation and than watch it's progress.
+In the next step you can start the actuall installation and than watch it's progress. The table of components will inform you about the progress of the installation.
+
+![Installation progress](./screenshots/expert_installation_progress.png)
+
+## Finish
+
+Once the installation is complete, you will have the possibility to save the configuration for future use. This is only usefull if you want to replicate the same installation on other machines. Otherwise, you can simply close the installer.
+
+![Finish](./screenshots/expert_installation_finish.png)
