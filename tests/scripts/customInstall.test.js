@@ -6,6 +6,7 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 
 export function runInstallCustom(
+    id,
     pathToEIM,
     installFolder,
     targetList,
@@ -39,7 +40,7 @@ export function runInstallCustom(
             if (this.currentTest.state === "failed") {
                 await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
                 logger.info(
-                    `Screenshot saved as ${this.currentTest.title}.png`
+                    `Screenshot saved as ${id} ${this.currentTest.title}.png`
                 );
                 customInstallFailed = true;
             }
@@ -80,29 +81,25 @@ export function runInstallCustom(
             const requisitesList = await prerequisitesList.getText();
             expect(requisitesList).to.not.be.empty;
             expect(requisitesList).to.not.include("❌");
-            if (os.platform() === "win32") {
-                let expectedRequisites = ["git", "cmake", "ninja"];
-                expectedRequisites.forEach((requisite) =>
-                    expect(requisitesList).to.include(requisite)
-                );
-            } else {
-                let expectedRequisites = [
-                    "git",
-                    "cmake",
-                    "ninja",
-                    "wget",
-                    "flex",
-                    "bison",
-                    "gperf",
-                    "ccache",
-                    "libffi-dev",
-                    "libssl-dev",
-                    "dfu-util",
-                    "libusb-1.0-0",
-                ];
-                expectedRequisites.forEach((requisite) =>
-                    expect(requisitesList).to.include(requisite)
-                );
+            let expectedRequisites =
+                os.platform() === "win32"
+                    ? ["git", "cmake", "ninja"]
+                    : [
+                          "git",
+                          "cmake",
+                          "ninja",
+                          "wget",
+                          "flex",
+                          "bison",
+                          "gperf",
+                          "ccache",
+                          "libffi-dev",
+                          "libssl-dev",
+                          "dfu-util",
+                          "libusb-1.0-0",
+                      ];
+            for (let requisite of expectedRequisites) {
+                expect(requisitesList).to.include(requisite);
             }
         });
 
@@ -133,9 +130,9 @@ export function runInstallCustom(
                 "esp32s2",
                 "esp32s3",
             ];
-            expected.forEach((target) =>
-                expect(targetsText).to.include(target)
-            );
+            for (let target of expected) {
+                expect(targetsText).to.include(target);
+            }
             let targetAll = await eimRunner.findByText("All");
             expect(
                 await targetAll.findElement(By.css("Div")).getAttribute("class")
@@ -157,15 +154,23 @@ export function runInstallCustom(
             ).to.include("checked");
             await eimRunner.clickButton("All");
 
-            targetList.forEach(async function (target) {
+            for (let target of targetList) {
                 await eimRunner.clickButton(target);
-                let selectedTarget = await eimRunner.findByDataId(
-                    `target-item-${target}`
-                );
-                expect(
-                    await selectedTarget.getAttribute("class")
-                ).to.not.include("selected");
-            });
+                if (target === "All") {
+                    expect(
+                        await targetAll
+                            .findElement(By.css("Div"))
+                            .getAttribute("class")
+                    ).to.include("checked");
+                } else {
+                    let selectedTarget = await eimRunner.findByDataId(
+                        `target-item-${target}`
+                    );
+                    expect(
+                        await selectedTarget.getAttribute("class")
+                    ).to.include("selected");
+                }
+            }
         });
 
         it("Should show IDF version list", async function () {
@@ -174,11 +179,10 @@ export function runInstallCustom(
             await new Promise((resolve) => setTimeout(resolve, 4000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
             const IDFListText = await IDFList.getText();
-            logger.info(IDFListText);
             let expected = ["v5.4", "v5.3.2", "v5.1.5", "master"];
-            expected.forEach((version) =>
-                expect(IDFListText).to.include(version)
-            );
+            for (let version of expected) {
+                expect(IDFListText).to.include(version);
+            }
             let IDFMaster = await eimRunner.findByDataId("version-item-master");
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
@@ -194,17 +198,16 @@ export function runInstallCustom(
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
             );
-
-            idfVersionList.forEach(
-                async (version) => await eimRunner.clickButton(version)
-            );
+            for (let version of idfVersionList) {
+                await eimRunner.clickButton(version);
+            }
 
             const selectedVersions = await eimRunner.findByText(
                 "Selected versions:"
             );
             const selectedVersionsText = await selectedVersions.getText();
             expected = ["Selected versions:", ...idfVersionList];
-            expected.forEach(async (substring) =>
+            expected.forEach((substring) =>
                 expect(selectedVersionsText).to.include(substring)
             );
         });
@@ -216,13 +219,13 @@ export function runInstallCustom(
             const IDFMirrors = await eimRunner.findByDataId(
                 "idf-mirror-radio-group"
             );
-            let idfMList = await IDFMirrors.getText();
+            let IDFMirrorsText = await IDFMirrors.getText();
             let expectedMirrors = [
                 "https://github.com",
                 "https://jihulab.com/esp-mirror",
             ];
             expectedMirrors.forEach((mirror) =>
-                expect(idfMList).to.include(mirror)
+                expect(IDFMirrorsText).to.include(mirror)
             );
 
             let githubMirror = await eimRunner.findByDataId(
@@ -256,14 +259,14 @@ export function runInstallCustom(
             const toolsMirrors = await eimRunner.findByDataId(
                 "tools-mirror-radio-group"
             );
-            let toolsMList = await toolsMirrors.getText();
+            let toolsMirrorsText = await toolsMirrors.getText();
             let expectedMirrors = [
                 "https://github.com",
                 "https://dl.espressif.com/github_assets",
                 "https://dl.espressif.cn/github_assets",
             ];
             expectedMirrors.forEach((mirror) =>
-                expect(toolsMList).to.include(mirror)
+                expect(toolsMirrorsText).to.include(mirror)
             );
             let githubMirror = await eimRunner.findByDataId(
                 "tools-mirror-option-https://github.com"
@@ -348,8 +351,8 @@ export function runInstallCustom(
                 "version-chips"
             );
             const selectedVersionsText = await selectedVersions.getText();
-            idfVersionList.forEach(async (idfVersion) =>
-                expect(selectedVersions).to.include(idfVersion)
+            idfVersionList.forEach((idfVersion) =>
+                expect(selectedVersionsText).to.include(idfVersion)
             );
         });
 

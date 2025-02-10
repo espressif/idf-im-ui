@@ -3,7 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runInstallSimplified(pathToEIM) {
+export function runInstallSimplified(id, pathToEIM) {
     let eimRunner = "";
 
     describe("EIM Application Launch", () => {
@@ -30,7 +30,7 @@ export function runInstallSimplified(pathToEIM) {
             if (this.currentTest.state === "failed") {
                 await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
                 logger.info(
-                    `Screenshot saved as ${this.currentTest.title}.png`
+                    `Screenshot saved as ${id} ${this.currentTest.title}.png`
                 );
                 simplifiedInstallFailed = true;
             }

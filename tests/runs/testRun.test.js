@@ -63,7 +63,7 @@ function testRun(script) {
             describe(`${test.id} - EIM Startup test ->`, function () {
                 this.timeout(60000);
 
-                runStartupTest(pathToEIM, EIMVersion);
+                runStartupTest(test.id, pathToEIM, EIMVersion);
             });
         } else if (test.type === "default") {
             //routine for default simplified installation
@@ -73,7 +73,7 @@ function testRun(script) {
                     : `C:\\esp`;
 
             describe(`${test.id} - EIM simplified installation test ->`, function () {
-                runInstallSimplified(pathToEIM);
+                runInstallSimplified(test.id, pathToEIM);
                 runPostInstallCleanUp(installFolder);
             });
         } else if (test.type === "custom") {
@@ -98,6 +98,7 @@ function testRun(script) {
 
             describe(`${test.id}  - EIM expert installation test ->`, function () {
                 runInstallCustom(
+                    test.id,
                     pathToEIM,
                     installFolder,
                     targetList,
