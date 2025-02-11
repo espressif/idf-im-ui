@@ -6,6 +6,7 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 
 export function runInstallCustom(
+    id,
     pathToEIM,
     installFolder,
     targetList,
@@ -15,7 +16,7 @@ export function runInstallCustom(
 ) {
     let eimRunner = "";
 
-    describe("EIM expert Installation", () => {
+    describe("1- EIM expert Installation", () => {
         let customInstallFailed = false;
 
         before(async function () {
@@ -37,9 +38,11 @@ export function runInstallCustom(
 
         afterEach(async function () {
             if (this.currentTest.state === "failed") {
-                await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+                await eimRunner.takeScreenshot(
+                    `${id} ${this.currentTest.title}.png`
+                );
                 logger.info(
-                    `Screenshot saved as ${this.currentTest.title}.png`
+                    `Screenshot saved as ${id} ${this.currentTest.title}.png`
                 );
                 customInstallFailed = true;
             }
@@ -50,11 +53,11 @@ export function runInstallCustom(
             try {
                 await eimRunner.closeEIM();
             } catch (error) {
-                logger.info("Error to close IEM application");
+                logger.info("Error to close EIM application");
             }
         });
 
-        it("Should show welcome page", async function () {
+        it("1- Should show welcome page", async function () {
             this.timeout(10000);
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
@@ -62,7 +65,7 @@ export function runInstallCustom(
             expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
         });
 
-        it("Should show expert installation option", async function () {
+        it("2- Should show expert installation option", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Get Started");
             const expert = await eimRunner.findByDataId("expert-title");
@@ -70,7 +73,7 @@ export function runInstallCustom(
             expect(await expert.isDisplayed()).to.be.true;
         });
 
-        it("Should check prerequisites", async function () {
+        it("3- Should check prerequisites", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Start Expert Setup");
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -80,33 +83,29 @@ export function runInstallCustom(
             const requisitesList = await prerequisitesList.getText();
             expect(requisitesList).to.not.be.empty;
             expect(requisitesList).to.not.include("❌");
-            if (os.platform() === "win32") {
-                let expectedRequisites = ["git", "cmake", "ninja"];
-                expectedRequisites.forEach((requisite) =>
-                    expect(requisitesList).to.include(requisite)
-                );
-            } else {
-                let expectedRequisites = [
-                    "git",
-                    "cmake",
-                    "ninja",
-                    "wget",
-                    "flex",
-                    "bison",
-                    "gperf",
-                    "ccache",
-                    "libffi-dev",
-                    "libssl-dev",
-                    "dfu-util",
-                    "libusb-1.0-0",
-                ];
-                expectedRequisites.forEach((requisite) =>
-                    expect(requisitesList).to.include(requisite)
-                );
+            let expectedRequisites =
+                os.platform() === "win32"
+                    ? ["git", "cmake", "ninja"]
+                    : [
+                          "git",
+                          "cmake",
+                          "ninja",
+                          "wget",
+                          "flex",
+                          "bison",
+                          "gperf",
+                          "ccache",
+                          "libffi-dev",
+                          "libssl-dev",
+                          "dfu-util",
+                          "libusb-1.0-0",
+                      ];
+            for (let requisite of expectedRequisites) {
+                expect(requisitesList).to.include(requisite);
             }
         });
 
-        it("Should check python installation", async function () {
+        it("4- Should check python installation", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue to Next Step");
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -116,7 +115,7 @@ export function runInstallCustom(
             );
         });
 
-        it("Should show targets list", async function () {
+        it("5- Should show targets list", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue to Next Step");
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -133,9 +132,9 @@ export function runInstallCustom(
                 "esp32s2",
                 "esp32s3",
             ];
-            expected.forEach((target) =>
-                expect(targetsText).to.include(target)
-            );
+            for (let target of expected) {
+                expect(targetsText).to.include(target);
+            }
             let targetAll = await eimRunner.findByText("All");
             expect(
                 await targetAll.findElement(By.css("Div")).getAttribute("class")
@@ -157,28 +156,35 @@ export function runInstallCustom(
             ).to.include("checked");
             await eimRunner.clickButton("All");
 
-            targetList.forEach(async function (target) {
+            for (let target of targetList) {
                 await eimRunner.clickButton(target);
-                let selectedTarget = await eimRunner.findByDataId(
-                    `target-item-${target}`
-                );
-                expect(
-                    await selectedTarget.getAttribute("class")
-                ).to.not.include("selected");
-            });
+                if (target === "All") {
+                    expect(
+                        await targetAll
+                            .findElement(By.css("Div"))
+                            .getAttribute("class")
+                    ).to.include("checked");
+                } else {
+                    let selectedTarget = await eimRunner.findByDataId(
+                        `target-item-${target}`
+                    );
+                    expect(
+                        await selectedTarget.getAttribute("class")
+                    ).to.include("selected");
+                }
+            }
         });
 
-        it("Should show IDF version list", async function () {
+        it("6- Should show IDF version list", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue with Selected Targets");
             await new Promise((resolve) => setTimeout(resolve, 4000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
             const IDFListText = await IDFList.getText();
-            logger.info(IDFListText);
             let expected = ["v5.4", "v5.3.2", "v5.1.5", "master"];
-            expected.forEach((version) =>
-                expect(IDFListText).to.include(version)
-            );
+            for (let version of expected) {
+                expect(IDFListText).to.include(version);
+            }
             let IDFMaster = await eimRunner.findByDataId("version-item-master");
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
@@ -194,35 +200,34 @@ export function runInstallCustom(
             expect(await IDFMaster.getAttribute("class")).to.not.include(
                 "selected"
             );
-
-            idfVersionList.forEach(
-                async (version) => await eimRunner.clickButton(version)
-            );
+            for (let version of idfVersionList) {
+                await eimRunner.clickButton(version);
+            }
 
             const selectedVersions = await eimRunner.findByText(
                 "Selected versions:"
             );
             const selectedVersionsText = await selectedVersions.getText();
             expected = ["Selected versions:", ...idfVersionList];
-            expected.forEach(async (substring) =>
+            expected.forEach((substring) =>
                 expect(selectedVersionsText).to.include(substring)
             );
         });
 
-        it("Should show IDF download mirrors", async function () {
+        it("7- Should show IDF download mirrors", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue Installation");
             await new Promise((resolve) => setTimeout(resolve, 2000));
             const IDFMirrors = await eimRunner.findByDataId(
                 "idf-mirror-radio-group"
             );
-            let idfMList = await IDFMirrors.getText();
+            let IDFMirrorsText = await IDFMirrors.getText();
             let expectedMirrors = [
                 "https://github.com",
                 "https://jihulab.com/esp-mirror",
             ];
             expectedMirrors.forEach((mirror) =>
-                expect(idfMList).to.include(mirror)
+                expect(IDFMirrorsText).to.include(mirror)
             );
 
             let githubMirror = await eimRunner.findByDataId(
@@ -251,19 +256,19 @@ export function runInstallCustom(
                 (await jihulabMirror.findElement(By.css("input")).click());
         });
 
-        it("Should show tools download mirrors", async function () {
+        it("8- Should show tools download mirrors", async function () {
             this.timeout(10000);
             const toolsMirrors = await eimRunner.findByDataId(
                 "tools-mirror-radio-group"
             );
-            let toolsMList = await toolsMirrors.getText();
+            let toolsMirrorsText = await toolsMirrors.getText();
             let expectedMirrors = [
                 "https://github.com",
                 "https://dl.espressif.com/github_assets",
                 "https://dl.espressif.cn/github_assets",
             ];
             expectedMirrors.forEach((mirror) =>
-                expect(toolsMList).to.include(mirror)
+                expect(toolsMirrorsText).to.include(mirror)
             );
             let githubMirror = await eimRunner.findByDataId(
                 "tools-mirror-option-https://github.com"
@@ -312,7 +317,7 @@ export function runInstallCustom(
                 (await espressifCnMirror.findElement(By.css("input")).click());
         });
 
-        it("Should show installation path", async function () {
+        it("9- Should show installation path", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue with Selected Mirrors");
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -335,7 +340,7 @@ export function runInstallCustom(
             expect(await input.getAttribute("value")).to.equal(installFolder);
         });
 
-        it("Should show installation summary", async function () {
+        it("10- Should show installation summary", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue");
             const versionSummary = await eimRunner.findByDataId(
@@ -348,13 +353,13 @@ export function runInstallCustom(
                 "version-chips"
             );
             const selectedVersionsText = await selectedVersions.getText();
-            idfVersionList.forEach(async (idfVersion) =>
-                expect(selectedVersions).to.include(idfVersion)
+            idfVersionList.forEach((idfVersion) =>
+                expect(selectedVersionsText).to.include(idfVersion)
             );
         });
 
-        it("Should install IDF", async function () {
-            this.timeout(1300000);
+        it("11- Should install IDF using expert setup", async function () {
+            this.timeout(1330000);
 
             try {
                 await eimRunner.clickButton("Start Installation");
@@ -364,7 +369,7 @@ export function runInstallCustom(
                 expect(await installing.isDisplayed()).to.be.true;
                 const startTime = Date.now();
 
-                while (Date.now() - startTime < 1800000) {
+                while (Date.now() - startTime < 1300000) {
                     if (
                         await eimRunner.findByText("Installation Failed", 1000)
                     ) {
@@ -393,8 +398,8 @@ export function runInstallCustom(
             }
         });
 
-        it("Should offer to save installation configuration", async function () {
-            this.timeout(1300000);
+        it("12- Should offer to save installation configuration", async function () {
+            this.timeout(10000);
 
             try {
                 await eimRunner.clickButton("Complete Installation");

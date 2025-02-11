@@ -3,10 +3,10 @@ import { describe, it, before, after, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runInstallSimplified(pathToEIM) {
+export function runInstallSimplified(id, pathToEIM) {
     let eimRunner = "";
 
-    describe("EIM Application Launch", () => {
+    describe("1- EIM Application Launch", () => {
         let simplifiedInstallFailed = false;
 
         before(async function () {
@@ -28,9 +28,11 @@ export function runInstallSimplified(pathToEIM) {
 
         afterEach(async function () {
             if (this.currentTest.state === "failed") {
-                await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+                await eimRunner.takeScreenshot(
+                    `${id} ${this.currentTest.title}.png`
+                );
                 logger.info(
-                    `Screenshot saved as ${this.currentTest.title}.png`
+                    `Screenshot saved as ${id} ${this.currentTest.title}.png`
                 );
                 simplifiedInstallFailed = true;
             }
@@ -45,7 +47,7 @@ export function runInstallSimplified(pathToEIM) {
             }
         });
 
-        it("Should show welcome page", async function () {
+        it("1- Should show welcome page", async function () {
             this.timeout(10000);
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
@@ -55,7 +57,7 @@ export function runInstallSimplified(pathToEIM) {
             );
         });
 
-        it("Should show installation options", async function () {
+        it("2- Should show installation options", async function () {
             this.timeout(10000);
 
             await eimRunner.clickButton("Get Started");
@@ -73,8 +75,8 @@ export function runInstallSimplified(pathToEIM) {
             ).to.be.true;
         });
 
-        it("Should install IDF using simplified setup", async function () {
-            this.timeout(1300000);
+        it("3- Should install IDF using simplified setup", async function () {
+            this.timeout(1330000);
             await eimRunner.clickButton("Start Simplified Setup");
             await new Promise((resolve) => setTimeout(resolve, 5000));
             const installing = await eimRunner.findByText(
@@ -87,7 +89,7 @@ export function runInstallSimplified(pathToEIM) {
             ).to.be.true;
             const startTime = Date.now();
 
-            while (Date.now() - startTime < 1200000) {
+            while (Date.now() - startTime < 1300000) {
                 if (await eimRunner.findByText("Installation Failed", 1000)) {
                     logger.debug("failed!!!!");
                     break;
@@ -111,8 +113,8 @@ export function runInstallSimplified(pathToEIM) {
             ).to.be.true;
         });
 
-        it("Should offer to save installation configuration", async function () {
-            this.timeout(1300000);
+        it("4- Should offer to save installation configuration", async function () {
+            this.timeout(10000);
             const saveConfig = await eimRunner.findByText("Save Configuration");
             expect(saveConfig, "Expected screen for saving configuration").to
                 .not.be.false;

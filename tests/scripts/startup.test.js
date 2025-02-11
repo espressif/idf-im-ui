@@ -3,10 +3,10 @@ import { describe, it, before, after, afterEach } from "mocha";
 import { EIMRunner } from "../classes/tauriRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runStartupTest(pathToEIM, eimVersion) {
+export function runStartupTest(id, pathToEIM, eimVersion) {
     let eimRunner = "";
 
-    describe("EIM Application Launch", () => {
+    describe("1- EIM Application Launch", () => {
         before(async function () {
             this.timeout(60000);
             eimRunner = new EIMRunner(pathToEIM);
@@ -19,9 +19,11 @@ export function runStartupTest(pathToEIM, eimVersion) {
 
         afterEach(async function () {
             if (this.currentTest.state === "failed") {
-                await eimRunner.takeScreenshot(`${this.currentTest.title}.png`);
+                await eimRunner.takeScreenshot(
+                    `${id} ${this.currentTest.title}.png`
+                );
                 logger.info(
-                    `Screenshot saved as ${this.currentTest.title}.png`
+                    `Screenshot saved as ${id} ${this.currentTest.title}.png`
                 );
             }
         });
@@ -35,7 +37,7 @@ export function runStartupTest(pathToEIM, eimVersion) {
             }
         });
 
-        it("Should show welcome page", async function () {
+        it("1- Should show welcome page", async function () {
             this.timeout(10000);
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
@@ -45,7 +47,7 @@ export function runStartupTest(pathToEIM, eimVersion) {
             );
         });
 
-        it("Should show correct version number", async function () {
+        it("2- Should show correct version number", async function () {
             const footer = await eimRunner.findByClass("footer");
             const text = await footer.getText();
             expect(text, "Expected correct version shown on page").to.include(
