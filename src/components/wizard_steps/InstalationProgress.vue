@@ -3,7 +3,8 @@
     <h1 class="title" data-id="installation-title">Installation Progress</h1>
 
     <n-card class="progress-card" data-id="progress-card">
-      <div class="summary-section" data-id="installation-summary" v-if="!instalation_running && !instalation_finished">
+      <div class="summary-section" data-id="installation-summary"
+        v-if="!instalation_running && !instalation_finished && !instalation_failed">
         <div class="versions-info" v-if="all_settings" data-id="versions-info">
           <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
           <div class="version-chips" data-id="version-chips">
@@ -15,7 +16,7 @@
         </div>
         <div data-id="start-button-container">
           <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
-            :disabled="instalation_running" data-id="start-installation-button">
+            :disabled="instalation_running" data-id="start-installation-button" v-if="!instalation_failed">
             {{ instalation_running ? 'Installing...' : 'Start Installation' }}
           </n-button>
         </div>
@@ -55,10 +56,15 @@
             </n-table>
           </n-tab-pane>
         </n-tabs>
-        <GlobalProgress messagePosition="right" v-if="!instalation_finished" />
+        <GlobalProgress messagePosition="right" v-if="!instalation_finished && !instalation_failed" />
+        <div v-if="instalation_failed" class="error-message" data-id="error-message">
+          <h3 data-id="error-title">Error during installation:</h3>
+          <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
+          <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">Go Back</n-button>
+        </div>
       </div>
 
-      <div class="action-footer" v-if="instalation_finished" data-id="action-footer">
+      <div class="action-footer" v-if="instalation_finished && !instalation_failed" data-id="action-footer">
         <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button-footer">
           Complete Installation
         </n-button>
@@ -73,7 +79,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 import GlobalProgress from "./../GlobalProgress.vue";
-
+import { useWizardStore } from '../../store'
 
 export default {
   name: 'InstalationProgress',
@@ -96,14 +102,25 @@ export default {
     progressDisplay_progress: true,
     instalation_running: false,
     instalation_finished: false,
+    instalation_failed: false,
+    error_message: "",
     curently_installing_version: undefined,
     versions_finished: [],
     versions_failed: [],
   }),
   methods: {
+    goHome: function () {
+      this.store.setStep(1);
+      this.$router.push('/');
+    },
     startInstalation: async function () {
       this.instalation_running = true;
-      const _ = await invoke("start_installation", {});
+      try {
+        const _ = await invoke("start_installation", {});
+      } catch (e) {
+        console.error('Error during installation:', e);
+        this.error_message = e;
+      }
       this.instalation_running = false;
       this.instalation_finished = true;
     },
@@ -136,13 +153,16 @@ export default {
             break;
           case 'error':
             this.tools[this.curently_installing_version][event.payload.tool].error = true;
-
+            this.instalation_running = false;
+            this.instalation_failed = true;
             break;
           case 'download_verified':
             this.tools[this.curently_installing_version][event.payload.tool].verified = true;
             break;
           case 'download_verification_failed':
             this.tools[this.curently_installing_version][event.payload.tool].verified = false;
+            this.instalation_running = false;
+            this.instalation_failed = true;
             break;
           default:
             console.warn('Unknown action:', event.payload.action);
@@ -186,8 +206,14 @@ export default {
       this.os = await invoke("get_operating_system", {});;
       return false;
     },
+    get_logs_path: async function () {
+      this.LogPath = await invoke("get_logs_folder", {});;
+    }
   },
   computed: {
+    store() {
+      return useWizardStore()
+    },
     idf_versions() {
       return this.all_settings ? this.all_settings.idf_versions : [];
     },
@@ -200,6 +226,7 @@ export default {
     this.get_settings();
     this.startListening();
     this.startListeningToInstalationProgress();
+    this.get_logs_path();
   },
   beforeDestroy() {
     if (this.unlisten) this.unlisten();
@@ -339,5 +366,11 @@ tr>td:first-child {
   width: 50%;
   margin-top: 6px;
   margin-right: 6px;
+}
+
+.error-message {
+  margin-top: 1rem;
+  border: 1px dotted #E8362D;
+  padding: 1rem;
 }
 </style>
