@@ -91,7 +91,6 @@ jobs:
             - name: Run IDF installation and post install test script (non-Windows)
               if: runner.os != 'Windows'
               run: |
-                  export DEBUG="true"
                   export LOG_TO_FILE="true"
                   export EIM_GUI_PATH="../test-bin/eim"
                   export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
@@ -140,7 +139,6 @@ jobs:
             - name: Run IDF installation and post install test script (Windows)
               if: runner.os == 'Windows'
               run: |
-                  $env:DEBUG="true"
                   $env:LOG_TO_FILE="true"
                   $env:EIM_GUI_PATH = "..\test-bin\eim.exe"
                   $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"

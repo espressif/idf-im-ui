@@ -57,7 +57,7 @@ export function runInstallCustom(
             }
         });
 
-        it("1- Should show welcome page", async function () {
+        it("01- Should show welcome page", async function () {
             this.timeout(10000);
             // Wait for the header to be present
             const header = await eimRunner.findByCSS("h1");
@@ -65,7 +65,7 @@ export function runInstallCustom(
             expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
         });
 
-        it("2- Should show expert installation option", async function () {
+        it("02- Should show expert installation option", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Get Started");
             const expert = await eimRunner.findByDataId("expert-title");
@@ -73,7 +73,7 @@ export function runInstallCustom(
             expect(await expert.isDisplayed()).to.be.true;
         });
 
-        it("3- Should check prerequisites", async function () {
+        it("03- Should check prerequisites", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Start Expert Setup");
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -105,7 +105,7 @@ export function runInstallCustom(
             }
         });
 
-        it("4- Should check python installation", async function () {
+        it("04- Should check python installation", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue to Next Step");
             await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -115,7 +115,7 @@ export function runInstallCustom(
             );
         });
 
-        it("5- Should show targets list", async function () {
+        it("05- Should show targets list", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue to Next Step");
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -175,7 +175,7 @@ export function runInstallCustom(
             }
         });
 
-        it("6- Should show IDF version list", async function () {
+        it("06- Should show IDF version list", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue with Selected Targets");
             await new Promise((resolve) => setTimeout(resolve, 4000));
@@ -214,7 +214,7 @@ export function runInstallCustom(
             );
         });
 
-        it("7- Should show IDF download mirrors", async function () {
+        it("07- Should show IDF download mirrors", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue Installation");
             await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -256,7 +256,7 @@ export function runInstallCustom(
                 (await jihulabMirror.findElement(By.css("input")).click());
         });
 
-        it("8- Should show tools download mirrors", async function () {
+        it("08- Should show tools download mirrors", async function () {
             this.timeout(10000);
             const toolsMirrors = await eimRunner.findByDataId(
                 "tools-mirror-radio-group"
@@ -317,7 +317,7 @@ export function runInstallCustom(
                 (await espressifCnMirror.findElement(By.css("input")).click());
         });
 
-        it("9- Should show installation path", async function () {
+        it("09- Should show installation path", async function () {
             this.timeout(10000);
             await eimRunner.clickButton("Continue with Selected Mirrors");
             await new Promise((resolve) => setTimeout(resolve, 2000));
