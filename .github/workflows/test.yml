@@ -68,8 +68,8 @@ jobs:
               if: runner.os != 'Windows'
               run: |
                   mkdir -p test-bin
-                  cp artifacts/eim-linux-x86_64-${{ github.run_number }}/eim test-bin
-                  # unzip ./artifacts/eim-linux-x86_64-${{ github.run_number }} -d test-bin
+                  # cp artifacts/eim-linux-x86_64-${{ github.run_number }}/eim test-bin
+                  unzip ./artifacts/eim-linux-x86_64-${{ github.run_number }}/eim.zip -d test-bin
 
             - name: Set executable permissions (non-Windows)
               if: runner.os != 'Windows'
@@ -91,6 +91,7 @@ jobs:
             - name: Run IDF installation and post install test script (non-Windows)
               if: runner.os != 'Windows'
               run: |
+                  export DEBUG="true"
                   export LOG_TO_FILE="true"
                   export EIM_GUI_PATH="../test-bin/eim"
                   export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
@@ -139,6 +140,7 @@ jobs:
             - name: Run IDF installation and post install test script (Windows)
               if: runner.os == 'Windows'
               run: |
+                  $env:DEBUG="true"                  
                   $env:LOG_TO_FILE="true"
                   $env:EIM_GUI_PATH = "..\test-bin\eim.exe"
                   $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
@@ -158,6 +160,21 @@ jobs:
                       ./tests/results-*.json
                       ./tests/*.png
                       ./tests/test.log
+
+            - name: Upload EIM install log (non-windows)
+              uses: actions/upload-artifact@v4
+              if: runner.os != 'Windows'
+              with:
+                  name: install-log-${{ matrix.package_name }}.zip
+                  path: |
+                      ~/.local/share/eim/logs/**/*
+
+            - name: Upload EIM install log (windows)
+              uses: actions/upload-artifact@v4
+              if: runner.os == 'Windows'
+              with:
+                  name: install-log-${{ matrix.package_name }}.zip
+                  path: |
                       ~/AppData/Local/eim/logs/**/*
 
     publish-test-results:
