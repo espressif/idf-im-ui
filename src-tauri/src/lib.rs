@@ -12,6 +12,7 @@ use serde_json::{json, Value};
 use std::fs::metadata;
 use std::process::Command;
 use std::{
+    env,
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
@@ -1273,6 +1274,11 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // this is here because macos bundled .app does not inherit path
+    #[cfg(target_os = "macos")]
+    {
+        env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
+    }
     let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
         error!("Failed to get log directory.");
         PathBuf::from("")
