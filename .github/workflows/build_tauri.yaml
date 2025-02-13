@@ -104,6 +104,8 @@ jobs:
         run: |
           chmod +x src-tauri/target/release/eim
           chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+          cd ./src-tauri/target/release/
+          zip -r eim.zip eim
 
       - name: Upload app Linux binary
         uses: actions/upload-artifact@v4
@@ -111,7 +113,7 @@ jobs:
         with:
           name: ${{ matrix.binname }}-${{ github.run_number }}
           path: |
-            src-tauri/target/release/eim
+            src-tauri/target/release/eim.zip
           if-no-files-found: error
 
       - name: Upload Release Asset Linux
@@ -121,9 +123,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/eim
-          asset_name: ${{ matrix.binname }}
-          asset_content_type: application/octet-stream
+          asset_path: src-tauri/target/release/eim.zip
+          asset_name: ${{ matrix.binname }}.zip
+          asset_content_type: application/zip
 
       - name: Upload app .deb
         uses: actions/upload-artifact@v4
