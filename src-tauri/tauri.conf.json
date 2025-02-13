@@ -49,7 +49,7 @@
       "tsp": false,
       "webviewInstallMode": {
         "silent": true,
-        "type": "downloadBootstrapper"
+        "type": "embedBootstrapper"
       },
       "wix": null
     }
