@@ -38,6 +38,20 @@
       "frameworks": [],
       "providerShortName": "QWXF6GB4AV",
       "signingIdentity": "Developer ID Application: ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)"
+    },
+    "windows": {
+      "allowDowngrades": true,
+      "certificateThumbprint": null,
+      "digestAlgorithm": null,
+      "nsis": null,
+      "signCommand": null,
+      "timestampUrl": null,
+      "tsp": false,
+      "webviewInstallMode": {
+        "silent": true,
+        "type": "downloadBootstrapper"
+      },
+      "wix": null
     }
   }
 }
