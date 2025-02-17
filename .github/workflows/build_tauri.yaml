@@ -87,6 +87,8 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           /usr/bin/security create-keychain -p espressif notary.keychain
           /usr/bin/security default-keychain -s notary.keychain
@@ -96,12 +98,17 @@ jobs:
 
       - name: build app
         if: ${{ ! startsWith(matrix.platform, 'macos') }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           yarn tauri build
 
       - name: Add +x permission to the binary
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          ls src-tauri/target/release
+          ls src-tauri/target/release/bundle/appimage
           chmod +x src-tauri/target/release/eim
           chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
           cd ./src-tauri/target/release/
@@ -262,6 +269,8 @@ jobs:
           curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_gui_release.json
           echo "Latest release tag: $(jq -r .tag_name eim_gui_release.json)"
           aws s3 cp --acl=public-read "eim_gui_release.json" s3://espdldata/dl/eim/eim_gui_release.json
+          ./github/workflows/release_into_update.sh eim_gui_release.json
+                    aws s3 cp --acl=public-read "update.json" s3://espdldata/dl/eim/update_gui.json
 
   call-test-workflow:
     needs: publish-tauri
