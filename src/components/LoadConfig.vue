@@ -58,7 +58,7 @@
           <div v-if="config_loaded" class="config-status" data-id="config-status">
             ✓ Config loaded
           </div>
-          <n-button @click="load_config" type="error" class="action-button" data-id="load-config-button">
+          <n-button @click="load_config" type="error" ghost class="action-button" data-id="load-config-button">
             Load Config
           </n-button>
         </div>
