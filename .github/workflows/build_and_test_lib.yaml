@@ -1,0 +1,72 @@
+name: Rust
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build for multiple platforms
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            package_name: windows-x64
+          # - os: windows-latest
+          #   package_name: windows-arm64
+          #   target: aarch64-pc-windows-msvc
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-13
+            package_name: macos-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build
+        run: |
+          cd src-tauri
+          if [ "${{ matrix.target }}" != "" ]; then
+            cargo build --release --no-default-features --lib --target ${{ matrix.target }}
+          else
+            cargo build --release --no-default-features --lib
+          fi
+        shell: bash
+
+      - name: Test
+        run: |
+          if [ "${{ matrix.target }}" != "" ]; then
+            cargo test --no-fail-fast --no-default-features --lib --target ${{ matrix.target }} 2>&1 | tee result.txt
+          else
+            cargo test --no-fail-fast --no-default-features --lib 2>&1 | tee result.txt
+          fi
+        shell: bash
+        continue-on-error: true
+
+      - name: Format test results
+        uses: hahihula/rust-test-results-formatter@v1
+        with:
+          results-file: "result.txt"
