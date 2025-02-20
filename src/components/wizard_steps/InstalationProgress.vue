@@ -4,7 +4,7 @@
 
     <n-card class="progress-card" data-id="progress-card">
       <div class="summary-section" data-id="installation-summary"
-        v-if="!instalation_running && !instalation_finished && !instalation_failed">
+        v-if="!installation_running && !installation_finished && !installation_failed">
         <div class="versions-info" v-if="all_settings" data-id="versions-info">
           <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
           <div class="version-chips" data-id="version-chips">
@@ -15,9 +15,9 @@
           </div>
         </div>
         <div data-id="start-button-container">
-          <n-button @click="startInstalation()" type="error" size="large" :loading="instalation_running"
-            :disabled="instalation_running" data-id="start-installation-button" v-if="!instalation_failed">
-            {{ instalation_running ? 'Installing...' : 'Start Installation' }}
+          <n-button @click="startInstalation()" type="error" size="large" :loading="installation_running"
+            :disabled="installation_running" data-id="start-installation-button" v-if="!installation_failed">
+            {{ installation_running ? 'Installing...' : 'Start Installation' }}
           </n-button>
         </div>
       </div>
@@ -56,15 +56,15 @@
             </n-table>
           </n-tab-pane>
         </n-tabs>
-        <GlobalProgress messagePosition="right" v-if="!instalation_finished && !instalation_failed" />
-        <div v-if="instalation_failed" class="error-message" data-id="error-message">
+        <GlobalProgress messagePosition="right" v-if="!installation_finished && !installation_failed" />
+        <div v-if="installation_failed" class="error-message" data-id="error-message">
           <h3 data-id="error-title">Error during installation:</h3>
           <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
           <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">Go Back</n-button>
         </div>
       </div>
 
-      <div class="action-footer" v-if="instalation_finished && !instalation_failed" data-id="action-footer">
+      <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
         <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button-footer">
           Complete Installation
         </n-button>
@@ -100,9 +100,9 @@ export default {
     progressStatus: "info",
     progressPercentage: "0",
     progressDisplay_progress: true,
-    instalation_running: false,
-    instalation_finished: false,
-    instalation_failed: false,
+    installation_running: false,
+    installation_finished: false,
+    installation_failed: false,
     error_message: "",
     curently_installing_version: undefined,
     versions_finished: [],
@@ -114,15 +114,15 @@ export default {
       this.$router.push('/');
     },
     startInstalation: async function () {
-      this.instalation_running = true;
+      this.installation_running = true;
       try {
         const _ = await invoke("start_installation", {});
       } catch (e) {
         console.error('Error during installation:', e);
         this.error_message = e;
       }
-      this.instalation_running = false;
-      this.instalation_finished = true;
+      this.installation_running = false;
+      this.installation_finished = true;
     },
     startListening: async function () {
       this.unlistenTools = await listen('tools-message', (event) => {
@@ -153,16 +153,16 @@ export default {
             break;
           case 'error':
             this.tools[this.curently_installing_version][event.payload.tool].error = true;
-            this.instalation_running = false;
-            this.instalation_failed = true;
+            this.installation_running = false;
+            this.installation_failed = true;
             break;
           case 'download_verified':
             this.tools[this.curently_installing_version][event.payload.tool].verified = true;
             break;
           case 'download_verification_failed':
             this.tools[this.curently_installing_version][event.payload.tool].verified = false;
-            this.instalation_running = false;
-            this.instalation_failed = true;
+            this.installation_running = false;
+            this.installation_failed = true;
             break;
           default:
             console.warn('Unknown action:', event.payload.action);
@@ -174,14 +174,18 @@ export default {
           case 'started':
             this.tools[event.payload.version] = {};
             this.curently_installing_version = event.payload.version;
+            this.installation_running = true;
             break;
           case 'finished':
             this.versions_finished.push(event.payload.version);
             this.curently_installing_version = undefined;
+            this.installation_running = false;
             break;
           case 'failed':
             this.versions_failed.push(event.payload.version);
             this.curently_installing_version = undefined;
+            this.installation_running = false;
+            this.installation_failed = true;
             console.error('Error during installation:', event.payload.version);
             break;
           default:
