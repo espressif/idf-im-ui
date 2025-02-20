@@ -2,7 +2,7 @@ use anyhow::{anyhow, Context, Error, Result};
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::{
-    self, add_path_to_path, download_file, ensure_path, expand_tilde,
+    add_path_to_path, download_file, ensure_path, expand_tilde,
     idf_tools::get_tools_export_paths, python_utils::run_idf_tools_py, settings::Settings,
     verify_file_checksum, DownloadProgress, ProgressMessage,
 };
