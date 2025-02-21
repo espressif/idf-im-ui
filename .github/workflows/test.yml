@@ -1,4 +1,4 @@
-name: Autotest
+name: Autotest GUI
 
 on:
     workflow_call:
@@ -119,12 +119,17 @@ jobs:
                   echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
                   echo "Latest IDF for default install: $IDF_TAG"
 
+            - name: Extract artifact (non-Windows)
+              if: runner.os != 'Windows'
+              run: |
+                  mkdir -p test-bin
+                  unzip ./artifacts/eim-gui-${{ matrix.package_name }}-${{ inputs.run_id }}/eim.zip -d test-bin
+
             - name: Extract artifact (Windows)
               if: runner.os == 'Windows'
               run: |
                   mkdir -p test-bin
-                  Copy-Item .\Artifacts\eim-windows-x86_64-${{ github.run_number }}\eim.exe -Destination test-bin
-                  # 7z x ./artifacts/eim-windows-binary -otest-bin
+                  Copy-Item .\artifacts\eim-gui-${{ matrix.package_name }}-${{ inputs.run_id }}\eim.exe -Destination test-bin
 
             - name: Update WebView2 Runtime
               if: runner.os == 'Windows'

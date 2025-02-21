@@ -6,11 +6,12 @@ authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
 
 [features]
-default = ["gui", "cli"]
+default = ["gui", "cli", "vendored-openssl"]
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log"]
-cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs"]
+cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
 offline = []
 userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
+vendored-openssl = ["openssl-sys/vendored", "reqwest/native-tls-vendored"]
 
 [lib]
 name = "idf_im_lib"
@@ -25,7 +26,7 @@ reqwest = "0.12.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-git2 = "0.19.0"
+git2 = "0.19.0" # TODO: vendored
 sha2 = "0.10.8"
 log = "0.4.21"
 dirs = "5.0.1"
@@ -69,4 +70,12 @@ fork = "0.1"
 
 [dependencies.openssl-sys]
 version = "0.9"
-features = ["vendored"]
+
+[target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
+version = "0.9"
+features = []
+
+[target.'cfg(target_os = "windows")'.dependencies.reqwest]
+version = "0.12.4"
+default-features = false
+features = ["native-tls"]

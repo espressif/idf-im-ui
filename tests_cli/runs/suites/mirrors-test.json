@@ -1,0 +1,48 @@
+[
+    {
+        "id": 1,
+        "type": "custom",
+        "name": "Mirrors jihulab and dl_com",
+        "data": {
+            "idfMirror": "jihulab",
+            "toolsMirror": "dl_com",
+            "recursive": "true",
+            "nonInteractive": "true"
+        }
+    },
+    {
+        "id": 2,
+        "type": "custom",
+        "name": "Mirrors jihulab and dl_cn",
+        "data": {
+            "idfMirror": "jihulab",
+            "toolsMirror": "dl_cn",
+            "recursive": "true",
+            "nonInteractive": "true"
+        }
+    },
+    {
+        "id": 3,
+        "type": "custom",
+        "name": "Mirrors jihulab and dl_com",
+        "data": {
+            "idfList": "v5.2.3",
+            "idfMirror": "jihulab",
+            "toolsMirror": "dl_com",
+            "recursive": "true",
+            "nonInteractive": "true"
+        }
+    },
+    {
+        "id": 4,
+        "type": "custom",
+        "name": "Mirrors jihulab and dl_cn",
+        "data": {
+            "idfList": "v5.0.7",
+            "idfMirror": "jihulab",
+            "toolsMirror": "dl_cn",
+            "recursive": "true",
+            "nonInteractive": "true"
+        }
+    }
+]
