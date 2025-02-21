@@ -6,11 +6,12 @@ authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
 
 [features]
-default = ["gui", "cli"]
+default = ["gui", "cli", "vendored-openssl"]
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log"]
-cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs"]
+cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
 offline = []
 userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
+vendored-openssl = ["openssl-sys/vendored"]  # New feature
 
 [lib]
 name = "idf_im_lib"
@@ -77,4 +78,4 @@ features = []
 [target.'cfg(target_os = "windows")'.dependencies.reqwest]
 version = "0.12.4"
 default-features = false
-features = ["native-tls"]
+features = ["native-tls-vendored"]
