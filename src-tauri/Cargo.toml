@@ -69,4 +69,12 @@ fork = "0.1"
 
 [dependencies.openssl-sys]
 version = "0.9"
-features = ["vendored"]
+
+[target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
+version = "0.9"
+features = []
+
+[target.'cfg(target_os = "windows")'.dependencies.reqwest]
+version = "0.12.4"
+default-features = false
+features = ["native-tls"]

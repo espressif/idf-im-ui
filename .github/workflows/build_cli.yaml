@@ -16,13 +16,15 @@ on:
 
 jobs:
   build:
-    name: Build for multiple platforms
+    name: CLI build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
             package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
           - os: windows-latest
             package_name: windows-x64
           - os: macos-latest
@@ -67,13 +69,37 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-index
 
-      - name: Build
+      - name: Build POSIX
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd src-tauri
+          if [ "${{ matrix.target }}" != "" ]; then
+            cargo build --release --no-default-features --features cli --target ${{ matrix.target }}
+          else
+            cargo build --release --no-default-features --features cli
+          fi
+      
+      - name: Build Windows
+        if: matrix.os == 'windows-latest'
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli
 
-      # - name: Run tests
-      #   run: cargo test --release
+      - name: Run tests (POSIX)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd src-tauri
+          if [ "${{ matrix.target }}" != "" ]; then
+            cargo test --release --no-fail-fast --no-default-features --features cli --bin eim --target ${{ matrix.target }}
+          else
+            cargo test --release --no-fail-fast --no-default-features --features cli --bin eim
+          fi
+
+      - name: Run tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cd src-tauri
+          cargo test --release --no-fail-fast --no-default-features --features cli --bin eim
 
       - name: Create release directory
         run: mkdir -p release_cli
@@ -98,9 +124,15 @@ jobs:
           & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
 
       - name: Copy binary to release directory POSIX
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-latest' && matrix.os != 'ubuntu-24.04-arm'
         run: |
           cp src-tauri/target/release/eim release_cli/${{ matrix.package_name }}/eim
+          chmod +x release_cli/${{ matrix.package_name }}/eim
+
+      - name: Copy binary to release directory aarch64-linux
+        if: matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          cp src-tauri/target/aarch64-unknown-linux-gnu/release/eim release_cli/${{ matrix.package_name }}/eim
           chmod +x release_cli/${{ matrix.package_name }}/eim
 
       - name: Codesign macOS eim executables
@@ -163,7 +195,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: eim-${{ github.run_id }}-${{ matrix.package_name }}
+          name: eim-${{ github.run_number }}-${{ matrix.package_name }}
           path: release_cli/${{ matrix.package_name }}/eim.zip
 
       - name: Upload artifact for tag
@@ -184,48 +216,49 @@ jobs:
           asset_name: eim-${{ github.ref_name }}-${{ matrix.package_name }}.zip
           asset_content_type: application/zip
 
-      - name: Create aarch64-linux build
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          rustup target add aarch64-unknown-linux-gnu
-          cargo install cross
-          cross build --target aarch64-unknown-linux-gnu --release
-          mkdir -p release_cli/aarch64-unknown-linux-gnu
-          cp target/aarch64-unknown-linux-gnu/release/eim release_cli/aarch64-unknown-linux-gnu/eim
-          chmod +x release_cli/aarch64-unknown-linux-gnu/eim
-          cd release_cli/aarch64-unknown-linux-gnu
-          zip -r eim.zip eim
+      # - name: Create aarch64-linux build
+      #   if: matrix.os == 'ubuntu-latest'
+      #   run: |
+      #     cd src-tauri
+      #     rustup target add aarch64-unknown-linux-gnu
+      #     cargo install cross
+      #     cross build --target aarch64-unknown-linux-gnu --release
+      #     mkdir -p release_cli/aarch64-unknown-linux-gnu
+      #     cp target/aarch64-unknown-linux-gnu/release/eim release_cli/aarch64-unknown-linux-gnu/eim
+      #     chmod +x release_cli/aarch64-unknown-linux-gnu/eim
+      #     cd release_cli/aarch64-unknown-linux-gnu
+      #     zip -r eim.zip eim
 
-      - name: Upload build artifacts for aarch64-linux
-        uses: actions/upload-artifact@v4
-        if: matrix.os == 'ubuntu-latest'
-        with:
-          name: eim-${{ github.run_id }}-linux-arm64
-          path: release_cli/aarch64-unknown-linux-gnu/eim.zip
+      # - name: Upload build artifacts for aarch64-linux
+      #   uses: actions/upload-artifact@v4
+      #   if: matrix.os == 'ubuntu-latest'
+      #   with:
+      #     name: eim-${{ github.run_id }}-linux-arm64
+      #     path: release_cli/aarch64-unknown-linux-gnu/eim.zip
 
-      - name: Upload artifact for tag on aarch64-linux
-        if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: eim-${{ github.ref_name }}-linux-arm64
-          path: release_cli/aarch64-unknown-linux-gnu/eim.zip
+      # - name: Upload artifact for tag on aarch64-linux
+      #   if: startsWith(github.ref, 'refs/tags/') && runner.os == 'Linux'
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: eim-${{ github.ref_name }}-linux-arm64
+      #     path: release_cli/aarch64-unknown-linux-gnu/eim.zip
 
-      - name: Upload Release Asset on aarch64-linux
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Linux'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/aarch64-unknown-linux-gnu/eim.zip
-          asset_name: eim-${{ github.ref_name }}-linux-arm64.zip
-          asset_content_type: application/zip
+      # - name: Upload Release Asset on aarch64-linux
+      #   if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Linux'
+      #   uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ github.event.release.upload_url }}
+      #     asset_path: release_cli/aarch64-unknown-linux-gnu/eim.zip
+      #     asset_name: eim-${{ github.ref_name }}-linux-arm64.zip
+      #     asset_content_type: application/zip
 
   call-test-workflow:
     needs: build
-    uses: ./.github/workflows/test.yml
+    uses: ./.github/workflows/test_cli.yml
     with:
-      run_id: ${{ github.run_id }}
+      run_id: ${{ github.run_number }}
       ref: ${{ github.event.pull_request.head.ref }}
 
   fetch-latest-release:

@@ -1,0 +1,34 @@
+[
+    {
+        "id": 1,
+        "type": "arguments",
+        "name": "command-line-arguments"
+    },
+    {
+        "id": 2,
+        "type": "default",
+        "name": "default-installation-wizard"
+    },
+    {
+        "id": 3,
+        "type": "custom",
+        "name": "non-interactive-basic",
+        "data": {
+            "nonInteractive": "true"
+        }
+    },
+    {
+        "id": 4,
+        "type": "custom",
+        "name": "non-interactive-full-parameters",
+        "data": {
+            "targetList": "esp32s2",
+            "idfList": "v5.3.2",
+            "installFolder": ".espcustom",
+            "idfMirror": "github",
+            "toolsMirror": "github",
+            "recursive": "false",
+            "nonInteractive": "false"
+        }
+    }
+]
