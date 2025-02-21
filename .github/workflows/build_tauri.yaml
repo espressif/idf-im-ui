@@ -102,6 +102,9 @@ jobs:
       - name: Add +x permission to the binary
         if: matrix.platform == 'ubuntu-22.04'
         run: |
+          ls -la src-tauri/target/release/
+          apt install -y tree
+          tree src-tauri/target/release/
           chmod +x src-tauri/target/release/eim
           chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
           cd ./src-tauri/target/release/

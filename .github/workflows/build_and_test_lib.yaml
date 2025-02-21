@@ -70,4 +70,4 @@ jobs:
       - name: Format test results
         uses: hahihula/rust-test-results-formatter@v1
         with:
-          results-file: "result.txt"
+          results-file: "./src-tauri/result.txt"

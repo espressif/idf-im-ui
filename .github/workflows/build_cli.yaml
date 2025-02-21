@@ -83,7 +83,7 @@ jobs:
 
       - name: Copy binary to release directory Windows
         if: matrix.os == 'windows-latest'
-        run: cp target/release/eim.exe release_cli/${{ matrix.package_name }}/eim.exe
+        run: cp src-tauri/target/release/eim.exe release_cli/${{ matrix.package_name }}/eim.exe
 
       - name: Sign Windows Binary
         if: matrix.platform == 'windows-latest'
@@ -100,7 +100,7 @@ jobs:
       - name: Copy binary to release directory POSIX
         if: matrix.os != 'windows-latest'
         run: |
-          cp target/release/eim release_cli/${{ matrix.package_name }}/eim
+          cp src-tauri/target/release/eim release_cli/${{ matrix.package_name }}/eim
           chmod +x release_cli/${{ matrix.package_name }}/eim
 
       - name: Codesign macOS eim executables
