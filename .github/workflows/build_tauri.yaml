@@ -1,4 +1,4 @@
-name: Tauri build
+name: GUI Build
 
 on:
   push:

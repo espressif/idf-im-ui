@@ -1,4 +1,4 @@
-name: Rust
+name: Build and Test for lib
 
 on:
   push:
@@ -58,6 +58,7 @@ jobs:
 
       - name: Test
         run: |
+          cd src-tauri
           if [ "${{ matrix.target }}" != "" ]; then
             cargo test --no-fail-fast --no-default-features --lib --target ${{ matrix.target }} 2>&1 | tee result.txt
           else

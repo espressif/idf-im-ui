@@ -170,6 +170,9 @@ wizard.tool.remove_failed:
 wizard.tool.extracted:
   en: extracted tool
   cn: 已解压工具
+wizard.tool.extract_failed:
+  en: Failed to extract the tool
+  cn: 解压工具失败
 wizard.after_install.add_to_path.prompt:
   en: Do you want to add ESP-IDF to your PATH permanently?
   cn: 是否要永久加入 ESP-IDF 到 PATH 中?

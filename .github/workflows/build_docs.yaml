@@ -1,3 +1,4 @@
+name: Build GUI docs
 on:
   release:
     types:

@@ -186,7 +186,10 @@ fn extract_tools(tools: Vec<String>, source_path: &str, destination_path: &str) 
             Ok(_) => {
                 info!("{}: {}", t!("wizard.tool.extracted"), tool);
             }
-            Err(err) => warn!("{:?}", err),
+            Err(err) => {
+                error!("{:?}", err);
+                panic!("{}: {}", t!("wizard.tool.extract_failed"), tool)
+            }
         }
     }
 }
