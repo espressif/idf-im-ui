@@ -1,4 +1,4 @@
-name: Autotest
+name: Autotest GUI
 
 on:
     workflow_call:

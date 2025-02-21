@@ -1,0 +1,85 @@
+name: Build and Test for lib
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Lib build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            package_name: windows-x64
+          # - os: windows-latest
+          #   package_name: windows-arm64
+          #   target: aarch64-pc-windows-msvc
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-13
+            package_name: macos-x64
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Install OpenSSL dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          choco install strawberryperl
+          refreshenv
+          perl -v
+          cpanm Locale::Maketext::Simple
+
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "OPENSSL_DIR=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows-static" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "OPENSSL_STATIC=1" | Out-File -FilePath $env:GITHUB_ENV -Append
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+          vcpkg install openssl:x64-windows-static
+
+      - name: Install OpenSSL (Macos)
+        if: matrix.os == 'macos-latest'
+        run: brew install openssl
+
+      - name: Build and Test
+        run: |
+          cd src-tauri
+          if [ "${{ matrix.target }}" != "" ]; then
+            cargo test --no-fail-fast --no-default-features --lib --target ${{ matrix.target }} 2>&1 | tee result.txt
+          else
+            cargo test --no-fail-fast --no-default-features --lib 2>&1 | tee result.txt
+          fi
+        shell: bash
+        continue-on-error: true
+
+      - name: Format test results
+        uses: hahihula/rust-test-results-formatter@v1
+        with:
+          results-file: "./src-tauri/result.txt"
