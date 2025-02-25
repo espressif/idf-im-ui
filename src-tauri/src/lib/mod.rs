@@ -9,8 +9,8 @@ use tar::Archive;
 use tera::{Context, Tera};
 use thiserror::Error;
 use utils::{find_directories_by_name, make_long_path_compatible};
-use xz2::read::XzDecoder;
 use zip::ZipArchive;
+use std::io::BufReader;
 
 pub mod command_executor;
 pub mod idf_config;
@@ -854,8 +854,16 @@ fn decompress_tar_xz(
     destination_path: &Path,
 ) -> Result<(), DecompressionError> {
     let file = File::open(archive_path)?;
-    let xz = XzDecoder::new(file);
-    let mut archive = Archive::new(xz);
+    let mut reader = BufReader::new(file);
+    let mut decompressed_data = Vec::new();
+    
+    // First decompress the XZ data
+    lzma_rs::xz_decompress(&mut reader, &mut decompressed_data)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    
+    // Then process the tar archive from the decompressed data
+    let cursor = std::io::Cursor::new(decompressed_data);
+    let mut archive = Archive::new(cursor);
     archive.unpack(destination_path)?;
     Ok(())
 }

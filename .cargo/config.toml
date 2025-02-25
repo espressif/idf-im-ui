@@ -10,3 +10,9 @@ linker = "x86_64-w64-mingw32-gcc"
 
 [target.'cfg(all(windows, target_env = "msvc"))']
 rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "target-feature=+crt-static"]
