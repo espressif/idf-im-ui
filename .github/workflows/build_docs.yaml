@@ -1,20 +1,20 @@
 name: Build GUI docs
-on:
-  release:
-    types:
-      - created
-  push:
-    branches:
-      - master
-      - release/*
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs_build.yml"
-  pull_request:
-    paths:
-      - "docs/**"
-      - ".github/workflows/docs_build.yml"
-  workflow_dispatch:
+# on:
+#   release:
+#     types:
+#       - created
+#   push:
+#     branches:
+#       - master
+#       - release/*
+#     paths:
+#       - "docs/**"
+#       - ".github/workflows/docs_build.yml"
+#   pull_request:
+#     paths:
+#       - "docs/**"
+#       - ".github/workflows/docs_build.yml"
+#   workflow_dispatch:
 
 jobs:
   build-and-deploy-docs:
