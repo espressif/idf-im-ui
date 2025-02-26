@@ -35,7 +35,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 
 ## Getting Started
 
-1. Download the appropriate version for your platform from the [releases page](https://github.com/espressif/idf-im-ui/releases) of [from dl.espressif.com mirror](https://dl.espressif.com/dl/eim/)
+1. Download the appropriate version for your platform from the [GitHub](https://github.com/espressif/idf-im-ui/releases) or from [dl.espressif.com](https://dl.espressif.com/dl/eim/) mirror
 2. Choose your preferred interface:
    - Launch the GUI for a visual installation experience
    - Use the command line for automation or headless operation

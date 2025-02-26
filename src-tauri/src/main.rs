@@ -99,12 +99,59 @@ fn set_locale(locale: &Option<String>) {
     }
 }
 
+#[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
+fn has_console() -> bool {
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::STD_OUTPUT_HANDLE;
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    
+    unsafe {
+        let handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        !(handle == INVALID_HANDLE_VALUE || handle.is_null())
+    }
+}
+
+#[cfg(all(target_os = "windows", feature = "cli"))]
+fn attach_console() -> bool {
+    use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        AttachConsole(ATTACH_PARENT_PROCESS) != 0
+    }
+}
+
 #[tokio::main]
 async fn main() {
-    println!("Starting EIM");
-    #[cfg(feature = "cli")]
+    let has_args = std::env::args().len() > 1;
+
+    // Remove the windows_subsystem attribute if we're in CLI mode with arguments
+    #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
     {
-        println!("Starting CLI");
+        if has_args {
+            let has_existing_console = has_console();
+            
+            if !has_existing_console {
+                // Try to attach to parent console
+                let attached = attach_console();
+                
+                // If attachment failed, allocate a new console
+                if !attached {
+                    unsafe { winapi::um::consoleapi::AllocConsole(); }
+                }
+                
+            }
+        }
+    }
+
+    // Now we can safely use println
+    println!("Starting EIM");
+    if has_args {
+        println!("Arguments detected: {:?}", std::env::args().collect::<Vec<_>>());
+    }
+
+    // Process in CLI mode if arguments are provided
+    #[cfg(feature = "cli")]
+    if has_args {
+        println!("Starting CLI mode");
         let cli = cli::cli_args::Cli::parse();
 
         #[cfg(not(feature = "gui"))]
@@ -112,7 +159,6 @@ async fn main() {
         set_locale(&cli.locale);
 
         let settings = Settings::new(cli.config.clone(), cli.into_iter());
-        // let settings = cli_args::Settings::new();
         match settings {
             Ok(settings) => {
                 let result = cli::wizard::run_wizzard_run(settings).await;
@@ -122,15 +168,31 @@ async fn main() {
                         println!("Successfully installed IDF");
                         println!("Now you can start using IDF tools");
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => {
+                        error!("Error: {}", err);
+                        eprintln!("Error: {}", err);
+                    }
                 }
             }
-            Err(err) => error!("Error: {}", err),
+            Err(err) => {
+                error!("Error: {}", err);
+                eprintln!("Error: {}", err);
+            }
         }
+        
+        // Exit after CLI processing to avoid starting GUI
+        return;
     }
+
+    // No arguments or CLI mode not active, start GUI
     #[cfg(feature = "gui")]
     {
-        println!("Starting GUI");
+        println!("Starting GUI mode");
         gui::run()
+    }
+    
+    #[cfg(not(any(feature = "gui", feature = "cli")))]
+    {
+        eprintln!("Error: Neither GUI nor CLI features are enabled!");
     }
 }

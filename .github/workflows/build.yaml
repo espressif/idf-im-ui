@@ -714,9 +714,9 @@ jobs:
           - os: windows-latest
             package_name: windows-x64
             run_on: GitHub
-          - os: macos-latest
-            package_name: macos-aarch64
-            run_on: GitHub
+          # - os: macos-latest
+          #   package_name: macos-aarch64
+          #   run_on: GitHub
 
     steps:
       - name: Checkout repository

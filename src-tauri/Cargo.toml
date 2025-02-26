@@ -80,3 +80,6 @@ features = []
 version = "0.12.4"
 default-features = false
 features = ["native-tls"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["wincon", "consoleapi", "processenv", "winbase", "handleapi"] }
