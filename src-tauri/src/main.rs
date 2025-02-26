@@ -101,9 +101,10 @@ fn set_locale(locale: &Option<String>) {
 
 #[tokio::main]
 async fn main() {
+    println!("Starting EIM");
     #[cfg(feature = "cli")]
     {
-        println!("CLI build!");
+        println!("Starting CLI");
         let cli = cli::cli_args::Cli::parse();
 
         #[cfg(not(feature = "gui"))]
@@ -129,6 +130,7 @@ async fn main() {
     }
     #[cfg(feature = "gui")]
     {
+        println!("Starting GUI");
         gui::run()
     }
 }

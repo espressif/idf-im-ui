@@ -15,6 +15,48 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Add a job to check which files changed
+  changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      lib: ${{ steps.filter.outputs.lib }}
+      cli: ${{ steps.filter.outputs.cli }}
+      gui: ${{ steps.filter.outputs.gui }}
+      release: ${{ steps.check-release.outputs.is_release }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if release or tag
+        id: check-release
+        run: |
+          if [[ "${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "is_release=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_release=false" >> $GITHUB_OUTPUT
+          fi
+      
+      # Use path-filter action to detect which files changed
+      - uses: dorny/paths-filter@v2
+        id: filter
+        with:
+          filters: |
+            lib:
+              - 'src-tauri/src/lib/**'
+            cli:
+              - 'src-tauri/src/lib/**'
+              - 'src-tauri/src/cli/**'
+              - 'src-tauri/src/main.rs'
+            gui:
+              - 'src-tauri/src/lib/**'
+              - 'src-tauri/src/gui/**'
+              - 'src-tauri/src/main.rs'
+              - 'src/**'
+  
   setup:
     name: Define Build Matrix
     runs-on: ubuntu-latest
@@ -29,7 +71,9 @@ jobs:
 
   build-test-lib:
     name: Build and Test Library (${{ matrix.package_name }})
-    needs: setup
+    needs: [setup, changes]
+    # Run if lib files changed or it's a release/tag
+    if: needs.changes.outputs.lib == 'true' || needs.changes.outputs.release == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -102,16 +146,11 @@ jobs:
         with:
           results-file: "./src-tauri/lib-result.txt"
 
-      # Save lib-result.txt as an artifact
-      # - name: Upload lib test results
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: lib-test-results-${{ matrix.package_name }}
-      #     path: src-tauri/lib-result.txt
-
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
-    needs: [setup, build-test-lib]
+    needs: [setup, changes, build-test-lib]
+    # Run if cli files changed or it's a release/tag
+    if: (needs.changes.outputs.cli == 'true' || needs.changes.outputs.release == 'true') && (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -169,32 +208,6 @@ jobs:
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli
-
-      # Test CLI TODO: enable tests in pipeline as well as in the code
-      # - name: Test CLI (POSIX)
-      #   if: runner.os != 'Windows'
-      #   run: |
-      #     cd src-tauri
-      #     if [ "${{ matrix.target }}" != "" ]; then
-      #       cargo test --release --no-fail-fast --no-default-features --features cli --bin eim --target ${{ matrix.target }} 2>&1 | tee cli-result.txt
-      #     else
-      #       cargo test --release --no-fail-fast --no-default-features --features cli --bin eim 2>&1 | tee cli-result.txt
-      #     fi
-      #   shell: bash
-      #   continue-on-error: true
-
-      # - name: Test CLI (Windows)
-      #   if: runner.os == 'Windows'
-      #   run: |
-      #     cd src-tauri
-      #     cargo test --release --no-fail-fast --no-default-features --features cli --bin eim 2>&1 | tee cli-result.txt
-      #   shell: cmd
-      #   continue-on-error: true
-
-      # - name: Format CLI test results
-      #   uses: hahihula/rust-test-results-formatter@v1
-      #   with:
-      #     results-file: "./src-tauri/cli-result.txt"
 
       # Create release directories
       - name: Create release directories
@@ -318,7 +331,9 @@ jobs:
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
-    needs: [setup, build-test-lib]
+    needs: [setup, changes, build-test-lib]
+    # Run if gui files changed or it's a release/tag
+    if: (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true') && (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -364,8 +379,6 @@ jobs:
           key: ${{ runner.os }}-cargo-all-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-all-
-
-
 
       # Install front-end dependencies
       - name: Install frontend dependencies
@@ -543,7 +556,9 @@ jobs:
 
   test-cli:
     name: Test CLI Binary (${{ matrix.package_name }})
-    needs: [build-cli]
+    needs: [build-cli, changes]
+    # Only run tests if cli was built and either cli changed or it's a release
+    if: needs.build-cli.result == 'success' && (needs.changes.outputs.cli == 'true' || needs.changes.outputs.release == 'true')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -686,7 +701,8 @@ jobs:
 
   test-cli-in-gui:
     name: Test CLI in GUI Binary (${{ matrix.package_name }})
-    needs: [build-gui]
+    needs: [build-gui, changes]
+    if: needs.build-gui.result == 'success' && (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -824,7 +840,8 @@ jobs:
 
   test-gui:
     name: Test GUI (${{ matrix.package_name }})
-    needs: [build-gui]
+    needs: [build-gui, changes]
+    if: needs.build-gui.result == 'success' && (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -1026,12 +1043,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-east-1
         run: |
-          # CLI release info
-          curl -s https://api.github.com/repos/espressif/idf-im-cli/releases/latest > eim_cli_release.json
-          echo "Latest CLI release tag: $(jq -r .tag_name eim_cli_release.json)"
-          aws s3 cp --acl=public-read "eim_cli_release.json" s3://espdldata/dl/eim/eim_cli_release.json
-          
           # GUI release info
-          curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_gui_release.json
-          echo "Latest GUI release tag: $(jq -r .tag_name eim_gui_release.json)"
-          aws s3 cp --acl=public-read "eim_gui_release.json" s3://espdldata/dl/eim/eim_gui_release.json
+          curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_unified_release.json
+          echo "Latest GUI release tag: $(jq -r .tag_name eim_unified_release.json)"
+          aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/dl/eim/eim_unified_release.json
