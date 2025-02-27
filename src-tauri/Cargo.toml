@@ -7,6 +7,7 @@ edition = "2021"
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
+
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log"]
 cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
 offline = []

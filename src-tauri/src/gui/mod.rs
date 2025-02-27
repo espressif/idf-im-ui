@@ -20,6 +20,8 @@ use std::{
     thread,
 };
 use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
+use std::fs::OpenOptions;
+
 
 // Types and structs
 #[derive(Default, Serialize, Deserialize)]
@@ -658,6 +660,10 @@ async fn download_idf(
 
     let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
 
+    log::info!("Starting IDF download for version: {}", version);
+    log::info!("Installation path: {}", idf_path.display());
+    
+
     match idf_im_lib::get_esp_idf_by_version_and_mirror(
         idf_path.to_str().unwrap(),
         version,
@@ -688,8 +694,14 @@ async fn download_idf(
         }
     }
 
-    handle.join().unwrap();
-    Ok(())
+    match handle.join() {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            error!("Progress monitor panicked: {:?}", e);
+            send_message(app_handle, format!("Progress monitor panicked: {:?}", e), "error".to_string());
+            Err("Progress monitor panicked".into())
+        }
+    }
 }
 
 // Tool installation types
@@ -1274,26 +1286,61 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // this is here because macos bundled .app does not inherit path
+    // Set up a file logger immediately for any early errors
+    let log_dir = match idf_im_lib::get_log_directory() {
+        Some(dir) => dir,
+        None => {
+            eprintln!("Failed to get log directory, using current directory");
+            PathBuf::from(".")
+        }
+    };
+    
+    // Try to log startup information, but continue if it fails
+    let log_path = log_dir.join("eim_early_gui.log");
+    let log_result = || -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)?;
+        
+        // writeln!(file, "Starting GUI at {}", chrono::Local::now().to_rfc3339())?;
+        writeln!(file, "Starting GUI at ??")?;
+
+        Ok(())
+    }();
+    
+    if let Err(e) = log_result {
+        eprintln!("Failed to log startup: {}", e);
+    }
+    
+    // Mac-specific PATH settings
     #[cfg(target_os = "macos")]
     {
         env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
     }
+    
+    // Run the Tauri app with proper error handling
+    run_tauri_app();
+}
+
+fn run_tauri_app() {
     let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
         error!("Failed to get log directory.");
-        PathBuf::from("")
+        PathBuf::from(".")
     });
-    tauri::Builder::default()
+
+    // Set up a more robust event loop
+    let result = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::Stdout,
                 ))
                 .target(tauri_plugin_log::Target::new(
-                    // this actually can not keep pace with the console, so maybe we should disable it for production build
+                    // Consider disabling this for production build
                     tauri_plugin_log::TargetKind::Webview,
                 ))
-                // Add new file target with path configuration
                 .target(tauri_plugin_log::Target::new(
                     tauri_plugin_log::TargetKind::Folder {
                         path: log_dir,
@@ -1307,8 +1354,19 @@ pub fn run() {
         )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // Setup with error handling
             let app_state = AppState::default();
             app.manage(app_state);
+            
+            // Consider adding:
+            // Windows-specific: disable window close on last window closed
+            #[cfg(target_os = "windows")]
+            {
+                // Note: This is for Tauri 2.0
+                // For Tauri 1.x, use app.manage instead
+                // let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
+            }
+            
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
@@ -1340,6 +1398,26 @@ pub fn run() {
             show_in_folder,
             is_path_empty_or_nonexistent,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!());
+    
+    match result {
+        Ok(app) => {
+            // Run the app with error handling
+            app.run(|_app_handle, event| {
+                match event {
+                    tauri::RunEvent::ExitRequested { api, .. } => {
+                        // You can prevent exit here if needed
+                    },
+                    tauri::RunEvent::Exit => {
+                        eprintln!("App exit requested");
+                    },
+                    _ => {}
+                }
+            });
+        }
+        Err(e) => {
+            error!("Failed to build Tauri app: {}", e);
+            eprintln!("Error building Tauri app: {}", e);
+        }
+    }
 }
