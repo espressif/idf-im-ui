@@ -1,0 +1,21 @@
+[book]
+authors = ["Petr Gadorek"]
+language = "en"
+multilingual = false
+src = "src"
+title = "ESP-IDF Installation Manager"
+
+
+[build]
+build-dir = "book"
+create-missing = false
+extra-watch-dirs = ["theme"]
+
+[output.html]
+theme = "theme"
+default-theme = "theme"
+smart-punctuation = true
+git-repository-url="https://github.com/espressif/idf-im-cli.git"
+copy-theme = true
+additional-files = ["theme"]
+site-url = "/projects/idf-im-cli/en/latest/"
