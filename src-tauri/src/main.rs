@@ -182,6 +182,34 @@ async fn main() {
         
         // Exit after CLI processing to avoid starting GUI
         return;
+    } else { // TODO: this is for running the wizard without arguments on CLI only build
+        #[cfg(not(feature = "gui"))]
+        {
+            let cli = cli::cli_args::Cli::parse();
+            setup_logging(&cli).unwrap();
+            set_locale(&cli.locale);
+            let settings = Settings::new(cli.config.clone(), cli.into_iter());
+            match settings {
+                Ok(settings) => {
+                    let result = cli::wizard::run_wizzard_run(settings).await;
+                    match result {
+                        Ok(r) => {
+                            info!("Wizard result: {:?}", r);
+                            println!("Successfully installed IDF");
+                            println!("Now you can start using IDF tools");
+                        }
+                        Err(err) => {
+                            error!("Error: {}", err);
+                            eprintln!("Error: {}", err);
+                        }
+                    }
+                }
+                Err(err) => {
+                    error!("Error: {}", err);
+                    eprintln!("Error: {}", err);
+                }
+            }
+        }
     }
 
     // No arguments or CLI mode not active, start GUI
