@@ -1,4 +1,3 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 #[cfg(feature = "gui")]
@@ -28,57 +27,6 @@ use log4rs::{
     encode::pattern::PatternEncoder,
 };
 
-use std::panic;
-use std::fs::OpenOptions;
-use std::io::Write;
-
-fn setup_unified_panic_handler() {
-    panic::set_hook(Box::new(|panic_info| {
-        // Capture backtrace
-        let backtrace = std::backtrace::Backtrace::capture();
-        
-        // Log to stderr first for immediate visibility
-        eprintln!("Application panic: {:?}", panic_info);
-        eprintln!("Backtrace: {}", backtrace);
-        
-        // Log to file
-        let log_path = get_log_directory()
-            .map(|dir| dir.join("eim_panic.log"))
-            .unwrap_or_else(|| PathBuf::from("eim_panic.log"));
-            
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(log_path)
-            .unwrap_or_else(|_| {
-                // Fallback to current directory
-                OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open("eim_panic.log")
-                    .expect("Failed to open panic log file")
-            });
-            
-        let _ = writeln!(file, "App panicked at: {:?}", std::time::SystemTime::now());
-        let _ = writeln!(file, "Panic info: {}", panic_info);
-        let _ = writeln!(file, "Backtrace: {}", backtrace);
-        
-        // Create a separate crash log with timestamp to prevent overwriting
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs();
-            
-        if let Some(log_dir) = get_log_directory() {
-            let crash_log = log_dir.join(format!("crash_{}.log", timestamp));
-            let _ = std::fs::write(
-                &crash_log,
-                format!("Crash: {:?}\nBacktrace: {}", panic_info, backtrace)
-            );
-        }
-    }));
-}
-
 #[cfg(feature = "cli")]
 fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
     let log_file_name = cli.log_file.clone().map_or_else(
@@ -93,7 +41,6 @@ fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
         PathBuf::from,
     );
 
-    // ... (rest of the logging setup code)
     let logfile = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
         .build(log_file_name)
@@ -171,12 +118,10 @@ fn attach_console() -> bool {
 
 #[tokio::main]
 async fn main() {
-    // Setup comprehensive logging early
     let startup_time = std::time::SystemTime::now();
     let log_dir = get_log_directory().unwrap_or_else(|| PathBuf::from("."));
     let log_path = log_dir.join("eim_startup.log");
     
-    // Log startup info
     if let Ok(mut file) = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -187,58 +132,17 @@ async fn main() {
         let _ = writeln!(file, "Arguments: {:?}", std::env::args().collect::<Vec<_>>());
         let _ = writeln!(file, "OS: {}", std::env::consts::OS);
     }
-    
-    // IMPORTANT: Single unified panic handler for both modes
-    // This replaces both existing panic handlers
-    panic::set_hook(Box::new(|panic_info| {
-        // First call eprintln for immediate visibility
-        eprintln!("Application panic: {:?}", panic_info);
-        
-        // Capture backtrace
-        let backtrace = std::backtrace::Backtrace::capture();
-        
-        // Log to multiple locations for redundancy
-        let locations = vec![
-            get_log_directory().map(|dir| dir.join("eim_panic.log")),
-            Some(PathBuf::from("eim_panic.log")),
-        ];
-        
-        for location in locations.into_iter().flatten() {
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&location) 
-            {
-                use std::io::Write;
-                let _ = writeln!(file, "=== Panic at {:?} ===", std::time::SystemTime::now());
-                let _ = writeln!(file, "Info: {:?}", panic_info);
-                let _ = writeln!(file, "Backtrace: {}", backtrace);
-                let _ = writeln!(file, "Arguments: {:?}", std::env::args().collect::<Vec<_>>());
-                let _ = file.flush();
-            }
-        }
-        
-        // Also create a unique crash log with timestamp
-        if let Some(dir) = get_log_directory() {
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let crash_path = dir.join(format!("crash_{}.log", timestamp));
-            
-            let _ = std::fs::write(
-                crash_path,
-                format!("Crash: {:?}\nBacktrace: {}", panic_info, backtrace)
-            );
-        }
-    }));
-    
+
     let has_args = std::env::args().len() > 1;
     
-    // IMPORTANT: Only set up Windows console for CLI mode
     #[cfg(all(target_os = "windows", not(debug_assertions)))]
-    if has_args {
-        setup_windows_console(true);
+    {
+        if has_args {
+            setup_windows_console(true);
+        } else {
+            // Ensure we don't have a console in GUI mode
+            setup_windows_console(false);
+        }
     }
     
     // Mac-specific PATH settings
@@ -308,10 +212,8 @@ async fn main() {
     }
 }
 
-// Extract CLI processing to a separate function
 #[cfg(feature = "cli")]
 async fn process_cli_mode() {
-    // Log that we're entering CLI mode
     if let Some(log_dir) = get_log_directory() {
         let _ = std::fs::OpenOptions::new()
             .create(true)
@@ -370,13 +272,13 @@ async fn process_cli_mode() {
     }
 }
 
-// Modified Windows console setup that's safer for GUI
 #[cfg(all(target_os = "windows", not(debug_assertions)))]
 fn setup_windows_console(force_cli_mode: bool) {
     use std::io::{self, Write};
     
     // Only set up console if this is definitely CLI mode
     if !force_cli_mode {
+        // For GUI mode, ensure we don't have a console
         return;
     }
     

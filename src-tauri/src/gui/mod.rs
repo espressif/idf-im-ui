@@ -1286,6 +1286,12 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    {
+        use std::env;
+        // Set GUI mode environment variable
+        env::set_var("RUST_BACKTRACE", "1");
+    }
     // Set up a file logger immediately for any early errors
     let log_dir = match idf_im_lib::get_log_directory() {
         Some(dir) => dir,
@@ -1321,7 +1327,16 @@ pub fn run() {
     }
     
     // Run the Tauri app with proper error handling
-    run_tauri_app();
+    if let Err(e) = std::panic::catch_unwind(|| {
+        run_tauri_app();
+    }) {
+        error!("Critical Windows GUI error: {:?}", e);
+        // Attempt to log to file before exiting
+        if let Some(log_dir) = idf_im_lib::get_log_directory() {
+            let crash_log = log_dir.join("windows_gui_crash.log");
+            let _ = std::fs::write(crash_log, format!("Critical error: {:?}", e));
+        }
+    }
 }
 
 fn run_tauri_app() {
@@ -1347,7 +1362,7 @@ fn run_tauri_app() {
                         file_name: Some("eim_gui_log".to_string()),
                     },
                 ))
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .level_for("idf_im_lib", log::LevelFilter::Info)
                 .level_for("eim_lib", log::LevelFilter::Info)
                 .build(),
@@ -1357,15 +1372,6 @@ fn run_tauri_app() {
             // Setup with error handling
             let app_state = AppState::default();
             app.manage(app_state);
-            
-            // Consider adding:
-            // Windows-specific: disable window close on last window closed
-            #[cfg(target_os = "windows")]
-            {
-                // Note: This is for Tauri 2.0
-                // For Tauri 1.x, use app.manage instead
-                // let _ = app.set_activation_policy(tauri::ActivationPolicy::Regular);
-            }
             
             Ok(())
         })

@@ -647,6 +647,7 @@ pub async fn download_file(
             ));
         }
     }
+    
     let _ = progress_sender.send(DownloadProgress::Complete);
 
     // Return Ok(()) if the download was successful
