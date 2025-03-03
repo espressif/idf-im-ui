@@ -1,0 +1,18 @@
+[net]
+git-fetch-with-cli = true
+
+[target.i686-pc-windows-gnu]
+linker = "/usr/bin/i686-w64-mingw32-gcc"
+ar = "/usr/i686-w64-mingw32/bin/ar"
+
+[target.aarch64-pc-windows-msvc]
+linker = "x86_64-w64-mingw32-gcc"
+
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "target-feature=+crt-static"]

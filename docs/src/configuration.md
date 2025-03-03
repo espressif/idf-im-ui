@@ -1,14 +1,43 @@
 # Configuration
 
-You can open the configuration file and proceed with simplified installation or go through the wizard.
+The ESP-IDF Installation Manager supports configuration through both its graphical interface and command line options. Choose the method that best suits your needs:
 
-![Instalation setup](./screenshots/instal_setup.png)
+- [GUI Configuration](./gui_configuration.md): Configure through the graphical interface
+- [CLI Configuration](./cli_configuration.md): Configure using command line arguments or configuration files
 
-#### Config File
+Both methods allow you to:
+- Select ESP-IDF versions
+- Choose installation paths
+- Configure download mirrors
+- Select target platforms
+- Save configurations for future use
 
-The installer can use a TOML configuration file. the file can be loaded (or draged & dropped) just before choosing between simplified or wizard installation.
+## Configuration Priority
 
-Here is an example of what a configuration file might look like:
+The configuration priority order is:
+1. Command line arguments (highest)
+2. Environment variables
+3. Configuration files
+4. Default values (lowest)
+
+## Using Configuration Files
+
+Configuration files can be used with both the GUI and CLI versions of the installer:
+
+### GUI Usage
+In the GUI, you can provide a configuration file, just use the "Load Configuration" button in the initial screen or drag&drop the file onto the installer
+
+![Installation setup](./screenshots/instal_setup.png)
+
+### CLI Usage
+With the CLI, you can specify a configuration file using the `--config` argument:
+```bash
+eim --config path/to/config.toml
+```
+
+## Configuration File Format
+
+The installer uses TOML format for configuration files. Here is an example:
 
 ```toml
 path = "/Users/Username/.espressif"
@@ -26,5 +55,6 @@ mirror = "https://github.com"
 idf_mirror = "https://github.com"
 recurse_submodules = false
 install_all_prerequisites = false
-
 ```
+
+After completing installation through either the GUI wizard or CLI, you have the option to save your configuration for future use. This saved configuration can be shared with other users to replicate the same installation setup.
