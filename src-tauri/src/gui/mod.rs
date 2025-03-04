@@ -1129,7 +1129,10 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn quit_app(app_handle: tauri::AppHandle) {
+    info!("Quitting app using command");
     app_handle.exit(0);
+    app_handle.cleanup_before_exit();
+    std::process::exit(0);
 }
 
 #[tauri::command]
@@ -1408,16 +1411,16 @@ fn run_tauri_app() {
     
     match result {
         Ok(app) => {
-            // Run the app with error handling
-            app.run(|_app_handle, event| {
+            app.run(|app_handle, event| {
                 match event {
                     tauri::RunEvent::ExitRequested { api, .. } => {
-                        // You can prevent exit here if needed
-                    },
-                    tauri::RunEvent::Exit => {
-                        eprintln!("App exit requested");
-                    },
-                    _ => {}
+                        info!("Exit requested");
+                        api.prevent_exit(); // Prevent the default exit behavior
+                        app_handle.exit(0); // Perform our own exit
+                    }
+                    _ => {
+                        debug!("App event: {:?}", event);
+                    }
                 }
             });
         }
