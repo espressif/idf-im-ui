@@ -1074,6 +1074,7 @@ async fn install_single_version(
         tools_install_path.to_str().unwrap(),
         export_vars,
     );
+    info!("single version installation completed");
 
     Ok(())
 }
@@ -1109,6 +1110,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
     match settings.save_esp_ide_json(filepath.to_str().unwrap()) {
         Ok(_) => {
+            info!("IDE JSON file saved to: {}", filepath.to_str().unwrap());
             send_message(
                 &app_handle,
                 format!("IDE JSON file saved to: {}", filepath.to_str().unwrap()),
@@ -1116,6 +1118,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             );
         }
         Err(e) => {
+            error!("Failed to save IDE JSON file: {}", e);
             send_message(
                 &app_handle,
                 format!("Failed to save IDE JSON file: {}", e),
@@ -1129,10 +1132,33 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn quit_app(app_handle: tauri::AppHandle) {
-    info!("Quitting app using command");
+    info!("Attempting to quit app - pre-exit log");
+    
+    #[cfg(target_os = "windows")]
+    {
+        // Log before attempting to exit
+        if let Some(log_dir) = idf_im_lib::get_log_directory() {
+            use std::io::Write;
+            let log_path = log_dir.join("windows_exit_attempt.log");
+            if let Ok(mut file) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(log_path) 
+            {
+                let _ = writeln!(file, "Windows exit triggered at {:?}", std::time::SystemTime::now());
+            }
+        }
+        
+        // Try both methods of exiting
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            info!("Forcing Windows process exit");
+            std::process::exit(0);
+        });
+    }
+    
+    // Try the standard Tauri exit
     app_handle.exit(0);
-    app_handle.cleanup_before_exit();
-    std::process::exit(0);
 }
 
 #[tauri::command]
@@ -1207,14 +1233,17 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
     }
     settings = get_locked_settings(&app_handle).unwrap();
     // install
+    info!("Starting installation");
     send_simple_setup_message(&app_handle, 10, "Installing IDF".to_string());
     let res = start_installation(app_handle.clone()).await;
     match res {
         Ok(_) => {
+            info!("Installation completed");
             send_simple_setup_message(&app_handle, 11, "Installation completed".to_string());
         }
         Err(e) => {
             send_simple_setup_message(&app_handle, 12, "Failed to install IDF".to_string());
+            error!("Failed to install IDF: {}", e);
         }
     }
 }
@@ -1415,8 +1444,7 @@ fn run_tauri_app() {
                 match event {
                     tauri::RunEvent::ExitRequested { api, .. } => {
                         info!("Exit requested");
-                        api.prevent_exit(); // Prevent the default exit behavior
-                        app_handle.exit(0); // Perform our own exit
+                        app_handle.cleanup_before_exit();
                     }
                     _ => {
                         debug!("App event: {:?}", event);

@@ -18,7 +18,7 @@
             </div>
 
 
-          </div>
+        </div>
 
           <div class="buttons" data-id="action-buttons">
             <n-button @click="save_config" type="info" class="save-button" dashed data-id="save-config-button">
@@ -66,29 +66,36 @@ export default {
     async get_os() {
       this.os = (await invoke("get_operating_system", {})).toLowerCase();
     },
-    save_config: async () => {
-      const selected = await save({
-        title: 'Save installation config file',
-        defaultPath: '/tmp/eim_config.toml',
-        filters: [
-          {
-            name: 'eim_config.toml',
-            extensions: ['toml'],
-
-          },
-        ],
-      });
-      if (selected) {
-        const _ = await invoke("save_config", { path: selected });
-        console.log("Config saved to", selected);
-      } else {
-        // todo: emit message to user that config was not saved
-        console.log("Config not saved");
+    async save_config() {
+      try {
+        const selected = await save({
+          title: 'Save installation config file',
+          defaultPath: '/tmp/eim_config.toml',
+          filters: [
+            {
+              name: 'eim_config.toml',
+              extensions: ['toml'],
+            },
+          ],
+        });
+        
+        if (selected) {
+          await invoke("save_config", { path: selected });
+          console.log("Config saved to", selected);
+        } else {
+          console.log("Config not saved");
+        }
+      } catch (error) {
+        console.error("Error saving config:", error);
       }
     },
-    quit() {
-      const _ = invoke("quit_app", {});
-    },
+    async quit() {
+      try {
+        await invoke("quit_app", {});
+      } catch (error) {
+        console.error("Error quitting app:", error);
+      }
+    }
   },
   mounted() {
     this.get_os();
