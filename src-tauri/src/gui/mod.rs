@@ -1415,8 +1415,9 @@ fn run_tauri_app() {
                 match event {
                     tauri::RunEvent::ExitRequested { api, .. } => {
                         info!("Exit requested");
-                        api.prevent_exit(); // Prevent the default exit behavior
-                        app_handle.exit(0); // Perform our own exit
+                        // Don't prevent the default exit and don't call exit manually
+                        // Just do any cleanup you need
+                        app_handle.cleanup_before_exit();
                     }
                     _ => {
                         debug!("App event: {:?}", event);
