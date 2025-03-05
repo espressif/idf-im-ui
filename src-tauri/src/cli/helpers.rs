@@ -34,8 +34,15 @@ pub fn create_theme() -> ColorfulTheme {
         ..ColorfulTheme::default()
     }
 }
+pub fn generic_select(prompt_key: &str, options: &Vec<String>) -> Result<String, String> {
+    generic_select_with_default(prompt_key, options, 0)
+}
 
-pub fn generic_select(prompt_key: &str, options: &[&str]) -> Result<String, String> {
+pub fn generic_select_with_default(
+    prompt_key: &str,
+    options: &Vec<String>,
+    default: usize,
+) -> Result<String, String> {
     let selection = Select::with_theme(&create_theme())
         .with_prompt(t!(prompt_key))
         .items(options)

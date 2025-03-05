@@ -640,7 +640,16 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         _ => {
             println!("{}", t!("wizard.posix.finish_steps.line_1"));
             println!("{}", t!("wizard.posix.finish_steps.line_2"));
-            println!("{:?}", config.path.clone().unwrap());
+            println!(
+                "{:?}",
+                config
+                    .path
+                    .clone()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string()
+            );
             println!("{}", t!("wizard.posix.finish_steps.line_3"));
             println!("============================================");
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
