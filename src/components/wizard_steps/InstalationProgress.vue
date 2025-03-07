@@ -117,12 +117,15 @@ export default {
       this.installation_running = true;
       try {
         const _ = await invoke("start_installation", {});
+        this.installation_running = false;
+        this.installation_finished = true;
       } catch (e) {
         console.error('Error during installation:', e);
         this.error_message = e;
+        alert(e);
+        this.installation_running = false;
+        this.installation_failed = true;
       }
-      this.installation_running = false;
-      this.installation_finished = true;
     },
     startListening: async function () {
       this.unlistenTools = await listen('tools-message', (event) => {

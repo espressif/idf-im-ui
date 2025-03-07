@@ -9,6 +9,7 @@
     "core:default",
     "shell:allow-open",
     "dialog:default",
-    "log:default"
+    "log:default",
+    "process:default"
   ]
 }

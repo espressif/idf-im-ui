@@ -1,9 +1,14 @@
 # Summary
 
-- [General information](./general_info.md)
+- [General Information](./general_info.md)
 - [Prerequisites](./prerequisites.md)
+- [Installation Methods](./installation_methods.md)
+  - [Simplified Installation (GUI)](./simple_installation.md) 
+  - [Expert Installation (GUI)](./expert_installation.md)
+  - [Command Line Installation](./cli_installation.md)
 - [Configuration](./configuration.md)
-- [Simplified Installation](./simple_installation.md)
-- [Expert Installation](./expert_installation.md)
+  - [GUI Configuration](./gui_configuration.md)
+  - [CLI Configuration](./cli_configuration.md)
 - [After Installing](./after_installing.md)
+- [Headless Usage](./headless_usage.md)
 - [FAQ](./faq.md)
