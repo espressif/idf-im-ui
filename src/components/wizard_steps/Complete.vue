@@ -56,6 +56,7 @@ import { NButton, NResult, NAlert } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog';
 import loading from "naive-ui/es/_internal/loading";
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { exit, relaunch } from '@tauri-apps/plugin-process';
 
 export default {
   name: 'Complete',
@@ -73,9 +74,7 @@ export default {
     async forceQuit() {
       console.log("Force quit button clicked");
       try {
-        // Replace this line
-        // const window = getCurrent();
-        // With this
+        await exit(0);
         const window = WebviewWindow.getByLabel('main');
         if (window) {
           await window.close();

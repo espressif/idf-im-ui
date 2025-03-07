@@ -100,7 +100,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libssl-dev patchelf
+          sudo apt-get install -y libssl-dev patchelf glib-2.0.pc
 
       # Cargo caching
       - name: Cache cargo registry
