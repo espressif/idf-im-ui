@@ -1149,17 +1149,27 @@ fn quit_app(app_handle: tauri::AppHandle) {
             }
         }
         
-        // Try both methods of exiting
+        // Try multiple exit methods for Windows
+        // First, try to exit via Tauri
+        let app_handle_clone = app_handle.clone();
+        app_handle.exit(0);
+        
+        // As a fallback, force exit after a short delay
         std::thread::spawn(move || {
-            std::thread::sleep(std::time::Duration::from_millis(100));
+            std::thread::sleep(std::time::Duration::from_millis(300));
             info!("Forcing Windows process exit");
+            // Try to emit a final event before exiting
+            let _ = app_handle_clone.emit("app_exiting", ());
             std::process::exit(0);
         });
+        
+        return;
     }
     
     // Try the standard Tauri exit
     app_handle.exit(0);
 }
+
 
 #[tauri::command]
 fn save_config(app_handle: tauri::AppHandle, path: String) {

@@ -1,6 +1,6 @@
 # Contributing Guide
 
-Thank you for your interest in contributing to our Tauri 2.0 application! This guide will help you get started with development and ensure your contributions meet the project's standards.
+Thank you for your interest in contributing to EIM! This guide will help you get started with development and ensure your contributions meet the project's standards.
 
 ## Project Overview
 
@@ -12,8 +12,9 @@ This application is built using Tauri 2.0 and offers both CLI and GUI capabiliti
 ## Development Prerequisites
 
 - [Rust](https://www.rust-lang.org/tools/install) and Cargo
-- [Node.js](https://nodejs.org/) and npm/yarn
+- [Node.js](https://nodejs.org/) and npm/yarn and vite
 - [Tauri CLI](https://tauri.app/v1/guides/getting-started/setup/)
+- [Perl](https://www.perl.org/get.html) is probably needed on windows to build the openssl library
 
 ## Important Note About Project Management
 

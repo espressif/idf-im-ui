@@ -27,6 +27,9 @@
             <n-button @click="quit" class="exit-button" type="info" data-id="exit-button">
               Exit Installer
             </n-button>
+            <n-button @click="forceQuit" class="exit-button" type="primary" data-id="force-quit-button">
+              Force Quit
+            </n-button>
           </div>
           <div class="config-save" data-id="config-save-section">
             <n-alert type="info" data-id="save-config-alert">
@@ -52,6 +55,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NResult, NAlert } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog';
 import loading from "naive-ui/es/_internal/loading";
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 
 export default {
   name: 'Complete',
@@ -66,11 +70,43 @@ export default {
     async get_os() {
       this.os = (await invoke("get_operating_system", {})).toLowerCase();
     },
+    async forceQuit() {
+      console.log("Force quit button clicked");
+      try {
+        // Replace this line
+        // const window = getCurrent();
+        // With this
+        const window = WebviewWindow.getByLabel('main');
+        if (window) {
+          await window.close();
+        } else {
+          console.error("Could not find main window");
+          // Fallback to process.exit
+          await invoke("quit_app", {});
+        }
+      } catch (error) {
+        console.error("Error force quitting:", error);
+        // Last resort - try to reload the page
+        try {
+          await invoke("quit_app", {});
+        } catch (e) {
+          console.error("Failed to quit via invoke:", e);
+          window.location.reload();
+        }
+      }
+    },
     async save_config() {
       try {
+        let defaultPath;
+        if (this.os === 'windows') {
+          defaultPath = 'C:\\Users\\Public\\eim_config.toml';
+        } else {
+          defaultPath = '/tmp/eim_config.toml';
+        }
+        console.log("Opening save dialog with default path:", defaultPath);
         const selected = await save({
           title: 'Save installation config file',
-          defaultPath: '/tmp/eim_config.toml',
+          defaultPath,
           filters: [
             {
               name: 'eim_config.toml',
@@ -78,6 +114,8 @@ export default {
             },
           ],
         });
+
+        console.log("Save dialog result:", selected);
         
         if (selected) {
           await invoke("save_config", { path: selected });
@@ -99,6 +137,7 @@ export default {
   },
   mounted() {
     this.get_os();
+    // Register the exit listener on the Rust side
   }
 }
 </script>
