@@ -1155,16 +1155,12 @@ fn quit_app(app_handle: tauri::AppHandle) {
             }
         }
 
-        // Try multiple exit methods for Windows
-        // First, try to exit via Tauri
         let app_handle_clone = app_handle.clone();
         app_handle.exit(0);
 
-        // As a fallback, force exit after a short delay
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(300));
             info!("Forcing Windows process exit");
-            // Try to emit a final event before exiting
             let _ = app_handle_clone.emit("app_exiting", ());
             std::process::exit(0);
         });
@@ -1172,7 +1168,6 @@ fn quit_app(app_handle: tauri::AppHandle) {
         return;
     }
 
-    // Try the standard Tauri exit
     app_handle.exit(0);
 }
 
@@ -1339,13 +1334,6 @@ use tauri::Emitter;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(target_os = "windows")]
-    {
-        use std::env;
-        // Set GUI mode environment variable
-        env::set_var("RUST_BACKTRACE", "1");
-    }
-    // Set up a file logger immediately for any early errors
     let log_dir = match idf_im_lib::get_log_directory() {
         Some(dir) => dir,
         None => {
@@ -1354,7 +1342,6 @@ pub fn run() {
         }
     };
 
-    // Try to log startup information, but continue if it fails
     let log_path = log_dir.join("eim_early_gui.log");
     let log_result = || -> std::io::Result<()> {
         use std::io::Write;
@@ -1363,7 +1350,6 @@ pub fn run() {
             .append(true)
             .open(&log_path)?;
 
-        // writeln!(file, "Starting GUI at {}", chrono::Local::now().to_rfc3339())?;
         writeln!(file, "Starting GUI at ??")?;
 
         Ok(())
@@ -1398,7 +1384,6 @@ fn run_tauri_app() {
         PathBuf::from(".")
     });
 
-    // Set up a more robust event loop
     let result = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -1406,7 +1391,6 @@ fn run_tauri_app() {
                     tauri_plugin_log::TargetKind::Stdout,
                 ))
                 .target(tauri_plugin_log::Target::new(
-                    // Consider disabling this for production build
                     tauri_plugin_log::TargetKind::Webview,
                 ))
                 .target(tauri_plugin_log::Target::new(
@@ -1422,7 +1406,6 @@ fn run_tauri_app() {
         )
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Setup with error handling
             let app_state = AppState::default();
             app.manage(app_state);
 

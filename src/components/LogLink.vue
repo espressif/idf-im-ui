@@ -16,8 +16,8 @@ export default {
   methods: {
     async open_logs(e) {
       e.preventDefault();
-      console.log("Opening logs folder: " + this.LogPath);
-      await invoke("show_in_folder", { path: this.LogPath });
+      console.log(`Opening logs folder: ${this.LogPath}`);
+      invoke("show_in_folder", { path: this.LogPath });
       console.log("Logs folder opened.");
     }
   }

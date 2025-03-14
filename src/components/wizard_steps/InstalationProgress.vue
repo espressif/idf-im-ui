@@ -116,13 +116,13 @@ export default {
     startInstalation: async function () {
       this.installation_running = true;
       try {
-        const _ = await invoke("start_installation", {});
+        const result = await invoke("start_installation", {});
+        console.log('### Installation finished:', result);
         this.installation_running = false;
         this.installation_finished = true;
       } catch (e) {
         console.error('Error during installation:', e);
         this.error_message = e;
-        alert(e);
         this.installation_running = false;
         this.installation_failed = true;
       }
