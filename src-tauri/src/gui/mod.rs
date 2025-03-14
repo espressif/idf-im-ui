@@ -2,14 +2,15 @@ use anyhow::{anyhow, Context, Error, Result};
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::{
-    add_path_to_path, download_file, ensure_path, expand_tilde,
-    idf_tools::get_tools_export_paths, python_utils::run_idf_tools_py, settings::Settings,
-    verify_file_checksum, DownloadProgress, ProgressMessage,
+    add_path_to_path, download_file, ensure_path, expand_tilde, idf_tools::get_tools_export_paths,
+    python_utils::run_idf_tools_py, settings::Settings, verify_file_checksum, DownloadProgress,
+    ProgressMessage,
 };
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::fs::metadata;
+use std::fs::OpenOptions;
 use std::process::Command;
 use std::{
     env,
@@ -20,8 +21,6 @@ use std::{
     thread,
 };
 use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
-use std::fs::OpenOptions;
-
 
 // Types and structs
 #[derive(Default, Serialize, Deserialize)]
@@ -662,7 +661,6 @@ async fn download_idf(
 
     log::info!("Starting IDF download for version: {}", version);
     log::info!("Installation path: {}", idf_path.display());
-    
 
     match idf_im_lib::get_esp_idf_by_version_and_mirror(
         idf_path.to_str().unwrap(),
@@ -698,7 +696,11 @@ async fn download_idf(
         Ok(_) => Ok(()),
         Err(e) => {
             error!("Progress monitor panicked: {:?}", e);
-            send_message(app_handle, format!("Progress monitor panicked: {:?}", e), "error".to_string());
+            send_message(
+                app_handle,
+                format!("Progress monitor panicked: {:?}", e),
+                "error".to_string(),
+            );
             Err("Progress monitor panicked".into())
         }
     }
@@ -1133,7 +1135,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn quit_app(app_handle: tauri::AppHandle) {
     info!("Attempting to quit app - pre-exit log");
-    
+
     #[cfg(target_os = "windows")]
     {
         // Log before attempting to exit
@@ -1143,17 +1145,21 @@ fn quit_app(app_handle: tauri::AppHandle) {
             if let Ok(mut file) = std::fs::OpenOptions::new()
                 .create(true)
                 .append(true)
-                .open(log_path) 
+                .open(log_path)
             {
-                let _ = writeln!(file, "Windows exit triggered at {:?}", std::time::SystemTime::now());
+                let _ = writeln!(
+                    file,
+                    "Windows exit triggered at {:?}",
+                    std::time::SystemTime::now()
+                );
             }
         }
-        
+
         // Try multiple exit methods for Windows
         // First, try to exit via Tauri
         let app_handle_clone = app_handle.clone();
         app_handle.exit(0);
-        
+
         // As a fallback, force exit after a short delay
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(300));
@@ -1162,14 +1168,13 @@ fn quit_app(app_handle: tauri::AppHandle) {
             let _ = app_handle_clone.emit("app_exiting", ());
             std::process::exit(0);
         });
-        
+
         return;
     }
-    
+
     // Try the standard Tauri exit
     app_handle.exit(0);
 }
-
 
 #[tauri::command]
 fn save_config(app_handle: tauri::AppHandle, path: String) {
@@ -1259,7 +1264,13 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn show_in_folder(path: String) {
+fn show_in_folder(app_handle: tauri::AppHandle, path: String) {
+    info!("Opening folder: {}", path);
+    send_message(
+        &app_handle,
+        format!("Opening folder: {}", path),
+        "info".to_string(),
+    );
     #[cfg(target_os = "windows")]
     {
         match Command::new("explorer")
@@ -1342,7 +1353,7 @@ pub fn run() {
             PathBuf::from(".")
         }
     };
-    
+
     // Try to log startup information, but continue if it fails
     let log_path = log_dir.join("eim_early_gui.log");
     let log_result = || -> std::io::Result<()> {
@@ -1351,23 +1362,23 @@ pub fn run() {
             .create(true)
             .append(true)
             .open(&log_path)?;
-        
+
         // writeln!(file, "Starting GUI at {}", chrono::Local::now().to_rfc3339())?;
         writeln!(file, "Starting GUI at ??")?;
 
         Ok(())
     }();
-    
+
     if let Err(e) = log_result {
         eprintln!("Failed to log startup: {}", e);
     }
-    
+
     // Mac-specific PATH settings
     #[cfg(target_os = "macos")]
     {
         env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
     }
-    
+
     // Run the Tauri app with proper error handling
     if let Err(e) = std::panic::catch_unwind(|| {
         run_tauri_app();
@@ -1414,7 +1425,7 @@ fn run_tauri_app() {
             // Setup with error handling
             let app_state = AppState::default();
             app.manage(app_state);
-            
+
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())
@@ -1447,18 +1458,16 @@ fn run_tauri_app() {
             is_path_empty_or_nonexistent,
         ])
         .build(tauri::generate_context!());
-    
+
     match result {
         Ok(app) => {
-            app.run(|app_handle, event| {
-                match event {
-                    tauri::RunEvent::ExitRequested { api, .. } => {
-                        info!("Exit requested");
-                        app_handle.cleanup_before_exit();
-                    }
-                    _ => {
-                        debug!("App event: {:?}", event);
-                    }
+            app.run(|app_handle, event| match event {
+                tauri::RunEvent::ExitRequested { api, .. } => {
+                    info!("Exit requested");
+                    app_handle.cleanup_before_exit();
+                }
+                _ => {
+                    debug!("App event: {:?}", event);
                 }
             });
         }

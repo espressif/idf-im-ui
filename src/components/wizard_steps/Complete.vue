@@ -18,7 +18,7 @@
             </div>
 
 
-        </div>
+          </div>
 
           <div class="buttons" data-id="action-buttons">
             <n-button @click="save_config" type="info" class="save-button" dashed data-id="save-config-button">
@@ -72,28 +72,17 @@ export default {
     },
     async forceQuit() {
       console.log("Force quit button clicked");
-      try {
-        // Replace this line
-        // const window = getCurrent();
-        // With this
-        const window = WebviewWindow.getByLabel('main');
-        if (window) {
-          await window.close();
-        } else {
-          console.error("Could not find main window");
-          // Fallback to process.exit
-          await invoke("quit_app", {});
-        }
-      } catch (error) {
-        console.error("Error force quitting:", error);
-        // Last resort - try to reload the page
-        try {
-          await invoke("quit_app", {});
-        } catch (e) {
-          console.error("Failed to quit via invoke:", e);
-          window.location.reload();
-        }
-      }
+      const window = WebviewWindow.getByLabel('main');
+      window.then(async (window) => {
+        await window.close();
+      }).catch(async (error) => {
+        console.error("Could not find or close main window:", error);
+        // Fallback to process.exit
+        await invoke("quit_app", {});
+      }).finally(() => {
+        console.log("Force quitting app");
+        process.exit(0);
+      });
     },
     async save_config() {
       try {
@@ -116,7 +105,7 @@ export default {
         });
 
         console.log("Save dialog result:", selected);
-        
+
         if (selected) {
           await invoke("save_config", { path: selected });
           console.log("Config saved to", selected);
@@ -128,6 +117,7 @@ export default {
       }
     },
     async quit() {
+      console.log("Exit button clicked");
       try {
         await invoke("quit_app", {});
       } catch (error) {
