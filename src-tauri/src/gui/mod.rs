@@ -1102,16 +1102,34 @@ async fn install_single_version(
 ) -> Result<(), Box<dyn std::error::Error>> {
     info!("Installing IDF version: {}", version);
 
+    // Yield control periodically
+    tokio::task::yield_now().await;
+
     let version_path = prepare_installation_directories(app_handle.clone(), settings, &version)?;
+
+    // Yield control periodically
+    tokio::task::yield_now().await;
+
     let idf_path = version_path.clone().join("esp-idf");
+
+    // Use more granular chunking for better responsiveness
     download_idf(&app_handle, settings, &version, &idf_path).await?;
+
+    // Yield control periodically
+    tokio::task::yield_now().await;
+
     let export_vars = setup_tools(&app_handle, settings, &idf_path).await?;
+
+    // Yield control periodically
+    tokio::task::yield_now().await;
+
     let tools_install_path = version_path.clone().join(
         settings
             .tool_install_folder_name
             .clone()
             .unwrap_or_default(),
     );
+
     idf_im_lib::single_version_post_install(
         &version_path.to_str().unwrap(),
         idf_path.to_str().unwrap(),
@@ -1119,6 +1137,7 @@ async fn install_single_version(
         tools_install_path.to_str().unwrap(),
         export_vars,
     );
+
     info!("single version installation completed");
 
     Ok(())
@@ -1198,14 +1217,19 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 .map_err(|_| "Lock error".to_string())?;
             *queue = versions.clone();
         } else {
+            // Reset installation flag before returning
+            *is_installing = false;
             return Err("No IDF versions were selected".to_string());
         }
     }
 
-    // Spawn a background task to process installations
-    let app_handle_clone = app_handle.clone();
-    tokio::spawn(async move {
-        process_installation_queue(app_handle_clone).await;
+    // Use a separate thread with proper yielding behavior to avoid blocking the main thread
+    std::thread::spawn(move || {
+        // Create a new runtime specifically for this thread
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(async {
+            process_installation_queue(app_handle).await;
+        });
     });
 
     Ok(())
@@ -1215,12 +1239,17 @@ async fn process_installation_queue(app_handle: AppHandle) {
     let app_state = app_handle.state::<AppState>();
     let settings = match get_settings_non_blocking(&app_handle) {
         Ok(s) => s,
-        Err(_) => {
+        Err(e) => {
             send_message(
                 &app_handle,
-                "Failed to get settings".to_string(),
+                format!("Failed to get settings: {}", e),
                 "error".to_string(),
             );
+
+            // Reset installation flag before returning
+            if let Ok(mut is_installing) = app_state.is_installing.lock() {
+                *is_installing = false;
+            }
             return;
         }
     };
@@ -1228,7 +1257,14 @@ async fn process_installation_queue(app_handle: AppHandle) {
     loop {
         // Get the next version to install
         let version = {
-            let mut queue = app_state.installation_queue.lock().unwrap();
+            let mut queue = match app_state.installation_queue.lock() {
+                Ok(q) => q,
+                Err(e) => {
+                    error!("Failed to lock installation queue: {:?}", e);
+                    break;
+                }
+            };
+
             if queue.is_empty() {
                 break;
             }
@@ -1238,6 +1274,7 @@ async fn process_installation_queue(app_handle: AppHandle) {
         // Start installation for this version
         send_install_progress_message(&app_handle, version.clone(), "started".to_string());
 
+        // Use a more granular approach to installation
         match install_single_version(app_handle.clone(), &settings, version.clone()).await {
             Ok(_) => {
                 send_install_progress_message(&app_handle, version, "finished".to_string());
@@ -1253,7 +1290,7 @@ async fn process_installation_queue(app_handle: AppHandle) {
             }
         }
 
-        // Allow other tasks to run
+        // Essential: yield control back to the event loop periodically
         tokio::task::yield_now().await;
     }
 
@@ -1281,8 +1318,11 @@ async fn process_installation_queue(app_handle: AppHandle) {
     }
 
     // Reset installation flag
-    let mut is_installing = app_state.is_installing.lock().unwrap();
-    *is_installing = false;
+    if let Ok(mut is_installing) = app_state.is_installing.lock() {
+        *is_installing = false;
+    } else {
+        error!("Failed to acquire is_installing lock for cleanup");
+    };
 }
 
 #[tauri::command]
