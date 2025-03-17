@@ -153,6 +153,33 @@ fn get_locked_settings(app_handle: &AppHandle) -> Result<Settings, String> {
         })
 }
 
+fn get_settings_non_blocking(app_handle: &AppHandle) -> Result<Settings, String> {
+    // Get the app state and store it in a longer-lived variable
+    let app_state = app_handle.state::<AppState>();
+
+    // First try with a non-blocking try_lock
+    if let Ok(guard) = app_state.settings.try_lock() {
+        // Clone immediately and release the lock
+        let settings_copy = (*guard).clone();
+        // Lock is automatically released when guard goes out of scope
+        return Ok(settings_copy);
+    }
+
+    // If we couldn't get the lock immediately, wait a little and retry
+    for _ in 0..5 {
+        // Small sleep to avoid busy waiting
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        if let Ok(guard) = app_state.settings.try_lock() {
+            let settings_copy = (*guard).clone();
+            return Ok(settings_copy);
+        }
+    }
+
+    // If we still can't get the lock, return an error
+    Err("Settings are currently locked. Try again later.".to_string())
+}
+
 fn update_settings<F>(app_handle: &AppHandle, updater: F) -> Result<(), String>
 where
     F: FnOnce(&mut Settings),
@@ -1163,7 +1190,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         }
         *is_installing = true;
 
-        let settings = get_locked_settings(&app_handle)?;
+        let settings = get_settings_non_blocking(&app_handle)?;
         if let Some(versions) = &settings.idf_versions {
             let mut queue = app_state
                 .installation_queue
@@ -1186,7 +1213,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
 async fn process_installation_queue(app_handle: AppHandle) {
     let app_state = app_handle.state::<AppState>();
-    let settings = match get_locked_settings(&app_handle) {
+    let settings = match get_settings_non_blocking(&app_handle) {
         Ok(s) => s,
         Err(_) => {
             send_message(
@@ -1392,68 +1419,71 @@ async fn show_in_folder(app_handle: tauri::AppHandle, path: String) {
         format!("Opening folder: {}", path),
         "info".to_string(),
     );
-    #[cfg(target_os = "windows")]
-    {
-        match Command::new("explorer")
-            .args(["/select,", &path]) // The comma after select is not a typo
-            .spawn()
+    let path_clone = path.clone();
+    tokio::task::spawn_blocking(move || {
+        #[cfg(target_os = "windows")]
         {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Failed to open folder with explorer: {}", e);
-            }
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        let path = if path.contains(",") {
-            // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
-            match metadata(&path).unwrap().is_dir() {
-                true => path,
-                false => {
-                    let mut path2 = PathBuf::from(path);
-                    path2.pop();
-                    path2.into_os_string().into_string().unwrap()
-                }
-            }
-        } else {
-            path
-        };
-
-        // Try using xdg-open first
-        if Command::new("xdg-open").arg(&path).spawn().is_err() {
-            // Fallback to dbus-send if xdg-open fails
-            let uri = format!("file://{}", path);
-            match Command::new("dbus-send")
-                .args([
-                    "--session",
-                    "--dest=org.freedesktop.FileManager1",
-                    "--type=method_call",
-                    "/org/freedesktop/FileManager1",
-                    "org.freedesktop.FileManager1.ShowItems",
-                    format!("array:string:\"{}\"", uri).as_str(),
-                    "string:\"\"",
-                ])
+            match Command::new("explorer")
+                .args(["/select,", &path_clone]) // The comma after select is not a typo
                 .spawn()
             {
                 Ok(_) => {}
                 Err(e) => {
-                    error!("Failed to open file with dbus-send: {}", e);
+                    error!("Failed to open folder with explorer: {}", e);
                 }
             }
         }
-    }
 
-    #[cfg(target_os = "macos")]
-    {
-        match Command::new("open").args(["-R", &path]).spawn() {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Failed to open file with open: {}", e);
+        #[cfg(target_os = "linux")]
+        {
+            let path = if path.contains(",") {
+                // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
+                match metadata(&path).unwrap().is_dir() {
+                    true => path,
+                    false => {
+                        let mut path2 = PathBuf::from(path);
+                        path2.pop();
+                        path2.into_os_string().into_string().unwrap()
+                    }
+                }
+            } else {
+                path
+            };
+
+            // Try using xdg-open first
+            if Command::new("xdg-open").arg(&path).spawn().is_err() {
+                // Fallback to dbus-send if xdg-open fails
+                let uri = format!("file://{}", path);
+                match Command::new("dbus-send")
+                    .args([
+                        "--session",
+                        "--dest=org.freedesktop.FileManager1",
+                        "--type=method_call",
+                        "/org/freedesktop/FileManager1",
+                        "org.freedesktop.FileManager1.ShowItems",
+                        format!("array:string:\"{}\"", uri).as_str(),
+                        "string:\"\"",
+                    ])
+                    .spawn()
+                {
+                    Ok(_) => {}
+                    Err(e) => {
+                        error!("Failed to open file with dbus-send: {}", e);
+                    }
+                }
             }
         }
-    }
+
+        #[cfg(target_os = "macos")]
+        {
+            match Command::new("open").args(["-R", &path]).spawn() {
+                Ok(_) => {}
+                Err(e) => {
+                    error!("Failed to open file with open: {}", e);
+                }
+            }
+        }
+    });
 }
 
 use tauri::Emitter;
@@ -1534,7 +1564,20 @@ fn run_tauri_app() {
         .setup(|app| {
             let app_state = AppState::default();
             app.manage(app_state);
+            // Add a periodic check for command processing health
+            let app_handle = app.handle().clone();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(1));
 
+                    // Check if commands are processing
+                    // If not, log and try to recover
+                    if let Err(e) = app_handle.emit("health_check", ()) {
+                        error!("Health check emission failed: {}", e);
+                        // Take recovery action if needed
+                    }
+                }
+            });
             Ok(())
         })
         .plugin(tauri_plugin_shell::init())

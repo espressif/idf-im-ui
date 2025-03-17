@@ -118,17 +118,12 @@ export default {
       console.log('### Starting installation...');
       const result = invoke("start_installation", {});
       result.then((data) => {
-        console.log('### Installation finished with result:', data);
-        this.installation_finished = true;
-        this.installation_failed = false;
+        console.log('### Installation is running:', data);
       }).catch((e) => {
-        console.error('Error during installation:', e);
+        console.error('Error during installation initialization:', e);
         this.error_message = e;
         this.installation_failed = true;
-      }).finally(() => {
-        console.log('### Installation finished');
-        this.installation_running = false;
-      });
+      })
     },
     startListening: function () {
       listen('tools-message', (event) => {
@@ -190,6 +185,7 @@ export default {
             this.versions_finished.push(event.payload.version);
             this.curently_installing_version = undefined;
             this.installation_running = false;
+            this.installation_finished = true;
             break;
           case 'failed':
             this.versions_failed.push(event.payload.version);
