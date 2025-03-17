@@ -15,10 +15,12 @@ export default {
   },
   methods: {
     async open_logs(e) {
-      e.preventDefault();
       console.log(`Opening logs folder: ${this.LogPath}`);
-      invoke("show_in_folder", { path: this.LogPath });
-      console.log("Logs folder opened.");
+      invoke("show_in_folder", { path: this.LogPath }).then(() => {
+        console.log("Logs folder opened.");
+      }).catch((error) => {
+        console.error(error);
+      });
     }
   }
 }

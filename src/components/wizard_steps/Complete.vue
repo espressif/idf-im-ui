@@ -67,8 +67,13 @@ export default {
     os: undefined,
   }),
   methods: {
-    async get_os() {
-      this.os = (await invoke("get_operating_system", {})).toLowerCase();
+    get_os() {
+      invoke("get_operating_system", {}).then((os) => {
+        console.info('Got OS:', os);
+        this.os = os.toLowerCase();
+      }).catch((e) => {
+        console.error('Error getting OS:', e);
+      });
     },
     async forceQuit() {
       console.log("Force quit button clicked");
@@ -84,7 +89,7 @@ export default {
         process.exit(0);
       });
     },
-    async save_config() {
+    save_config() {
       try {
         let defaultPath;
         if (this.os === 'windows') {
@@ -93,7 +98,7 @@ export default {
           defaultPath = '/tmp/eim_config.toml';
         }
         console.log("Opening save dialog with default path:", defaultPath);
-        const selected = await save({
+        save({
           title: 'Save installation config file',
           defaultPath,
           filters: [
@@ -102,32 +107,35 @@ export default {
               extensions: ['toml'],
             },
           ],
+        }).then((selected) => {
+          console.log("Save dialog result:", selected);
+          if (selected) {
+            invoke("save_config", { path: selected }).then(() => {
+              console.log("Config saved to", selected);
+            }).catch((error) => {
+              console.error("Error saving config:", error);
+            });
+          } else {
+            console.log("Config not saved");
+          }
+        }).catch((error) => {
+          console.error("Error opening save dialog:", error);
         });
-
-        console.log("Save dialog result:", selected);
-
-        if (selected) {
-          await invoke("save_config", { path: selected });
-          console.log("Config saved to", selected);
-        } else {
-          console.log("Config not saved");
-        }
       } catch (error) {
         console.error("Error saving config:", error);
       }
     },
-    async quit() {
+    quit() {
       console.log("Exit button clicked");
-      try {
-        await invoke("quit_app", {});
-      } catch (error) {
+      invoke("quit_app", {}).then(() => {
+        console.log("App quit");
+      }).catch((error) => {
         console.error("Error quitting app:", error);
-      }
+      });
     }
   },
   mounted() {
     this.get_os();
-    // Register the exit listener on the Rust side
   }
 }
 </script>

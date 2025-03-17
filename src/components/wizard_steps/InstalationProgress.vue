@@ -113,22 +113,25 @@ export default {
       this.store.setStep(1);
       this.$router.push('/');
     },
-    startInstalation: async function () {
+    startInstalation: function () {
       this.installation_running = true;
-      try {
-        const result = await invoke("start_installation", {});
-        console.log('### Installation finished:', result);
-        this.installation_running = false;
+      console.log('### Starting installation...');
+      const result = invoke("start_installation", {});
+      result.then((data) => {
+        console.log('### Installation finished with result:', data);
         this.installation_finished = true;
-      } catch (e) {
+        this.installation_failed = false;
+      }).catch((e) => {
         console.error('Error during installation:', e);
         this.error_message = e;
-        this.installation_running = false;
         this.installation_failed = true;
-      }
+      }).finally(() => {
+        console.log('### Installation finished');
+        this.installation_running = false;
+      });
     },
-    startListening: async function () {
-      this.unlistenTools = await listen('tools-message', (event) => {
+    startListening: function () {
+      listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
         switch (event.payload.action) {
           case 'start':
@@ -170,9 +173,13 @@ export default {
           default:
             console.warn('Unknown action:', event.payload.action);
         }
-
+      }).then((handler) => {
+        console.log('### Listening for tools messages...');
+        this.unlistenTools = handler;
+      }).catch((e) => {
+        console.error('Error listening for tools messages:', e);
       });
-      this.unlisten = await listen('install-progress-message', (event) => {
+      listen('install-progress-message', (event) => {
         switch (event.payload.state) {
           case 'started':
             this.tools[event.payload.version] = {};
@@ -194,27 +201,52 @@ export default {
           default:
             console.warn('Unknown state:', event.payload.state);
         }
+      }).then((handler) => {
+        console.log('### Listening for tools messages...');
+        this.unlisten = handler;
+      }).catch((e) => {
+        console.error('Error listening for tools messages:', e);
       });
     },
     startListeningToInstalationProgress: async function () {
       console.log('Listening for progress messages...');
       this.progressDisplay_progress = true;
-      this.unlistenProgress = await listen('progress-message', (event) => {
+      listen('progress-message', (event) => {
         this.progressMessage = event.payload.message;
         this.progressStatus = event.payload.status;
         this.progressPercentage = event.payload.percentage;
-      })
+      }).then((handler) => {
+        console.log('### Listening for progress messages...');
+        this.unlistenProgress = handler;
+      }).catch((e) => {
+        console.error('Error listening for progress messages:', e);
+      });
       this.progressDisplay_progress = false;
     },
-    get_settings: async function () {
-      this.all_settings = await invoke("get_settings", {});;
+    get_settings: function () {
+      invoke("get_settings", {}).then((settings) => {
+        console.info('Got settings:', settings);
+        this.all_settings = settings;
+      }).catch((e) => {
+        console.error('Error getting settings:', e);
+      });
     },
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});;
+      invoke("get_operating_system", {}).then((os) => {
+        console.info('Got OS:', os);
+        this.os = os;
+      }).catch((e) => {
+        console.error('Error getting OS:', e);
+      });
       return false;
     },
     get_logs_path: async function () {
-      this.LogPath = await invoke("get_logs_folder", {});;
+      invoke("get_logs_folder", {}).then((LogPath) => {
+        console.info('Got logs path:', LogPath);
+        this.LogPath = LogPath;
+      }).catch((e) => {
+        console.error('Error getting logs path:', e);
+      });
     }
   },
   computed: {
