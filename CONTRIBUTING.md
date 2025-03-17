@@ -77,6 +77,15 @@ cargo tauri dev -- -- --help
 
 Note the double `-- --` syntax: the first `--` separates the Cargo arguments from the Tauri arguments, and the second `--` separates the Tauri arguments from the application arguments.
 
+Also, if you want to enable the devtools, you can add 'devtools' feature to the tauri crate in Cargo.toml:
+
+```toml
+# GUI-related dependencies (optional)
+tauri = { version = "2.0.1", features = ["devtools"], optional = true }
+```
+
+Then, you can build the GUI application with the devtools enabled.
+
 ## Cross-Platform Compatibility
 
 All contributions **must** maintain multi-platform compatibility. While platform-specific enhancements are welcome, they cannot break functionality on other platforms:

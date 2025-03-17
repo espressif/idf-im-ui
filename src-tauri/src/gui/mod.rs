@@ -27,6 +27,22 @@ use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
 pub struct AppState {
     wizard_data: Mutex<WizardData>,
     settings: Mutex<Settings>,
+    installation_queue: Mutex<Vec<String>>,
+    is_installing: Mutex<bool>,
+}
+
+// Then add a command to check installation status
+#[tauri::command]
+fn is_installing(app_handle: AppHandle) -> bool {
+    let app_state = app_handle.state::<AppState>();
+    app_state
+        .is_installing
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire is_installing lock, assuming not installing");
+            false
+        })
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -1081,32 +1097,140 @@ async fn install_single_version(
     Ok(())
 }
 
+// #[tauri::command]
+// async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+//     info!("Starting installation");
+//     let settings = get_locked_settings(&app_handle)?;
+
+//     if let Some(versions) = &settings.idf_versions {
+//         for version in versions {
+//             send_install_progress_message(&app_handle, version.clone(), "started".to_string());
+//             if let Err(e) =
+//                 install_single_version(app_handle.clone(), &settings, version.clone()).await
+//             {
+//                 send_install_progress_message(&app_handle, version.clone(), "failed".to_string());
+
+//                 error!("Failed to install version {}: {}", version, e);
+//                 return Err(format!("Installation failed: {}", e));
+//             } else {
+//                 send_install_progress_message(&app_handle, version.clone(), "finished".to_string());
+//             }
+//         }
+//     } else {
+//         send_message(
+//             &app_handle,
+//             "No IDF versions were selected".to_string(),
+//             "warning".to_string(),
+//         );
+//         return Err("No IDF versions were selected".to_string());
+//     }
+//     let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+//     let _ = ensure_path(&ide_json_path);
+//     let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
+//     match settings.save_esp_ide_json(filepath.to_str().unwrap()) {
+//         Ok(_) => {
+//             info!("IDE JSON file saved to: {}", filepath.to_str().unwrap());
+//             send_message(
+//                 &app_handle,
+//                 format!("IDE JSON file saved to: {}", filepath.to_str().unwrap()),
+//                 "info".to_string(),
+//             );
+//         }
+//         Err(e) => {
+//             error!("Failed to save IDE JSON file: {}", e);
+//             send_message(
+//                 &app_handle,
+//                 format!("Failed to save IDE JSON file: {}", e),
+//                 "error".to_string(),
+//             );
+//         }
+//     }
+
+//     Ok(())
+// }
 #[tauri::command]
 async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    info!("Starting installation");
-    let settings = get_locked_settings(&app_handle)?;
+    let app_state = app_handle.state::<AppState>();
 
-    if let Some(versions) = &settings.idf_versions {
-        for version in versions {
-            send_install_progress_message(&app_handle, version.clone(), "started".to_string());
-            if let Err(e) =
-                install_single_version(app_handle.clone(), &settings, version.clone()).await
-            {
+    // Set installation flag and queue up versions
+    {
+        let mut is_installing = app_state
+            .is_installing
+            .lock()
+            .map_err(|_| "Lock error".to_string())?;
+        if *is_installing {
+            return Err("Installation already in progress".to_string());
+        }
+        *is_installing = true;
+
+        let settings = get_locked_settings(&app_handle)?;
+        if let Some(versions) = &settings.idf_versions {
+            let mut queue = app_state
+                .installation_queue
+                .lock()
+                .map_err(|_| "Lock error".to_string())?;
+            *queue = versions.clone();
+        } else {
+            return Err("No IDF versions were selected".to_string());
+        }
+    }
+
+    // Spawn a background task to process installations
+    let app_handle_clone = app_handle.clone();
+    tokio::spawn(async move {
+        process_installation_queue(app_handle_clone).await;
+    });
+
+    Ok(())
+}
+
+async fn process_installation_queue(app_handle: AppHandle) {
+    let app_state = app_handle.state::<AppState>();
+    let settings = match get_locked_settings(&app_handle) {
+        Ok(s) => s,
+        Err(_) => {
+            send_message(
+                &app_handle,
+                "Failed to get settings".to_string(),
+                "error".to_string(),
+            );
+            return;
+        }
+    };
+
+    loop {
+        // Get the next version to install
+        let version = {
+            let mut queue = app_state.installation_queue.lock().unwrap();
+            if queue.is_empty() {
+                break;
+            }
+            queue.remove(0)
+        };
+
+        // Start installation for this version
+        send_install_progress_message(&app_handle, version.clone(), "started".to_string());
+
+        match install_single_version(app_handle.clone(), &settings, version.clone()).await {
+            Ok(_) => {
+                send_install_progress_message(&app_handle, version, "finished".to_string());
+            }
+            Err(e) => {
                 send_install_progress_message(&app_handle, version.clone(), "failed".to_string());
-
                 error!("Failed to install version {}: {}", version, e);
-                return Err(format!("Installation failed: {}", e));
-            } else {
-                send_install_progress_message(&app_handle, version.clone(), "finished".to_string());
+                send_message(
+                    &app_handle,
+                    format!("Failed to install version {}: {}", version, e),
+                    "error".to_string(),
+                );
             }
         }
-    } else {
-        send_message(
-            &app_handle,
-            "No IDF versions were selected".to_string(),
-            "warning".to_string(),
-        );
+
+        // Allow other tasks to run
+        tokio::task::yield_now().await;
     }
+
+    // Complete installation process
     let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
     let _ = ensure_path(&ide_json_path);
     let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
@@ -1129,11 +1253,13 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    // Reset installation flag
+    let mut is_installing = app_state.is_installing.lock().unwrap();
+    *is_installing = false;
 }
 
 #[tauri::command]
-fn quit_app(app_handle: tauri::AppHandle) {
+async fn quit_app(app_handle: tauri::AppHandle) {
     info!("Attempting to quit app - pre-exit log");
 
     #[cfg(target_os = "windows")]
@@ -1259,7 +1385,7 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn show_in_folder(app_handle: tauri::AppHandle, path: String) {
+async fn show_in_folder(app_handle: tauri::AppHandle, path: String) {
     info!("Opening folder: {}", path);
     send_message(
         &app_handle,
