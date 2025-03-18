@@ -5,12 +5,12 @@ use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};
+use std::io::BufReader;
 use tar::Archive;
 use tera::{Context, Tera};
 use thiserror::Error;
 use utils::{find_directories_by_name, make_long_path_compatible};
 use zip::ZipArchive;
-use std::io::BufReader;
 
 pub mod command_executor;
 pub mod idf_config;
@@ -647,7 +647,7 @@ pub async fn download_file(
             ));
         }
     }
-    
+
     let _ = progress_sender.send(DownloadProgress::Complete);
 
     // Return Ok(()) if the download was successful
@@ -747,30 +747,44 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
     match std::env::consts::OS {
         "windows" => {
             let executor = crate::command_executor::get_executor();
+            let archive_path_str = archive_path.to_string_lossy().to_string();
+            let destination_path_str = destination_path.to_string_lossy().to_string();
 
-            let archive_path_str = archive_path.to_string_lossy();
-            let destination_path_str = destination_path.to_string_lossy();
+            // Create a separate thread to run the PowerShell command
+            let handle = std::thread::spawn(move || {
+                let script = format!(
+                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+                    archive_path_str, destination_path_str
+                );
 
-            let script = format!(
-                "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                archive_path_str, destination_path_str
-            );
+                executor.run_script_from_string(&script)
+            });
 
-            match executor.run_script_from_string(&script) {
-                Ok(output) => {
-                    if !output.status.success() {
-                        let error_message = String::from_utf8_lossy(&output.stderr);
-                        log::error!("Decompression failed: {}", error_message);
-                        return Err(DecompressionError::Io(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("PowerShell decompression failed: {}", error_message),
-                        )));
+            // Wait for the thread to complete
+            match handle.join() {
+                Ok(result) => match result {
+                    Ok(output) => {
+                        if !output.status.success() {
+                            let error_message = String::from_utf8_lossy(&output.stderr);
+                            log::error!("Decompression failed: {}", error_message);
+                            return Err(DecompressionError::Io(io::Error::new(
+                                io::ErrorKind::Other,
+                                format!("PowerShell decompression failed: {}", error_message),
+                            )));
+                        }
+                        Ok(())
                     }
-                    Ok(())
-                }
+                    Err(e) => {
+                        log::error!("Failed to execute PowerShell command: {}", e);
+                        Err(DecompressionError::Io(e))
+                    }
+                },
                 Err(e) => {
-                    log::error!("Failed to execute PowerShell command: {}", e);
-                    Err(DecompressionError::Io(e))
+                    log::error!("Thread panicked: {:?}", e);
+                    Err(DecompressionError::Io(io::Error::new(
+                        io::ErrorKind::Other,
+                        "Thread panicked during decompression",
+                    )))
                 }
             }
         }
@@ -857,11 +871,11 @@ fn decompress_tar_xz(
     let file = File::open(archive_path)?;
     let mut reader = BufReader::new(file);
     let mut decompressed_data = Vec::new();
-    
+
     // First decompress the XZ data
     lzma_rs::xz_decompress(&mut reader, &mut decompressed_data)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    
+
     // Then process the tar archive from the decompressed data
     let cursor = std::io::Cursor::new(decompressed_data);
     let mut archive = Archive::new(cursor);
