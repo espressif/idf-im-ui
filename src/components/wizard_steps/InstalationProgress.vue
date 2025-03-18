@@ -126,6 +126,9 @@ export default {
       })
     },
     startListening: function () {
+      listen('health_check', () => {
+        console.log('### Received health check message');
+      });
       listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
         switch (event.payload.action) {
