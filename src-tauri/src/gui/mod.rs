@@ -986,12 +986,26 @@ async fn process_tool_download(
     verify_download(&app_handle, &download.sha256, full_path_str, filename)?;
 
     // Extract tool
-    extract_tool(
+    match extract_tool(
         &app_handle,
         filename,
         full_path_str,
         &Path::new(&tool_setup.install_dir),
-    )?;
+    )
+    .await
+    {
+        Ok(_) => {
+            info!("Tool {} extracted successfully", tool_name);
+        }
+        Err(e) => {
+            send_message(
+                app_handle,
+                format!("Failed to extract tool {}: {}", tool_name, e),
+                "error".to_string(),
+            );
+            return Err(e.into());
+        }
+    }
 
     progress_handle
         .join()
@@ -1034,7 +1048,7 @@ fn verify_download(
     }
 }
 
-fn extract_tool(
+async fn extract_tool(
     app_handle: &AppHandle,
     tool_name: &str,
     full_path_str: &str,
@@ -1142,58 +1156,6 @@ async fn install_single_version(
 
     Ok(())
 }
-
-// #[tauri::command]
-// async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-//     info!("Starting installation");
-//     let settings = get_locked_settings(&app_handle)?;
-
-//     if let Some(versions) = &settings.idf_versions {
-//         for version in versions {
-//             send_install_progress_message(&app_handle, version.clone(), "started".to_string());
-//             if let Err(e) =
-//                 install_single_version(app_handle.clone(), &settings, version.clone()).await
-//             {
-//                 send_install_progress_message(&app_handle, version.clone(), "failed".to_string());
-
-//                 error!("Failed to install version {}: {}", version, e);
-//                 return Err(format!("Installation failed: {}", e));
-//             } else {
-//                 send_install_progress_message(&app_handle, version.clone(), "finished".to_string());
-//             }
-//         }
-//     } else {
-//         send_message(
-//             &app_handle,
-//             "No IDF versions were selected".to_string(),
-//             "warning".to_string(),
-//         );
-//         return Err("No IDF versions were selected".to_string());
-//     }
-//     let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
-//     let _ = ensure_path(&ide_json_path);
-//     let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
-//     match settings.save_esp_ide_json(filepath.to_str().unwrap()) {
-//         Ok(_) => {
-//             info!("IDE JSON file saved to: {}", filepath.to_str().unwrap());
-//             send_message(
-//                 &app_handle,
-//                 format!("IDE JSON file saved to: {}", filepath.to_str().unwrap()),
-//                 "info".to_string(),
-//             );
-//         }
-//         Err(e) => {
-//             error!("Failed to save IDE JSON file: {}", e);
-//             send_message(
-//                 &app_handle,
-//                 format!("Failed to save IDE JSON file: {}", e),
-//                 "error".to_string(),
-//             );
-//         }
-//     }
-
-//     Ok(())
-// }
 #[tauri::command]
 async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
@@ -1226,7 +1188,12 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     // Use a separate thread with proper yielding behavior to avoid blocking the main thread
     std::thread::spawn(move || {
         // Create a new runtime specifically for this thread
-        let rt = tokio::runtime::Runtime::new().unwrap();
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2) // Dedicated worker threads
+            .enable_all()
+            .build()
+            .unwrap();
+
         rt.block_on(async {
             process_installation_queue(app_handle).await;
         });
@@ -1574,6 +1541,45 @@ pub fn run() {
     }
 }
 
+fn setup_command_monitor(app_handle: AppHandle) {
+    // Clone the handle to use in the monitoring thread
+    let monitor_handle = app_handle.clone();
+    info!("Starting command monitor");
+
+    std::thread::spawn(move || {
+        let mut consecutive_failures = 0;
+        let failure_threshold = 3; // Number of consecutive failures before recovery
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            // Get a reference to the app state and store it
+            let app_state = monitor_handle.state::<AppState>();
+
+            // Test if commands are working by trying to acquire locks
+            let settings_lock_test = app_state.settings.try_lock();
+            let install_lock_test = app_state.is_installing.try_lock();
+
+            if settings_lock_test.is_err() || install_lock_test.is_err() {
+                log::warn!("Lock acquisition check failed - commands may be stuck");
+                consecutive_failures += 1;
+            } else {
+                // Release locks immediately if acquired
+                drop(settings_lock_test);
+                drop(install_lock_test);
+                consecutive_failures = 0;
+                log::debug!("Command processing is healthy");
+            }
+
+            // If too many consecutive failures, attempt recovery
+            if consecutive_failures >= failure_threshold {
+                log::error!("Command processing appears blocked, attempting recovery...");
+                // recover_command_processing(&monitor_handle);
+                consecutive_failures = 0;
+            }
+        }
+    });
+}
+
 fn run_tauri_app() {
     let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
         error!("Failed to get log directory.");
@@ -1606,6 +1612,7 @@ fn run_tauri_app() {
             app.manage(app_state);
             // Add a periodic check for command processing health
             let app_handle = app.handle().clone();
+            setup_command_monitor(app_handle.clone());
             std::thread::spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
