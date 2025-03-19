@@ -719,16 +719,6 @@ pub fn decompress_archive(
     }
 }
 
-/// Decompresses a ZIP archive into the specified destination directory.
-///
-/// # Parameters
-///
-/// * `archive_path`: A reference to a `Path` representing the path to the ZIP archive.
-/// * `destination_path`: A reference to a `Path` representing the destination directory where the archive should be decompressed.
-///
-/// # Return Value
-///
-/// * `Result<(), DecompressionError>`: On success, returns `Ok(())`. On error, returns a `DecompressionError` indicating the cause of the error.
 fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), DecompressionError> {
     log::info!(
         "Decompressing {} to {}",
@@ -744,8 +734,41 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
         )));
     }
 
-    match std::env::consts::OS {
-        "windows" => {
+    // First, try using ZipArchive for all platforms
+    let zip_result = (|| {
+        let file = File::open(archive_path)?;
+        let mut archive = ZipArchive::new(file)?;
+
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let outpath = match file.enclosed_name() {
+                Some(path) => destination_path.join(path),
+                None => continue,
+            };
+
+            if file.name().ends_with('/') {
+                std::fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                }
+                let mut outfile = File::create(&outpath)?;
+                io::copy(&mut file, &mut outfile)?;
+            }
+        }
+        Ok(())
+    })();
+
+    // If ZipArchive failed and we're on Windows, fall back to PowerShell
+    if let Err(err) = zip_result {
+        if std::env::consts::OS == "windows" {
+            log::warn!(
+                "ZipArchive decompression failed: {}. Falling back to PowerShell approach.",
+                err
+            );
+
             let executor = crate::command_executor::get_executor();
             let archive_path_str = archive_path.to_string_lossy().to_string();
             let destination_path_str = destination_path.to_string_lossy().to_string();
@@ -766,7 +789,7 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
                     Ok(output) => {
                         if !output.status.success() {
                             let error_message = String::from_utf8_lossy(&output.stderr);
-                            log::error!("Decompression failed: {}", error_message);
+                            log::error!("PowerShell decompression failed: {}", error_message);
                             return Err(DecompressionError::Io(io::Error::new(
                                 io::ErrorKind::Other,
                                 format!("PowerShell decompression failed: {}", error_message),
@@ -787,32 +810,13 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
                     )))
                 }
             }
+        } else {
+            // On non-Windows platforms, just return the original error
+            Err(err)
         }
-        _ => {
-            let file = File::open(archive_path)?;
-            let mut archive = ZipArchive::new(file)?;
-
-            for i in 0..archive.len() {
-                let mut file = archive.by_index(i)?;
-                let outpath = match file.enclosed_name() {
-                    Some(path) => destination_path.join(path),
-                    None => continue,
-                };
-
-                if file.name().ends_with('/') {
-                    std::fs::create_dir_all(&outpath)?;
-                } else {
-                    if let Some(p) = outpath.parent() {
-                        if !p.exists() {
-                            std::fs::create_dir_all(p)?;
-                        }
-                    }
-                    let mut outfile = File::create(&outpath)?;
-                    io::copy(&mut file, &mut outfile)?;
-                }
-            }
-            Ok(())
-        }
+    } else {
+        // ZipArchive succeeded
+        Ok(())
     }
 }
 
