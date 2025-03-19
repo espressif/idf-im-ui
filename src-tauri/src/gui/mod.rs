@@ -1541,6 +1541,12 @@ pub fn run() {
     }
 }
 
+#[tauri::command]
+fn ping(message: String) -> String {
+    log::info!("Ping received with message: {}", message);
+    format!("Pong: {}", message)
+}
+
 fn setup_command_monitor(app_handle: AppHandle) {
     // Clone the handle to use in the monitoring thread
     let monitor_handle = app_handle.clone();
@@ -1567,7 +1573,7 @@ fn setup_command_monitor(app_handle: AppHandle) {
                 drop(settings_lock_test);
                 drop(install_lock_test);
                 consecutive_failures = 0;
-                log::debug!("Command processing is healthy");
+                log::info!("@ Command processing is healthy");
             }
 
             // If too many consecutive failures, attempt recovery
@@ -1655,6 +1661,7 @@ fn run_tauri_app() {
             get_logs_folder,
             show_in_folder,
             is_path_empty_or_nonexistent,
+            ping,
         ])
         .build(tauri::generate_context!());
 

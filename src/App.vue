@@ -26,6 +26,32 @@ import { attachConsole } from '@tauri-apps/plugin-log'
 import { getVersion } from '@tauri-apps/api/app'
 import LogLink from './components/LogLink.vue'
 import { useWizardStore } from './store'
+import { invoke } from "@tauri-apps/api/core";
+
+// Add this to your frontend
+let commandsWorking = true;
+let lastSuccessfulPing = Date.now();
+
+// Set up periodic ping
+setInterval(async () => {
+  try {
+    const timestamp = Date.now();
+    const response = await invoke('ping', {
+      message: `ping-${timestamp}`
+    });
+    console.log("Backend ping successful:", response);
+    lastSuccessfulPing = Date.now();
+
+    if (!commandsWorking) {
+      console.log("Commands are working again!");
+      commandsWorking = true;
+    }
+  } catch (e) {
+    const downtime = Math.round((Date.now() - lastSuccessfulPing) / 1000);
+    console.error(`Ping failed! Backend unresponsive for ${downtime} seconds`, e);
+    commandsWorking = false;
+  }
+}, 5000);
 
 export default {
   name: 'App',
