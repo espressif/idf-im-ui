@@ -1586,6 +1586,70 @@ fn setup_command_monitor(app_handle: AppHandle) {
     });
 }
 
+#[tauri::command]
+fn reset_webview(app_handle: AppHandle) -> Result<(), String> {
+    // Log the attempt
+    info!("Attempting to reset webview");
+
+    // Try to emit a test event to see if the webview is responsive
+    if let Err(e) = app_handle.emit("webview_reset_check", ()) {
+        // If we can't emit, the webview might be in a bad state
+        error!("Failed to emit to webview: {}", e);
+
+        // Try to force a webview refresh (this is a bit extreme)
+        if let Some(window) = app_handle.get_webview_window("main") {
+            // Try to reload the window
+            if let Err(e) = window.eval("window.location.reload()") {
+                error!("Failed to reload webview: {}", e);
+                return Err("Failed to reload webview".to_string());
+            }
+
+            info!("Webview refresh requested");
+            return Ok(());
+        }
+
+        return Err("Window not found".to_string());
+    }
+
+    info!("Webview appears responsive");
+    Ok(())
+}
+
+fn setup_webview_monitor(app_handle: AppHandle) {
+    let monitor_handle = app_handle.clone();
+
+    std::thread::spawn(move || {
+        let mut consecutive_failures = 0;
+
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+
+            // Test if the webview is responsive
+            if let Err(e) = monitor_handle.emit("webview_health_check", ()) {
+                error!("Webview health check failed: {}", e);
+                consecutive_failures += 1;
+
+                if consecutive_failures >= 3 {
+                    error!("Multiple webview health check failures, attempting recovery");
+
+                    // Try to recover
+                    if let Some(window) = monitor_handle.get_webview_window("main") {
+                        // Try a soft refresh first
+                        let _ = window.eval("if(window.refreshUI) window.refreshUI();");
+
+                        // More drastic - force reload if needed
+                        if consecutive_failures >= 5 {
+                            let _ = window.eval("window.location.reload();");
+                        }
+                    }
+                }
+            } else {
+                consecutive_failures = 0;
+            }
+        }
+    });
+}
+
 fn run_tauri_app() {
     let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
         error!("Failed to get log directory.");
@@ -1619,6 +1683,7 @@ fn run_tauri_app() {
             // Add a periodic check for command processing health
             let app_handle = app.handle().clone();
             setup_command_monitor(app_handle.clone());
+            setup_webview_monitor(app.handle().clone());
             std::thread::spawn(move || {
                 loop {
                     std::thread::sleep(std::time::Duration::from_secs(1));
@@ -1662,6 +1727,7 @@ fn run_tauri_app() {
             show_in_folder,
             is_path_empty_or_nonexistent,
             ping,
+            reset_webview,
         ])
         .build(tauri::generate_context!());
 
