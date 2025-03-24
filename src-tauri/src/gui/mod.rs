@@ -136,6 +136,29 @@ fn get_locked_settings(app_handle: &AppHandle) -> Result<Settings, String> {
         })
 }
 
+fn get_settings_non_blocking(app_handle: &AppHandle) -> Result<Settings, String> {
+    let app_state = app_handle.state::<AppState>();
+
+    // First try with a non-blocking try_lock
+    if let Ok(guard) = app_state.settings.try_lock() {
+        let settings_copy = (*guard).clone();
+        return Ok(settings_copy);
+    }
+
+    // If we couldn't get the lock immediately, wait a little and retry
+    for _ in 0..5 {
+        // Small sleep to avoid busy waiting
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        if let Ok(guard) = app_state.settings.try_lock() {
+            let settings_copy = (*guard).clone();
+            return Ok(settings_copy);
+        }
+    }
+
+    Err("Settings are currently locked. Try again later.".to_string())
+}
+
 fn update_settings<F>(app_handle: &AppHandle, updater: F) -> Result<(), String>
 where
     F: FnOnce(&mut Settings),
