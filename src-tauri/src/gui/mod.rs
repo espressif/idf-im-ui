@@ -26,6 +26,20 @@ use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
 pub struct AppState {
     wizard_data: Mutex<WizardData>,
     settings: Mutex<Settings>,
+    is_installing: Mutex<bool>,
+}
+
+#[tauri::command]
+fn is_installing(app_handle: AppHandle) -> bool {
+    let app_state = app_handle.state::<AppState>();
+    app_state
+        .is_installing
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire is_installing lock, assuming not installing");
+            false
+        })
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -1089,6 +1103,174 @@ async fn install_single_version(
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
+#[tauri::command]
+async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+
+    // Set installation flag
+    {
+        let mut is_installing = app_state
+            .is_installing
+            .lock()
+            .map_err(|_| "Lock error".to_string())?;
+        
+        if *is_installing {
+            return Err("Installation already in progress".to_string());
+        }
+        *is_installing = true;
+    }
+
+    // Get the settings and save to a temporary config file
+    let settings = get_settings_non_blocking(&app_handle)?;
+    let temp_dir = std::env::temp_dir();
+    let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
+    
+    // Make sure settings has proper values
+    let mut settings_clone = settings.clone();
+    settings_clone.config_file_save_path = Some(config_path.clone());
+    settings_clone.non_interactive = Some(true);
+    settings_clone.install_all_prerequisites = Some(true);
+    
+    // Save settings to temp file
+    if let Err(e) = settings_clone.save() {
+        log::error!("Failed to save temporary config: {}", e);
+        return Err(format!("Failed to save temporary config: {}", e));
+    }
+    
+    log::info!("Saved temporary config to {}", config_path.display());
+    
+    // Get current executable path
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+    
+    // Set up command to capture output
+    use std::process::{Command, Stdio};
+    
+    send_message(
+        &app_handle,
+        "Starting installation in separate process...".to_string(),
+        "info".to_string(),
+    );
+    
+    // Start the process with piped stdout and stderr
+    let child = Command::new(current_exe)
+        .arg("--cli")                      // Run in CLI mode
+        .arg("-n").arg("true")             // Non-interactive mode
+        .arg("-a").arg("true")             // Install prerequisites
+        .arg("-c").arg(config_path.clone())        // Path to config file
+        .stdout(Stdio::piped())            // Capture stdout
+        .stderr(Stdio::piped())            // Capture stderr
+        .spawn()
+        .map_err(|e| format!("Failed to start installer: {}", e))?;
+    
+    
+    
+    // Set up monitor thread to read output and send to frontend
+    let monitor_handle = app_handle.clone();
+    let cfg_path = config_path.clone();
+    std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+
+        let pid = child.id();
+        
+        // Get stdout and stderr
+        let stdout = child.stdout.expect("Failed to capture stdout");
+        let stderr = child.stderr.expect("Failed to capture stderr");
+
+        
+        // Monitor stdout
+        let stdout_reader = BufReader::new(stdout);
+        let stdout_lines = stdout_reader.lines();
+        
+        for line in stdout_lines {
+            if let Ok(line) = line {
+                // Send output to frontend
+                let _ = monitor_handle.emit("installation_output", json!({
+                    "type": "stdout",
+                    "message": line
+                }));
+                
+                // Also log it
+                log::info!("Install process stdout: {}", line);
+            }
+        }
+        
+        // Monitor stderr
+        let stderr_reader = BufReader::new(stderr);
+        let stderr_lines = stderr_reader.lines();
+        
+        for line in stderr_lines {
+            if let Ok(line) = line {
+                // Send output to frontend
+                let _ = monitor_handle.emit("installation_output", json!({
+                    "type": "stderr",
+                    "message": line
+                }));
+                
+                // Also log it
+                log::error!("Install process stderr: {}", line);
+            }
+        }
+        
+        // // Wait for child process to complete
+        // let mut process_handle = std::process::Child {
+        //     stdin: None, 
+        //     stdout: None,
+        //     stderr: None,
+        //     handles: None, // Not sure if this is needed or how to get the handles
+        //     id: pid,
+        //     status: None,
+        // };
+        
+        loop {
+            // Check if process is still running
+            let running = is_process_running(pid);
+            if !running {
+                break;
+            }
+            
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        
+        // Clean up
+        if let Ok(mut is_installing) = monitor_handle.state::<AppState>().is_installing.lock() {
+            *is_installing = false;
+        }
+        
+        // Let the frontend know installation is complete
+        let _ = monitor_handle.emit("installation_complete", json!({
+            "success": true,
+            "message": "Installation process has completed"
+        }));
+        
+        // Clean up temporary config file
+        let _ = std::fs::remove_file(&cfg_path);
+    });
+    
+    Ok(())
+}
+
+// Helper function to check if a process is running on Windows
+#[cfg(target_os = "windows")]
+fn is_process_running(pid: u32) -> bool {
+    use std::process::Command;
+    
+    // Check if process exists using tasklist
+    let output = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+        .output();
+    
+    match output {
+        Ok(output) => {
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            output_str.contains(&pid.to_string())
+        },
+        Err(_) => false
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 #[tauri::command]
 async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
@@ -1356,6 +1538,7 @@ pub fn run() {
             get_installation_path,
             set_installation_path,
             start_installation,
+            is_installing,
             start_simple_setup,
             quit_app,
             save_config,

@@ -69,6 +69,9 @@
           Complete Installation
         </n-button>
       </div>
+      <pre>
+        {{new_install_messages.join('\r\n')}}
+      </pre>
     </n-card>
   </div>
 </template>
@@ -94,6 +97,7 @@ export default {
     loading: true,
     tools: {},
     unlisten: undefined,
+    unlistenNew: undefined,
     unlistenTools: undefined,
     unlistenProgress: undefined,
     progressMessage: "",
@@ -107,6 +111,7 @@ export default {
     curently_installing_version: undefined,
     versions_finished: [],
     versions_failed: [],
+    new_install_messages: [],
   }),
   methods: {
     goHome: function () {
@@ -125,6 +130,11 @@ export default {
       this.installation_finished = true;
     },
     startListening: async function () {
+      this.unlistenNew = await listen('installation_output', (event) => {
+        const { type, message } = event.payload;
+        console.log('### Received new message:', message);
+        this.new_install_messages.push(`${type}: ${message}`);
+      });
       this.unlistenTools = await listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
         switch (event.payload.action) {
@@ -236,6 +246,7 @@ export default {
     if (this.unlisten) this.unlisten();
     if (this.unlistenTools) this.unlistenTools();
     if (this.unlistenProgress) this.unlistenProgress();
+    if (this.unlistenNew) this.unlistenNew();
   },
 
 }
