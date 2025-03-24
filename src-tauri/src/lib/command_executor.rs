@@ -4,7 +4,7 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Output};
 
-pub trait CommandExecutor {
+pub trait CommandExecutor: Send {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output>;
     fn execute_with_env(
         &self,
