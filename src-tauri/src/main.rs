@@ -43,7 +43,6 @@ fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
         PathBuf::from,
     );
 
-    // ... (rest of the logging setup code)
     let logfile = FileAppender::builder()
         .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
         .build(log_file_name)
@@ -53,24 +52,27 @@ fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
         .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
         .build();
 
-    let log_level = match cli.verbose {
-        0 => LevelFilter::Info,
-        1 => LevelFilter::Debug,
-        _ => LevelFilter::Trace,
+    let console_log_level = match (cli.verbose, cli.non_interactive.unwrap_or(false)) {
+        (0, false) => LevelFilter::Info,
+        (0, true) => LevelFilter::Debug, // At least Debug level for non-interactive mode
+        (1, _) => LevelFilter::Debug,
+        (_, _) => LevelFilter::Trace,
     };
+
+    let file_log_level = LevelFilter::Trace;
 
     let config = log4rs::Config::builder()
         .appender(
             Appender::builder()
                 .filter(Box::new(log4rs::filter::threshold::ThresholdFilter::new(
-                    LevelFilter::Trace,
+                    file_log_level,
                 )))
                 .build("file", Box::new(logfile)),
         )
         .appender(
             Appender::builder()
                 .filter(Box::new(log4rs::filter::threshold::ThresholdFilter::new(
-                    log_level,
+                    console_log_level,
                 )))
                 .build("stdout", Box::new(stdout)),
         )
@@ -84,6 +86,11 @@ fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
 
     log4rs::init_config(config)
         .map_err(|e| ConfigError::Message(format!("Failed to initialize logger: {}", e)))?;
+
+    // Log the configuration to verify settings
+    debug!("Logging initialized with console level: {:?}, file level: {:?}", console_log_level, file_log_level);
+    debug!("Non-interactive mode: {}", cli.non_interactive.unwrap_or(false));
+    debug!("Verbosity level: {}", cli.verbose);
 
     Ok(())
 }
@@ -154,7 +161,7 @@ async fn main() {
         println!("Starting CLI mode");
         let cli = cli::cli_args::Cli::parse();
 
-        #[cfg(not(feature = "gui"))]
+        // #[cfg(not(feature = "gui"))]
         setup_logging(&cli).unwrap();
         set_locale(&cli.locale);
 

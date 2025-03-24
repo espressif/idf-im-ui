@@ -1230,6 +1230,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             }
             
             std::thread::sleep(std::time::Duration::from_secs(1));
+            info!("Waiting for install process to complete...")
         }
         
         // Clean up
