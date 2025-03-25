@@ -1409,15 +1409,15 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
     settings = get_locked_settings(&app_handle).unwrap();
     // install
     send_simple_setup_message(&app_handle, 10, "Installing IDF".to_string());
-    let res = start_installation(app_handle.clone()).await;
-    match res {
-        Ok(_) => {
-            send_simple_setup_message(&app_handle, 11, "Installation completed".to_string());
-        }
-        Err(e) => {
-            send_simple_setup_message(&app_handle, 12, "Failed to install IDF".to_string());
-        }
-    }
+    let _res = start_installation(app_handle.clone()).await;
+    // match res {
+    //     Ok(_) => {
+    //         send_simple_setup_message(&app_handle, 11, "Installation completed".to_string());
+    //     }
+    //     Err(e) => {
+    //         send_simple_setup_message(&app_handle, 12, "Failed to install IDF".to_string());
+    //     }
+    // }
 }
 
 #[tauri::command]

@@ -70,6 +70,8 @@ export default {
     last_user_message: '',
     last_user_message_type: 0,
     unlisten: undefined,
+    unlisten_win: undefined,
+    listener: undefined,
     user_message_unlisten: undefined
   }),
   computed: {
@@ -153,18 +155,24 @@ export default {
         this.messages.push(event.payload.message);
         this.current_state_code = event.payload.code;
       });
+      this.unlisten_win = await listen('installation_complete', (event) => {
+        const { success, message } = event.payload;
+        if (success) {
+          this.current_state_code = 11;
+        } else {
+          this.current_state_code = 12;
+        }
+        this.messages.push(message);
+      });
       // await this.startInstalation();
     },
     startInstalation: async function () {
-      const listener = await listen('user-message', (event) => {
+      this.listener = await listen('user-message', (event) => {
         this.last_user_message = event.payload.message;
         this.last_user_message_type = event.payload.type;
         this.messages.push(event.payload.message);
       });
       await invoke("start_simple_setup", {});
-      if (listener) {
-        listener();
-      };
     },
   },
   mounted() {
@@ -174,6 +182,9 @@ export default {
   beforeUnmount() {
     if (this.unlisten) {
       this.unlisten();
+    }
+    if (this.listener) {
+      this.listener();
     }
   }
 }
