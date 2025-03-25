@@ -1,7 +1,9 @@
 <template>
   <div class="installation-progress" data-id="installation-progress">
     <h1 class="title" data-id="installation-title">Installation Progress</h1>
-
+    <n-alert title="Instalation Error" type="error" v-if="error_message">
+      {{ error_message }}
+    </n-alert>
     <n-card class="progress-card" data-id="progress-card">
       <div class="summary-section" data-id="installation-summary"
         v-if="!installation_running && !installation_finished && !installation_failed">
@@ -69,9 +71,18 @@
           Complete Installation
         </n-button>
       </div>
-      <pre>
-        {{new_install_messages.join('\r\n')}}
-      </pre>
+      <!-- Installation Log -->
+      <n-spin size="large" v-if="installation_running && os === 'windows'" stroke="#E8362D" />
+      <n-collapse arrow-placement="right" v-if="new_install_messages.length > 0">
+        <n-collapse-item title="Installation Log" name="1">
+          <div class="log-container">
+            <pre v-for="message in new_install_messages" :key="message" class="log-message">{{ message }}</pre>
+          </div>
+        </n-collapse-item>
+      </n-collapse>
+      <div class="error-log-container"  v-if="new_install_error_messages.length > 0">
+        <pre v-for="message in new_install_error_messages" :key="message" class="log-message">{{ message }}</pre>
+      </div>
     </n-card>
   </div>
 </template>
@@ -79,7 +90,7 @@
 
 <script>
 import { invoke } from "@tauri-apps/api/core";
-import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable } from 'naive-ui'
+import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 import GlobalProgress from "./../GlobalProgress.vue";
 import { useWizardStore } from '../../store'
@@ -89,7 +100,7 @@ export default {
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, GlobalProgress },
+  components: { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem, GlobalProgress },
 
   data: () => ({
     os: undefined,
@@ -112,6 +123,7 @@ export default {
     versions_finished: [],
     versions_failed: [],
     new_install_messages: [],
+    new_install_error_messages: [],
   }),
   methods: {
     goHome: function () {
@@ -125,16 +137,34 @@ export default {
       } catch (e) {
         console.error('Error during installation:', e);
         this.error_message = e;
+        this.installation_failed = true;
       }
-      this.installation_running = false;
-      this.installation_finished = true;
     },
     startListening: async function () {
+      // windows
       this.unlistenNew = await listen('installation_output', (event) => {
         const { type, message } = event.payload;
         console.log('### Received new message:', message);
-        this.new_install_messages.push(`${type}: ${message}`);
+        if (type === 'stdout') {
+          this.new_install_messages.push(message);
+        } else if (type ==='stderr') {
+          this.new_install_error_messages.push(message);
+        }
       });
+      await listen('installation_complete', (event) => {
+        const { success, message } = event.payload;
+        if (success) {
+          this.installation_running = false;
+          this.installation_finished = true;
+          this.progressMessage = message;
+          this.progressStatus = "success";
+        } else {
+          this.installation_running = false;
+          this.installation_failed = true;
+          this.error_message = message;
+        }
+      });
+      // POSIX
       this.unlistenTools = await listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
         switch (event.payload.action) {
@@ -190,12 +220,14 @@ export default {
             this.versions_finished.push(event.payload.version);
             this.curently_installing_version = undefined;
             this.installation_running = false;
+            this.installation_finished = true;
             break;
           case 'failed':
             this.versions_failed.push(event.payload.version);
             this.curently_installing_version = undefined;
             this.installation_running = false;
             this.installation_failed = true;
+            this.installation_finished = true;
             console.error('Error during installation:', event.payload.version);
             break;
           default:
@@ -318,6 +350,7 @@ export default {
   justify-content: center;
   margin-top: 2rem;
   padding-top: 1rem;
+  margin-bottom: 1rem;
 }
 
 .idf-version {
@@ -387,5 +420,22 @@ tr>td:first-child {
   margin-top: 1rem;
   border: 1px dotted #E8362D;
   padding: 1rem;
+}
+
+.n-collapse {
+  background-color: #FAFAFA;
+  border: 1px solid #D5D5D5;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.n-collapse-item__header-main {
+  display: flex;
+  align-items: center;
+}
+
+.log-container {
+  text-align: left;
+  background-color: white;
 }
 </style>

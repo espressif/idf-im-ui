@@ -1212,16 +1212,6 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             }
         }
         
-        // // Wait for child process to complete
-        // let mut process_handle = std::process::Child {
-        //     stdin: None, 
-        //     stdout: None,
-        //     stderr: None,
-        //     handles: None, // Not sure if this is needed or how to get the handles
-        //     id: pid,
-        //     status: None,
-        // };
-        
         loop {
             // Check if process is still running
             let running = is_process_running(pid);
