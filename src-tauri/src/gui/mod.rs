@@ -1154,7 +1154,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     );
     
     // Start the process with piped stdout and stderr
-    let child = Command::new(current_exe)
+    let mut child = Command::new(current_exe)
         .arg("-n").arg("true")             // Non-interactive mode
         .arg("-a").arg("true")             // Install prerequisites
         .arg("-c").arg(config_path.clone())        // Path to config file
@@ -1174,54 +1174,67 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         let pid = child.id();
         
         // Get stdout and stderr
-        let stdout = child.stdout.expect("Failed to capture stdout");
-        let stderr = child.stderr.expect("Failed to capture stderr");
-
+        let mut child = child; // Take ownership of child to wait on it
+        let stdout = child.stdout.take().expect("Failed to capture stdout");
+        let stderr = child.stderr.take().expect("Failed to capture stderr");
         
-        // Monitor stdout
-        let stdout_reader = BufReader::new(stdout);
-        let stdout_lines = stdout_reader.lines();
+        // Monitor stdout in a separate thread
+        let stdout_monitor = {
+            let handle = monitor_handle.clone();
+            std::thread::spawn(move || {
+                let stdout_reader = BufReader::new(stdout);
+                for line in stdout_reader.lines() {
+                    if let Ok(line) = line {
+                        // Send output to frontend
+                        let _ = handle.emit("installation_output", json!({
+                            "type": "stdout",
+                            "message": line
+                        }));
+                        
+                        // Also log it
+                        log::info!("Install process stdout: {}", line);
+                    }
+                }
+            })
+        };
         
-        for line in stdout_lines {
-            if let Ok(line) = line {
-                // Send output to frontend
-                let _ = monitor_handle.emit("installation_output", json!({
-                    "type": "stdout",
-                    "message": line
-                }));
-                
-                // Also log it
-                log::info!("Install process stdout: {}", line);
+        // Monitor stderr in a separate thread
+        let stderr_monitor = {
+            let handle = monitor_handle.clone();
+            std::thread::spawn(move || {
+                let stderr_reader = BufReader::new(stderr);
+                for line in stderr_reader.lines() {
+                    if let Ok(line) = line {
+                        // Send output to frontend
+                        let _ = handle.emit("installation_output", json!({
+                            "type": "stderr",
+                            "message": line
+                        }));
+                        
+                        // Also log it
+                        log::error!("Install process stderr: {}", line);
+                    }
+                }
+            })
+        };
+        
+        // Wait for the child process to complete
+        let status = match child.wait() {
+            Ok(status) => {
+                log::info!("Install process completed with status: {:?}", status);
+                status
+            },
+            Err(e) => {
+                log::error!("Failed to wait for install process: {}", e);
+                // Wait a bit to ensure we've processed output
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                return;
             }
-        }
+        };
         
-        // Monitor stderr
-        let stderr_reader = BufReader::new(stderr);
-        let stderr_lines = stderr_reader.lines();
-        
-        for line in stderr_lines {
-            if let Ok(line) = line {
-                // Send output to frontend
-                let _ = monitor_handle.emit("installation_output", json!({
-                    "type": "stderr",
-                    "message": line
-                }));
-                
-                // Also log it
-                log::error!("Install process stderr: {}", line);
-            }
-        }
-        
-        loop {
-            // Check if process is still running
-            let running = is_process_running(pid);
-            if !running {
-                break;
-            }
-            
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            info!("Waiting for install process to complete...")
-        }
+        // Wait for stdout/stderr monitors to finish
+        let _ = stdout_monitor.join();
+        let _ = stderr_monitor.join();
         
         // Clean up
         if let Ok(mut is_installing) = monitor_handle.state::<AppState>().is_installing.lock() {
@@ -1229,13 +1242,21 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         }
         
         // Let the frontend know installation is complete
+        let success = status.success();
+        log::info!("Emitting installation_complete event with success={}", success);
         let _ = monitor_handle.emit("installation_complete", json!({
-            "success": true,
-            "message": "Installation process has completed"
+            "success": success,
+            "message": if success { 
+                "Installation process has completed successfully".to_string()
+            } else { 
+                format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1)) 
+            }
         }));
         
         // Clean up temporary config file
         let _ = std::fs::remove_file(&cfg_path);
+        
+        log::info!("Installation monitor thread completed");
     });
     
     Ok(())

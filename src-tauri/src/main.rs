@@ -216,6 +216,7 @@ async fn main() {
                     eprintln!("Error: {}", err);
                 }
             }
+            return;
         }
     }
 
