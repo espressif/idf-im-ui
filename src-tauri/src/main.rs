@@ -1,5 +1,8 @@
-// Prevents additional console window on Windows in release, DO NOT REMOVE!!
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// Apply windows_subsystem = "windows" only if "gui" feature is present and not in debug mode
+#![cfg_attr(
+    all(feature = "gui", not(debug_assertions)),
+    windows_subsystem = "windows"
+)]
 
 #[cfg(feature = "gui")]
 pub mod gui;
@@ -16,6 +19,8 @@ use idf_im_lib::settings::Settings;
 use log::{debug, error, info, LevelFilter};
 #[cfg(feature = "cli")]
 use std::path::PathBuf;
+#[cfg(feature = "cli")]
+use std::process;
 #[cfg(feature = "cli")]
 pub mod cli;
 
@@ -130,32 +135,40 @@ fn attach_console() -> bool {
     unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
 }
 
+#[cfg(all(target_os = "windows", feature = "cli"))]
+fn detach_console() {
+    use winapi::um::wincon::{FreeConsole, ATTACH_PARENT_PROCESS};
+    unsafe {
+        FreeConsole(); // Detach from any allocated or attached console
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let has_args = std::env::args().len() > 1;
+
+    #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
+    let mut console_attached_or_allocated = false;
 
     // Remove the windows_subsystem attribute if we're in CLI mode with arguments
     #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
     {
         if has_args {
             let has_existing_console = has_console();
-
             if !has_existing_console {
-                // Try to attach to parent console
                 let attached = attach_console();
-
-                // If attachment failed, allocate a new console
                 if !attached {
                     unsafe {
                         winapi::um::consoleapi::AllocConsole();
+                        console_attached_or_allocated = true;
                     }
+                } else {
+                    console_attached_or_allocated = true;
                 }
             }
         }
     }
 
-    // Now we can safely use println
-    println!("Starting EIM");
     if has_args {
         println!(
             "Arguments detected: {:?}",
@@ -163,13 +176,10 @@ async fn main() {
         );
     }
 
-    // Process in CLI mode if arguments are provided
     #[cfg(feature = "cli")]
     if has_args {
-        println!("Starting CLI mode");
         let cli = cli::cli_args::Cli::parse();
 
-        // #[cfg(not(feature = "gui"))]
         setup_logging(&cli).unwrap();
         set_locale(&cli.locale);
 
@@ -195,8 +205,12 @@ async fn main() {
             }
         }
 
-        // Exit after CLI processing to avoid starting GUI
-        return;
+        #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
+        if console_attached_or_allocated {
+            detach_console();
+        }
+
+        std::process::exit(0);
     } else {
         // TODO: this is for running the wizard without arguments on CLI only build
         #[cfg(not(feature = "gui"))]
@@ -225,7 +239,12 @@ async fn main() {
                     eprintln!("Error: {}", err);
                 }
             }
-            return;
+            #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
+            if console_attached_or_allocated {
+                detach_console();
+            }
+
+            std::process::exit(0);
         }
     }
 
