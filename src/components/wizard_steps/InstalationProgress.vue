@@ -30,16 +30,11 @@
           <h3>Current Activity:</h3>
           <div class="activity-status">{{ currentActivity }}</div>
         </div>
-        
+
         <div class="progress-section">
           <div class="progress-label">Overall Progress</div>
-          <n-progress 
-            type="line" 
-            :percentage="calculateOverallProgress" 
-            :processing="installation_running" 
-            :indicator-placement="'inside'" 
-            color="#E8362D"
-          />
+          <n-progress type="line" :percentage="calculateOverallProgress" :processing="installation_running"
+            :indicator-placement="'inside'" color="#E8362D" />
         </div>
       </div>
 
@@ -90,8 +85,9 @@
           Complete Installation
         </n-button>
       </div>
-      
-      <div v-if="installation_finished && !installation_failed" class="installation-summary" data-id="installation-summary">
+
+      <div v-if="installation_finished && !installation_failed" class="installation-summary"
+        data-id="installation-summary">
         <h3>Installation Complete</h3>
         <p>Successfully installed ESP-IDF and all required tools.</p>
         <div class="summary-details">
@@ -100,11 +96,12 @@
           <div><strong>Tools Installed:</strong> {{ completedToolsCount }}</div>
         </div>
       </div>
-      
+
       <n-collapse arrow-placement="right" v-if="new_install_messages.length > 0">
         <n-collapse-item title="Installation Log" name="1">
           <div class="log-container">
-            <pre v-for="message in new_install_messages" :key="message" class="log-message" :class="{ 'highlight': isHighlightMessage(message) }">{{ message }}</pre>
+            <pre v-for="message in new_install_messages" :key="message" class="log-message"
+              :class="{ 'highlight': isHighlightMessage(message) }">{{ message }}</pre>
           </div>
         </n-collapse-item>
       </n-collapse>
@@ -128,9 +125,9 @@ export default {
   props: {
     nextstep: Function
   },
-  components: { 
-    NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, 
-    NCollapseItem, GlobalProgress, NAlert, NProgress 
+  components: {
+    NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse,
+    NCollapseItem, GlobalProgress, NAlert, NProgress
   },
 
   data: () => ({
@@ -157,12 +154,12 @@ export default {
     new_install_error_messages: [],
     // New properties for improved UI
     currentActivity: "Preparing installation...",
-    windowsToolStatus: [], 
+    windowsToolStatus: [],
     installationPath: "",
     completedToolsCount: 0,
     totalTools: 0,
     highlightKeywords: [
-      "WARN", 
+      "WARN",
       "ERR"
     ]
   }),
@@ -186,11 +183,12 @@ export default {
       this.unlistenNew = await listen('installation_output', (event) => {
         const { type, message } = event.payload;
         console.log('### Received new message:', message);
-        
+
         if (type === 'stdout') {
-          let parts = message.split('-', 2);
+          let parts = message.split(' - ');
           if (parts.length > 1) {
-            this.new_install_messages.push(parts[1].trim());
+            parts.shift();
+            this.new_install_messages.push(parts.join(' - '));
           } else {
             this.new_install_messages.push(message);
           }
@@ -199,7 +197,7 @@ export default {
           this.new_install_error_messages.push(message);
         }
       });
-      
+
       await listen('installation_complete', (event) => {
         const { success, message } = event.payload;
         if (success) {
@@ -208,7 +206,7 @@ export default {
           this.progressMessage = message;
           this.progressStatus = "success";
           this.currentActivity = "Installation Complete";
-          
+
           // Set summary data
           this.completedToolsCount = this.windowsToolStatus.filter(tool => tool.status === 'completed').length;
         } else {
@@ -217,7 +215,7 @@ export default {
           this.error_message = message;
         }
       });
-      
+
       // POSIX
       this.unlistenTools = await listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
@@ -260,7 +258,7 @@ export default {
             console.warn('Unknown action:', event.payload.action);
         }
       });
-      
+
       this.unlisten = await listen('install-progress-message', (event) => {
         switch (event.payload.state) {
           case 'started':
@@ -310,14 +308,14 @@ export default {
     get_logs_path: async function () {
       this.LogPath = await invoke("get_logs_folder", {});
     },
-    parseWindowsLogMessage: function(message) {
+    parseWindowsLogMessage: function (message) {
       if (message.includes('idf_path:')) {
         const pathMatch = message.match(/idf_path:\s*(.*)/);
         if (pathMatch && pathMatch[1]) {
           this.installationPath = pathMatch[1].trim();
         }
       }
-      
+
       // Extract current activity
       if (message.includes('Checking for prerequisites')) {
         this.currentActivity = "Checking prerequisites...";
@@ -334,14 +332,14 @@ export default {
         if (toolsMatch && toolsMatch[1]) {
           const toolsList = toolsMatch[1].split(',').map(tool => tool.trim().replace(/"/g, ''));
           this.totalTools = toolsList.length;
-          
+
           // Initialize tool status tracking
           this.windowsToolStatus = toolsList.map(name => ({
             name,
             status: 'pending',
             downloadProgress: 0
           }));
-          
+
           this.currentActivity = `Downloading ${this.totalTools} tools...`;
         }
       } else if (message.includes('Downloading tool:')) {
@@ -349,7 +347,7 @@ export default {
         if (toolMatch && toolMatch[1]) {
           const toolName = toolMatch[1].trim();
           this.currentActivity = `Downloading ${toolName}...`;
-          
+
           // Update tool status
           const toolIndex = this.windowsToolStatus.findIndex(t => t.name === toolName);
           if (toolIndex >= 0) {
@@ -361,9 +359,9 @@ export default {
         if (toolMatch && toolMatch[1]) {
           const toolName = toolMatch[1];
           this.currentActivity = `Extracting ${toolName}...`;
-          
+
           // Update tool status
-          const toolIndex = this.windowsToolStatus.findIndex(t => 
+          const toolIndex = this.windowsToolStatus.findIndex(t =>
             t.name === toolName || toolMatch[1].includes(t.name));
           if (toolIndex >= 0) {
             this.windowsToolStatus[toolIndex].status = 'extracting';
@@ -374,9 +372,9 @@ export default {
         if (toolMatch && toolMatch[1]) {
           const filename = toolMatch[1].trim();
           const toolName = filename;
-          
+
           // Update tool status
-          const toolIndex = this.windowsToolStatus.findIndex(t => 
+          const toolIndex = this.windowsToolStatus.findIndex(t =>
             t.name === toolName || filename.includes(t.name));
           if (toolIndex >= 0) {
             this.windowsToolStatus[toolIndex].status = 'completed';
@@ -389,8 +387,8 @@ export default {
         this.installation_finished = true;
       }
     },
-    
-    isHighlightMessage: function(message) {
+
+    isHighlightMessage: function (message) {
       return this.highlightKeywords.some(keyword => message.includes(keyword));
     }
   },
@@ -408,18 +406,18 @@ export default {
       if (!this.installation_running) {
         return this.installation_finished ? 100 : 0;
       }
-      
+
       if (this.windowsToolStatus.length === 0) {
         return 10; // Initial stage
       }
-      
+
       const completed = this.windowsToolStatus.filter(t => t.status === 'completed').length;
       const extracting = this.windowsToolStatus.filter(t => t.status === 'extracting').length;
       const downloading = this.windowsToolStatus.filter(t => t.status === 'downloading').length;
-      
+
       // Weight: completed tools count most, extracting count as half-done
       const progress = (completed + (extracting * 0.5) + (downloading * 0.25)) / this.totalTools * 100;
-      
+
       return Math.min(Math.max(Math.round(progress), 10), 99); // Keep between 10-99% during installation
     }
   },

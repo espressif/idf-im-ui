@@ -88,8 +88,14 @@ fn setup_logging(cli: &cli::cli_args::Cli) -> Result<(), config::ConfigError> {
         .map_err(|e| ConfigError::Message(format!("Failed to initialize logger: {}", e)))?;
 
     // Log the configuration to verify settings
-    debug!("Logging initialized with console level: {:?}, file level: {:?}", console_log_level, file_log_level);
-    debug!("Non-interactive mode: {}", cli.non_interactive.unwrap_or(false));
+    debug!(
+        "Logging initialized with console level: {:?}, file level: {:?}",
+        console_log_level, file_log_level
+    );
+    debug!(
+        "Non-interactive mode: {}",
+        cli.non_interactive.unwrap_or(false)
+    );
     debug!("Verbosity level: {}", cli.verbose);
 
     Ok(())
@@ -108,10 +114,10 @@ fn set_locale(locale: &Option<String>) {
 
 #[cfg(all(target_os = "windows", feature = "cli", not(debug_assertions)))]
 fn has_console() -> bool {
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
     use winapi::um::processenv::GetStdHandle;
     use winapi::um::winbase::STD_OUTPUT_HANDLE;
-    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-    
+
     unsafe {
         let handle = GetStdHandle(STD_OUTPUT_HANDLE);
         !(handle == INVALID_HANDLE_VALUE || handle.is_null())
@@ -121,9 +127,7 @@ fn has_console() -> bool {
 #[cfg(all(target_os = "windows", feature = "cli"))]
 fn attach_console() -> bool {
     use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
-    unsafe {
-        AttachConsole(ATTACH_PARENT_PROCESS) != 0
-    }
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
 }
 
 #[tokio::main]
@@ -135,16 +139,17 @@ async fn main() {
     {
         if has_args {
             let has_existing_console = has_console();
-            
+
             if !has_existing_console {
                 // Try to attach to parent console
                 let attached = attach_console();
-                
+
                 // If attachment failed, allocate a new console
                 if !attached {
-                    unsafe { winapi::um::consoleapi::AllocConsole(); }
+                    unsafe {
+                        winapi::um::consoleapi::AllocConsole();
+                    }
                 }
-                
             }
         }
     }
@@ -152,7 +157,10 @@ async fn main() {
     // Now we can safely use println
     println!("Starting EIM");
     if has_args {
-        println!("Arguments detected: {:?}", std::env::args().collect::<Vec<_>>());
+        println!(
+            "Arguments detected: {:?}",
+            std::env::args().collect::<Vec<_>>()
+        );
     }
 
     // Process in CLI mode if arguments are provided
@@ -186,10 +194,11 @@ async fn main() {
                 eprintln!("Error: {}", err);
             }
         }
-        
+
         // Exit after CLI processing to avoid starting GUI
         return;
-    } else { // TODO: this is for running the wizard without arguments on CLI only build
+    } else {
+        // TODO: this is for running the wizard without arguments on CLI only build
         #[cfg(not(feature = "gui"))]
         {
             let cli = cli::cli_args::Cli::parse();
@@ -226,7 +235,7 @@ async fn main() {
         println!("Starting GUI mode");
         gui::run()
     }
-    
+
     #[cfg(not(any(feature = "gui", feature = "cli")))]
     {
         eprintln!("Error: Neither GUI nor CLI features are enabled!");
