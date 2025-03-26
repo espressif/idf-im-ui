@@ -185,6 +185,9 @@ export default {
         console.log('### Received new message:', message);
 
         if (type === 'stdout') {
+          if (message.includes('DEBUG') || message.includes('TRACE')) {
+            return; // ignore debug and trace messages
+          }
           let parts = message.split(' - ');
           if (parts.length > 1) {
             parts.shift();
