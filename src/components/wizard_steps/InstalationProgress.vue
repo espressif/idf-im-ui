@@ -185,6 +185,7 @@ export default {
         console.log('### Received new message:', message);
 
         if (type === 'stdout') {
+          this.parseWindowsLogMessage(message);
           if (message.includes('DEBUG') || message.includes('TRACE')) {
             return; // ignore debug and trace messages
           }
@@ -195,7 +196,7 @@ export default {
           } else {
             this.new_install_messages.push(message);
           }
-          this.parseWindowsLogMessage(message);
+
         } else if (type === 'stderr') {
           this.new_install_error_messages.push(message);
         }

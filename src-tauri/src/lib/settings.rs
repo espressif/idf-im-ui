@@ -75,7 +75,7 @@ impl Default for Settings {
             idf_tools_path: Some("tools/idf_tools.py".to_string()),
             config_file: None,
             config_file_save_path: Some(PathBuf::from("eim_config.toml")),
-            non_interactive: Some(false),
+            non_interactive: Some(true),
             wizard_all_questions: Some(false),
             mirror: Some(
                 crate::get_idf_tools_mirrors_list()

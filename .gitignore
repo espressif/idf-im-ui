@@ -14,6 +14,7 @@ dist-ssr
 
 # mdbook
 /docs/book
+/docs/theme
 
 # Editor directories and files
 .vscode/*
