@@ -107,6 +107,7 @@ export default {
       const _ = await invoke("load_settings", { path: file });
       this.gs();
       this.config_loaded = true;
+      console.log(`Config loaded... ${JSON.stringify(this.rust_settings)}`);
     }
   },
   mounted: async function () {

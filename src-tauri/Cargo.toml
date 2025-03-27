@@ -1,31 +1,71 @@
 [package]
 name = "eim"
-version = "0.1.3"
+version = "0.1.2"
 description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+default = ["gui", "cli", "vendored-openssl"]
+gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log"]
+cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
+offline = []
+userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
+vendored-openssl = ["openssl-sys/vendored", "reqwest/native-tls-vendored"]
 
 [lib]
-name = "eim_lib"
+name = "idf_im_lib"
+path = "src/lib/mod.rs"
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.0.1", features = [] }
+tauri-build = { version = "2.0.1", features = [], optional = true }
 
 [dependencies]
-tauri = { version = "2.0.1", features = [] }
-tauri-plugin-shell = "2.0.1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-idf-im-lib = { git = "https://github.com/espressif/idf-im-lib.git", tag="v0.1.13" } 
-tauri-plugin-dialog = "2.2.0"
+reqwest = "0.12.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_derive = "1.0"
+serde_json = "1.0"
+git2 = { version = "0.19.0", features = ["vendored-libgit2"] }
+sha2 = "0.10.8"
+log = "0.4.21"
+dirs = "5.0.1"
+tera = "1.20.0"
+config = "0.14.0"
 toml = "0.8"
-tauri-plugin-log = "2"
-log = "0.4"
-tokio = "1.41.0"
+uuid = {version="1.10.0", features = ["v4"] }
+tempfile = "3.2"
 anyhow = "^1.0"
+rust_search = "2.1.0"
+flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+tar = { version = "0.4", default-features = true }
+zip = { version = "2.2.2", default-features = true }
+lzma-rs = "0.3.0"
+thiserror = "1.0"
+rust-i18n = "3.0.1"
+tokio = { version = "1.41.0", features = ["full"] }
+deranged = "=0.4.0"
+
+
+# GUI-related dependencies (optional)
+tauri = { version = "2.3.1", features = [], optional = true }
+tauri-plugin-shell = { version = "2.2.0", optional = true }
+tauri-plugin-dialog = { version = "2.2.0", optional = true }
+tauri-plugin-log = { version = "2.3.1", optional = true }
+
+# CLI-related dependencies
+clap = {version = "4.5", features = ["cargo", "derive", "color"], optional = true}
+dialoguer = { git = "https://github.com/Hahihula/dialoguer.git", branch = "folder-select", features = ["folder-select"], optional = true }
+indicatif = { version = "0.17.8", optional = true }
+console = { version = "0.15.8", optional = true }
+log4rs = { version = "1.3.0", optional = true }
+
+
+# userustpython feature dependencies
+rustpython-vm = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["freeze-stdlib"], optional = true }
+rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["ssl-vendor"], optional = true }
+struct_iterable = "0.1.1"
+
 
 # OS-specific dependency
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -33,4 +73,15 @@ fork = "0.1"
 
 [dependencies.openssl-sys]
 version = "0.9"
-features = ["vendored"]
+
+[target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
+version = "0.9"
+features = []
+
+[target.'cfg(target_os = "windows")'.dependencies.reqwest]
+version = "0.12.4"
+default-features = false
+features = ["native-tls"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+winapi = { version = "0.3", features = ["wincon", "consoleapi", "processenv", "winbase", "handleapi"] }

@@ -1,0 +1,220 @@
+_version: 2
+hello:
+  en: Hello world
+  cn: 你好世界
+prerequisites.ok:
+  en: All prerequisites are satisfied!
+  cn: 所有依赖项都满足！
+prerequisites.not_ok:
+  en: Some prerequisites are not satisfied
+  cn: 有些依赖项不满足
+prerequisites.missing:
+  en: The following prerequisites are not satisfied
+  cn: 以下依赖项不满足
+prerequisites.install.prompt:
+  en: Do you want to install prerequisites?
+  cn: 是否要安装这些依赖项？
+prerequisites.install.success:
+  en: Prerequisites installed successfully
+  cn: 依赖项安装成功
+prerequisites.install.failure:
+  en: Prerequisite installation failed
+  cn: 依赖项安装失败
+prerequisites.install.catastrophic:
+  en: Something went terribly wrong. These prerequisites were not installed:%{l}
+  cn: 发生了严重错误。以下依赖项未安装成功:%{l}
+prerequisites.install.ask:
+  en: Please install the missing prerequisites and try again.
+  cn: 请先安装缺少的依赖项并重试。
+python.sanitycheck.info:
+  en: Running python sanity check
+  cn: 运行 Python 健全性检查
+python.sanitycheck.ok:
+  en: Your Python meets the requirements
+  cn: 你的 python 符合要求
+python.sanitycheck.fail:
+  en: Python is missing, or it does not meet the requirements. Please install python3 with pip, venv and ssl support and try again
+  cn: Python 缺失或不符合要求。请安装 python3, pip 和 ssl 支持并重试
+pythhon.install.prompt:
+  en: Do you want to install Python?
+  cn: 是否要安装 python?
+python.install.success:
+  en: Python installed successfully
+  cn: python 安装成功
+python.install.failure:
+  en: Python installation failed
+  cn: python 安装失败
+python.install.refuse:
+  en: Please install python3 with pip and SSL support and try again
+  cn: 请安装 python3, pip 和 ssl 支持，并重试
+wizard.instalation_path.prompt:
+  en: Please select the ESP-IDF installation location
+  cn: 请选择 ESP-IDF 安装位置
+wizard.instalation_path.unselected:
+  en: You really need to select some installation path
+  cn: 你真的需要选择一些安装位置
+wizard.idf.mirror:
+  en: Select the source from which to download esp-idf
+  cn: 请选择来源来下载 esp-idf
+wizard.idf.sucess:
+  en: Download esp-idf successfully
+  cn: 下载 esp-idf 成功
+wizard.idf.failure:
+  en: Download esp-idf failed
+  cn: 下载 esp-idf 失败
+wizard.idf.user_cancelled:
+  en: Canceling the instalation
+  cn: 取消安装 ESP-IDF
+wizard.tools.donwload.prompt:
+  en: Choose the folder where the tools will be downloaded
+  cn: 请选择要下载的工具所在目录
+wizard.tools.donwload.prompt.failure:
+  en: You really need to select some folder
+  cn: 你真的需要选择一些目录
+wizard.tools.install.prompt:
+  en: Choose the folder where the tools will be installed
+  cn: 请选择要安装的工具所在目录
+wizard.tools.install.prompt.failure:
+  en: You really need to select some folder
+  cn: 你真的需要选择一些目录
+wizard.tooljs_json.prompt:
+  en: specify the relative (from the installation path) path to tools.json file
+  cn: 指定 tools.json 文件的相对路径
+wizard.tools_json.prompt.failure:
+  en: You really need to point to the tools.json file
+  cn: 你真的需要指向 tools.json 文件
+wizard.tools_json.not_found:
+  en: tools.json file does not exist. Please select valid tools.json file
+  cn: tools.json 文件不存在。请选择有效的 tools.json 文件
+wizard.tools_json.select.prompt:
+  en: Select tools.json file manually
+  cn: 手动选择 tools.json 文件
+wizard.tools_json.unreachable:
+  en: "tools.json file does not exist. The file you've selected cannot be accessed."
+  cn: "tools.json 文件不存在。所选文件无法被访问。"
+wizard.tools_json.unparsable:
+  en: Failed to read tools.json file. Error:%{e}
+  cn: tools.json 文件无法读取。错误：%{e}
+wizard.tools.mirror:
+  en: Select a source from which to download tools
+  cn: 请选择来源来下载 tools
+wizard.idf_tools.prompt:
+  en: specify the relative (from installation path) path to idf_tools.py file
+  cn: 指定 idf_tools.py 文件的相对路径
+wizard.idf_tools.prompt.failure:
+  en: You really need to point to the idf_tools.py file
+  cn: 你真的需要指向 idf_tools.py 文件
+wizard.idf_tools.not_found:
+  en: idf_tools.py file does not exist. Please select valid idf_tools.py file
+  cn: idf_tools.py 文件不存在。请选择有效的 idf_tools.py 文件
+wizard.idf_tools.select.prompt:
+  en: Select idf_tools.py file manually
+  cn: 手动选择 idf_tools.py 文件
+wizard.idf_tools.unreachable:
+  en: "idf_tools.py file does not exist. The file you've selected cannot be accessed."
+  cn: "idf_tools.py 文件不存在。所选文件无法被访问。"
+wizard.idf_tools.failed_to_run:
+  en: Failed to run idf_tools.py file. Error
+  cn: idf_tools.py 文件无法运行。错误
+wizard.windows.succes_message:
+  en: \n\rYour environment variables have been updated! Shell may need to be restarted for changes to be effective.
+  cn: \n\r你的环境变量已更新 Shell 需要重启才能生效
+wizard.posix.succes_message:
+  en: please copy and paste the following lines to your terminal
+  cn: 请复制并粘贴以下行到终端
+wizard.spinner.message:
+  en: Doing something...
+  cn: 执行中
+wizard.select_target.prompt:
+  en: Please select all of the target platforms (esp chips)
+  cn: 请选择所有的目标平台 esp 芯片）
+wizard.select_target.prompt.failure:
+  en: We were unable to fetch available targets
+  cn: 无法获取可用的目标平台
+wizard.select_idf_version.prompt:
+  en: Please select the desired ESP-IDF version
+  cn: 请选择要使用的 ESP-IDF 版本
+wizard.idf_path_exists.prompt:
+  en: The path already exists. Do you want to proceed with installation without redownloading IDF?
+  cn: 该路径已存在。是​​否要继续安装而不重新下载 IDF?
+wizard.tools_download.progress:
+  en: Downloading tools
+  cn: 下载工具
+wizard.tool_download.progress:
+  en: Downloading tool
+  cn: 下载工具
+wizard.tools_platform_error:
+  en: Can not identify the correct platform for tools installation
+  cn: 无法确定正确的平台来安装工具
+wizard.tool_file.present:
+  en: The file is already downloaded and the checksum matches.
+  cn: 文件已下载并校验通过
+wizard.tool_file.missing:
+  en: The checksum does not match or the file was not available.
+  cn: 校验不通过或文件不可用
+wizard.tool.downloaded:
+  en: Downloaded
+  cn: 已下载
+wizard.tool.download_failed:
+  en: Download failed
+  cn: 下载失败
+wizard.tool.corupted:
+  en: The downloaded file is corrupted.
+  cn: 下载的文件已损坏
+wizard.tool.removed:
+  en: The corupted downloaded file has been removed.
+  cn: 已移除损坏的下载文件
+wizard.tool.remove_failed:
+  en: Failed to remove the corupted file.
+  cn: 无法移除文件
+wizard.tool.extracted:
+  en: extracted tool
+  cn: 已解压工具
+wizard.tool.extract_failed:
+  en: Failed to extract the tool
+  cn: 解压工具失败
+wizard.after_install.add_to_path.prompt:
+  en: Do you want to add ESP-IDF to your PATH permanently?
+  cn: 是否要永久加入 ESP-IDF 到 PATH 中?
+wizard.shellrc.update.success:
+  en: ESP-IDF shellrc updated successfully
+  cn: ESP-IDF shellrc 已更新成功
+wizard.shellrc.update.error:
+  en: ESP-IDF shellrc update failed
+  cn: ESP-IDF shellrc 更新失败
+wizard.after_install.save_config.prompt:
+  en: Do you want to save the installer configuration?
+  cn: 是否要保存安装器配置
+wizard.after_install.config.saved:
+  en: Configuration saved successfully to config.toml
+  cn: 配置已保存成功到 config.toml
+wizard.after_install.config.save_failed:
+  en: Configuration save failed
+  cn: 配置保存失败
+wizard.after_install.desktop_shortcut.created:
+  en: Desktop shortcut created successfully
+  cn: 已创建 desktop 快捷方式
+wizard.after_install.desktop_shortcut.failed:
+  en: Failed to create desktop shortcut
+  cn: 创建 desktop 快捷方式失败
+wizard.posix.finish_steps.line_1:
+  en: You have successfully installed ESP-IDF
+  cn: 已成功安装 ESP-IDF
+wizard.posix.finish_steps.line_2:
+  en: for using the ESP-IDF tools inside the terminal, you will find activation scripts inside the base install folder
+  cn: 用于在终端内使用 ESP-IDF 工具，你可以在基础安装文件夹中找到激活脚本
+wizard.posix.finish_steps.line_3:
+  en: sourcing the activation script will setup environment in the current terminal session
+  cn: 激活脚本会在当前的终端会话中设置环境变量
+wizard.posix.finish_steps.line_4:
+  en: to activate the environment, run the following command in your terminal
+  cn: 运行以下命令来激活环境
+wizard.posix.finish_steps.line_5:
+  en: source
+  cn: source
+wizard.windows.finish_steps.line_1:
+  en: You have successfully installed ESP-IDF
+  cn: 已成功安装 ESP-IDF
+wizard.windows.finish_steps.line_2:
+  en: the installer placed shortcuts for PowerShell terminal with activated ESP-IDF environment to your desktop
+  cn: 安装器将在桌面上放置带有激活 ESP-IDF 环境的 PowerShell 终端快捷方式
