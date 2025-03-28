@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use log::warn;
 
+use crate::idf_config;
 use crate::utils::remove_directory_all;
 use crate::{
     idf_config::{IdfConfig, IdfInstallation},
@@ -121,7 +122,7 @@ pub fn select_idf_version(identifier: &str) -> Result<String> {
     let config_path = get_default_config_path();
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     if ide_config.select_installation(identifier) {
-        ide_config.to_file(config_path, true)?;
+        ide_config.to_file(config_path, true, false)?;
         return Ok(format!("Version {} selected", identifier));
     }
     Err(anyhow!("Version {} not installed", identifier))
@@ -150,7 +151,7 @@ pub fn rename_idf_version(identifier: &str, new_name: String) -> Result<String> 
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     let res = ide_config.update_installation_name(identifier, new_name.to_string());
     if res {
-        ide_config.to_file(config_path, true)?;
+        ide_config.to_file(config_path, true, false)?;
         Ok(format!("Version {} renamed to {}", identifier, new_name))
     } else {
         Err(anyhow!("Version {} not installed", identifier))
@@ -201,7 +202,7 @@ pub fn remove_single_idf_version(identifier: &str) -> Result<String> {
         } else {
             return Err(anyhow!("Failed to remove installation from config file"));
         }
-        ide_config.to_file(config_path, true)?;
+        ide_config.to_file(config_path, true, false)?;
         Ok(format!("Version {} removed", identifier))
     } else {
         Err(anyhow!("Version {} not installed", identifier))

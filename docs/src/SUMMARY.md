@@ -9,6 +9,7 @@
 - [Configuration](./configuration.md)
   - [GUI Configuration](./gui_configuration.md)
   - [CLI Configuration](./cli_configuration.md)
+  - [CLI Commands](./cli_commands.md)
 - [After Installing](./after_installing.md)
 - [Headless Usage](./headless_usage.md)
 - [FAQ](./faq.md)

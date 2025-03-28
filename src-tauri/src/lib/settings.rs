@@ -75,7 +75,7 @@ impl Default for Settings {
             idf_tools_path: Some("tools/idf_tools.py".to_string()),
             config_file: None,
             config_file_save_path: Some(PathBuf::from("eim_config.toml")),
-            non_interactive: Some(false),
+            non_interactive: Some(true),
             wizard_all_questions: Some(false),
             mirror: Some(
                 crate::get_idf_tools_mirrors_list()
@@ -372,6 +372,6 @@ impl Settings {
         let json_path =
             PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join("eim_idf.json");
 
-        config.to_file(json_path, true)
+        config.to_file(json_path, true, true)
     }
 }

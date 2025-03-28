@@ -1155,6 +1155,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     
     // Start the process with piped stdout and stderr
     let mut child = Command::new(current_exe)
+        .arg("install")
         .arg("-n").arg("true")             // Non-interactive mode
         .arg("-a").arg("true")             // Install prerequisites
         .arg("-c").arg(config_path.clone())        // Path to config file

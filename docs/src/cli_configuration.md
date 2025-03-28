@@ -7,6 +7,28 @@ The command-line interface supports multiple configuration methods with the foll
 3. Configuration files
 4. Default values
 
+## Command Structure
+
+ESP-IDF Installation Manager (EIM) now uses a command-based structure with the following format:
+
+```bash
+eim [OPTIONS] [COMMAND] [COMMAND_OPTIONS]
+```
+
+For example:
+```bash
+# Install ESP-IDF with specific version
+eim install -i v5.3.2
+
+# Run the interactive wizard
+eim wizard
+
+# List installed versions
+eim list
+```
+
+For a complete list of available commands and their options, see [CLI Commands](./cli_commands.md).
+
 ## Command Line Arguments
 
 View all available options with:
@@ -14,22 +36,9 @@ View all available options with:
 eim --help
 ```
 
-Common arguments include:
+For help with a specific command:
 ```bash
-# Install specific IDF version
-eim -i v5.3.2
-
-# Set installation path
-eim -p /opt/esp-idf
-
-# Non-interactive installation
-eim -n true
-
-# Use configuration file
-eim --config path/to/config.toml
-
-# Install prerequisites (Windows only)
-eim -a true
+eim <command> --help
 ```
 
 ## Environment Variables
@@ -43,7 +52,7 @@ Example:
 ```bash
 export ESP_PATH="/opt/esp-idf"
 export ESP_IDF_VERSION="v5.3.2"
-eim
+eim install
 ```
 
 ## Configuration Files
@@ -70,22 +79,25 @@ install_all_prerequisites = false
 
 Load a configuration file:
 ```bash
-eim --config path/to/config.toml
+eim install --config path/to/config.toml
 ```
 
 ## Headless Configuration
 
-For automated installations, combine non-interactive mode with other configuration options:
+For automated installations, use the `install` command which runs in non-interactive mode by default:
 
 ```bash
 # Basic headless installation
-eim -n true
+eim install
 
 # Headless with specific version and path
-eim -n true -i v5.3.2 -p /opt/esp-idf
+eim install -i v5.3.2 -p /opt/esp-idf
 
 # Headless with config file
-eim -n true --config path/to/config.toml
+eim install --config path/to/config.toml
+
+# To run in interactive mode, explicitly set non-interactive to false
+eim install -n false
 ```
 
-See [Headless Usage](./headless_usage.md) for more details about automated installations. 
+See [Headless Usage](./headless_usage.md) for more details about automated installations.
