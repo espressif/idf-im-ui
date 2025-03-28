@@ -372,6 +372,6 @@ impl Settings {
         let json_path =
             PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join("eim_idf.json");
 
-        config.to_file(json_path, true)
+        config.to_file(json_path, true, true)
     }
 }

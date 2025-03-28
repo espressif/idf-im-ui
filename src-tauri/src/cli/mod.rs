@@ -23,6 +23,7 @@ use log4rs::config::Appender;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
 
+#[cfg(feature = "gui")]
 use crate::gui;
 
 pub mod cli_args;
@@ -106,14 +107,14 @@ pub async fn run_cli(cli: Cli) {
         .command
         .unwrap_or(Commands::Gui(InstallArgs::default()));
     #[cfg(not(feature = "gui"))]
-    if cli.command.is_none() {
+    if cli.clone().command.is_none() {
         Cli::command()
             .print_help()
             .expect("No command specified, use --help to see available commands");
         return;
     }
     #[cfg(not(feature = "gui"))]
-    let command = cli.command.unwrap();
+    let command = cli.clone().command.unwrap();
     match command {
         #[cfg(feature = "gui")]
         Commands::Gui(_) => {

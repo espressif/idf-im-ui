@@ -355,7 +355,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             }
         };
         current_config.idf_installed.push(installation);
-        match current_config.to_file(config_path, true) {
+        match current_config.to_file(config_path, true, false) {
             Ok(_) => {
                 debug!("Updated config file with new tool set");
                 return Ok(());
