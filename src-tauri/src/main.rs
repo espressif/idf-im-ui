@@ -68,6 +68,55 @@ fn detach_console() {
     }
 }
 
+#[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
+fn setup_interactive_console() -> bool {
+    use winapi::um::consoleapi::{AllocConsole, GetConsoleMode, SetConsoleMode};
+    use winapi::um::processenv::GetStdHandle;
+    use winapi::um::winbase::{STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE};
+    use winapi::um::wincon::{ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT};
+
+    unsafe {
+        if AllocConsole() == 0 {
+            return false;
+        }
+
+        // Get handles
+        let stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
+        let stdout_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+        let stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+
+        // Configure console mode for interactive input
+        let mut mode: u32 = 0;
+        if GetConsoleMode(stdin_handle, &mut mode) != 0 {
+            mode |= ENABLE_ECHO_INPUT | ENABLE_LINE_INPUT | ENABLE_PROCESSED_INPUT;
+            SetConsoleMode(stdin_handle, mode);
+        }
+    }
+
+    true
+}
+
+#[cfg(all(target_os = "windows", feature = "cli"))]
+fn is_interactive_command() -> bool {
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() <= 1 {
+        return false;
+    }
+
+    // Commands that need interactive console
+    let interactive_commands = vec!["select", "rename", "remove", "wizard"];
+
+    for arg in args.iter().skip(1) {
+        for cmd in &interactive_commands {
+            if arg == cmd {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 #[tokio::main]
 async fn main() {
     #[cfg(not(any(feature = "gui", feature = "cli")))]
@@ -75,6 +124,12 @@ async fn main() {
         eprintln!("Error: Neither GUI nor CLI features are enabled!");
         return;
     }
+    #[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
+    if is_interactive_command() {
+        setup_interactive_console()
+    } else {
+        false
+    };
     #[cfg(not(feature = "gui"))]
     {
         let cli = cli::cli_args::Cli::parse();
@@ -94,7 +149,6 @@ async fn main() {
 
     let has_args = std::env::args().len() > 1;
 
-    // Remove the windows_subsystem attribute if we're in CLI mode with arguments
     #[cfg(target_os = "windows")]
     {
         if has_args {

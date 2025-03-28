@@ -122,7 +122,6 @@ pub fn select_idf_version(identifier: &str) -> Result<String> {
     let config_path = get_default_config_path();
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     if ide_config.select_installation(identifier) {
-        println!("Selected version {} file: {:?}.", identifier, ide_config);
         ide_config.to_file(config_path, true, false)?;
         return Ok(format!("Version {} selected", identifier));
     }
