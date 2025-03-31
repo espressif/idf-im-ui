@@ -10,25 +10,12 @@ pub mod gui;
 #[cfg(feature = "cli")]
 use clap::Parser;
 #[cfg(feature = "cli")]
-use config::ConfigError;
-#[cfg(feature = "cli")]
-use idf_im_lib::get_log_directory;
-#[cfg(feature = "cli")]
-use log::{debug, error, info, LevelFilter};
-#[cfg(feature = "cli")]
-use std::path::PathBuf;
+use log::{debug, info};
 #[cfg(feature = "cli")]
 pub mod cli;
 
 #[cfg(feature = "cli")]
 rust_i18n::i18n!("locales", fallback = "en");
-
-#[cfg(feature = "cli")]
-use log4rs::{
-    append::{console::ConsoleAppender, file::FileAppender},
-    config::{Appender, Root},
-    encode::pattern::PatternEncoder,
-};
 
 #[cfg(feature = "cli")]
 #[cfg(feature = "cli")]
@@ -104,11 +91,13 @@ fn is_interactive_command() -> bool {
     }
 
     // Commands that need interactive console
-    let interactive_commands = vec!["select", "rename", "remove", "wizard"];
+    let interactive_commands = vec!["select", "rename", "remove"];
 
     for arg in args.iter().skip(1) {
         for cmd in &interactive_commands {
-            if arg == cmd {
+            if arg == "wizard" {
+                return true;
+            } else if arg == cmd && args.len() == 2 {
                 return true;
             }
         }
@@ -173,6 +162,10 @@ async fn main() {
 
     #[cfg(target_os = "windows")]
     if console_attached_or_allocated {
+        println!("Pressing Enter to exit...");
         detach_console();
+    } else {
+        debug!("This is the end...");
     }
+    std::process::exit(0);
 }

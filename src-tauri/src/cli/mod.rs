@@ -166,7 +166,10 @@ pub async fn run_cli(cli: Cli) {
                         }
                     }
                 }
-                Err(err) => error!("Error: {}", err),
+                Err(err) => {
+                    error!("No versions found. Use eim install to install a new ESP-IDF version.");
+                    debug!("Error: {}", err)
+                }
             }
         }
         Commands::Select { version } => {
@@ -189,7 +192,12 @@ pub async fn run_cli(cli: Cli) {
                             }
                         }
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => {
+                        error!(
+                            "No versions found. Use eim install to install a new ESP-IDF version."
+                        );
+                        debug!("Error: {}", err)
+                    }
                 }
             } else {
                 match select_idf_version(&version.clone().unwrap()) {
