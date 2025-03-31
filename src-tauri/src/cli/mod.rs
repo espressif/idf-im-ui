@@ -213,7 +213,7 @@ pub async fn run_cli(cli: Cli) {
                 match idf_im_lib::version_manager::list_installed_versions() {
                     Ok(versions) => {
                         if versions.len() == 0 {
-                            println!("No versions installed");
+                            warn!("No versions installed");
                         } else {
                             let options = versions.iter().map(|v| v.name.clone()).collect();
                             let version = helpers::generic_select(
@@ -237,7 +237,12 @@ pub async fn run_cli(cli: Cli) {
                             }
                         }
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => {
+                        debug!("Error: {}", err);
+                        error!(
+                            "No versions found. Use eim install to install a new ESP-IDF version."
+                        )
+                    }
                 }
             } else if new_name.is_none() {
                 let new_name =
