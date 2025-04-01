@@ -221,12 +221,24 @@ pub async fn run_cli(cli: Cli) {
                                 &options,
                             )
                             .unwrap(); // todo move to function and add error handling
-                            let new_name = generic_input(
+                            let new_name = match generic_input(
                                 "Enter new name:",
                                 "you need to enter a new name",
                                 "",
-                            )
-                            .unwrap(); // todo move to function and add error handling
+                            ) {
+                                Ok(name) => {
+                                    if name.len() == 0 {
+                                        warn!("No name provided, using default!");
+                                        version.clone()
+                                    } else {
+                                        name
+                                    }
+                                }
+                                Err(err) => {
+                                    error!("Error: {}", err);
+                                    version.clone()
+                                }
+                            };
                             match idf_im_lib::version_manager::rename_idf_version(
                                 &version, new_name,
                             ) {
@@ -246,7 +258,20 @@ pub async fn run_cli(cli: Cli) {
                 }
             } else if new_name.is_none() {
                 let new_name =
-                    generic_input("Enter new name:", "you need to enter a new name", "").unwrap(); // todo move to function and add error handling
+                    match generic_input("Enter new name:", "you need to enter a new name", "") {
+                        Ok(name) => {
+                            if name.len() == 0 {
+                                warn!("No name provided, using default!");
+                                version.clone().unwrap()
+                            } else {
+                                name
+                            }
+                        }
+                        Err(err) => {
+                            error!("Error: {}", err);
+                            version.clone().unwrap()
+                        }
+                    };
                 match idf_im_lib::version_manager::rename_idf_version(
                     &version.clone().unwrap(),
                     new_name,
