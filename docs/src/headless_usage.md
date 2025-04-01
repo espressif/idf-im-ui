@@ -4,29 +4,35 @@ The ESP-IDF Installation Manager supports headless mode for automated installati
 
 ## Basic Headless Usage
 
-To run the installer in headless mode, use the `-n` or `--non-interactive` flag:
+The `install` command runs in non-interactive (headless) mode by default. You don't need to explicitly specify the `-n` or `--non-interactive` flag:
 
 ```bash
-eim -n true
+eim install
 ```
 
-This will install the latest version of ESP-IDF with default settings.
+This will install the latest version of ESP-IDF with default settings in non-interactive mode.
+
+If you want to run the install command in interactive mode, you would need to explicitly specify:
+
+```bash
+eim install -n false
+```
 
 ## Advanced Headless Usage
 
 ### Custom Installation Options
 
-Combine the non-interactive flag with other parameters:
+Use the install command with various parameters:
 
 ```bash
 # Install specific version
-eim -n true -i v5.3.2
+eim install -i v5.3.2
 
 # Custom installation path
-eim -n true -p /opt/esp-idf
+eim install -p /opt/esp-idf
 
 # Install prerequisites (Windows only)
-eim -n true -a true
+eim install -a true
 ```
 
 ### Using Configuration Files
@@ -34,7 +40,22 @@ eim -n true -a true
 For reproducible installations, use a configuration file:
 
 ```bash
-eim -n true --config path/to/config.toml
+eim install --config path/to/config.toml
+```
+
+### Managing Installations
+
+You can also use other commands:
+
+```bash
+# List installed versions
+eim list
+
+# Select a specific version
+eim select v5.3.2
+
+# Remove a specific version
+eim remove v5.3.2
 ```
 
 ## CI/CD Integration
@@ -86,7 +107,7 @@ RUN set -x && \
     rm /tmp/eim.zip
 
 # Install ESP-IDF
-RUN eim -n true -i v5.3.2
+RUN eim install -i v5.3.2
 
 WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "-c", "source /root/.espressif/activate_idf_v5.3.2.sh && $0 $@"]
@@ -98,4 +119,4 @@ ENTRYPOINT ["/bin/bash", "-c", "source /root/.espressif/activate_idf_v5.3.2.sh &
 2. **Configuration Files**: Use configuration files for complex setups to ensure consistency
 3. **Error Handling**: In CI/CD environments, ensure proper error handling and logging
 4. **Prerequisites**: On Windows, use `-a true` to automatically install prerequisites
-5. **Path Management**: Use absolute paths to avoid any ambiguity 
+5. **Path Management**: Use absolute paths to avoid any ambiguity

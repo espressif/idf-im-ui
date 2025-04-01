@@ -6,7 +6,7 @@ use crate::{
     version_manager::get_default_config_path,
 };
 use anyhow::{anyhow, Result};
-use log::debug;
+use log::{debug, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 #[cfg(not(windows))]
@@ -199,9 +199,11 @@ fn filter_subpaths(paths: Vec<String>) -> Vec<String> {
 /// - `io::Result<()>`: If the directory and its contents are successfully removed, the function returns `Ok(())`.
 ///   If an error occurs during the process, the function returns an `io::Error` containing the specific error details.
 pub fn remove_directory_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
-    let path = path.as_ref();
+    let expanded = crate::expand_tilde(path.as_ref());
+    let path = Path::new(&expanded);
 
     if !path.exists() {
+        warn!("Directory {} does not exist, didn't remove", path.display());
         return Ok(());
     }
 
@@ -355,7 +357,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             }
         };
         current_config.idf_installed.push(installation);
-        match current_config.to_file(config_path, true) {
+        match current_config.to_file(config_path, true, false) {
             Ok(_) => {
                 debug!("Updated config file with new tool set");
                 return Ok(());

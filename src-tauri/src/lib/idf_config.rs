@@ -48,15 +48,19 @@ impl IdfConfig {
     /// let config = IdfConfig { ... };
     /// config.to_file("eim_idf.json", true)?;
     /// ```
-    pub fn to_file<P: AsRef<Path>>(&mut self, path: P, pretty: bool) -> Result<()> {
+    pub fn to_file<P: AsRef<Path>>(&mut self, path: P, pretty: bool, append: bool) -> Result<()> {
         // Create parent directories if they don't exist
         ensure_path(path.as_ref().parent().unwrap().to_str().unwrap())?;
 
-        if path.as_ref().exists() {
+        if path.as_ref().exists() && append {
             debug!("Config file already exists, appending to it");
             let existing_config = IdfConfig::from_file(path.as_ref())?;
             let existing_version = existing_config.idf_installed;
-            self.idf_installed.extend(existing_version);
+            for install in existing_version.iter() {
+                if !self.idf_installed.iter().any(|i| i.id == install.id) {
+                    self.idf_installed.push(install.clone());
+                }
+            }
         } else {
             debug!("Creating new ide config file");
         }
@@ -308,7 +312,7 @@ mod tests {
         let mut config = create_test_config();
 
         // Test writing config to file
-        config.to_file(&config_path, true)?;
+        config.to_file(&config_path, true, false)?;
         assert!(config_path.exists());
 
         // Test reading config from file
@@ -328,7 +332,7 @@ mod tests {
         };
 
         config.idf_installed = vec![new_installation.clone()];
-        config.to_file(&config_path, true)?;
+        config.to_file(&config_path, true, false)?;
 
         let updated_config = IdfConfig::from_file(&config_path)?;
         assert!(updated_config
