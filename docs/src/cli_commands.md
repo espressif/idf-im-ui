@@ -88,7 +88,7 @@ Select an ESP-IDF version as active.
 eim select [VERSION]
 ```
 
-If `VERSION` is not provided, the command will prompt you to select from available versions.
+If `VERSION` is not provided, the command will prompt you to select from available versions. Selecting version means setting the `idfSelectedId` in the `eim_idf.json` file. This is used by the IDEs to know which of the IDF versions you prefer to use.
 
 ### Rename Command
 
