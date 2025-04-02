@@ -1,0 +1,16 @@
+path = "/home/fabricio/.espressif"
+idf_path = "/home/fabricio/.espressif/v5.4.1/esp-idf"
+esp_idf_json_path = "/home/fabricio/.espressif/tools"
+tool_download_folder_name = "dist"
+tool_install_folder_name = "tools"
+target = ["all"]
+idf_versions = ["v5.4.1"]
+tools_json_file = "tools/tools.json"
+idf_tools_path = "tools/idf_tools.py"
+config_file_save_path = "eim_config.toml"
+non_interactive = false
+wizard_all_questions = false
+mirror = "https://github.com"
+idf_mirror = "https://github.com"
+recurse_submodules = false
+install_all_prerequisites = false

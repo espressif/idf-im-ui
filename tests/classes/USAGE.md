@@ -1,4 +1,4 @@
-# Using the class on node terminal
+# Using the GUITestRunner class on node terminal for debug purposes
 
 Import the system modules:
 
