@@ -62,20 +62,20 @@ New-Alias -Name idf.py -Value Invoke-idfpy -Force -Scope Global
 . "{{idf_python_env_path}}\Scripts\Activate.ps1"
 
 # Display setup information
-Write-Host 'IDF PowerShell Environment' -ForegroundColor Green
-Write-Host '-------------------------' -ForegroundColor Green
-Write-Host 'Environment variables set:' -ForegroundColor Cyan
-Write-Host "IDF_PATH: $env:IDF_PATH" -ForegroundColor Yellow
-Write-Host "IDF_TOOLS_PATH: $env:IDF_TOOLS_PATH" -ForegroundColor Yellow
-Write-Host "IDF_PYTHON_ENV_PATH: $env:IDF_PYTHON_ENV_PATH" -ForegroundColor Yellow
+Write-Host 'IDF PowerShell Environment'
+Write-Host '-------------------------'
+Write-Host 'Environment variables set:'
+Write-Host "IDF_PATH: $env:IDF_PATH"
+Write-Host "IDF_TOOLS_PATH: $env:IDF_TOOLS_PATH"
+Write-Host "IDF_PYTHON_ENV_PATH: $env:IDF_PYTHON_ENV_PATH"
 Write-Host ''
-Write-Host 'Custom commands available:' -ForegroundColor Cyan
-Write-Host 'idf.py - Use this to run IDF commands (e.g., idf.py build)' -ForegroundColor Yellow
-Write-Host 'esptool.py' -ForegroundColor Yellow
-Write-Host 'espefuse.py' -ForegroundColor Yellow
-Write-Host 'espsecure.py' -ForegroundColor Yellow
-Write-Host 'otatool.py' -ForegroundColor Yellow
-Write-Host 'parttool.py' -ForegroundColor Yellow
+Write-Host 'Custom commands available:'
+Write-Host 'idf.py - Use this to run IDF commands (e.g., idf.py build)'
+Write-Host 'esptool.py'
+Write-Host 'espefuse.py'
+Write-Host 'espsecure.py'
+Write-Host 'otatool.py'
+Write-Host 'parttool.py'
 Write-Host ''
-Write-Host 'Python environment activated.' -ForegroundColor Cyan
-Write-Host 'You can now use IDF commands and Python tools.' -ForegroundColor Cyan
+Write-Host 'Python environment activated.'
+Write-Host 'You can now use IDF commands and Python tools.'

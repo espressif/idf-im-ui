@@ -5,12 +5,12 @@ use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};
+use std::io::BufReader;
 use tar::Archive;
 use tera::{Context, Tera};
 use thiserror::Error;
 use utils::{find_directories_by_name, make_long_path_compatible};
 use zip::ZipArchive;
-use std::io::BufReader;
 
 pub mod command_executor;
 pub mod idf_config;
@@ -301,7 +301,7 @@ fn create_powershell_profile(
         );
     }
     context.insert("add_paths_extras", &export_paths.join(";"));
-    let rendered = match tera.render("powershell_profile", &context) {
+    let mut rendered = match tera.render("powershell_profile", &context) {
         Err(e) => {
             error!("Failed to render template: {}", e);
             return Err(std::io::Error::new(
@@ -311,6 +311,10 @@ fn create_powershell_profile(
         }
         Ok(text) => text,
     };
+
+    if std::env::consts::OS == "windows" {
+        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n");
+    }
     let mut filename = PathBuf::from(profile_path);
     filename.push("Microsoft.PowerShell_profile.ps1");
     fs::write(&filename, rendered).expect("Unable to write file");
@@ -874,11 +878,11 @@ fn decompress_tar_xz(
     let file = File::open(archive_path)?;
     let mut reader = BufReader::new(file);
     let mut decompressed_data = Vec::new();
-    
+
     // First decompress the XZ data
     lzma_rs::xz_decompress(&mut reader, &mut decompressed_data)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    
+
     // Then process the tar archive from the decompressed data
     let cursor = std::io::Cursor::new(decompressed_data);
     let mut archive = Archive::new(cursor);
