@@ -779,7 +779,7 @@ jobs:
                   export IDF_VERSION="${{ env.IDF_TAG }}"
                   cd tests
                   npm ci
-                  npm run test-CLI --file=CLI-basic
+                  npm run test-CLI --file=CLI-GUI-basic
               continue-on-error: true
 
             # Windows steps
@@ -825,7 +825,7 @@ jobs:
                       npm ci
                     }
                   }
-                  npm run test-CLI-win --file=CLI-basic
+                  npm run test-CLI-win --file=CLI-GUI-basic
               continue-on-error: true
 
             # Upload test results

@@ -3,7 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import { By, Key } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import {
-    VERSIONSSHOWNONINSTALLER,
+    IDFVERSIONSSHOWNONINSTALLER,
     IDFMIRRORS,
     TOOLSMIRRORS,
 } from "../config.js";
@@ -186,7 +186,7 @@ export function runGUICustomInstallTest(
             await new Promise((resolve) => setTimeout(resolve, 4000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
             const IDFListText = await IDFList.getText();
-            for (let version of VERSIONSSHOWNONINSTALLER) {
+            for (let version of IDFVERSIONSSHOWNONINSTALLER) {
                 expect(IDFListText).to.include(version);
             }
             let IDFMaster = await eimRunner.findByDataId("version-item-master");

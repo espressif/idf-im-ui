@@ -13,8 +13,6 @@
         "id": 3,
         "type": "custom",
         "name": "non-interactive-basic",
-        "data": {
-            "nonInteractive": "true"
-        }
+        "data": {}
     }
 ]
