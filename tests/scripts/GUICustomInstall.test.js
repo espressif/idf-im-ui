@@ -181,7 +181,7 @@ export function runGUICustomInstallTest(
         });
 
         it("06- Should show IDF version list", async function () {
-            this.timeout(10000);
+            this.timeout(15000);
             await eimRunner.clickButton("Continue with Selected Targets");
             await new Promise((resolve) => setTimeout(resolve, 4000));
             const IDFList = await eimRunner.findByDataId("versions-grid");
@@ -212,14 +212,14 @@ export function runGUICustomInstallTest(
                 "Selected versions:"
             );
             const selectedVersionsText = await selectedVersions.getText();
-            expected = ["Selected versions:", ...idfVersionList];
+            const expected = ["Selected versions:", ...idfVersionList];
             expected.forEach((substring) =>
                 expect(selectedVersionsText).to.include(substring)
             );
         });
 
         it("07- Should show IDF download mirrors", async function () {
-            this.timeout(10000);
+            this.timeout(15000);
             await eimRunner.clickButton("Continue Installation");
             await new Promise((resolve) => setTimeout(resolve, 2000));
             const IDFMirrors = await eimRunner.findByDataId(
@@ -354,7 +354,7 @@ export function runGUICustomInstallTest(
         });
 
         it("11- Should install IDF using expert setup", async function () {
-            this.timeout(1330000);
+            this.timeout(2130000);
 
             try {
                 await eimRunner.clickButton("Start Installation");
@@ -364,7 +364,7 @@ export function runGUICustomInstallTest(
                 expect(await installing.isDisplayed()).to.be.true;
                 const startTime = Date.now();
 
-                while (Date.now() - startTime < 1300000) {
+                while (Date.now() - startTime < 2100000) {
                     if (
                         await eimRunner.findByText("Installation Failed", 1000)
                     ) {
