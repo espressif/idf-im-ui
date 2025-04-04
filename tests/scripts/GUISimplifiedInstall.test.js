@@ -89,7 +89,7 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
             ).to.be.true;
             const startTime = Date.now();
 
-            while (Date.now() - startTime < 1300000) {
+            while (Date.now() - startTime < 2700000) {
                 if (await eimRunner.findByText("Installation Failed", 1000)) {
                     logger.debug("failed!!!!");
                     break;

@@ -2,7 +2,7 @@ const IDFVERSIONSSHOWNONINSTALLER = [
     `master`,
     `v5.4.1`,
     `v5.3.2`,
-    `v5.2.3`,
+    `v5.2.5`,
     `v5.1.6`,
 ];
 
