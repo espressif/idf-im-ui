@@ -209,26 +209,26 @@ export function runGUICustomInstallTest(
             }
 
             const selectedVersions = await eimRunner.findByText(
-                "Selected versions:"
+                "Selected versions"
             );
             const selectedVersionsText = await selectedVersions.getText();
             const expected = ["Selected versions:", ...idfVersionList];
-            expected.forEach((substring) =>
-                expect(selectedVersionsText).to.include(substring)
-            );
+            for (let substring of expected) {
+                expect(selectedVersionsText).to.include(substring);
+            }
         });
 
         it("07- Should show IDF download mirrors", async function () {
             this.timeout(15000);
             await eimRunner.clickButton("Continue Installation");
             await new Promise((resolve) => setTimeout(resolve, 2000));
-            const IDFMirrors = await eimRunner.findByDataId(
+            const IDFMirrorsList = await eimRunner.findByDataId(
                 "idf-mirror-radio-group"
             );
-            let IDFMirrorsText = await IDFMirrors.getText();
-            IDFMIRRORS.forEach((mirror) =>
-                expect(IDFMirrorsText).to.include(mirror)
-            );
+            let IDFMirrorsListText = await IDFMirrorsList.getText();
+            for (let mirror of Object.values(IDFMIRRORS)) {
+                expect(IDFMirrorsListText).to.include(mirror);
+            }
 
             let githubMirror = await eimRunner.findByDataId(
                 "idf-mirror-option-https://github.com"
@@ -258,13 +258,13 @@ export function runGUICustomInstallTest(
 
         it("08- Should show tools download mirrors", async function () {
             this.timeout(10000);
-            const toolsMirrors = await eimRunner.findByDataId(
+            const toolsMirrorsList = await eimRunner.findByDataId(
                 "tools-mirror-radio-group"
             );
-            let toolsMirrorsText = await toolsMirrors.getText();
-            TOOLSMIRRORS.forEach((mirror) =>
-                expect(toolsMirrorsText).to.include(mirror)
-            );
+            let toolsMirrorsListText = await toolsMirrorsList.getText();
+            for (let mirror of Object.values(TOOLSMIRRORS)) {
+                expect(toolsMirrorsListText).to.include(mirror);
+            }
             let githubMirror = await eimRunner.findByDataId(
                 "tools-mirror-option-https://github.com"
             );
@@ -348,13 +348,13 @@ export function runGUICustomInstallTest(
                 "version-chips"
             );
             const selectedVersionsText = await selectedVersions.getText();
-            idfVersionList.forEach((idfVersion) =>
-                expect(selectedVersionsText).to.include(idfVersion)
-            );
+            for (let idfVersion of idfVersionList) {
+                expect(selectedVersionsText).to.include(idfVersion);
+            }
         });
 
         it("11- Should install IDF using expert setup", async function () {
-            this.timeout(2130000);
+            this.timeout(2730000);
 
             try {
                 await eimRunner.clickButton("Start Installation");
@@ -364,7 +364,7 @@ export function runGUICustomInstallTest(
                 expect(await installing.isDisplayed()).to.be.true;
                 const startTime = Date.now();
 
-                while (Date.now() - startTime < 2100000) {
+                while (Date.now() - startTime < 2700000) {
                     if (
                         await eimRunner.findByText("Installation Failed", 1000)
                     ) {

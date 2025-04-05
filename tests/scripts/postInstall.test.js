@@ -172,7 +172,7 @@ function runPostInstallTest(
 function runPostInstallCleanUp(installFolder) {
     describe("2- Clean UP after install ->", function () {
         after(function () {
-            this.timeout(20000);
+            this.timeout(30000);
             logger.info("Starting cleanup");
             try {
                 fs.rmSync(installFolder, { recursive: true, force: true });

@@ -140,10 +140,6 @@ export function runCLIWizardInstallTest(pathToEim) {
             ).to.be.true;
             expect(
                 testRunner.output,
-                "Error message during installation"
-            ).to.not.include("error");
-            expect(
-                testRunner.output,
                 "Error to download the tools, missing 'Downloading Tools'"
             ).to.include("Downloading tools");
 

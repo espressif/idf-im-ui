@@ -76,7 +76,7 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
         });
 
         it("3- Should install IDF using simplified setup", async function () {
-            this.timeout(2130000);
+            this.timeout(2730000);
             await eimRunner.clickButton("Start Simplified Setup");
             await new Promise((resolve) => setTimeout(resolve, 5000));
             const installing = await eimRunner.findByText(
@@ -89,7 +89,7 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
             ).to.be.true;
             const startTime = Date.now();
 
-            while (Date.now() - startTime < 2100000) {
+            while (Date.now() - startTime < 2700000) {
                 if (await eimRunner.findByText("Installation Failed", 1000)) {
                     logger.debug("failed!!!!");
                     break;

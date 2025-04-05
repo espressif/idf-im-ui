@@ -21,7 +21,7 @@
         "name": "Expert installation using modified parameters",
         "data": {
             "targetList": "esp32s3",
-            "idfList": "v5.2.3",
+            "idfList": "v5.2.5",
             "installFolder": ".espcustom",
             "idfMirror": "github",
             "toolsMirror": "github"
