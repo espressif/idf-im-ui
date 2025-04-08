@@ -1,10 +1,10 @@
 import winston from "winston";
 
-const logLevel = process.env.DEBUG === "true" ? "debug" : "info";
 const logToFile = process.env.LOG_TO_FILE === "true";
 
 const transports = [
     new winston.transports.Console({
+        level: "info",
         format: winston.format.combine(
             winston.format.colorize(),
             winston.format.simple()
@@ -15,6 +15,7 @@ const transports = [
 if (logToFile) {
     transports.push(
         new winston.transports.File({
+            level: "debug",
             filename: "./test.log",
             format: winston.format.combine(
                 winston.format.timestamp(),
@@ -25,7 +26,7 @@ if (logToFile) {
 }
 
 const logger = winston.createLogger({
-    level: logLevel,
+    level: "debug",
     format: winston.format.combine(
         winston.format.printf(({ level, message }) => {
             return `[${level}]: ${message}`;
