@@ -72,7 +72,8 @@ export default {
     unlisten: undefined,
     unlisten_win: undefined,
     listener: undefined,
-    user_message_unlisten: undefined
+    user_message_unlisten: undefined,
+    path_valid: true,
   }),
   computed: {
     isInProgress() {
@@ -142,6 +143,9 @@ export default {
         return 'Please use expert mode to manually select ESP-IDF version';
       }
       if (this.getCurrentStateStatus === 'error') {
+        if (this.path_valid == false) {
+          return 'The default installation path is not empty. Please switch to expert mode for more control with possibility to select custom path';
+        }
         return 'Please try again or switch to expert mode for more control';
       } else {
         return '';
@@ -164,9 +168,13 @@ export default {
         }
         this.messages.push(message);
       });
-      // await this.startInstalation();
     },
     startInstalation: async function () {
+      this.path_valid = await this.validate_path();
+      if (!this.path_valid) {
+        this.current_state_code = 12;
+        return;
+      }
       this.listener = await listen('user-message', (event) => {
         this.last_user_message = event.payload.message;
         this.last_user_message_type = event.payload.type;
@@ -174,8 +182,20 @@ export default {
       });
       await invoke("start_simple_setup", {});
     },
+    validate_path: async function () {
+      let all_settings = await invoke("get_settings", {});
+      if (all_settings && all_settings.path) {
+        let installationPath = all_settings.path;
+        console.info(`Installation path: ${installationPath}`);
+        let result = await invoke("is_path_empty_or_nonexistent", { path: installationPath });
+        console.info(`Installation path: ${installationPath} is valid: ${result}`);
+        return result;
+      } else {
+        return false;
+      }
+    },
   },
-  mounted() {
+  async mounted() {
     this.startListening();
     this.startInstalation();
   },
