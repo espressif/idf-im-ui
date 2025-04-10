@@ -36,7 +36,8 @@
 
 
 
-        <GlobalProgress messagePosition="left" v-if="current_state_code > 0 && current_state_code < 11" />
+        <GlobalProgress messagePosition="left"
+          v-if="(current_state_code > 0 && current_state_code < 11) && last_user_message_type != 'error'" />
 
         <!-- Installation Log -->
         <n-collapse arrow-placement="right" v-if="messages.length > 0">
@@ -83,10 +84,10 @@ export default {
       return [3, 4, 6, 7, 9, 12].includes(this.current_state_code);
     },
     showRetryButton() {
-      return [3, 4, 6, 7, 12].includes(this.current_state_code);
+      return [3, 4, 6, 7, 12].includes(this.current_state_code) || this.last_user_message_type == 'error';
     },
     showExpertButton() {
-      return [3, 4, 6, 7, 9, 12].includes(this.current_state_code);
+      return [3, 4, 6, 7, 9, 12].includes(this.current_state_code) || this.last_user_message_type == 'error';
     },
     getCurrentStateStatus() {
       switch (this.current_state_code) {
