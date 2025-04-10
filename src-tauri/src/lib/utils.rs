@@ -48,6 +48,30 @@ pub fn get_git_path() -> Result<String, String> {
         Err(stderr.trim().to_string())
     }
 }
+
+/// Filters a vector of strings containing paths to only include directories.
+///
+/// # Purpose
+///
+/// This function takes a vector of strings representing paths and filters out any paths that are not directories.
+/// It uses the `PathBuf::is_dir` method to check if each path is a directory.
+///
+/// # Parameters
+///
+/// * `paths`: A vector of strings containing paths to be filtered.
+///
+/// # Return Value
+///
+/// * `Vec<String>`: A vector of strings containing the paths of directories.
+fn filter_directories(paths: Vec<String>) -> Vec<String> {
+    paths
+        .into_iter()
+        .filter(|path_str| {
+            let path = PathBuf::from(path_str);
+            path.is_dir()
+        })
+        .collect()
+}
 // Finds all directories in the specified path that match the given name.
 // The function recursively searches subdirectories and collects matching paths in a vector.
 // Returns a vector of PathBuf containing the paths of matching directories.
@@ -62,7 +86,7 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
         .hidden()
         .build()
         .collect();
-    filter_subpaths(search)
+    filter_directories(filter_subpaths(search))
 }
 
 /// Checks if the given path is a valid ESP-IDF directory.

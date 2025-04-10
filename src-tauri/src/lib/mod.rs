@@ -531,7 +531,7 @@ pub fn setup_environment_variables(
 /// * `Result<PathBuf, std::io::Error>` - On success, returns a `PathBuf` representing the path to the ELF ROM directory.
 ///   On error, returns a `std::io::Error` indicating the cause of the error.
 fn get_elf_rom_dir(idf_tools_path: &PathBuf) -> Result<PathBuf, std::io::Error> {
-    let elf_rom_dir = idf_tools_path.join("tools").join("esp-rom-elfs");
+    let elf_rom_dir = idf_tools_path.join("esp-rom-elfs");
     if elf_rom_dir.exists() {
         let mut subdirs = vec![];
         // Read the entries in the elf_rom_dir
@@ -570,7 +570,7 @@ fn get_elf_rom_dir(idf_tools_path: &PathBuf) -> Result<PathBuf, std::io::Error> 
 /// * `Result<PathBuf, std::io::Error>` - On success, returns a `PathBuf` representing the path to the OpenOCD scripts folder.
 ///   On error, returns a `std::io::Error` indicating the cause of the error.
 fn get_openocd_scripts_folder(idf_tools_path: &PathBuf) -> Result<String, std::io::Error> {
-    let search_path = idf_tools_path.join("tools").join("openocd-esp32");
+    let search_path = idf_tools_path.join("openocd-esp32");
 
     let result = find_directories_by_name(&search_path, "scripts");
 

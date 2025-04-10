@@ -1,4 +1,4 @@
-use log::trace;
+use log::{info, trace};
 #[cfg(feature = "userustpython")]
 use rustpython_vm as vm;
 #[cfg(feature = "userustpython")]
@@ -117,14 +117,21 @@ pub fn run_python_script_from_file(
 pub fn run_idf_tools_py(
     // todo: rewrite functionality to rust
     idf_tools_path: &str,
-    environment_variables: &Vec<(String, String)>,
+    environment_variables_install: &Vec<(String, String)>,
+    environment_variables_python: &Vec<(String, String)>,
 ) -> Result<String, String> {
-    run_idf_tools_py_with_features(idf_tools_path, environment_variables, &vec![])
+    run_idf_tools_py_with_features(
+        idf_tools_path,
+        environment_variables_install,
+        environment_variables_python,
+        &vec![],
+    )
 }
 
 pub fn run_idf_tools_py_with_features(
     idf_tools_path: &str,
-    environment_variables: &Vec<(String, String)>,
+    environment_variables_install: &Vec<(String, String)>,
+    environment_variables_python: &Vec<(String, String)>,
     features: &Vec<String>,
 ) -> Result<String, String> {
     let escaped_path = if std::env::consts::OS == "windows" {
@@ -132,8 +139,19 @@ pub fn run_idf_tools_py_with_features(
     } else {
         replace_unescaped_spaces_posix(&idf_tools_path)
     };
-    run_install_script(&escaped_path, environment_variables)?;
-    run_install_python_env_script_with_features(&escaped_path, environment_variables, features)
+    match run_install_script(&escaped_path, environment_variables_install) {
+        Ok(_) => {
+            info!("install success");
+        }
+        Err(e) => {
+            info!("Instal failed {:?}", e);
+        }
+    }
+    run_install_python_env_script_with_features(
+        &escaped_path,
+        environment_variables_python,
+        features,
+    )
 }
 
 fn run_install_script(

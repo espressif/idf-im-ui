@@ -845,9 +845,12 @@ async fn setup_tools(
     for (tool_name, download) in tools_to_download {
         process_tool_download(&app_handle, &tool_setup, &tool_name, &download).await?;
     }
+    let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
+    let parent_of_tools_install_folder = tools_install_folder.parent().unwrap().to_path_buf();
 
-    let env_vrs =
-        idf_im_lib::setup_environment_variables(&PathBuf::from(&tool_setup.install_dir), idf_path)
+    println!("Setting up tools... to directory: {}",tools_install_folder.display());
+    let env_vars_python =
+        idf_im_lib::setup_environment_variables(tools_install_folder, idf_path)
             .map_err(|e| {
                 send_message(
                     app_handle,
@@ -856,6 +859,17 @@ async fn setup_tools(
                 );
                 anyhow!("Failed to setup environment variables: {}", e)
             })?;
+    
+    let env_vars_install =
+            idf_im_lib::setup_environment_variables(&parent_of_tools_install_folder, idf_path)
+                .map_err(|e| {
+                    send_message(
+                        app_handle,
+                        format!("Failed to setup environment variables: {}", e),
+                        "error".to_string(),
+                    );
+                    anyhow!("Failed to setup environment variables: {}", e)
+                })?;
 
     // get_and_validate_idf_tools_path
 
@@ -869,7 +883,7 @@ async fn setup_tools(
 
     // run_idf_tools_py TODO: replace the python call
 
-    run_idf_tools_py(idf_tools_path.to_str().unwrap(), &env_vrs).map_err(|e| {
+    run_idf_tools_py(idf_tools_path.to_str().unwrap(), &env_vars_install, &env_vars_python).map_err(|e| {
         send_message(
             app_handle,
             format!("Failed to run IDF tools setup: {}", e),
@@ -887,8 +901,7 @@ async fn setup_tools(
     let export_paths: Vec<String> = get_tools_export_paths(
         tools,
         settings.target.clone().unwrap(),
-        PathBuf::from(tool_setup.install_dir)
-            .join("tools")
+        tools_install_folder
             .to_str()
             .unwrap(),
     )
