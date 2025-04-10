@@ -570,29 +570,34 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             &tool_install_directory,
         )
         .await?;
-
-        let env_vars = idf_im_lib::setup_environment_variables(&tool_install_directory, &idf_path)?;
-
+        let parent_tools = tool_install_directory.parent().unwrap();
+        let env_vars =
+            idf_im_lib::setup_environment_variables(&parent_tools.to_path_buf(), &idf_path)?;
+        let real_env_vars = idf_im_lib::setup_environment_variables(
+            &tool_install_directory.to_path_buf(),
+            &idf_path,
+        )?;
         let idf_tools_path = get_and_validate_idf_tools_path(&mut config, &idf_path)?;
-
         if config.idf_features.is_some() {
             let features = config.idf_features.clone().unwrap();
             idf_im_lib::python_utils::run_idf_tools_py_with_features(
                 idf_tools_path.to_str().unwrap(),
                 &env_vars,
+                &real_env_vars,
                 &features,
             )?;
         } else {
             idf_im_lib::python_utils::run_idf_tools_py(
                 idf_tools_path.to_str().unwrap(),
                 &env_vars,
+                &real_env_vars,
             )?;
         }
 
         let export_paths = idf_im_lib::idf_tools::get_tools_export_paths(
             tools,
             config.target.clone().unwrap().clone(),
-            tool_install_directory.join("tools").to_str().unwrap(),
+            tool_install_directory.to_str().unwrap(),
         )
         .into_iter()
         .map(|p| {
