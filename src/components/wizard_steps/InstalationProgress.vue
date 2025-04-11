@@ -25,7 +25,7 @@
       </div>
 
       <!-- Current Activity Display (Win only) -->
-      <div v-if="installation_running" class="current-activity" data-id="current-activity">
+      <div v-if="installation_running && os == 'windows'" class="current-activity" data-id="current-activity">
         <div class="current-step">
           <h3>Current Activity:</h3>
           <div class="activity-status">{{ currentActivity }}</div>
@@ -93,7 +93,7 @@
         <div class="summary-details">
           <div><strong>Installed Version:</strong> {{ curently_installing_version || versions_finished[0] }}</div>
           <div><strong>Installation Path:</strong> {{ installationPath }}</div>
-          <div><strong>Tools Installed:</strong> {{ completedToolsCount }}</div>
+          <div v-if="completedToolsCount != 0"><strong>Tools Installed:</strong> {{ completedToolsCount }}</div>
         </div>
       </div>
 
@@ -237,6 +237,7 @@ export default {
             break;
           case 'match':
             this.tools[this.curently_installing_version][event.payload.tool].finished = true;
+            this.completedToolsCount++;
             break;
           case 'downloaded':
             this.tools[this.curently_installing_version][event.payload.tool].downloaded = true;
@@ -244,6 +245,7 @@ export default {
           case 'extracted':
             this.tools[this.curently_installing_version][event.payload.tool].extracted = true;
             this.tools[this.curently_installing_version][event.payload.tool].finished = true;
+            this.completedToolsCount++;
             break;
           case 'error':
             this.tools[this.curently_installing_version][event.payload.tool].error = true;
