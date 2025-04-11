@@ -1,5 +1,5 @@
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
@@ -331,7 +331,7 @@ pub fn get_tools_export_paths(
 
     let list = filter_tools_by_target(tools_file.tools, &selected_chip);
     // debug!("Creating export paths for: {:?}", list);
-    let mut paths = vec![];
+    let mut paths_set: HashSet<String> = HashSet::new();
     for tool in &list {
         tool.export_paths.iter().for_each(|path| {
             let mut p = PathBuf::new();
@@ -339,18 +339,14 @@ pub fn get_tools_export_paths(
             for level in path {
                 p.push(level);
             }
-            paths.push(p.to_str().unwrap().to_string());
+            paths_set.insert(p.to_str().unwrap().to_string());
         });
     }
     for bin_dir in bin_dirs {
         let str_p = bin_dir;
-        if paths.contains(&str_p) {
-            log::trace!("Skipping duplicate export path: {}", str_p);
-        } else {
-            log::trace!("Adding export path: {}", str_p);
-            paths.push(str_p);
-        }
+        paths_set.insert(str_p);
     }
+    let paths = paths_set.into_iter().collect();
     log::debug!("Export paths: {:?}", paths);
     paths
 }
