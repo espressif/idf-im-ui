@@ -15,301 +15,257 @@ on:
     workflow_dispatch:
 
 jobs:
-    # Add a job to check which files changed
-    changes:
-        name: Detect Changed Files
-        runs-on: ubuntu-latest
-        outputs:
-            lib: ${{ steps.filter.outputs.lib }}
-            cli: ${{ steps.filter.outputs.cli }}
-            gui: ${{ steps.filter.outputs.gui }}
-            release: ${{ steps.check-release.outputs.is_release }}
+  setup:
+    name: Define Build Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Set up build matrix
+        id: set-matrix
+        run: |
+          echo "matrix={\"include\":[{\"os\":\"ubuntu-latest\",\"package_name\":\"linux-x64\",\"target\":\"\",\"use_container\":true},{\"os\":\"ubuntu-24.04-arm\",\"package_name\":\"linux-aarch64\",\"target\":\"aarch64-unknown-linux-gnu\",\"use_container\":true},{\"os\":\"windows-latest\",\"package_name\":\"windows-x64\",\"target\":\"\",\"use_container\":false},{\"os\":\"macos-latest\",\"package_name\":\"macos-aarch64\",\"target\":\"aarch64-apple-darwin\",\"use_container\":false},{\"os\":\"macos-13\",\"package_name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\",\"use_container\":false}]}" >> $GITHUB_OUTPUT
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
+  build-test-lib:
+    name: Build and Test Library (${{ matrix.package_name }})
+    needs: setup
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Check if release or tag
-              id: check-release
-              run: |
-                  if [[ "${{ github.event_name }}" == "release" || "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.ref }}" == refs/tags/* ]]; then
-                    echo "is_release=true" >> $GITHUB_OUTPUT
-                  else
-                    echo "is_release=false" >> $GITHUB_OUTPUT
-                  fi
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-            # Use path-filter action to detect which files changed
-            - uses: dorny/paths-filter@v2
-              id: filter
-              with:
-                  filters: |
-                      lib:
-                        - 'src-tauri/src/lib/**'
-                      cli:
-                        - 'src-tauri/src/lib/**'
-                        - 'src-tauri/src/cli/**'
-                        - 'src-tauri/src/main.rs'
-                      gui:
-                        - 'src-tauri/src/lib/**'
-                        - 'src-tauri/src/gui/**'
-                        - 'src-tauri/src/main.rs'
-                        - 'src/**'
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          vcpkg install openssl:x64-windows-static-md
 
-    setup:
-        name: Define Build Matrix
-        runs-on: ubuntu-latest
-        outputs:
-            matrix: ${{ steps.set-matrix.outputs.matrix }}
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev patchelf
 
-        steps:
-            - name: Set up build matrix
-              id: set-matrix
-              run: |
-                  echo "matrix={\"include\":[{\"os\":\"ubuntu-latest\",\"package_name\":\"linux-x64\",\"target\":\"\"},{\"os\":\"ubuntu-24.04-arm\",\"package_name\":\"linux-aarch64\",\"target\":\"aarch64-unknown-linux-gnu\"},{\"os\":\"windows-latest\",\"package_name\":\"windows-x64\",\"target\":\"\"},{\"os\":\"macos-latest\",\"package_name\":\"macos-aarch64\",\"target\":\"aarch64-apple-darwin\"},{\"os\":\"macos-13\",\"package_name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\"}]}" >> $GITHUB_OUTPUT
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
-    build-test-lib:
-        name: Build and Test Library (${{ matrix.package_name }})
-        needs: [setup, changes]
-        # Run if lib files changed or it's a release/tag
-        if: needs.changes.outputs.lib == 'true' || needs.changes.outputs.release == 'true'
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      - name: Build and Test Library
+        if: runner.os != 'Windows'
+        run: |
+          cd src-tauri
+          cargo test --no-fail-fast --no-default-features --lib ${{ matrix.target && format('--target {0}', matrix.target) || '' }} 2>&1 | tee lib-result.txt
+        shell: bash
+        continue-on-error: true
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+      - name: Format test results
+        if: runner.os != 'Windows'
+        uses: hahihula/rust-test-results-formatter@v1
+        with:
+          results-file: "./src-tauri/lib-result.txt"
 
-            - name: Set up Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.target != '' && matrix.target || '' }}
+  build-cli-linux:
+    name: Build CLI (Linux - ${{ matrix.package_name }})
+    needs: [setup, build-test-lib]
+    if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            target: ""
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            target: aarch64-unknown-linux-musl
+    container:
+      image: clux/muslrust:stable
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            # OpenSSL setup for each platform
-            - name: Install OpenSSL (Windows)
-              if: runner.os == 'Windows'
-              shell: powershell
-              run: |
-                  echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  vcpkg install openssl:x64-windows-static-md
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y libssl-dev patchelf zip
 
-            - name: Install dependencies (Ubuntu)
-              if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libssl-dev patchelf
+      - name: Build CLI
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
 
-            # Cargo caching
-            - name: Cache cargo registry
-              uses: actions/cache@v4
-              with:
-                  path: ~/.cargo/registry
-                  key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-registry-
+      - name: Create release directory
+        run: mkdir -p release_cli/${{ matrix.package_name }}
 
-            - name: Cache cargo index
-              uses: actions/cache@v4
-              with:
-                  path: ~/.cargo/git
-                  key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-index-
+      - name: Copy binary
+        run: |
+          cp src-tauri/target/${{ matrix.target || 'x86_64-unknown-linux-musl' }}/release/eim release_cli/${{ matrix.package_name }}/eim
+          chmod +x release_cli/${{ matrix.package_name }}/eim
+        shell: bash
 
-            - name: Cache cargo build
-              uses: actions/cache@v4
-              with:
-                  path: target
-                  key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-build-target-
+      - name: Zip artifacts
+        run: |
+          cd release_cli/${{ matrix.package_name }}
+          zip -r eim.zip eim
 
-            # Build and test the library
-            - name: Build and Test Library
-              if: runner.os != 'Windows'
-              run: |
-                  cd src-tauri
-                  if [ "${{ matrix.target }}" != "" ]; then
-                    cargo test --no-fail-fast --no-default-features --lib --target ${{ matrix.target }} 2>&1 | tee lib-result.txt
-                  else
-                    cargo test --no-fail-fast --no-default-features --lib 2>&1 | tee lib-result.txt
-                  fi
-              shell: bash
-              continue-on-error: true
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/eim.zip
 
-            - name: Format lib test results
-              if: runner.os != 'Windows'
-              uses: hahihula/rust-test-results-formatter@v1
-              with:
-                  results-file: "./src-tauri/lib-result.txt"
+      - name: Upload artifact for tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
+          path: release_cli/${{ matrix.package_name }}/eim.zip
 
-    build-cli:
-        name: Build CLI (${{ matrix.package_name }})
-        needs: [setup, changes, build-test-lib]
-        # Run if cli files changed or it's a release/tag
-        if: (needs.changes.outputs.cli == 'true' || needs.changes.outputs.release == 'true') && (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/eim.zip
+          asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
+          asset_content_type: application/zip
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  build-cli:
+    name: Build CLI (${{ matrix.package_name }})
+    needs: [setup, build-test-lib]
+    if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            package_name: windows-x64
+            target: ""
+          - os: macos-latest
+            package_name: macos-aarch64
+            target: aarch64-apple-darwin
+          - os: macos-13
+            package_name: macos-x64
+            target: x86_64-apple-darwin
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Set up Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.target != '' && matrix.target || '' }}
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-            # OpenSSL setup for Windows
-            - name: Install OpenSSL (Windows)
-              if: runner.os == 'Windows'
-              shell: powershell
-              run: |
-                  echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  vcpkg install openssl:x64-windows-static-md
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          vcpkg install openssl:x64-windows-static-md
 
-            - name: Install dependencies (Ubuntu)
-              if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libssl-dev patchelf
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
-            # Restore caches
-            - name: Restore cargo caches
-              uses: actions/cache/restore@v4
-              with:
-                  path: |
-                      ~/.cargo/registry
-                      ~/.cargo/git
-                      target
-                  key: ${{ runner.os }}-cargo-all-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-all-
+      - name: Build CLI
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
 
-            # Build CLI
-            - name: Build CLI (POSIX)
-              if: runner.os != 'Windows'
-              run: |
-                  cd src-tauri
-                  if [ "${{ matrix.target }}" != "" ]; then
-                    cargo build --release --no-default-features --features cli --target ${{ matrix.target }}
-                  else
-                    cargo build --release --no-default-features --features cli
-                  fi
-              shell: bash
+      - name: Create release directory
+        run: mkdir -p release_cli/${{ matrix.package_name }}
 
-            - name: Build CLI (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  cd src-tauri
-                  cargo build --release --no-default-features --features cli
+      - name: Copy binary (Windows)
+        if: runner.os == 'Windows'
+        run: copy src-tauri\target\release\eim.exe release_cli\${{ matrix.package_name }}\eim.exe
+        shell: cmd
 
-            # Create release directories
-            - name: Create release directories
-              run: |
-                  mkdir -p release_cli/${{ matrix.package_name }}
-              shell: bash
+      - name: Copy binary (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cp src-tauri/target/${{ matrix.target }}/release/eim release_cli/${{ matrix.package_name }}/eim
+          chmod +x release_cli/${{ matrix.package_name }}/eim
+        shell: bash
 
-            # Copy binaries to release directories
-            - name: Copy binary (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  copy src-tauri\target\release\eim.exe release_cli\${{ matrix.package_name }}\eim.exe
-              shell: cmd
+      - name: Sign Windows Binary
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        run: |
+          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+          certutil -decode cert.b64 cert.pfx
+          Remove-Item cert.b64
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
 
-            - name: Copy binary (MacOs and ARM Linux)
-              if: startsWith(matrix.os, 'macos') || matrix.os == 'ubuntu-24.04-arm'
-              run: |
-                  cp src-tauri/target/${{ matrix.target }}/release/eim release_cli/${{ matrix.package_name }}/eim
-                  chmod +x release_cli/${{ matrix.package_name }}/eim
-              shell: bash
+      - name: Codesign macOS Binary
+        if: startsWith(matrix.os, 'macos')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security create-keychain -p espressif build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p espressif build.keychain
+          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+          codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/eim -v
+          codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
 
-            - name: Copy binary (non-ARM Linux)
-              if: matrix.os == 'ubuntu-latest'
-              run: |
-                  cp src-tauri/target/release/eim release_cli/${{ matrix.package_name }}/eim
-                  chmod +x release_cli/${{ matrix.package_name }}/eim
-              shell: bash
+      - name: Notarize macOS Binary
+        if: startsWith(matrix.os, 'macos')
+        env:
+          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
+          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          cd release_cli/${{ matrix.package_name }}
+          zip -r eim.zip eim
+          security create-keychain -p espressif notary.keychain
+          security default-keychain -s notary.keychain
+          security unlock-keychain -p espressif notary.keychain
+          xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
+          xcrun notarytool submit eim.zip --keychain-profile "eim-notarytool-profile" --wait
+          unzip -o eim.zip -d .
 
-            # Signing
-            - name: Sign Windows Binary
-              if: runner.os == 'Windows'
-              env:
-                  WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-                  WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-                  WINDOWS_SIGN_TOOL_PATH: 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe'
-              run: |
-                  echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-                  certutil -decode cert.b64 cert.pfx
-                  Remove-Item cert.b64
-                  & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
+      - name: Zip artifacts
+        run: |
+          cd release_cli/${{ matrix.package_name }}
+          ${{ runner.os == 'Windows' && '7z a -tzip eim.zip eim.exe' || 'zip -r eim.zip eim' }}
 
-            - name: Codesign macOS eim executables
-              if: startsWith(matrix.os, 'macos')
-              env:
-                  MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-                  MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-              run: |
-                  echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-                  /usr/bin/security create-keychain -p espressif build.keychain
-                  /usr/bin/security default-keychain -s build.keychain
-                  /usr/bin/security unlock-keychain -p espressif build.keychain
-                  /usr/bin/security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-                  /usr/bin/security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
-
-                  /usr/bin/codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/eim -v
-                  /usr/bin/codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
-
-            # Notarize macOS executables
-            - name: Zip eim executable for notarization
-              if: startsWith(matrix.os, 'macos')
-              run: |
-                  cd release_cli/${{ matrix.package_name }}
-                  zip -r eim.zip eim
-
-            - name: Notarization of macOS eim executables
-              if: startsWith(matrix.os, 'macos')
-              env:
-                  NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-                  NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-                  NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-              run: |
-                  echo "Create notary keychain"
-                  /usr/bin/security create-keychain -p espressif notary.keychain
-                  /usr/bin/security default-keychain -s notary.keychain
-                  /usr/bin/security unlock-keychain -p espressif notary.keychain
-
-                  echo "Create keychain profile"
-                  xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-                  xcrun notarytool submit release_cli/${{ matrix.package_name }}/eim.zip --keychain-profile "eim-notarytool-profile" --wait
-
-                  echo "Unzipping the executable"
-                  unzip -o release_cli/${{ matrix.package_name }}/eim.zip -d release_cli/${{ matrix.package_name }}
-
-            # Zip artifacts
-            - name: Zip artifacts (Windows)
-              if: runner.os == 'Windows'
-              run: |
-                  cd release_cli/${{ matrix.package_name }}
-                  7z a -tzip eim.zip eim.exe
-
-            - name: Zip artifacts (POSIX)
-              if: runner.os != 'Windows'
-              run: |
-                  cd release_cli/${{ matrix.package_name }}
-                  zip -r eim.zip eim
-
-            # Upload artifacts
-            - name: Upload CLI build artifacts
-              uses: actions/upload-artifact@v4
-              with:
-                  name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
-                  path: release_cli/${{ matrix.package_name }}/eim.zip
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/eim.zip
 
             - name: Upload artifact for tag
               if: startsWith(github.ref, 'refs/tags/')
@@ -329,230 +285,149 @@ jobs:
                   asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
                   asset_content_type: application/zip
 
-    build-gui:
-        name: Build GUI (${{ matrix.package_name }})
-        needs: [setup, changes, build-test-lib]
-        # Run if gui files changed or it's a release/tag
-        if: (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true') && (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-        permissions:
-            contents: write
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+  build-gui:
+    name: Build GUI (${{ matrix.package_name }})
+    needs: [setup, build-test-lib]
+    if: needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
             - name: Setup Node.js
               uses: actions/setup-node@v4
               with:
                   node-version: lts/*
 
-            - name: Set up Rust
-              uses: dtolnay/rust-toolchain@stable
-              with:
-                  targets: ${{ matrix.target != '' && matrix.target || '' }}
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
-            # OpenSSL setup for Windows
-            - name: Install OpenSSL (Windows)
-              if: runner.os == 'Windows'
-              shell: powershell
-              run: |
-                  echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  vcpkg install openssl:x64-windows-static-md
+      - name: Install OpenSSL (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+          vcpkg install openssl:x64-windows-static-md
 
-            - name: Install dependencies (Ubuntu)
-              if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
+      - name: Install dependencies (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf
 
-            # Restore caches
-            - name: Restore cargo caches
-              uses: actions/cache/restore@v4
-              with:
-                  path: |
-                      ~/.cargo/registry
-                      ~/.cargo/git
-                      target
-                  key: ${{ runner.os }}-cargo-all-${{ hashFiles('**/Cargo.lock') }}
-                  restore-keys: |
-                      ${{ runner.os }}-cargo-all-
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
-            # Install front-end dependencies
-            - name: Install frontend dependencies
-              run: yarn install
+      - name: Install frontend dependencies
+        run: yarn install
 
-            # Prepare for signing (macOS)
-            - uses: apple-actions/import-codesign-certs@v3
-              if: startsWith(matrix.os, 'macos')
-              with:
-                  p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
-                  p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-                  keychain: build
+      - name: Import macOS codesign certs
+        if: startsWith(matrix.os, 'macos')
+        uses: apple-actions/import-codesign-certs@v3
+        with:
+          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
+          p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          keychain: build
 
-            # Build with signing and notarization (macOS)
-            - name: Build with signing and notarization (macOS)
-              if: startsWith(matrix.os, 'macos')
-              env:
-                  MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-                  APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
-                  APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-                  APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-                  MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-              run: |
-                  /usr/bin/security create-keychain -p espressif notary.keychain
-                  /usr/bin/security default-keychain -s notary.keychain
-                  /usr/bin/security unlock-keychain -p espressif notary.keychain
+      - name: Build GUI (macOS)
+        if: startsWith(matrix.os, 'macos')
+        env:
+          APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
+          APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+        run: |
+          security create-keychain -p espressif notary.keychain
+          security default-keychain -s notary.keychain
+          security unlock-keychain -p espressif notary.keychain
+          yarn tauri build
 
-                  yarn tauri build
+      - name: Build GUI (non-macOS)
+        if: ${{ !startsWith(matrix.os, 'macos') }}
+        run: yarn tauri build
 
-            # Build app (non-macOS)
-            - name: Build GUI
-              if: ${{ ! startsWith(matrix.os, 'macos') }}
-              run: |
-                  yarn tauri build
+      - name: Sign Windows Binary
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        run: |
+          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+          certutil -decode cert.b64 cert.pfx
+          Remove-Item cert.b64
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
 
-            # Sign Windows binary
-            - name: Sign Windows Binary
-              if: runner.os == 'Windows'
-              env:
-                  WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-                  WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-                  WINDOWS_SIGN_TOOL_PATH: 'C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe'
-              run: |
-                  echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-                  certutil -decode cert.b64 cert.pfx
-                  Remove-Item cert.b64
-                  & "$env:WINDOWS_SIGN_TOOL_PATH" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
+      - name: Handle Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          chmod +x src-tauri/target/release/eim
+          chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+          cd src-tauri/target/release
+          zip -r eim.zip eim
 
-            # Handle Linux artifacts
-            - name: Handle Linux artifacts
-              if: matrix.os == 'ubuntu-latest'
-              run: |
-                  chmod +x src-tauri/target/release/eim
-                  chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
-                  cd ./src-tauri/target/release/
-                  zip -r eim.zip eim
+      - name: Handle macOS artifacts
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          chmod +x src-tauri/target/release/bundle/macos/eim.app
+          cd src-tauri/target/release/bundle/macos
+          zip -r eim.zip eim.app
 
-            # Handle macOS artifacts
-            - name: Handle macOS artifacts
-              if: startsWith(matrix.os, 'macos')
-              run: |
-                  chmod +x ./src-tauri/target/release/bundle/macos/eim.app
-                  cd ./src-tauri/target/release/bundle/macos/
-                  zip -r eim.zip eim.app
+      - name: Upload Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          path: |
+            src-tauri/target/release/eim.zip
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: error
 
-            # Upload platform-specific artifacts
-            # Linux
-            - name: Upload Linux binary
-              uses: actions/upload-artifact@v4
-              if: matrix.os == 'ubuntu-latest'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
-                  path: src-tauri/target/release/eim.zip
-                  if-no-files-found: error
+      - name: Upload macOS artifacts
+        if: startsWith(matrix.os, 'macos')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          path: |
+            src-tauri/target/release/bundle/macos/eim.zip
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+          if-no-files-found: error
 
-            - name: Upload Linux .deb
-              uses: actions/upload-artifact@v4
-              if: matrix.os == 'ubuntu-latest'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-deb
-                  path: src-tauri/target/release/bundle/deb/*.deb
-                  if-no-files-found: error
+      - name: Upload Windows artifacts
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          path: |
+            src-tauri/target/release/eim.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: error
 
-            - name: Upload Linux .rpm
-              uses: actions/upload-artifact@v4
-              if: matrix.os == 'ubuntu-latest'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-rpm
-                  path: src-tauri/target/release/bundle/rpm/*.rpm
-                  if-no-files-found: error
-
-            - name: Upload Linux .AppImage
-              uses: actions/upload-artifact@v4
-              if: matrix.os == 'ubuntu-latest'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-AppImage
-                  path: src-tauri/target/release/bundle/appimage/*.AppImage
-                  if-no-files-found: error
-
-            # macOS
-            - name: Upload macOS binary
-              uses: actions/upload-artifact@v4
-              if: startsWith(matrix.os, 'macos')
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
-                  path: src-tauri/target/release/bundle/macos/eim.zip
-                  if-no-files-found: error
-
-            - name: Upload macOS .dmg
-              uses: actions/upload-artifact@v4
-              if: startsWith(matrix.os, 'macos')
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-dmg
-                  path: src-tauri/target/release/bundle/dmg/*.dmg
-                  if-no-files-found: error
-
-            - name: Upload macOS .app
-              uses: actions/upload-artifact@v4
-              if: startsWith(matrix.os, 'macos')
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-app
-                  path: src-tauri/target/release/bundle/macos/*.app
-                  if-no-files-found: error
-
-            # Windows
-            - name: Upload Windows binary
-              uses: actions/upload-artifact@v4
-              if: runner.os == 'Windows'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
-                  path: src-tauri/target/release/eim.exe
-                  if-no-files-found: error
-
-            - name: Upload Windows .msi
-              uses: actions/upload-artifact@v4
-              if: runner.os == 'Windows'
-              with:
-                  name: eim-gui-${{ matrix.package_name }}-msi
-                  path: src-tauri/target/release/bundle/msi/*.msi
-                  if-no-files-found: error
-
-            # Upload release assets
-            - name: Upload Release Asset (Linux)
-              if: github.event_name == 'release' && github.event.action == 'created' && matrix.os == 'ubuntu-latest'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/release/eim.zip
-                  asset_name: eim-gui-${{ matrix.package_name }}.zip
-                  asset_content_type: application/zip
-
-            - name: Upload Release Asset (macOS)
-              if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/release/bundle/macos/eim.zip
-                  asset_name: eim-gui-${{ matrix.package_name }}.zip
-                  asset_content_type: application/zip
-
-            - name: Upload Release Asset (Windows)
-              if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: src-tauri/target/release/eim.exe
-                  asset_name: eim-gui-${{ matrix.package_name }}.exe
-                  asset_content_type: application/octet-stream
+      - name: Upload Release Assets
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (matrix.os == 'ubuntu-latest' && 'src-tauri/target/release/eim.zip' || 'src-tauri/target/release/bundle/macos/eim.zip') }}
+          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || 'zip' }}
+          asset_content_type: ${{ runner.os == 'Windows' && 'application/octet-stream' || 'application/zip' }}
 
     test-cli:
         name: Test CLI Binary (${{ matrix.package_name }})
@@ -676,7 +551,7 @@ jobs:
                   $env:LOG_TO_FILE="true"
                   $env:EIM_FILE_PATH = "..\test-bin\eim.exe"
                   $env:EIM_VERSION = "eim ${{ env.CLI_TAG }}"
-                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"                  
+                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"
                   Set-Location -Path "./tests"
                   Expand-Archive node_modules.zip
                   npm run test-CLI-win --file=CLI-basic
@@ -820,7 +695,7 @@ jobs:
                   $env:LOG_TO_FILE="true"
                   $env:EIM_FILE_PATH = "..\test-bin\eim.exe"
                   $env:EIM_VERSION = "eim ${{ env.CLI_TAG }}"
-                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"                  
+                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"
                   Set-Location -Path "./tests"
                   Expand-Archive node_modules.zip
                   npm run test-CLI-win --file=CLI-GUI-basic
@@ -962,7 +837,7 @@ jobs:
                   $env:LOG_TO_FILE="true"
                   $env:EIM_GUI_PATH = "..\test-bin\eim.exe"
                   $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
-                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"                  
+                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"
                   Set-Location -Path "./tests"
                   Expand-Archive node_modules.zip
                   npm run test-GUI-win --file=GUI-basic
