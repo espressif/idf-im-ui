@@ -41,12 +41,12 @@
             </n-button>
           </div>
           <div v-else class="manual-install" data-id="manual-install-section">
-            <p class="hint" data-id="manual-install-hint">Please install these components and run the check again:
+            <p class="hint" data-id="manual-install-hint">Please install the prerequisites and run the check again.
             </p>
           </div>
         </div>
       </div>
-      <div v-else>
+      <div v-if="missing_prerequisities.length > 0 || !did_the_check_run">
         <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
           {{ loading ? 'Checking...' : 'Check Prerequisites' }}
         </n-button>
