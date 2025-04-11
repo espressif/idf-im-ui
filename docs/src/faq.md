@@ -11,6 +11,16 @@ No, the installer does not require elevated rights and should **not** be run as 
 
 ## GUI-Specific Questions
 
+## Running Installer in Windows Sandbox
+
+If you intend to run the ESP-IDF installer within a Windows Sandbox environment, you might encounter issues if the 'WebView2 Runtime' is not present in the sandbox. The installer relies on WebView2 for its graphical user interface.
+
+To successfully run the installer in Windows Sandbox, you will need to first install the 'WebView2 Runtime' within the sandbox environment. You can obtain the installer for the WebView2 Runtime from the following link:
+
+[https://developer.microsoft.com/](https://developer.microsoft.com/en-us/microsoft-edge/webview2/?form=MA13LH#download)
+
+Download and run the appropriate WebView2 Runtime installer inside the Windows Sandbox before attempting to run the ESP-IDF installer. This will ensure that the necessary components for the GUI are available, allowing the ESP-IDF installer to function correctly.
+
 ### Can I return to the main page of the installer?
 Yes, you can return to the main page by clicking on the Espressif logo in the top-left corner. However, this is not possible during the final steps of installation.
 
