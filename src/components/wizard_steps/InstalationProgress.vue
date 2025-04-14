@@ -25,7 +25,7 @@
       </div>
 
       <!-- Current Activity Display (Win only) -->
-      <div v-if="installation_running" class="current-activity" data-id="current-activity">
+      <div v-if="installation_running && os == 'windows'" class="current-activity" data-id="current-activity">
         <div class="current-step">
           <h3>Current Activity:</h3>
           <div class="activity-status">{{ currentActivity }}</div>
