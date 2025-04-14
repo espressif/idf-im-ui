@@ -1285,6 +1285,8 @@ fn is_process_running(pid: u32) -> bool {
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    use std::fmt::format;
+
     info!("Starting installation");
     let settings = get_locked_settings(&app_handle)?;
 
@@ -1328,6 +1330,8 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             );
         }
     }
+
+    send_simple_setup_message(&app_handle,11,"Installation finished sucessfully".to_string());
 
     Ok(())
 }
