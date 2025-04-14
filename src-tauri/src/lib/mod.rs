@@ -1030,12 +1030,22 @@ fn shallow_clone(
         callbacks.transfer_progress(|stats| {
             let val =
                 ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-            tx.send(ProgressMessage::Update(val)).unwrap();
+            match tx.send(ProgressMessage::Update(val)) {
+                Ok(_) => {}
+                Err(e) => {
+                    // log::warn!("Failed to send progress message: {}", e);
+                }
+            };
             true
         });
         sfo.remote_callbacks(callbacks);
-        tx.send(ProgressMessage::Finish).unwrap();
         update_submodules(&repo, sfo, tx.clone())?;
+        match tx.send(ProgressMessage::Finish) {
+            Ok(_) => {}
+            Err(e) => {
+                // log::warn!("Failed to send finish message: {}", e);
+            }
+        }
         info!("Finished fetching submodules");
     }
     // Return the opened repository
@@ -1067,9 +1077,20 @@ fn update_submodules(
         fetch_options: &mut SubmoduleUpdateOptions,
         tx: std::sync::mpsc::Sender<ProgressMessage>,
     ) -> Result<(), git2::Error> {
-        let submodules = repo.submodules()?;
+        let submodules = match repo.submodules(){
+            Ok(submodules) => submodules,
+            Err(e) => {
+                log::error!("Failed to get submodules: {}", e);
+                return Err(e);
+            }
+        };
         for mut submodule in submodules {
-            tx.send(ProgressMessage::Finish).unwrap();
+            match tx.send(ProgressMessage::Finish) {
+                Ok(_) => {}
+                Err(e) => {
+                    // log::warn!("Failed to send finish message: {}", e);
+                }
+            };
             submodule.update(true, Some(fetch_options))?;
             let sub_repo = submodule.open()?;
             update_submodules_recursive(
