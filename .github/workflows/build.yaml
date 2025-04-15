@@ -176,12 +176,34 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install OpenSSL (Windows)
+      - name: Set up Perl (Windows)
+        if: runner.os == 'Windows'
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "5.38"
+
+      - name: Install Perl dependencies (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          vcpkg install openssl:x64-windows-static-md
+          cpan App::cpanminus
+          cpanm --force Locale::Maketext::Simple
+          cpanm --force Text::Template
+          cpanm --force Params::Check
+          cpanm --force IPC::Cmd
+          perl -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
+          perl -MText::Template -e "print 'Text::Template loaded successfully\n'"
+          perl -MParams::Check -e "print 'Params::Check loaded successfully\n'"
+          perl -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
+          $perl_lib_path = "C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\site\lib"
+          echo "PERL5LIB=$perl_lib_path" >> $env:GITHUB_ENV
+
+      # - name: Install OpenSSL (Windows)
+      #   if: runner.os == 'Windows'
+      #   shell: powershell
+      #   run: |
+      #     echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+      #     vcpkg install openssl:x64-windows-static-md
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -193,7 +215,33 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Debug Perl Environment (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "PERL5LIB: $env:PERL5LIB"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -V
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -e "print qq(@INC\n)"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MText::Template -e "print 'Text::Template loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MParams::Check -e "print 'Params::Check loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
+
       - name: Build CLI
+        if: runner.os == 'Windows'
+        env:
+          OPENSSL_DIR: 'C:\vcpkg\installed\x64-windows-static-md'
+          OPENSSL_LIB_DIR: 'C:\vcpkg\installed\x64-windows-static-md\lib'
+          OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
+          OPENSSL_STATIC: "1"
+          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.4-thr\\x64\\bin\\perl.exe'
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Build CLI
+        if: startsWith(matrix.os, 'macos')
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -267,23 +315,23 @@ jobs:
           name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim.zip
 
-            - name: Upload artifact for tag
-              if: startsWith(github.ref, 'refs/tags/')
-              uses: actions/upload-artifact@v4
-              with:
-                  name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-                  path: release_cli/${{ matrix.package_name }}/eim.zip
+      - name: Upload artifact for tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+            name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
+            path: release_cli/${{ matrix.package_name }}/eim.zip
 
-            - name: Upload Release Asset
-              if: github.event_name == 'release' && github.event.action == 'created'
-              uses: actions/upload-release-asset@v1
-              env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-              with:
-                  upload_url: ${{ github.event.release.upload_url }}
-                  asset_path: release_cli/${{ matrix.package_name }}/eim.zip
-                  asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
-                  asset_content_type: application/zip
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: actions/upload-release-asset@v1
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            upload_url: ${{ github.event.release.upload_url }}
+            asset_path: release_cli/${{ matrix.package_name }}/eim.zip
+            asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
+            asset_content_type: application/zip
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
@@ -299,10 +347,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: lts/*
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+            node-version: lts/*
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -392,9 +440,9 @@ jobs:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
             src-tauri/target/release/eim.zip
-            src-tauri/target/release/bundle/deb/*.deb
-            src-tauri/target/release/bundle/rpm/*.rpm
-            src-tauri/target/release/bundle/appimage/*.AppImage
+            # src-tauri/target/release/bundle/deb/*.deb
+            # src-tauri/target/release/bundle/rpm/*.rpm
+            # src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
 
       - name: Upload macOS artifacts
@@ -404,8 +452,8 @@ jobs:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
             src-tauri/target/release/bundle/macos/eim.zip
-            src-tauri/target/release/bundle/dmg/*.dmg
-            src-tauri/target/release/bundle/macos/*.app
+            # src-tauri/target/release/bundle/dmg/*.dmg
+            # src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
 
       - name: Upload Windows artifacts
@@ -415,7 +463,7 @@ jobs:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
             src-tauri/target/release/eim.exe
-            src-tauri/target/release/bundle/msi/*.msi
+            # src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
 
       - name: Upload Release Assets
@@ -429,148 +477,148 @@ jobs:
           asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || 'zip' }}
           asset_content_type: ${{ runner.os == 'Windows' && 'application/octet-stream' || 'application/zip' }}
 
-    test-cli:
-        name: Test CLI Binary (${{ matrix.package_name }})
-        needs: [build-cli, changes]
-        # Only run tests if cli was built and either cli changed or it's a release
-        if: needs.build-cli.result == 'success' && (needs.changes.outputs.cli == 'true' || needs.changes.outputs.release == 'true')
-        runs-on: ${{ matrix.os }}
-        strategy:
-            fail-fast: false
-            matrix:
-                include:
-                    - os: ubuntu-latest
-                      package_name: linux-x64
-                      run_on: GitHub
-                    - os: windows-latest
-                      package_name: windows-x64
-                      run_on: GitHub
-                    - os: macos-latest
-                      package_name: macos-aarch64
-                      run_on: GitHub
+  test-cli:
+    name: Test CLI Binary (${{ matrix.package_name }})
+    needs: [build-cli]
+    # Only run tests if cli was built and either cli changed or it's a release
+    if: needs.build-cli.result == 'success'
+    runs-on: ${{ matrix.os }}
+    strategy:
+        fail-fast: false
+        matrix:
+            include:
+                - os: ubuntu-latest
+                  package_name: linux-x64
+                  run_on: GitHub
+                - os: windows-latest
+                  package_name: windows-x64
+                  run_on: GitHub
+                - os: macos-latest
+                  package_name: macos-aarch64
+                  run_on: GitHub
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-              with:
-                  ref: ${{ github.event.pull_request.head.ref || github.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+            ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
-            - name: Set up Node.js
-              uses: actions/setup-node@v4
-              with:
-                  node-version: "20"
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+            node-version: "20"
 
-            - name: Download artifacts
-              uses: actions/download-artifact@v4
-              with:
-                  path: ./artifacts
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+            path: ./artifacts
 
-            # Get CLI version number (non-Windows)
-            - name: Get CLI application version number (non-Windows)
-              if: matrix.os != 'windows-latest'
-              run: |
-                  git fetch --tags
-                  LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
-                  STRIPPED_TAG=${LATEST_TAG#v}
-                  echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+      # Get CLI version number (non-Windows)
+      - name: Get CLI application version number (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+            git fetch --tags
+            LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
+            STRIPPED_TAG=${LATEST_TAG#v}
+            echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
 
-            # Get IDF version (non-Windows)
-            - name: Fetch latest IDF release (non-Windows)
-              if: matrix.os != 'windows-latest'
-              run: |
-                  curl -s https://dl.espressif.com/dl/esp-idf/idf_versions.json > IDF_latest_release.json
-                  IDF_TAG=$(jq -r .VERSIONS[1].name IDF_latest_release.json)
-                  echo "IDF_TAG=$IDF_TAG" >> $GITHUB_ENV
-                  echo "Latest IDF for default install: $IDF_TAG"
+      # Get IDF version (non-Windows)
+      - name: Fetch latest IDF release (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+            curl -s https://dl.espressif.com/dl/esp-idf/idf_versions.json > IDF_latest_release.json
+            IDF_TAG=$(jq -r .VERSIONS[1].name IDF_latest_release.json)
+            echo "IDF_TAG=$IDF_TAG" >> $GITHUB_ENV
+            echo "Latest IDF for default install: $IDF_TAG"
 
-            # Extract artifact (non-Windows)
-            - name: Extract artifact (non-Windows)
-              if: matrix.os != 'windows-latest'
-              run: |
-                  mkdir -p test-bin
-                  ls -la ./artifacts/
-                  ls -la ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/
-                  unzip ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/eim.zip -d test-bin
+      # Extract artifact (non-Windows)
+      - name: Extract artifact (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+            mkdir -p test-bin
+            ls -la ./artifacts/
+            ls -la ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/
+            unzip ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/eim.zip -d test-bin
 
-            # Install dependencies (Ubuntu)
-            - name: Install dependencies (Ubuntu)
-              if: matrix.os == 'ubuntu-latest'
-              run: |
-                  sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip
+      # Install dependencies (Ubuntu)
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+            sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip
 
-            # Install dependencies (MacOS)
-            - name: Install dependencies (MacOS)
-              if: matrix.os == 'macos-latest'
-              run: |
-                  brew install cmake ninja dfu-util
+      # Install dependencies (MacOS)
+      - name: Install dependencies (MacOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+            brew install cmake ninja dfu-util
 
-            # Run tests (non-Windows)
-            - name: Run IDF basic install test script (non-Windows)
-              if: matrix.os != 'windows-latest' && matrix.run_on != 'CNRunner'
-              run: |
-                  export LOG_TO_FILE="true"
-                  export EIM_FILE_PATH="../test-bin/eim"
-                  export EIM_VERSION="eim ${{ env.CLI_TAG }}"
-                  export IDF_VERSION="${{ env.IDF_TAG }}"
-                  cd tests
-                  npm ci
-                  npm run test-CLI --file=CLI-basic
-              continue-on-error: true
+      # Run tests (non-Windows)
+      - name: Run IDF basic install test script (non-Windows)
+        if: matrix.os != 'windows-latest' && matrix.run_on != 'CNRunner'
+        run: |
+            export LOG_TO_FILE="true"
+            export EIM_FILE_PATH="../test-bin/eim"
+            export EIM_VERSION="eim ${{ env.CLI_TAG }}"
+            export IDF_VERSION="${{ env.IDF_TAG }}"
+            cd tests
+            npm ci
+            npm run test-CLI --file=CLI-basic
+        continue-on-error: true
 
-            # Windows steps
-            - name: Get CLI application version number (Windows)
-              if: matrix.os == 'windows-latest'
-              run: |
-                  git fetch --tags
-                  $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
-                  $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
-                  echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+      # Windows steps
+      - name: Get CLI application version number (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+            git fetch --tags
+            $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
+            $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
+            echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-            - name: Fetch latest IDF release (Windows)
-              if: matrix.os == 'windows-latest'
-              run: |
-                  $json = Invoke-RestMethod -Uri "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
-                  $IDF_TAG = $json.VERSIONS[1].name
-                  echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
-                  echo "Latest IDF for default install: $IDF_TAG"
+      - name: Fetch latest IDF release (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+            $json = Invoke-RestMethod -Uri "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
+            $IDF_TAG = $json.VERSIONS[1].name
+            echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+            echo "Latest IDF for default install: $IDF_TAG"
 
-            - name: Extract artifact (Windows)
-              if: matrix.os == 'windows-latest'
-              run: |
-                  mkdir -p test-bin
-                  7z x ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/eim.zip -otest-bin
+      - name: Extract artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+            mkdir -p test-bin
+            7z x ./artifacts/eim-cli-${{ matrix.package_name }}-${{ github.run_number }}/eim.zip -otest-bin
 
-            - name: Install dependencies (Windows)
-              if: matrix.os == 'windows-latest'
-              run: |
-                  choco install ninja -y
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+            choco install ninja -y
 
-            - name: Run IDF basic install test script (Windows)
-              if: matrix.os == 'windows-latest'
-              run: |
-                  $env:LOG_TO_FILE="true"
-                  $env:EIM_FILE_PATH = "..\test-bin\eim.exe"
-                  $env:EIM_VERSION = "eim ${{ env.CLI_TAG }}"
-                  $env:IDF_VERSION = "${{ env.IDF_TAG }}"
-                  Set-Location -Path "./tests"
-                  Expand-Archive node_modules.zip
-                  npm run test-CLI-win --file=CLI-basic
-              continue-on-error: true
+      - name: Run IDF basic install test script (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+            $env:LOG_TO_FILE="true"
+            $env:EIM_FILE_PATH = "..\test-bin\eim.exe"
+            $env:EIM_VERSION = "eim ${{ env.CLI_TAG }}"
+            $env:IDF_VERSION = "${{ env.IDF_TAG }}"
+            Set-Location -Path "./tests"
+            Expand-Archive node_modules.zip
+            npm run test-CLI-win --file=CLI-basic
+        continue-on-error: true
 
-            # Upload test results
-            - name: Upload test results
-              uses: actions/upload-artifact@v4
-              if: always()
-              with:
-                  name: cli-test-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
-                  path: |
-                      ./tests/results-*.json
-                      ./tests/test.log
+      # Upload test results
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+            name: cli-test-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
+            path: |
+                ./tests/results-*.json
+                ./tests/test.log
 
-    test-cli-in-gui:
+  test-cli-in-gui:
         name: Test CLI in GUI Binary (${{ matrix.package_name }})
-        needs: [build-gui, changes]
-        if: needs.build-gui.result == 'success' && (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true')
+        needs: [build-gui]
+        if: needs.build-gui.result == 'success'
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
@@ -711,10 +759,10 @@ jobs:
                       ./tests/results-*.json
                       ./tests/test.log
 
-    test-gui:
+  test-gui:
         name: Test GUI (${{ matrix.package_name }})
-        needs: [build-gui, changes]
-        if: needs.build-gui.result == 'success' && (needs.changes.outputs.gui == 'true' || needs.changes.outputs.release == 'true')
+        needs: [build-gui]
+        if: needs.build-gui.result == 'success'
         runs-on: ${{ matrix.os }}
         strategy:
             fail-fast: false
@@ -870,7 +918,7 @@ jobs:
                   path: |
                       ~/AppData/Local/eim/logs/**/*
 
-    publish-cli-test-results:
+  publish-cli-test-results:
         name: Publish CLI Test Results
         needs: test-cli
         runs-on: ubuntu-latest
@@ -886,7 +934,7 @@ jobs:
                   reporter: mocha-json
                   fail-on-empty: "true"
 
-    publish-gui-cli-test-results:
+  publish-gui-cli-test-results:
         name: Publish CLI in GUI Test Results
         needs: test-cli-in-gui
         runs-on: ubuntu-latest
@@ -902,7 +950,7 @@ jobs:
                   reporter: mocha-json
                   fail-on-empty: "true"
 
-    publish-gui-test-results:
+  publish-gui-test-results:
         name: Publish GUI Test Results
         needs: [test-gui]
         runs-on: ubuntu-latest
@@ -918,7 +966,7 @@ jobs:
                   reporter: mocha-json
                   fail-on-empty: "true"
 
-    update-release-info:
+  update-release-info:
         name: Update Release Information
         needs: [build-cli, build-gui]
         runs-on: ubuntu-latest
