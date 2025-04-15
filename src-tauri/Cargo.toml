@@ -72,11 +72,11 @@ struct_iterable = "0.1.1"
 fork = "0.1"
 
 [dependencies.openssl-sys]
-version = "0.9"
+version = "0.9.0"
 
 [target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
-version = "0.9"
-features = []
+version = "0.9.0"
+features = ["vendored"]
 
 [target.'cfg(target_os = "windows")'.dependencies.reqwest]
 version = "0.12.4"

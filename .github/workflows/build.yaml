@@ -176,12 +176,34 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install OpenSSL (Windows)
+      - name: Set up Perl (Windows)
+        if: runner.os == 'Windows'
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "5.38"
+
+      - name: Install Perl dependencies (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: |
-          echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-          vcpkg install openssl:x64-windows-static-md
+          cpan App::cpanminus
+          cpanm --force Locale::Maketext::Simple
+          cpanm --force Text::Template
+          cpanm --force Params::Check
+          cpanm --force IPC::Cmd
+          perl -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
+          perl -MText::Template -e "print 'Text::Template loaded successfully\n'"
+          perl -MParams::Check -e "print 'Params::Check loaded successfully\n'"
+          perl -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
+          $perl_lib_path = "C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\site\lib"
+          echo "PERL5LIB=$perl_lib_path" >> $env:GITHUB_ENV
+
+      # - name: Install OpenSSL (Windows)
+      #   if: runner.os == 'Windows'
+      #   shell: powershell
+      #   run: |
+      #     echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+      #     vcpkg install openssl:x64-windows-static-md
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -193,7 +215,33 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
+      - name: Debug Perl Environment (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "PERL5LIB: $env:PERL5LIB"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -V
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -e "print qq(@INC\n)"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MText::Template -e "print 'Text::Template loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MParams::Check -e "print 'Params::Check loaded successfully\n'"
+          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
+
       - name: Build CLI
+        if: runner.os == 'Windows'
+        env:
+          OPENSSL_DIR: 'C:\vcpkg\installed\x64-windows-static-md'
+          OPENSSL_LIB_DIR: 'C:\vcpkg\installed\x64-windows-static-md\lib'
+          OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
+          OPENSSL_STATIC: "1"
+          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.4-thr\\x64\\bin\\perl.exe'
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Build CLI
+        if: startsWith(matrix.os, 'macos')
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
