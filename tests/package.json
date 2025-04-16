@@ -1,20 +1,23 @@
 {
-    "name": "eimtest-selenium",
     "type": "module",
-    "version": "0.0.1",
-    "main": "index.js",
+    "name": "eim_automated_tests",
+    "version": "0.2.0",
+    "description": "Automated tests scripts for ESP-IDF Installation Manager",
+    "main": "CLIRunner.test.js",
     "scripts": {
-        "test": "export JSON_FILENAME=$npm_config_file && mocha --exit --reporter json --reporter-options output=./results-$JSON_FILENAME.json runs/testRun.test.js",
-        "test-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json runs/testRun.test.js\""
+        "test-CLI": "export JSON_FILENAME=$npm_config_file && npx mocha --exit --reporter json --reporter-options output=./results-$JSON_FILENAME.json CLIRunner.test.js",
+        "test-CLI-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; npx mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json CLIRunner.test.js\"",
+        "test-GUI": "export JSON_FILENAME=$npm_config_file && npx mocha --exit --reporter json --reporter-options output=./results-$JSON_FILENAME.json GUIRunner.test.js",
+        "test-GUI-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; npx mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json GUIRunner.test.js\""
     },
     "author": "",
     "license": "ISC",
-    "description": "",
     "dependencies": {
-        "chai": "^5.1.2",
-        "mocha": "^11.0.1",
-        "mocha-junit-reporter": "^2.2.1",
-        "selenium-webdriver": "^4.27.0",
+        "chai": "^5.2.0",
+        "mocha": "^11.1.0",
+        "node-gyp": "^10.2.0",
+        "node-pty": "^1.0.0",
+        "selenium-webdriver": "^4.29.0",
         "winston": "^3.17.0"
     }
 }

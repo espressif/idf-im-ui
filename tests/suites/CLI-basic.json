@@ -1,0 +1,18 @@
+[
+    {
+        "id": 1,
+        "type": "arguments",
+        "name": "command-line-arguments"
+    },
+    {
+        "id": 2,
+        "type": "default",
+        "name": "default-installation-wizard"
+    },
+    {
+        "id": 3,
+        "type": "custom",
+        "name": "non-interactive-basic",
+        "data": {}
+    }
+]

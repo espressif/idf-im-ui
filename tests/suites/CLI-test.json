@@ -1,0 +1,14 @@
+[
+    {
+        "id": 2,
+        "type": "custom",
+        "name": "Extended 2",
+        "data": {
+            "targetList": "esp32",
+            "idfList": "v5.2.3",
+            "installFolder": ".espext2",
+            "idfMirror": "github",
+            "toolsMirror": "github"
+        }
+    }
+]
