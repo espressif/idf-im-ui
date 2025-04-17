@@ -1033,7 +1033,7 @@ fn shallow_clone(
             match tx.send(ProgressMessage::Update(val)) {
                 Ok(_) => {}
                 Err(e) => {
-                    // log::warn!("Failed to send progress message: {}", e);
+                    log::warn!("Failed to send progress message: {}", e);
                 }
             };
             true
@@ -1043,7 +1043,7 @@ fn shallow_clone(
         match tx.send(ProgressMessage::Finish) {
             Ok(_) => {}
             Err(e) => {
-                // log::warn!("Failed to send finish message: {}", e);
+                log::warn!("Failed to send finish message: {}", e);
             }
         }
         info!("Finished fetching submodules");
@@ -1088,7 +1088,7 @@ fn update_submodules(
             match tx.send(ProgressMessage::Finish) {
                 Ok(_) => {}
                 Err(e) => {
-                    // log::warn!("Failed to send finish message: {}", e);
+                    log::warn!("Failed to send finish message: {}", e);
                 }
             };
             submodule.update(true, Some(fetch_options))?;

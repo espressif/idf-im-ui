@@ -125,7 +125,6 @@ impl<'a> ProgressBar {
     }
 
     fn finish(&self) {
-        info!("finish_progress_bar called");
         emit_to_fe(
             &self.app_handle,
             "progress-message",
@@ -669,15 +668,22 @@ fn spawn_progress_monitor(
     thread::spawn(move || {
         let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
 
+        let mut download_finished = false;
+
         while let Ok(message) = rx.recv() {
             match message {
                 ProgressMessage::Finish => {
                     progress.update(100, None);
                     progress.finish();
-                    break;
+                    download_finished = true;
                 }
                 ProgressMessage::Update(value) => {
+                  if download_finished {
+                    progress.update(value, Some(&format!("Downloading submodules...")));
+
+                  } else {
                     progress.update(value, Some(&format!("Downloading IDF {}...", version)));
+                  }
                 }
             }
         }
@@ -859,7 +865,7 @@ async fn setup_tools(
                 );
                 anyhow!("Failed to setup environment variables: {}", e)
             })?;
-    
+
     let env_vars_install =
             idf_im_lib::setup_environment_variables(&parent_of_tools_install_folder, idf_path)
                 .map_err(|e| {
@@ -1127,7 +1133,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             .is_installing
             .lock()
             .map_err(|_| "Lock error".to_string())?;
-        
+
         if *is_installing {
             return Err("Installation already in progress".to_string());
         }
@@ -1138,34 +1144,34 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let settings = get_settings_non_blocking(&app_handle)?;
     let temp_dir = std::env::temp_dir();
     let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
-    
+
     // Make sure settings has proper values
     let mut settings_clone = settings.clone();
     settings_clone.config_file_save_path = Some(config_path.clone());
     settings_clone.non_interactive = Some(true);
     settings_clone.install_all_prerequisites = Some(true);
-    
+
     // Save settings to temp file
     if let Err(e) = settings_clone.save() {
         log::error!("Failed to save temporary config: {}", e);
         return Err(format!("Failed to save temporary config: {}", e));
     }
-    
+
     log::info!("Saved temporary config to {}", config_path.display());
-    
+
     // Get current executable path
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("Failed to get current executable path: {}", e))?;
-    
+
     // Set up command to capture output
     use std::process::{Command, Stdio};
-    
+
     send_message(
         &app_handle,
         "Starting installation in separate process...".to_string(),
         "info".to_string(),
     );
-    
+
     // Start the process with piped stdout and stderr
     let mut child = Command::new(current_exe)
         .arg("install")
@@ -1176,9 +1182,9 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         .stderr(Stdio::piped())            // Capture stderr
         .spawn()
         .map_err(|e| format!("Failed to start installer: {}", e))?;
-    
-    
-    
+
+
+
     // Set up monitor thread to read output and send to frontend
     let monitor_handle = app_handle.clone();
     let cfg_path = config_path.clone();
@@ -1186,12 +1192,12 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         use std::io::{BufRead, BufReader};
 
         let pid = child.id();
-        
+
         // Get stdout and stderr
         let mut child = child; // Take ownership of child to wait on it
         let stdout = child.stdout.take().expect("Failed to capture stdout");
         let stderr = child.stderr.take().expect("Failed to capture stderr");
-        
+
         // Monitor stdout in a separate thread
         let stdout_monitor = {
             let handle = monitor_handle.clone();
@@ -1204,14 +1210,14 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                             "type": "stdout",
                             "message": line
                         }));
-                        
+
                         // Also log it
                         log::info!("Install process stdout: {}", line);
                     }
                 }
             })
         };
-        
+
         // Monitor stderr in a separate thread
         let stderr_monitor = {
             let handle = monitor_handle.clone();
@@ -1224,14 +1230,14 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                             "type": "stderr",
                             "message": line
                         }));
-                        
+
                         // Also log it
                         log::error!("Install process stderr: {}", line);
                     }
                 }
             })
         };
-        
+
         // Wait for the child process to complete
         let status = match child.wait() {
             Ok(status) => {
@@ -1245,34 +1251,34 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 return;
             }
         };
-        
+
         // Wait for stdout/stderr monitors to finish
         let _ = stdout_monitor.join();
         let _ = stderr_monitor.join();
-        
+
         // Clean up
         if let Ok(mut is_installing) = monitor_handle.state::<AppState>().is_installing.lock() {
             *is_installing = false;
         }
-        
+
         // Let the frontend know installation is complete
         let success = status.success();
         log::info!("Emitting installation_complete event with success={}", success);
         let _ = monitor_handle.emit("installation_complete", json!({
             "success": success,
-            "message": if success { 
+            "message": if success {
                 "Installation process has completed successfully".to_string()
-            } else { 
-                format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1)) 
+            } else {
+                format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1))
             }
         }));
-        
+
         // Clean up temporary config file
         let _ = std::fs::remove_file(&cfg_path);
-        
+
         log::info!("Installation monitor thread completed");
     });
-    
+
     Ok(())
 }
 
@@ -1280,12 +1286,12 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn is_process_running(pid: u32) -> bool {
     use std::process::Command;
-    
+
     // Check if process exists using tasklist
     let output = Command::new("tasklist")
         .args(["/FI", &format!("PID eq {}", pid), "/NH"])
         .output();
-    
+
     match output {
         Ok(output) => {
             let output_str = String::from_utf8_lossy(&output.stdout);
@@ -1526,7 +1532,7 @@ pub fn run() {
                         file_name: Some("eim_gui_log".to_string()),
                     },
                 ))
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .level_for("idf_im_lib", log::LevelFilter::Info)
                 .level_for("eim_lib", log::LevelFilter::Info)
                 .build(),
