@@ -141,7 +141,7 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: release_cli/${{ matrix.package_name }}/eim
-          asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
+          asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
           asset_content_type: application/zip
 
   build-cli:
@@ -202,18 +202,6 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
-
-      - name: Debug Perl Environment (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          echo "PERL5LIB: $env:PERL5LIB"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -V
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -e "print qq(@INC\n)"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MText::Template -e "print 'Text::Template loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MParams::Check -e "print 'Params::Check loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
 
       - name: Build CLI
         if: runner.os == 'Windows'
@@ -313,7 +301,7 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
             upload_url: ${{ github.event.release.upload_url }}
-            asset_path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
+            asset_path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
             asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
             asset_content_type: application/zip
 
@@ -453,8 +441,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (startsWith(matrix.os, 'macos') && 'src-tauri/target/release/eim' || 'src-tauri/target/release/bundle/macos/eim') }}
-          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || '' }}
+          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (startsWith(matrix.os, 'macos') && 'src-tauri/target/release/bundle/macos/eim' || 'src-tauri/target/release/eim') }}
+          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && '.exe' || '' }}
           asset_content_type: ${{ runner.os == 'Windows' && 'application/octet-stream' || 'application/zip' }}
 
   test-cli:

@@ -1,9 +1,10 @@
 [package]
 name = "eim"
-version = "0.2.0"
+version = "0.2.1"
 description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
+copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
