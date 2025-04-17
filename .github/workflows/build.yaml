@@ -193,13 +193,6 @@ jobs:
           $perl_lib_path = "C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\site\lib"
           echo "PERL5LIB=$perl_lib_path" >> $env:GITHUB_ENV
 
-      # - name: Install OpenSSL (Windows)
-      #   if: runner.os == 'Windows'
-      #   shell: powershell
-      #   run: |
-      #     echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
-      #     vcpkg install openssl:x64-windows-static-md
-
       - name: Cache cargo
         uses: actions/cache@v4
         with:
@@ -299,23 +292,19 @@ jobs:
           xcrun notarytool submit eim.zip --keychain-profile "eim-notarytool-profile" --wait
           unzip -o eim.zip -d .
 
-      - name: Zip artifacts
-        run: |
-          cd release_cli/${{ matrix.package_name }}
-          ${{ runner.os == 'Windows' && '7z a -tzip eim.zip eim.exe' || 'zip -r eim.zip eim' }}
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
-          path: release_cli/${{ matrix.package_name }}/eim.zip
+          path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
 
       - name: Upload artifact for tag
         if: startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
             name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-            path: release_cli/${{ matrix.package_name }}/eim.zip
+            path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
 
       - name: Upload Release Asset
         if: github.event_name == 'release' && github.event.action == 'created'
@@ -324,7 +313,7 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
             upload_url: ${{ github.event.release.upload_url }}
-            asset_path: release_cli/${{ matrix.package_name }}/eim.zip
+            asset_path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
             asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
             asset_content_type: application/zip
 
@@ -418,15 +407,11 @@ jobs:
         run: |
           chmod +x src-tauri/target/release/eim
           chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
-          cd src-tauri/target/release
-          zip -r eim.zip eim
 
       - name: Handle macOS artifacts
         if: startsWith(matrix.os, 'macos')
         run: |
           chmod +x src-tauri/target/release/bundle/macos/eim.app
-          cd src-tauri/target/release/bundle/macos
-          zip -r eim.zip eim.app
 
       - name: Upload Linux artifacts
         if: startsWith(matrix.os, 'ubuntu')
@@ -434,7 +419,7 @@ jobs:
         with:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
-            src-tauri/target/release/eim.zip
+            src-tauri/target/release/eim
             # src-tauri/target/release/bundle/deb/*.deb
             # src-tauri/target/release/bundle/rpm/*.rpm
             # src-tauri/target/release/bundle/appimage/*.AppImage
@@ -446,7 +431,7 @@ jobs:
         with:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
-            src-tauri/target/release/bundle/macos/eim.zip
+            src-tauri/target/release/eim
             # src-tauri/target/release/bundle/dmg/*.dmg
             # src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
@@ -468,8 +453,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (startsWith(matrix.os, 'macos') && 'src-tauri/target/release/eim.zip' || 'src-tauri/target/release/bundle/macos/eim.zip') }}
-          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || 'zip' }}
+          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (startsWith(matrix.os, 'macos') && 'src-tauri/target/release/eim' || 'src-tauri/target/release/bundle/macos/eim') }}
+          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || '' }}
           asset_content_type: ${{ runner.os == 'Windows' && 'application/octet-stream' || 'application/zip' }}
 
   test-cli:
