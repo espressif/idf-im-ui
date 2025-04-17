@@ -118,6 +118,8 @@ jobs:
         run: |
           cp src-tauri/target/${{ matrix.target || 'x86_64-unknown-linux-musl' }}/release/eim release_cli/${{ matrix.package_name }}/eim
           chmod +x release_cli/${{ matrix.package_name }}/eim
+          cd release_cli/${{ matrix.package_name }}
+          zip -r eim.zip eim
         shell: bash
 
       - name: Upload build artifacts
@@ -133,16 +135,15 @@ jobs:
           name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
           path: release_cli/${{ matrix.package_name }}/eim
 
-      - name: Upload Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset - Unix
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/eim
-          asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-          asset_content_type: application/zip
+            upload_url: ${{ github.event.release.upload_url }}
+            asset_path: release_cli/${{ matrix.package_name }}/eim.zip
+            asset_name: eim-cli-${{ matrix.package_name }}.zip
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -203,18 +204,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: ${{ runner.os }}-cargo-
 
-      - name: Debug Perl Environment (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: |
-          echo "PERL5LIB: $env:PERL5LIB"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -V
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -e "print qq(@INC\n)"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MLocale::Maketext::Simple -e "print 'Locale::Maketext::Simple loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MText::Template -e "print 'Text::Template loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MParams::Check -e "print 'Params::Check loaded successfully\n'"
-          C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\bin\perl.exe -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
-
       - name: Build CLI
         if: runner.os == 'Windows'
         env:
@@ -248,6 +237,8 @@ jobs:
         run: |
           cp src-tauri/target/${{ matrix.target }}/release/eim release_cli/${{ matrix.package_name }}/eim
           chmod +x release_cli/${{ matrix.package_name }}/eim
+          cd release_cli/${{ matrix.package_name }}
+          zip -r eim.zip eim
         shell: bash
 
       - name: Sign Windows Binary
@@ -306,16 +297,25 @@ jobs:
             name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
             path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
 
-      - name: Upload Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        uses: actions/upload-release-asset@v1
+      - name: Upload Release Asset - MacOs
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
             upload_url: ${{ github.event.release.upload_url }}
-            asset_path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
-            asset_name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}.zip
-            asset_content_type: application/zip
+            asset_path: release_cli/${{ matrix.package_name }}/eim.zip
+            asset_name: eim-cli-${{ matrix.package_name }}.zip
+
+      - name: Upload Release Asset (Windows)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            upload_url: ${{ github.event.release.upload_url }}
+            asset_path: release_cli/${{ matrix.package_name }}/eim.exe
+            asset_name: eim-cli-${{ matrix.package_name }}.exe
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
@@ -407,11 +407,15 @@ jobs:
         run: |
           chmod +x src-tauri/target/release/eim
           chmod +x src-tauri/target/release/bundle/appimage/*.AppImage
+          cd src-tauri/target/release/
+          zip -r eim.zip eim
 
       - name: Handle macOS artifacts
         if: startsWith(matrix.os, 'macos')
         run: |
           chmod +x src-tauri/target/release/bundle/macos/eim.app
+          cd src-tauri/target/release/bundle/macos
+          zip -r eim.zip eim.app
 
       - name: Upload Linux artifacts
         if: startsWith(matrix.os, 'ubuntu')
@@ -446,16 +450,35 @@ jobs:
             # src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error
 
-      - name: Upload Release Assets
-        if: github.event_name == 'release' && github.event.action == 'created'
-        uses: actions/upload-release-asset@v1
+      - name: Upload Release Assets (Windows)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: ${{ runner.os == 'Windows' && 'src-tauri/target/release/eim.exe' || (startsWith(matrix.os, 'macos') && 'src-tauri/target/release/eim' || 'src-tauri/target/release/bundle/macos/eim') }}
-          asset_name: eim-gui-${{ matrix.package_name }}.${{ runner.os == 'Windows' && 'exe' || '' }}
-          asset_content_type: ${{ runner.os == 'Windows' && 'application/octet-stream' || 'application/zip' }}
+          asset_path: src-tauri/target/release/eim.exe
+          asset_name: eim-gui-${{ matrix.package_name }}.exe
+
+      - name: Upload Release Assets (Linux)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/eim.zip
+          asset_name: eim-gui-${{ matrix.package_name }}.zip
+
+      - name: Upload Release Assets (macOS)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/macos/eim.zip
+          asset_name: eim-gui-${{ matrix.package_name }}.zip
 
   test-cli:
     name: Test CLI Binary (${{ matrix.package_name }})
