@@ -39,7 +39,8 @@ eim -i v4.4.1
 ```
 
 ### I am getting the error `/lib64/libm.so.6: version 'GLIBC_2.38' not found`. What should I do?
-This error indicates that your Linux system is using an outdated version of the GNU C Library (glibc). You will need to update your Linux distribution to a newer version that includes a more recent glibc.
+This error indicates that your Linux system is using an outdated version of the GNU C Library (glibc). However, since the CLI is statically linked, it does not depend on the system's glibc and should not encounter this issue. If you continue to experience problems, consider updating your Linux distribution to a newer version.
+
 
 ### How can I use EIM in CI/CD pipelines?
 For GitHub Actions, use the [install-esp-idf-action](https://github.com/espressif/install-esp-idf-action). For other CI/CD systems, use the headless mode with appropriate configuration. See [Headless Usage](./headless_usage.md) for details.
