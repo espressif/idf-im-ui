@@ -18,7 +18,7 @@
     "type": "custom",
     "name": "Extended 2",
     "data": {
-      "targetList": "esp32",
+      "targetList": "all",
       "idfList": "v5.2.5",
       "installFolder": ".espext2",
       "idfMirror": "github",
@@ -33,36 +33,8 @@
     "name": "Extended 3",
     "data": {
       "targetList": "esp32",
-      "idfList": "v5.1.5",
-      "installFolder": ".esprext3",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
-  },
-  {
-    "id": 4,
-    "type": "custom",
-    "name": "Extended 4",
-    "data": {
-      "targetList": "all",
-      "idfList": "v5.0.7",
-      "installFolder": ".esprext4",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
-  },
-  {
-    "id": 5,
-    "type": "custom",
-    "name": "Extended 5",
-    "data": {
-      "targetList": "esp32",
       "idfList": "master",
-      "installFolder": ".esprext5",
+      "installFolder": ".esprext3",
       "idfMirror": "github",
       "toolsMirror": "github",
       "recursive": "true",
