@@ -5,6 +5,7 @@
 # Function to print environment variables
 print_env_variables() {
     echo "PATH="{{addition_to_path}}""
+    echo "SYSTEM_PATH={{current_system_path}}"
     echo "ESP_IDF_VERSION={{idf_version}}"
     for pair in "${env_var_pairs[@]}"; do
         key="${pair%%:*}"

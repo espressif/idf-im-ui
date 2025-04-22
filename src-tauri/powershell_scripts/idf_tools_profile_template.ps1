@@ -10,6 +10,7 @@ param(
 function Print-EnvVariables {
     "PATH={{add_paths_extras}}"
     "ESP_IDF_VERSION={{idf_version}}"
+    "SYSTEM_PATH={{current_system_path}}"
     $env_var_pairs.GetEnumerator() | ForEach-Object {
         Write-Host "$($_.Key)=$($_.Value)"
     }
@@ -32,27 +33,27 @@ $env:PATH += ";{{add_paths_extras}}"
 
 # Define the Invoke-idfpy function
 function global:Invoke-idfpy {
-    {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\tools\idf.py @args 
+    {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\tools\idf.py @args
 }
 
 function global:esptool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\esptool.py @args 
+  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\esptool.py @args
 }
 
 function global:espefuse.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espefuse.py @args 
+  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
 }
 
 function global:espsecure.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espsecure.py @args 
+  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
 }
 
 function global:otatool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\app_update\otatool.py @args 
+  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\app_update\otatool.py @args
 }
 
 function global:parttool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\partition_table\parttool.py @args 
+  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\partition_table\parttool.py @args
 }
 
 # Create an alias for the function

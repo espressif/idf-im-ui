@@ -146,6 +146,8 @@ pub fn create_activation_shell_script(
     );
     context.insert("idf_version", &idf_version);
     context.insert("addition_to_path", &export_paths.join(":"));
+    context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
+
     if let Some(idf_python_env_path) = idf_python_env_path {
         context.insert("idf_python_env_path", &idf_python_env_path);
         context.insert(
@@ -301,6 +303,7 @@ fn create_powershell_profile(
         );
     }
     context.insert("add_paths_extras", &export_paths.join(";"));
+    context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
     let mut rendered = match tera.render("powershell_profile", &context) {
         Err(e) => {
             error!("Failed to render template: {}", e);
