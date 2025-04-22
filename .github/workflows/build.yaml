@@ -434,9 +434,9 @@ jobs:
         with:
           name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
           path: |
-            src-tauri/target/release/bundle/macos/eim.app
+            # src-tauri/target/release/bundle/macos/eim.app
             # src-tauri/target/release/bundle/dmg/*.dmg
-            # src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: error
 
       - name: Upload Windows artifacts
@@ -481,7 +481,7 @@ jobs:
 
   test-cli:
     name: Test CLI Binary (${{ matrix.package_name }})
-    needs: [build-cli]
+    needs: [build-cli, build-cli-linux]
     # Only run tests if cli was built and either cli changed or it's a release
     if: needs.build-cli.result == 'success'
     runs-on: ${{ matrix.os }}
@@ -745,8 +745,8 @@ jobs:
           mkdir -p test-bin
           ls -la ./artifacts/
           ls -la ./artifacts/eim-gui-${{ matrix.package_name }}-${{ github.run_number }}/
-          cp ./artifacts/eim-gui-${{ matrix.package_name }}-${{ github.run_number }}/eim.app test-bin
-          chmod +x test-bin/eim.app/Contents/MacOS/eim
+          cp ./artifacts/eim-gui-${{ matrix.package_name }}-${{ github.run_number }} test-bin/eim.app
+          chmod +x test-bin/eim.app
 
       - name: Install dependencies (MacOS)
         if: matrix.os == 'macos-latest'
@@ -1015,7 +1015,7 @@ jobs:
       - name: Publish Test Results
         uses: dorny/test-reporter@v2
         with:
-          artifact: /cli-test-results-(.*)/
+          artifact: /autotest-CLI-results-(.*)/
           name: "CLI Tests $1"
           path: "*.json"
           reporter: mocha-json
@@ -1055,7 +1055,7 @@ jobs:
 
   update-release-info:
     name: Update Release Information
-    needs: [build-cli, build-gui]
+    needs: [build-cli, build-cli-linux, build-gui]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     steps:
