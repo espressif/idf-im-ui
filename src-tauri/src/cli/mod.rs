@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use clap::CommandFactory;
 use cli_args::Cli;
 use cli_args::Commands;
 
@@ -151,7 +150,7 @@ pub async fn run_cli(cli: Cli) {
             info!("Listing installed versions...");
             match idf_im_lib::version_manager::get_esp_ide_config() {
                 Ok(config) => {
-                    if config.idf_installed.len() == 0 {
+                    if config.idf_installed.is_empty() {
                         warn!(
                             "No versions found. Use eim install to install a new ESP-IDF version."
                         );
@@ -176,7 +175,7 @@ pub async fn run_cli(cli: Cli) {
             if version.is_none() {
                 match idf_im_lib::version_manager::list_installed_versions() {
                     Ok(versions) => {
-                        if versions.len() == 0 {
+                        if versions.is_empty() {
                             warn!("No versions installed");
                         } else {
                             println!("Available versions:");
@@ -212,7 +211,7 @@ pub async fn run_cli(cli: Cli) {
             if version.is_none() {
                 match idf_im_lib::version_manager::list_installed_versions() {
                     Ok(versions) => {
-                        if versions.len() == 0 {
+                        if versions.is_empty() {
                             warn!("No versions installed");
                         } else {
                             let options = versions.iter().map(|v| v.name.clone()).collect();
@@ -227,7 +226,7 @@ pub async fn run_cli(cli: Cli) {
                                 "",
                             ) {
                                 Ok(name) => {
-                                    if name.len() == 0 {
+                                    if name.is_empty() {
                                         warn!("No name provided, using default!");
                                         version.clone()
                                     } else {
@@ -260,7 +259,7 @@ pub async fn run_cli(cli: Cli) {
                 let new_name =
                     match generic_input("Enter new name:", "you need to enter a new name", "") {
                         Ok(name) => {
-                            if name.len() == 0 {
+                            if name.is_empty() {
                                 warn!("No name provided, using default!");
                                 version.clone().unwrap()
                             } else {
@@ -321,7 +320,7 @@ pub async fn run_cli(cli: Cli) {
             if version.is_none() {
                 match idf_im_lib::version_manager::list_installed_versions() {
                     Ok(versions) => {
-                        if versions.len() == 0 {
+                        if versions.is_empty() {
                             println!("No versions installed");
                         } else {
                             println!("Available versions:");
@@ -353,7 +352,7 @@ pub async fn run_cli(cli: Cli) {
             println!("Purging all known IDF installations...");
             match idf_im_lib::version_manager::list_installed_versions() {
                 Ok(versions) => {
-                    if versions.len() == 0 {
+                    if versions.is_empty() {
                         println!("No versions installed");
                     } else {
                         for version in versions {
@@ -393,7 +392,7 @@ pub async fn run_cli(cli: Cli) {
             }
         }
         #[cfg(feature = "gui")]
-        Commands::Gui(install_args) => {
+        Commands::Gui(_install_args) => {
             #[cfg(not(feature = "gui"))]
             unimplemented!("GUI not present in this type of build");
             gui::run()

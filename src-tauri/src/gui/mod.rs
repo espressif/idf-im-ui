@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::{
@@ -9,7 +9,6 @@ use idf_im_lib::{
 use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::fs::metadata;
 use std::process::Command;
 use std::{
     env,
@@ -50,7 +49,7 @@ struct WizardData {
 
 // Event handling
 fn send_message(app_handle: &AppHandle, message: String, message_type: String) {
-    let _ = emit_to_fe(
+    emit_to_fe(
         app_handle,
         "user-message",
         json!({ "type": message_type, "message": message }),
@@ -58,7 +57,7 @@ fn send_message(app_handle: &AppHandle, message: String, message_type: String) {
 }
 
 fn send_tools_message(app_handle: &AppHandle, tool: String, action: String) {
-    let _ = emit_to_fe(
+    emit_to_fe(
         app_handle,
         "tools-message",
         json!({ "tool": tool, "action": action }),
@@ -66,7 +65,7 @@ fn send_tools_message(app_handle: &AppHandle, tool: String, action: String) {
 }
 
 fn send_install_progress_message(app_handle: &AppHandle, version: String, state: String) {
-    let _ = emit_to_fe(
+    emit_to_fe(
         app_handle,
         "install-progress-message",
         json!({ "version": version, "state": state }),
@@ -74,7 +73,7 @@ fn send_install_progress_message(app_handle: &AppHandle, version: String, state:
 }
 
 fn send_simple_setup_message(app_handle: &AppHandle, message_code: i32, message: String) {
-    let _ = emit_to_fe(
+    emit_to_fe(
         app_handle,
         "simple-setup-message",
         json!({ "code": message_code, "message": message }),
@@ -91,7 +90,7 @@ struct ProgressBar {
     app_handle: AppHandle,
 }
 
-impl<'a> ProgressBar {
+impl ProgressBar {
     fn new(app_handle: AppHandle, message: &str) -> Self {
         let progress = Self { app_handle };
         progress.create(message);
@@ -279,7 +278,7 @@ fn get_logs_folder(app_handle: AppHandle) -> PathBuf {
         None => {
             send_message(
                 &app_handle,
-                format!("Error getting log folder"),
+                "Error getting log folder".to_string(),
                 "error".to_string(),
             );
             log::error!("Error getting log folder"); //TODO: emit message
@@ -323,7 +322,7 @@ async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
         guard.clone()
     };
     let targets = settings.target.clone().unwrap_or_default();
-    let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets()
+    let available_targets = idf_im_lib::idf_versions::get_avalible_targets()
         .await
         .unwrap();
     // available_targets.insert(0, "all".to_string());
@@ -374,7 +373,7 @@ async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
     let targets = settings.target.clone().unwrap_or_default();
     let versions = settings.idf_versions.clone().unwrap_or_default();
 
-    let targets_vec: Vec<String> = targets.iter().cloned().collect();
+    let targets_vec: Vec<String> = targets.to_vec();
     let mut available_versions = if targets_vec.contains(&"all".to_string()) {
         idf_im_lib::idf_versions::get_idf_names().await
     } else {
@@ -577,13 +576,13 @@ async fn is_path_empty_or_nonexistent(app_handle: AppHandle, path: String) -> bo
                         return false;
                     }
                 }
-                return true;
+                true
             } // true if directory is empty
             Err(_) => false, // return false if we can't read the directory
         }
     } else {
         //path is file which is conflicting with the directory
-        false // return false if it's not a directory
+        false
     }
 }
 
@@ -843,7 +842,7 @@ async fn setup_tools(
     );
 
     for (tool_name, download) in tools_to_download {
-        process_tool_download(&app_handle, &tool_setup, &tool_name, &download).await?;
+        process_tool_download(app_handle, &tool_setup, &tool_name, &download).await?;
     }
     let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
     let parent_of_tools_install_folder = tools_install_folder.parent().unwrap().to_path_buf();
@@ -859,7 +858,7 @@ async fn setup_tools(
                 );
                 anyhow!("Failed to setup environment variables: {}", e)
             })?;
-    
+
     let env_vars_install =
             idf_im_lib::setup_environment_variables(&parent_of_tools_install_folder, idf_path)
                 .map_err(|e| {
@@ -976,14 +975,14 @@ async fn process_tool_download(
     };
 
     // Verify downloaded file
-    verify_download(&app_handle, &download.sha256, full_path_str, filename)?;
+    verify_download(app_handle, &download.sha256, full_path_str, filename)?;
 
     // Extract tool
     extract_tool(
-        &app_handle,
+        app_handle,
         filename,
         full_path_str,
-        &Path::new(&tool_setup.install_dir),
+        Path::new(&tool_setup.install_dir),
     )?;
 
     progress_handle
@@ -1065,7 +1064,7 @@ fn setup_progress_monitoring(
         while let Ok(progress_msg) = progress_rx.recv() {
             match progress_msg {
                 DownloadProgress::Progress(current, total) => {
-                    let percentage = (current * 100 / total) as u64;
+                    let percentage = current * 100 / total;
                     progress.update(
                         percentage,
                         Some(&format!("Downloading {}... {}%", tool_name, percentage)),
@@ -1106,7 +1105,7 @@ async fn install_single_version(
             .unwrap_or_default(),
     );
     idf_im_lib::single_version_post_install(
-        &version_path.to_str().unwrap(),
+        version_path.to_str().unwrap(),
         idf_path.to_str().unwrap(),
         &version,
         tools_install_path.to_str().unwrap(),
@@ -1127,7 +1126,7 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             .is_installing
             .lock()
             .map_err(|_| "Lock error".to_string())?;
-        
+
         if *is_installing {
             return Err("Installation already in progress".to_string());
         }
@@ -1138,34 +1137,34 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let settings = get_settings_non_blocking(&app_handle)?;
     let temp_dir = std::env::temp_dir();
     let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
-    
+
     // Make sure settings has proper values
     let mut settings_clone = settings.clone();
     settings_clone.config_file_save_path = Some(config_path.clone());
     settings_clone.non_interactive = Some(true);
     settings_clone.install_all_prerequisites = Some(true);
-    
+
     // Save settings to temp file
     if let Err(e) = settings_clone.save() {
         log::error!("Failed to save temporary config: {}", e);
         return Err(format!("Failed to save temporary config: {}", e));
     }
-    
+
     log::info!("Saved temporary config to {}", config_path.display());
-    
+
     // Get current executable path
     let current_exe = std::env::current_exe()
         .map_err(|e| format!("Failed to get current executable path: {}", e))?;
-    
+
     // Set up command to capture output
     use std::process::{Command, Stdio};
-    
+
     send_message(
         &app_handle,
         "Starting installation in separate process...".to_string(),
         "info".to_string(),
     );
-    
+
     // Start the process with piped stdout and stderr
     let mut child = Command::new(current_exe)
         .arg("install")
@@ -1176,9 +1175,9 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         .stderr(Stdio::piped())            // Capture stderr
         .spawn()
         .map_err(|e| format!("Failed to start installer: {}", e))?;
-    
-    
-    
+
+
+
     // Set up monitor thread to read output and send to frontend
     let monitor_handle = app_handle.clone();
     let cfg_path = config_path.clone();
@@ -1186,12 +1185,12 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         use std::io::{BufRead, BufReader};
 
         let pid = child.id();
-        
+
         // Get stdout and stderr
         let mut child = child; // Take ownership of child to wait on it
         let stdout = child.stdout.take().expect("Failed to capture stdout");
         let stderr = child.stderr.take().expect("Failed to capture stderr");
-        
+
         // Monitor stdout in a separate thread
         let stdout_monitor = {
             let handle = monitor_handle.clone();
@@ -1204,14 +1203,14 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                             "type": "stdout",
                             "message": line
                         }));
-                        
+
                         // Also log it
                         log::info!("Install process stdout: {}", line);
                     }
                 }
             })
         };
-        
+
         // Monitor stderr in a separate thread
         let stderr_monitor = {
             let handle = monitor_handle.clone();
@@ -1224,14 +1223,14 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                             "type": "stderr",
                             "message": line
                         }));
-                        
+
                         // Also log it
                         log::error!("Install process stderr: {}", line);
                     }
                 }
             })
         };
-        
+
         // Wait for the child process to complete
         let status = match child.wait() {
             Ok(status) => {
@@ -1245,34 +1244,34 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 return;
             }
         };
-        
+
         // Wait for stdout/stderr monitors to finish
         let _ = stdout_monitor.join();
         let _ = stderr_monitor.join();
-        
+
         // Clean up
         if let Ok(mut is_installing) = monitor_handle.state::<AppState>().is_installing.lock() {
             *is_installing = false;
         }
-        
+
         // Let the frontend know installation is complete
         let success = status.success();
         log::info!("Emitting installation_complete event with success={}", success);
         let _ = monitor_handle.emit("installation_complete", json!({
             "success": success,
-            "message": if success { 
+            "message": if success {
                 "Installation process has completed successfully".to_string()
-            } else { 
-                format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1)) 
+            } else {
+                format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1))
             }
         }));
-        
+
         // Clean up temporary config file
         let _ = std::fs::remove_file(&cfg_path);
-        
+
         log::info!("Installation monitor thread completed");
     });
-    
+
     Ok(())
 }
 
@@ -1280,12 +1279,12 @@ async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 #[cfg(target_os = "windows")]
 fn is_process_running(pid: u32) -> bool {
     use std::process::Command;
-    
+
     // Check if process exists using tasklist
     let output = Command::new("tasklist")
         .args(["/FI", &format!("PID eq {}", pid), "/NH"])
         .output();
-    
+
     match output {
         Ok(output) => {
             let output_str = String::from_utf8_lossy(&output.stdout);
@@ -1298,7 +1297,6 @@ fn is_process_running(pid: u32) -> bool {
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    use std::fmt::format;
 
     info!("Starting installation");
     let settings = get_locked_settings(&app_handle)?;
@@ -1373,13 +1371,12 @@ fn save_config(app_handle: tauri::AppHandle, path: String) {
 
 #[tauri::command]
 async fn start_simple_setup(app_handle: tauri::AppHandle) {
-    let mut settings = get_locked_settings(&app_handle).unwrap();
-    let state_settings = app_handle.state::<AppState>();
+    let settings = get_locked_settings(&app_handle).unwrap();
     send_simple_setup_message(&app_handle, 1, "started".to_string());
     // prerequisities check
     let mut prerequisities = check_prequisites(app_handle.clone());
     let os = get_operating_system().to_lowercase();
-    if prerequisities.len() > 0 && os == "windows" {
+    if !prerequisities.is_empty() && os == "windows" {
         send_simple_setup_message(&app_handle, 2, "installing prerequisites".to_string());
         prerequisities = check_prequisites(app_handle.clone());
         if !install_prerequisites(app_handle.clone()) {
@@ -1388,7 +1385,7 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
         }
         prerequisities = check_prequisites(app_handle.clone());
     }
-    if prerequisities.len() > 0 {
+    if !prerequisities.is_empty() {
         send_simple_setup_message(&app_handle, 4, prerequisities.join(", "));
         return;
     }
@@ -1424,7 +1421,6 @@ async fn start_simple_setup(app_handle: tauri::AppHandle) {
             return;
         }
     }
-    settings = get_locked_settings(&app_handle).unwrap();
     // install
     send_simple_setup_message(&app_handle, 10, "Installing IDF".to_string());
     let _res = start_installation(app_handle.clone()).await;

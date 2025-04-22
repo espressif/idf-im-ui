@@ -235,7 +235,6 @@ pub fn get_download_link_by_platform(
 /// * A new HashMap with the same keys as the input `tools` but with updated Download instances.
 ///   The URLs of the Download instances are replaced with the mirror URL if provided.
 ///
-
 pub fn change_links_donwanload_mirror(
     tools: HashMap<String, Download>,
     mirror: Option<&str>,
@@ -371,9 +370,7 @@ pub fn get_tools_export_paths(
 /// * A vector of `PathBuf` instances representing the directories found.
 ///
 pub fn find_bin_directories(path: &Path) -> Vec<String> {
-    let result = find_directories_by_name(path, "bin");
-
-    result
+    find_directories_by_name(path, "bin")
 }
 
 #[cfg(test)]

@@ -308,14 +308,13 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
     let group_name = config
         .idf_mirror
         .as_deref()
-        .map(|mirror| {
+        .and_then(|mirror| {
             if mirror.contains("https://gitee.com/") {
                 Some("EspressifSystems")
             } else {
                 None
             }
-        })
-        .flatten();
+        });
 
     match idf_im_lib::get_esp_idf_by_tag_name(
         &config.idf_path,
@@ -535,7 +534,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // setup tool directories
 
         let tool_download_directory = setup_directory(
-            config.wizard_all_questions.clone(),
+            config.wizard_all_questions,
             &version_instalation_path,
             &mut config.tool_download_folder_name,
             "wizard.tools.download.prompt",
@@ -544,7 +543,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         // Setup install directory
         let tool_install_directory = setup_directory(
-            config.wizard_all_questions.clone(),
+            config.wizard_all_questions,
             &version_instalation_path,
             &mut config.tool_install_folder_name,
             "wizard.tools.install.prompt",
@@ -564,7 +563,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
 
         download_and_extract_tools(
-            &&config,
+            &config,
             &tools,
             &tool_download_directory,
             &tool_install_directory,
@@ -610,10 +609,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         .collect();
 
         idf_im_lib::single_version_post_install(
-            &version_instalation_path.to_str().unwrap(),
-            &idf_path.to_str().unwrap(),
+            version_instalation_path.to_str().unwrap(),
+            idf_path.to_str().unwrap(),
             &idf_version,
-            &tool_install_directory.to_str().unwrap(),
+            tool_install_directory.to_str().unwrap(),
             export_paths,
         )
     }
@@ -654,10 +653,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
             for idf_version in config.idf_versions.clone().unwrap() {
                 println!(
-                    "       {} \"{}/{}\"",
+                    "       {} \"{}/activate_idf_{}.sh\"",
                     t!("wizard.posix.finish_steps.line_5"),
                     config.path.clone().unwrap().to_str().unwrap(),
-                    format!("activate_idf_{}.sh", idf_version),
+                    idf_version,
                 );
             }
             println!("============================================");

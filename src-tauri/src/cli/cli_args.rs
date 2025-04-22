@@ -226,7 +226,7 @@ impl IntoIterator for InstallArgs {
             (
                 "target".to_string(),
                 self.target.map(|s| {
-                    if s != "" {
+                    if !s.is_empty() {
                         s.split(',').collect::<Vec<&str>>().into()
                     } else {
                         s.into()
@@ -236,7 +236,7 @@ impl IntoIterator for InstallArgs {
             (
                 "idf_versions".to_string(),
                 self.idf_versions.map(|s| {
-                    if s != "" {
+                    if !s.is_empty() {
                         s.split(',').collect::<Vec<&str>>().into()
                     } else {
                         s.into()
