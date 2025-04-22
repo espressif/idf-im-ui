@@ -1573,7 +1573,7 @@ mod tests {
         let idf_tools_path = temp_dir.path().to_path_buf();
 
         // Create the directory structure
-        let tools_dir = idf_tools_path.join("tools");
+        let tools_dir = idf_tools_path.clone();
         let esp_rom_dir = tools_dir.join("esp-rom-elfs");
         let version_dir = esp_rom_dir.join("20243982");
 
@@ -1593,7 +1593,7 @@ mod tests {
         let idf_tools_path = temp_dir.path().to_path_buf();
 
         // Create empty directory structure
-        let tools_dir = idf_tools_path.join("tools");
+        let tools_dir = idf_tools_path.clone();
         let esp_rom_dir = tools_dir.join("esp-rom-elfs");
         fs::create_dir_all(&esp_rom_dir)?;
 
@@ -1617,7 +1617,7 @@ mod tests {
         let result = get_elf_rom_dir(&idf_tools_path)?;
 
         // Should return a path to the (nonexistent) esp-rom-elfs directory
-        assert_eq!(result, idf_tools_path.join("tools").join("esp-rom-elfs"));
+        assert_eq!(result, idf_tools_path.join("esp-rom-elfs"));
 
         Ok(())
     }

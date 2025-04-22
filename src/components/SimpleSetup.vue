@@ -37,7 +37,7 @@
 
 
         <GlobalProgress messagePosition="left"
-          v-if="(current_state_code > 0 && !showRetryButton ) && last_user_message_type != 'error'" />
+          v-if="(current_state_code > 0 && !showRetryButton ) && last_user_message_type != 'error' && current_state_code != 11" />
 
         <!-- Installation Log -->
         <n-collapse arrow-placement="right" v-if="messages.length > 0">

@@ -332,7 +332,7 @@ mod tests {
         };
 
         config.idf_installed = vec![new_installation.clone()];
-        config.to_file(&config_path, true, false)?;
+        config.to_file(&config_path, true, true)?;
 
         let updated_config = IdfConfig::from_file(&config_path)?;
         assert!(updated_config
