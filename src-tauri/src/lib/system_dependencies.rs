@@ -293,7 +293,7 @@ fn install_scoop_package_manager() -> Result<(), String> {
             };
             add_to_path(&path_with_scoop).unwrap();
             let scoop_install_cmd = include_str!("../../powershell_scripts/install_scoop.ps1");
-            let output = crate::run_powershell_script(&scoop_install_cmd);
+            let output = crate::run_powershell_script(scoop_install_cmd);
 
             match output {
                 Ok(o) => {
@@ -369,7 +369,7 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
 /// # Parameters
 ///
 /// * `packages_list` - A vector of strings representing the names of the packages to be installed.
-/// this can be obtained by calling the check_prerequisites() function.
+///   this can be obtained by calling the check_prerequisites() function.
 ///
 /// # Returns
 ///

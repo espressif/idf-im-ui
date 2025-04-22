@@ -9,7 +9,7 @@ pub trait CommandExecutor: Send {
     fn execute_with_env(
         &self,
         command: &str,
-        args: &Vec<&str>,
+        args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
@@ -24,7 +24,7 @@ impl CommandExecutor for DefaultExecutor {
     fn execute_with_env(
         &self,
         command: &str,
-        args: &Vec<&str>,
+        args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output> {
         let mut binding = Command::new(command);
@@ -118,7 +118,7 @@ impl CommandExecutor for WindowsExecutor {
                 Import-Module Microsoft.PowerShell.Security -Force\n\
                 Set-ExecutionPolicy Bypass -Scope Process -Force\n\
                 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\n\
-                {}", 
+                {}",
                 script
             );
 

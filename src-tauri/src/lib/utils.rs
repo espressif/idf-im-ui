@@ -38,7 +38,7 @@ pub fn get_git_path() -> Result<String, String> {
         _ => "which",
     };
 
-    let output = execute_command(cmd, &vec!["git"]).expect("failed to execute process");
+    let output = execute_command(cmd, &["git"]).expect("failed to execute process");
 
     if output.status.success() {
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -111,10 +111,10 @@ pub fn is_valid_idf_directory(path: &str) -> bool {
     }
     match read_and_parse_tools_file(tools_json_path.to_str().unwrap()) {
         Ok(_) => {
-            return true;
+            true
         }
         Err(_) => {
-            return false;
+            false
         }
     }
 }
@@ -305,7 +305,7 @@ pub struct IdfToolsConfig {
 fn extract_tools_path_from_python_env_path(path: &str) -> Option<PathBuf> {
     let path = PathBuf::from(path);
     path.ancestors()
-        .find(|p| p.file_name().map_or(false, |name| name == "python_env"))
+        .find(|p| p.file_name().is_some_and(|name| name == "python_env"))
         .and_then(|p| p.parent().map(|parent| parent.to_path_buf()))
 }
 
@@ -335,7 +335,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
     };
-    for tool_set in config {
+    if let Some(tool_set) = config.into_iter().next() {
         let new_idf_tools_path = extract_tools_path_from_python_env_path(
             tool_set.env_vars.get("IDF_PYTHON_ENV_PATH").unwrap(),
         )
@@ -360,9 +360,9 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
                 version_path.to_str().unwrap()
             ),
             _ => format!(
-                "{}/{}",
+                "{}/activate_idf_{}.sh",
                 version_path.to_str().unwrap(),
-                format!("activate_idf_{}.sh", tool_set.idf_version)
+                tool_set.idf_version
             ),
         };
         let installation = IdfInstallation {

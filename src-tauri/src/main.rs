@@ -18,7 +18,6 @@ pub mod cli;
 rust_i18n::i18n!("locales", fallback = "en");
 
 #[cfg(feature = "cli")]
-#[cfg(feature = "cli")]
 fn set_locale(locale: &Option<String>) {
     match locale {
         Some(l) => {
@@ -135,8 +134,6 @@ async fn main() {
     // both GUI and CLI features are enabled
     #[cfg(target_os = "windows")]
     let mut console_attached_or_allocated = false;
-
-    let has_args = std::env::args().len() > 1;
 
     #[cfg(target_os = "windows")]
     {

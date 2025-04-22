@@ -71,7 +71,7 @@ fn create_executable_shell_script(file_path: &str, content: &str) -> Result<(), 
 /// * A String representing the formatted environment variable pairs in bash-compatible format.
 ///   Each pair is enclosed in double quotes and separated by a newline.
 ///
-fn format_bash_env_pairs(pairs: &Vec<(String, String)>) -> String {
+fn format_bash_env_pairs(pairs: &[(String, String)]) -> String {
     let formatted_pairs: Vec<String> = pairs
         .iter()
         .map(|(key, value)| format!("    \"{}:{}\"", key, value))
@@ -90,7 +90,7 @@ fn format_bash_env_pairs(pairs: &Vec<(String, String)>) -> String {
 ///
 /// * A string representing the formatted environment variables in PowerShell-compatible format.
 ///
-fn format_powershell_env_pairs(pairs: &Vec<(String, String)>) -> String {
+fn format_powershell_env_pairs(pairs: &[(String, String)]) -> String {
     let formatted_pairs: Vec<String> = pairs
         .iter()
         .map(|(key, value)| format!("    \"{}\" = \"{}\"", key, value))
@@ -1167,18 +1167,16 @@ pub fn get_esp_idf_by_version_and_mirror(
         Some(version)
     };
     let group_name = mirror
-        .as_deref()
-        .map(|m| {
+        .and_then(|m| {
             if m.contains("https://gitee.com/") {
                 Some("EspressifSystems")
             } else {
                 None
             }
-        })
-        .flatten();
+        });
     get_esp_idf_by_tag_name(
         path,
-        tag.as_deref(),
+        tag,
         tx,
         mirror,
         group_name,
@@ -1203,7 +1201,6 @@ pub fn get_esp_idf_by_version_and_mirror(
 ///   On error, returns a `Result` containing a `git2::Error` indicating the cause of the error.
 ///
 ///
-
 pub fn get_esp_idf_by_tag_name(
     custom_path: &str,
     tag: Option<&str>,
@@ -1285,7 +1282,7 @@ pub fn single_version_post_install(
         &PathBuf::from(tool_install_directory),
         &PathBuf::from(idf_path),
     )
-    .unwrap_or(vec![]);
+    .unwrap_or_default();
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut

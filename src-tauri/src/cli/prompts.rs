@@ -29,7 +29,7 @@ pub async fn select_idf_version(
     avalible_versions.push("master".to_string());
     if non_interactive {
         debug!("Non-interactive mode, selecting first available IDF version.");
-        return Ok(vec![avalible_versions.first().unwrap().clone()]);
+        Ok(vec![avalible_versions.first().unwrap().clone()])
     } else {
         first_defaulted_multiselect("wizard.select_idf_version.prompt", &avalible_versions)
     }
@@ -216,7 +216,7 @@ pub fn select_installation_path(mut config: Settings) -> Result<Settings, String
         let path = match generic_input(
             "wizard.instalation_path.prompt",
             "wizard.instalation_path.unselected",
-            &config.path.clone().unwrap_or_default().to_str().unwrap(),
+            config.path.clone().unwrap_or_default().to_str().unwrap(),
         ) {
             Ok(path) => PathBuf::from(path),
             Err(e) => {

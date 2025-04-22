@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Result};
-use config::{Config, ConfigError, File};
-use log::debug;
+use config::{Config, ConfigError};
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -176,12 +175,12 @@ impl Settings {
             if cli_settings_struct.non_interactive.is_some()
                 && !cli_settings_struct.is_default("non_interactive")
             {
-                settings.non_interactive = cli_settings_struct.non_interactive.clone();
+                settings.non_interactive = cli_settings_struct.non_interactive
             }
             if cli_settings_struct.wizard_all_questions.is_some()
                 && !cli_settings_struct.is_default("wizard_all_questions")
             {
-                settings.wizard_all_questions = cli_settings_struct.wizard_all_questions.clone();
+                settings.wizard_all_questions = cli_settings_struct.wizard_all_questions;
             }
             if cli_settings_struct.mirror.is_some() && !cli_settings_struct.is_default("mirror") {
                 settings.mirror = cli_settings_struct.mirror.clone();
@@ -194,13 +193,13 @@ impl Settings {
             if cli_settings_struct.recurse_submodules.is_some()
                 && !cli_settings_struct.is_default("recurse_submodules")
             {
-                settings.recurse_submodules = cli_settings_struct.recurse_submodules.clone();
+                settings.recurse_submodules = cli_settings_struct.recurse_submodules;
             }
             if cli_settings_struct.install_all_prerequisites.is_some()
                 && !cli_settings_struct.is_default("install_all_prerequisites")
             {
                 settings.install_all_prerequisites =
-                    cli_settings_struct.install_all_prerequisites.clone();
+                    cli_settings_struct.install_all_prerequisites;
             }
             if cli_settings_struct.idf_features.is_some()
                 && !cli_settings_struct.is_default("idf_features")

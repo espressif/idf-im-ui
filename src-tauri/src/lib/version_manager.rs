@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 use log::warn;
 
-use crate::idf_config;
 use crate::utils::remove_directory_all;
 use crate::{
     idf_config::{IdfConfig, IdfInstallation},
@@ -185,7 +184,7 @@ pub fn remove_single_idf_version(identifier: &str) -> Result<String> {
     {
         let installation_folder_path = PathBuf::from(installation.path.clone());
         let installation_folder = installation_folder_path.parent().unwrap();
-        match remove_directory_all(&installation_folder) {
+        match remove_directory_all(installation_folder) {
             Ok(_) => {}
             Err(e) => {
                 return Err(anyhow!("Failed to remove installation folder: {}", e));
@@ -224,7 +223,7 @@ pub fn remove_single_idf_version(identifier: &str) -> Result<String> {
 ///   The vector is sorted in descending order.
 pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
     let path = Path::new(path);
-    let mut dirs = crate::utils::find_directories_by_name(&path, "esp-idf");
+    let mut dirs = crate::utils::find_directories_by_name(path, "esp-idf");
     dirs.sort();
     dirs.reverse();
     let filtered_dirs = crate::utils::filter_duplicate_paths(dirs.clone());
