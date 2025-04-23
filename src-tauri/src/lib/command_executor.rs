@@ -89,7 +89,7 @@ impl CommandExecutor for WindowsExecutor {
     fn execute_with_env(
         &self,
         command: &str,
-        args: &Vec<&str>,
+        args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output> {
         use std::os::windows::process::CommandExt;

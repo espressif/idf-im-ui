@@ -135,6 +135,8 @@ async fn main() {
     #[cfg(target_os = "windows")]
     let mut console_attached_or_allocated = false;
 
+    let has_args = std::env::args().len() > 1;
+
     #[cfg(target_os = "windows")]
     {
         if has_args {

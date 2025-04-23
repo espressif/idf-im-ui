@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use cli_args::Cli;
 use cli_args::Commands;
-
+use clap::CommandFactory;
 use cli_args::InstallArgs;
 use config::ConfigError;
 use helpers::generic_input;
