@@ -5,7 +5,7 @@
     "name": "Extended 1",
     "data": {
       "targetList": "esp32s2|esp32h2",
-      "idfList": "v5.3.2|v5.4.1",
+      "idfList": "v5.3.3|v5.4.1",
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github",
@@ -33,7 +33,7 @@
     "name": "Extended 3",
     "data": {
       "targetList": "esp32",
-      "idfList": "v5.1.5",
+      "idfList": "v5.1.6",
       "installFolder": ".esprext3",
       "idfMirror": "github",
       "toolsMirror": "github",
@@ -47,7 +47,7 @@
     "name": "Extended 4",
     "data": {
       "targetList": "all",
-      "idfList": "v5.0.7",
+      "idfList": "v5.0.8",
       "installFolder": ".esprext4",
       "idfMirror": "github",
       "toolsMirror": "github",

@@ -19,7 +19,7 @@
     "name": "Extended 2",
     "data": {
       "targetList": "All",
-      "idfList": "v5.2.5",
+      "idfList": "v5.0.8",
       "installFolder": ".espext2",
       "idfMirror": "github",
       "toolsMirror": "github",
