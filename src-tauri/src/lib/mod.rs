@@ -2,6 +2,7 @@ use flate2::read::GzDecoder;
 use git2::{FetchOptions, ObjectType, RemoteCallbacks, Repository, SubmoduleUpdateOptions};
 use log::{error, info, trace, warn};
 use reqwest::Client;
+use std::fs::metadata;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};

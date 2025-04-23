@@ -1445,7 +1445,7 @@ fn show_in_folder(path: String) {
     {
         let path = if path.contains(",") {
             // see https://gitlab.freedesktop.org/dbus/dbus/-/issues/76
-            match metadata(&path).unwrap().is_dir() {
+            match std::fs::metadata(&path).unwrap().is_dir() {
                 true => path,
                 false => {
                     let mut path2 = PathBuf::from(path);

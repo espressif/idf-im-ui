@@ -128,7 +128,7 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                     for tool in list_of_required_tools {
                         let output = command_executor::execute_command(
                             "sh",
-                            &["-c", &format!("dnf list installed | grep {}", tool)],
+                            &["-c", &format!("rpm -q {}", tool)],
                         );
                         match output {
                             Ok(o) => {
@@ -202,7 +202,7 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
             for tool in list_of_required_tools {
                 let output = command_executor::execute_command(
                     "zsh",
-                    &["-c", &format!("brew list | grep {}", tool)],
+                    &["-c", &format!("which {}", tool)],
                 );
                 match output {
                     Ok(o) => {
