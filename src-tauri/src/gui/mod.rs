@@ -678,6 +678,14 @@ fn spawn_progress_monitor(
                 ProgressMessage::Update(value) => {
                     progress.update(value, Some(&format!("Downloading IDF {}...", version)));
                 }
+                ProgressMessage::SubmoduleUpdate((name, value)) => {
+                  progress.update(value, Some(&format!("Downloading submodule {}... {}%", name, value)));
+
+                }
+                ProgressMessage::SubmoduleFinish(name) => {
+                  progress.update(100, None);
+                  progress.finish();
+                }
             }
         }
     })

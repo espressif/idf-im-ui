@@ -956,6 +956,8 @@ pub enum ProgressMessage {
     Update(u64),
     /// Finish the progress bar.
     Finish,
+    SubmoduleUpdate((String, u64)),
+    SubmoduleFinish(String),
 }
 
 /// Performs a shallow clone of a Git repository.
@@ -1031,18 +1033,10 @@ fn shallow_clone(
     };
 
     if recurse_submodules {
-        let mut sfo = FetchOptions::new();
-        let mut callbacks = RemoteCallbacks::new();
         info!("Fetching submodules");
-        callbacks.transfer_progress(|stats| {
-            let val =
-                ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-            tx.send(ProgressMessage::Update(val)).unwrap();
-            true
-        });
-        sfo.remote_callbacks(callbacks);
+
         tx.send(ProgressMessage::Finish).unwrap();
-        update_submodules(&repo, sfo, tx.clone())?;
+        update_submodules(&repo, tx.clone())?;
         info!("Finished fetching submodules");
     }
     // Return the opened repository
@@ -1061,42 +1055,83 @@ fn shallow_clone(
 /////+
 /// * `Result<(), git2::Error>`: On success, returns `Ok(())`. On error, returns a `git2::Error` indicating the cause of the error.//+
 fn update_submodules(
-    repo: &Repository,
-    fetch_options: FetchOptions,
-    tx: std::sync::mpsc::Sender<ProgressMessage>,
+  repo: &Repository,
+  tx: Sender<ProgressMessage>,
 ) -> Result<(), git2::Error> {
-    let mut submodule_update_options = git2::SubmoduleUpdateOptions::new();
-    submodule_update_options.fetch(fetch_options);
+  fn update_submodules_recursive(
+      repo: &Repository,
+      path: &Path,
+      tx: Sender<ProgressMessage>,
+  ) -> Result<(), git2::Error> {
+      let submodules = repo.submodules()?;
+      for mut submodule in submodules {
+          // Get submodule name or path as fallback
+          let submodule_name = submodule
+              .name()
+              .map(|s| s.to_string())
+              .unwrap_or_else(|| {
+                  submodule
+                      .path()
+                      .to_str()
+                      .unwrap_or("unknown")
+                      .to_string()
+              });
 
-    fn update_submodules_recursive(
-        repo: &Repository,
-        path: &Path,
-        fetch_options: &mut SubmoduleUpdateOptions,
-        tx: std::sync::mpsc::Sender<ProgressMessage>,
-    ) -> Result<(), git2::Error> {
-        let submodules = repo.submodules()?;
-        for mut submodule in submodules {
-            tx.send(ProgressMessage::Finish).unwrap();
-            submodule.update(true, Some(fetch_options))?;
-            let sub_repo = submodule.open()?;
-            update_submodules_recursive(
-                &sub_repo,
-                &path.join(submodule.path()),
-                fetch_options,
-                tx.clone(),
-            )?;
-        }
-        Ok(())
-    }
+          // Create callbacks specifically for this submodule
+          let mut callbacks = RemoteCallbacks::new();
+          let submodule_name_clone = submodule_name.clone();
+          let tx_clone = tx.clone();
 
-    update_submodules_recursive(
-        repo,
-        repo.workdir().unwrap(),
-        &mut submodule_update_options,
-        tx.clone(),
-    )
+          callbacks.transfer_progress(move |stats| {
+              if stats.total_objects() > 0 {
+                  let percentage = ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
+                  // Send message with submodule name and progress
+                  let _ = tx_clone.send(ProgressMessage::SubmoduleUpdate((
+                      submodule_name_clone.clone(),
+                      percentage,
+                  )));
+
+              }
+              true
+          });
+
+          // Create new fetch options for this submodule
+          let mut fetch_options = FetchOptions::new();
+          fetch_options.remote_callbacks(callbacks);
+
+          // Create update options with the fetch options
+          let mut update_options = SubmoduleUpdateOptions::new();
+          update_options.fetch(fetch_options);
+
+          // Notify that we're starting on this submodule
+          let _ = tx.send(ProgressMessage::SubmoduleUpdate((
+              submodule_name.clone(),
+              0))
+          );
+
+          // Update the submodule
+          submodule.update(true, Some(&mut update_options))?;
+
+          // Notify that we've finished this submodule
+          let _ = tx.send(ProgressMessage::SubmoduleFinish(submodule_name.clone()));
+
+          // Recursively update this submodule's submodules
+          let sub_repo = submodule.open()?;
+          update_submodules_recursive(
+              &sub_repo,
+              &path.join(submodule.path()),
+              tx.clone(),
+          )?;
+      }
+      Ok(())
+  }
+
+  update_submodules_recursive(
+      repo,
+      repo.workdir().unwrap_or(repo.path()),
+      tx,
+  )
 }
-
 pub enum GitReference {
     Branch(String),
     Tag(String),
@@ -1175,10 +1210,9 @@ pub fn clone_repository(
             }
             true
         });
-        submodule_fetch_options.remote_callbacks(callbacks);
 
         let _ = tx.send(ProgressMessage::Finish);
-        update_submodules(&repo, submodule_fetch_options, tx.clone())?;
+        update_submodules(&repo, tx.clone())?;
     }
 
     Ok(repo)
