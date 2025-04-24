@@ -59,6 +59,7 @@ Options:
 - `-a, --install-all-prerequisites <INSTALL_ALL_PREREQUISITES>`: Should the installer attempt to install all missing prerequisites (Windows only)
 - `--config-file-save-path <CONFIG_FILE_SAVE_PATH>`: Path to save the configuration file
 - `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF
+- `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
 
 ### Wizard Command
 
@@ -149,6 +150,9 @@ eim install -i v5.3.2
 
 # Install ESP-IDF v5.3.2 in interactive mode
 eim install -i v5.3.2 -n false
+
+# Install using custom repository mirror and stub
+eim install -i v5.3.2 --mirror https://my.custom.mirror --repo-stub my-custom-idf
 
 # Run the interactive wizard
 eim wizard

@@ -113,6 +113,22 @@ WORKDIR /workspace
 ENTRYPOINT ["/bin/bash", "-c", "source /root/.espressif/activate_idf_v5.3.2.sh && $0 $@"]
 ```
 
+## Custom Repository Configuration
+
+When installing from custom repositories, you can use the following options:
+
+1. **For GitHub repositories**: Only the `--repo-stub` parameter is needed to specify the repository name:
+```bash
+eim install -i v5.3.2 --repo-stub my-github-user/my-custom-idf
+```
+
+2. **For completely custom repositories** (like GitLab or self-hosted): Use both `--mirror` and `--repo-stub` parameters:
+```bash
+eim install -i v5.3.2 --mirror https://gitlab.example.com --repo-stub my-gitlab-user/my-custom-idf
+```
+
+The mirror parameter should point to the root URL of your repository host, while repo-stub specifies the repository path.
+
 ## Best Practices
 
 1. **Version Control**: Always specify the ESP-IDF version explicitly to ensure reproducible builds
