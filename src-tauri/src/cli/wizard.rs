@@ -250,6 +250,7 @@ async fn select_targets_and_versions(mut config: Settings) -> Result<Settings, S
 
 pub struct DownloadConfig {
     pub idf_path: String,
+    pub repo_stub: Option<String>,
     pub idf_version: String,
     pub idf_mirror: Option<String>,
     pub recurse_submodules: Option<bool>,
@@ -304,7 +305,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
 
     match idf_im_lib::get_esp_idf(
         &config.idf_path,
-        None,
+        config.repo_stub.as_deref(),
         &config.idf_version,
         config.idf_mirror.as_deref(),
         config.recurse_submodules.unwrap_or_default(),
@@ -502,6 +503,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // download idf
         let download_config = DownloadConfig {
             idf_path: idf_path.to_str().unwrap().to_string(),
+            repo_stub: config.repo_stub.clone(),
             idf_version: idf_version.to_string(),
             idf_mirror: config.idf_mirror.clone(),
             recurse_submodules: config.recurse_submodules,

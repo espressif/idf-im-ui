@@ -696,7 +696,7 @@ async fn download_idf(
 
     match idf_im_lib::get_esp_idf(
       idf_path.to_str().unwrap(),
-      None,
+      settings.repo_stub.as_deref(),
       version,
       settings.idf_mirror.as_deref(),
       settings.recurse_submodules.unwrap_or_default(),

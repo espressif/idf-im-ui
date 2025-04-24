@@ -202,6 +202,12 @@ pub struct InstallArgs {
         help = "Comma separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF."
     )]
     pub idf_features: Option<String>,
+
+    #[arg(
+        long,
+        help = "Repo stub to be used in case you want to use a custom repository. This is the 'espressif/esp-idf' part of the repository URL."
+    )]
+    pub repo_stub: Option<String>,
 }
 
 impl IntoIterator for InstallArgs {
@@ -277,6 +283,10 @@ impl IntoIterator for InstallArgs {
                 "idf_features".to_string(),
                 self.idf_features
                     .map(|s| s.split(',').collect::<Vec<&str>>().into()),
+            ),
+            (
+                "repo_stub".to_string(),
+                self.repo_stub.map(Into::into),
             ),
         ]
         .into_iter()
