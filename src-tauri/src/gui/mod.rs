@@ -694,33 +694,34 @@ async fn download_idf(
 
     let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
 
-    match idf_im_lib::get_esp_idf_by_version_and_mirror(
-        idf_path.to_str().unwrap(),
-        version,
-        settings.idf_mirror.as_deref(),
-        tx,
-        settings.recurse_submodules.unwrap_or_default(),
+    match idf_im_lib::get_esp_idf(
+      idf_path.to_str().unwrap(),
+      None,
+      version,
+      settings.idf_mirror.as_deref(),
+      settings.recurse_submodules.unwrap_or_default(),
+      tx,
     ) {
         Ok(_) => {
-            send_message(
-                app_handle,
-                format!(
-                    "IDF {} installed successfully at: {}",
-                    version,
-                    idf_path.display()
-                ),
-                "info".to_string(),
-            );
-            progress.finish();
+          send_message(
+            app_handle,
+            format!(
+                "IDF {} installed successfully at: {}",
+                version,
+                idf_path.display()
+            ),
+            "info".to_string(),
+          );
+          progress.finish();
         }
         Err(e) => {
-            send_message(
-                app_handle,
-                format!("Failed to install IDF {}. Reason: {}", version, e),
-                "error".to_string(),
-            );
-            progress.finish();
-            return Err(e.into());
+          send_message(
+            app_handle,
+            format!("Failed to install IDF {}. Reason: {}", version, e),
+            "error".to_string(),
+        );
+        progress.finish();
+        return Err(e.into());
         }
     }
 

@@ -300,33 +300,26 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
         }
     });
 
-    let tag = if config.idf_version == "master" {
-        None
-    } else {
-        Some(config.idf_version)
-    };
-    let group_name = config
-        .idf_mirror
-        .as_deref()
-        .and_then(|mirror| {
-            if mirror.contains("https://gitee.com/") {
-                Some("EspressifSystems")
-            } else {
-                None
-            }
-        });
+    info!("Cloning ESP-IDF");
 
-    match idf_im_lib::get_esp_idf_by_tag_name(
+    match idf_im_lib::get_esp_idf(
         &config.idf_path,
-        tag.as_deref(),
-        tx,
+        None,
+        &config.idf_version,
         config.idf_mirror.as_deref(),
-        group_name,
-        config.recurse_submodules.unwrap_or(true),
+        config.recurse_submodules.unwrap_or_default(),
+        tx,
     ) {
         Ok(_) => {
             debug!("{}", t!("wizard.idf.success"));
-            handle.join().unwrap();
+            match handle.join() {
+                Ok(_) => {
+                    debug!("{}", t!("wizard.idf.progress_bar.join"));
+                }
+                Err(err) => {
+                    error!("{}", t!("wizard.idf.progress_bar.error"));
+                }
+            }
             Ok(())
         }
         Err(err) => {
@@ -337,6 +330,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
             }
         }
     }
+
 }
 
 fn setup_directory(

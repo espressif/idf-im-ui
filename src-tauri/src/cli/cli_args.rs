@@ -125,7 +125,7 @@ pub struct InstallArgs {
     #[arg(
         short,
         long,
-        help = "you can provide multiple versions of ESP-IDF separated by comma"
+        help = "you can provide multiple versions of ESP-IDF separated by comma, you can also specify exact commit hash"
     )]
     idf_versions: Option<String>,
 
