@@ -124,7 +124,6 @@ impl ProgressBar {
     }
 
     fn finish(&self) {
-        info!("finish_progress_bar called");
         emit_to_fe(
             &self.app_handle,
             "progress-message",
@@ -668,15 +667,22 @@ fn spawn_progress_monitor(
     thread::spawn(move || {
         let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
 
+        let mut download_finished = false;
+
         while let Ok(message) = rx.recv() {
             match message {
                 ProgressMessage::Finish => {
                     progress.update(100, None);
                     progress.finish();
-                    break;
+                    download_finished = true;
                 }
                 ProgressMessage::Update(value) => {
+                  if download_finished {
+                    progress.update(value, Some(&format!("Downloading submodules...")));
+
+                  } else {
                     progress.update(value, Some(&format!("Downloading IDF {}...", version)));
+                  }
                 }
             }
         }
@@ -1522,7 +1528,7 @@ pub fn run() {
                         file_name: Some("eim_gui_log".to_string()),
                     },
                 ))
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .level_for("idf_im_lib", log::LevelFilter::Info)
                 .level_for("eim_lib", log::LevelFilter::Info)
                 .build(),
