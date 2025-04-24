@@ -294,6 +294,18 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                 Ok(ProgressMessage::Update(value)) => {
                     update_progress_bar_number(&progress_bar, value);
                 }
+                Ok(ProgressMessage::SubmoduleUpdate((name, value))) => {
+                    let message = format!("{}: {}", name, value);
+                    progress_bar.set_message(message);
+                    progress_bar.set_position(value);
+                }
+                Ok(ProgressMessage::SubmoduleFinish(name)) => {
+                    let message = format!("{}: {}", name, 100);
+                    progress_bar.set_message(message);
+                    progress_bar.finish();
+                    info!("{}: {}", t!("wizard.idf.submodule_finish"), name);
+                    progress_bar = create_progress_bar();
+                }
                 Err(_) => {
                     break;
                 }
