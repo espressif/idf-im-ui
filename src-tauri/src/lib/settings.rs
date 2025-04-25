@@ -40,6 +40,7 @@ pub struct Settings {
     pub recurse_submodules: Option<bool>,
     pub install_all_prerequisites: Option<bool>,
     pub idf_features: Option<Vec<String>>,
+    pub repo_stub: Option<String>,
 }
 
 impl Default for Settings {
@@ -86,6 +87,7 @@ impl Default for Settings {
             recurse_submodules: Some(false),
             install_all_prerequisites: Some(false),
             idf_features: None,
+            repo_stub: None,
         }
     }
 }
@@ -206,6 +208,9 @@ impl Settings {
             {
                 settings.idf_features = cli_settings_struct.idf_features.clone();
             }
+            if cli_settings_struct.repo_stub.is_some() && !cli_settings_struct.is_default("repo_stub") {
+                settings.repo_stub = cli_settings_struct.repo_stub.clone();
+            }
         }
 
         // Set the config file field
@@ -275,7 +280,8 @@ impl Settings {
             idf_mirror,
             recurse_submodules,
             install_all_prerequisites,
-            idf_features
+            idf_features,
+            repo_stub
         );
     }
 

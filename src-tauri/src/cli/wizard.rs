@@ -250,6 +250,7 @@ async fn select_targets_and_versions(mut config: Settings) -> Result<Settings, S
 
 pub struct DownloadConfig {
     pub idf_path: String,
+    pub repo_stub: Option<String>,
     pub idf_version: String,
     pub idf_mirror: Option<String>,
     pub recurse_submodules: Option<bool>,
@@ -300,33 +301,26 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
         }
     });
 
-    let tag = if config.idf_version == "master" {
-        None
-    } else {
-        Some(config.idf_version)
-    };
-    let group_name = config
-        .idf_mirror
-        .as_deref()
-        .and_then(|mirror| {
-            if mirror.contains("https://gitee.com/") {
-                Some("EspressifSystems")
-            } else {
-                None
-            }
-        });
+    info!("Cloning ESP-IDF");
 
-    match idf_im_lib::get_esp_idf_by_tag_name(
+    match idf_im_lib::get_esp_idf(
         &config.idf_path,
-        tag.as_deref(),
-        tx,
+        config.repo_stub.as_deref(),
+        &config.idf_version,
         config.idf_mirror.as_deref(),
-        group_name,
-        config.recurse_submodules.unwrap_or(true),
+        config.recurse_submodules.unwrap_or_default(),
+        tx,
     ) {
         Ok(_) => {
             debug!("{}", t!("wizard.idf.success"));
-            handle.join().unwrap();
+            match handle.join() {
+                Ok(_) => {
+                    debug!("{}", t!("wizard.idf.progress_bar.join"));
+                }
+                Err(err) => {
+                    error!("{}", t!("wizard.idf.progress_bar.error"));
+                }
+            }
             Ok(())
         }
         Err(err) => {
@@ -337,6 +331,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
             }
         }
     }
+
 }
 
 fn setup_directory(
@@ -508,6 +503,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // download idf
         let download_config = DownloadConfig {
             idf_path: idf_path.to_str().unwrap().to_string(),
+            repo_stub: config.repo_stub.clone(),
             idf_version: idf_version.to_string(),
             idf_mirror: config.idf_mirror.clone(),
             recurse_submodules: config.recurse_submodules,
