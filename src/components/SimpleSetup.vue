@@ -188,7 +188,7 @@ export default {
       if (all_settings && all_settings.path) {
         let installationPath = all_settings.path;
         console.info(`Installation path: ${installationPath}`);
-        let result = await invoke("is_path_empty_or_nonexistent", { path: installationPath });
+        let result = await invoke("is_path_empty_or_nonexistent_command", { path: installationPath });
         console.info(`Installation path: ${installationPath} is valid: ${result}`);
         return result;
       } else {
