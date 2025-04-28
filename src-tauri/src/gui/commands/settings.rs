@@ -97,30 +97,6 @@ pub fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), 
   Ok(())
 }
 
-// /// Checks if a path is empty or doesn't exist
-// #[tauri::command]
-// pub async fn is_path_empty_or_nonexistent(app_handle: AppHandle, path: String) -> bool {
-//   let settings = match get_locked_settings(&app_handle) {
-//       Ok(s) => s,
-//       Err(_) => return false,
-//   };
-
-//   let versions = match &settings.idf_versions {
-//       Some(v) => v.clone(),
-//       None => {
-//           send_message(
-//               &app_handle,
-//               "No IDF versions selected. Please select at least one version to continue."
-//                   .to_string(),
-//               "error".to_string(),
-//           );
-//           return false;
-//       }
-//   };
-
-//   is_path_empty_or_nonexistent(&path, &versions)
-// }
-
 /// Gets the list of available IDF targets
 #[tauri::command]
 pub async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
@@ -310,11 +286,11 @@ pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Str
 /// Checks if a path is empty or doesn't exist
 #[tauri::command]
 pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: String) -> bool {
-    let settings = match get_locked_settings(&app_handle) {
+    let settings = match get_settings_non_blocking(&app_handle) {
         Ok(s) => s,
         Err(_) => return false,
     };
-
+    println!("Settings: {:?}", settings);
     let versions = match &settings.idf_versions {
         Some(v) => v.clone(),
         None => {
@@ -324,7 +300,8 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
                     .to_string(),
                 "error".to_string(),
             );
-            return false;
+            // return false;
+            [].to_vec()
         }
     };
 
