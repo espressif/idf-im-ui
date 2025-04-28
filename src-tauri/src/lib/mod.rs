@@ -706,7 +706,8 @@ pub fn decompress_archive(
         std::fs::create_dir_all(destination_path)?;
     }
 
-    match archive_path.extension().and_then(|ext| ext.to_str()) {
+
+    let result = match archive_path.extension().and_then(|ext| ext.to_str()) {
         Some("zip") => decompress_zip(archive_path, destination_path),
         Some("tar") => decompress_tar(archive_path, destination_path),
         Some("gz") | Some("tgz") => {
@@ -726,6 +727,34 @@ pub fn decompress_archive(
             }
         }
         _ => Err(DecompressionError::UnsupportedFormat),
+    };
+    // Check the result of the decompression
+    // if the file already exists, skip the decompression
+    match result {
+        Ok(_) => {
+            log::info!("Decompression completed successfully.");
+            Ok(())
+        }
+        Err(e) => {
+          match e {
+            DecompressionError::Io(err) => {
+              if err.kind() == io::ErrorKind::AlreadyExists {
+                  info!("File already exists, skipping decompression.");
+                  return Ok(());
+              }
+                log::error!("I/O error: {}", err);
+                Err(DecompressionError::Io(err))
+            }
+            DecompressionError::Zip(err) => {
+                log::error!("ZIP error: {}", err);
+                Err(DecompressionError::Zip(err))
+            }
+            DecompressionError::UnsupportedFormat => {
+                log::error!("Unsupported archive format.");
+                Err(DecompressionError::UnsupportedFormat)
+            }
+          }
+        }
     }
 }
 
