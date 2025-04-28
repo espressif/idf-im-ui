@@ -653,7 +653,7 @@ jobs:
           name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
           path: |
             ./tests/results-*.json
-            ./tests/test.log
+            ./tests/test-*.log
 
   test-cli-in-gui:
     name: Test CLI in GUI Binary (${{ matrix.package_name }})
@@ -746,7 +746,7 @@ jobs:
           ls -la ./artifacts/
           ls -la ./artifacts/eim-gui-${{ matrix.package_name }}-${{ github.run_number }}/
           cp -r ./artifacts/eim-gui-${{ matrix.package_name }}-${{ github.run_number }}/eim.app test-bin
-          chmod +x test-bin/eim.app
+          chmod +x test-bin/eim.app/Contents/MacOS/eim
 
       - name: Install dependencies (MacOS)
         if: matrix.os == 'macos-latest'
@@ -816,7 +816,7 @@ jobs:
           name: autotest-cli-in-gui-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
           path: |
             ./tests/results-*.json
-            ./tests/test.log
+            ./tests/test-*.log
 
   test-gui:
     name: Test GUI (${{ matrix.package_name }})
@@ -987,7 +987,7 @@ jobs:
           path: |
             ./tests/results-*.json
             ./tests/*.png
-            ./tests/test.log
+            ./tests/test-*.log
 
       - name: Upload EIM install log (non-windows)
         uses: actions/upload-artifact@v4

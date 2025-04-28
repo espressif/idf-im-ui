@@ -2,17 +2,23 @@
 
 ## Concepts
 
-The EMI application should have a test structure that would allow validation or customer use cases on the final artifacts. At an initial stage
-the tests will be executed manually and using an structure that will allow evolution to be triggered by github actions using local or remote windows and linux runners.
+The EMI application should have a test structure that would allow validation of customer use cases on the final artifacts. The automated tests intends to execute basic validation, with additional specific tests executed manually. The roadmap includes automating most tests possible to reduce manual testing workload
 
-All tests are developed in Node.js using Chain and Mocha as test libraries in combination with Node-PTY for terminal emulation. It is required to install node on the test runner machine.
+All tests are developed in Node.js using Chai and Mocha as test libraries in combination with Node-PTY for terminal emulation. It is required to install node on the test runner machine.
+
+The GUI tests uses Selenium webdriver in combination with tauri-driver to validate the interface user experience. Although the install procedure backend is the same for both CLI and GUI, the tests implement full IDF installation for both artifacts.
 
 ## Environment Setup
 
 On the test machine, the first step is to copy the testing artifacts. The location of the artifacts can be set using environment variable, or the test will look for the `eim` file in the default location:
 
-Windows: `$USERPROFILE\eim-cli\`  
+CLI
+Windows: `$USERPROFILE\eim-cli\`
 Linux/MacOS: `$HOME/eim-cli/`
+
+GUI
+Windows: `$USERPROFILE\eim-gui\`
+Linux/MacOS: `$HOME/eim-gui/`
 
 ### Windows
 
@@ -38,7 +44,7 @@ Install git:
 
 Clone the public repository:
 
-`git clone https://github.com/espressif/idf-im-cli.git`
+`git clone https://github.com/espressif/idf-im-ui.git`
 
 ### Linux:
 
@@ -54,7 +60,7 @@ Start a new terminal (to load nvm)
 
 Clone the public repository:
 
-`git clone https://github.com/espressif/idf-im-cli.git`
+`git clone https://github.com/espressif/idf-im-ui.git`
 
 > **At his point test for prerequisites can be run, the remaining tests requires the pre-requisites to be installed.**
 
@@ -90,7 +96,7 @@ Install git
 
 Clone the public repository:
 
-`git clone https://github.com/espressif/idf-im-cli.git`
+`git clone https://github.com/espressif/idf-im-ui.git`
 
 > **At his point test for prerequisites can be run, the remaining tests requires the pre-requisites to be installed.**
 
@@ -100,39 +106,96 @@ Install ESP-IDF pre-requisites
 
 `brew install cmake ninja dfu-util`
 
-## Commands summary
+## For GUI testing
 
-Navigate to the idf-im-cli folder, where the repository was cloned.
+In order to install the Tauri specific files make sure to have Rust and Cargo installed in the system.
 
-The test runs are split into multiple files, each of them with an associated JSON test script and a NPM run script for each access.  
+On Linux:
+`curl https://sh.rustup.rs -sSf | sh`
+
+On Windows:
+Download the rust up package [here](https://doc.rust-lang.org/cargo/getting-started/installation.html).
+
+The tests rely on WEbDriver interface from the running operating system on a cross platform wrapper from Tauri, both the webdriver kit and the tauri driver must be installed in the system in order to run the test scripts.
+
+Linux:
+Install WebKitWebDriver ( use command `which WebKitWebDriver` to check if available)
+`sudo apt install webkit2gtk-driver`
+
+Windows:
+Download [Microsoft Edge Driver](https://developer.microsoft.com/en-us/microsoft-edge/tools/webdriver) at the same version from Microsoft Edge installed in the system (Please double check version)
+The Edge Driver must be copied on system path, either add the file location to path, or copy it to a valid windows PATH folder (c:\windows)
+If changing path note that this is not a permanent change and need to be redone for every new shell, or added to the $profile
+`$env:Path += ';C:\<your_folder>'`
+`$env:Path += ';'+$env:USERPROFILE+'\EdgeDriver'`
+
+Install the tauri-driver using Cargo:
+`cargo install tauri-driver`
+
+## Running the tests
+
+Test scripts are created to allow launching and running the tests. These scripts do not build the Tauri application, it is necessary to have them compiled before running the tests.
+
+Navigate to the idf-im-ui folder, where the repository was cloned.
+
+The test runs are split into multiple files, each of them with an associated JSON test script and a NPM run script for each access.
 The tests relies on environmental variables for the information below, the test scripts also have default values associated to this variables in case
 environmental variables are not found.
 
-EIM_FILE_PATH -> Specify the path to the EIM application -> default value Windows: `$USERPROFILE\eim-cli\` Linux/MacOS: `$HOME/eim-cli/`  
-EIM_VERSION -> Version of the EIM application being tested -> default value "eim 0.1.6"  
-IDF_VERSION -> The latest released version of ESP-IDF, used on express installation by EIM -> default "v5.4"
+EIM_FILE_PATH -> Specify the path to the EIM application -> default value Windows: `$USERPROFILE\eim-cli\` Linux/MacOS: `$HOME/eim-cli/`
+EIM_VERSION -> Version of the EIM application being tested -> default value "eim 0.2.0"
+IDF_VERSION -> The latest released version of ESP-IDF, used on express installation by EIM -> default "v5.4.1"
+
+EIM_GUI_PATH -> Specify the path to the EIM application -> default value Windows: `$USERPROFILE\eim-gui\` Linux/MacOS: `$HOME/eim-gui/`
+EIM_GUI_VERSION -> Version of the EIM application being tested -> default value "0.2.0"
 
 Option variables
 
-LOG_TO_FILE="true" -> Enable logs saved to text file on the execution folder -> default false  
+LOG_TO_FILE="true" -> Enable logs saved to text file on the execution folder -> default false
 DEBUG="true" -> Enable debug level messages generated by the test scripts -> default false
 
 To modify the test parameters, modify the json files located at `/src/tests/runs/suites`
 then execute the tests by running the test npm script passing the test script file name as argument:
 
-`npm run test --file=basic_test`
-`npm run test --file=extended_test`
-`npm run test --file=mirrors-test`
+`npm run test-CLI --file=CLI-basic`
+`npm run test-CLI --file=CLI-extended`
+`npm run test-CLI --file=CLI-mirrors`
 
-> For Windows use `test-win`
+`npm run test-GUI --file=GUI-basic`
+`npm run test-GUI --file=GUI-extended`
+
+> For Windows use `test-CLI-win` or `test-GUI-win`.
 
 The test for prerequisites test can be executed to check the detection of missing prerequisites (before they are installed in the system) by running:
 
-`npm run pre-test`
+`npm run test-CLI --file=CLI-prerequisites`
 
 # Installation Manager Usage
 
-## Application arguments
+## Commands
+
+```
+Commands:
+  install   Install ESP-IDF versions
+  list      List installed ESP-IDF versions
+  select    Select an ESP-IDF version as active
+  discover  Discover available ESP-IDF versions (not implemented yet)
+  remove    Remove specific ESP-IDF version
+  rename    Rename specific ESP-IDF version
+  import    Import existing ESP-IDF installation using tools_set_config.json
+  purge     Purge all ESP-IDF installations
+  wizard    Run the ESP-IDF Installer Wizard
+  help      Print this message or the help of the given subcommand(s)
+
+Options:
+  -l, --locale <LOCALE>      Set the language for the wizard (en, cn)
+  -v, --verbose...           Increase verbosity level (can be used multiple times)
+      --log-file <LOG_FILE>  file in which logs will be stored (default: eim.log)
+  -h, --help                 Print help (see more with '--help')
+  -V, --version              Print version
+```
+
+## install arguments
 
 ```
 Options:
@@ -213,42 +276,42 @@ idf_mirror = "https://github.com"
 
 #### Windows:
 
-`.\eim.exe -p c:\espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
+`.\eim.exe install -p c:\espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
 
-`.\eim.exe -c config.toml`
+`.\eim.exe install -c config.toml`
 
-`.\eim.exe --log-file InstManager.log`
+`.\eim.exe install --log-file InstManager.log`
 
 #### Linux & MacOS
 
-`./eim -p ~/.espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
+`./eim install -p ~/.espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
 
-`./eim -c config.toml`
+`./eim install -c config.toml`
 
-`./eim --log-file InstManager.log`
+`./eim install --log-file InstManager.log`
 
 ## References
 
 Alternative Mirrors:
 
-IDF:  
-https://github.com  
+IDF:
+https://github.com
 https://jihulab.com/esp-mirror
 
-Tools:  
-https://github.com  
-https://dl.espressif.com/github_assets  
+Tools:
+https://github.com
+https://dl.espressif.com/github_assets
 https://dl.espressif.cn/github_assets
 
 Packages required by EIM:
 
-Windows:  
+Windows:
 `eim should be able to perform all requirements installation`
 
-Linux:  
+Linux:
 `sudo apt install git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-dev python3 python3-venv python3-pip`
 
-MacOS:  
-Install homebrew and load the application to the terminal profile  
-`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`  
+MacOS:
+Install homebrew and load the application to the terminal profile
+`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
 Then run: `brew install dfu-util cmake ninja python3`

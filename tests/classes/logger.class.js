@@ -13,10 +13,12 @@ const transports = [
 ];
 
 if (logToFile) {
+  const timestamp = new Date().toISOString().replace(/[-:.]/g, "").slice(0, 15);
+
   transports.push(
     new winston.transports.File({
       level: "debug",
-      filename: "./test.log",
+      filename: `./test-${timestamp}.log`,
       format: winston.format.combine(
         winston.format.timestamp(),
         winston.format.json()
