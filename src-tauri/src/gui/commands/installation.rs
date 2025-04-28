@@ -1,4 +1,4 @@
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter, Manager};
 use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools};
 use std::{
   fs,
@@ -171,7 +171,7 @@ async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-  let app_state = app_handle.state::<crate::app_state::AppState>();
+  let app_state = app_handle.state::<crate::gui::app_state::AppState>();
 
   // Set installation flag
   if let Err(e) = set_installation_status(&app_handle, true) {
