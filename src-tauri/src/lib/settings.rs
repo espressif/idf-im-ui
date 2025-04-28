@@ -45,16 +45,21 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        let default_esp_idf_json_path_value = match std::env::consts::OS {
+        let tool_install_folder_name_value = match std::env::consts::OS {
             "windows" => "C:\\Espressif\\tools".to_string(),
             _ => dirs::home_dir()
-                .unwrap()
-                .join(".espressif")
-                .join("tools")
-                .to_str()
-                .unwrap()
-                .to_string(),
+            .unwrap()
+            .join(".espressif")
+            .join("tools")
+            .to_str()
+            .unwrap().to_string(),
         };
+        let tool_download_folder_name_value = match PathBuf::from(&tool_install_folder_name_value).parent() {
+            Some(parent) => parent.join("dist").to_str().unwrap().to_string(),
+            None => PathBuf::from(&tool_install_folder_name_value).join("tmp_dist").to_str().unwrap().to_string(),
+          };
+
+        let default_esp_idf_json_path_value = tool_install_folder_name_value.clone();
         let default_path_value = if std::env::consts::OS == "windows" {
             PathBuf::from(r"C:\esp")
         } else {
@@ -67,8 +72,8 @@ impl Default for Settings {
             path: Some(default_path_value),
             idf_path: None,
             esp_idf_json_path: Some(default_esp_idf_json_path_value),
-            tool_download_folder_name: Some("dist".to_string()),
-            tool_install_folder_name: Some("tools".to_string()),
+            tool_download_folder_name: Some(tool_download_folder_name_value),
+            tool_install_folder_name: Some(tool_install_folder_name_value),
             target: Some(vec!["all".to_string()]),
             idf_versions: None,
             tools_json_file: Some("tools/tools.json".to_string()),
