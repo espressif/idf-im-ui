@@ -1,7 +1,7 @@
 [
-    {
-        "id": 1,
-        "type": "prerequistes",
-        "name": "CLI-prerequisites"
-    }
+  {
+    "id": 1,
+    "type": "prerequistes",
+    "name": "CLI-prerequisites"
+  }
 ]

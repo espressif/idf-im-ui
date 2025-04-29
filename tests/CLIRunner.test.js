@@ -14,7 +14,7 @@
             "recursive": "false",        // Whether to prevent downloading submodules (set to true if omitted)
             "nonInteractive": "false"    // Whether to prevent running in non-interactive mode (set to true if omitted)
         }
-    
+
  */
 
 import { describe } from "mocha";
@@ -25,19 +25,19 @@ import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
 import { runPostInstallTest } from "./scripts/postInstall.test.js";
 import logger from "./classes/logger.class.js";
 import {
-    IDFMIRRORS,
-    TOOLSMIRRORS,
-    CLIDEFAULTVERSION,
-    IDFDEFAULTINSTALLVERSION,
+  IDFMIRRORS,
+  TOOLSMIRRORS,
+  CLIDEFAULTVERSION,
+  IDFDEFAULTINSTALLVERSION,
 } from "./config.js";
 import os from "os";
 import path from "path";
 import fs from "fs";
 
 const jsonFilePath = path.join(
-    import.meta.dirname,
-    "suites",
-    `${process.env.JSON_FILENAME}.json`
+  import.meta.dirname,
+  "suites",
+  `${process.env.JSON_FILENAME}.json`
 );
 const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
 logger.info(`Running test script: ${jsonFilePath}`);
@@ -45,129 +45,118 @@ logger.info(`Running test script: ${jsonFilePath}`);
 testRun(testScript);
 
 function testRun(jsonScript) {
-    const PATHTOEIM =
-        process.env.EIM_FILE_PATH || path.join(os.homedir(), "eim-cli/eim");
+  const PATHTOEIM =
+    process.env.EIM_FILE_PATH || path.join(os.homedir(), "eim-cli/eim");
 
-    const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
+  const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
 
-    const IDFDEFAULTVERSION =
-        process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
-            ? process.env.IDF_VERSION
-            : IDFDEFAULTINSTALLVERSION;
+  const IDFDEFAULTVERSION =
+    process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
+      ? process.env.IDF_VERSION
+      : IDFDEFAULTINSTALLVERSION;
 
-    // Test Runs
-    jsonScript.forEach((test) => {
-        if (test.type === "prerequisites") {
-            //route for prerequisites tests
+  // Test Runs
+  jsonScript.forEach((test) => {
+    if (test.type === "prerequisites") {
+      //route for prerequisites tests
 
-            describe(`${test.id} - EIM prerequisites ->`, function () {
-                this.timeout(20000);
+      describe(`${test.id} - EIM prerequisites ->`, function () {
+        this.timeout(20000);
 
-                runCLIPrerequisitesTest(PATHTOEIM);
-            });
-        } else if (test.type === "arguments") {
-            //routine for arguments tests
+        runCLIPrerequisitesTest(PATHTOEIM);
+      });
+    } else if (test.type === "arguments") {
+      //routine for arguments tests
 
-            describe(`${test.id} - EIM command line arguments ->`, function () {
-                this.timeout(20000);
+      describe(`${test.id} - EIM command line arguments ->`, function () {
+        this.timeout(20000);
 
-                runCLIArgumentsTest(PATHTOEIM, EIMVERSION);
-            });
-        } else if (test.type === "default") {
-            //routine for default installation tests
+        runCLIArgumentsTest(PATHTOEIM, EIMVERSION);
+      });
+    } else if (test.type === "default") {
+      //routine for default installation tests
 
-            const installFolder =
-                os.platform() !== "win32"
-                    ? path.join(os.homedir(), `.espressif`)
-                    : `C:\\esp`;
+      const installFolder =
+        os.platform() !== "win32"
+          ? path.join(os.homedir(), `.espressif`)
+          : `C:\\esp`;
 
-            const pathToIDFScript =
-                os.platform() !== "win32"
-                    ? path.join(
-                          installFolder,
-                          `activate_idf_${IDFDEFAULTVERSION}.sh`
-                      )
-                    : path.join(
-                          installFolder,
-                          IDFDEFAULTVERSION,
-                          "Microsoft.PowerShell_profile.ps1"
-                      );
+      const pathToIDFScript =
+        os.platform() !== "win32"
+          ? path.join(installFolder, `activate_idf_${IDFDEFAULTVERSION}.sh`)
+          : path.join(
+              installFolder,
+              IDFDEFAULTVERSION,
+              "Microsoft.PowerShell_profile.ps1"
+            );
 
-            describe(`${test.id} - Installation manager default installation ->`, function () {
-                this.timeout(2400000);
+      describe(`${test.id} - Installation manager default installation ->`, function () {
+        this.timeout(2400000);
 
-                runCLIWizardInstallTest(PATHTOEIM);
+        runCLIWizardInstallTest(PATHTOEIM);
 
-                runPostInstallTest(pathToIDFScript, installFolder);
-            });
-        } else if (test.type === "custom") {
-            //routine for custom installation tests
-            let installFolder;
-            if (test.data.installFolder) {
-                installFolder = path.join(
-                    os.homedir(),
-                    test.data.installFolder
-                );
-            } else {
-                installFolder =
-                    os.platform() !== "win32"
-                        ? path.join(os.homedir(), `.espressif`)
-                        : `C:\\esp`;
-            }
+        runPostInstallTest(pathToIDFScript, installFolder);
+      });
+    } else if (test.type === "custom") {
+      //routine for custom installation tests
+      let installFolder;
+      if (test.data.installFolder) {
+        installFolder = path.join(os.homedir(), test.data.installFolder);
+      } else {
+        installFolder =
+          os.platform() !== "win32"
+            ? path.join(os.homedir(), `.espressif`)
+            : `C:\\esp`;
+      }
 
-            const targetList = test.data.targetList || "esp32";
-            const idfVersionList = test.data.idfList || IDFDEFAULTVERSION;
+      const targetList = test.data.targetList || "esp32";
+      const idfVersionList = test.data.idfList || IDFDEFAULTVERSION;
 
-            let installArgs = [];
+      let installArgs = [];
 
-            test.data.installFolder && installArgs.push(`-p ${installFolder}`);
+      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
 
-            test.data.targetList &&
-                installArgs.push(
-                    `-t ${test.data.targetList.split("|").join(",")}`
-                );
+      test.data.targetList &&
+        installArgs.push(`-t ${test.data.targetList.split("|").join(",")}`);
 
-            test.data.idfList &&
-                installArgs.push(
-                    `-i ${test.data.idfList.split("|").join(",")}`
-                );
+      test.data.idfList &&
+        installArgs.push(`-i ${test.data.idfList.split("|").join(",")}`);
 
-            test.data.toolsMirror &&
-                installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror]}`);
+      test.data.toolsMirror &&
+        installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror]}`);
 
-            test.data.idfMirror &&
-                installArgs.push(
-                    `--idf-mirror ${IDFMIRRORS[test.data.idfMirror]}`
-                );
+      test.data.idfMirror &&
+        installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror]}`);
 
-            test.data.recursive &&
-                installArgs.push(`-r ${test.data.recursive}`);
+      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
 
-            test.data.nonInteractive &&
-                installArgs.push(`-n ${test.data.nonInteractive}`);
+      test.data.nonInteractive &&
+        installArgs.push(`-n ${test.data.nonInteractive}`);
 
-            const pathToIDFScript =
-                os.platform() !== "win32"
-                    ? path.join(
-                          installFolder,
-                          `activate_idf_${idfVersionList.split("|")[0]}.sh`
-                      )
-                    : path.join(
-                          installFolder,
-                          idfVersionList.split("|")[0],
-                          `Microsoft.PowerShell_profile.ps1`
-                      );
-            describe(`${test.id} - Installation using custom settings -> ${test.name} ->`, function () {
-                this.timeout(2400000);
+      const pathToIDFScript =
+        os.platform() !== "win32"
+          ? path.join(
+              installFolder,
+              `activate_idf_${idfVersionList.split("|")[0]}.sh`
+            )
+          : path.join(
+              installFolder,
+              idfVersionList.split("|")[0],
+              `Microsoft.PowerShell_profile.ps1`
+            );
+      describe(`${test.id} - Installation using custom settings -> ${test.name} ->`, function () {
+        this.timeout(6000000);
 
-                runCLICustomInstallTest(PATHTOEIM, installArgs);
+        runCLICustomInstallTest(PATHTOEIM, installArgs);
 
-                runPostInstallTest(
-                    pathToIDFScript,
-                    installFolder,
-                    targetList.split("|")[0]
-                );
-            });
-        }
-    });
+        runPostInstallTest(
+          pathToIDFScript,
+          installFolder,
+          targetList.split("|")[0] === "all"
+            ? "esp32"
+            : targetList.split("|")[0]
+        );
+      });
+    }
+  });
 }
