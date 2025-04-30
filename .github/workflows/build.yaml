@@ -426,7 +426,37 @@ jobs:
             # src-tauri/target/release/bundle/deb/*.deb
             # src-tauri/target/release/bundle/rpm/*.rpm
             # src-tauri/target/release/bundle/appimage/*.AppImage
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload Linux artifacts - .deb
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-deb
+          path: |
+            src-tauri/target/release/bundle/deb/*.deb
+            # src-tauri/target/release/bundle/rpm/*.rpm
+            # src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
+
+      - name: Upload Linux artifacts - .deb
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-rpm
+          path: |
+            src-tauri/target/release/bundle/rpm/*.rpm
+            # src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
+
+      - name: Upload Linux artifacts - .AppImage
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-AppImage
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+          if-no-files-found: warn
 
       - name: Upload macOS artifacts
         if: startsWith(matrix.os, 'macos')
@@ -437,7 +467,16 @@ jobs:
             # src-tauri/target/release/bundle/macos/eim.app
             # src-tauri/target/release/bundle/dmg/*.dmg
             src-tauri/target/release/bundle/macos/*.app
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload macOS artifacts - dmg
+        if: startsWith(matrix.os, 'macos')
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-dmg
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+          if-no-files-found: warn
 
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
@@ -447,7 +486,16 @@ jobs:
           path: |
             src-tauri/target/release/eim.exe
             # src-tauri/target/release/bundle/msi/*.msi
-          if-no-files-found: error
+          if-no-files-found: warn
+
+      - name: Upload Windows artifacts - msi
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-msi
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+          if-no-files-found: warn
 
       - name: Upload Release Assets (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
