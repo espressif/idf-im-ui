@@ -231,9 +231,12 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
 pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
     let path = Path::new(path);
     let mut dirs = crate::utils::find_directories_by_name(path, "esp-idf");
+    debug!("Found {} esp-idf folders", dirs.len());
+    debug!("Found folders: {:?}", dirs);
     dirs.sort();
     dirs.reverse();
     let filtered_dirs = crate::utils::filter_duplicate_paths(dirs.clone());
+    debug!("Filtered folders: {:?}", filtered_dirs);
     filtered_dirs
         .iter()
         .filter(|p| crate::utils::is_valid_idf_directory(p))

@@ -30,7 +30,8 @@ These options can be used with any command:
 | `remove` | Remove a specific ESP-IDF version |
 | `purge` | Purge all ESP-IDF installations |
 | `import` | Import existing ESP-IDF installation using tools_set_config.json |
-| `discover` | Discover available ESP-IDF versions (not implemented yet) |
+| `discover` | Discover available ESP-IDF versions |
+| `gui` | Run the ESP-IDF Installer GUI with arguments passed through command line |
 
 ## Command Details
 
@@ -139,10 +140,10 @@ If `PATH` is not provided, the command will inform you that no config file was s
 Discover available ESP-IDF versions (not implemented yet).
 
 ```bash
-eim discover
+eim discover [PATH]
 ```
 
-This command is planned to discover ESP-IDF installations on your system but is not yet implemented.
+This command searches for previously installed ESP-IDF versions on your system. If PATH is not provided, the command will search from the root of the filesystem. For any found versions where automatic import is possible, they will be imported into EIM's management. For other found versions that cannot be automatically imported, the command will suggest the appropriate `eim install` command to allow the user to manually reinstall them.
 
 ### Fix Command
 

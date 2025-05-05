@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -9,8 +10,12 @@ use config::ConfigError;
 use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
+use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
+use idf_im_lib::utils::find_by_name_and_extension;
+use idf_im_lib::utils::parse_esp_idf_json;
+use idf_im_lib::utils::EspIdfConfig;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;
@@ -316,13 +321,128 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Discover => {
-            // TODO:Implement version discovery
-            unimplemented!("Version discovery not implemented yet");
-            println!("Discovering available versions... (This can take couple of minutes)");
-            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
+        Commands::Discover {path  } => {
+            info!("Discovering available versions... (This can take couple of minutes)");
+            let path = path.unwrap_or_else(|| {
+                let default_path = match std::env::consts::OS {
+                    "windows" => {
+                        "C:\\".to_string()
+                    }
+                    _ => {
+                        "/".to_string()
+                    }
+                };
+
+
+                debug!("No path provided, using default: {}", default_path);
+                default_path
+            });
+            // first parse existing esp_idf.json (using parse_esp_idf_json) || previous VSCode installations
+            info!("Searching for esp_idf.json files...");
+            let search_patch = Path::new(&path);
+            let esp_idf_json_path = find_by_name_and_extension(
+              search_patch,
+              "esp_idf",
+              "json",
+            );
+            if esp_idf_json_path.is_empty() {
+                info!("No esp_idf.json found");
+            } else {
+                info!("Found {} esp_idf.json files:", esp_idf_json_path.len());
+            }
+            for path in esp_idf_json_path {
+                info!("- {} ", &path);
+              match std::env::consts::OS {
+                "windows" => {
+                    // On Windows, we need to fix every installation from VSCode
+                    info!("Parsing esp_idf.json at: {}", path);
+                    let idf_json_path = Path::new(&path);
+                    let json_str = std::fs::read_to_string(idf_json_path).unwrap();
+                    let config: EspIdfConfig = match serde_json::from_str(&json_str) {
+                        Ok(config) => config,
+                        Err(e) => {
+                          error!("Failed to parse config file: {}", e);
+                          continue;
+                        }
+                    };
+                    for (_key, value) in config.idf_installed {
+                        let idf_path = value.path;
+                        fix_command(Some(idf_path)).await?;
+                    }
+                }
+                _ => {
+                    match parse_esp_idf_json(&path) {
+                          Ok(_) => {
+                              info!("Parsed config: {:?}", path);
+                          }
+                          Err(err) => {
+                              info!("Failed to parse esp_idf.json: {}", err);
+                          }
+                      }
+                    }
+                  }
+            }
+            // second try to find tool_set_config.json (using parse_tool_set_config) || previous Eclipse installations
+            info!("Searching for tool_set_config.json files...");
+            let tool_set_config_path = find_by_name_and_extension(
+                search_patch,
+                "tool_set_config",
+                "json",
+            );
+            if tool_set_config_path.is_empty() {
+                info!("No tool_set_config.json found");
+            } else {
+                info!("Found {} tool_set_config.json files:", tool_set_config_path.len());
+            }
+            for path in tool_set_config_path {
+                info!("- {} ", &path);
+                match idf_im_lib::utils::parse_tool_set_config(&path) {
+                    Ok(_) => {
+                        info!("Parsed config: {:?}", path);
+                    }
+                    Err(err) => {
+                        info!("Failed to parse tool_set_config.json: {}", err);
+                    }
+                }
+            }
+            // third try to find IDF directories (using find_esp_idf_folders) || previous instalation from cli
+            info!("Searching for any other IDF directories...");
+            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders(&path);
+            if idf_dirs.is_empty() {
+                info!("No IDF directories found");
+            } else {
+                info!("Found {} IDF directories:", idf_dirs.len());
+            }
+            let config = match idf_im_lib::version_manager::get_esp_ide_config() {
+              Ok(config) => {
+                if config.idf_installed.is_empty() {
+                  debug!(
+                      "No versions found. Every discovered version can be imported."
+                  );
+                }
+                config
+              }
+              Err(_err) => {
+                debug!("No ide config found. New will be created.");
+                IdfConfig::default()
+              }
+            };
+            let mut paths_to_add = vec![];
             for dir in idf_dirs {
-                println!("Found IDF directory: {}", dir);
+              info!("- {} ", &dir);
+              if config.clone().is_path_in_config(dir.clone()) {
+                info!("Already present!");
+              } else {
+                info!("Can be added...");
+                paths_to_add.push(dir);
+              }
+            }
+            if paths_to_add.is_empty() {
+                info!("No new IDF directories found to add.");
+                return Ok(());
+            } else {
+                info!("Found {} new IDF directories available to add:", paths_to_add.len());
+                info!("You can add them using `eim install` command with the `--path` option.");
             }
             Ok(())
         }
@@ -434,87 +554,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
         }
         Commands::Fix { path } => {
-          let path_to_fix = if path.is_some() {
-              // If a path is provided, fix the IDF installation at that path
-              let path = path.unwrap();
-               if is_valid_idf_directory(&path) {
-                PathBuf::from(path)
-               } else {
-                error!("Invalid IDF directory: {}", path);
-                return Err(anyhow::anyhow!("Invalid IDF directory: {}", path));
-               }
-            } else {
-              match idf_im_lib::version_manager::list_installed_versions() {
-                Ok(versions) => {
-                  if versions.is_empty() {
-                      warn!("No versions installed");
-                      return Ok(());
-                  } else {
-                    let options = versions.iter().map(|v| v.path.clone()).collect();
-                    let version_path = match helpers::generic_select(
-                        "Which version do you want to fix?",
-                        &options,
-                    ) {
-                        Ok(selected) => selected,
-                        Err(err) => {
-                            error!("Error: {}", err);
-                            return Err(anyhow::anyhow!(err));
-                        }
-                    };
-                    PathBuf::from(version_path)
-                  }
-                }
-                Err(err) => {
-                  debug!("Error: {}", err);
-                  return Err(anyhow::anyhow!("No versions found. Use eim install to install a new ESP-IDF version."));
-                }
-            }
-          };
-          info!("Fixing IDF installation at path: {}", path_to_fix.display());
-          // The fix logic is just instalation with use of existing repository
-          let mut version_name = None;
-          match idf_im_lib::version_manager::list_installed_versions() {
-            Ok(versions) => {
-              for v in versions {
-                if v.path == path_to_fix.to_str().unwrap() {
-                  info!("Found existing IDF version: {}", v.name);
-                  // Remove the existing activation script and eim_idf.json entry
-                  match remove_single_idf_version(&v.name, true) {
-                    Ok(_) => {
-                      info!("Removed existing IDF version from eim_idf.json: {}", v.name);
-                      version_name = Some(v.name.clone());
-                    }
-                    Err(err) => {
-                      error!("Failed to remove existing IDF version {}: {}", v.name, err);
-                    }
-                  }
-                }
-              }
-            }
-            Err(_) => {
-              info!("Failed to list installed versions. Using default naming.");
-            }
-          }
-
-          let mut settings = Settings::default();
-          settings.path = Some(path_to_fix.clone());
-          settings.non_interactive = Some(true);
-          settings.version_name = version_name;
-          settings.install_all_prerequisites = Some(true);
-          settings.config_file_save_path = None;
-          let result = wizard::run_wizzard_run(settings).await;
-          match result {
-            Ok(r) => {
-              info!("Fix result: {:?}", r);
-              info!("Successfully fixed IDF installation at {}", path_to_fix.display());
-            }
-            Err(err) => {
-              error!("Failed to fix IDF installation: {}", err);
-              return Err(anyhow::anyhow!(err));
-            }
-          }
-          info!("Now you can start using IDF tools");
-          Ok(())
+          fix_command(path).await
         }
         #[cfg(feature = "gui")]
         Commands::Gui(_install_args) => {
@@ -524,4 +564,88 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             Ok(())
         }
     }
+}
+
+async fn fix_command(path:Option<String>) -> anyhow::Result<()> {
+  let path_to_fix = if path.is_some() {
+    // If a path is provided, fix the IDF installation at that path
+    let path = path.unwrap();
+      if is_valid_idf_directory(&path) {
+      PathBuf::from(path)
+      } else {
+      error!("Invalid IDF directory: {}", path);
+      return Err(anyhow::anyhow!("Invalid IDF directory: {}", path));
+      }
+  } else {
+    match idf_im_lib::version_manager::list_installed_versions() {
+      Ok(versions) => {
+        if versions.is_empty() {
+            warn!("No versions installed");
+            return Ok(());
+        } else {
+          let options = versions.iter().map(|v| v.path.clone()).collect();
+          let version_path = match helpers::generic_select(
+              "Which version do you want to fix?",
+              &options,
+          ) {
+              Ok(selected) => selected,
+              Err(err) => {
+                  error!("Error: {}", err);
+                  return Err(anyhow::anyhow!(err));
+              }
+          };
+          PathBuf::from(version_path)
+        }
+      }
+      Err(err) => {
+          debug!("Error: {}", err);
+          return Err(anyhow::anyhow!("No versions found. Use eim install to install a new ESP-IDF version."));
+        }
+    }
+  };
+  info!("Fixing IDF installation at path: {}", path_to_fix.display());
+  // The fix logic is just instalation with use of existing repository
+  let mut version_name = None;
+  match idf_im_lib::version_manager::list_installed_versions() {
+    Ok(versions) => {
+      for v in versions {
+        if v.path == path_to_fix.to_str().unwrap() {
+          info!("Found existing IDF version: {}", v.name);
+          // Remove the existing activation script and eim_idf.json entry
+          match remove_single_idf_version(&v.name, true) {
+            Ok(_) => {
+              info!("Removed existing IDF version from eim_idf.json: {}", v.name);
+              version_name = Some(v.name.clone());
+            }
+            Err(err) => {
+              error!("Failed to remove existing IDF version {}: {}", v.name, err);
+            }
+          }
+        }
+      }
+    }
+    Err(_) => {
+      info!("Failed to list installed versions. Using default naming.");
+    }
+  }
+
+  let mut settings = Settings::default();
+  settings.path = Some(path_to_fix.clone());
+  settings.non_interactive = Some(true);
+  settings.version_name = version_name;
+  settings.install_all_prerequisites = Some(true);
+  settings.config_file_save_path = None; // Do not save config file in fix mode
+  let result = wizard::run_wizzard_run(settings).await;
+  match result {
+    Ok(r) => {
+      info!("Fix result: {:?}", r);
+      info!("Successfully fixed IDF installation at {}", path_to_fix.display());
+    }
+    Err(err) => {
+      error!("Failed to fix IDF installation: {}", err);
+      return Err(anyhow::anyhow!(err));
+    }
+  }
+  info!("Now you can start using IDF tools");
+  Ok(())
 }

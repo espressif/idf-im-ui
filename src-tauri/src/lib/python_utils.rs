@@ -201,7 +201,7 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
 pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
-  info!("Creating Python virtual environment at: {}", venv_path);
+  info!("Creating Python virtual environment  at: {}", venv_path);
 
     let output = match std::env::consts::OS {
         "windows" => command_executor::execute_command(

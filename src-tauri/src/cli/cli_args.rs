@@ -65,8 +65,11 @@ pub enum Commands {
         version: Option<String>,
     },
 
-    /// Discover available ESP-IDF versions (not implemented yet)
-    Discover,
+    /// Discover available ESP-IDF versions
+    Discover {
+        #[arg(help = "Discover available ESP-IDF versions and imports them")]
+        path: Option<String>,
+    },
 
     /// Remove specific ESP-IDF version
     Remove {
