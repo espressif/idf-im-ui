@@ -439,7 +439,7 @@ jobs:
             # src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
-      - name: Upload Linux artifacts - .deb
+      - name: Upload Linux artifacts - .rpm
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
@@ -507,6 +507,16 @@ jobs:
           asset_path: src-tauri/target/release/eim.exe
           asset_name: eim-gui-${{ matrix.package_name }}.exe
 
+      - name: Upload Release Assets (Windows msi)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/msi/*.msi
+          asset_name: eim-gui-${{ matrix.package_name }}.msi
+
       - name: Upload Release Assets (Linux)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
         uses: shogo82148/actions-upload-release-asset@v1
@@ -517,6 +527,36 @@ jobs:
           asset_path: src-tauri/target/release/eim.zip
           asset_name: eim-gui-${{ matrix.package_name }}.zip
 
+      - name: Upload Release Assets (Linux - .deb)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/deb/*.deb
+          asset_name: eim-gui-${{ matrix.package_name }}.deb
+
+      - name: Upload Release Assets (Linux - .rpm)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/deb/*.rpm
+          asset_name: eim-gui-${{ matrix.package_name }}.rpm
+
+      - name: Upload Release Assets (Linux - .AppImage)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/deb/*.AppImage
+          asset_name: eim-gui-${{ matrix.package_name }}.AppImage
+
       - name: Upload Release Assets (macOS)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
         uses: shogo82148/actions-upload-release-asset@v1
@@ -526,6 +566,16 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: src-tauri/target/release/bundle/macos/eim.zip
           asset_name: eim-gui-${{ matrix.package_name }}.zip
+
+      - name: Upload Release Assets (macOS - dmg)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/dmg/*.dmg
+          asset_name: eim-gui-${{ matrix.package_name }}.dmg
 
   test-cli:
     name: Test CLI Binary (${{ matrix.package_name }})-(${{ matrix.run_on }})
