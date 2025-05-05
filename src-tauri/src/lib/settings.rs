@@ -377,6 +377,7 @@ impl Settings {
                 .map(|install| install.id.clone())
                 .unwrap_or_default(),
             idf_installed: idf_installations,
+            eim_path: None, // this will be autofilled on file save
         };
 
         let json_path =
