@@ -81,7 +81,7 @@ export default {
   },
   methods: {
     async validatePath(path) {
-      let result = await invoke("is_path_empty_or_nonexistent", { path: path });
+      let result = await invoke("is_path_empty_or_nonexistent_command", { path: path });
       return result;
     },
     async openFolderDialog() {
