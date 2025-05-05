@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Context, Result};
 use log::debug;
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Serialize};
+use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
@@ -27,6 +28,8 @@ pub struct IdfConfig {
     pub idf_installed: Vec<IdfInstallation>,
     #[serde(rename = "idfSelectedId")]
     pub idf_selected_id: String,
+    #[serde(rename = "eimPath")]
+    pub eim_path: Option<String>,
 }
 
 impl IdfConfig {
@@ -63,6 +66,24 @@ impl IdfConfig {
             }
         } else {
             debug!("Creating new ide config file");
+        }
+        if self.eim_path.is_none() {
+          self.eim_path = match env::current_exe() {
+            Ok(path) => Some(path.to_str().unwrap().to_string()),
+            Err(_) => None,
+          };
+        } else {
+          debug!("eim_path already set to {}", self.eim_path.as_ref().unwrap());
+          match env::current_exe() {
+            Ok(path) => {
+              let path = path.to_str().unwrap().to_string();
+              if self.eim_path.as_ref().unwrap() != &path {
+                // Update the eim_path if it is different
+                self.eim_path = Some(path);
+              }
+            },
+            Err(_) => debug!("Failed to get current executable path"),
+          };
         }
 
         // Convert to JSON string
@@ -236,6 +257,7 @@ mod tests {
                 },
             ],
             idf_selected_id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
+            eim_path: None,
         }
     }
 
