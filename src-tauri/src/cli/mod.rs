@@ -9,6 +9,7 @@ use config::ConfigError;
 use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
+use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
@@ -313,12 +314,37 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
         }
         Commands::Discover => {
-            // TODO:Implement version discovery
-            unimplemented!("Version discovery not implemented yet");
-            println!("Discovering available versions... (This can take couple of minutes)");
-            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
+            info!("Discovering available versions... (This can take couple of minutes)");
+            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/tmp");
+            if idf_dirs.is_empty() {
+                info!("No IDF directories found");
+            } else {
+                info!("Found {} IDF directories:", idf_dirs.len());
+            }
+            let config = match idf_im_lib::version_manager::get_esp_ide_config() {
+              Ok(config) => {
+                if config.idf_installed.is_empty() {
+                  debug!(
+                      "No versions found. Every discovered version can be imported."
+                  );
+                }
+                config
+              }
+              Err(err) => {
+                debug!("No ide config found. New will be created.");
+                IdfConfig::default()
+              }
+            };
+            let mut paths_to_add = vec![];
             for dir in idf_dirs {
-                println!("Found IDF directory: {}", dir);
+              info!("- {} ", &dir);
+              if config.clone().is_path_in_config(dir.clone()) {
+                info!("Already present!");
+              } else {
+                info!("Will be added...");
+                paths_to_add.push(dir);
+              }
+
             }
             Ok(())
         }

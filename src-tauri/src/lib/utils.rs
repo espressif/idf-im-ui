@@ -146,14 +146,18 @@ pub fn is_valid_idf_directory(path: &str) -> bool {
     let path = PathBuf::from(path);
     let tools_path = path.join("tools");
     let tools_json_path = tools_path.join("tools.json");
+    debug!("Checking for tools.json at: {}", tools_json_path.display());
     if !tools_json_path.exists() {
         return false;
     }
+    debug!("Found tools.json at: {}", tools_json_path.display());
     match read_and_parse_tools_file(tools_json_path.to_str().unwrap()) {
         Ok(_) => {
+            debug!("Valid IDF directory: {}", path.display());
             true
         }
         Err(_) => {
+            debug!("Invalid IDF directory: {}", path.display());
             false
         }
     }
@@ -386,53 +390,69 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
         let tmp = PathBuf::from(tool_set.idf_location.clone());
         let version_path = tmp.parent().unwrap();
-        single_version_post_install(
+        match import_single_version(
             version_path.to_str().unwrap(),
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
             new_export_paths,
-            None,
-        );
-
-        let new_activation_script = match std::env::consts::OS {
-            "windows" => format!(
-                "{}\\Microsoft.PowerShell_profile.ps1",
-                version_path.to_str().unwrap()
-            ),
-            _ => format!(
-                "{}/activate_idf_{}.sh",
-                version_path.to_str().unwrap(),
-                tool_set.idf_version
-            ),
-        };
-        let installation = IdfInstallation {
-            id: tool_set.id.to_string(),
-            activation_script: new_activation_script,
-            path: tool_set.idf_location,
-            name: tool_set.idf_version,
-            python: tool_set.system_python_executable_path,
-            idf_tools_path: new_idf_tools_path,
-        };
-        let config_path = get_default_config_path();
-        let mut current_config = match IdfConfig::from_file(&config_path) {
-            Ok(config) => config,
-            Err(e) => {
-                return Err(anyhow!("Config file not found: {}", e));
-            }
-        };
-        current_config.idf_installed.push(installation);
-        match current_config.to_file(config_path, true, false) {
+            Some(tool_set.system_python_executable_path),
+        ) {
             Ok(_) => {
-                debug!("Updated config file with new tool set");
-                return Ok(());
+                debug!("Successfully imported tool set");
             }
             Err(e) => {
-                return Err(anyhow!("Failed to update config file: {}", e));
+                return Err(anyhow!("Failed to import tool set: {}", e));
             }
         }
     }
     Ok(())
+}
+
+pub fn import_single_version(path_to_create_activation_script: &str,idf_location: &str, idf_version: &str, idf_tools_path: &str, export_paths: Vec<String>, python: Option<String>) -> Result<()> {
+  single_version_post_install(
+    path_to_create_activation_script,
+    idf_location,
+    idf_version,
+    &idf_tools_path,
+    export_paths,
+  );
+  let activation_script = match std::env::consts::OS {
+    "windows" => format!(
+        "{}\\Microsoft.PowerShell_profile.ps1",
+        path_to_create_activation_script,
+    ),
+    _ => format!(
+        "{}/activate_idf_{}.sh",
+        path_to_create_activation_script,
+        idf_version
+    ),
+  };
+  let installation = IdfInstallation {
+    id: idf_version.to_string(),
+    activation_script,
+    path: idf_location.to_string(),
+    name: idf_version.to_string(),
+    python: python.unwrap_or_else(|| "python".to_string()),
+    idf_tools_path: idf_tools_path.to_string(),
+  };
+  let config_path = get_default_config_path();
+  let mut current_config = match IdfConfig::from_file(&config_path) {
+      Ok(config) => config,
+      Err(e) => {
+          return Err(anyhow!("Config file not found: {}", e));
+      }
+  };
+  current_config.idf_installed.push(installation);
+  match current_config.to_file(config_path, true, false) {
+      Ok(_) => {
+          debug!("Updated config file with new tool set");
+          return Ok(());
+      }
+      Err(e) => {
+          return Err(anyhow!("Failed to update config file: {}", e));
+      }
+  }
 }
 
 /// Converts a path to a long path compatible with Windows.
