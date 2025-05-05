@@ -577,7 +577,7 @@ jobs:
           asset_path: src-tauri/target/release/bundle/dmg/*.dmg
           asset_name: eim-gui-${{ matrix.package_name }}.dmg
 
-  Autotest-CLI-workflow:
+  Autotest-CLI:
     needs: [build-cli, build-cli-linux]
     if: needs.build-cli.result == 'success'
     uses: ./.github/workflows/test_cli.yml
@@ -585,7 +585,7 @@ jobs:
       run_number: ${{ github.run_number }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
-  Autotest-GUI-workflow:
+  Autotest-GUI:
     needs: [build-gui]
     if: needs.build-gui.result == 'success'
     uses: ./.github/workflows/test_gui.yml

@@ -117,9 +117,26 @@ function runPostInstallTest(
       testRunner.sendInput("cd hello_world\r");
       testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
 
+      const startTime = Date.now();
+      while (Date.now() - startTime < 900000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("failed to se target!!!!");
+          break;
+        }
+        if (
+          await testRunner.waitForOutput(
+            "Build files have been written to",
+            1000
+          )
+        ) {
+          logger.debug("Targets Set!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const targetSet = await testRunner.waitForOutput(
-        "Build files have been written to",
-        900000
+        "Build files have been written to"
       );
 
       expect(
@@ -149,9 +166,21 @@ function runPostInstallTest(
       testRunner.sendInput("cd hello_world\r");
       testRunner.sendInput("idf.py build\r");
 
+      const startTime = Date.now();
+      while (Date.now() - startTime < 450000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("Build failed!!!!");
+          break;
+        }
+        if (await testRunner.waitForOutput("Project build complete", 1000)) {
+          logger.debug("Build Complete!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const buildComplete = await testRunner.waitForOutput(
-        "Project build complete",
-        450000
+        "Project build complete"
       );
 
       expect(

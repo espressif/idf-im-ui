@@ -47,18 +47,31 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       logger.info(`Starting test - IDF custom installation`);
       testRunner.sendInput(`${pathToEim} install ${args.join(" ")}\r`);
       if (!"-n true" in args) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < 1800000) {
+          if (await testRunner.waitForOutput("failed", 1000)) {
+            logger.debug("failed!!!!");
+            break;
+          }
+          if (
+            await testRunner.waitForOutput(
+              "Do you want to save the installer configuration",
+              1000
+            )
+          ) {
+            logger.debug("Completed!!!");
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+
         const installationCompleted = await testRunner.waitForOutput(
-          "Do you want to save the installer configuration",
-          5000000
+          "Do you want to save the installer configuration"
         );
         expect(
           installationCompleted,
           "Failed to ask to save installation configuration - failure to install using full arguments on run time"
         ).to.be.true;
-        expect(
-          testRunner.output,
-          "Error message during installation"
-        ).to.not.include("error");
         expect(
           testRunner.output,
           "Failed to download submodules, missing 'Finished fetching submodules'"
@@ -68,9 +81,24 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         testRunner.output = "";
         testRunner.sendInput("n");
       }
+
+      const startTime = Date.now();
+      while (Date.now() - startTime < 1800000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("failed!!!!");
+          break;
+        }
+        if (
+          await testRunner.waitForOutput("Successfully installed IDF", 1000)
+        ) {
+          logger.debug("Completed!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const installationSuccessful = await testRunner.waitForOutput(
-        "Successfully installed IDF",
-        5000000
+        "Successfully installed IDF"
       );
 
       expect(

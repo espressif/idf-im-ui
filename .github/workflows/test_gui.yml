@@ -12,7 +12,7 @@ on:
 
 jobs:
   test-cli-in-gui:
-    name: Test CLI in GUI Binary (${{ matrix.package_name }})
+    name: CLI in GUI ${{ matrix.package_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -184,7 +184,7 @@ jobs:
           fail-on-empty: true
 
   test-gui:
-    name: Test GUI (${{ matrix.package_name }})
+    name: GUI (${{ matrix.package_name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -270,7 +270,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (non-Windows)
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
           export EIM_GUI_PATH="../test-bin/eim"
@@ -331,7 +331,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           $env:LOG_TO_FILE="true"
           $env:EIM_GUI_PATH = "..\test-bin\eim.exe"

@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: Test CLI Binary (${{ matrix.package_name }})-(${{ matrix.run_on }})
+    name: CLI ${{ matrix.package_name }}(${{ matrix.run_on }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -27,9 +27,11 @@ jobs:
           - os: macos-latest
             package_name: macos-aarch64
             run_on: GitHub
-          - os: self-hosted
+          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && (contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest') || null }}
             package_name: linux-x64
             run_on: CNRunner
+        exclude:
+          - os: null
 
     steps:
       - name: Checkout repository
@@ -98,7 +100,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script (non-Windows)
-        if: matrix.os != 'windows-latest' && matrix.run_on != 'CNRunner'
+        if: matrix.os != 'windows-latest' && matrix.run_on != 'CNRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
           export EIM_FILE_PATH="../test-bin/eim"
@@ -109,7 +111,7 @@ jobs:
         continue-on-error: true
 
       - name: Run alternative mirrors test script (CNRunner)
-        if: matrix.run_on == 'CNRunner'
+        if: matrix.run_on == 'CNRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
           export EIM_FILE_PATH="../test-bin/eim"
@@ -164,7 +166,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           $env:LOG_TO_FILE="true"
           $env:EIM_FILE_PATH = "..\test-bin\eim.exe"
@@ -179,7 +181,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
+          name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.run_on}}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
