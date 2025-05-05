@@ -235,6 +235,8 @@ mod tests {
     use std::fs;
     use tempfile::tempdir;
 
+
+
     fn create_test_config() -> IdfConfig {
         IdfConfig {
             git_path: String::from("/opt/homebrew/bin/git"),
@@ -390,4 +392,32 @@ mod tests {
 
         Ok(())
     }
+
+  #[test]
+  fn test_eim_path_auto_set() -> Result<()> {
+      let dir = tempdir()?;
+      let config_path = dir.path().join("eim_path_test_config.json");
+      let mut config = create_test_config();
+
+      // Ensure eim_path is None
+      config.eim_path = None;
+
+      // Save config to file
+      config.to_file(&config_path, true, false)?;
+
+      // Read the config back
+      let read_config = IdfConfig::from_file(&config_path)?;
+
+      // Check that eim_path is now set to the current executable path
+      assert!(read_config.eim_path.is_some());
+
+      // Get current executable path to compare
+      let current_exe = env::current_exe()?;
+      let current_exe_str = current_exe.to_str().unwrap();
+
+      // Compare paths
+      assert_eq!(read_config.eim_path.unwrap(), current_exe_str);
+
+      Ok(())
+  }
 }
