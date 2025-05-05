@@ -55,6 +55,11 @@ function testRun(jsonScript) {
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
 
+  const TOOLSFOLDER =
+    os.platform() !== "win32"
+      ? path.join(os.homedir(), `.espressif`)
+      : `C:\\Espressif`;
+
   // Test Runs
   jsonScript.forEach((test) => {
     if (test.type === "prerequisites") {
@@ -95,7 +100,7 @@ function testRun(jsonScript) {
 
         runCLIWizardInstallTest(PATHTOEIM);
 
-        runPostInstallTest(pathToIDFScript, installFolder);
+        runPostInstallTest(pathToIDFScript, installFolder, TOOLSFOLDER);
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
@@ -152,6 +157,7 @@ function testRun(jsonScript) {
         runPostInstallTest(
           pathToIDFScript,
           installFolder,
+          TOOLSFOLDER,
           targetList.split("|")[0] === "all"
             ? "esp32"
             : targetList.split("|")[0]

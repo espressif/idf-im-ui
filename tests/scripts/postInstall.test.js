@@ -9,6 +9,7 @@ import fs from "fs";
 function runPostInstallTest(
   pathToIDFScript,
   installFolder,
+  toolsfolder,
   validTarget = "esp32",
   invalidTarget = ""
 ) {
@@ -58,6 +59,15 @@ function runPostInstallTest(
       logger.info("Post install test completed, starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
+        fs.rmSync(path.join(toolsfolder, `tools`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `dist`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);
@@ -196,13 +206,22 @@ function runPostInstallTest(
   });
 }
 
-function runPostInstallCleanUp(installFolder) {
+function runPostInstallCleanUp(installFolder, toolsfolder) {
   describe("2- Clean UP after install ->", function () {
     after(function () {
       this.timeout(30000);
       logger.info("Starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
+        fs.rmSync(path.join(toolsfolder, `tools`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `dist`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);
