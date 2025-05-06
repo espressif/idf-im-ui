@@ -83,6 +83,18 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
     filter_directories(filter_subpaths(search))
 }
 
+pub fn find_by_name_and_extension(path: &Path, name: &str, extension: &str) -> Vec<String> {
+    SearchBuilder::default()
+        .location(path)
+        .search_input(name)
+        .ext(extension)
+        .strict()
+        .ignore_case()
+        .hidden()
+        .build()
+        .collect()
+}
+
 /// Checks if the given path is a valid ESP-IDF directory.
 ///
 /// # Purpose
@@ -516,6 +528,8 @@ pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
 }
 
 pub fn import_single_version(path_to_create_activation_script: &str,idf_location: &str, idf_version: &str, idf_tools_path: &str, export_paths: Vec<String>, python: Option<String>) -> Result<()> {
+  // TODO: skip is path does not exist
+  // TODO: check if not alreasdy in the config
   single_version_post_install(
     path_to_create_activation_script,
     idf_location,
