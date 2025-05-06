@@ -295,6 +295,7 @@ pub async fn run_cli(cli: Cli) {
             }
         }
         Commands::Discover => {
+          // todo: first parse existing esp_idf.json (using parse_esp_idf_json)
             info!("Discovering available versions... (This can take couple of minutes)");
             let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
             if idf_dirs.is_empty() {
