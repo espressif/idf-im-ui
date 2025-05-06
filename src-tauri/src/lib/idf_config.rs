@@ -260,9 +260,6 @@ impl IdfConfig {
         }
     }
 
-    pub fn is_path_in_config(self, path:String) -> bool {
-      self.idf_installed.iter().find(|i| i.path == path).is_some()
-    }
 }
 
 pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {
