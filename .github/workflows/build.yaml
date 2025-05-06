@@ -579,7 +579,7 @@ jobs:
 
   Autotest-CLI:
     needs: [build-cli, build-cli-linux]
-    if: needs.build-cli.result == 'success'
+    if: needs.build-cli.result == 'success' && needs.build-cli-linux.result == 'success'
     uses: ./.github/workflows/test_cli.yml
     with:
       run_number: ${{ github.run_number }}

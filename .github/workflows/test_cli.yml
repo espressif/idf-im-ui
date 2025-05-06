@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: CLI ${{ matrix.package_name }}(${{ matrix.run_on }})
+    name: CLI (${{ matrix.package_name }}-${{ matrix.run_on }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -27,11 +27,9 @@ jobs:
           - os: macos-latest
             package_name: macos-aarch64
             run_on: GitHub
-          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && (contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest') || null }}
+          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest' }}
             package_name: linux-x64
             run_on: CNRunner
-        exclude:
-          - os: null
 
     steps:
       - name: Checkout repository
@@ -185,6 +183,22 @@ jobs:
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
+
+      - name: Upload EIM install log (non-windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os != 'windows-latest'
+        with:
+          name: autotest-CLI-install-log-${{ matrix.package_name }}
+          path: |
+            ~/.local/share/eim/logs/**/*
+
+      - name: Upload EIM install log (windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: autotest-CLI-install-log-${{ matrix.package_name }}
+          path: |
+            ~/AppData/Local/eim/logs/**/*
 
       # Publish test results
       - name: Publish Test Results
