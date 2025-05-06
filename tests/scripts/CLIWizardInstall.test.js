@@ -23,7 +23,8 @@ export function runCLIWizardInstallTest(pathToEim) {
 
     afterEach(function () {
       if (this.currentTest.state === "failed") {
-        logger.info(
+        logger.info(`Test failed: ${this.currentTest.title}`);
+        logger.debug(
           `Installation using wizard failed -> output: \r >>${testRunner.output}<<`
         );
         installationFailed = true;
@@ -143,6 +144,9 @@ export function runCLIWizardInstallTest(pathToEim) {
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (Date.now() - startTime >= 1200000) {
+        logger.info("Installation timed out after 20 minutes");
       }
 
       const installationCompleted = await testRunner.waitForOutput(
