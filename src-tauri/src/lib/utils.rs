@@ -2,7 +2,7 @@ use crate::{
     command_executor::execute_command, idf_config::{IdfConfig, IdfInstallation}, idf_tools::{self, read_and_parse_tools_file}, replace_unescaped_spaces_win, settings::Settings, single_version_post_install, version_manager::get_default_config_path
 };
 use anyhow::{anyhow, Result};
-use log::{debug, warn};
+use log::{debug, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -414,9 +414,11 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         let idf_path = value.path;
         let python = value.python;
         let tools_path = config.idf_tools_path.clone();
+        println!("IDF tools path: {}", tools_path);
+        println!("IDF version: {}", idf_version);
         let export_paths = vec![config.git_path.clone()];
         match import_single_version(
-            idf_json_path.to_str().unwrap(),
+            idf_json_path.parent().unwrap().to_str().unwrap(),
             &idf_path,
             &idf_version,
             &tools_path,
@@ -483,10 +485,12 @@ pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
     }
   }
   // was not installed by eim
+  debug!("Path {} was not installed by EIM", idf_path);
   let path_to_create_activation_script = match path.parent() {
     Some(parent) => parent,
     None => path,
   };
+  info!("Path to create activation script: {}", path_to_create_activation_script.display());
   let idf_version = path_to_create_activation_script.file_name().unwrap().to_str().unwrap();
   let tools_file = match idf_tools::read_and_parse_tools_file(&Path::new(idf_path).join("tools").join("tools.json").to_str().unwrap()){
     Ok(tools_file) => tools_file,
@@ -520,7 +524,7 @@ pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
       debug!("Successfully imported tool set");
     }
     Err(e) => {
-      warn!("Failed to import tool set: {}", e);
+      warn!("Failed to import tool set:{} {}", idf_path, e);
     }
   }
   //  TODO: add more approaches for different legacy installations
@@ -528,14 +532,31 @@ pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
 }
 
 pub fn import_single_version(path_to_create_activation_script: &str,idf_location: &str, idf_version: &str, idf_tools_path: &str, export_paths: Vec<String>, python: Option<String>) -> Result<()> {
-  // TODO: skip is path does not exist
-  // TODO: check if not alreasdy in the config
+  let config_path = get_default_config_path();
+  let mut current_config = match IdfConfig::from_file(&config_path) {
+      Ok(config) => config,
+      Err(e) => IdfConfig::default(),
+  };
+  let idf_path = PathBuf::from(idf_location);
+  if !idf_path.exists() {
+    warn!("Path {} does not exists, skipping", idf_location);
+    return Err(anyhow!("Path {} does not exists", idf_location));
+  };
+  if current_config.clone().is_path_in_config(idf_location.to_string()) {
+    info!("Path {} already in config, skipping", idf_location);
+    return Ok(());
+  };
+  let python_env = python.clone().and_then(|s| {
+    s.find("python_env").map(|index| s[..=index+9].to_string())
+  });
+  println!("Python env: {:?}", python_env);
   single_version_post_install(
     path_to_create_activation_script,
     idf_location,
     idf_version,
     &idf_tools_path,
     export_paths,
+    python_env.as_deref(),
   );
   let activation_script = match std::env::consts::OS {
     "windows" => format!(
@@ -556,13 +577,7 @@ pub fn import_single_version(path_to_create_activation_script: &str,idf_location
     python: python.unwrap_or_else(|| "python".to_string()),
     idf_tools_path: idf_tools_path.to_string(),
   };
-  let config_path = get_default_config_path();
-  let mut current_config = match IdfConfig::from_file(&config_path) {
-      Ok(config) => config,
-      Err(e) => {
-          return Err(anyhow!("Config file not found: {}", e));
-      }
-  };
+
   current_config.idf_installed.push(installation);
   match current_config.to_file(config_path, true, false) {
       Ok(_) => {
