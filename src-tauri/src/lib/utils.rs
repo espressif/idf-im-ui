@@ -403,6 +403,65 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
     Ok(())
 }
 
+#[derive(Deserialize, Debug)]
+pub struct EspIdfConfig {
+    #[serde(rename = "$schema")]
+    pub schema: String,
+    #[serde(rename = "$id")]
+    pub id: String,
+    #[serde(rename = "_comment")]
+    pub comment: String,
+    #[serde(rename = "_warning")]
+    pub warning: String,
+    #[serde(rename = "gitPath")]
+    pub git_path: String,
+    #[serde(rename = "idfToolsPath")]
+    pub idf_tools_path: String,
+    #[serde(rename = "idfSelectedId")]
+    pub idf_selected_id: String,
+    #[serde(rename = "idfInstalled")]
+    pub idf_installed: HashMap<String, EspIdfVersion>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EspIdfVersion {
+    pub version: String,
+    pub python: String,
+    pub path: String,
+}
+
+pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
+    let idf_json_path = Path::new(idf_json_path);
+    let json_str = std::fs::read_to_string(idf_json_path).unwrap();
+    let config: EspIdfConfig = match serde_json::from_str(&json_str) {
+        Ok(config) => config,
+        Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
+    };
+    for (_key, value) in config.idf_installed {
+        let idf_version = value.version;
+        let idf_path = value.path;
+        let python = value.python;
+        let tools_path = config.idf_tools_path.clone();
+        let export_paths = vec![config.git_path.clone()];
+        match import_single_version(
+            idf_json_path.to_str().unwrap(),
+            &idf_path,
+            &idf_version,
+            &tools_path,
+            export_paths,
+            Some(python),
+        ) {
+            Ok(_) => {
+                debug!("Successfully imported tool set");
+            }
+            Err(e) => {
+                return Err(anyhow!("Failed to import tool set: {}", e));
+            }
+        }
+    }
+    Ok(())
+}
+
 pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
   let path = Path::new(idf_path);
   let default_settings = Settings::default();
