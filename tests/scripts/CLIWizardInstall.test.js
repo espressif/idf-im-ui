@@ -127,9 +127,26 @@ export function runCLIWizardInstallTest(pathToEim) {
       testRunner.output = "";
       testRunner.sendInput("\r");
 
+      const startTime = Date.now();
+      while (Date.now() - startTime < 1200000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("failed!!!!");
+          break;
+        }
+        if (
+          await testRunner.waitForOutput(
+            "Do you want to save the installer configuration",
+            1000
+          )
+        ) {
+          logger.debug("Completed!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const installationCompleted = await testRunner.waitForOutput(
-        "Do you want to save the installer configuration",
-        1200000
+        "Do you want to save the installer configuration"
       );
       expect(
         installationCompleted,

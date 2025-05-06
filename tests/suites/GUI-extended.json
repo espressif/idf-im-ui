@@ -26,19 +26,5 @@
       "recursive": "true",
       "nonInteractive": "true"
     }
-  },
-  {
-    "id": 3,
-    "type": "custom",
-    "name": "Extended 3",
-    "data": {
-      "targetList": "esp32",
-      "idfList": "master",
-      "installFolder": ".esprext3",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
   }
 ]

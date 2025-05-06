@@ -9,6 +9,7 @@ import fs from "fs";
 function runPostInstallTest(
   pathToIDFScript,
   installFolder,
+  toolsfolder,
   validTarget = "esp32",
   invalidTarget = ""
 ) {
@@ -58,6 +59,15 @@ function runPostInstallTest(
       logger.info("Post install test completed, starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
+        fs.rmSync(path.join(toolsfolder, `tools`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `dist`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);
@@ -117,9 +127,26 @@ function runPostInstallTest(
       testRunner.sendInput("cd hello_world\r");
       testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
 
+      const startTime = Date.now();
+      while (Date.now() - startTime < 900000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("failed to se target!!!!");
+          break;
+        }
+        if (
+          await testRunner.waitForOutput(
+            "Build files have been written to",
+            1000
+          )
+        ) {
+          logger.debug("Targets Set!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const targetSet = await testRunner.waitForOutput(
-        "Build files have been written to",
-        900000
+        "Build files have been written to"
       );
 
       expect(
@@ -149,9 +176,21 @@ function runPostInstallTest(
       testRunner.sendInput("cd hello_world\r");
       testRunner.sendInput("idf.py build\r");
 
+      const startTime = Date.now();
+      while (Date.now() - startTime < 450000) {
+        if (await testRunner.waitForOutput("failed", 1000)) {
+          logger.debug("Build failed!!!!");
+          break;
+        }
+        if (await testRunner.waitForOutput("Project build complete", 1000)) {
+          logger.debug("Build Complete!!!");
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
       const buildComplete = await testRunner.waitForOutput(
-        "Project build complete",
-        450000
+        "Project build complete"
       );
 
       expect(
@@ -167,13 +206,22 @@ function runPostInstallTest(
   });
 }
 
-function runPostInstallCleanUp(installFolder) {
+function runPostInstallCleanUp(installFolder, toolsfolder) {
   describe("2- Clean UP after install ->", function () {
     after(function () {
       this.timeout(30000);
       logger.info("Starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
+        fs.rmSync(path.join(toolsfolder, `tools`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `dist`), {
+          recursive: true,
+          force: true,
+        });
+        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);

@@ -63,6 +63,8 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
         "Installation Setup"
       );
       const simplified = await eimRunner.findByText("Simplified Installation");
+      expect(simplified, "Expected option for simplified installation").to.not
+        .be.false;
       expect(
         await simplified.isDisplayed(),
         "Expected option for simplified installation"
@@ -75,14 +77,17 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const installing = await eimRunner.findByText(
         "Installing ESP-IDF...",
-        15000
+        20000
       );
+
+      expect(installing, "Expected installation progress screen").to.not.be
+        .false;
       expect(
         await installing.isDisplayed(),
         "Expected installation progress screen"
       ).to.be.true;
-      const startTime = Date.now();
 
+      const startTime = Date.now();
       while (Date.now() - startTime < 2700000) {
         if (await eimRunner.findByText("Installation Failed", 1000)) {
           logger.debug("failed!!!!");
@@ -92,7 +97,7 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
           logger.debug("Completed!!!");
           break;
         }
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
       const completed = await eimRunner.findByText("Installation Complete!");
       expect(completed, "Expected installation to be completed").to.not.be

@@ -58,6 +58,11 @@ function testRun(script) {
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
 
+  const TOOLSFOLDER =
+    os.platform() !== "win32"
+      ? path.join(os.homedir(), `.espressif`)
+      : `C:\\Espressif`;
+
   script.forEach((test) => {
     if (test.type === "startup") {
       //routine for startup test script
@@ -75,7 +80,7 @@ function testRun(script) {
 
       describe(`${test.id} - EIM simplified installation test ->`, function () {
         runGUISimplifiedInstallTest(test.id, pathToEIM);
-        runPostInstallCleanUp(installFolder);
+        runPostInstallCleanUp(installFolder, TOOLSFOLDER);
       });
     } else if (test.type === "custom") {
       //routine for expert install with custom settings
@@ -107,7 +112,7 @@ function testRun(script) {
           toolsMirror,
           IDFMirror
         );
-        runPostInstallCleanUp(installFolder);
+        runPostInstallCleanUp(installFolder, TOOLSFOLDER);
       });
     }
   });
