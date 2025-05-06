@@ -369,6 +369,7 @@ pub async fn run_cli(cli: Cli) {
               }
 
             }
+            // TODO: ask the user to select which IDFs to add
             for p in paths_to_add {
               match try_import_existing_idf(&p) {
                 Ok(_) => {
