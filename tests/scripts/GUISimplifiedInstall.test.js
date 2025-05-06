@@ -99,6 +99,9 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
+      if (Date.now() - startTime >= 2700000) {
+        logger.info("Installation timed out after 45 minutes");
+      }
       const completed = await eimRunner.findByText("Installation Complete!");
       expect(completed, "Expected installation to be completed").to.not.be
         .false;
