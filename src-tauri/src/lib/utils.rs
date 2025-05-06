@@ -556,12 +556,18 @@ pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
 }
 
 pub fn import_single_version(path_to_create_activation_script: &str,idf_location: &str, idf_version: &str, idf_tools_path: &str, export_paths: Vec<String>, python: Option<String>) -> Result<()> {
+  // TODO: skip is path does not exist
+  // TODO: check if not alreasdy in the config
+  let python_env = python.clone().and_then(|s| {
+    s.find("python_env").map(|index| s[..=index+9].to_string())
+  });
   single_version_post_install(
     path_to_create_activation_script,
     idf_location,
     idf_version,
     &idf_tools_path,
     export_paths,
+    python_env.as_deref()
   );
   let activation_script = match std::env::consts::OS {
     "windows" => format!(
