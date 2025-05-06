@@ -10,6 +10,7 @@ use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::try_import_existing_idf;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;
@@ -295,7 +296,7 @@ pub async fn run_cli(cli: Cli) {
         }
         Commands::Discover => {
             info!("Discovering available versions... (This can take couple of minutes)");
-            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/tmp");
+            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
             if idf_dirs.is_empty() {
                 info!("No IDF directories found");
             } else {
@@ -325,6 +326,16 @@ pub async fn run_cli(cli: Cli) {
                 paths_to_add.push(dir);
               }
 
+            }
+            for p in paths_to_add {
+              match try_import_existing_idf(&p) {
+                Ok(_) => {
+                  info!("Added to config: {}", p);
+                }
+                Err(err) => {
+                  error!("Failed to add: {} - reason :{}",p, err);
+                }
+              }
             }
         }
         Commands::Import { path } => match path {
