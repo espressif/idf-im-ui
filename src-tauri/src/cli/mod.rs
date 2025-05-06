@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -11,6 +12,8 @@ use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::find_by_name_and_extension;
+use idf_im_lib::utils::parse_esp_idf_json;
 use idf_im_lib::utils::try_import_existing_idf;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
@@ -314,10 +317,48 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Discover => {
-          // todo: first parse existing esp_idf.json (using parse_esp_idf_json)
+        Commands::Discover {path  } => {
             info!("Discovering available versions... (This can take couple of minutes)");
-            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
+            // TODO: add warning and confirmation
+            let path = path.unwrap_or_else(|| {
+                let default_path = match std::env::consts::OS {
+                    "windows" => {
+                        "C:\\".to_string()
+                    }
+                    _ => {
+                        "/".to_string()
+                    }
+                };
+
+
+                debug!("No path provided, using default: {}", default_path);
+                default_path
+            });
+          // first parse existing esp_idf.json (using parse_esp_idf_json)
+
+            let search_patch = Path::new(&path);
+            let esp_idf_json_path = find_by_name_and_extension(
+              search_patch,
+              "esp_idf",
+              "json",
+            );
+            if esp_idf_json_path.is_empty() {
+                info!("No esp_idf.json found");
+            } else {
+                info!("Found {} esp_idf.json files:", esp_idf_json_path.len());
+            }
+            for path in esp_idf_json_path {
+                info!("- {} ", &path);
+               match parse_esp_idf_json(&path) {
+                    Ok(_) => {
+                        info!("Parsed config: {:?}", path);
+                    }
+                    Err(err) => {
+                        info!("Failed to parse esp_idf.json: {}", err);
+                    }
+                }
+            }
+            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders(&path);
             if idf_dirs.is_empty() {
                 info!("No IDF directories found");
             } else {
