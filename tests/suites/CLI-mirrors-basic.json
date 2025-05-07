@@ -1,0 +1,24 @@
+[
+  {
+    "id": 1,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_com",
+    "data": {
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_com",
+      "recursive": "true",
+      "nonInteractive": "true"
+    }
+  },
+  {
+    "id": 2,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_cn",
+    "data": {
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_cn",
+      "recursive": "true",
+      "nonInteractive": "true"
+    }
+  }
+]
