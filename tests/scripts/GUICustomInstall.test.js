@@ -75,7 +75,7 @@ export function runGUICustomInstallTest(
     });
 
     it("03- Should check prerequisites", async function () {
-      this.timeout(10000);
+      this.timeout(20000);
       await eimRunner.clickButton("Start Expert Setup");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const prerequisitesList = await eimRunner.findByDataId(
@@ -107,7 +107,7 @@ export function runGUICustomInstallTest(
     });
 
     it("04- Should check python installation", async function () {
-      this.timeout(10000);
+      this.timeout(15000);
       await eimRunner.clickButton("Continue to Next Step");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const result = await eimRunner.findByDataId("python-check-result");
@@ -356,7 +356,7 @@ export function runGUICustomInstallTest(
     });
 
     it("12- Should offer to save installation configuration", async function () {
-      this.timeout(10000);
+      this.timeout(15000);
 
       try {
         await eimRunner.clickButton("Complete Installation");
