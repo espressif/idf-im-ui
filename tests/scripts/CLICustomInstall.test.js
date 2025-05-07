@@ -92,6 +92,10 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
           logger.debug("failed!!!!");
           break;
         }
+        if (await testRunner.waitForOutput("panicked", 1000)) {
+          logger.debug("Rust App failure!!!!");
+          break;
+        }
         if (
           await testRunner.waitForOutput("Successfully installed IDF", 1000)
         ) {
