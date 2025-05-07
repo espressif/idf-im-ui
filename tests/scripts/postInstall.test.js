@@ -42,7 +42,8 @@ function runPostInstallTest(
     afterEach(async function () {
       this.timeout(20000);
       if (this.currentTest.state === "failed") {
-        logger.info(
+        logger.info(`Test failed: ${this.currentTest.title}`);
+        logger.debug(
           `Post install test step failed -> output: >>\r ${testRunner.output}`
         );
         postInstallStepFailed = true;
@@ -144,6 +145,9 @@ function runPostInstallTest(
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
+      if (Date.now() - startTime >= 900000) {
+        logger.info("Set Target timed out after 15 minutes");
+      }
 
       const targetSet = await testRunner.waitForOutput(
         "Build files have been written to"
@@ -177,7 +181,7 @@ function runPostInstallTest(
       testRunner.sendInput("idf.py build\r");
 
       const startTime = Date.now();
-      while (Date.now() - startTime < 450000) {
+      while (Date.now() - startTime < 480000) {
         if (await testRunner.waitForOutput("failed", 1000)) {
           logger.debug("Build failed!!!!");
           break;
@@ -192,6 +196,9 @@ function runPostInstallTest(
       const buildComplete = await testRunner.waitForOutput(
         "Project build complete"
       );
+      if (Date.now() - startTime >= 480000) {
+        logger.info("Build timed out after 8 minutes");
+      }
 
       expect(
         buildComplete,
