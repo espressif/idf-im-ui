@@ -163,6 +163,7 @@ async fn install_single_version(
       &version,
       tools_install_path.to_str().unwrap(),
       export_vars,
+      None,
   );
 
   Ok(())

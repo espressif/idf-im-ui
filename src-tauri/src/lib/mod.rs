@@ -1453,6 +1453,7 @@ pub fn single_version_post_install(
     idf_version: &str,
     tool_install_directory: &str,
     export_paths: Vec<String>,
+    idf_python_env_path: Option<&str>
 ) {
     let env_vars = setup_environment_variables(
         &PathBuf::from(tool_install_directory),
@@ -1467,7 +1468,7 @@ pub fn single_version_post_install(
                 idf_path,
                 idf_version,
                 tool_install_directory,
-                None,
+                idf_python_env_path,
                 export_paths,
                 env_vars,
             ) {
@@ -1488,7 +1489,7 @@ pub fn single_version_post_install(
                 install_path,
                 idf_path,
                 tool_install_directory,
-                None,
+                idf_python_env_path,
                 idf_version,
                 export_paths,
                 env_vars,
