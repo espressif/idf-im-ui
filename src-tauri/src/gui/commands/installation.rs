@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager};
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, utils::is_path_empty_or_nonexistent};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -188,6 +188,16 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
   settings_clone.config_file_save_path = Some(config_path.clone());
   settings_clone.non_interactive = Some(true);
   settings_clone.install_all_prerequisites = Some(true);
+
+  if !is_path_empty_or_nonexistent(settings_clone.path.clone().unwrap().to_str().unwrap(), &settings_clone.clone().idf_versions.unwrap()) {
+    log::error!("Installation path not avalible: {:?}", settings_clone.path.clone().unwrap());
+    send_simple_setup_message(
+      &app_handle,
+      12,
+      format!("Installation path not avalible"),
+    );
+    return Err(format!("Installation path not avalible: {:?}", settings_clone.path.clone().unwrap()));
+  }
 
   // Save settings to temp file
   if let Err(e) = settings_clone.save() {
@@ -457,9 +467,6 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
       );
       return;
   }
-  println!("#####");
-  println!("settings: {:?}", settings);
-  println!("#####");
 
   // Check for IDF versions
   if settings.idf_versions.is_none() {
