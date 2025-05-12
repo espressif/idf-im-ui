@@ -223,6 +223,8 @@ export default {
       // POSIX
       this.unlistenTools = await listen('tools-message', (event) => {
         console.log('### Received tools message:', event.payload);
+        this.installation_finished = false;
+        this.installation_running = true;
         switch (event.payload.action) {
           case 'start':
             this.tools[this.curently_installing_version][event.payload.tool] = {
@@ -271,6 +273,7 @@ export default {
             this.tools[event.payload.version] = {};
             this.curently_installing_version = event.payload.version;
             this.installation_running = true;
+            this.installation_finished = false;
             break;
           case 'finished':
             this.versions_finished.push(event.payload.version);
