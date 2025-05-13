@@ -59,11 +59,24 @@ impl IdfConfig {
             debug!("Config file already exists, appending to it");
             let existing_config = IdfConfig::from_file(path.as_ref())?;
             let existing_version = existing_config.idf_installed;
-            for install in existing_version.iter() {
-                if !self.idf_installed.iter().any(|i| i.id == install.id) {
-                    self.idf_installed.push(install.clone());
-                }
+
+            let new_paths = self.idf_installed.iter().map(|i| i.path.clone()).collect::<Vec<_>>();
+
+            let mut merged_version = existing_version
+              .iter()
+              .filter(|i| {
+                let path = i.path.clone();
+                !new_paths.contains(&path)
+              })
+              .cloned()
+              .collect::<Vec<_>>();
+            for install in self.idf_installed.iter() {
+              if !merged_version.iter().any(|i| i.id == install.id) {
+                merged_version.push(install.clone());
+              }
             }
+            self.idf_installed = merged_version;
+            debug!("Merged existing config with new installations");
         } else {
             debug!("Creating new ide config file");
         }
@@ -223,6 +236,10 @@ impl IdfConfig {
             false
         }
     }
+
+    pub fn is_path_in_config(self, path:String) -> bool {
+      self.idf_installed.iter().find(|i| i.path == path).is_some()
+    }
 }
 
 pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {
@@ -351,7 +368,7 @@ mod tests {
             id: String::from("5.1"),
             idf_tools_path: String::from("/home/user/.espressif/tools"),
             name: String::from("ESP-IDF v5.1"),
-            path: String::from("/esp/idf/v5.1"),
+            path: String::from("/esp/idf/v5.1.0"),
             python: String::from("/usr/bin/python3"),
         };
 
@@ -419,5 +436,60 @@ mod tests {
       assert_eq!(read_config.eim_path.unwrap(), current_exe_str);
 
       Ok(())
+  }
+
+  #[test]
+fn test_append_with_same_path_replacement() -> Result<()> {
+    let dir = tempdir()?;
+    let config_path = dir.path().join("same_path_test_config.json");
+
+    // Create initial config with two installations
+    let mut initial_config = create_test_config();
+
+    // Save initial config to file
+    initial_config.to_file(&config_path, true, false)?;
+
+    // Create new config with installation that has the same path but different ID and name
+    let mut new_config = IdfConfig {
+        git_path: String::from("/usr/bin/git"),
+        idf_installed: vec![
+            IdfInstallation {
+                activation_script: String::from("/tmp/esp/v5.0/updated-export.sh"),
+                id: String::from("esp-idf-new-id"),
+                idf_tools_path: String::from("/tmp/esp/v5.0/updated-tools"),
+                name: String::from("ESP-IDF v5.0 (Updated)"),
+                path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the first installation in initial_config
+                python: String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3"),
+            },
+        ],
+        idf_selected_id: String::from("esp-idf-new-id"),
+        eim_path: None,
+    };
+
+    // Append new config to existing file (should replace installation with same path)
+    new_config.to_file(&config_path, true, true)?;
+
+    // Read the resulting config
+    let result_config = IdfConfig::from_file(&config_path)?;
+
+    // Verify the result has 2 installations
+    assert_eq!(result_config.idf_installed.len(), 2);
+
+    let v5_0_install = result_config.idf_installed.iter()
+        .find(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
+        .expect("Installation with path /tmp/esp-new/v5.1.5/esp-idf not found");
+
+    // Verify it's the updated one, not the original
+    assert_eq!(v5_0_install.id, "esp-idf-new-id");
+    assert_eq!(v5_0_install.name, "ESP-IDF v5.0 (Updated)");
+    assert_eq!(v5_0_install.activation_script, "/tmp/esp/v5.0/updated-export.sh");
+
+    // Verify the unique installation is still there unchanged
+    let v5_1_install = result_config.idf_installed.iter()
+        .find(|i| i.path == "/tmp/esp-new/v5.4/esp-idf")
+        .expect("Installation with path /tmp/esp-new/v5.4/esp-idf not found");
+    assert_eq!(v5_1_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
+
+    Ok(())
   }
 }
