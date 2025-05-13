@@ -129,7 +129,7 @@ pub fn run_idf_tools_py(
 
 pub fn run_idf_tools_py_with_features(
     idf_tools_path: &str,
-    environment_variables_install: &Vec<(String, String)>,
+    _environment_variables_install: &Vec<(String, String)>,
     environment_variables_python: &Vec<(String, String)>,
     features: &[String],
 ) -> Result<String, String> {
@@ -138,35 +138,11 @@ pub fn run_idf_tools_py_with_features(
     } else {
         replace_unescaped_spaces_posix(idf_tools_path)
     };
-    match run_install_script(&escaped_path, environment_variables_install) {
-        Ok(_) => {
-            info!("install success");
-        }
-        Err(e) => {
-            info!("Instal failed {:?}", e);
-        }
-    }
     run_install_python_env_script_with_features(
         &escaped_path,
         environment_variables_python,
         features,
     )
-}
-
-fn run_install_script(
-    idf_tools_path: &str,
-    environment_variables: &Vec<(String, String)>,
-) -> Result<String, String> {
-    let output = run_python_script_from_file(
-        idf_tools_path,
-        Some("install"),
-        None,
-        Some(environment_variables),
-    );
-
-    trace!("idf_tools.py install output:\n{:?}", output);
-
-    output
 }
 
 fn run_install_python_env_script(
