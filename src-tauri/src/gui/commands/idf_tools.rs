@@ -259,7 +259,7 @@ async fn process_tool_download(
 
   // Download file
   info!("Downloading {} to: {}", tool_name, full_path_str);
-  match download_file(&download.url, &tool_setup.download_dir, progress_tx).await {
+  match download_file(&download.url, &tool_setup.download_dir, Some(progress_tx)).await {
       Ok(_) => {
           send_tools_message(app_handle, filename.to_string(), "downloaded".to_string());
           send_message(

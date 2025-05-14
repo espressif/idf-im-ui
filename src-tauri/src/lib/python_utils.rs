@@ -1,14 +1,25 @@
-use log::{info, trace};
+use anyhow::{anyhow, Context, Result};
+use log::{debug, error, info, trace, warn};
 #[cfg(feature = "userustpython")]
 use rustpython_vm as vm;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::function::PosArgs;
 #[cfg(feature = "userustpython")]
 use std::process::ExitCode;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    time::{Duration, SystemTime},
+    vec,
+};
 #[cfg(feature = "userustpython")]
 use vm::{builtins::PyStrRef, Interpreter};
 
-use crate::{command_executor, replace_unescaped_spaces_posix, replace_unescaped_spaces_win};
+use crate::{
+    command_executor, download_file, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
+    utils::{remove_after_second_dot, with_retry},
+};
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
 /// todo: check documentation
@@ -81,6 +92,243 @@ pub fn run_python_script_from_file(
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
+    let constraint_file = format!(
+        "espidf.constraints.{}.txt",
+        remove_after_second_dot(idf_version)
+    );
+    let constraint_path = idf_tools_path.join(&constraint_file);
+    let constraint_url = format!("https://dl.espressif.com/dl/esp-idf/{}", constraint_file);
+
+    // Check if file exists and is fresh (less than 1 day old)
+    if constraint_path.exists() {
+        if let Ok(metadata) = fs::metadata(&constraint_path) {
+            if let Ok(modified) = metadata.modified() {
+                let now = SystemTime::now();
+                if now.duration_since(modified).unwrap_or_default() < Duration::from_secs(86400) {
+                    println!(
+                        "Skipping the download of {} because it was downloaded recently.",
+                        constraint_path.display()
+                    );
+                    return Ok(constraint_path);
+                }
+            }
+        }
+    }
+
+    // Create directory if needed
+    if let Some(parent) = constraint_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Download the constraints file
+    println!("Downloading constraints file from {}", constraint_url);
+
+    match download_file(&constraint_url, idf_tools_path.to_str().unwrap(), None).await {
+        Ok(_) => {
+            info!(
+                "Downloaded constraints file to {}",
+                constraint_path.display()
+            );
+        }
+        Err(e) => {
+            error!("Failed to download constraints file: {}", e);
+            return Err(anyhow!("Failed to download constraints file: {}", e));
+        }
+    }
+
+    println!(
+        "Downloaded constraints file to {}",
+        constraint_path.display()
+    );
+    Ok(constraint_path)
+}
+
+pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
+    let output = match std::env::consts::OS {
+        "windows" => command_executor::execute_command(
+            "powershell",
+            &["-Command", "python3.exe", "-m", "venv", venv_path],
+        ),
+        _ => command_executor::execute_command(
+            "bash",
+            &["-c", &format!("python3 -m venv {}", venv_path)],
+        ),
+    };
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(std::str::from_utf8(&out.stdout).unwrap().to_string())
+            } else {
+                Err(std::str::from_utf8(&out.stderr).unwrap().to_string())
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+pub fn pip_install_requirements(
+    venv_path: &Path,
+    requirements_file: &Path,
+    constraint_file: &Option<PathBuf>,
+) -> Result<(), std::io::Error> {
+    let python_location = match std::env::consts::OS {
+        "windows" => venv_path.join("Scripts").join("python.exe"),
+        _ => venv_path.join("bin").join("python3"),
+    };
+    std::env::set_var("VIRTUAL_ENV", venv_path.to_str().unwrap());
+    if std::env::var("PIP_USER").unwrap_or_default() == "yes" {
+        debug!("Found PIP_USER=\"yes\" in the environment. Disabling PIP_USER in this shell to install packages into a virtual environment.");
+        std::env::set_var("PIP_USER", "no".to_string());
+    }
+    let constrain_path = match constraint_file {
+        Some(path) => path.to_str().unwrap(),
+        None => "",
+    };
+
+    match std::env::consts::OS {
+        "windows" => {
+            match command_executor::execute_command_with_env(
+                "powershell",
+                &vec![
+                    "-Command",
+                    python_location.to_str().unwrap(),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    requirements_file.to_str().unwrap(),
+                    "--upgrade",
+                    "--constraint",
+                    constrain_path,
+                ],
+                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        Ok(())
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
+                        ))
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        }
+        _ => {
+            match command_executor::execute_command_with_env(
+                "bash",
+                &vec![
+                    "-c",
+                    &format!(
+                        "{} -m pip install -r {} --upgrade --constraint {}",
+                        python_location.to_str().unwrap(),
+                        requirements_file.to_str().unwrap(),
+                        constrain_path
+                    ),
+                ],
+                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        trace!(
+                            "pip install output: {}",
+                            std::str::from_utf8(&out.stdout).unwrap()
+                        );
+                        Ok(())
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
+                        ))
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        }
+    }
+}
+
+pub async fn install_python_env(
+    idf_version: &str,
+    idf_tools_path: &Path,
+    reinstall: bool,
+    idf_path: &Path,
+    features: &[String],
+) -> Result<(), String> {
+    let venv_path = idf_tools_path.join("python").join(idf_version).join("venv");
+
+    // if reinstall is true, remove the existing venv
+    if venv_path.exists() && reinstall {
+        debug!("venv already exists, removing it");
+        std::fs::remove_dir_all(&venv_path).unwrap();
+    }
+
+    // create the venv
+    match create_python_venv(venv_path.to_str().unwrap()) {
+        Ok(_) => {
+            debug!("venv created");
+        }
+        Err(e) => {
+            error!("failed to create venv: {}", e);
+            return Err(format!("failed to create venv: {}", e));
+        }
+    }
+
+    // install the requirements
+    let mut requirements_file_list = vec![];
+    let base_requirements_path = idf_path.join("tools").join("requirements");
+    requirements_file_list.push(base_requirements_path.join("requirements.core.txt"));
+    // prepare list of requirements files
+    for feature in features {
+        let requirements_file =
+            base_requirements_path.join(format!("requirements_{}.txt", feature));
+        if requirements_file.exists() {
+            requirements_file_list.push(requirements_file);
+        } else {
+            warn!(
+                "requirements file not found: {}",
+                requirements_file.display()
+            );
+        }
+    }
+    let constraint_file = match download_constraints_file(idf_tools_path, idf_version)
+        .await
+        .context("Failed to download constraints file")
+    {
+        Ok(constraint_file) => {
+            info!("Downloaded constraints file: {}", constraint_file.display());
+            Some(constraint_file)
+        }
+        Err(e) => {
+            warn!("Failed to download constraints file: {}", e);
+            None
+        }
+    };
+    // install the requirements from files
+    for requirements_file in requirements_file_list {
+        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file) {
+            Ok(_) => {
+                debug!("requirements installed: {}", requirements_file.display());
+            }
+            Err(e) => {
+                error!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                );
+                return Err(format!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                ));
+            }
+        }
+    }
+    info!("Python environment installed successfully");
+    Ok(())
 }
 
 /// Runs the IDF tools Python installation script.
