@@ -1,14 +1,25 @@
-use log::{info, trace};
+use anyhow::{anyhow, Context, Result};
+use log::{debug, error, info, trace, warn};
 #[cfg(feature = "userustpython")]
 use rustpython_vm as vm;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::function::PosArgs;
 #[cfg(feature = "userustpython")]
 use std::process::ExitCode;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::mpsc,
+    time::{Duration, SystemTime},
+    vec,
+};
 #[cfg(feature = "userustpython")]
 use vm::{builtins::PyStrRef, Interpreter};
 
-use crate::{command_executor, replace_unescaped_spaces_posix, replace_unescaped_spaces_win};
+use crate::{
+    command_executor, download_file, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
+    utils::{remove_after_second_dot, with_retry},
+};
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
 /// todo: check documentation
@@ -81,6 +92,376 @@ pub fn run_python_script_from_file(
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Downloads the ESP-IDF constraints file for a given IDF version.
+///
+/// This function constructs the appropriate constraints file name and URL based on the
+/// provided `idf_version`. It first checks if the file already exists locally and
+/// was downloaded within the last 24 hours. If it's fresh, the download is skipped.
+/// Otherwise, it creates the necessary directories and proceeds to download the file.
+///
+/// # Arguments
+///
+/// * `idf_tools_path` - A reference to a `Path` indicating the directory where IDF tools
+///   and associated files (like the constraints file) are stored.
+/// * `idf_version` - A string slice representing the ESP-IDF version.
+///   For example, "master", "v4.4", or "v5.1".
+///
+/// # Returns
+///
+/// A `Result` which is:
+/// - `Ok(PathBuf)` containing the path to the downloaded (or existing fresh)
+///   constraints file if the operation was successful.
+/// - `Err(anyhow::Error)` if an error occurred during directory creation,
+///   downloading, or other file operations.
+///
+/// # Errors
+///
+/// This function can return an error if:
+/// - There are issues creating the parent directories for the constraints file.
+/// - The download of the constraints file fails for any reason (e.g., network issues,
+///   invalid URL, server errors).
+/// - File system metadata cannot be accessed or modified times cannot be determined.
+async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
+    let constraint_file = format!(
+        "espidf.constraints.{}.txt",
+        if idf_version == "master" { "v6.0".to_string() } else { remove_after_second_dot(idf_version) } //TODO: move the default value somewhere
+    );
+    let constraint_path = idf_tools_path.join(&constraint_file);
+    let constraint_url = format!("https://dl.espressif.com/dl/esp-idf/{}", constraint_file);
+
+    // Check if file exists and is fresh (less than 1 day old)
+    if constraint_path.exists() {
+        if let Ok(metadata) = fs::metadata(&constraint_path) {
+            if let Ok(modified) = metadata.modified() {
+                let now = SystemTime::now();
+                if now.duration_since(modified).unwrap_or_default() < Duration::from_secs(86400) {
+                    println!(
+                        "Skipping the download of {} because it was downloaded recently.",
+                        constraint_path.display()
+                    );
+                    return Ok(constraint_path);
+                }
+            }
+        }
+    }
+
+    // Create directory if needed
+    if let Some(parent) = constraint_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Download the constraints file
+    println!("Downloading constraints file from {}", constraint_url);
+
+    match download_file(&constraint_url, idf_tools_path.to_str().unwrap(), None).await {
+        Ok(_) => {
+            info!(
+                "Downloaded constraints file to {}",
+                constraint_path.display()
+            );
+        }
+        Err(e) => {
+            error!("Failed to download constraints file: {}", e);
+            return Err(anyhow!("Failed to download constraints file: {}", e));
+        }
+    }
+
+    println!(
+        "Downloaded constraints file to {}",
+        constraint_path.display()
+    );
+    Ok(constraint_path)
+}
+
+/// Creates a Python virtual environment at the specified path.
+///
+/// This function executes the `python3 -m venv` command to create a new virtual
+/// environment. It adapts the command based on the operating system to ensure
+/// compatibility (using `powershell` on Windows and `bash` on other systems).
+///
+/// # Arguments
+///
+/// * `venv_path` - A string slice that specifies the desired path for the new
+///   virtual environment.
+///
+/// # Returns
+///
+/// A `Result` which is:
+/// - `Ok(String)` containing the standard output from the `venv` command if
+///   the virtual environment was created successfully.
+/// - `Err(String)` containing the standard error output or an error message
+///   if the command failed to execute or if the `venv` creation was unsuccessful.
+///
+/// # Errors
+///
+/// This function can return an error if:
+/// - The `python3` command is not found in the system's PATH.
+/// - There are insufficient permissions to create directories at `venv_path`.
+/// - Other system-level errors prevent the command from executing.
+/// - The `python -m venv` command itself encounters an error (e.g., invalid path).
+pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
+    let output = match std::env::consts::OS {
+        "windows" => command_executor::execute_command(
+            "powershell",
+            &["-Command", "python3.exe", "-m", "venv", venv_path],
+        ),
+        _ => command_executor::execute_command(
+            "bash",
+            &["-c", &format!("python3 -m venv {}", venv_path)],
+        ),
+    };
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                Ok(std::str::from_utf8(&out.stdout).unwrap().to_string())
+            } else {
+                Err(std::str::from_utf8(&out.stderr).unwrap().to_string())
+            }
+        }
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// Installs Python packages listed in a requirements file into a specified virtual environment
+/// using pip.
+///
+/// This function activates the virtual environment and then runs `pip install -r` to install
+/// the dependencies. It also handles an optional constraints file to manage package versions.
+/// The function adjusts its command execution based on the operating system (Windows or Unix-like)
+/// and temporarily disables `PIP_USER` if it's set, to ensure packages are installed into
+/// the virtual environment.
+///
+/// # Arguments
+///
+/// * `venv_path` - A reference to a `Path` pointing to the root directory of the Python
+///   virtual environment.
+/// * `requirements_file` - A reference to a `Path` pointing to the `requirements.txt` file
+///   containing the list of Python packages to install.
+/// * `constraint_file` - An `Option<PathBuf>` that, if present, specifies the path to a
+///   pip constraints file (`.txt`). This file can be used to pin package versions.
+///
+/// # Returns
+///
+/// A `Result<(), std::io::Error>` which is:
+/// - `Ok(())` if the pip installation was successful.
+/// - `Err(std::io::Error)` if the command failed to execute, or if pip
+///   returned a non-zero exit code (indicating an installation error). The error
+///   will contain the standard error output from the pip command.
+///
+/// # Errors
+///
+/// This function can return an `std::io::Error` if:
+/// - The `python` or `python.exe` executable within the virtual environment
+///   cannot be found or executed.
+/// - The `requirements_file` does not exist or is not readable.
+/// - The `constraint_file` (if provided) does not exist or is not readable.
+/// - There are network issues preventing pip from downloading packages.
+/// - Dependency conflicts or other pip-related errors occur during installation.
+pub fn pip_install_requirements(
+    venv_path: &Path,
+    requirements_file: &Path,
+    constraint_file: &Option<PathBuf>,
+) -> Result<(), std::io::Error> {
+    let python_location = match std::env::consts::OS {
+        "windows" => venv_path.join("Scripts").join("python.exe"),
+        _ => venv_path.join("bin").join("python3"),
+    };
+    std::env::set_var("VIRTUAL_ENV", venv_path.to_str().unwrap());
+    if std::env::var("PIP_USER").unwrap_or_default() == "yes" {
+        debug!("Found PIP_USER=\"yes\" in the environment. Disabling PIP_USER in this shell to install packages into a virtual environment.");
+        std::env::set_var("PIP_USER", "no".to_string());
+    }
+    let constrain_path = match constraint_file {
+        Some(path) => path.to_str().unwrap(),
+        None => "",
+    };
+
+    match std::env::consts::OS {
+        "windows" => {
+            match command_executor::execute_command_with_env(
+                "powershell",
+                &vec![
+                    "-Command",
+                    python_location.to_str().unwrap(),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    requirements_file.to_str().unwrap(),
+                    "--upgrade",
+                    "--constraint",
+                    constrain_path,
+                ],
+                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        Ok(())
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
+                        ))
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        }
+        _ => {
+            match command_executor::execute_command_with_env(
+                "bash",
+                &vec![
+                    "-c",
+                    &format!(
+                        "{} -m pip install -r {} --upgrade --constraint {}",
+                        python_location.to_str().unwrap(),
+                        requirements_file.to_str().unwrap(),
+                        constrain_path
+                    ),
+                ],
+                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        trace!(
+                            "pip install output: {}",
+                            std::str::from_utf8(&out.stdout).unwrap()
+                        );
+                        Ok(())
+                    } else {
+                        Err(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
+                        ))
+                    }
+                }
+                Err(e) => Err(e),
+            }
+        }
+    }
+}
+
+/// Installs or updates the Python virtual environment for a specific ESP-IDF version.
+///
+/// This asynchronous function orchestrates the creation of a Python virtual environment,
+/// downloads the necessary constraints file, and then installs all required Python
+/// packages based on the ESP-IDF version and specified features. It can optionally
+/// reinstall the environment if it already exists.
+///
+/// # Arguments
+///
+/// * `idf_version` - A string slice representing the ESP-IDF version (e.g., "v5.1", "master").
+/// * `idf_tools_path` - A reference to a `Path` where ESP-IDF tools, including the
+///   Python virtual environment, should be stored.
+/// * `reinstall` - A boolean indicating whether to remove an existing virtual
+///   environment before creating a new one. If `true`, the existing `venv` will be
+///   deleted.
+/// * `idf_path` - A reference to a `Path` pointing to the root directory of the
+///   ESP-IDF installation, used to locate `requirements.txt` files.
+/// * `features` - A slice of `String`s, where each string represents an additional
+///   feature whose Python requirements should be installed (e.g., "esp_gh_action").
+///   These correspond to files like `requirements_esp_gh_action.txt`.
+///
+/// # Returns
+///
+/// A `Result<(), String>` which is:
+/// - `Ok(())` if the Python environment was installed or updated successfully.
+/// - `Err(String)` if any step of the installation process fails, containing
+///   a descriptive error message.
+///
+/// # Errors
+///
+/// This function can return an error for various reasons, including but not limited to:
+/// - Failure to create the virtual environment.
+/// - Issues removing an existing virtual environment during a reinstall operation.
+/// - Failure to download the constraints file.
+/// - Failure to install any of the required Python packages from the `requirements.txt`
+///   files using pip.
+pub async fn install_python_env(
+    idf_version: &str,
+    idf_tools_path: &Path,
+    reinstall: bool,
+    idf_path: &Path,
+    features: &[String],
+) -> Result<(), String> {
+    let venv_path = idf_tools_path.join("python").join(idf_version).join("venv");
+
+    // if reinstall is true, remove the existing venv
+    if venv_path.exists() && reinstall {
+        debug!("venv already exists, removing it");
+        match std::fs::remove_dir_all(&venv_path) {
+            Ok(_) => {
+                debug!("venv removed");
+            }
+            Err(e) => {
+                warn!("failed to remove venv: {}, trying to proceed nonetheless", e);
+            }
+        }
+    }
+
+    // create the venv
+    match create_python_venv(venv_path.to_str().unwrap()) {
+        Ok(_) => {
+            debug!("venv created");
+        }
+        Err(e) => {
+            error!("failed to create venv: {}", e);
+            return Err(format!("failed to create venv: {}", e));
+        }
+    }
+
+    // install the requirements
+    let mut requirements_file_list = vec![];
+    let base_requirements_path = idf_path.join("tools").join("requirements");
+    requirements_file_list.push(base_requirements_path.join("requirements.core.txt"));
+    // prepare list of requirements files
+    for feature in features {
+        let requirements_file =
+            base_requirements_path.join(format!("requirements_{}.txt", feature));
+        if requirements_file.exists() {
+            requirements_file_list.push(requirements_file);
+        } else {
+            warn!(
+                "requirements file not found: {}",
+                requirements_file.display()
+            );
+        }
+    }
+    let constraint_file = match download_constraints_file(idf_tools_path, idf_version)
+        .await
+        .context("Failed to download constraints file")
+    {
+        Ok(constraint_file) => {
+            info!("Downloaded constraints file: {}", constraint_file.display());
+            Some(constraint_file)
+        }
+        Err(e) => {
+            warn!("Failed to download constraints file: {}", e);
+            None
+        }
+    };
+    // install the requirements from files
+    for requirements_file in requirements_file_list {
+        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file) {
+            Ok(_) => {
+                debug!("requirements installed: {}", requirements_file.display());
+            }
+            Err(e) => {
+                error!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                );
+                return Err(format!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                ));
+            }
+        }
+    }
+    info!("Python environment installed successfully");
+    Ok(())
 }
 
 /// Runs the IDF tools Python installation script.

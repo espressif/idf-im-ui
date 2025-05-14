@@ -95,6 +95,7 @@ pub async fn setup_tools(
   app_handle: &AppHandle,
   settings: &Settings,
   idf_path: &PathBuf,
+  idf_version: &str,
 ) -> Result<Vec<String>> {
   info!("Setting up tools...");
 
@@ -173,19 +174,31 @@ pub async fn setup_tools(
       return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
   }
 
-  // Run IDF tools Python script
-  run_idf_tools_py(
-      idf_tools_path.to_str().unwrap(),
-      &env_vars_install,
-      &env_vars_python
-  ).map_err(|e| {
-      send_message(
+  match idf_im_lib::python_utils::install_python_env(
+    &idf_version,
+    &tools_install_folder,
+    true, //TODO: actually read from config
+    &idf_path,
+    &settings.idf_features.clone().unwrap_or_default(),
+  ).await {
+      Ok(_) => {
+        info!("Python environment installed");
+        send_message(
           app_handle,
-          format!("Failed to run IDF tools setup: {}", e),
-          "error".to_string(),
-      );
-      anyhow!("Failed to run IDF tools setup: {}", e)
-  })?;
+          "Python environment installed successfully".to_string(),
+          "info".to_string(),
+        );
+      }
+      Err(err) => {
+          error!("Failed to install Python environment: {}", err);
+          send_message(
+            app_handle,
+            "Failed to install Python environment".to_string(),
+            "error".to_string(),
+          );
+          return Err(anyhow!("Failed to install Python environment: {}", err));
+      }
+  };
 
   send_message(
       app_handle,
@@ -259,7 +272,7 @@ async fn process_tool_download(
 
   // Download file
   info!("Downloading {} to: {}", tool_name, full_path_str);
-  match download_file(&download.url, &tool_setup.download_dir, progress_tx).await {
+  match download_file(&download.url, &tool_setup.download_dir, Some(progress_tx)).await {
       Ok(_) => {
           send_tools_message(app_handle, filename.to_string(), "downloaded".to_string());
           send_message(

@@ -211,19 +211,21 @@ async fn install_single_version(
     let version_path = prepare_installation_directories(app_handle.clone(), settings, &version)?;
     let idf_path = version_path.clone().join("esp-idf");
     download_idf(&app_handle, settings, &version, &idf_path).await?;
-    let export_vars = setup_tools(&app_handle, settings, &idf_path).await?;
+    let export_vars = setup_tools(&app_handle, settings, &idf_path, &version).await?;
     let tools_install_path = version_path.clone().join(
         settings
             .tool_install_folder_name
             .clone()
             .unwrap_or_default(),
     );
+    let idf_python_env_path = tools_install_path.clone().join("python").join(&version).join("venv");
     idf_im_lib::single_version_post_install(
         version_path.to_str().unwrap(),
         idf_path.to_str().unwrap(),
         &version,
         tools_install_path.to_str().unwrap(),
         export_vars,
+        Some(idf_python_env_path.to_str().unwrap()),
     );
 
     Ok(())
