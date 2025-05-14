@@ -132,7 +132,7 @@ async fn download_tools(
             })
         };
 
-        match idf_im_lib::download_file(&download_link.url, destination_path, progress_tx).await {
+        match idf_im_lib::download_file(&download_link.url, destination_path, Some(progress_tx)).await {
             Ok(_) => {
                 downloaded_tools.push(filename.to_string());
                 progress_bar.finish();
@@ -577,29 +577,24 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             &tool_install_directory,
         )
         .await?;
-        let parent_tools = tool_install_directory.parent().unwrap();
-        let env_vars =
-            idf_im_lib::setup_environment_variables(&parent_tools.to_path_buf(), &idf_path)?;
-        let real_env_vars = idf_im_lib::setup_environment_variables(
-            &tool_install_directory.to_path_buf(),
-            &idf_path,
-        )?;
-        let idf_tools_path = get_and_validate_idf_tools_path(&mut config, &idf_path)?;
-        if config.idf_features.is_some() {
-            let features = config.idf_features.clone().unwrap();
-            idf_im_lib::python_utils::run_idf_tools_py_with_features(
-                idf_tools_path.to_str().unwrap(),
-                &env_vars,
-                &real_env_vars,
-                &features,
-            )?;
-        } else {
-            idf_im_lib::python_utils::run_idf_tools_py(
-                idf_tools_path.to_str().unwrap(),
-                &env_vars,
-                &real_env_vars,
-            )?;
-        }
+        match idf_im_lib::python_utils::install_python_env(
+          &idf_version,
+          &tool_install_directory,
+          true, //TODO: actually read from config
+          &idf_path,
+          &config.idf_features.clone().unwrap_or_default(),
+        ).await {
+            Ok(_) => {
+                info!("Python environment installed");
+            }
+            Err(err) => {
+                error!("Failed to install Python environment: {}", err);
+                return Err(err.to_string());
+            }
+        };
+        let idf_python_env_path = tool_install_directory.join("python").join(&idf_version).join("venv"); //todo: move to config
+        ensure_path(idf_python_env_path.to_str().unwrap())
+            .map_err(|err| format!("Failed to create Python environment directory: {}", err))?;
 
         let export_paths = idf_im_lib::idf_tools::get_tools_export_paths(
             tools,
@@ -615,13 +610,13 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         })
         .collect();
-
         idf_im_lib::single_version_post_install(
             version_instalation_path.to_str().unwrap(),
             idf_path.to_str().unwrap(),
             &idf_version,
             tool_install_directory.to_str().unwrap(),
             export_paths,
+            idf_python_env_path.to_str(),
         )
     }
     save_config_if_desired(&config)?;

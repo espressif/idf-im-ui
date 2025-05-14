@@ -352,6 +352,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             &tool_set.idf_version,
             &new_idf_tools_path,
             new_export_paths,
+            None,
         );
 
         let new_activation_script = match std::env::consts::OS {
@@ -425,6 +426,15 @@ pub fn make_long_path_compatible(path: &str) -> String {
     } else {
         path.to_string()
     }
+}
+
+pub fn remove_after_second_dot(s: &str) -> String {
+  if let Some(first_dot) = s.find('.') {
+      if let Some(second_dot) = s[first_dot + 1..].find('.') {
+          return s[..first_dot + 1 + second_dot].to_string();
+      }
+  }
+  s.to_string()
 }
 
 #[cfg(test)]
