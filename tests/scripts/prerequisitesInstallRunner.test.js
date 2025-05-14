@@ -42,7 +42,8 @@ describe("Check Pre-requisites installation on Windows ->", function () {
   afterEach(async function () {
     this.timeout(20000);
     if (this.currentTest.state === "failed") {
-      logger.info(`Terminal output on failure: >>\r ${testRunner.output}`);
+      logger.info(`Test failed: ${this.currentTest.title}`);
+      logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
     }
     try {
       await testRunner.stop();
