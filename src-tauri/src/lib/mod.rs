@@ -499,7 +499,6 @@ pub fn setup_environment_variables(
 ) -> Result<Vec<(String, String)>, String> {
     let mut env_vars = vec![];
 
-    // env::set_var("IDF_TOOLS_PATH", tool_install_directory);
     let instal_dir_string = tool_install_directory.to_str().unwrap().to_string();
     env_vars.push(("IDF_TOOLS_PATH".to_string(), instal_dir_string));
     let idf_path_string = idf_path.to_str().unwrap().to_string();
@@ -516,13 +515,6 @@ pub fn setup_environment_variables(
         "OPENOCD_SCRIPTS".to_string(),
         get_openocd_scripts_folder(tool_install_directory).unwrap(),
     ));
-
-    let python_env_path_string = tool_install_directory
-        .join("python")
-        .to_str()
-        .unwrap()
-        .to_string();
-    env_vars.push(("IDF_PYTHON_ENV_PATH".to_string(), python_env_path_string));
 
     Ok(env_vars)
 }
@@ -603,7 +595,7 @@ pub enum DownloadProgress {
 pub async fn download_file(
     url: &str,
     destination_path: &str,
-    progress_sender: Sender<DownloadProgress>,
+    progress_sender: Option<Sender<DownloadProgress>>,
 ) -> Result<(), std::io::Error> {
     // Create a new HTTP client
     let client = Client::new();
@@ -615,12 +607,27 @@ pub async fn download_file(
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
+    if !response.status().is_success() {
+      if let Some(sender) = &progress_sender {
+        let _ = sender.send(DownloadProgress::Error(format!(
+          "HTTP error: {}",
+          response.status()
+        )));
+      }
+      return Err(std::io::Error::new(
+        std::io::ErrorKind::Other,
+        format!("HTTP error: {}", response.status()),
+      ));
+    }
+
     // Get the total size of the file being downloaded
     let total_size = response.content_length().ok_or_else(|| {
-        let _ = progress_sender.send(DownloadProgress::Error(
-            "Failed to get content length".into(),
+      if let Some(sender) = &progress_sender {
+        let _ = sender.send(DownloadProgress::Error(
+          "Failed to get content length".into(),
         ));
-        std::io::Error::new(std::io::ErrorKind::Other, "Failed to get content length")
+      }
+      std::io::Error::new(std::io::ErrorKind::Other, "Failed to get content length")
     })?;
     log::debug!("Downloading {} to {}", url, destination_path);
 
@@ -651,14 +658,21 @@ pub async fn download_file(
         file.write_all(&chunk)?;
 
         // Call the progress callback function
-        if let Err(e) = progress_sender.send(DownloadProgress::Progress(downloaded, total_size)) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to send progress: {}", e),
-            ));
+        if let Some(sender) = &progress_sender {
+            if let Err(e) = sender.send(DownloadProgress::Progress(downloaded, total_size)) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Failed to send progress: {}", e),
+                ));
+            }
         }
     }
-    let _ = progress_sender.send(DownloadProgress::Complete);
+    if let Some(sender) = &progress_sender {
+        // Send a completion message
+        if let Err(e) = sender.send(DownloadProgress::Complete) {
+            warn!("Failed to send completion: {}", e);
+        }
+    }
 
     // Return Ok(()) if the download was successful
     Ok(())
@@ -706,7 +720,6 @@ pub fn decompress_archive(
         std::fs::create_dir_all(destination_path)?;
     }
 
-
     let result = match archive_path.extension().and_then(|ext| ext.to_str()) {
         Some("zip") => decompress_zip(archive_path, destination_path),
         Some("tar") => decompress_tar(archive_path, destination_path),
@@ -735,13 +748,12 @@ pub fn decompress_archive(
             log::info!("Decompression completed successfully.");
             Ok(())
         }
-        Err(e) => {
-          match e {
+        Err(e) => match e {
             DecompressionError::Io(err) => {
-              if err.kind() == io::ErrorKind::AlreadyExists {
-                  info!("File already exists, skipping decompression.");
-                  return Ok(());
-              }
+                if err.kind() == io::ErrorKind::AlreadyExists {
+                    info!("File already exists, skipping decompression.");
+                    return Ok(());
+                }
                 log::error!("I/O error: {}", err);
                 Err(DecompressionError::Io(err))
             }
@@ -753,8 +765,7 @@ pub fn decompress_archive(
                 log::error!("Unsupported archive format.");
                 Err(DecompressionError::UnsupportedFormat)
             }
-          }
-        }
+        },
     }
 }
 
@@ -1083,83 +1094,67 @@ fn shallow_clone(
 /// # Returns//+
 /////+
 /// * `Result<(), git2::Error>`: On success, returns `Ok(())`. On error, returns a `git2::Error` indicating the cause of the error.//+
-fn update_submodules(
-  repo: &Repository,
-  tx: Sender<ProgressMessage>,
-) -> Result<(), git2::Error> {
-  fn update_submodules_recursive(
-      repo: &Repository,
-      path: &Path,
-      tx: Sender<ProgressMessage>,
-  ) -> Result<(), git2::Error> {
-      let submodules = repo.submodules()?;
-      for mut submodule in submodules {
-          // Get submodule name or path as fallback
-          let submodule_name = submodule
-              .name()
-              .map(|s| s.to_string())
-              .unwrap_or_else(|| {
-                  submodule
-                      .path()
-                      .to_str()
-                      .unwrap_or("unknown")
-                      .to_string()
-              });
+fn update_submodules(repo: &Repository, tx: Sender<ProgressMessage>) -> Result<(), git2::Error> {
+    fn update_submodules_recursive(
+        repo: &Repository,
+        path: &Path,
+        tx: Sender<ProgressMessage>,
+    ) -> Result<(), git2::Error> {
+        let submodules = repo.submodules()?;
+        for mut submodule in submodules {
+            // Get submodule name or path as fallback
+            let submodule_name = submodule
+                .name()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| submodule.path().to_str().unwrap_or("unknown").to_string());
 
-          // Create callbacks specifically for this submodule
-          let mut callbacks = RemoteCallbacks::new();
-          let submodule_name_clone = submodule_name.clone();
-          let tx_clone = tx.clone();
+            // Create callbacks specifically for this submodule
+            let mut callbacks = RemoteCallbacks::new();
+            let submodule_name_clone = submodule_name.clone();
+            let tx_clone = tx.clone();
 
-          callbacks.transfer_progress(move |stats| {
-              if stats.total_objects() > 0 {
-                  let percentage = ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-                  // Send message with submodule name and progress
-                  let _ = tx_clone.send(ProgressMessage::SubmoduleUpdate((
-                      submodule_name_clone.clone(),
-                      percentage,
-                  )));
+            callbacks.transfer_progress(move |stats| {
+                if stats.total_objects() > 0 {
+                    let percentage = ((stats.received_objects() as f64)
+                        / (stats.total_objects() as f64)
+                        * 100.0) as u64;
+                    // Send message with submodule name and progress
+                    let _ = tx_clone.send(ProgressMessage::SubmoduleUpdate((
+                        submodule_name_clone.clone(),
+                        percentage,
+                    )));
+                }
+                true
+            });
 
-              }
-              true
-          });
+            // Create new fetch options for this submodule
+            let mut fetch_options = FetchOptions::new();
+            fetch_options.remote_callbacks(callbacks);
 
-          // Create new fetch options for this submodule
-          let mut fetch_options = FetchOptions::new();
-          fetch_options.remote_callbacks(callbacks);
+            // Create update options with the fetch options
+            let mut update_options = SubmoduleUpdateOptions::new();
+            update_options.fetch(fetch_options);
 
-          // Create update options with the fetch options
-          let mut update_options = SubmoduleUpdateOptions::new();
-          update_options.fetch(fetch_options);
+            // Notify that we're starting on this submodule
+            let _ = tx.send(ProgressMessage::SubmoduleUpdate((
+                submodule_name.clone(),
+                0,
+            )));
 
-          // Notify that we're starting on this submodule
-          let _ = tx.send(ProgressMessage::SubmoduleUpdate((
-              submodule_name.clone(),
-              0))
-          );
+            // Update the submodule
+            submodule.update(true, Some(&mut update_options))?;
 
-          // Update the submodule
-          submodule.update(true, Some(&mut update_options))?;
+            // Notify that we've finished this submodule
+            let _ = tx.send(ProgressMessage::SubmoduleFinish(submodule_name.clone()));
 
-          // Notify that we've finished this submodule
-          let _ = tx.send(ProgressMessage::SubmoduleFinish(submodule_name.clone()));
+            // Recursively update this submodule's submodules
+            let sub_repo = submodule.open()?;
+            update_submodules_recursive(&sub_repo, &path.join(submodule.path()), tx.clone())?;
+        }
+        Ok(())
+    }
 
-          // Recursively update this submodule's submodules
-          let sub_repo = submodule.open()?;
-          update_submodules_recursive(
-              &sub_repo,
-              &path.join(submodule.path()),
-              tx.clone(),
-          )?;
-      }
-      Ok(())
-  }
-
-  update_submodules_recursive(
-      repo,
-      repo.workdir().unwrap_or(repo.path()),
-      tx,
-  )
+    update_submodules_recursive(repo, repo.workdir().unwrap_or(repo.path()), tx)
 }
 pub enum GitReference {
     Branch(String),
@@ -1453,12 +1448,18 @@ pub fn single_version_post_install(
     idf_version: &str,
     tool_install_directory: &str,
     export_paths: Vec<String>,
+    idf_python_env_path: Option<&str>,
 ) {
-    let env_vars = setup_environment_variables(
+    let mut env_vars = setup_environment_variables(
         &PathBuf::from(tool_install_directory),
         &PathBuf::from(idf_path),
     )
     .unwrap_or_default();
+    env_vars.push((
+        // todo: move to setup_environment_variables
+        "IDF_PYTHON_ENV_PATH".to_string(),
+        idf_python_env_path.unwrap_or_default().to_string(),
+    ));
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut
@@ -1467,7 +1468,7 @@ pub fn single_version_post_install(
                 idf_path,
                 idf_version,
                 tool_install_directory,
-                None,
+                idf_python_env_path,
                 export_paths,
                 env_vars,
             ) {
@@ -1488,7 +1489,7 @@ pub fn single_version_post_install(
                 install_path,
                 idf_path,
                 tool_install_directory,
-                None,
+                idf_python_env_path,
                 idf_version,
                 export_paths,
                 env_vars,
