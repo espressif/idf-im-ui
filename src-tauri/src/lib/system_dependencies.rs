@@ -1,8 +1,9 @@
-use std::env;
+use std::{env, fs};
+use anyhow::{anyhow, Result, Context};
 
 use log::{debug, trace, warn};
 
-use crate::command_executor;
+use crate::{command_executor, utils::find_by_name_and_extension};
 
 /// Determines the package manager installed on the system.
 ///
@@ -607,4 +608,48 @@ fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     }
 
     Ok(new_path_string)
+}
+
+/// Copies the 60-openocd.rules file to /etc/udev/rules.d/ on Linux.
+///
+/// This function checks if the rules file already exists. If not, it attempts
+/// to find it within the provided `tools_path` and copy it.
+///
+/// # Arguments
+/// * `tools_path` - The path where tool-related files might be located,
+///                  including the openocd rules file.
+///
+/// # Returns
+/// A `Result` indicating success (`Ok(())`) or an `anyhow::Error` if
+/// an error occurs during file operations or if the file is not found.
+pub fn copy_openocd_rules(tools_path: &str) -> Result<()> {
+  let openocd_rules_path = match std::env::consts::OS {
+    "linux" => "/etc/udev/rules.d/60-openocd.rules",
+    _ => return Ok(()),
+  };
+  let openocd_rules_path = std::path::Path::new(openocd_rules_path);
+  if openocd_rules_path.exists() {
+    debug!("openocd rules file already exists");
+    return Ok(());
+  }
+
+  let tools_path = std::path::Path::new(tools_path);
+
+  let found_files = find_by_name_and_extension(tools_path, "60-openocd", "rules");
+
+  let openocd_rules_source = found_files.first().ok_or_else(|| {
+    anyhow!(
+      "60-openocd.rules file not found in {}",
+      tools_path.display()
+    )
+  })?;
+  fs::copy(openocd_rules_source, openocd_rules_path).with_context(|| {
+    format!(
+      "Failed to copy {} to {}",
+      openocd_rules_source,
+      openocd_rules_path.display()
+    )
+  })?;
+
+  Ok(())
 }
