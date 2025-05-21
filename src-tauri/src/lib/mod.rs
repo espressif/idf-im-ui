@@ -8,6 +8,7 @@ use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};
+use system_dependencies::copy_openocd_rules;
 use std::fs::metadata;
 use std::io::BufReader;
 use tar::Archive;
@@ -1493,6 +1494,11 @@ pub fn single_version_post_install(
                 export_paths,
                 env_vars,
             );
+            // copy openocd rules (it's noop on macOs)
+            match copy_openocd_rules(tool_install_directory) {
+                Ok(_) => info!("OpenOCD rules copied successfully"),
+                Err(err) => error!("Failed to copy OpenOCD rules: {:?}", err),
+            }
         }
     }
 }

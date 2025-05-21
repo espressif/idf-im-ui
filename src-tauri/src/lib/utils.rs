@@ -89,6 +89,46 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
     filter_directories(filter_subpaths(search))
 }
 
+/// Searches for files within a specified directory that match a given name and extension.
+///
+/// This function constructs a search query using `SearchBuilder` to find files.
+/// The search is strict, case-insensitive, includes hidden files, and looks for
+/// an exact match for the file name and extension.
+///
+/// # Arguments
+///
+/// * `path` - A reference to a `Path` indicating the directory where the search should begin.
+/// * `name` - A string slice representing the exact name of the file to search for (without the extension).
+/// * `extension` - A string slice representing the exact extension of the file to search for (e.g., "txt", "rs").
+///
+/// # Returns
+///
+/// A `Vec<String>` containing the paths of all files found that match the criteria.
+/// The paths are returned as strings. If no files are found, an empty vector is returned.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::Path;
+///
+/// let search_path = Path::new("./my_directory");
+/// let found_files = find_by_name_and_extension(search_path, "document", "pdf");
+/// for file in found_files {
+///     println!("Found: {}", file);
+/// }
+/// ```
+pub fn find_by_name_and_extension(path: &Path, name: &str, extension: &str) -> Vec<String> {
+  SearchBuilder::default()
+    .location(path)
+    .search_input(name)
+    .ext(extension)
+    .strict()
+    .ignore_case()
+    .hidden()
+    .build()
+    .collect()
+}
+
 /// Checks if the given path is a valid ESP-IDF directory.
 ///
 /// # Purpose
