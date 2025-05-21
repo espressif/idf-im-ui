@@ -204,6 +204,13 @@ jobs:
           path: |
             ~/.local/share/eim/logs/**/*
 
+      - name: Clean Up runner (Self-hosted MirrorRunner)
+        if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER')
+        run: |
+          rm -rf ~/.local/share/eim
+          rm -rf ~/runner/_work/idf-im-ui
+        continue-on-error: true
+
       - name: Upload EIM install log (windows)
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
