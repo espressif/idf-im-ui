@@ -442,11 +442,15 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         let idf_path = value.path;
         let python = value.python;
         let tools_path = config.idf_tools_path.clone();
+        let path_for_activation_script = idf_json_path.parent().unwrap().to_str().unwrap();
+
         println!("IDF tools path: {}", tools_path);
         println!("IDF version: {}", idf_version);
+        println!("activation script path: {}", path_for_activation_script);
+        println!("Python path: {}", python);
         let export_paths = vec![config.git_path.clone()];
         match import_single_version(
-            idf_json_path.parent().unwrap().to_str().unwrap(),
+            path_for_activation_script,
             &idf_path,
             &idf_version,
             &tools_path,
@@ -575,7 +579,7 @@ pub fn import_single_version(path_to_create_activation_script: &str,idf_location
     return Ok(());
   };
   let python_env = python.clone().and_then(|s| {
-    s.find("python_env").map(|index| s[..=index+9].to_string())
+    s.find("bin").map(|index| s[..=index-1].to_string())
   });
   single_version_post_install(
     path_to_create_activation_script,
@@ -592,7 +596,7 @@ pub fn import_single_version(path_to_create_activation_script: &str,idf_location
     ),
     _ => format!(
         "{}/activate_idf_{}.sh",
-        path_to_create_activation_script,
+        PathBuf::from(path_to_create_activation_script).parent().unwrap().to_str().unwrap(),
         idf_version
     ),
   };
