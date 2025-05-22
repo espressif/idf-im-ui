@@ -130,8 +130,8 @@ export function runCLIWizardInstallTest(pathToEim) {
 
       const startTime = Date.now();
       while (Date.now() - startTime < 1200000) {
-        if (await testRunner.waitForOutput("failed", 1000)) {
-          logger.debug("failed!!!!");
+        if (await testRunner.waitForPrompt()) {
+          logger.debug("Prompt found!!!!!");
           break;
         }
         if (

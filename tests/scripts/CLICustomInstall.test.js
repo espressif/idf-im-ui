@@ -50,8 +50,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       if (!"-n true" in args) {
         const startTime = Date.now();
         while (Date.now() - startTime < 1800000) {
-          if (await testRunner.waitForOutput("failed", 1000)) {
-            logger.debug("failed!!!!");
+          if (await testRunner.waitForPrompt()) {
+            logger.debug("Prompt found!!!!!");
             break;
           }
           if (
@@ -88,8 +88,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
 
       const startTime = Date.now();
       while (Date.now() - startTime < 1800000) {
-        if (await testRunner.waitForOutput("failed", 1000)) {
-          logger.debug("failed!!!!");
+        if (await testRunner.waitForPrompt()) {
+          logger.debug("Prompt found!!!!!");
           break;
         }
         if (await testRunner.waitForOutput("panicked", 1000)) {

@@ -47,7 +47,7 @@
     "name": "Extended 4",
     "data": {
       "targetList": "all",
-      "idfList": "v5.0.8",
+      "idfList": "v5.0.9",
       "installFolder": ".esprext4",
       "idfMirror": "github",
       "toolsMirror": "github",
