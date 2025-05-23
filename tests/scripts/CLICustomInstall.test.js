@@ -23,6 +23,7 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
     afterEach(function () {
       if (this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
+        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
         logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
       }
     });
@@ -47,11 +48,16 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
     it("Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
       testRunner.sendInput(`${pathToEim} install ${args.join(" ")}\r`);
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       if (!"-n true" in args) {
         const startTime = Date.now();
         while (Date.now() - startTime < 1800000) {
           if (await testRunner.waitForPrompt()) {
-            logger.debug("Prompt found!!!!!");
+            logger.info(">>>>>>>Prompt found!!!!!");
+            break;
+          }
+          if (await testRunner.waitForOutput("panicked", 1000)) {
+            logger.info(">>>>>>>Rust App failure!!!!");
             break;
           }
           if (
@@ -60,7 +66,7 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
               1000
             )
           ) {
-            logger.debug("Completed!!!");
+            logger.info(">>>>>>>Completed!!!");
             break;
           }
           await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -89,17 +95,17 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       const startTime = Date.now();
       while (Date.now() - startTime < 1800000) {
         if (await testRunner.waitForPrompt()) {
-          logger.debug("Prompt found!!!!!");
+          logger.info(">>>>>>>Prompt found!!!!!");
           break;
         }
         if (await testRunner.waitForOutput("panicked", 1000)) {
-          logger.debug("Rust App failure!!!!");
+          logger.info(">>>>>>>Rust App failure!!!!");
           break;
         }
         if (
           await testRunner.waitForOutput("Successfully installed IDF", 1000)
         ) {
-          logger.debug("Completed!!!");
+          logger.info(">>>>>>>Completed!!!");
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
