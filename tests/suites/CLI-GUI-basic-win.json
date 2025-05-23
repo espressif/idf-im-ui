@@ -1,0 +1,13 @@
+[
+  {
+    "id": 1,
+    "type": "arguments",
+    "name": "command-line-arguments"
+  },
+  {
+    "id": 2,
+    "type": "custom",
+    "name": "non-interactive-basic",
+    "data": {}
+  }
+]

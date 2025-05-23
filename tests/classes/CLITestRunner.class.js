@@ -78,8 +78,12 @@ class CLITestRunner {
     // Wait until prompt is ready
     if (!this.exited && !this.error) {
       try {
-        await this.waitForPrompt();
-        return Promise.resolve();
+        if (await this.waitForPrompt()) {
+          return Promise.resolve();
+        } else {
+          logger.info(`No prompt detected >>${this.output}<<< `);
+          Promise.reject("Timeout without a prompt");
+        }
       } catch (error) {
         logger.info(`Error detecting prompt >>${this.output}<<< `);
         return Promise.reject(error);
@@ -121,12 +125,12 @@ class CLITestRunner {
   async waitForPrompt(timeout = 3000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
-      if (this.output.slice(-20).includes(this.prompt)) {
-        return Promise.resolve();
+      if (this.output.slice(-10).includes(this.prompt)) {
+        return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
     }
-    return Promise.reject("Timeout without a prompt");
+    return false;
   }
 
   async stop(timeout = 3000) {
