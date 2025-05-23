@@ -43,9 +43,8 @@ function runPostInstallTest(
       this.timeout(20000);
       if (this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
-        logger.debug(
-          `Post install test step failed -> output: >>\r ${testRunner.output}`
-        );
+        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
+        logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
         postInstallStepFailed = true;
       }
       try {
@@ -60,15 +59,10 @@ function runPostInstallTest(
       logger.info("Post install test completed, starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
-        fs.rmSync(path.join(toolsfolder, `tools`), {
+        fs.rmSync(toolsfolder, {
           recursive: true,
           force: true,
         });
-        fs.rmSync(path.join(toolsfolder, `dist`), {
-          recursive: true,
-          force: true,
-        });
-        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);
@@ -95,6 +89,7 @@ function runPostInstallTest(
         expect(confirmFilesCopied).to.be.true;
       }
       testRunner.output = "";
+      2;
       testRunner.sendInput("cd hello_world\r");
       testRunner.sendInput("ls\r");
 
@@ -220,15 +215,10 @@ function runPostInstallCleanUp(installFolder, toolsfolder) {
       logger.info("Starting cleanup");
       try {
         fs.rmSync(installFolder, { recursive: true, force: true });
-        fs.rmSync(path.join(toolsfolder, `tools`), {
+        fs.rmSync(toolsfolder, {
           recursive: true,
           force: true,
         });
-        fs.rmSync(path.join(toolsfolder, `dist`), {
-          recursive: true,
-          force: true,
-        });
-        fs.rmSync(path.join(toolsfolder, `idf-env.json`));
         logger.info(`Successfully deleted ${installFolder}`);
       } catch (err) {
         logger.info(`Error deleting ${installFolder}`);
