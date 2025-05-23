@@ -448,7 +448,35 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         println!("IDF version: {}", idf_version);
         println!("activation script path: {}", path_for_activation_script);
         println!("Python path: {}", python);
-        let export_paths = vec![config.git_path.clone()];
+        // export paths
+        let tools_json_file = find_by_name_and_extension(Path::new(&idf_path), "tools", "json");
+        if tools_json_file.is_empty() {
+            return Err(anyhow!("tools.json file not found"));
+        }
+
+        debug!("Tools json file: {:?}", tools_json_file);
+
+        let tools = match crate::idf_tools::read_and_parse_tools_file(&tools_json_file.first().unwrap()){
+            Ok(tools) => tools,
+            Err(e) => {
+                return Err(anyhow!("Failed to read tools.json file: {}", e));
+            }
+        };
+        let mut export_paths:Vec<String> = crate::idf_tools::get_tools_export_paths(
+            tools,
+            vec!["all".to_string()],
+            &tools_path,
+        )
+        .into_iter()
+        .map(|p| {
+            if std::env::consts::OS == "windows" {
+                crate::replace_unescaped_spaces_win(&p)
+            } else {
+                p
+            }
+        })
+        .collect();
+        export_paths.push(config.git_path.clone());
         match import_single_version(
             path_for_activation_script,
             &idf_path,
