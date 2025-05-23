@@ -314,7 +314,7 @@ pub async fn run_cli(cli: Cli) {
                 debug!("No path provided, using default: {}", default_path);
                 default_path
             });
-          // first parse existing esp_idf.json (using parse_esp_idf_json)
+          // first parse existing esp_idf.json (using parse_esp_idf_json) || previous VSCode installations
 
             let search_patch = Path::new(&path);
             let esp_idf_json_path = find_by_name_and_extension(
@@ -335,6 +335,28 @@ pub async fn run_cli(cli: Cli) {
                     }
                     Err(err) => {
                         info!("Failed to parse esp_idf.json: {}", err);
+                    }
+                }
+            }
+            // second try to find tool_set_config.json (using parse_tool_set_config) || previous Eclipse installations
+            let tool_set_config_path = find_by_name_and_extension(
+                search_patch,
+                "tool_set_config",
+                "json",
+            );
+            if tool_set_config_path.is_empty() {
+                info!("No tool_set_config.json found");
+            } else {
+                info!("Found {} tool_set_config.json files:", tool_set_config_path.len());
+            }
+            for path in tool_set_config_path {
+                info!("- {} ", &path);
+                match idf_im_lib::utils::parse_tool_set_config(&path) {
+                    Ok(_) => {
+                        info!("Parsed config: {:?}", path);
+                    }
+                    Err(err) => {
+                        info!("Failed to parse tool_set_config.json: {}", err);
                     }
                 }
             }
