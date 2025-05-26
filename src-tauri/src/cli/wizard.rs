@@ -1,3 +1,5 @@
+use anyhow::anyhow;
+use anyhow::Result;
 use dialoguer::FolderSelect;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::settings::Settings;
@@ -31,7 +33,7 @@ async fn download_tools(
     selected_chip: Vec<String>,
     destination_path: &str,
     mirror: Option<&str>,
-) -> Vec<String> {
+) -> Result<Vec<String>> {
     let tool_name_list: Vec<String> = tools_file
         .tools
         .iter()
@@ -141,10 +143,10 @@ async fn download_tools(
             Err(err) => {
                 error!("{}: {}", t!("wizard.tool.download_failed"), tool_name);
                 error!("Error: {:?}", err);
-                panic!();
+                return Err(anyhow!("{}: {}", t!("wizard.tool.download_failed"), err));
             }
         }
-        progress_handle.join().unwrap();
+        progress_handle.join().map_err(|e| anyhow::anyhow!("Progress reporting thread panicked: {:?}", e))?;
         match idf_im_lib::verify_file_checksum(
             &download_link.sha256,
             full_file_path.to_str().unwrap(),
@@ -174,10 +176,11 @@ async fn download_tools(
             }
         }
     }
-    downloaded_tools
+    Ok(downloaded_tools)
 }
 
-fn extract_tools(tools: Vec<String>, source_path: &str, destination_path: &str) {
+fn extract_tools(tools: Vec<String>, source_path: &str, destination_path: &str) -> anyhow::Result<()> {
+  let mut failed = false;
     for tool in tools.iter() {
         let mut archive_path = PathBuf::from(source_path);
         archive_path.push(tool);
@@ -188,9 +191,15 @@ fn extract_tools(tools: Vec<String>, source_path: &str, destination_path: &str) 
             }
             Err(err) => {
                 error!("{:?}", err);
-                panic!("{}: {}", t!("wizard.tool.extract_failed"), tool)
+                error!("{}: {}", t!("wizard.tool.extract_failed"), tool);
+                failed = true;
             }
         }
+    }
+    if failed {
+        Err(anyhow::anyhow!("Some tools failed to extract"))
+    } else {
+        Ok(())
     }
 }
 
@@ -418,22 +427,26 @@ async fn download_and_extract_tools(
     tools: &ToolsFile,
     download_dir: &PathBuf,
     install_dir: &PathBuf,
-) -> Result<(), String> {
-    let downloaded_tools_list = download_tools(
+) -> anyhow::Result<()> {
+    let downloaded_tools_list = match download_tools(
         tools.clone(),
         config.target.clone().unwrap(),
         download_dir.to_str().unwrap(),
         config.mirror.as_deref(),
     )
-    .await;
+    .await {
+        Ok(list) => list,
+        Err(err) => {
+            error!("Failed to download tools: {}", err);
+            return Err(anyhow!(err));
+        }
+    };
 
     extract_tools(
         downloaded_tools_list,
         download_dir.to_str().unwrap(),
         install_dir.to_str().unwrap(),
-    );
-
-    Ok(())
+    )
 }
 
 fn get_and_validate_idf_tools_path(
@@ -570,13 +583,21 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
 
-        download_and_extract_tools(
+        match download_and_extract_tools(
             &config,
             &tools,
             &tool_download_directory,
             &tool_install_directory,
         )
-        .await?;
+        .await {
+            Ok(_) => {
+                info!("{}: {}", t!("wizard.tools.downloaded"), tools_json_file.display());
+            }
+            Err(err) => {
+                error!("Failed to download and extract tools: {}", err);
+                return Err(err.to_string());
+            }
+        }
         match idf_im_lib::python_utils::install_python_env(
           &idf_version,
           &tool_install_directory,

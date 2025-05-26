@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use anyhow::Context;
 use cli_args::Cli;
 use cli_args::Commands;
 use clap::CommandFactory;
@@ -30,7 +31,7 @@ pub mod helpers;
 pub mod prompts;
 pub mod wizard;
 
-fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> Result<(), config::ConfigError> {
+fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<()> {
     let log_file_name = cli.log_file.clone().map_or_else(
         || {
             get_log_directory()
@@ -98,7 +99,7 @@ fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> Result<(), confi
     Ok(())
 }
 
-pub async fn run_cli(cli: Cli) {
+pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
     // let cli = cli_args::Cli::parse();
     #[cfg(feature = "gui")]
     let command = cli
@@ -110,7 +111,7 @@ pub async fn run_cli(cli: Cli) {
         Cli::command()
             .print_help()
             .expect("No command specified, use --help to see available commands");
-        return;
+        return Ok(());
     }
     #[cfg(not(feature = "gui"))]
     let command = cli.clone().command.unwrap();
@@ -122,7 +123,7 @@ pub async fn run_cli(cli: Cli) {
             println!("Running GUI...");
         }
         _ => {
-            setup_logging(&cli, false).unwrap();
+            setup_logging(&cli, false).context("Failed to setup logging")?;
         }
     }
     match command {
@@ -139,11 +140,12 @@ pub async fn run_cli(cli: Cli) {
                             info!("Wizard result: {:?}", r);
                             info!("Successfully installed IDF");
                             info!("Now you can start using IDF tools");
+                            Ok(())
                         }
-                        Err(err) => error!("Error: {}", err),
+                        Err(err) => Err(anyhow::anyhow!(err))
                     }
                 }
-                Err(err) => error!("Error: {}", err),
+                Err(err) => Err(anyhow::anyhow!(err))
             }
         }
         Commands::List => {
@@ -154,6 +156,7 @@ pub async fn run_cli(cli: Cli) {
                         warn!(
                             "No versions found. Use eim install to install a new ESP-IDF version."
                         );
+                        Ok(())
                     } else {
                         println!("Installed versions:");
                         for version in config.idf_installed {
@@ -163,11 +166,13 @@ pub async fn run_cli(cli: Cli) {
                                 println!("- {}", version.name);
                             }
                         }
+                        Ok(())
                     }
                 }
                 Err(err) => {
                     error!("No versions found. Use eim install to install a new ESP-IDF version.");
-                    debug!("Error: {}", err)
+                    debug!("Error: {}", err);
+                    Err(anyhow::anyhow!(err))
                 }
             }
         }
@@ -177,6 +182,7 @@ pub async fn run_cli(cli: Cli) {
                     Ok(versions) => {
                         if versions.is_empty() {
                             warn!("No versions installed");
+                            Ok(())
                         } else {
                             println!("Available versions:");
                             let options = versions.iter().map(|v| v.name.clone()).collect();
@@ -184,10 +190,11 @@ pub async fn run_cli(cli: Cli) {
                                 Ok(selected) => match select_idf_version(&selected) {
                                     Ok(_) => {
                                         println!("Selected version: {}", selected);
+                                        Ok(())
                                     }
-                                    Err(err) => error!("Error: {}", err),
+                                    Err(err) => Err(anyhow::anyhow!(err)),
                                 },
-                                Err(err) => error!("Error: {}", err),
+                                Err(err) => Err(anyhow::anyhow!(err)),
                             }
                         }
                     }
@@ -195,15 +202,17 @@ pub async fn run_cli(cli: Cli) {
                         error!(
                             "No versions found. Use eim install to install a new ESP-IDF version."
                         );
-                        debug!("Error: {}", err)
+                        debug!("Error: {}", err);
+                        Err(anyhow::anyhow!(err))
                     }
                 }
             } else {
                 match select_idf_version(&version.clone().unwrap()) {
                     Ok(_) => {
                         info!("Selected version: {}", version.clone().unwrap());
+                        Ok(())
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             }
         }
@@ -213,13 +222,20 @@ pub async fn run_cli(cli: Cli) {
                     Ok(versions) => {
                         if versions.is_empty() {
                             warn!("No versions installed");
+                            Ok(())
                         } else {
                             let options = versions.iter().map(|v| v.name.clone()).collect();
-                            let version = helpers::generic_select(
+                            let version = match helpers::generic_select(
                                 "Which version do you want to rename?",
                                 &options,
-                            )
-                            .unwrap(); // todo move to function and add error handling
+                            ) {
+                                Ok(selected) => selected,
+                                Err(err) => {
+                                    error!("Error: {}", err);
+                                    return Err(anyhow::anyhow!(err));
+                                }
+                            };
+
                             let new_name = match generic_input(
                                 "Enter new name:",
                                 "you need to enter a new name",
@@ -243,8 +259,9 @@ pub async fn run_cli(cli: Cli) {
                             ) {
                                 Ok(_) => {
                                     println!("Version renamed.");
+                                    Ok(())
                                 }
-                                Err(err) => error!("Error: {}", err),
+                                Err(err) => Err(anyhow::anyhow!(err)),
                             }
                         }
                     }
@@ -252,7 +269,8 @@ pub async fn run_cli(cli: Cli) {
                         debug!("Error: {}", err);
                         error!(
                             "No versions found. Use eim install to install a new ESP-IDF version."
-                        )
+                        );
+                        Err(anyhow::anyhow!(err))
                     }
                 }
             } else if new_name.is_none() {
@@ -277,8 +295,9 @@ pub async fn run_cli(cli: Cli) {
                 ) {
                     Ok(_) => {
                         println!("Version renamed.");
+                        Ok(())
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             } else {
                 match idf_im_lib::version_manager::rename_idf_version(
@@ -287,8 +306,9 @@ pub async fn run_cli(cli: Cli) {
                 ) {
                     Ok(_) => {
                         println!("Version renamed.");
+                        Ok(())
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             }
         }
@@ -300,19 +320,22 @@ pub async fn run_cli(cli: Cli) {
             for dir in idf_dirs {
                 println!("Found IDF directory: {}", dir);
             }
+            Ok(())
         }
         Commands::Import { path } => match path {
             Some(config_file) => {
-                println!("Importing using config file: {:?}", config_file);
+                info!("Importing using config file: {:?}", config_file);
                 match idf_im_lib::utils::parse_tool_set_config(&config_file) {
                     Ok(_) => {
-                        println!("Config file parsed. eim_idf.json updated.");
+                        info!("Config file parsed. eim_idf.json updated.");
+                        Ok(())
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             }
             None => {
-                println!("No config file specified, nothing to import.");
+                info!("No config file specified, nothing to import.");
+                Ok(())
             }
         },
         Commands::Remove { version } => {
@@ -321,29 +344,32 @@ pub async fn run_cli(cli: Cli) {
                 match idf_im_lib::version_manager::list_installed_versions() {
                     Ok(versions) => {
                         if versions.is_empty() {
-                            println!("No versions installed");
+                            info!("No versions installed");
+                            Ok(())
                         } else {
                             println!("Available versions:");
                             let options = versions.iter().map(|v| v.name.clone()).collect();
                             match generic_select("Which version do you want to remove?", &options) {
                                 Ok(selected) => match remove_single_idf_version(&selected) {
                                     Ok(_) => {
-                                        println!("Removed version: {}", selected);
+                                        info!("Removed version: {}", selected);
+                                        Ok(())
                                     }
-                                    Err(err) => error!("Error: {}", err),
+                                    Err(err) => Err(anyhow::anyhow!(err)),
                                 },
-                                Err(err) => error!("Error: {}", err),
+                                Err(err) => Err(anyhow::anyhow!(err)),
                             }
                         }
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             } else {
                 match remove_single_idf_version(&version.clone().unwrap()) {
                     Ok(_) => {
                         println!("Removed version: {}", version.clone().unwrap());
+                        Ok(())
                     }
-                    Err(err) => error!("Error: {}", err),
+                    Err(err) => Err(anyhow::anyhow!(err)),
                 }
             }
         }
@@ -354,19 +380,30 @@ pub async fn run_cli(cli: Cli) {
                 Ok(versions) => {
                     if versions.is_empty() {
                         println!("No versions installed");
+                        Ok(())
                     } else {
+                        let mut failed = false;
                         for version in versions {
-                            println!("Removing version: {}", version.name);
+                            info!("Removing version: {}", version.name);
                             match remove_single_idf_version(&version.name) {
                                 Ok(_) => {
-                                    println!("Removed version: {}", version.name);
+                                    info!("Removed version: {}", version.name);
                                 }
-                                Err(err) => error!("Error: {}", err),
+                                Err(err) => {
+                                  error!("Failed to remove version {}: {}", version.name, err);
+                                  failed = true;
+                                }
                             }
                         }
+                        if failed {
+                            return Err(anyhow::anyhow!("Some versions failed to remove. Check logs for details."));
+                        } else {
+                            info!("All versions removed successfully.");
+                        }
+                        Ok(())
                     }
                 }
-                Err(err) => error!("Error: {}", err),
+                Err(err) => Err(anyhow::anyhow!(err)),
             }
         }
         Commands::Wizard(install_args) => {
@@ -384,18 +421,20 @@ pub async fn run_cli(cli: Cli) {
                             info!("Wizard result: {:?}", r);
                             info!("Successfully installed IDF");
                             info!("Now you can start using IDF tools");
+                            Ok(())
                         }
-                        Err(err) => error!("Error: {}", err),
+                        Err(err) => Err(anyhow::anyhow!(err)),
                     }
                 }
-                Err(err) => error!("Error: {}", err),
+                Err(err) => Err(anyhow::anyhow!(err)),
             }
         }
         #[cfg(feature = "gui")]
         Commands::Gui(_install_args) => {
             #[cfg(not(feature = "gui"))]
             unimplemented!("GUI not present in this type of build");
-            gui::run()
+            gui::run();
+            Ok(())
         }
     }
 }
