@@ -123,13 +123,17 @@ async fn main() {
         let cli = cli::cli_args::Cli::parse();
         set_locale(&cli.locale);
 
-        cli::run_cli(cli).await;
-
-        return;
+        match cli::run_cli(cli).await {
+            Ok(_) => std::process::exit(0),
+            Err(e) => {
+                eprintln!("Error executing CLI: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
     #[cfg(not(feature = "cli"))]
     {
-        return gui::run();
+        gui::run();
     }
     // both GUI and CLI features are enabled
     #[cfg(target_os = "windows")]
@@ -157,7 +161,7 @@ async fn main() {
     let cli = cli::cli_args::Cli::parse();
     set_locale(&cli.locale);
 
-    cli::run_cli(cli).await; // Run the GUI by default if no arguments are provided
+    let result = cli::run_cli(cli).await; // Run the GUI by default if no arguments are provided
 
     #[cfg(target_os = "windows")]
     if console_attached_or_allocated {
@@ -166,5 +170,12 @@ async fn main() {
     } else {
         debug!("This is the end...");
     }
-    std::process::exit(0);
+    match result {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+          eprintln!("Error executing CLI: {}", e);
+          std::process::exit(1);
+        }
+    }
+
 }
