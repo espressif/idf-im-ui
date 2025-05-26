@@ -1,3 +1,4 @@
+use log::debug;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -329,8 +330,8 @@ pub fn get_tools_export_paths(
     log::debug!("Bin directories: {:?}", bin_dirs);
 
     let list = filter_tools_by_target(tools_file.tools, &selected_chip);
-    // debug!("Creating export paths for: {:?}", list);
-    println!("Creating export paths from path: {:?}", tools_install_path);
+    debug!("Creating export paths for: {:?}", list);
+    debug!("Creating export paths from path: {:?}", tools_install_path);
     let mut paths_set: HashSet<String> = HashSet::new();
     for tool in &list {
         tool.export_paths.iter().for_each(|path| {
@@ -354,7 +355,13 @@ pub fn get_tools_export_paths(
             log::warn!("Bin directory does not exist: {}", bin_dir);
         }
     }
-    let paths = paths_set.into_iter().collect();
+    let mut paths:Vec<String> = paths_set.into_iter().collect();
+    paths.sort();
+    // move clang to the end of the list if it exists
+    if let Some(index) = paths.iter().position(|path| path.contains("clang")) {
+      let clang_path = paths.remove(index);
+      paths.push(clang_path);
+    }
     log::debug!("Export paths: {:?}", paths);
     paths
 }
