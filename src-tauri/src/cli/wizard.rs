@@ -3,6 +3,7 @@ use anyhow::Result;
 use dialoguer::FolderSelect;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
@@ -331,13 +332,24 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     // Multiple version starts here
 
     for idf_version in config.idf_versions.clone().unwrap() {
-        let mut version_instalation_path = config.path.clone().unwrap();
-        version_instalation_path = idf_im_lib::expand_tilde(version_instalation_path.as_path());
+      let mut version_instalation_path = config.path.clone().unwrap();
+      version_instalation_path = idf_im_lib::expand_tilde(version_instalation_path.as_path());
+      let mut idf_path = version_instalation_path.clone();
+      let mut using_existing_idf = false;
+      if is_valid_idf_directory(idf_path.to_str().unwrap()) {
+        // the user pointed installer to existing IDF directory
+        info!("Using existing IDF directory: {}", idf_path.display());
+        using_existing_idf = true;
+      } else {
         version_instalation_path.push(&idf_version);
-        let mut idf_path = version_instalation_path.clone();
+        idf_path = version_instalation_path.clone();
         idf_path.push("esp-idf");
+      }
+
         config.idf_path = Some(idf_path.clone()); // todo: list all of the paths
         idf_im_lib::add_path_to_path(idf_path.to_str().unwrap());
+
+      if !using_existing_idf {
 
         // download idf
         let download_config = DownloadConfig {
@@ -366,6 +378,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err("User cancelled the operation".to_string());
             }
         }
+      }
         // setup tool directories
 
         let tool_download_directory = setup_directory(
