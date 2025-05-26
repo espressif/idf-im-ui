@@ -429,6 +429,7 @@ pub async fn install_python_env(
             );
         }
     }
+    download_constraints_file(idf_tools_path, "v6.0").await; // download the constraints file for v6.0, as it is the default for master and untaged versions
     let constraint_file = match download_constraints_file(idf_tools_path, idf_version)
         .await
         .context("Failed to download constraints file")
