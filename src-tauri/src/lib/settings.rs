@@ -89,7 +89,7 @@ impl Default for Settings {
                     .to_string(),
             ),
             idf_mirror: Some(crate::get_idf_mirrors_list().first().unwrap().to_string()),
-            recurse_submodules: Some(false),
+            recurse_submodules: Some(true),
             install_all_prerequisites: Some(false),
             idf_features: None,
             repo_stub: None,
