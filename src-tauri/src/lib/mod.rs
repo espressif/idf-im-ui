@@ -1035,7 +1035,12 @@ fn shallow_clone(
     callbacks.transfer_progress(|stats| {
         let val =
             ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-        tx.send(ProgressMessage::Update(val)).unwrap();
+        match tx.send(ProgressMessage::Update(val)){
+          Ok(_) => {}
+          Err(e) => {
+              log::warn!("Failed to send progress message: {}", e);
+          }
+        };
         true
     });
     fo.remote_callbacks(callbacks);
@@ -1076,7 +1081,12 @@ fn shallow_clone(
     if recurse_submodules {
         info!("Fetching submodules");
 
-        tx.send(ProgressMessage::Finish).unwrap();
+        match tx.send(ProgressMessage::Finish) {
+          Ok(_) => {}
+          Err(e) => {
+              log::warn!("Failed to send finish message: {}", e);
+          }
+        }
         update_submodules(&repo, tx.clone())?;
         info!("Finished fetching submodules");
     }

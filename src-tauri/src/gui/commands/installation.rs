@@ -55,7 +55,7 @@ fn prepare_installation_directories(
 }
 
 /// Spawns a progress monitor thread for installation
-fn spawn_progress_monitor(
+pub fn spawn_progress_monitor(
   app_handle: AppHandle,
   version: String,
   rx: mpsc::Receiver<ProgressMessage>,
@@ -67,8 +67,6 @@ fn spawn_progress_monitor(
           match message {
               ProgressMessage::Finish => {
                   progress.update(100, None);
-                  progress.finish();
-                  break;
               }
               ProgressMessage::Update(value) => {
                   progress.update(value, Some(&format!("Downloading IDF {}...", version)));
@@ -79,9 +77,8 @@ fn spawn_progress_monitor(
                       Some(&format!("Downloading submodule {}... {}%", name, value))
                   );
               }
-              ProgressMessage::SubmoduleFinish(name) => {
+              ProgressMessage::SubmoduleFinish(_name) => {
                   progress.update(100, None);
-                  progress.finish();
               }
           }
       }

@@ -53,37 +53,6 @@ fn prepare_installation_directories(
     Ok(version_path)
 }
 
-fn spawn_progress_monitor(
-    app_handle: AppHandle,
-    version: String,
-    rx: mpsc::Receiver<ProgressMessage>,
-) -> thread::JoinHandle<()> {
-    thread::spawn(move || {
-        let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
-
-        while let Ok(message) = rx.recv() {
-            match message {
-                ProgressMessage::Finish => {
-                    progress.update(100, None);
-                    progress.finish();
-                    break;
-                }
-                ProgressMessage::Update(value) => {
-                    progress.update(value, Some(&format!("Downloading IDF {}...", version)));
-                }
-                ProgressMessage::SubmoduleUpdate((name, value)) => {
-                  progress.update(value, Some(&format!("Downloading submodule {}... {}%", name, value)));
-
-                }
-                ProgressMessage::SubmoduleFinish(name) => {
-                  progress.update(100, None);
-                  progress.finish();
-                }
-            }
-        }
-    })
-}
-
 async fn download_idf(
     app_handle: &AppHandle,
     settings: &Settings,
