@@ -1495,8 +1495,7 @@ pub fn single_version_post_install(
         _ => {
             let install_folder = PathBuf::from(version_instalation_path);
             let install_path = install_folder.parent().unwrap().to_str().unwrap();
-            let _ = create_activation_shell_script(
-                // todo: handle error
+            let _ = match create_activation_shell_script(
                 install_path,
                 idf_path,
                 tool_install_directory,
@@ -1504,7 +1503,10 @@ pub fn single_version_post_install(
                 idf_version,
                 export_paths,
                 env_vars,
-            );
+            ) {
+                Ok(_) => info!("Activation shell script created successfully on path: {}", install_path),
+                Err(err) => error!("Failed to create activation shell script: {:?}", err),
+            };
             // copy openocd rules (it's noop on macOs)
             match copy_openocd_rules(tool_install_directory) {
                 Ok(_) => info!("OpenOCD rules copied successfully"),
