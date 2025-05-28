@@ -425,6 +425,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
               }
             }
+            Ok(())
         }
         Commands::Import { path } => match path {
             Some(config_file) => {

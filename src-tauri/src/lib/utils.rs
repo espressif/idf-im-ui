@@ -368,7 +368,11 @@ fn extract_tools_path_from_python_env_path(path: &str) -> Option<PathBuf> {
 /// It also logs errors if the IDF installation configuration cannot be updated.
 pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
     let config_path = Path::new(config_path);
-    let json_str = std::fs::read_to_string(config_path).unwrap();
+    let json_str = match std::fs::read_to_string(config_path) {
+        Ok(content) => content,
+        Err(e) => return Err(anyhow!("Failed to read config file: {}", e)),
+    };
+    debug!("Parsing tool set config from: {}", config_path.display());
     let config: Vec<IdfToolsConfig> = match serde_json::from_str(&json_str) {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
@@ -384,21 +388,62 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
         let tmp = PathBuf::from(tool_set.idf_location.clone());
         let version_path = tmp.parent().unwrap();
-        match import_single_version(
+        single_version_post_install(
             version_path.to_str().unwrap(),
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
             new_export_paths,
-            Some(tool_set.system_python_executable_path),
-        ) {
-            Ok(_) => {
-                debug!("Successfully imported tool set");
-            }
+            None,
+        );
+
+        let new_activation_script = match std::env::consts::OS {
+            "windows" => format!(
+                "{}\\Microsoft.PowerShell_profile.ps1",
+                version_path.to_str().unwrap()
+            ),
+            _ => format!(
+                "{}/activate_idf_{}.sh",
+                version_path.to_str().unwrap(),
+                tool_set.idf_version
+            ),
+        };
+        let installation = IdfInstallation {
+            id: tool_set.id.to_string(),
+            activation_script: new_activation_script,
+            path: tool_set.idf_location.clone(),
+            name: tool_set.idf_version,
+            python: tool_set.system_python_executable_path,
+            idf_tools_path: new_idf_tools_path,
+        };
+        let config_path = get_default_config_path();
+        let mut current_config = match IdfConfig::from_file(&config_path) {
+            Ok(config) => config,
             Err(e) => {
-                return Err(anyhow!("Failed to import tool set: {}", e));
+                debug!("Config file not found, creating a new one: {}", e);
+                IdfConfig::default()
             }
+        };
+        match current_config.idf_installed.iter().find(|install| install.path == tool_set.idf_location){
+          Some(_) => {
+            debug!("IDF installation already exists in config, skipping");
+            return Ok(());
+          }
+          None => {
+            debug!("Adding new IDF installation to config");
+            current_config.idf_installed.push(installation);
+            match current_config.to_file(config_path, true, false) {
+              Ok(_) => {
+                debug!("Updated config file with new tool set");
+                return Ok(());
+              }
+              Err(e) => {
+                return Err(anyhow!("Failed to update config file: {}", e));
+              }
+            }
+          }
         }
+
     }
     Ok(())
 }
