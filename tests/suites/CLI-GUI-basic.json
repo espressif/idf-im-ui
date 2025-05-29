@@ -2,17 +2,17 @@
   {
     "id": 1,
     "type": "arguments",
-    "name": "command-line-arguments"
+    "name": "CLI in GUI Arguments"
   },
   {
     "id": 2,
     "type": "default",
-    "name": "default-installation-wizard"
+    "name": "CLI in GUI Wizard Default"
   },
   {
     "id": 3,
     "type": "custom",
-    "name": "non-interactive-basic",
+    "name": "CLI in GUI Non-Interactive Default",
     "data": {}
   }
 ]

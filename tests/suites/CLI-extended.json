@@ -2,7 +2,7 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "Extended 1",
+    "name": "CLI Non-Interactive v5.3.3 and v5.4.1",
     "data": {
       "targetList": "esp32s2|esp32h2",
       "idfList": "v5.3.3|v5.4.1",
@@ -16,7 +16,7 @@
   {
     "id": 2,
     "type": "custom",
-    "name": "Extended 2",
+    "name": "CLI Non-Interactive v5.2.5",
     "data": {
       "targetList": "esp32",
       "idfList": "v5.2.5",
@@ -30,7 +30,7 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Extended 3",
+    "name": "CLI Non-Interactive v5.1.6",
     "data": {
       "targetList": "esp32",
       "idfList": "v5.1.6",
@@ -44,7 +44,7 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Extended 4",
+    "name": "CLI Non-Interactive v5.0.9",
     "data": {
       "targetList": "all",
       "idfList": "v5.0.9",
@@ -58,7 +58,7 @@
   {
     "id": 5,
     "type": "custom",
-    "name": "Extended 5",
+    "name": "CLI Non-Interactive master",
     "data": {
       "targetList": "esp32",
       "idfList": "master",

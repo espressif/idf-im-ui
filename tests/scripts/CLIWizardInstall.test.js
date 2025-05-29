@@ -5,7 +5,7 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 
 export function runCLIWizardInstallTest(pathToEim) {
-  describe("1 - Run Install Wizard steps ->", function () {
+  describe("1- Run wizard ->", function () {
     this.timeout(800000);
     let testRunner = null;
     let installationFailed = false;

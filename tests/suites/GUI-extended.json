@@ -2,7 +2,7 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "Extended 1",
+    "name": "GUI Expert v5.3.3 & v5.4.1",
     "data": {
       "targetList": "esp32s2|esp32h2",
       "idfList": "v5.3.3|v5.4.1",
@@ -16,11 +16,25 @@
   {
     "id": 2,
     "type": "custom",
-    "name": "Extended 2",
+    "name": "GUI Expert v5.0.9",
     "data": {
       "targetList": "All",
       "idfList": "v5.0.9",
       "installFolder": ".espext2",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "recursive": "true",
+      "nonInteractive": "true"
+    }
+  },
+  {
+    "id": 3,
+    "type": "custom",
+    "name": "GUI Expert master",
+    "data": {
+      "targetList": "All",
+      "idfList": "master",
+      "installFolder": ".espext3",
       "idfMirror": "github",
       "toolsMirror": "github",
       "recursive": "true",

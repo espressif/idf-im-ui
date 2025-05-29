@@ -6,7 +6,7 @@ import logger from "../classes/logger.class.js";
 export function runGUISimplifiedInstallTest(id, pathToEIM) {
   let eimRunner = "";
 
-  describe("1- EIM Application Launch", () => {
+  describe("1- Run simplified mode", () => {
     let simplifiedInstallFailed = false;
 
     before(async function () {

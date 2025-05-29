@@ -2,7 +2,7 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com",
+    "name": "Mirrors jihulab and dl_com v5.2.5",
     "data": {
       "idfList": "v5.2.5",
       "idfMirror": "jihulab",
@@ -14,7 +14,7 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn",
+    "name": "Mirrors jihulab and dl_cn v5.2.5",
     "data": {
       "idfList": "v5.2.5",
       "idfMirror": "jihulab",

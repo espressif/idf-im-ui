@@ -21,7 +21,7 @@ export function runGUICustomInstallTest(
 ) {
   let eimRunner = "";
 
-  describe("1- EIM expert Installation", () => {
+  describe("1- Run expert mode", () => {
     let customInstallFailed = false;
 
     before(async function () {

@@ -4,7 +4,7 @@ import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runCLICustomInstallTest(pathToEim, args = []) {
-  describe("1 - Run custom installation using given parameters ->", function () {
+  describe("1- Run custom ->", function () {
     let testRunner = null;
 
     before(async function () {

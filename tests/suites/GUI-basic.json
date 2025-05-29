@@ -2,23 +2,23 @@
   {
     "id": 1,
     "type": "startup",
-    "name": "Startup test and version check"
+    "name": "Startup & version check"
   },
   {
     "id": 2,
     "type": "default",
-    "name": "Simplified installation"
+    "name": "GUI Simplified Default"
   },
   {
     "id": 3,
     "type": "custom",
-    "name": "Expert installation using default parameters",
+    "name": "GUI Expert Default",
     "data": {}
   },
   {
     "id": 4,
     "type": "custom",
-    "name": "Expert installation using modified parameters",
+    "name": "GUI Expert v5.2.5",
     "data": {
       "targetList": "esp32s3",
       "idfList": "v5.2.5",

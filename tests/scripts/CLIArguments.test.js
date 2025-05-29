@@ -4,7 +4,7 @@ import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runCLIArgumentsTest(pathToEim, eimVersion) {
-  describe("Basic Arguments Tests ->", function () {
+  describe("Basic Arguments ->", function () {
     let testRunner = null;
 
     beforeEach(function () {

@@ -25,7 +25,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
   //     pathToEim = path.join(os.homedir(), "eim-cli/eim");
   // }
 
-  describe("Check if prerequisites are installed ->", function () {
+  describe("Check for prerequisites ->", function () {
     this.timeout(600000);
     let testRunner;
 
@@ -58,7 +58,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
 
     // The following test can only be executed if the prerequisites have not been installed in the OS.
     (os.platform() !== "win32" ? describe : describe.skip)(
-      "Pre-Requisites test on non windows platform",
+      "Prerequisites non-windows",
       function () {
         afterEach(function () {
           this.timeout(10000);
@@ -89,7 +89,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
      */
 
     (os.platform() === "win32" ? describe : describe.skip)(
-      "Pre-requisites test on Windows",
+      "Prerequisites Windows",
       function () {
         afterEach(async function () {
           this.timeout(10000);
