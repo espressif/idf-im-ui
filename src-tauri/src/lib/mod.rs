@@ -712,10 +712,8 @@ pub fn decompress_archive(
     archive_path: &str,
     destination_path: &str,
 ) -> Result<(), DecompressionError> {
-    let archive_path_long = make_long_path_compatible(archive_path);
-    let archive_path = Path::new(&archive_path_long);
-    let destination_path_long = make_long_path_compatible(destination_path);
-    let destination_path = Path::new(&destination_path_long);
+    let archive_path = Path::new(&archive_path);
+    let destination_path = Path::new(&destination_path);
 
     if !destination_path.exists() {
         std::fs::create_dir_all(destination_path)?;
