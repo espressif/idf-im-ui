@@ -5,7 +5,7 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 
 export function runCLIWizardInstallTest(pathToEim) {
-  describe("1 - Run Install Wizard steps ->", function () {
+  describe("1- Run wizard ->", function () {
     this.timeout(800000);
     let testRunner = null;
     let installationFailed = false;
@@ -23,9 +23,9 @@ export function runCLIWizardInstallTest(pathToEim) {
 
     afterEach(function () {
       if (this.currentTest.state === "failed") {
-        logger.info(
-          `Installation using wizard failed -> output: \r >>${testRunner.output}<<`
-        );
+        logger.info(`Test failed: ${this.currentTest.title}`);
+        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
+        logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
         installationFailed = true;
       }
     });
@@ -126,11 +126,15 @@ export function runCLIWizardInstallTest(pathToEim) {
       logger.info("Select install path passed");
       testRunner.output = "";
       testRunner.sendInput("\r");
-
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       const startTime = Date.now();
       while (Date.now() - startTime < 1200000) {
-        if (await testRunner.waitForOutput("failed", 1000)) {
-          logger.debug("failed!!!!");
+        if (await testRunner.waitForPrompt()) {
+          logger.info(">>>>>>>Prompt found!!!!!");
+          break;
+        }
+        if (await testRunner.waitForOutput("panicked", 1000)) {
+          logger.info(">>>>>>>Rust App failure!!!!");
           break;
         }
         if (
@@ -139,10 +143,13 @@ export function runCLIWizardInstallTest(pathToEim) {
             1000
           )
         ) {
-          logger.debug("Completed!!!");
+          logger.info(">>>>>>>Completed!!!");
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (Date.now() - startTime >= 1200000) {
+        logger.info("Installation timed out after 20 minutes");
       }
 
       const installationCompleted = await testRunner.waitForOutput(

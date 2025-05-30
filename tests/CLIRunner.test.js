@@ -65,7 +65,7 @@ function testRun(jsonScript) {
     if (test.type === "prerequisites") {
       //route for prerequisites tests
 
-      describe(`${test.id} - EIM prerequisites ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(20000);
 
         runCLIPrerequisitesTest(PATHTOEIM);
@@ -73,7 +73,7 @@ function testRun(jsonScript) {
     } else if (test.type === "arguments") {
       //routine for arguments tests
 
-      describe(`${test.id} - EIM command line arguments ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(20000);
 
         runCLIArgumentsTest(PATHTOEIM, EIMVERSION);
@@ -95,7 +95,7 @@ function testRun(jsonScript) {
               "Microsoft.PowerShell_profile.ps1"
             );
 
-      describe(`${test.id} - Installation manager default installation ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(2400000);
 
         runCLIWizardInstallTest(PATHTOEIM);
@@ -149,7 +149,7 @@ function testRun(jsonScript) {
               idfVersionList.split("|")[0],
               `Microsoft.PowerShell_profile.ps1`
             );
-      describe(`${test.id} - Installation using custom settings -> ${test.name} ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
         runCLICustomInstallTest(PATHTOEIM, installArgs);

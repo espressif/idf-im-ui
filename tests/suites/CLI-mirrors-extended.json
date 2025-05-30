@@ -1,0 +1,26 @@
+[
+  {
+    "id": 3,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_com v5.2.5",
+    "data": {
+      "idfList": "v5.2.5",
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_com",
+      "recursive": "true",
+      "nonInteractive": "true"
+    }
+  },
+  {
+    "id": 4,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_cn v5.2.5",
+    "data": {
+      "idfList": "v5.2.5",
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_cn",
+      "recursive": "true",
+      "nonInteractive": "true"
+    }
+  }
+]

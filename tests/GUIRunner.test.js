@@ -66,7 +66,7 @@ function testRun(script) {
   script.forEach((test) => {
     if (test.type === "startup") {
       //routine for startup test script
-      describe(`${test.id} - EIM Startup test ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(60000);
 
         runGUIStartupTest(test.id, pathToEIM, EIMVersion);
@@ -78,7 +78,7 @@ function testRun(script) {
           ? path.join(os.homedir(), `.espressif`)
           : `C:\\esp`;
 
-      describe(`${test.id} - EIM simplified installation test ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUISimplifiedInstallTest(test.id, pathToEIM);
         runPostInstallCleanUp(installFolder, TOOLSFOLDER);
       });
@@ -102,7 +102,7 @@ function testRun(script) {
 
       const IDFMirror = test.data.idfMirror || "github";
 
-      describe(`${test.id}  - EIM expert installation test ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUICustomInstallTest(
           test.id,
           pathToEIM,

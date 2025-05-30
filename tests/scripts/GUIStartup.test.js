@@ -6,7 +6,7 @@ import logger from "../classes/logger.class.js";
 export function runGUIStartupTest(id, pathToEIM, eimVersion) {
   let eimRunner = "";
 
-  describe("1- EIM Application Launch", () => {
+  describe("1- EIM startup", () => {
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);

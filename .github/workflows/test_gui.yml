@@ -12,7 +12,7 @@ on:
 
 jobs:
   test-cli-in-gui:
-    name: CLI in GUI ${{ matrix.package_name }}
+    name: CLI in GUI (${{ matrix.package_name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -159,7 +159,7 @@ jobs:
           $env:IDF_VERSION = "${{ env.IDF_TAG }}"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
-          npm run test-CLI-win --file=CLI-GUI-basic
+          npm run test-CLI-win --file=CLI-GUI-basic-win
         continue-on-error: true
 
       # Upload test results
@@ -167,10 +167,26 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-cli-in-gui-results-${{ matrix.package_name }}-${{matrix.run_on}}.zip
+          name: autotest-CLI-in-GUI-results-${{ matrix.package_name }}-${{matrix.run_on}}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
+
+      - name: Upload EIM install log (non-windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os != 'windows-latest'
+        with:
+          name: autotest-CLI-in-GUI-install-log-${{ matrix.package_name }}
+          path: |
+            ~/.local/share/eim/logs/**/*
+
+      - name: Upload EIM install log (windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: autotest-CLI-in-GUI-install-log-${{ matrix.package_name }}
+          path: |
+            ~/AppData/Local/eim/logs/**/*
 
       # Publish test results
       - name: Publish Test Results
@@ -346,7 +362,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-GUI-results-${{ matrix.package_name }}.zip
+          name: autotest-GUI-results-${{ matrix.package_name }}
           path: |
             ./tests/results-*.json
             ./tests/*.png
@@ -356,7 +372,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-GUI-install-log-${{ matrix.package_name }}.zip
+          name: autotest-GUI-install-log-${{ matrix.package_name }}
           path: |
             ~/.local/share/eim/logs/**/*
 
@@ -364,7 +380,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-GUI-install-log-${{ matrix.package_name }}.zip
+          name: autotest-GUI-install-log-${{ matrix.package_name }}
           path: |
             ~/AppData/Local/eim/logs/**/*
 

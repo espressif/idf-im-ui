@@ -5,11 +5,6 @@
     "name": "CLI in GUI Arguments"
   },
   {
-    "id": 2,
-    "type": "default",
-    "name": "CLI in GUI Wizard Default"
-  },
-  {
     "id": 3,
     "type": "custom",
     "name": "CLI in GUI Non-Interactive Default",

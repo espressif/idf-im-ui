@@ -6,7 +6,7 @@ import logger from "../classes/logger.class.js";
 export function runGUISimplifiedInstallTest(id, pathToEIM) {
   let eimRunner = "";
 
-  describe("1- EIM Application Launch", () => {
+  describe("1- Run simplified mode", () => {
     let simplifiedInstallFailed = false;
 
     before(async function () {
@@ -98,6 +98,9 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
           break;
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (Date.now() - startTime >= 2700000) {
+        logger.info("Installation timed out after 45 minutes");
       }
       const completed = await eimRunner.findByText("Installation Complete!");
       expect(completed, "Expected installation to be completed").to.not.be
