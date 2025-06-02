@@ -5,7 +5,7 @@ use crate::{
     single_version_post_install,
     version_manager::get_default_config_path,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Result, Error};
 use log::{debug, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
@@ -17,6 +17,8 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
+use regex::Regex;
+
 /// This function retrieves the path to the git executable.
 ///
 /// # Purpose
@@ -468,6 +470,30 @@ pub fn make_long_path_compatible(path: &str) -> String {
     }
 }
 
+/// Removes everything after the second dot in a string (including the second dot).
+///
+/// This function searches for the first two dots in the input string and returns
+/// a new string containing only the characters up to the second dot.
+/// If the string contains fewer than two dots, the original string is returned unchanged.
+///
+/// # Arguments
+///
+/// * `s` - A string slice to process
+///
+/// # Returns
+///
+/// A `String` containing the input up to and not including the second dot, or the
+/// original string if it contains fewer than two dots.
+///
+/// # Examples
+///
+/// ```
+/// let result = remove_after_second_dot("hello.world.foo.bar");
+/// assert_eq!(result, "hello.world");
+///
+/// let result = remove_after_second_dot("one.two");
+/// assert_eq!(result, "one.two");
+/// ```
 pub fn remove_after_second_dot(s: &str) -> String {
   if let Some(first_dot) = s.find('.') {
       if let Some(second_dot) = s[first_dot + 1..].find('.') {
@@ -475,6 +501,92 @@ pub fn remove_after_second_dot(s: &str) -> String {
       }
   }
   s.to_string()
+}
+
+/// Parses the IDF version from an ESP-IDF installation CMakec file.
+///
+/// This function reads the `version.cmake` file from the ESP-IDF tools directory
+/// and extracts the major and minor version numbers from the IDF_VERSION_MAJOR
+/// and IDF_VERSION_MINOR variables.
+///
+/// # Arguments
+///
+/// * `idf_path` - A string slice containing the path to the ESP-IDF installation directory
+///
+/// # Returns
+///
+/// A `Result` containing a tuple of `(major, minor)` version strings on success,
+/// or an error if:
+/// - The version.cmake file doesn't exist
+/// - The file cannot be read
+/// - The version numbers cannot be parsed
+/// - Either major or minor version is missing
+///
+/// # File Format Expected
+///
+/// The function expects lines in the format:
+/// ```cmake
+/// set(IDF_VERSION_MAJOR 5)
+/// set(IDF_VERSION_MINOR 1)
+/// ...
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// # use std::fs;
+/// # use std::path::Path;
+/// # fn main() -> anyhow::Result<()> {
+/// // Assuming you have a valid ESP-IDF installation
+/// let (major, minor) = parse_cmake_version("/path/to/esp-idf")?;
+/// println!("ESP-IDF version: {}.{}", major, minor);
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error if the version.cmake file is not found, cannot be read,
+/// or does not contain valid version information.
+pub fn parse_cmake_version(idf_path: &str) -> Result<(String, String)> {
+    let mut cmake_path = PathBuf::from(idf_path);
+    cmake_path.push("tools");
+    cmake_path.push("cmake");
+    cmake_path.push("version.cmake");
+
+    // Check if file exists
+    if !cmake_path.exists() {
+        return Err(anyhow!("CMake version file not found at: {}", cmake_path.display()));
+    }
+
+    // Read the file content
+    let content = fs::read_to_string(&cmake_path)
+        .map_err(|e| anyhow!("Failed to read CMake version file: {}", e))?;
+
+    // Regex to extract numbers from lines
+    let re = Regex::new(r"\d+")
+        .map_err(|e| anyhow!("Failed to compile regex: {}", e))?;
+
+    // Parse major and minor versions
+    let mut major = None;
+    let mut minor = None;
+    for line in content.lines() {
+        let line = line.trim();
+
+        if line.starts_with("set(IDF_VERSION_MAJOR") {
+            if let Some(captures) = re.find(line) {
+                major = Some(captures.as_str().parse::<u32>());
+            }
+        } else if line.starts_with("set(IDF_VERSION_MINOR") {
+            if let Some(captures) = re.find(line) {
+                minor = Some(captures.as_str().parse::<u32>());
+            }
+        }
+    }
+    if let (Some(Ok(maj)), Some(Ok(min))) = (major, minor) {
+        return Ok((maj.to_string(), min.to_string()));
+    }
+    Err(anyhow!("Could not find both major and minor version numbers"))
 }
 
 #[cfg(test)]
@@ -642,5 +754,247 @@ mod tests {
 
         assert!(result.is_err());
         assert_eq!(counter.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn test_multiple_dots() {
+        assert_eq!(
+            remove_after_second_dot("hello.world.foo.bar"),
+            "hello.world"
+        );
+        assert_eq!(
+            remove_after_second_dot("a.b.c.d.e"),
+            "a.b"
+        );
+    }
+
+    #[test]
+    fn test_exactly_two_dots() {
+        assert_eq!(
+            remove_after_second_dot("first.second."),
+            "first.second"
+        );
+        assert_eq!(
+            remove_after_second_dot("one.two.three"),
+            "one.two"
+        );
+    }
+
+    #[test]
+    fn test_one_dot() {
+        assert_eq!(
+            remove_after_second_dot("hello.world"),
+            "hello.world"
+        );
+        assert_eq!(
+            remove_after_second_dot("test."),
+            "test."
+        );
+    }
+
+    #[test]
+    fn test_no_dots() {
+        assert_eq!(
+            remove_after_second_dot("hello"),
+            "hello"
+        );
+        assert_eq!(
+            remove_after_second_dot(""),
+            ""
+        );
+    }
+
+    #[test]
+    fn test_dots_at_start() {
+        assert_eq!(
+            remove_after_second_dot("..rest"),
+            "."
+        );
+        assert_eq!(
+            remove_after_second_dot(".hello.world.foo"),
+            ".hello"
+        );
+    }
+
+    #[test]
+    fn test_consecutive_dots() {
+        assert_eq!(
+            remove_after_second_dot("hello...world"),
+            "hello."
+        );
+    }
+
+    #[test]
+    fn test_parse_cmake_version() -> Result<(), Box<dyn std::error::Error>> {
+        // Create a temporary directory structure
+        let temp_dir = TempDir::new()?;
+        let tools_dir = temp_dir.path().join("tools").join("cmake");
+        fs::create_dir_all(&tools_dir)?;
+
+        // Create the version.cmake file
+        let version_file = tools_dir.join("version.cmake");
+        let content = r#"set(IDF_VERSION_MAJOR 6)
+set(IDF_VERSION_MINOR 0)
+set(IDF_VERSION_PATCH 0)
+
+set(ENV{IDF_VERSION} "${IDF_VERSION_MAJOR}.${IDF_VERSION_MINOR}.${IDF_VERSION_PATCH}")
+"#;
+        fs::write(&version_file, content)?;
+
+        // Test the function
+        let version = parse_cmake_version(temp_dir.path().to_str().unwrap())?;
+        assert_eq!(version, ("6".to_string(), "0".to_string()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_cmake_version_file_not_found() {
+        let temp_dir = TempDir::new().unwrap();
+        let result = parse_cmake_version(temp_dir.path().to_str().unwrap());
+        assert!(result.is_err());
+    }
+
+    fn create_test_cmake_file(temp_dir: &TempDir, content: &str) -> PathBuf {
+        let mut cmake_dir = temp_dir.path().to_path_buf();
+        cmake_dir.push("tools");
+        cmake_dir.push("cmake");
+        fs::create_dir_all(&cmake_dir).unwrap();
+
+        let cmake_file = cmake_dir.join("version.cmake");
+        fs::write(&cmake_file, content).unwrap();
+        temp_dir.path().to_path_buf()
+    }
+
+    #[test]
+    fn test_valid_version_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+# ESP-IDF CMake version file
+set(IDF_VERSION_MAJOR 5)
+set(IDF_VERSION_MINOR 1)
+set(IDF_VERSION_PATCH 2)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_ok());
+        let (major, minor) = result.unwrap();
+        assert_eq!(major, "5");
+        assert_eq!(minor, "1");
+    }
+
+    #[test]
+    fn test_version_with_extra_whitespace() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+    set(IDF_VERSION_MAJOR   4  )
+  set(IDF_VERSION_MINOR 3)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_ok());
+        let (major, minor) = result.unwrap();
+        assert_eq!(major, "4");
+        assert_eq!(minor, "3");
+    }
+
+    #[test]
+    fn test_version_with_comments() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+# This is a comment
+set(IDF_VERSION_MAJOR 5) # Major version
+# Another comment
+set(IDF_VERSION_MINOR 2) # Minor version
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_ok());
+        let (major, minor) = result.unwrap();
+        assert_eq!(major, "5");
+        assert_eq!(minor, "2");
+    }
+
+    #[test]
+    fn test_missing_major_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+set(IDF_VERSION_MINOR 1)
+set(IDF_VERSION_PATCH 2)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+    }
+
+     #[test]
+    fn test_missing_minor_version() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+set(IDF_VERSION_MAJOR 5)
+set(IDF_VERSION_PATCH 2)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+    }
+
+    #[test]
+    fn test_nonexistent_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let idf_path = temp_dir.path().to_str().unwrap();
+
+        let result = parse_cmake_version(idf_path);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("CMake version file not found"));
+    }
+
+    #[test]
+    fn test_empty_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = "";
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+    }
+
+    #[test]
+    fn test_malformed_version_numbers() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+set(IDF_VERSION_MAJOR abc)
+set(IDF_VERSION_MINOR 1)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+    }
+
+    #[test]
+    fn test_different_order() {
+        let temp_dir = TempDir::new().unwrap();
+        let content = r#"
+set(IDF_VERSION_PATCH 0)
+set(IDF_VERSION_MINOR 4)
+set(IDF_VERSION_MAJOR 5)
+"#;
+        let idf_path = create_test_cmake_file(&temp_dir, content);
+
+        let result = parse_cmake_version(idf_path.to_str().unwrap());
+        assert!(result.is_ok());
+        let (major, minor) = result.unwrap();
+        assert_eq!(major, "5");
+        assert_eq!(minor, "4");
     }
 }

@@ -1391,6 +1391,7 @@ dependencies = [
  "log4rs",
  "lzma-rs",
  "openssl-sys",
+ "regex",
  "reqwest",
  "rust-i18n",
  "rust_search",
