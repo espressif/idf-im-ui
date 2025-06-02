@@ -294,7 +294,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-          path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && 'exe' || '' }}
+          path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
 
       - name: Upload Release Asset - MacOs
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
