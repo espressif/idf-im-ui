@@ -18,7 +18,7 @@ use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
     command_executor, download_file, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
-    utils::{remove_after_second_dot, with_retry},
+    utils::{parse_cmake_version, remove_after_second_dot, with_retry},
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -126,7 +126,7 @@ pub fn run_python_script_from_file(
 async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
     let constraint_file = format!(
         "espidf.constraints.{}.txt",
-        if idf_version == "master" { "v6.0".to_string() } else { remove_after_second_dot(idf_version) } //TODO: move the default value somewhere
+        remove_after_second_dot(idf_version)
     );
     let constraint_path = idf_tools_path.join(&constraint_file);
     let constraint_url = format!("https://dl.espressif.com/dl/esp-idf/{}", constraint_file);
@@ -429,7 +429,14 @@ pub async fn install_python_env(
             );
         }
     }
-    let constraint_file = match download_constraints_file(idf_tools_path, idf_version)
+    let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
+        Ok((maj,min)) => format!("v{}.{}", maj, min),
+        Err(e) => {
+            warn!("Failed to parse CMake version: {}", e);
+            idf_version.to_string()
+        }
+    };
+    let constraint_file = match download_constraints_file(idf_tools_path, &constrains_idf_version)
         .await
         .context("Failed to download constraints file")
     {
