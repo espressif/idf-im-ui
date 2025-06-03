@@ -330,12 +330,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     config = select_installation_path(config)?;
 
     // Multiple version starts here
-
+    let mut using_existing_idf = false;
     for idf_version in config.idf_versions.clone().unwrap() {
       let mut version_instalation_path = config.path.clone().unwrap();
       version_instalation_path = idf_im_lib::expand_tilde(version_instalation_path.as_path());
       let mut idf_path = version_instalation_path.clone();
-      let mut using_existing_idf = false;
+
       if is_valid_idf_directory(idf_path.to_str().unwrap()) {
         // the user pointed installer to existing IDF directory
         info!("Using existing IDF directory: {}", idf_path.display());
@@ -509,12 +509,21 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("============================================");
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
             for idf_version in config.idf_versions.clone().unwrap() {
+              if using_existing_idf {
+                println!(
+                    "       {} \"{}/activate_idf_{}.sh\"",
+                    t!("wizard.posix.finish_steps.line_5"),
+                    config.path.clone().unwrap().parent().unwrap().to_str().unwrap(),
+                    idf_version,
+                );
+              } else {
                 println!(
                     "       {} \"{}/activate_idf_{}.sh\"",
                     t!("wizard.posix.finish_steps.line_5"),
                     config.esp_idf_json_path.clone().unwrap_or_default(),
                     idf_version,
                 );
+              }
             }
             println!("============================================");
         }
