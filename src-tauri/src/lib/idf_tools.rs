@@ -196,32 +196,49 @@ pub fn get_platform_identification(python: Option<&str>) -> Result<String, Strin
     Ok(platform.to_string())
 }
 
-/// Retrieves a HashMap of tool names and their corresponding Download instances based on the given platform.
+/// Given a list of `Tool` structs and a target platform, this function returns a HashMap
+/// that maps tool names to their preferred `Download` links for that platform.
+///
+/// For each tool, the function determines the preferred version based on the following logic:
+/// - If there's a version with status "recommended", it's chosen.
+/// - If no "recommended" version exists but multiple versions are present, the first one in the list is used.
+/// - If only one version exists, that version is used.
+/// - If a tool has no versions, a warning is logged and the tool is skipped.
+///
+/// After determining the preferred version, the function attempts to find a download link
+/// specific to the provided `platform`. If a download link for the platform is found,
+/// it's added to the result HashMap.
 ///
 /// # Arguments
 ///
-/// * `tools` - A vector of `Tool` instances.
-/// * `platform` - A reference to a string representing the target platform. This can be obtained from the `get_platform_identification` function.
+/// * `tools` - A `Vec` of `Tool` structs, each potentially containing multiple versions and download links.
+/// * `platform` - A string slice representing the target platform (e.g., "windows", "linux", "macos").
 ///
 /// # Returns
 ///
-/// * A HashMap where the keys are tool names and the values are Download instances.
-///   If a tool does not have a download for the given platform, it is not included in the HashMap.
-///
+/// A `HashMap<String, Download>` where keys are tool names and values are the
+/// `Download` structs relevant to the specified `platform` for the preferred tool version.
 pub fn get_download_link_by_platform(
     tools: Vec<Tool>,
     platform: &String,
 ) -> HashMap<String, Download> {
-    let mut tool_links = HashMap::new();
-    for tool in tools {
-        tool.versions.iter().for_each(|version| {
-            match version.downloads.get(platform) {
-                Some(download) => tool_links.insert(tool.name.clone(), download.clone()),
-                None => None,
-            };
-        });
+  let mut tool_links = HashMap::new();
+  for tool in tools {
+    let preferred_version;
+    if tool.versions.len() > 1 {
+      log::info!("Tool {} has multiple versions, using the recommended or the first one", tool.name);
+      preferred_version = tool.versions.iter().find(|v| v.status == "recommended").unwrap_or(&tool.versions[0]);
+    } else if tool.versions.is_empty() {
+      log::warn!("Tool {} has no versions", tool.name);
+      continue;
+    } else {
+      preferred_version = tool.versions.first().unwrap();
     }
-    tool_links
+    if let Some(download) = preferred_version.downloads.get(platform) {
+      tool_links.insert(tool.name.clone(), download.clone());
+    }
+  }
+  tool_links
 }
 
 /// Changes the download links of tools to use a specified mirror.
