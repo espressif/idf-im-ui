@@ -9,9 +9,16 @@
 ### Should I run the installer 'as admin'?
 No, the installer does not require elevated rights and should **not** be run as an administrator. Running the installer with admin privileges is unnecessary and could lead to unintended permission issues.
 
+### Can I use an existing ESP-IDF Git repository with EIM?
+Yes, EIM is designed to work with existing ESP-IDF Git repositories on your filesystem. During the installation process (both GUI and CLI), when prompted for the installation path, you can specify the path to your existing ESP-IDF repository.
+
+If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
+- **Utilize that existing repository**: It will not download a new copy or overwrite your existing files.
+- **Ignore selected ESP-IDF versions**: Any specific ESP-IDF version you may have chosen in the GUI or via CLI arguments will be disregarded, as EIM will work with the version already present in your existing repository.
+
 ## GUI-Specific Questions
 
-## Running Installer in Windows Sandbox
+### Running Installer in Windows Sandbox
 
 If you intend to run the ESP-IDF installer within a Windows Sandbox environment, you might encounter issues if the 'WebView2 Runtime' is not present in the sandbox. The installer relies on WebView2 for its graphical user interface.
 

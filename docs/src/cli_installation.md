@@ -20,7 +20,7 @@ chmod +x ./eim
 ## Installation Methods
 
 ### Interactive Wizard
-Running `eim` without parameters starts an interactive wizard that guides you through the installation:
+Running `eim wizard` starts an interactive wizard that guides you through the installation:
 
 1. Prerequisites check
 2. Platform selection
@@ -33,13 +33,16 @@ For automated installations, use command line arguments:
 
 ```bash
 # Install specific version
-eim -i v5.3.2
+eim install -i v5.3.2
 
 # Install with custom path
-eim -p /opt/esp-idf
+eim install -p /opt/esp-idf
 
 # Non-interactive installation
-eim -n true
+eim install -n true
 ```
 
-See [CLI Configuration](./cli_configuration.md) for all available options. 
+### Important Note on Installation Path and Version:
+If the path provided for installation (e.g., via `-p` or in the interactive wizard) is a valid, existing ESP-IDF Git repository, EIM will use that repository directly and will not overwrite its contents. In such a scenario, any ESP-IDF version specified through other parameters (e.g., `-i`for a specific version) will be ignored, as the installer will work with the version already present in the existing repository.
+
+See [CLI Configuration](./cli_configuration.md) for all available options.

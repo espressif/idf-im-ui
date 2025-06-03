@@ -513,7 +513,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 println!(
                     "       {} \"{}/activate_idf_{}.sh\"",
                     t!("wizard.posix.finish_steps.line_5"),
-                    config.path.clone().unwrap().parent().unwrap().to_str().unwrap(),
+                    config.path.clone().unwrap().parent().unwrap_or(Path::new("/")).to_str().unwrap(),
                     idf_version,
                 );
               } else {
