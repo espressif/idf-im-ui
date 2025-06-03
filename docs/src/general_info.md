@@ -20,6 +20,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 - Prerequisites auto-detection and installation
 - Configuration import/export
 - Headless operation support
+- Utilize Existing ESP-IDF Repositories: EIM can use an already existing ESP-IDF Git repository on your filesystem to install all necessary tools. This is particularly useful for ESP-IDF development.
 
 ### Integration Support
 - CI/CD pipeline integration
