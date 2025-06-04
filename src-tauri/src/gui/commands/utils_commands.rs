@@ -6,6 +6,7 @@ use std::{
     process::Command,
 };
 use tauri::AppHandle;
+use num_cpus;
 
 use crate::gui;
 use crate::gui::utils::is_path_empty_or_nonexistent;
@@ -104,4 +105,9 @@ pub fn show_in_folder(path: String) {
 #[tauri::command]
 pub fn quit_app(app_handle: tauri::AppHandle) {
     app_handle.exit(0);
+}
+
+#[tauri::command]
+pub fn cpu_count() -> usize {
+    num_cpus::get()
 }
