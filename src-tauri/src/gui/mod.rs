@@ -287,6 +287,7 @@ pub fn run() {
             get_logs_folder,
             show_in_folder,
             is_path_empty_or_nonexistent_command,
+            cpu_count,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -3,7 +3,18 @@
 
   <!-- Main content -->
   <main class="main-content">
-    <div class="welcome-card">
+    <div class="welcome-card" v-if="os === 'windows' && cpu == 1">
+      <h1>Welcome to <span>ESP-IDF</span> Installation Manager!</h1>
+      <div class="content">
+        <p>This tool needs a system with at least 2 CPU cores when using Windows OS.</p>
+        <p>Sorry for the inconvenience</p>
+        <n-button @click="quit" class="exit-button" type="info">
+          Exit Installer
+        </n-button>
+      </div>
+
+    </div>
+    <div class="welcome-card" v-else >
       <h1>Welcome to <span>ESP-IDF</span> Installation Manager!</h1>
 
       <div class="content">
@@ -37,15 +48,37 @@
 </template>
 
 <script>
-import { NButton } from 'naive-ui'
+import { c, NButton } from 'naive-ui'
+import { invoke } from "@tauri-apps/api/core";
 
 export default {
   name: 'Welcome',
   components: { NButton },
+  data() {
+    return {
+      cpu: 0,
+      os: "unknown"
+    };
+  },
   methods: {
     getStarted() {
       this.$router.push('/load_config');
+    },
+    get_os: async function () {
+      this.os = await invoke("get_operating_system", {});
+      return false;
+    },
+    get_cpu: async function () {
+      this.cpu = await invoke("cpu_count", {});
+      return false;
+    },
+    quit() {
+      const _ = invoke("quit_app", {});
     }
+  },
+  mounted() {
+    this.get_os();
+    this.get_cpu();
   }
 }
 </script>
