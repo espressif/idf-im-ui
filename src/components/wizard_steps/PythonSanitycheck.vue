@@ -37,6 +37,9 @@
               <li data-id="virtualenv-requirement">virtualenv module</li>
               <li data-id="ssl-requirement">SSL support</li>
             </ul>
+            <n-button @click="check_python_sanity" type="error" data-id="recheck-python-button">
+              Recheck Python Installation
+            </n-button>
           </div>
         </div>
       </n-spin>
