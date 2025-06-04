@@ -133,7 +133,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 install_args.clone().into_iter(),
             );
             match settings {
-                Ok(settings) => {
+                Ok(mut settings) => {
+                  if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
+                    settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
+                  }
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
                         Ok(r) => {
