@@ -347,8 +347,8 @@ impl Settings {
                 let tools_path = base_path.join(version).join(tool_install_folder);
 
                 let python_path = match std::env::consts::OS {
-                    "windows" => tools_path.join("python").join("Scripts").join("Python.exe"),
-                    _ => tools_path.join("python").join("bin").join("python3"),
+                    "windows" => tools_path.join("python").join(version).join("Scripts").join("Python.exe"),
+                    _ => tools_path.join("python").join(version).join("bin").join("python3"),
                 };
 
                 let activation_script = match std::env::consts::OS {
