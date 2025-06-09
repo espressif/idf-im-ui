@@ -68,6 +68,7 @@ rustpython-vm = { git = "https://github.com/Hahihula/RustPython.git", branch = "
 rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["ssl-vendor"], optional = true }
 struct_iterable = "0.1.1"
 regex = "1.11.1"
+shlex = "1.3.0"
 
 
 # OS-specific dependency
