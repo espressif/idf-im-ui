@@ -281,18 +281,11 @@ pub fn pip_install_requirements(
     match std::env::consts::OS {
         "windows" => {
             match command_executor::execute_command_with_env(
-                "powershell",
+                python_location.to_str().unwrap(),
                 &vec![
-                    "-Command",
-                    python_location.to_str().unwrap(),
-                    "-m",
-                    "pip",
-                    "install",
-                    "-r",
+                    "-m", "pip", "install", "-r",
                     requirements_file.to_str().unwrap(),
-                    "--upgrade",
-                    "--constraint",
-                    constrain_path,
+                    "--upgrade", "--constraint", constrain_path
                 ],
                 vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
             ) {
@@ -316,9 +309,9 @@ pub fn pip_install_requirements(
                     "-c",
                     &format!(
                         "{} -m pip install -r {} --upgrade --constraint {}",
-                        python_location.to_str().unwrap(),
-                        requirements_file.to_str().unwrap(),
-                        constrain_path
+                        shlex::quote(python_location.to_str().unwrap()),
+                        shlex::quote(requirements_file.to_str().unwrap()),
+                        shlex::quote(constrain_path)
                     ),
                 ],
                 vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],

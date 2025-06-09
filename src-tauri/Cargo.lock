@@ -1402,6 +1402,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "sha2",
+ "shlex",
  "struct_iterable",
  "tar",
  "tauri",
