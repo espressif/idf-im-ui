@@ -645,7 +645,7 @@ pub fn copy_openocd_rules(tools_path: &str) -> Result<()> {
   })?;
   fs::copy(openocd_rules_source, openocd_rules_path).with_context(|| {
     format!(
-      "Failed to copy {} to {}",
+      "Failed to copy {} to {} . Make sure you have the necessary permissions. Now you can copy it manually.",
       openocd_rules_source,
       openocd_rules_path.display()
     )

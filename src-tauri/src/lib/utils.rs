@@ -589,6 +589,27 @@ pub fn parse_cmake_version(idf_path: &str) -> Result<(String, String)> {
     Err(anyhow!("Could not find both major and minor version numbers"))
 }
 
+/// Parse version string and extract major.minor components
+pub fn parse_version_major_minor(version: &str) -> Option<(u32, u32)> {
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() >= 2 {
+        if let (Ok(major), Ok(minor)) = (parts[0].parse::<u32>(), parts[1].parse::<u32>()) {
+            return Some((major, minor));
+        }
+    }
+    None
+}
+
+/// Compare two versions considering only major and minor components
+pub fn versions_match(installed: &str, expected: &str) -> bool {
+    match (parse_version_major_minor(installed), parse_version_major_minor(expected)) {
+        (Some((inst_major, inst_minor)), Some((exp_major, exp_minor))) => {
+            inst_major == exp_major && inst_minor == exp_minor
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -996,5 +1017,24 @@ set(IDF_VERSION_MAJOR 5)
         let (major, minor) = result.unwrap();
         assert_eq!(major, "5");
         assert_eq!(minor, "4");
+    }
+
+    #[test]
+    fn test_parse_version_major_minor() {
+        assert_eq!(parse_version_major_minor("1.2.3"), Some((1, 2)));
+        assert_eq!(parse_version_major_minor("14.2.0_20241119"), Some((14, 2)));
+        assert_eq!(parse_version_major_minor("3.30.2"), Some((3, 30)));
+        assert_eq!(parse_version_major_minor("1.0"), Some((1, 0)));
+        assert_eq!(parse_version_major_minor("1"), None);
+        assert_eq!(parse_version_major_minor("invalid"), None);
+    }
+
+    #[test]
+    fn test_versions_match() {
+        assert!(versions_match("1.2.3", "1.2.0"));
+        assert!(versions_match("14.2.0_20241119", "14.2.1"));
+        assert!(!versions_match("1.2.3", "1.3.0"));
+        assert!(!versions_match("2.0.0", "1.2.0"));
+        assert!(!versions_match("invalid", "1.2.0"));
     }
 }

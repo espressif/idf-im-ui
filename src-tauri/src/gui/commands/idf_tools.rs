@@ -2,16 +2,14 @@ use crate::gui::ui::{send_message, send_tools_message, ProgressBar};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  add_path_to_path, decompress_archive, download_file, ensure_path,
+  add_path_to_path,ensure_path,
   idf_tools::{self, get_tools_export_paths},
-  python_utils::run_idf_tools_py, verify_file_checksum, DownloadProgress,
+  DownloadProgress,
   settings::Settings,
 };
-use log::{debug, error, info};
+use log::{ error, info};
 use std::{
   path::{Path, PathBuf},
-  sync::mpsc,
-  thread,
 };
 use tauri::AppHandle;
 
@@ -128,42 +126,66 @@ pub async fn setup_tools(
           anyhow!("Failed to parse tools.json: {}", e)
       })?;
 
-  let tools_to_download = idf_tools::get_list_of_tools_to_download(
-      tools.clone(),
-      settings.target.clone().unwrap_or_default(),
-      settings.mirror.as_deref(),
-  );
+  // Setup progress callback for the library function
+  let app_handle_clone = app_handle.clone();
+  let progress_callback = move |progress: DownloadProgress| {
+    match progress {
+        DownloadProgress::Progress(current, total) => {
+            let percentage = current * 100 / total;
+            let progress = ProgressBar::new(app_handle_clone.clone(), "Installing tools");
+            progress.update(percentage, Some(&format!("Downloading... {}%", percentage)));
+        }
+        DownloadProgress::Start(url) => {
+            // Extract filename from URL for tool status updates
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                send_tools_message(&app_handle_clone, filename.to_string(), "start".to_string());
+            }
+        }
+        DownloadProgress::Complete => {
+            let progress = ProgressBar::new(app_handle_clone.clone(), "Installing tools");
+            progress.finish();
+        }
+        DownloadProgress::Downloaded(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                send_tools_message(&app_handle_clone, filename.to_string(), "downloaded".to_string());
+            }
+        }
+        DownloadProgress::Verified(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                send_tools_message(&app_handle_clone, filename.to_string(), "download_verified".to_string());
+                send_tools_message(&app_handle_clone, filename.to_string(), "match".to_string());
+            }
+        }
+        DownloadProgress::Extracted(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                send_tools_message(&app_handle_clone, filename.to_string(), "extracted".to_string());
+            }
+        }
+        DownloadProgress::Error(err) => {
+            send_message(
+                &app_handle_clone,
+                format!("Download error: {}", err),
+                "error".to_string(),
+            );
+        }
+    }
+  };
 
-  for (tool_name, download) in tools_to_download {
-      process_tool_download(app_handle, &tool_setup, &tool_name, &download).await?;
-  }
+  // Use the library's setup_tools function
+  let installed_tools_list = idf_tools::setup_tools(
+      &tools,
+      settings.target.clone().unwrap_or_default(),
+      &PathBuf::from(&tool_setup.download_dir),
+      &PathBuf::from(&tool_setup.install_dir),
+      settings.mirror.as_deref(),
+      progress_callback,
+  )
+  .await
+  .map_err(|e| anyhow!("Failed to setup tools: {}", e))?;
 
   let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
-  let parent_of_tools_install_folder = tools_install_folder.parent().unwrap().to_path_buf();
 
   info!("Setting up tools... to directory: {}", tools_install_folder.display());
-
-  let env_vars_python =
-      idf_im_lib::setup_environment_variables(tools_install_folder, idf_path)
-          .map_err(|e| {
-              send_message(
-                  app_handle,
-                  format!("Failed to setup environment variables: {}", e),
-                  "error".to_string(),
-              );
-              anyhow!("Failed to setup environment variables: {}", e)
-          })?;
-
-  let env_vars_install =
-          idf_im_lib::setup_environment_variables(&parent_of_tools_install_folder, idf_path)
-              .map_err(|e| {
-                  send_message(
-                      app_handle,
-                      format!("Failed to setup environment variables: {}", e),
-                      "error".to_string(),
-                  );
-                  anyhow!("Failed to setup environment variables: {}", e)
-              })?;
 
   // Get and validate IDF tools path
   let mut idf_tools_path = idf_path.clone();
@@ -206,12 +228,10 @@ pub async fn setup_tools(
       "info".to_string(),
   );
 
-  let export_paths: Vec<String> = get_tools_export_paths(
+  let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
       tools,
-      settings.target.clone().unwrap(),
-      tools_install_folder
-          .to_str()
-          .unwrap(),
+      installed_tools_list,
+      tools_install_folder.to_str().unwrap(),
   )
   .into_iter()
   .map(|p| {
@@ -230,172 +250,4 @@ pub async fn setup_tools(
   );
 
   Ok(export_paths)
-}
-
-/// Processes a single tool download
-async fn process_tool_download(
-  app_handle: &AppHandle,
-  tool_setup: &ToolSetup,
-  tool_name: &str,
-  download: &idf_tools::Download,
-) -> Result<()> {
-  let (progress_tx, progress_rx) = mpsc::channel();
-  let progress = ProgressBar::new(app_handle.clone(), &format!("Installing tool {}", tool_name));
-
-  let filename = Path::new(&download.url)
-      .file_name()
-      .and_then(|f| f.to_str())
-      .ok_or_else(|| anyhow!("Invalid download URL"))?;
-
-  let full_path = Path::new(&tool_setup.download_dir).join(filename);
-  let full_path_str = match full_path.to_str() {
-      Some(s) => s,
-      None => return Err(anyhow!("Invalid file path")),
-  };
-
-  send_tools_message(app_handle, filename.to_string(), "start".to_string());
-
-  // Verify existing file checksum
-  if let Ok(true) = verify_file_checksum(&download.sha256, full_path_str) {
-      info!("Checksum verified for existing file: {}", full_path_str);
-      send_tools_message(app_handle, filename.to_string(), "match".to_string());
-      return Ok(());
-  }
-
-  // Setup progress monitoring
-  let progress_handle = setup_progress_monitoring(
-      app_handle.clone(),
-      progress_rx,
-      progress,
-      tool_name.to_string(),
-  );
-
-  // Download file
-  info!("Downloading {} to: {}", tool_name, full_path_str);
-  match download_file(&download.url, &tool_setup.download_dir, Some(progress_tx)).await {
-      Ok(_) => {
-          send_tools_message(app_handle, filename.to_string(), "downloaded".to_string());
-          send_message(
-              app_handle,
-              format!("Tool {} downloaded successfully", tool_name),
-              "info".to_string(),
-          );
-      }
-      Err(e) => return Err(anyhow!("Download failed: {}", e)),
-  };
-
-  // Verify downloaded file
-  verify_download(app_handle, &download.sha256, full_path_str, filename)?;
-
-  // Extract tool
-  extract_tool(
-      app_handle,
-      filename,
-      full_path_str,
-      Path::new(&tool_setup.install_dir),
-  )?;
-
-  progress_handle
-      .join()
-      .map_err(|_| anyhow!("Progress monitoring thread panicked"))?;
-
-  Ok(())
-}
-
-/// Verifies that a downloaded file matches its checksum
-fn verify_download(
-  app_handle: &AppHandle,
-  sha256: &str,
-  full_path_str: &str,
-  filename: &str,
-) -> Result<()> {
-  match verify_file_checksum(sha256, full_path_str) {
-      Ok(true) => {
-          info!(
-              "Checksum verified for newly downloaded file: {}",
-              full_path_str
-          );
-          send_tools_message(
-              app_handle,
-              filename.to_string(),
-              "download_verified".to_string(),
-          );
-          Ok(())
-      }
-      _ => {
-          debug!(
-              "Checksum verification of downloaded file failed: {}",
-              full_path_str
-          );
-          send_tools_message(
-              app_handle,
-              filename.to_string(),
-              "download_verification_failed".to_string(),
-          );
-          Err(anyhow!("Checksum verification failed"))
-      }
-  }
-}
-
-/// Extracts a downloaded tool archive
-fn extract_tool(
-  app_handle: &AppHandle,
-  tool_name: &str,
-  full_path_str: &str,
-  install_dir: &Path,
-) -> Result<()> {
-  match decompress_archive(full_path_str, install_dir.to_str().unwrap()) {
-      Ok(_) => {
-          send_tools_message(app_handle, tool_name.to_string(), "extracted".to_string());
-          send_message(
-              app_handle,
-              format!("Tool {} extracted successfully", tool_name),
-              "info".to_string(),
-          );
-      }
-      Err(e) => {
-          send_tools_message(app_handle, tool_name.to_string(), "error".to_string());
-          send_message(
-              app_handle,
-              format!("Failed to extract tool {}: {}", tool_name, e),
-              "error".to_string(),
-          );
-          return Err(e.into());
-      }
-  }
-  Ok(())
-}
-
-/// Sets up progress monitoring for a download
-fn setup_progress_monitoring(
-  app_handle: AppHandle,
-  progress_rx: mpsc::Receiver<DownloadProgress>,
-  progress: ProgressBar,
-  tool_name: String,
-) -> thread::JoinHandle<()> {
-  thread::spawn(move || {
-      while let Ok(progress_msg) = progress_rx.recv() {
-          match progress_msg {
-              DownloadProgress::Progress(current, total) => {
-                  let percentage = current * 100 / total;
-                  progress.update(
-                      percentage,
-                      Some(&format!("Downloading {}... {}%", tool_name, percentage)),
-                  );
-              }
-              DownloadProgress::Complete => {
-                  progress.finish();
-                  break;
-              }
-              DownloadProgress::Error(err) => {
-                  send_message(
-                      &app_handle,
-                      format!("Error downloading {}: {}", tool_name, err),
-                      "error".to_string(),
-                  );
-                  break;
-              }
-          }
-      }
-  })
 }

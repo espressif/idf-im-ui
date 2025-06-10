@@ -1,13 +1,16 @@
 use log::debug;
+use regex::Regex;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
+use anyhow::{anyhow, Result, Context};
 
+use crate::command_executor::execute_command;
 use crate::python_utils::get_python_platform_definition;
-use crate::system_dependencies;
-use crate::utils::find_directories_by_name;
+use crate::{decompress_archive, download_file, system_dependencies, verify_file_checksum, DownloadProgress};
+use crate::utils::{find_directories_by_name, versions_match};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
@@ -62,6 +65,13 @@ pub struct Download {
 pub struct ToolsFile {
     pub tools: Vec<Tool>,
     pub version: u8,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum ToolStatus {
+    Missing,
+    DifferentVersion { installed: String, expected: String },
+    Correct { version: String },
 }
 
 /// Reads and parses the tools file from the given path.
@@ -197,7 +207,8 @@ pub fn get_platform_identification(python: Option<&str>) -> Result<String, Strin
 }
 
 /// Given a list of `Tool` structs and a target platform, this function returns a HashMap
-/// that maps tool names to their preferred `Download` links for that platform.
+/// that maps tool names to a tuple containing their preferred version name and the
+/// corresponding `Download` link for that platform.
 ///
 /// For each tool, the function determines the preferred version based on the following logic:
 /// - If there's a version with status "recommended", it's chosen.
@@ -207,7 +218,7 @@ pub fn get_platform_identification(python: Option<&str>) -> Result<String, Strin
 ///
 /// After determining the preferred version, the function attempts to find a download link
 /// specific to the provided `platform`. If a download link for the platform is found,
-/// it's added to the result HashMap.
+/// it's added to the result HashMap along with the preferred version's name.
 ///
 /// # Arguments
 ///
@@ -216,12 +227,13 @@ pub fn get_platform_identification(python: Option<&str>) -> Result<String, Strin
 ///
 /// # Returns
 ///
-/// A `HashMap<String, Download>` where keys are tool names and values are the
-/// `Download` structs relevant to the specified `platform` for the preferred tool version.
+/// A `HashMap<String, (String, Download)>` where keys are tool names and values are a tuple
+/// containing the preferred version's name (String) and the `Download` struct relevant
+/// to the specified `platform` for that preferred tool version.
 pub fn get_download_link_by_platform(
     tools: Vec<Tool>,
     platform: &String,
-) -> HashMap<String, Download> {
+) -> HashMap<String, (String, Download)> {
   let mut tool_links = HashMap::new();
   for tool in tools {
     let preferred_version;
@@ -235,7 +247,7 @@ pub fn get_download_link_by_platform(
       preferred_version = tool.versions.first().unwrap();
     }
     if let Some(download) = preferred_version.downloads.get(platform) {
-      tool_links.insert(tool.name.clone(), download.clone());
+      tool_links.insert(tool.name.clone(), (preferred_version.name.clone(), download.clone()));
     }
   }
   tool_links
@@ -245,21 +257,26 @@ pub fn get_download_link_by_platform(
 ///
 /// # Arguments
 ///
-/// * `tools` - A HashMap containing tool names as keys and their corresponding Download instances as values.
-/// * `mirror` - An optional reference to a string representing the mirror URL. If None, the original URLs are used.
+/// * `tools` - A HashMap where keys are tool names (String) and values are
+///             tuples containing the tool's version (String) and its corresponding
+///             Download instance.
+/// * `mirror` - An optional reference to a string representing the mirror URL.
+///              If `None`, the original URLs are used.
 ///
 /// # Returns
 ///
-/// * A new HashMap with the same keys as the input `tools` but with updated Download instances.
-///   The URLs of the Download instances are replaced with the mirror URL if provided.
+/// * A new HashMap with the same keys and version strings as the input `tools`,
+///   but with updated Download instances. The URLs within these Download instances
+///   are replaced with the mirror URL if provided, specifically by
+///   replacing "https://github.com" with the mirror URL.
 ///
 pub fn change_links_donwanload_mirror(
-    tools: HashMap<String, Download>,
+    tools: HashMap<String, (String, Download)>,
     mirror: Option<&str>,
-) -> HashMap<String, Download> {
-    let new_tools: HashMap<String, Download> = tools
+) -> HashMap<String, (String, Download)> {
+    let new_tools: HashMap<String, (String, Download)> = tools
         .iter()
-        .map(|(name, link)| {
+        .map(|(name, (version,  link))| {
             let new_link = match mirror {
                 Some(mirror) => Download {
                     sha256: link.sha256.clone(),
@@ -269,7 +286,7 @@ pub fn change_links_donwanload_mirror(
                 },
                 None => link.clone(),
             };
-            (name.to_string(), new_link)
+            (name.to_string(), (version.clone(), new_link))
         })
         .collect();
     new_tools
@@ -292,7 +309,7 @@ pub fn get_list_of_tools_to_download(
     tools_file: ToolsFile,
     selected_chips: Vec<String>,
     mirror: Option<&str>,
-) -> HashMap<String, Download> {
+) -> HashMap<String, (String, Download)> {
     let list = filter_tools_by_target(tools_file.tools, &selected_chips);
     let platform = match get_platform_identification(None) {
         Ok(platform) => platform,
@@ -383,6 +400,87 @@ pub fn get_tools_export_paths(
     paths
 }
 
+
+/// Gathers unique export paths for a given set of installed tools.
+///
+/// This function iterates through a map of installed tools, constructs their installation
+/// paths, and then identifies specific export paths based on the `ToolsFile` definition.
+/// For paths containing "bin", it dynamically finds all "bin" directories within the
+/// tool's installation. Otherwise, it constructs the path as specified.
+/// It logs warnings for non-existent paths and errors for access issues.
+/// All unique, existing paths are collected, sorted, and returned.
+///
+/// # Arguments
+///
+/// * `tools_file` - A `ToolsFile` struct containing the definitions of tools,
+///                  including their `export_paths`.
+/// * `installed_tools` - A `HashMap` where keys are tool names (`String`) and values
+///                       are tuples containing the tool's installed version (`String`)
+///                       and its `Download` information.
+/// * `tools_install_path` - A string slice representing the base directory where tools are installed.
+///
+/// # Returns
+///
+/// A `Vec<String>` containing a sorted list of unique, absolute export paths for the
+/// specified installed tools that actually exist on the filesystem.
+///
+pub fn get_tools_export_paths_from_list(
+  tools_file: ToolsFile,
+  installed_tools: HashMap<String, (String, Download)>,
+  tools_install_path: &str,
+) -> Vec<String> {
+    let mut paths_set: HashSet<String> = HashSet::new();
+    for (tool_name, (version, download)) in installed_tools {
+      let mut p = PathBuf::from(tools_install_path);
+      p.push(tool_name.clone());
+      p.push(version);
+      tools_file.tools.iter().find(|tool| tool.name == tool_name)
+        .and_then(|tool| {
+          tool.export_paths.iter().for_each(|path| {
+            if path.iter().find(| level | {
+                *level == "bin"
+            }).is_some() {
+                let bin_dirs = find_bin_directories(&p);
+                for bin_dir in bin_dirs {
+                    match Path::new(&bin_dir).try_exists() {
+                        Ok(true) => {
+                            paths_set.insert(bin_dir);
+                        }
+                        Ok(false) => {
+                            log::warn!("Bin directory does not exist: {}", bin_dir);
+                        }
+                        Err(e) => {
+                            log::error!("Error checking bin directory: {}", e);
+                        }
+                    }
+                }
+            } else {
+              let mut export_path = p.clone();
+              for level in path {
+                  export_path.push(level);
+              }
+              match export_path.try_exists() {
+                Ok(true) => {
+                    paths_set.insert(export_path.to_str().unwrap().to_string());
+                }
+                Ok(false) => {
+                    log::warn!("Export path does not exist: {}", export_path.to_str().unwrap());
+                }
+                Err(e) => {
+                    log::error!("Error checking export path: {}", e);
+                }
+              }
+            }
+          });
+          Some(())
+        });
+    }
+    let mut paths:Vec<String> = paths_set.into_iter().collect();
+    paths.sort();
+    log::debug!("Export paths from list: {:?}", paths);
+    paths
+}
+
 /// Recursively searches for directories named "bin" within the given path.
 ///
 /// # Parameters
@@ -395,6 +493,211 @@ pub fn get_tools_export_paths(
 ///
 pub fn find_bin_directories(path: &Path) -> Vec<String> {
     find_directories_by_name(path, "bin")
+}
+
+/// Sets up (downloads and installs) a list of selected tools based on their definitions.
+///
+/// This asynchronous function orchestrates the entire setup process for a given set of tools.
+/// It first determines which tools need to be downloaded, then iteratively processes each tool:
+///
+/// 1. **Verifies Installation Status**: Checks if the tool is already installed correctly,
+///    if a different version is present, or if it's missing. If already correct, it skips
+///    the download and installation.
+/// 2. **Handles Existing Downloads**: If a tool's archive already exists in the download
+///    directory and passes checksum verification, it skips the download phase.
+/// 3. **Downloads Tools**: Downloads the tool's archive to the specified download directory,
+///    providing progress updates via the `progress_callback`.
+/// 4. **Verifies Checksum**: After download, it verifies the integrity of the downloaded file
+///    using its SHA256 checksum. Corrupted files are removed.
+/// 5. **Extracts Archives**: Decompresses the downloaded archive into the appropriate
+///    installation directory, structured by tool name and version.
+///
+/// Progress updates throughout these stages are communicated via the `progress_callback`.
+///
+/// # Arguments
+///
+/// * `tools` - A reference to a `ToolsFile` struct, containing the definitions for all known tools.
+/// * `selected_targets` - A `Vec` of strings, representing the names of the tools to be set up.
+/// * `download_dir` - A `PathBuf` indicating the directory where tool archives should be downloaded.
+/// * `install_dir` - A `PathBuf` indicating the base directory where tools should be installed.
+/// * `mirror` - An `Option<&str>` specifying an optional mirror URL to use for downloads.
+///              If `Some`, download URLs will be adjusted to use this mirror.
+/// * `progress_callback` - A closure that implements `Fn(DownloadProgress) + Clone + Send + 'static`.
+///                         This callback is invoked to report the progress and status of downloads
+///                         and installations.
+///
+/// # Returns
+///
+/// A `Result` which is:
+/// * `Ok(HashMap<String, (String, Download)>)` - A `HashMap` containing the names of the tools
+///   that were processed, mapped to a tuple of their preferred version (String) and the
+///   `Download` information used for that version.
+/// * `Err(anyhow::Error)` - An error if any critical step during the setup process fails
+///   (e.g., download failure, checksum mismatch, extraction error).
+///
+pub async fn setup_tools(
+    tools: &ToolsFile,
+    selected_targets: Vec<String>,
+    download_dir: &PathBuf,
+    install_dir: &PathBuf,
+    mirror: Option<&str>,
+    progress_callback: impl Fn(DownloadProgress) + Clone + Send + 'static,
+) -> anyhow::Result<HashMap<String, (String, Download)>> {
+
+    let download_links = get_list_of_tools_to_download(tools.clone(), selected_targets, mirror);
+    // Download each tool
+    for (tool_name, (version, download_link)) in download_links.iter() {
+
+      match verify_tool_installation(tool_name, tools) {
+        Ok(ToolStatus::Correct { version }) => {
+          progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+          progress_callback(DownloadProgress::Complete);
+          log::info!("Tool '{}' is already installed with the correct version: {}", tool_name, version);
+          continue; // Skip if already installed correctly
+        }
+        Ok(ToolStatus::DifferentVersion { installed, expected }) => {
+          // todo: install to different folder
+          log::warn!("Tool '{}' is installed with version '{}', but expected '{}'. Reinstalling...", tool_name, installed, expected);
+        }
+        Ok(ToolStatus::Missing) => {
+          log::info!("Tool '{}' is not installed. Downloading...", tool_name);
+        }
+        Err(e) => {
+          log::error!("Error verifying tool '{}': {}", tool_name, e);
+          return Err(anyhow::anyhow!("Error verifying tool '{}': {}", tool_name, e));
+        }
+      }
+
+
+      let file_path = Path::new(&download_link.url);
+      let filename = file_path.file_name()
+          .ok_or_else(|| anyhow::anyhow!("Invalid filename in URL"))?
+          .to_str()
+          .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename"))?;
+
+      let full_file_path = download_dir.join(filename);
+      let this_install_dir = install_dir.join(tool_name).join(version);
+
+      // Notify start of processing this tool
+      progress_callback(DownloadProgress::Start(download_link.url.clone()));
+
+      // Check if file already exists and has correct checksum
+      if let Ok(true) = verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()) {
+        progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+        decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+        progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
+        progress_callback(DownloadProgress::Complete);
+        continue;
+      }
+
+      // Create a channel for progress updates
+      let (tx, rx) = std::sync::mpsc::channel();
+
+      // Spawn a thread to forward progress updates to the callback
+      let callback = progress_callback.clone();
+      let url = download_link.url.clone();
+      std::thread::spawn(move || {
+        while let Ok(progress) = rx.recv() {
+          match progress {
+            DownloadProgress::Progress(current, total) => {
+              callback(DownloadProgress::Progress(current, total));
+            }
+            DownloadProgress::Complete => {
+              callback(DownloadProgress::Downloaded(url.clone()));
+            }
+            DownloadProgress::Error(e) => {
+              callback(DownloadProgress::Error(e));
+            }
+            _ => {}
+          }
+        }
+      });
+
+      // Download the file
+      match download_file(&download_link.url, download_dir.to_str().unwrap(), Some(tx)).await {
+        Ok(_) => {
+          // Verify downloaded file
+          if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())? {
+            progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+            // Extract the archive
+
+            decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+            progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
+            progress_callback(DownloadProgress::Complete);
+          } else {
+            // Remove corrupted file
+            std::fs::remove_file(&full_file_path)?;
+            return Err(anyhow::anyhow!("Downloaded file is corrupted"));
+          }
+        }
+        Err(e) => {
+          progress_callback(DownloadProgress::Error(e.to_string()));
+          return Err(anyhow::anyhow!("Download failed: {}", e));
+        }
+      }
+    }
+
+    Ok(download_links)
+}
+
+/// Verify if a tool is installed with the correct version
+pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile) -> Result<ToolStatus> {
+    // Find the tool in the tools file
+    let tool = tools_file.tools.iter()
+        .find(|t| t.name == tool_name)
+        .ok_or(format!("Tool '{}' not found in tools file", tool_name)).map_err(|e| anyhow!(e))?;
+
+    // Skip verification if version_cmd is empty
+    if tool.version_cmd.is_empty() {
+        return Ok(ToolStatus::Missing);
+    }
+
+    // Get the expected version (recommended or first available)
+    let expected_version = tool.versions.iter().find(|v| v.status == "recommended")
+        .or_else(|| tool.versions.first())
+        .ok_or(format!("No version found for tool '{}'", tool_name)).map_err(|e| anyhow!(e))?;
+
+    // Execute the version command
+    let output = match execute_command(
+        &tool.version_cmd[0],
+        &[&tool.version_cmd[1]],
+    ) {
+        Ok(output) => output,
+        Err(_) => return Ok(ToolStatus::Missing),
+    };
+
+    // Convert output to string
+    let output_str = String::from_utf8_lossy(&output.stdout);
+    let error_str = String::from_utf8_lossy(&output.stderr);
+    let combined_output = format!("{}\n{}", output_str, error_str);
+
+    // Parse version using regex
+    let regex = Regex::new(&tool.version_regex)
+        .map_err(|e| format!("Invalid regex '{}': {}", tool.version_regex, e)).map_err(|e| anyhow!(e))?;
+
+    let installed_version = match regex.captures(&combined_output)
+        .and_then(|caps| caps.get(1))
+        .map(|m| m.as_str()) {
+        Some(version) => version,
+        None => {
+            return Ok(ToolStatus::DifferentVersion {
+                installed: format!("Unknown version from output: {}", output_str.trim()),
+                expected: expected_version.name.clone(),
+            });
+        }
+      };
+
+    // Compare versions (major.minor only)
+    if versions_match(installed_version, &expected_version.name) {
+        Ok(ToolStatus::Correct {
+            version: installed_version.to_string(),
+        })
+    } else {
+        Ok(ToolStatus::DifferentVersion {
+            installed: installed_version.to_string(),
+            expected: expected_version.name.clone(),
+        })
+    }
 }
 
 #[cfg(test)]
@@ -457,32 +760,32 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            Download {
+            ("1.0.0".to_string(),Download {
                 sha256: "abc123".to_string(),
                 size: 1024,
                 url: "https://github.com/example/tool1.tar.gz".to_string(),
                 rename_dist: None,
-            },
+            }),
         );
         tools.insert(
             "tool2".to_string(),
-            Download {
+            ("1.0.0".to_string(),Download {
                 sha256: "def456".to_string(),
                 size: 2048,
                 url: "https://github.com/example/tool2.tar.gz".to_string(),
                 rename_dist: None,
-            },
+            }),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
         let updated_tools = change_links_donwanload_mirror(tools, mirror);
 
         assert_eq!(
-            updated_tools.get("tool1").unwrap().url,
+            updated_tools.get("tool1").unwrap().1.url,
             "https://dl.espressif.com/github_assets/example/tool1.tar.gz"
         );
         assert_eq!(
-            updated_tools.get("tool2").unwrap().url,
+            updated_tools.get("tool2").unwrap().1.url,
             "https://dl.espressif.com/github_assets/example/tool2.tar.gz"
         );
     }
@@ -492,19 +795,19 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            Download {
+            ("1.0.0".to_string(),Download {
                 sha256: "abc123".to_string(),
                 size: 1024,
                 url: "https://github.com/example/tool1.tar.gz".to_string(),
                 rename_dist: None,
-            },
+            }),
         );
 
         let mirror = None;
         let updated_tools = change_links_donwanload_mirror(tools, mirror);
 
         assert_eq!(
-            updated_tools.get("tool1").unwrap().url,
+            updated_tools.get("tool1").unwrap().1.url,
             "https://github.com/example/tool1.tar.gz"
         );
     }
@@ -524,19 +827,19 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            Download {
+            ("1.0.0".to_string(),Download {
                 sha256: "abc123".to_string(),
                 size: 1024,
                 url: "https://example.com/tool1.tar.gz".to_string(),
                 rename_dist: None,
-            },
+            }),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
         let updated_tools = change_links_donwanload_mirror(tools, mirror);
 
         assert_eq!(
-            updated_tools.get("tool1").unwrap().url,
+            updated_tools.get("tool1").unwrap().1.url,
             "https://example.com/tool1.tar.gz"
         );
     }
@@ -546,17 +849,17 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            Download {
+            ("1.0.0".to_string(),Download {
                 sha256: "abc123".to_string(),
                 size: 1024,
                 url: "".to_string(),
                 rename_dist: None,
-            },
+            }),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
         let updated_tools = change_links_donwanload_mirror(tools, mirror);
 
-        assert_eq!(updated_tools.get("tool1").unwrap().url, "");
+        assert_eq!(updated_tools.get("tool1").unwrap().1.url, "");
     }
 }
