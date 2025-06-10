@@ -588,7 +588,11 @@ fn get_openocd_scripts_folder(idf_tools_path: &PathBuf) -> Result<String, std::i
 }
 
 pub enum DownloadProgress {
+    Start(String),
     Progress(u64, u64), // (downloaded, total)
+    Downloaded(String),
+    Verified(String),
+    Extracted(String),
     Complete,
     Error(String),
 }

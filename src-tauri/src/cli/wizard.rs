@@ -7,6 +7,7 @@ use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
+use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 use std::{
@@ -27,181 +28,6 @@ use crate::cli::helpers::{
 };
 
 use crate::cli::prompts::*;
-
-async fn download_tools(
-    tools_file: ToolsFile,
-    selected_chip: Vec<String>,
-    destination_path: &str,
-    mirror: Option<&str>,
-) -> Result<Vec<String>> {
-    let tool_name_list: Vec<String> = tools_file
-        .tools
-        .iter()
-        .map(|tool| tool.name.clone())
-        .collect();
-    info!(
-        "{}: {:?}",
-        t!("wizard.tools_download.progress"),
-        tool_name_list
-    );
-    let list = idf_im_lib::idf_tools::filter_tools_by_target(tools_file.tools, &selected_chip);
-
-    let platform = match idf_im_lib::idf_tools::get_platform_identification(None) {
-        Ok(platform) => platform,
-        Err(err) => {
-            if std::env::consts::OS == "windows" {
-                // All this is for cases when on windows microsoft store creates "pseudolinks" for python
-                let scp = idf_im_lib::system_dependencies::get_scoop_path();
-                let usable_python = match scp {
-                    Some(path) => {
-                        let mut python_path = PathBuf::from(path);
-                        python_path.push("python3.exe");
-                        python_path.to_str().unwrap().to_string()
-                    }
-                    None => "python3.exe".to_string(),
-                };
-                match idf_im_lib::idf_tools::get_platform_identification(Some(&usable_python)) {
-                    Ok(platform) => platform,
-                    Err(err) => {
-                        error!("Unable to identify platform: {}", err);
-                        panic!("{}.  {:?}", t!("wizard.tools_platform_error"), err);
-                    }
-                }
-            } else {
-                panic!("{}.  {:?}", t!("wizard.tools_platform_error"), err);
-            }
-        }
-    };
-    debug!("Python platform: {}", platform);
-    let download_links = idf_im_lib::idf_tools::change_links_donwanload_mirror(
-        idf_im_lib::idf_tools::get_download_link_by_platform(list, &platform),
-        // Some("https://dl.espressif.com/github_assets"), // this switches mirror, should be parametrized
-        mirror,
-    )
-    .into_iter()
-    .collect::<Vec<_>>();
-    let mut downloaded_tools: Vec<String> = vec![];
-    for (tool_name, download_link) in download_links.iter() {
-        info!("{}: {}", t!("wizard.tool_download.progress"), tool_name);
-
-        let (progress_tx, progress_rx) = mpsc::channel();
-
-        let progress_bar = ProgressBar::new(download_link.size);
-        progress_bar.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})").unwrap()
-        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-        .progress_chars("#>-"));
-
-        debug!("Download link: {}", download_link.url);
-        debug!("destination: {}", destination_path);
-
-        let file_path = Path::new(&download_link.url);
-        let filename: &str = file_path.file_name().unwrap().to_str().unwrap();
-
-        let full_file_path = Path::new(&destination_path).join(Path::new(filename));
-        match idf_im_lib::verify_file_checksum(
-            &download_link.sha256,
-            full_file_path.to_str().unwrap(),
-        ) {
-            Ok(true) => {
-                downloaded_tools.push(filename.to_string()); // add it to the list for extraction even if it's already downloaded
-                info!("{}", t!("wizard.tool_file.present"));
-                progress_bar.finish();
-                continue;
-            }
-            _ => {
-                debug!("{}", t!("wizard.tool_file.missing"));
-            }
-        }
-        let tn = tool_name.clone();
-        let pb = progress_bar.clone();
-        let progress_handle = {
-            thread::spawn(move || {
-                while let Ok(progress_msg) = progress_rx.recv() {
-                    match progress_msg {
-                        DownloadProgress::Progress(current, _total) => {
-                            pb.set_position(current);
-                        }
-                        DownloadProgress::Complete => {
-                            pb.finish();
-                            break;
-                        }
-                        DownloadProgress::Error(err) => {
-                            log::error!("Error downloading {}: {}", tn, err);
-                            break;
-                        }
-                    }
-                }
-            })
-        };
-
-        match idf_im_lib::download_file(&download_link.url, destination_path, Some(progress_tx)).await {
-            Ok(_) => {
-                downloaded_tools.push(filename.to_string());
-                progress_bar.finish();
-                info!("{} {}", t!("wizard.tool.downloaded"), tool_name);
-            }
-            Err(err) => {
-                error!("{}: {}", t!("wizard.tool.download_failed"), tool_name);
-                error!("Error: {:?}", err);
-                return Err(anyhow!("{}: {}", t!("wizard.tool.download_failed"), err));
-            }
-        }
-        progress_handle.join().map_err(|e| anyhow::anyhow!("Progress reporting thread panicked: {:?}", e))?;
-        match idf_im_lib::verify_file_checksum(
-            &download_link.sha256,
-            full_file_path.to_str().unwrap(),
-        ) {
-            Ok(true) => {
-                continue;
-            }
-            _ => {
-                error!("{}", t!("wizard.tool.corupted"));
-                match fs::remove_file(&full_file_path) {
-                    Ok(_) => {
-                        error!(
-                            "{}: {}",
-                            t!("wizard.tool.removed"),
-                            full_file_path.to_str().unwrap()
-                        );
-                    }
-                    Err(err) => {
-                        error!(
-                            "{}: {}: {}",
-                            t!("wizard.tool.remove_failed"),
-                            full_file_path.to_str().unwrap(),
-                            err
-                        );
-                    }
-                };
-            }
-        }
-    }
-    Ok(downloaded_tools)
-}
-
-fn extract_tools(tools: Vec<String>, source_path: &str, destination_path: &str) -> anyhow::Result<()> {
-  let mut failed = false;
-    for tool in tools.iter() {
-        let mut archive_path = PathBuf::from(source_path);
-        archive_path.push(tool);
-        let out = idf_im_lib::decompress_archive(archive_path.to_str().unwrap(), destination_path);
-        match out {
-            Ok(_) => {
-                info!("{}: {}", t!("wizard.tool.extracted"), tool);
-            }
-            Err(err) => {
-                error!("{:?}", err);
-                error!("{}: {}", t!("wizard.tool.extract_failed"), tool);
-                failed = true;
-            }
-        }
-    }
-    if failed {
-        Err(anyhow::anyhow!("Some tools failed to extract"))
-    } else {
-        Ok(())
-    }
-}
 
 fn add_to_shell_rc(content: &str) -> Result<(), String> {
     let shell = env::var("SHELL").unwrap_or_else(|_| String::from(""));
@@ -352,7 +178,6 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
             }
         }
     }
-
 }
 
 fn setup_directory(
@@ -427,68 +252,57 @@ async fn download_and_extract_tools(
     tools: &ToolsFile,
     download_dir: &PathBuf,
     install_dir: &PathBuf,
-) -> anyhow::Result<()> {
-    let downloaded_tools_list = match download_tools(
-        tools.clone(),
-        config.target.clone().unwrap(),
-        download_dir.to_str().unwrap(),
-        config.mirror.as_deref(),
-    )
-    .await {
-        Ok(list) => list,
-        Err(err) => {
-            error!("Failed to download tools: {}", err);
-            return Err(anyhow!(err));
+) -> anyhow::Result<HashMap<String, (String, idf_im_lib::idf_tools::Download)>> {
+    info!(
+      "{}: {:?}",
+      t!("wizard.tools_download.progress"),
+      download_dir.display()
+    );
+    let progress_bar = ProgressBar::new(0);
+    progress_bar.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})").unwrap()
+        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+        .progress_chars("#>-"));
+
+    let progress_callback = move |progress: DownloadProgress| match progress {
+        DownloadProgress::Progress(current, total) => {
+            progress_bar.set_length(total);
+            progress_bar.set_position(current);
+        }
+        DownloadProgress::Complete => {
+            progress_bar.finish();
+        }
+        DownloadProgress::Error(err) => {
+            progress_bar.abandon_with_message(format!("Error: {}", err));
+        }
+        DownloadProgress::Start(_) => {
+            progress_bar.set_position(0);
+        }
+        DownloadProgress::Downloaded(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                info!("{} sucessfully downloaded", filename.to_string());
+            }
+        }
+        DownloadProgress::Verified(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                info!("{} checksum verified", filename.to_string());
+            }
+        }
+        DownloadProgress::Extracted(url) => {
+            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                info!("{} sucessfully extracted", filename.to_string());
+            }
         }
     };
 
-    extract_tools(
-        downloaded_tools_list,
-        download_dir.to_str().unwrap(),
-        install_dir.to_str().unwrap(),
+    idf_im_lib::idf_tools::setup_tools(
+        tools,
+        config.target.clone().unwrap(),
+        download_dir,
+        install_dir,
+        config.mirror.as_deref(),
+        progress_callback,
     )
-}
-
-fn get_and_validate_idf_tools_path(
-    config: &mut Settings,
-    idf_path: &PathBuf,
-) -> Result<PathBuf, String> {
-    let mut idf_tools_path = idf_path.clone();
-
-    if let Some(file) = config.idf_tools_path.clone() {
-        idf_tools_path.push(&file);
-    } else if config.wizard_all_questions.unwrap_or(false) {
-        let name = generic_input(
-            "wizard.idf_tools.prompt",
-            "wizard.idf_tools.prompt.failure",
-            DEFAULT_IDF_TOOLS_PY_LOCATION,
-        )?;
-
-        idf_tools_path.push(&name);
-        config.idf_tools_path = Some(name);
-    } else {
-        idf_tools_path.push(DEFAULT_IDF_TOOLS_PY_LOCATION); // TODO: defaults are in lib now
-        config.idf_tools_path = Some(DEFAULT_IDF_TOOLS_PY_LOCATION.to_string());
-    }
-
-    if fs::metadata(&idf_tools_path).is_err() {
-        warn!("{}", t!("wizard.idf_tools.not_found"));
-        let idf_tools_py_select = FolderSelect::with_theme(&create_theme())
-            .with_prompt(t!("wizard.idf_tools.select.prompt"))
-            .folder(idf_path.to_str().unwrap())
-            .file(true)
-            .interact()
-            .map_err(|e| format!("Failed to select: {}", e))?;
-
-        if fs::metadata(&idf_tools_py_select).is_ok() {
-            idf_tools_path = PathBuf::from(&idf_tools_py_select);
-            config.idf_tools_path = Some(idf_tools_py_select);
-        } else {
-            return Err(t!("wizard.idf_tools.unreachable").to_string());
-        }
-    }
-
-    Ok(idf_tools_path)
+    .await
 }
 
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
@@ -583,28 +397,36 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
 
-        match download_and_extract_tools(
+        let installed_tools_list = match download_and_extract_tools(
             &config,
             &tools,
             &tool_download_directory,
             &tool_install_directory,
         )
-        .await {
-            Ok(_) => {
-                info!("{}: {}", t!("wizard.tools.downloaded"), tools_json_file.display());
+        .await
+        {
+            Ok(list) => {
+                info!(
+                    "{}: {}",
+                    t!("wizard.tools.downloaded"),
+                    tools_json_file.display()
+                );
+                list
             }
             Err(err) => {
                 error!("Failed to download and extract tools: {}", err);
                 return Err(err.to_string());
             }
-        }
+        };
         match idf_im_lib::python_utils::install_python_env(
-          &idf_version,
-          &tool_install_directory,
-          true, //TODO: actually read from config
-          &idf_path,
-          &config.idf_features.clone().unwrap_or_default(),
-        ).await {
+            &idf_version,
+            &tool_install_directory,
+            true, //TODO: actually read from config
+            &idf_path,
+            &config.idf_features.clone().unwrap_or_default(),
+        )
+        .await
+        {
             Ok(_) => {
                 info!("Python environment installed");
             }
@@ -613,13 +435,16 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
-        let idf_python_env_path = tool_install_directory.join("python").join(&idf_version).join("venv"); //todo: move to config
+        let idf_python_env_path = tool_install_directory
+            .join("python")
+            .join(&idf_version)
+            .join("venv"); //todo: move to config
         ensure_path(idf_python_env_path.to_str().unwrap())
             .map_err(|err| format!("Failed to create Python environment directory: {}", err))?;
 
-        let export_paths = idf_im_lib::idf_tools::get_tools_export_paths(
+        let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
             tools,
-            config.target.clone().unwrap().clone(),
+            installed_tools_list,
             tool_install_directory.to_str().unwrap(),
         )
         .into_iter()

@@ -138,7 +138,7 @@ wizard.idf_path_exists.prompt:
   en: The path already exists. Do you want to proceed with installation without redownloading IDF?
   cn: 该路径已存在。是​​否要继续安装而不重新下载 IDF?
 wizard.tools_download.progress:
-  en: Downloading tools
+  en: Downloading tools to
   cn: 下载工具
 wizard.tool_download.progress:
   en: Downloading tool
