@@ -2,12 +2,16 @@ use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
 use idf_im_lib::idf_tools::ToolsFile;
+use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
+use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::settings::Settings;
-use idf_im_lib::utils::is_valid_idf_directory;
+use idf_im_lib::utils::copy_dir_contents;
+use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
+use tempfile::TempDir;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -309,6 +313,67 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
+    let mut offline_mode = false;
+    if config.use_local_archive.is_some() {
+        debug!("Using local archive: {:?}", config.use_local_archive);
+        if !config.use_local_archive.as_ref().unwrap().exists() {
+            return Err(format!(
+                "Local archive path does not exist: {}",
+                config.use_local_archive.as_ref().unwrap().display()
+            ));
+        }
+        offline_mode = true;
+    }
+
+    let offline_archive_dir = if offline_mode {
+        Some(TempDir::new().expect("Failed to create temporary directory"))
+    } else {
+        None
+    };
+
+    if offline_mode { // only setting up temp directory if offline mode is enabled
+      let archive_dir = offline_archive_dir.as_ref().unwrap();
+      debug!("Temporary directory created: {}", archive_dir.path().display());
+      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &archive_dir.path()) {
+        Ok(_) => {
+            info!("Successfully extracted archive to: {:?}", archive_dir);
+        }
+        Err(err) => {
+            return Err(format!("Failed to extract archive: {}", err));
+        }
+      }
+      // load the config from the extracted archive
+      let config_path = archive_dir.path().join("config.toml");
+      if config_path.exists() {
+        debug!("Loading config from extracted archive: {}", config_path.display());
+        let mut tmp_setting = Settings::default();
+        match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
+          Ok(()) => {
+            debug!("Config loaded from archive: {:?}", config_path.display());
+            debug!("Config: {:?}", tmp_setting);
+            debug!("Using only version for now.");
+            config.idf_versions = tmp_setting.idf_versions;
+        }
+          Err(err) => {
+            return Err(format!("Failed to load config from archive: {}", err));
+          }
+        }
+      } else {
+        warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+      }
+      // install prerequisites offline
+      if std::env::consts::OS == "windows" {
+        match install_prerequisites_offline(&archive_dir){
+          Ok(_) => {
+              info!("Successfully installed prerequisites from offline archive.");
+          }
+          Err(err) => {
+              return Err(format!("Failed to install prerequisites from offline archive: {}", err));
+          }
+        }
+      }
+    }
+
     if config.skip_prerequisites_check.unwrap_or(false) {
         info!("Skipping prerequisites check as per user request.");
     } else {
@@ -326,6 +391,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.install_all_prerequisites.unwrap_or_default(),
     )?;
 
+    if offline_mode {
+      let archive_dir = offline_archive_dir.as_ref().unwrap();
+      // copy IDFs
+      copy_idf_from_offline_archive(archive_dir, &config)?;
+    }
+
     // select target & idf version
     config = select_targets_and_versions(config).await?;
 
@@ -336,7 +407,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     // Multiple version starts here
     let mut using_existing_idf = false;
-    for mut idf_version in config.idf_versions.clone().unwrap() {
+    for idf_version in config.idf_versions.clone().unwrap() {
       let paths = config.get_version_paths(&idf_version).map_err(|err| {
           error!("Failed to get version paths: {}", err);
           err.to_string()
@@ -344,7 +415,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
       using_existing_idf = paths.using_existing_idf;
 
 
-      config.idf_path = Some(paths.idf_path.clone()); // todo: list all of the paths
+      config.idf_path = Some(paths.idf_path.clone());
       idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
       if !using_existing_idf {
@@ -386,6 +457,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             "wizard.tools.download.prompt",
             DEFAULT_TOOLS_DOWNLOAD_FOLDER,
         )?;
+
+        if offline_mode {
+          // copy content dist from offline_archive_dir
+          copy_dir_contents(
+            &offline_archive_dir.as_ref().unwrap().path().join("dist"),
+            &tool_download_directory,
+          )
+          .map_err(|err| format!("Failed to copy dist directory from offline archive: {}", err))?;
+        }
 
         // Setup install directory
         let tool_install_directory = setup_directory(
@@ -429,12 +509,18 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
+
         match idf_im_lib::python_utils::install_python_env(
             &paths.actual_version,
             &tool_install_directory,
             true, //TODO: actually read from config
             &paths.idf_path,
             &config.idf_features.clone().unwrap_or_default(),
+            if offline_mode {
+                Some(offline_archive_dir.as_ref().unwrap().path())
+            } else {
+                None
+            },
         )
         .await
         {

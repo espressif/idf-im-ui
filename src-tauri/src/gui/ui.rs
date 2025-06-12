@@ -5,7 +5,6 @@ use tauri::{AppHandle, Emitter}; // dep: fork = "0.1"
 
 /// Emits a message to the frontend
 pub fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
-    debug!("emit_to_fe: {} {:?}", event_name, json_data); //TODO: remove debug
     let _ = app_handle.emit(event_name, json_data);
 }
 

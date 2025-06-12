@@ -196,12 +196,14 @@ pub async fn setup_tools(
       return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
   }
 
+
   match idf_im_lib::python_utils::install_python_env(
     &idf_version,
     &tools_install_folder,
     true, //TODO: actually read from config
     &idf_path,
     &settings.idf_features.clone().unwrap_or_default(),
+    None, // Offline archive directory
   ).await {
       Ok(_) => {
         info!("Python environment installed");

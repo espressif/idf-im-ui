@@ -353,9 +353,12 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
         }
         "windows" => {
             for tool in list_of_required_tools {
-                let output = command_executor::execute_command(
+              let current_path = std::env::var("PATH").unwrap_or_default();
+              let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
+                let output = command_executor::execute_command_with_env(
                     "powershell",
-                    &["-Command", &format!("{} --version", tool)],
+                    &vec!["-Command", &format!("{} --version", tool)],
+                    vec![("PATH", &system_path)],
                 );
                 match output {
                     Ok(o) => {
@@ -598,22 +601,10 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                     }
                 };
                 debug!("Installing {} with scoop: {}", package, path_with_scoop);
-                let mut main_command = "powershell";
-
-                let test_for_pwsh = command_executor::execute_command("pwsh", &["--version"]);
-                match test_for_pwsh {
-                    // this needs to be used in powershell 7
-                    Ok(_) => {
-                        debug!("Found powershell core");
-                        main_command = "pwsh";
-                    }
-                    Err(_) => {
-                        debug!("Powershell core not found, using powershell");
-                    }
-                }
+                let mut main_command = get_correct_powershell_command();
 
                 let output = command_executor::execute_command_with_env(
-                    main_command,
+                    &main_command,
                     &vec![
                         "-ExecutionPolicy",
                         "Bypass",
@@ -647,6 +638,19 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
     Ok(())
 }
 
+pub fn get_correct_powershell_command() -> String {
+    match command_executor::execute_command("pwsh", &["--version"]) {
+        Ok(_) => {
+            debug!("Found powershell core");
+            "pwsh".to_string()
+        }
+        Err(_) => {
+            debug!("Powershell core not found, using powershell");
+            "powershell".to_string()
+        }
+    }
+}
+
 /// Adds a new directory to the system's PATH environment variable.
 ///
 /// This function appends the new directory to the current PATH if it's not already present.
@@ -660,7 +664,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
 ///
 /// * `Ok(String)` - Returns the updated PATH string if the operation is successful.
 /// * `Err(std::io::Error)` - Returns an IO error if the PATH update fails on Windows systems.
-fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
+pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     let binding = env::var_os("PATH").unwrap_or_default();
     let paths = binding.to_str().unwrap();
 

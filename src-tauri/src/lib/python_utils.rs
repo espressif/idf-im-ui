@@ -17,7 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, utils::{parse_cmake_version, remove_after_second_dot, with_retry}
+    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -122,7 +122,7 @@ pub fn run_python_script_from_file(
 /// - The download of the constraints file fails for any reason (e.g., network issues,
 ///   invalid URL, server errors).
 /// - File system metadata cannot be accessed or modified times cannot be determined.
-async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
+pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
     let constraint_file = format!(
         "espidf.constraints.{}.txt",
         remove_after_second_dot(idf_version)
@@ -200,17 +200,17 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
 /// - There are insufficient permissions to create directories at `venv_path`.
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
-pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
+fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
   info!("Creating Python virtual environment at: {}", venv_path);
 
     let output = match std::env::consts::OS {
         "windows" => command_executor::execute_command(
             "powershell",
-            &["-Command", "python3.exe", "-m", "venv", venv_path],
+            &["-Command", python_executable, "-m", "venv", venv_path],
         ),
         _ => command_executor::execute_command(
             "bash",
-            &["-c", &format!("python3 -m venv {}", venv_path)],
+            &["-c", &format!("{} -m venv {}", python_executable, venv_path)],
         ),
     };
     match output {
@@ -264,6 +264,7 @@ pub fn pip_install_requirements(
     venv_path: &Path,
     requirements_file: &Path,
     constraint_file: &Option<PathBuf>,
+    wheel_dir: &Option<PathBuf>,
 ) -> Result<(), std::io::Error> {
     let python_location = match std::env::consts::OS {
         "windows" => venv_path.join("Scripts").join("python.exe"),
@@ -281,15 +282,28 @@ pub fn pip_install_requirements(
 
     match std::env::consts::OS {
         "windows" => {
-            match command_executor::execute_command_with_env(
-                python_location.to_str().unwrap(),
-                &vec![
-                    "-m", "pip", "install", "-r",
-                    requirements_file.to_str().unwrap(),
-                    "--upgrade", "--constraint", constrain_path
+            match if let Some(wheel_dir) = wheel_dir { // offline mode
+                command_executor::execute_command_with_env(
+                    python_location.to_str().unwrap(),
+                    &vec![
+                        "-m", "pip", "install", "-r",
+                        requirements_file.to_str().unwrap(),
+                        "--upgrade", "--constraint", constrain_path,
+                        "--no-index", "--find-links", wheel_dir.to_str().unwrap()
+                    ],
+                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+                )
+            } else {
+                command_executor::execute_command_with_env(
+                    python_location.to_str().unwrap(),
+                    &vec![
+                        "-m", "pip", "install", "-r",
+                        requirements_file.to_str().unwrap(),
+                        "--upgrade", "--constraint", constrain_path
                 ],
                 vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-            ) {
+              )
+            } {
                 Ok(out) => {
                     if out.status.success() {
                         Ok(())
@@ -304,7 +318,23 @@ pub fn pip_install_requirements(
             }
         }
         _ => {
-            match command_executor::execute_command_with_env(
+            match if let Some(wheel_dir) = wheel_dir {
+                command_executor::execute_command_with_env(
+                  "bash",
+                  &vec![
+                      "-c",
+                      &format!(
+                          "{} -m pip install -r {} --upgrade --constraint {} --no-index --find-links {}",
+                          shlex::quote(python_location.to_str().unwrap()),
+                          shlex::quote(requirements_file.to_str().unwrap()),
+                          shlex::quote(constrain_path),
+                          shlex::quote(wheel_dir.to_str().unwrap())
+                      ),
+                  ],
+                  vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+                )
+            } else {
+               command_executor::execute_command_with_env(
                 "bash",
                 &vec![
                     "-c",
@@ -316,7 +346,8 @@ pub fn pip_install_requirements(
                     ),
                 ],
                 vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-            ) {
+              )
+            } {
                 Ok(out) => {
                     if out.status.success() {
                         trace!(
@@ -379,7 +410,9 @@ pub async fn install_python_env(
     reinstall: bool,
     idf_path: &Path,
     features: &[String],
+    offline_archive_dir: Option<&Path>,
 ) -> Result<(), String> {
+    let mut offline_mode = false;
     let venv_path = idf_tools_path.join("python").join(idf_version).join("venv");
 
     // if reinstall is true, remove the existing venv
@@ -403,9 +436,38 @@ pub async fn install_python_env(
             return Err(format!("failed to ensure venv path: {}", e));
         }
     }
+    if let Some(_offline_dir) = offline_archive_dir {
+        offline_mode = true;
+    } else {
+        debug!("No offline archive directory provided, skipping copying contents.");
+    }
+
+    let python_executable = match std::env::consts::OS {
+            "windows" => {
+              if offline_mode {
+                if let Some(scoop_shims_path) = get_scoop_path() {
+                  // Use the Scoop shims path for the Python executable
+                  let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
+                  match python_executable_path.try_exists() {
+                      Ok(true) => python_executable_path.to_string_lossy().into_owned(),
+                      Ok(false) => "python3.exe".to_string(),
+                      Err(e) => {
+                          warn!("Failed to check if Python executable exists: {}", e);
+                          "python3.exe".to_string()
+                      }
+                  }
+                } else {
+                  "python3.exe".to_string()
+                }
+              } else {
+                "python.exe".to_string()
+              }
+            },
+            _ => "python3".to_string(),
+        };
 
     // create the venv
-    match create_python_venv(venv_path.to_str().unwrap()) {
+    match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
         Ok(_) => {
             debug!("venv created");
         }
@@ -439,22 +501,37 @@ pub async fn install_python_env(
             idf_version.to_string()
         }
     };
-    let constraint_file = match download_constraints_file(idf_tools_path, &constrains_idf_version)
-        .await
-        .context("Failed to download constraints file")
-    {
-        Ok(constraint_file) => {
-            info!("Downloaded constraints file: {}", constraint_file.display());
-            Some(constraint_file)
-        }
-        Err(e) => {
-            warn!("Failed to download constraints file: {}", e);
-            None
-        }
+
+    let constraint_file = if offline_mode {
+      fs::copy(
+          offline_archive_dir.unwrap().join("espidf.constraints.v5.5.txt"), //TODO: not hardcoded
+          idf_tools_path.join("espidf.constraints.v5.5.txt"),
+      ).map_err(|e| format!("Failed to copy constraints file: {}", e))?;
+      Some(idf_tools_path.join("espidf.constraints.v5.5.txt"))
+    } else {
+      match download_constraints_file(idf_tools_path, &constrains_idf_version)
+          .await
+          .context("Failed to download constraints file")
+      {
+          Ok(constraint_file) => {
+              info!("Downloaded constraints file: {}", constraint_file.display());
+              Some(constraint_file)
+          }
+          Err(e) => {
+              warn!("Failed to download constraints file: {}", e);
+              None
+          }
+      }
     };
+    //
     // install the requirements from files
+    let wheel_dir = if offline_mode {
+        Some(offline_archive_dir.unwrap().join("wheels"))
+    } else {
+        None
+    };
     for requirements_file in requirements_file_list {
-        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file) {
+        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir) {
             Ok(_) => {
                 debug!("requirements installed: {}", requirements_file.display());
             }

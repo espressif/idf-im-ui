@@ -30,6 +30,7 @@ pub mod settings;
 pub mod system_dependencies;
 pub mod utils;
 pub mod version_manager;
+pub mod offline_installer;
 use std::fs::{set_permissions, File};
 use std::{
     env,
@@ -604,11 +605,24 @@ pub enum DownloadProgress {
     Complete,
     Error(String),
 }
-
 pub async fn download_file(
     url: &str,
     destination_path: &str,
     progress_sender: Option<Sender<DownloadProgress>>,
+) -> Result<(), std::io::Error> {
+    download_file_and_rename(
+        url,
+        destination_path,
+        progress_sender,
+        None, // No new name provided
+    ).await
+}
+
+pub async fn download_file_and_rename(
+    url: &str,
+    destination_path: &str,
+    progress_sender: Option<Sender<DownloadProgress>>,
+    new_name: Option<&str>,
 ) -> Result<(), std::io::Error> {
     // Create a new HTTP client
     let client = Client::new();
@@ -644,15 +658,19 @@ pub async fn download_file(
     })?;
     log::debug!("Downloading {} to {}", url, destination_path);
 
-    // Extract the filename from the URL
-    let filename = Path::new(&url).file_name().unwrap().to_str().unwrap();
+    let filename = if let Some(new_name) = new_name {
+      new_name.to_string()
+    } else {
+      // Use the last part of the URL as the filename
+      Path::new(&url).file_name().unwrap().to_str().unwrap().to_string()
+    };
     log::debug!(
         "Filename: {} and destination: {}",
-        filename,
+        &filename,
         destination_path
     );
     // Create a new file at the specified destination path
-    let mut file = File::create(Path::new(&destination_path).join(Path::new(filename)))?;
+    let mut file = File::create(Path::new(&destination_path).join(Path::new(&filename)))?;
     log::debug!("Created file at {}", destination_path);
 
     // Initialize the amount downloaded
@@ -1200,6 +1218,7 @@ fn update_submodules(repo: &Repository, tx: Sender<ProgressMessage>) -> Result<(
             // Create new fetch options for this submodule
             let mut fetch_options = FetchOptions::new();
             fetch_options.remote_callbacks(callbacks);
+            // fetch_options.depth(1); // Set depth for shallow clone - does seems to blow up on components/micro-ecc on hello world build time
 
             // Create update options with the fetch options
             let mut update_options = SubmoduleUpdateOptions::new();
