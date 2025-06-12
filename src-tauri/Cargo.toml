@@ -19,6 +19,14 @@ name = "idf_im_lib"
 path = "src/lib/mod.rs"
 crate-type = ["lib", "cdylib", "staticlib"]
 
+[[bin]]
+name = "eim"
+path = "src/main.rs"
+
+[[bin]]
+name = "offline_installer"
+path = "src/offline_installer.rs"
+
 [build-dependencies]
 tauri-build = { version = "2.0.1", features = [], optional = true }
 
