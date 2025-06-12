@@ -328,7 +328,7 @@ impl Settings {
             .unwrap_or(false)
     }
 
-    pub fn save_esp_ide_json(&self, _file_path: &str) -> Result<()> {
+    pub fn save_esp_ide_json(&self) -> Result<()> {
         let mut idf_installations = Vec::new();
 
         if let Some(versions) = &self.idf_versions {
@@ -352,10 +352,9 @@ impl Settings {
                 };
 
                 let activation_script = match std::env::consts::OS {
-                    "windows" => base_path
-                        .join(version)
-                        .join("Microsoft.PowerShell_profile.ps1"),
-                    _ => base_path.join(format!("activate_idf_{}.sh", version)),
+                    "windows" => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default())
+                        .join(format!("Microsoft.{}.PowerShell_profile.ps1", version)),
+                    _ => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(format!("activate_idf_{}.sh", version)),
                 };
 
                 idf_installations.push(IdfInstallation {
