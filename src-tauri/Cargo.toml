@@ -10,7 +10,7 @@ copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
 default = ["gui", "cli", "vendored-openssl"]
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log", "dep:num_cpus"]
 cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
-offline = []
+offline = ["cli"]
 userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
 vendored-openssl = ["openssl-sys/vendored", "reqwest/native-tls-vendored"]
 
