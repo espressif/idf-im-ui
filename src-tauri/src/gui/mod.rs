@@ -188,8 +188,9 @@ async fn install_single_version(
             .unwrap_or_default(),
     );
     let idf_python_env_path = tools_install_path.clone().join("python").join(&version).join("venv");
+    let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
     idf_im_lib::single_version_post_install(
-        version_path.to_str().unwrap(),
+        &activation_script_path,
         idf_path.to_str().unwrap(),
         &version,
         tools_install_path.to_str().unwrap(),

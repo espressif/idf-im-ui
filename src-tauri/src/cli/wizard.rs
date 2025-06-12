@@ -456,8 +456,9 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         })
         .collect();
+        let activation_script_path = config.esp_idf_json_path.clone().unwrap_or_default();
         idf_im_lib::single_version_post_install(
-            version_instalation_path.to_str().unwrap(),
+            &activation_script_path,
             idf_path.to_str().unwrap(),
             &idf_version,
             tool_install_directory.to_str().unwrap(),
@@ -475,10 +476,8 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             return Err(err.to_string());
         }
     }
-    // TODO: stop using useless param
-    let ide_conf_path = ide_conf_path_tmp.join("esp_ide.json");
-    match config.save_esp_ide_json(ide_conf_path.to_str().unwrap()) {
-        Ok(_) => debug!("IDE configuration saved to: {}", ide_conf_path.display()),
+    match config.save_esp_ide_json() {
+        Ok(_) => debug!("IDE configuration saved."),
         Err(err) => {
             error!("Failed to save IDE configuration: {}", err);
             return Err(err.to_string());
@@ -493,10 +492,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         _ => {
             println!("{}", t!("wizard.posix.finish_steps.line_1"));
             println!("{}", t!("wizard.posix.finish_steps.line_2"));
-            println!(
-                "{:?}",
-                config.path.clone().unwrap().to_str().unwrap().to_string()
-            );
             println!("{}", t!("wizard.posix.finish_steps.line_3"));
             println!("============================================");
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
@@ -504,7 +499,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 println!(
                     "       {} \"{}/activate_idf_{}.sh\"",
                     t!("wizard.posix.finish_steps.line_5"),
-                    config.path.clone().unwrap().to_str().unwrap(),
+                    config.esp_idf_json_path.clone().unwrap_or_default(),
                     idf_version,
                 );
             }

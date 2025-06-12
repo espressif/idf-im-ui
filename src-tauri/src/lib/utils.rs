@@ -388,8 +388,10 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
         let tmp = PathBuf::from(tool_set.idf_location.clone());
         let version_path = tmp.parent().unwrap();
+        let settings = crate::settings::Settings::default();
+        let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
         single_version_post_install(
-            version_path.to_str().unwrap(),
+            &activation_script_path,
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
