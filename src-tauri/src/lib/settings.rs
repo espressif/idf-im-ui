@@ -4,7 +4,7 @@ use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use struct_iterable::Iterable;
 use uuid::Uuid;
 
@@ -44,6 +44,7 @@ pub struct Settings {
     pub repo_stub: Option<String>,
     pub skip_prerequisites_check: Option<bool>,
     pub version_name: Option<String>,
+    pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
 }
 
 #[derive(Debug, Clone)]
@@ -112,6 +113,7 @@ impl Default for Settings {
             repo_stub: None,
             skip_prerequisites_check: Some(false),
             version_name: None,
+            use_local_archive: None,
         }
     }
 }
@@ -245,6 +247,11 @@ impl Settings {
             {
                 settings.version_name = cli_settings_struct.version_name.clone();
             }
+            if cli_settings_struct.use_local_archive.is_some()
+                && !cli_settings_struct.is_default("use_local_archive")
+            {
+                settings.use_local_archive = cli_settings_struct.use_local_archive.clone();
+            }
         }
 
         // Set the config file field
@@ -317,7 +324,8 @@ impl Settings {
             idf_features,
             repo_stub,
             skip_prerequisites_check,
-            version_name
+            version_name,
+            use_local_archive
         );
     }
 
