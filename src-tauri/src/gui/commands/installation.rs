@@ -155,8 +155,9 @@ async fn install_single_version(
   );
 
   let idf_python_env_path = tools_install_path.clone().join("python").join(&version).join("venv");
+  let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
   idf_im_lib::single_version_post_install(
-      version_path.to_str().unwrap(),
+      &activation_script_path,
       idf_path.to_str().unwrap(),
       &version,
       tools_install_path.to_str().unwrap(),
@@ -381,12 +382,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
   // Save IDE JSON configuration
   let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
   let _ = ensure_path(&ide_json_path);
-  let filepath = PathBuf::from(ide_json_path).join("esp_ide.json");
-  match settings.save_esp_ide_json(filepath.to_str().unwrap()) {
+  match settings.save_esp_ide_json() {
       Ok(_) => {
           send_message(
               &app_handle,
-              format!("IDE JSON file saved to: {}", filepath.to_str().unwrap()),
+              format!("IDE JSON file saved to: {}", ide_json_path),
               "info".to_string(),
           );
       }

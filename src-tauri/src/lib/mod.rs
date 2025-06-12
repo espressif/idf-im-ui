@@ -324,7 +324,7 @@ fn create_powershell_profile(
         rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n");
     }
     let mut filename = PathBuf::from(profile_path);
-    filename.push("Microsoft.PowerShell_profile.ps1");
+    filename.push(format!("Microsoft.{}.PowerShell_profile.ps1", idf_version));
     fs::write(&filename, rendered).expect("Unable to write file");
     Ok(filename.display().to_string())
 }
@@ -1450,13 +1450,13 @@ pub fn expand_tilde(path: &Path) -> PathBuf {
 ///
 /// # Parameters
 ///
-/// * `version_instalation_path`: A reference to a string representing the path where the ESP-IDF version is installed.
+/// * `activation_script_path`: A reference to a string representing the path where the activation script or the ps1 profile will be placed.
 /// * `idf_path`: A reference to a string representing the path to the ESP-IDF repository.
 /// * `idf_version`: A reference to a string representing the version of ESP-IDF being installed.
 /// * `tool_install_directory`: A reference to a string representing the directory where the ESP-IDF tools will be installed.
 /// * `export_paths`: A vector of strings representing the paths that need to be exported for the ESP-IDF tools.
 pub fn single_version_post_install(
-    version_instalation_path: &str,
+    activation_script_path: &str,
     idf_path: &str,
     idf_version: &str,
     tool_install_directory: &str,
@@ -1477,7 +1477,7 @@ pub fn single_version_post_install(
         "windows" => {
             // Creating desktop shortcut
             if let Err(err) = create_desktop_shortcut(
-                version_instalation_path,
+                activation_script_path,
                 idf_path,
                 idf_version,
                 tool_install_directory,
@@ -1495,18 +1495,22 @@ pub fn single_version_post_install(
             }
         }
         _ => {
-            let install_folder = PathBuf::from(version_instalation_path);
-            let install_path = install_folder.parent().unwrap().to_str().unwrap();
-            let _ = create_activation_shell_script(
-                // todo: handle error
-                install_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths,
-                env_vars,
-            );
+            match create_activation_shell_script(
+              activation_script_path,
+              idf_path,
+              tool_install_directory,
+              idf_python_env_path,
+              idf_version,
+              export_paths,
+              env_vars,
+            ) {
+              Ok(_) => info!("Activation shell script created successfully"),
+              Err(err) => error!(
+                  "{} {:?}",
+                  "Failed to create activation shell script",
+                  err.to_string()
+              ),
+            };
             // copy openocd rules (it's noop on macOs)
             match copy_openocd_rules(tool_install_directory) {
                 Ok(_) => info!("OpenOCD rules copied successfully"),
