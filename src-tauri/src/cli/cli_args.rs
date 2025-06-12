@@ -233,6 +233,12 @@ pub struct InstallArgs {
         help = "Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash."
     )]
     pub version_name: Option<String>,
+
+    #[arg(
+        long,
+        help = "Path to a local archive for offline installation. This is useful if you have already downloaded the ESP-IDF zst archive and want to use it for installation without downloading it again."
+    )]
+    pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
 }
 
 impl IntoIterator for InstallArgs {
@@ -320,6 +326,10 @@ impl IntoIterator for InstallArgs {
             (
                 "version_name".to_string(),
                 self.version_name.map(Into::into),
+            ),
+            (
+                "use_local_archive".to_string(),
+                self.use_local_archive.map(|p| p.to_str().unwrap().into()),
             ),
         ]
         .into_iter()

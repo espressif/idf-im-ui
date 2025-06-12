@@ -43,20 +43,20 @@ To build the CLI application:
 
 ```bash
 cd ./src-tauri/
-cargo build --release --no-default-features --features cli
+cargo build --bin eim --release --no-default-features --features cli
 ```
 
 To run the CLI application:
 
 ```bash
 cd ./src-tauri/
-cargo run --release --no-default-features --features cli
+cargo run --bin eim --release --no-default-features --features cli
 ```
 
 You can pass parameters to the CLI application by adding them after a double dash:
 
 ```bash
-cargo run --release --no-default-features --features cli -- --help
+cargo run --bin eim --release --no-default-features --features cli -- --help
 ```
 
 ### GUI Component
@@ -65,16 +65,22 @@ To run the GUI application in development mode:
 
 ```bash
 # From the root of the repository
-cargo tauri dev
+cargo tauri dev -- --bin eim
 ```
 
 To pass CLI arguments to the GUI binary:
 
 ```bash
-cargo tauri dev -- -- --help
+cargo tauri dev -- --bin eim -- --help
 ```
 
 Note the double `-- --` syntax: the first `--` separates the Cargo arguments from the Tauri arguments, and the second `--` separates the Tauri arguments from the application arguments.
+
+### Offline Installer Builder
+
+```bash
+cargo run --bin offline_installer_builder --release --no-default-features --features offline -- --help
+```
 
 ## Cross-Platform Compatibility
 

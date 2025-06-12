@@ -1423,6 +1423,7 @@ dependencies = [
  "git2",
  "idf-env",
  "indicatif",
+ "libz-sys",
  "log",
  "log4rs",
  "lzma-rs",
@@ -1454,6 +1455,7 @@ dependencies = [
  "uuid",
  "winapi",
  "zip",
+ "zstd",
 ]
 
 [[package]]
