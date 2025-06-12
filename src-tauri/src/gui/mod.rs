@@ -247,7 +247,7 @@ pub fn run() {
                         file_name: Some("eim_gui_log".to_string()),
                     },
                 ))
-                .level(log::LevelFilter::Debug)
+                .level(log::LevelFilter::Info)
                 .level_for("idf_im_lib", log::LevelFilter::Info)
                 .level_for("eim_lib", log::LevelFilter::Info)
                 .build(),
