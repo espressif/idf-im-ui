@@ -1454,6 +1454,7 @@ dependencies = [
  "uuid",
  "winapi",
  "zip",
+ "zstd",
 ]
 
 [[package]]

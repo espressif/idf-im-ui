@@ -353,9 +353,12 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
         }
         "windows" => {
             for tool in list_of_required_tools {
-                let output = command_executor::execute_command(
+              let current_path = std::env::var("PATH").unwrap_or_default();
+              let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
+                let output = command_executor::execute_command_with_env(
                     "powershell",
-                    &["-Command", &format!("{} --version", tool)],
+                    &vec!["-Command", &format!("{} --version", tool)],
+                    vec![("PATH", &system_path)],
                 );
                 match output {
                     Ok(o) => {
@@ -660,7 +663,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
 ///
 /// * `Ok(String)` - Returns the updated PATH string if the operation is successful.
 /// * `Err(std::io::Error)` - Returns an IO error if the PATH update fails on Windows systems.
-fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
+pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     let binding = env::var_os("PATH").unwrap_or_default();
     let paths = binding.to_str().unwrap();
 

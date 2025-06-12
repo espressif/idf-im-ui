@@ -144,6 +144,36 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: release_cli/${{ matrix.package_name }}/eim.zip
           asset_name: eim-cli-${{ matrix.package_name }}.zip
+      # offline installer
+      - name: Build offline_installer_builder
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer_builder ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Copy offline_installer_builder binary
+        run: |
+          cp src-tauri/target/${{ matrix.target || 'x86_64-unknown-linux-musl' }}/release/offline_installer_builder release_cli/${{ matrix.package_name }}/offline_installer_builder
+          chmod +x release_cli/${{ matrix.package_name }}/offline_installer_builder
+          cd release_cli/${{ matrix.package_name }}
+          zip -r offline_installer_builder.zip offline_installer_builder
+        shell: bash
+
+      - name: Upload offline_installer_builder artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/offline_installer_builder
+
+      - name: Upload offline_installer_builder Release Asset - Unix
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.zip
+          asset_name: offline_installer_builder-${{ matrix.package_name }}.zip
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -316,6 +346,144 @@ jobs:
           asset_path: release_cli/${{ matrix.package_name }}/eim.exe
           asset_name: eim-cli-${{ matrix.package_name }}.exe
 
+      - name: Build offline_installer_builder (Windows)
+        if: runner.os == 'Windows'
+        env:
+          OPENSSL_DIR: 'C:\vcpkg\installed\x64-windows-static-md'
+          OPENSSL_LIB_DIR: 'C:\vcpkg\installed\x64-windows-static-md\lib'
+          OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
+          OPENSSL_STATIC: "1"
+          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.4-thr\\x64\\bin\\perl.exe'
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer_builder ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Build offline_installer_builder (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer_builder ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Copy offline_installer_builder binary (Windows)
+        if: runner.os == 'Windows'
+        run: copy src-tauri\target\release\offline_installer_builder.exe release_cli\${{ matrix.package_name }}\offline_installer_builder.exe
+        shell: cmd
+
+      - name: Copy offline_installer_builder binary (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cp src-tauri/target/${{ matrix.target }}/release/offline_installer_builder release_cli/${{ matrix.package_name }}/offline_installer_builder
+          chmod +x release_cli/${{ matrix.package_name }}/offline_installer_builder
+          cd release_cli/${{ matrix.package_name }}
+          zip -r offline_installer_builder.zip offline_installer_builder
+        shell: bash
+
+      - name: Sign Windows offline_installer_builder Binary
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        run: |
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
+
+      - name: Codesign macOS offline_installer_builder Binary
+        if: startsWith(matrix.os, 'macos')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
+          codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
+
+      - name: Upload offline_installer_builder build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/offline_installer_builder${{ runner.os == 'Windows' && '.exe' || '' }}
+
+      - name: Upload offline_installer_builder Release Asset - MacOs
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.zip
+          asset_name: offline_installer_builder-${{ matrix.package_name }}.zip
+
+      - name: Upload offline_installer_builder Release Asset (Windows)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
+          asset_name: offline_installer_builder-${{ matrix.package_name }}.exe
+
+  build-offline-archives:
+    name: Build Offline Archives (${{ matrix.package_name }})
+    needs: [build-cli, build-cli-linux]
+    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped')
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+          - os: windows-latest
+            package_name: windows-x64
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-13
+            package_name: macos-x64
+    steps:
+      - name: Download offline_installer_builder artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          path: ./
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./offline_installer_builder
+
+      - name: Install tooling
+        run: |
+          cargo install --git https://github.com/astral-sh/uv uv
+
+      - name: Run offline_installer_builder
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./offline_installer_builder.exe -c default
+          else
+            ./offline_installer_builder -c default
+          fi
+        shell: bash
+
+      - name: Rename archive file
+        run: |
+          if [ -f "archive_v5.5.zst" ]; then
+            mv archive_v5.5.zst archive_v5.5_${{ matrix.package_name }}.zst
+          else
+            echo "Archive file not found"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Upload offline archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-archive-${{ matrix.package_name }}-${{ github.run_number }}
+          path: archive_v5.5_${{ matrix.package_name }}.zst
+
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -373,6 +541,29 @@ jobs:
           p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
           keychain: build
+
+      - name: Remove offline_installer_builder from Cargo.toml for GUI build (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          # Remove the specific lines for offline_installer_builder
+          sed -i.bak '/^\[\[bin\]\]$/{ N; N; N; /name = "offline_installer_builder"/d; }' src-tauri/Cargo.toml ||
+          sed -i.bak '/name = "offline_installer_builder"/{ N; N; s/.*\n.*\n.*//; }' src-tauri/Cargo.toml ||
+          # Fallback: remove each line individually
+          sed -i.bak '/name = "offline_installer_builder"/,+2d' src-tauri/Cargo.toml
+          # Also remove any orphaned [[bin]] line
+          sed -i.bak '/^\[\[bin\]\]$/{ N; /path = "src\/offline_installer_builder\.rs"/d; }' src-tauri/Cargo.toml
+          rm -f src-tauri/Cargo.toml.bak
+          cat src-tauri/Cargo.toml
+
+      - name: Remove offline_installer_builder from Cargo.toml for GUI build (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = Get-Content "src-tauri/Cargo.toml" -Raw
+          $pattern = '(?s)\[\[bin\]\]\s*name = "offline_installer_builder"\s*path = "src/offline_installer_builder\.rs"\s*required-features = \["offline"\]\s*(?=\n(\[\[bin\]\]|\[|$))'
+          $newContent = $content -replace $pattern, ''
+          Set-Content "src-tauri/Cargo.toml" -Value $newContent
+          Get-Content "src-tauri/Cargo.toml"
 
       - name: Build GUI (macOS) - release
         if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
