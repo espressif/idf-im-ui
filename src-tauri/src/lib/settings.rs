@@ -8,7 +8,7 @@ use struct_iterable::Iterable;
 use uuid::Uuid;
 
 use crate::idf_config::{IdfConfig, IdfInstallation};
-use crate::utils::get_git_path;
+use crate::utils::{get_git_path, is_valid_idf_directory};
 
 macro_rules! merge_fields {
     ($self:expr, $other:expr, $($field:ident),*) => {
@@ -351,11 +351,19 @@ impl Settings {
                     _ => tools_path.join("python").join(version).join("venv").join("bin").join("python3"),
                 };
 
+                let script_path;
+                if is_valid_idf_directory(base_path.to_str().unwrap_or_default()) {
+                  script_path = base_path.parent()
+                    .ok_or_else(|| anyhow!("Base path parent not found"))?;
+                } else {
+                  script_path = base_path;
+                }
+
                 let activation_script = match std::env::consts::OS {
                     "windows" => base_path
                         .join(version)
                         .join("Microsoft.PowerShell_profile.ps1"),
-                    _ => base_path.join(format!("activate_idf_{}.sh", version)),
+                    _ => script_path.join(format!("activate_idf_{}.sh", version)),
                 };
 
                 idf_installations.push(IdfInstallation {
