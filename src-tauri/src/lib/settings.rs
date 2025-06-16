@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use config::{Config, ConfigError};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -343,31 +344,36 @@ impl Settings {
 
             for version in versions {
                 let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
-                let idf_path = base_path.join(version).join("esp-idf");
-                let tools_path = base_path.join(version).join(tool_install_folder);
+                let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
+                let mut idf_path = base_path.clone();
+                let mut idf_version = version.clone();
+                if !using_existing_idf {
+                  idf_path = idf_path.join(version).join("esp-idf");
+                } else {
+                  idf_version = match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
+                    Ok(hash) => hash,
+                    Err(err) => {
+                      warn!("Failed to get commit hash: {}", err);
+                      idf_version
+                    }
+                  };
+                }
+                let tools_path = base_path.join(&idf_version).join(tool_install_folder);
 
                 let python_path = match std::env::consts::OS {
-                    "windows" => tools_path.join("python").join(version).join("venv").join("Scripts").join("Python.exe"),
-                    _ => tools_path.join("python").join(version).join("venv").join("bin").join("python3"),
+                    "windows" => tools_path.join("python").join(&idf_version).join("venv").join("Scripts").join("Python.exe"),
+                    _ => tools_path.join("python").join(&idf_version).join("venv").join("bin").join("python3"),
                 };
-
-                let script_path;
-                if is_valid_idf_directory(base_path.to_str().unwrap_or_default()) {
-                  script_path = base_path.parent()
-                    .ok_or_else(|| anyhow!("Base path parent not found"))?;
-                } else {
-                  script_path = base_path;
-                }
 
                 let activation_script = match std::env::consts::OS {
                     "windows" => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default())
-                        .join(format!("Microsoft.{}.PowerShell_profile.ps1", version)),
-                    _ => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(format!("activate_idf_{}.sh", version)),
+                        .join(format!("Microsoft.{}.PowerShell_profile.ps1", idf_version)),
+                    _ => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(format!("activate_idf_{}.sh", idf_version)),
                 };
 
                 idf_installations.push(IdfInstallation {
                     id,
-                    name: version.to_string(),
+                    name: idf_version.to_string(),
                     path: idf_path.to_string_lossy().into_owned(),
                     python: python_path.to_string_lossy().into_owned(),
                     idf_tools_path: tools_path.to_string_lossy().into_owned(),

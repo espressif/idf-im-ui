@@ -6,6 +6,7 @@ use crate::{
     version_manager::get_default_config_path,
 };
 use anyhow::{anyhow, Result, Error};
+use git2::Repository;
 use log::{debug, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
@@ -610,6 +611,15 @@ pub fn versions_match(installed: &str, expected: &str) -> bool {
         }
         _ => false,
     }
+}
+
+pub fn get_commit_hash(repo_path: &str) -> Result<String, git2::Error> {
+    let repo = Repository::open(repo_path)?;
+    // Get the HEAD reference
+    let head = repo.head()?;
+    // Get the commit that HEAD points to
+    let commit = head.peel_to_commit()?;
+    Ok(commit.id().to_string()[..7].to_string()) // Return the first 7 characters of the commit hash
 }
 
 #[cfg(test)]
