@@ -1,5 +1,7 @@
 import { expect } from "chai";
 import { describe, it, after, beforeEach, afterEach } from "mocha";
+import CLITestRunner from "../classes/CLITestRunner.class.js";
+import logger from "../classes/logger.class.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -22,11 +24,11 @@ function runInstallVerification({
     const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
 
     beforeEach(async function () {
+      this.timeout(10000);
       if (verificationStepFailed) {
         logger.info("Test failed, skipping next tests");
         this.skip();
       }
-      this.timeout(10000);
     });
 
     afterEach(async function () {
@@ -236,6 +238,7 @@ function runInstallVerification({
        * The commands might differ for each operating system.
        * The assert is based on the existence of the project files in the expected folder.
        */
+      let testRunner = null;
       testRunner = new CLITestRunner();
       logger.info(`Starting test - create new project`);
       for (let idf of idfList) {
@@ -299,9 +302,10 @@ function runInstallVerification({
       /**
        * This test attempts to set a target MCU for the project created in the previous test.
        */
+      this.timeout(750000);
+      let testRunner = null;
       testRunner = new CLITestRunner();
       logger.info(`Starting test - set target`);
-      this.timeout(750000);
 
       for (let idf of idfList) {
         let pathToProjectFolder = path.join(
@@ -377,8 +381,10 @@ function runInstallVerification({
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.
        */
-      logger.info(`Starting test - build project`);
       this.timeout(600000);
+      let testRunner = null;
+      testRunner = new CLITestRunner();
+      logger.info(`Starting test - build project`);
       for (let idf of idfList) {
         let pathToProjectFolder = path.join(
           installFolder,
