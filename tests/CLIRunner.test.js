@@ -51,7 +51,7 @@ function testRun(jsonScript) {
   const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
 
   const IDFDefaultVersion =
-    process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
+    process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
 
@@ -101,7 +101,9 @@ function testRun(jsonScript) {
       }
 
       const targetList = test.data.targetList || "esp32";
-      const idfVersionList = test.data.idfList || [IDFDefaultVersion];
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
 
       let installArgs = [];
 
