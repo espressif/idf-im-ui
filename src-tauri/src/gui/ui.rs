@@ -91,7 +91,7 @@ impl ProgressBar {
 
     /// Completes the progress bar and hides it
     pub fn finish(&self) {
-        info!("finish_progress_bar called");
+        debug!("finish_progress_bar called");
         emit_to_fe(
             &self.app_handle,
             "progress-message",

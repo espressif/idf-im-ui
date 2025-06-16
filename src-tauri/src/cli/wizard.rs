@@ -347,7 +347,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             idf_version.clone()
           }
         };
-        println!("Using IDF version: {}", idf_version);
+        debug!("Using IDF version: {}", idf_version);
       } else {
         version_instalation_path.push(&idf_version);
         idf_path = version_instalation_path.clone();
