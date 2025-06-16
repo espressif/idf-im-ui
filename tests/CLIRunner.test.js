@@ -23,7 +23,6 @@ import { runCLIArgumentsTest } from "./scripts/CLIArguments.test.js";
 import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
 import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
-import { runPostInstallTest } from "./scripts/postInstall.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -51,15 +50,10 @@ function testRun(jsonScript) {
 
   const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
 
-  const IDFDEFAULTVERSION =
+  const IDFDefaultVersion =
     process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
-
-  const TOOLSFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\Espressif`;
 
   // Test Runs
   jsonScript.forEach((test) => {
@@ -92,7 +86,7 @@ function testRun(jsonScript) {
 
         runCLIWizardInstallTest(PATHTOEIM);
 
-        runInstallVerification({ installFolder, idfList: IDFDEFAULTVERSION });
+        runInstallVerification({ installFolder, idfList: [IDFDefaultVersion] });
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
@@ -107,7 +101,7 @@ function testRun(jsonScript) {
       }
 
       const targetList = test.data.targetList || "esp32";
-      const idfVersionList = test.data.idfList || IDFDEFAULTVERSION;
+      const idfVersionList = test.data.idfList || [IDFDefaultVersion];
 
       let installArgs = [];
 
