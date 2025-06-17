@@ -322,7 +322,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::Discover {path  } => {
             info!("Discovering available versions... (This can take couple of minutes)");
-            // TODO: add warning and confirmation
             let path = path.unwrap_or_else(|| {
                 let default_path = match std::env::consts::OS {
                     "windows" => {
@@ -401,7 +400,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
                 config
               }
-              Err(err) => {
+              Err(_err) => {
                 debug!("No ide config found. New will be created.");
                 IdfConfig::default()
               }
@@ -412,21 +411,16 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
               if config.clone().is_path_in_config(dir.clone()) {
                 info!("Already present!");
               } else {
-                info!("Will be added...");
+                info!("Can be added...");
                 paths_to_add.push(dir);
               }
-
             }
-            // TODO: ask the user to select which IDFs to add
-            for p in paths_to_add {
-              match try_import_existing_idf(&p) {
-                Ok(_) => {
-                  info!("Added to config: {}", p);
-                }
-                Err(err) => {
-                  error!("Failed to add: {} - reason :{}",p, err);
-                }
-              }
+            if paths_to_add.is_empty() {
+                info!("No new IDF directories found to add.");
+                return Ok(());
+            } else {
+                info!("Found {} new IDF directories available to add:", paths_to_add.len());
+                info!("You can add them using `eim install` command with the `--path` option.");
             }
             Ok(())
         }
