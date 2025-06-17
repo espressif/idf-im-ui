@@ -60,13 +60,21 @@ impl IdfConfig {
             let existing_config = IdfConfig::from_file(path.as_ref())?;
             let existing_version = existing_config.idf_installed;
 
-            let new_paths = self.idf_installed.iter().map(|i| i.path.clone()).collect::<Vec<_>>();
+            let new_paths = self.idf_installed.iter().map(|i| {
+              match std::env::consts::OS {
+                  "windows" => i.path.to_lowercase(),
+                  _ => i.path.clone(),
+              }
+            }).collect::<Vec<_>>();
 
             let mut merged_version = existing_version
               .iter()
               .filter(|i| {
-                let path = i.path.clone();
-                !new_paths.contains(&path)
+                let normalized_path = match std::env::consts::OS {
+                  "windows" => i.path.to_lowercase(),
+                  _ => i.path.clone(),
+                };
+                !new_paths.contains(&normalized_path)
               })
               .cloned()
               .collect::<Vec<_>>();

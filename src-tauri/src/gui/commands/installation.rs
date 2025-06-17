@@ -10,8 +10,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use idf_im_lib::{ensure_path, expand_tilde, ProgressMessage};
-use log::{error, info};
+use idf_im_lib::{ensure_path, expand_tilde, utils::{is_valid_idf_directory, parse_cmake_version}, ProgressMessage};
+use log::{debug, error, info, warn};
 use serde_json::json;
 
 use idf_im_lib::settings::Settings;
@@ -140,26 +140,57 @@ async fn install_single_version(
 ) -> Result<(), Box<dyn std::error::Error>> {
   info!("Installing IDF version: {}", version);
 
-  let version_path = prepare_installation_directories(&app_handle.clone(), settings, &version)?;
-  let idf_path = version_path.clone().join("esp-idf");
+  let mut using_existing_idf = false;
 
-  download_idf(&app_handle, settings, &version, &idf_path).await?;
+  let p = idf_im_lib::expand_tilde(settings.path.as_ref().unwrap().as_path());
+  let mut idf_path;
+  let mut version_path = PathBuf::from(p.clone());
+  let mut version = version.clone();
+  if is_valid_idf_directory(p.to_str().unwrap()) {
+    info!("Using existing IDF directory: {}", p.display());
+    send_message(
+        &app_handle,
+        format!("Using existing IDF directory: {}", p.display()),
+        "info".to_string(),
+    );
+    using_existing_idf = true;
+    idf_path = p;
+    version = match idf_im_lib::utils::get_commit_hash(idf_path.to_str().unwrap()) {
+      Ok(hash) => hash,
+      Err(err) => {
+        warn!("Failed to get commit hash: {}", err);
+        version.clone()
+      }
+    };
+
+    debug!("Using IDF version: {}", version);
+  } else {
+    version_path = prepare_installation_directories(&app_handle.clone(), settings, &version)?;
+    idf_path = version_path.clone().join("esp-idf");
+    download_idf(&app_handle, settings, &version, &idf_path).await?;
+  }
+
 
   let export_vars = setup_tools(&app_handle, settings, &idf_path, &version).await?;
 
-  let tools_install_path = version_path.clone().join(
-      settings
+  let tools_install_path = PathBuf::from(settings
           .tool_install_folder_name
           .clone()
-          .unwrap_or_default(),
-  );
+          .unwrap_or_default());
 
   let idf_python_env_path = tools_install_path.clone().join("python").join(&version).join("venv");
   let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+  let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
+    Ok((maj,min)) => format!("v{}.{}", maj, min),
+    Err(e) => {
+      warn!("Failed to parse CMake version: {}", e);
+      version.to_string()
+    }
+  };
   idf_im_lib::single_version_post_install(
       &activation_script_path,
       idf_path.to_str().unwrap(),
-      &version,
+      if using_existing_idf { &version } else { &constrains_idf_version },
       tools_install_path.to_str().unwrap(),
       export_vars,
       Some(idf_python_env_path.to_str().unwrap()),

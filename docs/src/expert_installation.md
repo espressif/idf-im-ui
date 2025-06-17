@@ -38,6 +38,8 @@ You will then be prompted to select a mirror from which the ESP-IDF should be do
 
 In the next step, you will be prompted to enter the installation path for the ESP-IDF. The default path is `C:\esp` on Windows and `~\.espressif` on POSIX systems. It is recommended to use the folder browser for selecting the path.
 
+**Important:** If you select a path that already contains an existing ESP-IDF Git repository, the installer will **use that repository directly** and will not rewrite its contents. In such cases, your previously selected preferred ESP-IDF version will be irrelevant, as the installer will work with the version present in the existing repository.
+
 ![Instalation path selections](./screenshots/installation_path_selection.png)
 
 ## Installation Progress
