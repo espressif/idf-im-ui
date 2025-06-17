@@ -58,7 +58,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           curl -s https://dl.espressif.com/dl/esp-idf/idf_versions.json > IDF_latest_release.json
-          IDF_TAG=$(jq -r .VERSIONS[1].name IDF_latest_release.json)
+          IDF_TAG=$(jq -r '.VERSIONS[] | select((.old == false) and (.pre_release != true)) | .name' IDF_latest_release.json | head -n 1)
           echo "IDF_TAG=$IDF_TAG" >> $GITHUB_ENV
           echo "Latest IDF for default install: $IDF_TAG"
 
@@ -133,7 +133,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           $json = Invoke-RestMethod -Uri "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
-          $IDF_TAG = $json.VERSIONS[1].name
+          $IDF_TAG = $json.VERSIONS | Where-Object { $_.old -eq $false -and ($_.pre_release -ne $true) } | Select-Object -First 1 -ExpandProperty name
           echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "Latest IDF for default install: $IDF_TAG"
 
@@ -248,7 +248,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           curl -s https://dl.espressif.com/dl/esp-idf/idf_versions.json > IDF_latest_release.json
-          IDF_TAG=$(jq -r .VERSIONS[1].name IDF_latest_release.json)
+          IDF_TAG=$(jq -r '.VERSIONS[] | select((.old == false) and (.pre_release != true)) | .name' IDF_latest_release.json | head -n 1)
           echo "IDF_TAG=$IDF_TAG" >> $GITHUB_ENV
           echo "Latest IDF for default install: $IDF_TAG"
 
@@ -311,7 +311,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           $json = Invoke-RestMethod -Uri "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
-          $IDF_TAG = $json.VERSIONS[1].name
+          $IDF_TAG = $json.VERSIONS | Where-Object { $_.old -eq $false -and ($_.pre_release -ne $true) } | Select-Object -First 1 -ExpandProperty name
           echo "IDF_TAG=$IDF_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "Latest IDF for default install: $IDF_TAG"
 
