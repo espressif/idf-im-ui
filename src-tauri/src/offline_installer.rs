@@ -2,10 +2,14 @@ use clap::Parser;
 use clap::builder;
 use idf_im_lib::ensure_path;
 use idf_im_lib::ProgressMessage;
+use zstd::encode_all;
 use std::fmt::Write;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
+use std::io::{Write as otherwrite, Read};
+use tar::Builder as TarBuilder;
 use idf_im_lib::settings::Settings;
 use tempfile::TempDir;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
@@ -71,7 +75,8 @@ fn main() {
     };
     let archive_dir = TempDir::new().expect("Failed to create temporary directory");
     // TODO: Download prerequisities and python
-    for idf_version in settings.idf_versions.clone().unwrap() {
+    let version_list = settings.idf_versions.clone().unwrap_or(vec!["v5.4".to_string()]);
+    for idf_version in version_list {
       let version_path = archive_dir.path().join(&idf_version);
       ensure_path(version_path.to_str().unwrap()).expect("Failed to ensure path for IDF version");
       println!("Preparing installation data for ESP-IDF version: {} to folder {:?}", idf_version, version_path.display());
@@ -129,6 +134,19 @@ fn main() {
       // Placeholder for downloading and preparing the installation data
       // This would typically involve downloading the IDF version and its tools
     }
+    // Create a .zst file in the current directory
+    let output_path = PathBuf::from(format!("archive_{}_.zst", settings.idf_versions.unwrap_or(vec!["default".to_string()]).join("_")));
+    let mut output_file = File::create(&output_path).expect("Failed to create output zst file");
+
+    // Compress the archive_dir into a .zst file
+    let mut tar = TarBuilder::new(Vec::new());
+    tar.append_dir_all(".", archive_dir.path()).expect("Failed to create tar archive");
+    let tar_data = tar.into_inner().expect("Failed to finalize tar archive");
+    // Compression level 3 is almost instant, just IDF  results in 2.2GB archive, level 19 took 8 minutes resulting in 2.1G archive
+    let compressed_data = encode_all(&tar_data[..], 3).expect("Failed to compress with zstd");
+    output_file.write_all(&compressed_data).expect("Failed to write compressed data");
+
+    println!("Compressed archive saved to {:?}", output_path);
     return;
   } else {
     // Placeholder for extracting installation data
