@@ -407,14 +407,9 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
 
         let new_activation_script = match std::env::consts::OS {
             "windows" => format!(
-<<<<<<< HEAD
                 "{}\\Microsoft.{}.PowerShell_profile.ps1",
                 activation_script_path,
                 &tool_set.idf_version
-=======
-                "{}\\Microsoft.PowerShell_profile.ps1",
-                activation_script_path
->>>>>>> b06d894 (updated according to changes in the scripts location)
             ),
             _ => format!(
                 "{}/activate_idf_{}.sh",
