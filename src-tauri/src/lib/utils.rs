@@ -1,5 +1,5 @@
 use crate::{
-    command_executor::execute_command, idf_config::{IdfConfig, IdfInstallation}, idf_tools::{self, read_and_parse_tools_file}, replace_unescaped_spaces_win, settings::Settings, single_version_post_install, version_manager::get_default_config_path
+    command_executor::execute_command, idf_config::{IdfConfig, IdfInstallation}, idf_tools::{self, read_and_parse_tools_file}, replace_unescaped_spaces_win, settings::{self, Settings}, single_version_post_install, version_manager::get_default_config_path
 };
 use anyhow::{anyhow, Result, Error};
 use git2::Repository;
@@ -389,8 +389,6 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         .unwrap()
         .to_string();
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
-        let tmp = PathBuf::from(tool_set.idf_location.clone());
-        let version_path = tmp.parent().unwrap();
         let settings = crate::settings::Settings::default();
         let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
         single_version_post_install(
@@ -405,11 +403,11 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let new_activation_script = match std::env::consts::OS {
             "windows" => format!(
                 "{}\\Microsoft.PowerShell_profile.ps1",
-                version_path.to_str().unwrap()
+                activation_script_path
             ),
             _ => format!(
                 "{}/activate_idf_{}.sh",
-                version_path.to_str().unwrap(),
+                activation_script_path,
                 tool_set.idf_version
             ),
         };
@@ -437,7 +435,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
           None => {
             debug!("Adding new IDF installation to config");
             current_config.idf_installed.push(installation);
-            match current_config.to_file(config_path, true, false) {
+            match current_config.to_file(config_path, true, true) {
               Ok(_) => {
                 debug!("Updated config file with new tool set");
                 return Ok(());
@@ -492,12 +490,13 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         let idf_path = value.path;
         let python = value.python;
         let tools_path = config.idf_tools_path.clone();
-        let path_for_activation_script = idf_json_path.parent().unwrap().to_str().unwrap();
+        let settings = crate::settings::Settings::default();
+        let path_for_activation_script = settings.esp_idf_json_path.clone().unwrap_or_default();
 
-        println!("IDF tools path: {}", tools_path);
-        println!("IDF version: {}", idf_version);
-        println!("activation script path: {}", path_for_activation_script);
-        println!("Python path: {}", python);
+        debug!("IDF tools path: {}", tools_path);
+        debug!("IDF version: {}", idf_version);
+        debug!("activation script path: {}", &path_for_activation_script);
+        debug!("Python path: {}", python);
         // export paths
         let tools_json_file = find_by_name_and_extension(Path::new(&idf_path), "tools", "json");
         if tools_json_file.is_empty() {
@@ -528,7 +527,7 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         .collect();
         export_paths.push(config.git_path.clone());
         match import_single_version(
-            path_for_activation_script,
+            &path_for_activation_script,
             &idf_path,
             &idf_version,
             &tools_path,
@@ -674,7 +673,7 @@ pub fn import_single_version(path_to_create_activation_script: &str,idf_location
     ),
     _ => format!(
         "{}/activate_idf_{}.sh",
-        PathBuf::from(path_to_create_activation_script).parent().unwrap().to_str().unwrap(),
+        path_to_create_activation_script,
         idf_version
     ),
   };
