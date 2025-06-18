@@ -1,7 +1,11 @@
 use clap::Parser;
 use clap::builder;
+use idf_im_lib::download_file;
 use idf_im_lib::ensure_path;
+use idf_im_lib::idf_tools::get_list_of_tools_to_download;
+use idf_im_lib::verify_file_checksum;
 use idf_im_lib::ProgressMessage;
+use log::debug;
 use zstd::encode_all;
 use std::fmt::Write;
 use std::fs::File;
@@ -49,7 +53,9 @@ struct Args {
     create_from_config: Option<String>,
 }
 
-fn main() {
+
+#[tokio::main]
+async fn main() {
   let args = Args::parse();
 
   if args.create_from_config.is_some() {
@@ -114,10 +120,10 @@ fn main() {
                 }
             }
         }
-    });
-
+      });
+      let idf_path = version_path.join("esp_idf");
       match idf_im_lib::get_esp_idf(
-        version_path.join("esp_idf").to_str().unwrap(),
+        idf_path.to_str().unwrap(),
         settings.repo_stub.as_deref(),
         &idf_version,
         settings.idf_mirror.as_deref(),
@@ -131,11 +137,42 @@ fn main() {
          eprintln!("Failed to download ESP-IDF version: {}", idf_version);
         }
       }
-      // Placeholder for downloading and preparing the installation data
-      // This would typically involve downloading the IDF version and its tools
+      let tools_json_file = idf_path.clone().join(settings.clone().tools_json_file.clone().unwrap_or(Settings::default().tools_json_file.unwrap())).to_str().expect("Failed to convert tools json file path to string").to_string();
+
+      debug!("Tools json file: {}", tools_json_file);
+      let tools = match idf_im_lib::idf_tools::read_and_parse_tools_file(&tools_json_file) {
+        Ok(tools) => tools,
+        Err(err) => {
+          eprintln!("Failed to read tools json file: {}", err);
+          return;
+        }
+      };
+      let download_links = get_list_of_tools_to_download(tools.clone(), settings.clone().target.unwrap_or(vec!["all".to_string()]), settings.mirror.as_deref());
+      let tool_path = version_path.join("dist");
+      ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
+      for (tool_name, (version, download_link)) in download_links.iter() {
+        println!("Preparing tool: {} version: {} download link: {:?}", tool_name, version, download_link);
+        match download_file(&download_link.url, tool_path.to_str().unwrap(), None).await {
+          Ok(_) => {
+            let file_path = Path::new(&download_link.url);
+            let filename = file_path.file_name().unwrap().to_str().unwrap();
+
+            let full_file_path = tool_path.join(filename);
+            if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()).unwrap() {
+              println!("Tool {} version {} downloaded successfully.", tool_name, version);
+            } else {
+              eprintln!("Checksum verification failed for tool {} version {}.", tool_name, version);
+              panic!("Checksum verification failed for tool {} version {}.", tool_name, version);
+            }
+          }
+          Err(err) => {
+            eprintln!("Failed to download tool {}: {}", tool_name, err);
+          }
+        }
+      }
     }
     // Create a .zst file in the current directory
-    let output_path = PathBuf::from(format!("archive_{}_.zst", settings.idf_versions.unwrap_or(vec!["default".to_string()]).join("_")));
+    let output_path = PathBuf::from(format!("archive_{}.zst", settings.idf_versions.unwrap_or(vec!["default".to_string()]).join("_")));
     let mut output_file = File::create(&output_path).expect("Failed to create output zst file");
 
     // Compress the archive_dir into a .zst file
