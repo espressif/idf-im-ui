@@ -122,7 +122,7 @@ pub fn run_python_script_from_file(
 /// - The download of the constraints file fails for any reason (e.g., network issues,
 ///   invalid URL, server errors).
 /// - File system metadata cannot be accessed or modified times cannot be determined.
-async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
+pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
     let constraint_file = format!(
         "espidf.constraints.{}.txt",
         remove_after_second_dot(idf_version)
