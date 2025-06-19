@@ -412,7 +412,7 @@ pub async fn install_python_env(
     // prepare list of requirements files
     for feature in features {
         let requirements_file =
-            base_requirements_path.join(format!("requirements_{}.txt", feature));
+            base_requirements_path.join(format!("requirements.{}.txt", feature));
         if requirements_file.exists() {
             requirements_file_list.push(requirements_file);
         } else {
