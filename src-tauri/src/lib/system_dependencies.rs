@@ -74,7 +74,7 @@ pub fn get_prequisites() -> Vec<&'static str> {
 /// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied tools.
 /// * `Err(String)` - If an error occurs, returns an error message.
 pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
-    let list_of_required_tools = get_prequisites();
+    let mut list_of_required_tools = get_prequisites();
     debug!("Checking for prerequisites...");
     debug!("will be checking for : {:?}", list_of_required_tools);
     let mut unsatisfied = vec![];
@@ -86,6 +86,7 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 Ok(output) => {
                     if output.status.success() {
                         debug!("git is already installed: {:?}", output);
+                        list_of_required_tools.retain(|&tool| tool != "git");
                     } else {
                         debug!("check for git failed: {:?}", output);
                         unsatisfied.push("git");
@@ -95,15 +96,30 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                     unsatisfied.push("git");
                 }
             };
+            // check with which command
+            let cloned_list_of_required_tools = list_of_required_tools.clone();
+            for tool in cloned_list_of_required_tools {
+                let output = command_executor::execute_command("which", &["-a", tool]);
+                match output {
+                    Ok(o) => {
+                        if o.status.success() {
+                            debug!("{} is already installed: {:?}", tool, o);
+                            list_of_required_tools.retain(|&tool_name| tool_name != tool);
+                        } else {
+                            debug!("check for {} failed: {:?}", tool, o);
+                        }
+                    }
+                    Err(e) => {
+                        debug!("check for {} failed with error: {:?}", tool, e);
+                    }
+                }
+            }
+            // now check if the tools are installed with the package manager
             let package_manager = determine_package_manager();
             debug!("Detected package manager: {:?}", package_manager);
             match package_manager {
                 Some("apt") => {
                     for tool in list_of_required_tools {
-                        if tool == "git" {
-                            // git is already checked above
-                            continue;
-                        }
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("apt list --installed | grep {}", tool)],
@@ -125,10 +141,6 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 }
                 Some("dpkg") => {
                     for tool in list_of_required_tools {
-                        if tool == "git" {
-                            // git is already checked above
-                            continue;
-                        }
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("dpkg -l | grep {}", tool)],
@@ -150,10 +162,6 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 }
                 Some("dnf") => {
                     for tool in list_of_required_tools {
-                        if tool == "git" {
-                            // git is already checked above
-                            continue;
-                        }
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("rpm -q {}", tool)],
@@ -174,10 +182,6 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 }
                 Some("pacman") => {
                     for tool in list_of_required_tools {
-                        if tool == "git" {
-                            // git is already checked above
-                            continue;
-                        }
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("pacman -Qs | grep {}", tool)],
@@ -198,10 +202,6 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 }
                 Some("zypper") => {
                     for tool in list_of_required_tools {
-                        if tool == "git" {
-                            // git is already checked above
-                            continue;
-                        }
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("zypper se --installed-only {}", tool)],
