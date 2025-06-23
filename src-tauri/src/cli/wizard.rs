@@ -309,11 +309,16 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
-    // Check prerequisites
-    check_and_install_prerequisites(
-        config.non_interactive.unwrap_or_default(),
-        config.install_all_prerequisites.unwrap_or_default(),
-    )?;
+    if config.skip_prerequisites_check.unwrap_or(false) {
+        info!("Skipping prerequisites check as per user request.");
+    } else {
+       // Check prerequisites
+      check_and_install_prerequisites(
+          config.non_interactive.unwrap_or_default(),
+          config.install_all_prerequisites.unwrap_or_default(),
+      )?;
+    }
+
 
     // Python sanity check
     check_and_install_python(

@@ -97,23 +97,22 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                 }
             };
             // check with which command
-            let cloned_list_of_required_tools = list_of_required_tools.clone();
-            for tool in cloned_list_of_required_tools {
-                let output = command_executor::execute_command("which", &["-a", tool]);
-                match output {
+            list_of_required_tools.retain(|&tool| {
+                match command_executor::execute_command("which", &["-a", tool]) {
+                    Ok(o) if o.status.success() => {
+                        debug!("{} is already installed: {:?}", tool, o);
+                        false // Tool found, so remove it from the list (don't retain).
+                    }
                     Ok(o) => {
-                        if o.status.success() {
-                            debug!("{} is already installed: {:?}", tool, o);
-                            list_of_required_tools.retain(|&tool_name| tool_name != tool);
-                        } else {
-                            debug!("check for {} failed: {:?}", tool, o);
-                        }
+                        debug!("'which' check for {} failed: {:?}", tool, o);
+                        true
                     }
                     Err(e) => {
-                        debug!("check for {} failed with error: {:?}", tool, e);
+                        debug!("'which' check for {} failed with error: {:?}", tool, e);
+                        true
                     }
                 }
-            }
+            });
             // now check if the tools are installed with the package manager
             let package_manager = determine_package_manager();
             debug!("Detected package manager: {:?}", package_manager);

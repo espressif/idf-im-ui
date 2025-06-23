@@ -208,6 +208,12 @@ pub struct InstallArgs {
         help = "Repo stub to be used in case you want to use a custom repository. This is the 'espressif/esp-idf' part of the repository URL."
     )]
     pub repo_stub: Option<String>,
+
+    #[arg(
+        long,
+        help = "Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.",
+    )]
+    pub skip_prerequisites_check: Option<bool>,
 }
 
 impl IntoIterator for InstallArgs {
@@ -287,6 +293,10 @@ impl IntoIterator for InstallArgs {
             (
                 "repo_stub".to_string(),
                 self.repo_stub.map(Into::into),
+            ),
+            (
+                "skip_prerequisites_check".to_string(),
+                self.skip_prerequisites_check.map(Into::into),
             ),
         ]
         .into_iter()
