@@ -60,6 +60,7 @@ Options:
 - `--config-file-save-path <CONFIG_FILE_SAVE_PATH>`: Path to save the configuration file
 - `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF
 - `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
+- `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing. This can produce installation which will not work or kill your kittens. use at your own risk.
 
 ### Wizard Command
 

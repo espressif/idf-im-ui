@@ -42,6 +42,7 @@ pub struct Settings {
     pub install_all_prerequisites: Option<bool>,
     pub idf_features: Option<Vec<String>>,
     pub repo_stub: Option<String>,
+    pub skip_prerequisites_check: Option<bool>,
 }
 
 impl Default for Settings {
@@ -94,6 +95,7 @@ impl Default for Settings {
             install_all_prerequisites: Some(false),
             idf_features: None,
             repo_stub: None,
+            skip_prerequisites_check: Some(false),
         }
     }
 }
@@ -216,6 +218,11 @@ impl Settings {
             }
             if cli_settings_struct.repo_stub.is_some() && !cli_settings_struct.is_default("repo_stub") {
                 settings.repo_stub = cli_settings_struct.repo_stub.clone();
+            }
+            if cli_settings_struct.skip_prerequisites_check.is_some()
+                && !cli_settings_struct.is_default("skip_prerequisites_check")
+            {
+                settings.skip_prerequisites_check = cli_settings_struct.skip_prerequisites_check;
             }
         }
 
