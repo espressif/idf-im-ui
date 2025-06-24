@@ -190,7 +190,7 @@ async fn install_single_version(
   idf_im_lib::single_version_post_install(
       &activation_script_path,
       idf_path.to_str().unwrap(),
-      if using_existing_idf { &version } else { &constrains_idf_version },
+      if using_existing_idf { &constrains_idf_version } else { &version },
       tools_install_path.to_str().unwrap(),
       export_vars,
       Some(idf_python_env_path.to_str().unwrap()),
