@@ -1473,6 +1473,26 @@ pub fn single_version_post_install(
         "IDF_PYTHON_ENV_PATH".to_string(),
         idf_python_env_path.unwrap_or_default().to_string(),
     ));
+    let mut export_paths = export_paths.clone();
+    let python_bin_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
+    match std::env::consts::OS {
+        "windows" => {
+            // On Windows, we need to add the Python Scripts directory to the PATH
+            if python_bin_path.exists() {
+                let scripts_path = python_bin_path.join("Scripts");
+                if scripts_path.exists() {
+                    export_paths.push(scripts_path.to_string_lossy().to_string());
+                }
+            }
+        }
+        _ => {
+            // On Unix-like systems, we can add the Python bin directory to the PATH
+            let scripts_path = python_bin_path.join("bin");
+            if scripts_path.exists() {
+                export_paths.push(scripts_path.to_string_lossy().to_string());
+            }
+        }
+    }
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut
