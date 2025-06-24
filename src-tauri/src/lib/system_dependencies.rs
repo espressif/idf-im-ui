@@ -52,13 +52,66 @@ pub fn get_prequisites() -> Vec<&'static str> {
             "bison",
             "gperf",
             "ccache",
-            "libffi-dev",
-            "libssl-dev",
             "dfu-util",
-            "libusb-1.0-0",
         ],
         "windows" => vec!["git", "cmake", "ninja"], // temporary added cmake back before solving why it does not install from tools.json
         "macos" => vec!["dfu-util", "cmake", "ninja"],
+        _ => vec![],
+    }
+}
+/// Returns a list of additional system-level prerequisites (development libraries)
+/// required for certain functionalities, based on the detected operating system
+/// and, for Linux, the package manager in use.
+///
+/// These prerequisites are typically needed for compiling or running applications
+/// that depend on native libraries like `libffi`, `libusb`, or `OpenSSL`.
+///
+/// # Returns
+///
+/// A `Vec<&'static str>` containing the names of the packages to be installed.
+/// An empty `Vec` is returned if the operating system is not Linux, or if the
+/// Linux package manager is not recognized or does not have specific prerequisites
+/// defined by this function.
+///
+/// # Linux Package Manager Mappings:
+///
+/// - **apt (Debian/Ubuntu):**
+///   - `libffi-dev`: Development headers for Foreign Function Interface.
+///   - `libusb-1.0-0`: Runtime library for USB device access.
+///   - `libssl-dev`: Development headers for OpenSSL (SSL/TLS cryptography).
+///
+/// - **dpkg (Debian/Ubuntu fallback):**
+///   - Same as `apt`.
+///
+/// - **dnf (Fedora/RHEL/CentOS):**
+///   - `libffi-devel`: Development headers for Foreign Function Interface.
+///   - `libusb`: Runtime library for USB device access.
+///   - `openssl-devel`: Development headers for OpenSSL.
+///
+/// - **pacman (Arch Linux):**
+///   - `libusb`: Includes both runtime and development files for USB access.
+///   - `libffi`: Includes both runtime and development files for Foreign Function Interface.
+///   - `openssl`: Includes both runtime and development files for OpenSSL.
+///
+/// - **zypper (openSUSE/SUSE Linux Enterprise):**
+///   - `libusb-1_0-0`: Runtime library for USB device access.
+///   - `libffi-devel`: Development headers for Foreign Function Interface.
+///   - `libopenssl-devel`: Development headers for OpenSSL.
+///
+/// For other operating systems (Windows, macOS) or unrecognized Linux package managers,
+/// an empty vector is returned.
+pub fn get_additional_prerequisites_based_on_package_manager() -> Vec<&'static str> {
+    match std::env::consts::OS {
+        "linux" => match determine_package_manager() {
+            Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
+            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
+            Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel"],
+            Some("pacman") => vec!["libusb", "libffi", "openssl"],
+            Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel"],
+            _ => vec![],
+        },
+        "windows" => vec![],
+        "macos" => vec![],
         _ => vec![],
     }
 }
@@ -75,6 +128,7 @@ pub fn get_prequisites() -> Vec<&'static str> {
 /// * `Err(String)` - If an error occurs, returns an error message.
 pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
     let mut list_of_required_tools = get_prequisites();
+    list_of_required_tools = [list_of_required_tools, get_additional_prerequisites_based_on_package_manager()].concat();
     debug!("Checking for prerequisites...");
     debug!("will be checking for : {:?}", list_of_required_tools);
     let mut unsatisfied = vec![];
@@ -163,7 +217,7 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                     for tool in list_of_required_tools {
                         let output = command_executor::execute_command(
                             "sh",
-                            &["-c", &format!("rpm -q {}", tool)],
+                            &["-c", &format!("rpm -qa | grep -i {}", tool)],
                         );
                         match output {
                             Ok(o) => {
