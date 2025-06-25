@@ -585,30 +585,6 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
     }
 }
 
-/// Retrieves the platform definition by the Python interpreter.
-///
-/// This function executes a Python script that uses the `platform` module to determine the system and machine
-/// details of the Python interpreter. The platform definition is formatted as "system-machine".
-///
-/// # Parameters
-///
-/// * `python` - An optional reference to a string representing the Python interpreter to be used.
-///   If `None`, the function will default to using "python3".
-///
-/// # Returns
-///
-/// * `String` - The platform definition of the Python interpreter. If the Python script execution fails,
-///   the function returns the error message as a string.
-pub fn get_python_platform_definition(python: Option<&str>) -> String {
-    match run_python_script(
-        "import platform; print(f'{platform.system()}-{platform.machine()}')",
-        python,
-    ) {
-        Ok(out) => out,
-        Err(e) => e,
-    }
-}
-
 /// Performs a series of sanity checks for the Python interpreter.
 ///
 /// This function executes various Python scripts and checks for the availability of essential Python modules,
