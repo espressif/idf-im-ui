@@ -5,11 +5,10 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use anyhow::{anyhow, Result, Context};
+use anyhow::{anyhow, Result};
 
 use crate::command_executor::execute_command;
-use crate::python_utils::get_python_platform_definition;
-use crate::{decompress_archive, download_file, system_dependencies, verify_file_checksum, DownloadProgress};
+use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
 use crate::utils::{find_directories_by_name, versions_match};
 
 #[derive(Deserialize, Debug, Clone)]
@@ -127,83 +126,91 @@ pub fn filter_tools_by_target(tools: Vec<Tool>, target: &[String]) -> Vec<Tool> 
         .collect()
 }
 
-// TODO: maybe get this by direct calling the idf_tool.py so the hashtable is not duplicate
-/// Retrieves the platform identification based on the Python platform definition.
+/// Returns a standardized platform identifier string based on the current Rust target.
 ///
-/// This function maps the Python platform definition to a corresponding platform identifier.
-/// It uses a predefined hashmap to perform the mapping. If the Python platform definition is not found in the hashmap,
-/// an error is returned.
+/// This function maps the Rust-specific platform definition (e.g., "windows-x86_64")
+/// obtained from `get_rust_platform_definition()` to a more common and standardized
+/// identifier (e.g., "win64").
 ///
-/// # Parameters
+/// # Errors
 ///
-/// * `python` - An optional reference to a string representing the Python interpreter to be used.
-///   If `None`, the function will default to using "python3".
+/// Returns an `Err` containing a `String` if the current Rust platform is not
+/// explicitly supported and mapped within the function.
+///
+/// # Examples
+///
+/// ```
+/// match get_platform_identification() {
+///     Ok(platform_id) => {
+///         // On a 64-bit Windows system, platform_id might be "win64"
+///         // On a macOS M1 system, platform_id might be "macos-arm64"
+///         println!("Platform ID: {}", platform_id);
+///     },
+///     Err(e) => {
+///         eprintln!("Error getting platform ID: {}", e);
+///     }
+/// }
+/// ```
 ///
 /// # Returns
 ///
-/// * `Result<String, String>`:
-///   - `Ok(String)`: If the platform identification is successfully retrieved.
-///   - `Err(String)`: If the Python platform definition is not supported.
-///
-pub fn get_platform_identification(python: Option<&str>) -> Result<String, String> {
+/// A `Result` which is:
+/// - `Ok(String)`: A `String` representing the standardized platform identifier.
+/// - `Err(String)`: An error message if the platform is unsupported.
+pub fn get_platform_identification() -> Result<String, String> {
     let mut platform_from_name = HashMap::new();
 
-    // Windows
-    platform_from_name.insert("win32", "win32");
-    platform_from_name.insert("Windows-i686", "win32");
-    platform_from_name.insert("Windows-x86", "win32");
-    platform_from_name.insert("i686-w64-mingw32", "win32");
-    platform_from_name.insert("win64", "win64");
-    platform_from_name.insert("Windows-x86_64", "win64");
-    platform_from_name.insert("Windows-AMD64", "win64");
-    platform_from_name.insert("x86_64-w64-mingw32", "win64");
-    platform_from_name.insert("Windows-ARM64", "win64");
+    // Rust native Windows identifiers
+    platform_from_name.insert("windows-x86", "win32");
+    platform_from_name.insert("windows-x86_64", "win64");
+    platform_from_name.insert("windows-aarch64", "win64");
 
-    // macOS
-    platform_from_name.insert("macos", "macos");
-    platform_from_name.insert("osx", "macos");
-    platform_from_name.insert("darwin", "macos");
-    platform_from_name.insert("Darwin-x86_64", "macos");
-    platform_from_name.insert("x86_64-apple-darwin", "macos");
-    platform_from_name.insert("macos-arm64", "macos-arm64");
+    // Rust native macOS identifiers
+    platform_from_name.insert("macos-x86_64", "macos");
     platform_from_name.insert("macos-aarch64", "macos-arm64");
-    platform_from_name.insert("Darwin-arm64", "macos-arm64");
-    platform_from_name.insert("Darwin-aarch64", "macos-arm64");
-    platform_from_name.insert("aarch64-apple-darwin", "macos-arm64");
-    platform_from_name.insert("arm64-apple-darwin", "macos-arm64");
-    platform_from_name.insert("aarch64-apple-darwin", "macos-arm64");
 
-    // Linux
-    platform_from_name.insert("linux-amd64", "linux-amd64");
-    platform_from_name.insert("linux64", "linux-amd64");
-    platform_from_name.insert("Linux-x86_64", "linux-amd64");
-    platform_from_name.insert("FreeBSD-amd64", "linux-amd64");
-    platform_from_name.insert("x86_64-linux-gnu", "linux-amd64");
-    platform_from_name.insert("linux-i686", "linux-i686");
-    platform_from_name.insert("linux32", "linux-i686");
-    platform_from_name.insert("Linux-i686", "linux-i686");
-    platform_from_name.insert("FreeBSD-i386", "linux-i686");
-    platform_from_name.insert("i586-linux-gnu", "linux-i686");
-    platform_from_name.insert("i686-linux-gnu", "linux-i686");
-    platform_from_name.insert("linux-arm64", "linux-arm64");
-    platform_from_name.insert("Linux-arm64", "linux-arm64");
-    platform_from_name.insert("Linux-aarch64", "linux-arm64");
-    platform_from_name.insert("Linux-armv8l", "linux-arm64");
-    platform_from_name.insert("aarch64", "linux-arm64");
-    platform_from_name.insert("linux-armhf", "linux-armhf");
-    platform_from_name.insert("arm-linux-gnueabihf", "linux-armhf");
-    platform_from_name.insert("linux-armel", "linux-armel");
-    platform_from_name.insert("arm-linux-gnueabi", "linux-armel");
-    platform_from_name.insert("Linux-armv7l", "linux-armel");
-    platform_from_name.insert("Linux-arm", "linux-armel");
+    // Rust native Linux identifiers
+    platform_from_name.insert("linux-x86", "linux-i686");
+    platform_from_name.insert("linux-x86_64", "linux-amd64");
+    platform_from_name.insert("linux-aarch64", "linux-arm64");
+    platform_from_name.insert("linux-arm", "linux-armel");
 
-    let python_platform_string = get_python_platform_definition(python).trim().to_string();
+    // Rust native FreeBSD identifiers
+    platform_from_name.insert("freebsd-x86_64", "linux-amd64");
+    platform_from_name.insert("freebsd-x86", "linux-i686");
 
-    let platform = match platform_from_name.get(&python_platform_string.as_str()) {
+    let platform_string = get_rust_platform_definition();
+
+    let platform = match platform_from_name.get(&platform_string.as_str()) {
         Some(platform) => platform,
-        None => return Err(format!("Unsupported platform: {}", python_platform_string)),
+        None => return Err(format!("Unsupported platform: {}", platform_string)),
     };
     Ok(platform.to_string())
+}
+
+/// Returns a string representing the current Rust platform in the format "os-arch".
+///
+/// This function retrieves the operating system and architecture information
+/// at compile time using `std::env::consts::OS` and `std::env::consts::ARCH`
+/// respectively.
+///
+/// # Examples
+///
+/// ```
+/// let platform = get_rust_platform_definition();
+/// // On a 64-bit Linux system, platform might be "linux-x86_64"
+/// // On a macOS M1 system, platform might be "macos-aarch64"
+/// println!("{}", platform);
+/// ```
+///
+/// # Returns
+///
+/// A `String` in the format "os-arch" (e.g., "linux-x86_64", "macos-aarch64").
+fn get_rust_platform_definition() -> String {
+    let os = std::env::consts::OS;
+    let arch = std::env::consts::ARCH;
+
+    format!("{}-{}", os, arch)
 }
 
 /// Given a list of `Tool` structs and a target platform, this function returns a HashMap
@@ -311,30 +318,10 @@ pub fn get_list_of_tools_to_download(
     mirror: Option<&str>,
 ) -> HashMap<String, (String, Download)> {
     let list = filter_tools_by_target(tools_file.tools, &selected_chips);
-    let platform = match get_platform_identification(None) {
+    let platform = match get_platform_identification() {
         Ok(platform) => platform,
         Err(err) => {
-            if std::env::consts::OS == "windows" {
-                // All this is for cases when on windows microsoft store creates "pseudolinks" for python
-                let scp = system_dependencies::get_scoop_path();
-                let usable_python = match scp {
-                    Some(path) => {
-                        let mut python_path = PathBuf::from(path);
-                        python_path.push("python3.exe");
-                        python_path.to_str().unwrap().to_string()
-                    }
-                    None => "python3.exe".to_string(),
-                };
-                match get_platform_identification(Some(&usable_python)) {
-                    Ok(platform) => platform,
-                    Err(err) => {
-                        log::error!("Unable to identify platform: {}", err);
-                        panic!("Unable to identify platform: {}", err);
-                    }
-                }
-            } else {
-                panic!("Unable to identify platform: {}", err);
-            }
+          panic!("Unable to identify platform: {}", err);
         }
     };
     change_links_donwanload_mirror(get_download_link_by_platform(list, &platform), mirror)
@@ -861,5 +848,23 @@ mod tests {
         let updated_tools = change_links_donwanload_mirror(tools, mirror);
 
         assert_eq!(updated_tools.get("tool1").unwrap().1.url, "");
+    }
+
+    #[test]
+    fn test_platform_detection() {
+        let result = get_platform_identification();
+        assert!(result.is_ok());
+
+        // The actual result will depend on the platform the test runs on
+        println!("Detected platform: {:?}", result);
+    }
+
+    #[test]
+    fn test_rust_platform_definition() {
+        let platform_def = get_rust_platform_definition();
+        println!("Platform definition: {}", platform_def);
+
+        // Should match one of the expected formats
+        assert!(platform_def.contains("-"));
     }
 }
