@@ -17,8 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
-    utils::{parse_cmake_version, remove_after_second_dot, with_retry},
+    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, utils::{parse_cmake_version, remove_after_second_dot, with_retry}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -202,14 +201,15 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
 pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
+  println!("Creating Python virtual environment at: {}", venv_path);
     let output = match std::env::consts::OS {
         "windows" => command_executor::execute_command(
             "powershell",
             &["-Command", "python3.exe", "-m", "venv", venv_path],
         ),
         _ => command_executor::execute_command(
-            "bash",
-            &["-c", &format!("python3 -m venv {}", venv_path)],
+            "python3",
+            &["-m", &format!("venv {}", venv_path)],
         ),
     };
     match output {
@@ -391,6 +391,15 @@ pub async fn install_python_env(
             Err(e) => {
                 warn!("failed to remove venv: {}, trying to proceed nonetheless", e);
             }
+        }
+    }
+    match ensure_path(venv_path.to_str().unwrap()){
+        Ok(_) => {
+            debug!("venv path ensured: {}", venv_path.display());
+        }
+        Err(e) => {
+            error!("failed to ensure venv path: {}", e);
+            return Err(format!("failed to ensure venv path: {}", e));
         }
     }
 
