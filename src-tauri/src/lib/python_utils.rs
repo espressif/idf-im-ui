@@ -17,8 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
-    utils::{parse_cmake_version, remove_after_second_dot, with_retry},
+    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, utils::{parse_cmake_version, remove_after_second_dot, with_retry}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -137,7 +136,7 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
             if let Ok(modified) = metadata.modified() {
                 let now = SystemTime::now();
                 if now.duration_since(modified).unwrap_or_default() < Duration::from_secs(86400) {
-                    println!(
+                    info!(
                         "Skipping the download of {} because it was downloaded recently.",
                         constraint_path.display()
                     );
@@ -153,7 +152,7 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
     }
 
     // Download the constraints file
-    println!("Downloading constraints file from {}", constraint_url);
+    info!("Downloading constraints file from {}", constraint_url);
 
     match download_file(&constraint_url, idf_tools_path.to_str().unwrap(), None).await {
         Ok(_) => {
@@ -168,7 +167,7 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
         }
     }
 
-    println!(
+    info!(
         "Downloaded constraints file to {}",
         constraint_path.display()
     );
@@ -202,6 +201,8 @@ async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> 
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
 pub fn create_python_venv(venv_path: &str) -> Result<String, String> {
+  info!("Creating Python virtual environment at: {}", venv_path);
+
     let output = match std::env::consts::OS {
         "windows" => command_executor::execute_command(
             "powershell",
@@ -391,6 +392,15 @@ pub async fn install_python_env(
             Err(e) => {
                 warn!("failed to remove venv: {}, trying to proceed nonetheless", e);
             }
+        }
+    }
+    match ensure_path(venv_path.to_str().unwrap()){
+        Ok(_) => {
+            debug!("venv path ensured: {}", venv_path.display());
+        }
+        Err(e) => {
+            error!("failed to ensure venv path: {}", e);
+            return Err(format!("failed to ensure venv path: {}", e));
         }
     }
 

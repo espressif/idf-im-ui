@@ -985,7 +985,10 @@ pub fn add_path_to_path(directory_path: &str) {
         let new_path = if current_path.is_empty() {
             directory_path.to_owned()
         } else {
-            format!("{};{}", current_path, directory_path)
+          match std::env::consts::OS {
+            "windows" => format!("{};{}", current_path, directory_path),
+            _ => format!("{}:{}", current_path, directory_path)
+          }
         };
 
         // Set the new PATH environment variable.
