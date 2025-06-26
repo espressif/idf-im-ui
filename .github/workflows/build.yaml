@@ -268,7 +268,7 @@ jobs:
           codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
 
       - name: Notarize macOS Binary
-        if: startsWith(matrix.os, 'macos')
+        if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
         env:
           NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
           NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
@@ -374,8 +374,8 @@ jobs:
           p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
           keychain: build
 
-      - name: Build GUI (macOS)
-        if: startsWith(matrix.os, 'macos')
+      - name: Build GUI (macOS) - release
+        if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
         env:
           APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
           APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
@@ -385,6 +385,10 @@ jobs:
           security default-keychain -s notary.keychain
           security unlock-keychain -p espressif notary.keychain
           yarn tauri build
+
+      - name: Build GUI (macOS) - non-release
+        if: startsWith(matrix.os, 'macos') && github.event_name != 'release'
+        run: yarn tauri build
 
       - name: Build GUI (non-macOS)
         if: ${{ !startsWith(matrix.os, 'macos') }}
