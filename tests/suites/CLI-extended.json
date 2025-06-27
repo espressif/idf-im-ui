@@ -42,20 +42,6 @@
     }
   },
   {
-    "id": 4,
-    "type": "custom",
-    "name": "CLI Non-Interactive v5.0.9",
-    "data": {
-      "targetList": "all",
-      "idfList": "v5.0.9",
-      "installFolder": ".esprext4",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
-  },
-  {
     "id": 5,
     "type": "custom",
     "name": "CLI Non-Interactive master",
