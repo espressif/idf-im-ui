@@ -474,7 +474,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
             IdfInstallation {
                 activation_script: String::from("/tmp/esp/v5.0/updated-export.sh"),
                 id: String::from("esp-idf-new-id"),
-                idf_tools_path: String::from("/tmp/esp/v5.0/updated-tools"),
+                idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the first installation in initial_config
                 name: String::from("ESP-IDF v5.0 (Updated)"),
                 path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the first installation in initial_config
                 python: String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3"),

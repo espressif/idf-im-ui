@@ -9,7 +9,7 @@ use anyhow::{anyhow, Result};
 
 use crate::command_executor::execute_command;
 use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
-use crate::utils::{find_directories_by_name, versions_match};
+use crate::utils::{find_by_name_and_extension, find_directories_by_name, versions_match};
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct Tool {
@@ -572,6 +572,15 @@ pub async fn setup_tools(
       if let Ok(true) = verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()) {
         progress_callback(DownloadProgress::Verified(download_link.url.clone()));
         decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+        // this is fix for ninja not having `x` permission in zip archive
+        match add_x_permission_to_tool(&this_install_dir, "ninja") {
+          Ok(_) => {
+            log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
+          }
+          Err(e) => {
+            log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+          }
+        }
         progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
         progress_callback(DownloadProgress::Complete);
         continue;
@@ -609,6 +618,15 @@ pub async fn setup_tools(
             // Extract the archive
 
             decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+            // this is fix for ninja not having `x` permission in zip archive
+            match add_x_permission_to_tool(&this_install_dir, "ninja") {
+              Ok(_) => {
+                log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
+              }
+              Err(e) => {
+                log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+              }
+            }
             progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
             progress_callback(DownloadProgress::Complete);
           } else {
@@ -625,6 +643,67 @@ pub async fn setup_tools(
     }
 
     Ok(download_links)
+}
+
+/// Adds execute (x) permission to the specified tool within the installation directory.
+///
+/// This function searches for a tool by its name within the given `install_dir`
+/// and, if found, sets its file permissions to `0o755` (read, write, and execute for owner;
+/// read and execute for group and others) on Unix-like systems.
+///
+/// # Arguments
+///
+/// * `install_dir` - A reference to a `PathBuf` indicating the directory where the tool is installed.
+/// * `executable_name` - A string slice representing the name of the executable file.
+///
+/// # Returns
+///
+/// A `Result` indicating success (`Ok(())`) or an error (`Err`) if the permissions
+/// could not be set for any reason.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::path::PathBuf;
+/// use anyhow::Result;
+///
+/// // Assuming `add_x_permission_to_tool` is in scope
+/// fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Result<()> {
+///     // ... function implementation ...
+/// #    Ok(())
+/// }
+///
+/// let install_dir = PathBuf::from("/usr/local/bin");
+/// let executable_name = "my_tool";
+///
+/// if let Err(e) = add_x_permission_to_tool(&install_dir, executable_name) {
+///     eprintln!("Failed to add execute permission: {}", e);
+/// }
+/// ```
+fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Result<()> {
+    let tool_path = find_by_name_and_extension(install_dir, executable_name, "");
+    let direct = install_dir.join(executable_name);
+    #[cfg(unix)]
+    {
+        if direct.exists() {
+            log::debug!("Found tool at: {}", direct.display());
+            use std::{fs::set_permissions, os::unix::fs::PermissionsExt};
+            // Set the file as executable (mode 0o755)
+            let permissions = PermissionsExt::from_mode(0o755);
+            set_permissions(Path::new(&direct), permissions).map_err(|e| anyhow!(e))?;
+        }
+    }
+    for single_tool in tool_path {
+        log::debug!("Setting execute permission for tool: {}", single_tool);
+        #[cfg(unix)]
+        {
+            use std::{fs::set_permissions, os::unix::fs::PermissionsExt};
+            // Set the file as executable (mode 0o755)
+            let permissions = PermissionsExt::from_mode(0o755);
+            set_permissions(Path::new(&single_tool), permissions).map_err(|e| anyhow!(e))?;
+        }
+    }
+    Ok(())
 }
 
 /// Verify if a tool is installed with the correct version
