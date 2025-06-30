@@ -8,7 +8,10 @@ use tauri::AppHandle;
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
 pub fn get_prequisites() -> Vec<&'static str> {
-    idf_im_lib::system_dependencies::get_prequisites()
+   idf_im_lib::system_dependencies::get_prequisites()
+    .into_iter()
+    .chain(idf_im_lib::system_dependencies::get_additional_prerequisites_based_on_package_manager())
+    .collect()
 }
 
 /// Checks which prerequisites are missing
