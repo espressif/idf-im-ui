@@ -28,16 +28,16 @@ class CLITestRunner {
       this.sendInput(`${loadCommand}\r`);
       const startTime = Date.now();
       while (Date.now() - startTime < timeout) {
-        if (!this.exited && !this.error && this.output.includes("(python)")) {
+        if (!this.exited && !this.error && this.output.includes("(venv)")) {
           return Promise.resolve();
         }
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
-      logger.info("Failed to terminate terminal process");
-      return Promise.resolve();
+      logger.info("Failed to load IDF terminal within timeout");
+      return Promise.reject();
     } catch {
       logger.debug("Error loading IDF terminal");
-      return Promise.resolve();
+      return Promise.reject();
     }
   }
 

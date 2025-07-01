@@ -49,6 +49,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to clean up terminal after test");
           logger.info(` Error: ${error}`);
+        } finally {
+          testRunner = null;
         }
       }
     });
@@ -232,13 +234,87 @@ function runInstallVerification({
       }
     });
 
-    it("3 - Should create a new project based on a template", async function () {
+    it("3 - Should have correct tools version installed on path", async function () {
+      /**
+       * This test checks if the tools folder contains the expected tools versions.
+       * The tools are activated by the activation script.
+       *
+       */
+      testRunner = new CLITestRunner();
+      logger.info(`Validating tools versions installed on path`);
+      let pathToIDFScript;
+      let toolsList;
+      for (let idf of idfList) {
+        pathToIDFScript =
+          os.platform() !== "win32"
+            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
+            : path.join(
+                toolsFolder,
+                "tools",
+                `Microsoft.${idf}.PowerShell_profile.ps1`
+              );
+        try {
+          await testRunner.runIDFTerminal(pathToIDFScript);
+        } catch (error) {
+          logger.info("Error to start IDF terminal");
+          logger.info(testRunner.output);
+          this.test.error(new Error("Error starting IDF Terminal"));
+          logger.info(` Error: ${error}`);
+        }
+        toolsList = JSON.parse(
+          fs.readFileSync(
+            path.join(installFolder, idf, "esp-idf", "tools", "tools.json"),
+            "utf-8"
+          )
+        );
+        expect(
+          toolsList,
+          `tools.json file not found on the tools folder for IDF ${idf}`
+        ).to.be.an("object").that.is.not.empty;
+        expect(
+          toolsList,
+          `tools.json file does not contain expected tools for IDF ${idf}`
+        ).to.have.property("tools");
+        let toolVersionOutput;
+        for (let tool of toolsList.tools) {
+          testRunner.output = "";
+          if (tool && tool.install === "always") {
+            expect(
+              tool,
+              `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
+            ).to.have.property("name");
+            expect(
+              tool,
+              `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
+            ).to.have.property("version_cmd");
+
+            if (tool.version_cmd.join(" ") !== "") {
+              testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
+              toolVersionOutput = await testRunner.waitForOutput(
+                `${tool.versions[0].name}`
+              );
+              logger.info(
+                `Tool ${tool.name} version output: ${testRunner.output}`
+              );
+              logger.debug(
+                `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
+              );
+              expect(
+                toolVersionOutput,
+                `Tool ${tool.name} version not matching expected version ${tool.versions[0].name}`
+              ).to.be.true;
+            }
+          }
+        }
+      }
+    });
+
+    it("4 - Should create a new project based on a template", async function () {
       /**
        * This test should attempt to create a copy of the Hello World Project into the ~/esp folder
        * The commands might differ for each operating system.
        * The assert is based on the existence of the project files in the expected folder.
        */
-      let testRunner = null;
       testRunner = new CLITestRunner();
       logger.info(`Starting test - create new project`);
       for (let idf of idfList) {
@@ -298,12 +374,11 @@ function runInstallVerification({
       }
     });
 
-    it("4 - Should set the target", async function () {
+    it("5 - Should set the target", async function () {
       /**
        * This test attempts to set a target MCU for the project created in the previous test.
        */
       this.timeout(750000);
-      let testRunner = null;
       testRunner = new CLITestRunner();
       logger.info(`Starting test - set target`);
 
@@ -376,13 +451,12 @@ function runInstallVerification({
       }
     });
 
-    it("5 - Should build project for the selected target", async function () {
+    it("6 - Should build project for the selected target", async function () {
       /**
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.
        */
       this.timeout(600000);
-      let testRunner = null;
       testRunner = new CLITestRunner();
       logger.info(`Starting test - build project`);
       for (let idf of idfList) {
