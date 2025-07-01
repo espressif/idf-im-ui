@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{anyhow, Result, Error};
 use git2::Repository;
-use log::{debug, warn};
+use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 #[cfg(not(windows))]
@@ -387,8 +387,6 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         .unwrap()
         .to_string();
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
-        let tmp = PathBuf::from(tool_set.idf_location.clone());
-        let version_path = tmp.parent().unwrap();
         let settings = crate::settings::Settings::default();
         let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
         single_version_post_install(
@@ -402,12 +400,13 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
 
         let new_activation_script = match std::env::consts::OS {
             "windows" => format!(
-                "{}\\Microsoft.PowerShell_profile.ps1",
-                version_path.to_str().unwrap()
+                "{}\\Microsoft.{}.PowerShell_profile.ps1",
+                activation_script_path,
+                &tool_set.idf_version
             ),
             _ => format!(
                 "{}/activate_idf_{}.sh",
-                version_path.to_str().unwrap(),
+                activation_script_path,
                 tool_set.idf_version
             ),
         };
@@ -422,8 +421,15 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let config_path = get_default_config_path();
         let mut current_config = match IdfConfig::from_file(&config_path) {
             Ok(config) => config,
-            Err(e) => {
-                return Err(anyhow!("Config file not found: {}", e));
+            Err(_e) => {
+                info!("Config file not found, creating a new one at: {}", config_path.display());
+                let mut setting = crate::settings::Settings::default();
+                setting.idf_versions = Some(vec![]);
+                match setting.save_esp_ide_json() {
+                    Ok(_) => info!("Created new config file at: {}", config_path.display()),
+                    Err(e) => error!("Failed to create config file: {}", e),
+                }
+                IdfConfig::from_file(&config_path).unwrap()
             }
         };
         current_config.idf_installed.push(installation);
