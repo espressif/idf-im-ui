@@ -389,13 +389,18 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
         let settings = crate::settings::Settings::default();
         let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+        let idf_python_env_path = tool_set
+            .env_vars
+            .get("IDF_PYTHON_ENV_PATH")
+            .map(|s| s.to_string());
+
         single_version_post_install(
             &activation_script_path,
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
             new_export_paths,
-            None,
+            idf_python_env_path.as_deref(),
         );
 
         let new_activation_script = match std::env::consts::OS {
@@ -433,7 +438,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             }
         };
         current_config.idf_installed.push(installation);
-        match current_config.to_file(config_path, true, false) {
+        match current_config.to_file(config_path, true, true) {
             Ok(_) => {
                 debug!("Updated config file with new tool set");
                 return Ok(());
