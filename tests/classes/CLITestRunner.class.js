@@ -10,6 +10,7 @@ class CLITestRunner {
     this.exited = false;
     this.exitCode = null;
     this.error = null;
+    this.lastDataTimestamp = Date.now();
     this.prompt = os.platform() !== "win32" ? "$" : ">";
     this.command = os.platform() !== "win32" ? "bash" : "powershell.exe";
     this.args =
@@ -60,6 +61,7 @@ class CLITestRunner {
       cleanData = cleanData.replace(/[\r\n]+/g, " ");
       logger.debug(cleanData);
       this.output += cleanData;
+      this.lastDataTimestamp = Date.now();
     });
 
     this.process.onExit(({ exitCode }) => {
