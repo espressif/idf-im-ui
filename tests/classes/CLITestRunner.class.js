@@ -1,6 +1,7 @@
 import pty from "node-pty";
 import os from "os";
 import logger from "./logger.class.js";
+import stripAnsi from "strip-ansi";
 
 class CLITestRunner {
   constructor() {
@@ -55,8 +56,10 @@ class CLITestRunner {
     this.exited = false;
 
     this.process.onData((data) => {
-      logger.debug(data);
-      this.output += data;
+      let cleanData = stripAnsi(data);
+      cleanData = cleanData.replace(/[\r\n]+/g, " ");
+      logger.debug(cleanData);
+      this.output += cleanData;
     });
 
     this.process.onExit(({ exitCode }) => {
