@@ -66,6 +66,12 @@ impl IdfConfig {
                   _ => i.path.clone(),
               }
             }).collect::<Vec<_>>();
+            let new_tools_paths = self.idf_installed.iter().map(|i| {
+              match std::env::consts::OS {
+                  "windows" => i.idf_tools_path.to_lowercase(),
+                  _ => i.idf_tools_path.clone(),
+              }
+            }).collect::<Vec<_>>();
 
             let mut merged_version = existing_version
               .iter()
@@ -74,7 +80,11 @@ impl IdfConfig {
                   "windows" => i.path.to_lowercase(),
                   _ => i.path.clone(),
                 };
-                !new_paths.contains(&normalized_path)
+                let normalized_tools_path = match std::env::consts::OS {
+                  "windows" => i.idf_tools_path.to_lowercase(),
+                  _ => i.idf_tools_path.clone(),
+                };
+                !new_paths.contains(&normalized_path) || !new_tools_paths.contains(&normalized_tools_path)
               })
               .cloned()
               .collect::<Vec<_>>();
