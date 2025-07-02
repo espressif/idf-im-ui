@@ -415,12 +415,18 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
                 tool_set.idf_version
             ),
         };
+        let python = match std::env::consts::OS {
+            "windows" => PathBuf::from(idf_python_env_path.unwrap()).join("Scripts").join("python.exe"),
+            _ => PathBuf::from(idf_python_env_path.unwrap()).join("bin").join("python"),
+        };
         let installation = IdfInstallation {
             id: tool_set.id.to_string(),
             activation_script: new_activation_script,
             path: tool_set.idf_location,
             name: tool_set.idf_version,
-            python: tool_set.system_python_executable_path,
+            python: python.to_str()
+                .unwrap()
+                .to_string(),
             idf_tools_path: new_idf_tools_path,
         };
         let config_path = get_default_config_path();
