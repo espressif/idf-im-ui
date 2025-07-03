@@ -1,6 +1,7 @@
 import pty from "node-pty";
 import os from "os";
 import logger from "./logger.class.js";
+import stripAnsi from "strip-ansi";
 
 class CLITestRunner {
   constructor() {
@@ -9,6 +10,7 @@ class CLITestRunner {
     this.exited = false;
     this.exitCode = null;
     this.error = null;
+    this.lastDataTimestamp = Date.now();
     this.prompt = os.platform() !== "win32" ? "$" : ">";
     this.command = os.platform() !== "win32" ? "bash" : "powershell.exe";
     this.args =
@@ -28,16 +30,16 @@ class CLITestRunner {
       this.sendInput(`${loadCommand}\r`);
       const startTime = Date.now();
       while (Date.now() - startTime < timeout) {
-        if (!this.exited && !this.error && this.output.includes("(python)")) {
+        if (!this.exited && !this.error && this.output.includes("(venv)")) {
           return Promise.resolve();
         }
         await new Promise((resolve) => setTimeout(resolve, 200));
       }
-      logger.info("Failed to terminate terminal process");
-      return Promise.resolve();
+      logger.info("Failed to load IDF terminal within timeout");
+      return Promise.reject();
     } catch {
       logger.debug("Error loading IDF terminal");
-      return Promise.resolve();
+      return Promise.reject();
     }
   }
 
@@ -55,8 +57,11 @@ class CLITestRunner {
     this.exited = false;
 
     this.process.onData((data) => {
-      logger.debug(data);
-      this.output += data;
+      let cleanData = stripAnsi(data);
+      cleanData = cleanData.replace(/[\r\n]+/g, " ");
+      logger.debug(cleanData);
+      this.output += cleanData;
+      this.lastDataTimestamp = Date.now();
     });
 
     this.process.onExit(({ exitCode }) => {

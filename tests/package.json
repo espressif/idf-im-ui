@@ -18,6 +18,7 @@
     "node-gyp": "^10.2.0",
     "node-pty": "^1.0.0",
     "selenium-webdriver": "^4.29.0",
+    "strip-ansi": "^7.1.0",
     "winston": "^3.17.0"
   }
 }

@@ -20,7 +20,7 @@
     "type": "custom",
     "name": "GUI Expert v5.2.5",
     "data": {
-      "targetList": "esp32s3",
+      "targetList": "All",
       "idfList": "v5.2.5",
       "installFolder": ".espcustom",
       "idfMirror": "github",

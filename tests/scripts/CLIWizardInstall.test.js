@@ -129,8 +129,8 @@ export function runCLIWizardInstallTest(pathToEim) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const startTime = Date.now();
       while (Date.now() - startTime < 1200000) {
-        if (await testRunner.waitForPrompt()) {
-          logger.info(">>>>>>>Prompt found!!!!!");
+        if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+          logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
           break;
         }
         if (await testRunner.waitForOutput("panicked", 1000)) {
@@ -152,13 +152,11 @@ export function runCLIWizardInstallTest(pathToEim) {
         logger.info("Installation timed out after 20 minutes");
       }
 
-      const installationCompleted = await testRunner.waitForOutput(
-        "Do you want to save the installer configuration"
-      );
       expect(
-        installationCompleted,
+        testRunner.output,
         "Failed to ask to save installation configuration - failure to install using wizard parameters"
-      ).to.be.true;
+      ).to.include("Do you want to save the installer configuration");
+
       expect(
         testRunner.output,
         "Error to download the tools, missing 'Downloading Tools'"
