@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico"
+    type="image/vnd.microsoft.icon">
+  <title>ESP-IDF Installation Manager Downloads</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+  <style>
+    :root {
+      --primary: #e7352c;
+      --primary-dark: #e7210a;
+      --secondary: #6b7280;
+      --background: #f8fafc;
+      --card: #ffffff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background: var(--background);
+      min-height: 100vh;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 2rem 0;
+    }
+
+    .logo-title {
+      font-size: 3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary) 0%, #00a3ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+
+    .subtitle {
+      font-size: 1.125rem;
+      color: var(--secondary);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .release-version {
+      font-size: 1rem;
+      color: var(--secondary);
+      margin-top: 0.5rem;
+    }
+
+    .platform-section {
+      margin-bottom: 1.5rem;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .platform-header {
+      background: var(--card);
+      padding: 1.5rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.3s ease;
+    }
+
+    .platform-header:hover {
+      background: #f1f5f9;
+    }
+
+    .platform-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .platform-toggle {
+      font-size: 1.5rem;
+      color: var(--secondary);
+      transition: transform 0.3s ease;
+    }
+
+    .platform-toggle.expanded {
+      transform: rotate(90deg);
+    }
+
+    .platform-content {
+      background: var(--card);
+      padding: 0 1.5rem 1.5rem;
+      display: none;
+    }
+
+    .platform-content.expanded {
+      display: block;
+    }
+
+    .installer-group {
+      margin-top: 1rem;
+    }
+
+    .installer-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--secondary);
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 0.5rem;
+    }
+
+    .download-item {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .download-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .download-name {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .download-desc {
+      color: var(--secondary);
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .download-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .download-size {
+      color: var(--secondary);
+      font-size: 0.875rem;
+    }
+
+    .download-buttons {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .download-button {
+      background: var(--primary);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+    }
+
+    .download-button:hover {
+      background: var(--primary-dark);
+    }
+
+    .github-button {
+      background: #24292e;
+    }
+
+    .github-button:hover {
+      background: #000000;
+    }
+
+    .github-icon {
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem 0;
+      color: var(--secondary);
+    }
+
+    .loading-spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 1.5rem;
+      text-align: center;
+      color: #dc2626;
+      margin-bottom: 1.5rem;
+    }
+
+    .retry-button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--secondary);
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app" class="container">
+    <header>
+      <h1 class="logo-title">ESP-IDF Installation Manager</h1>
+      <p class="subtitle">Installation manager for ESP-IDF development framework</p>
+      <p v-if="releaseData" class="release-version">Version {{ releaseData.tag_name }}</p>
+    </header>
+
+    <main>
+      <div v-if="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <p>Loading release information...</p>
+      </div>
+
+      <template v-else>
+        <div v-if="error" class="error">
+          <p>{{ error }}</p>
+          <button @click="fetchRelease" class="retry-button">Retry</button>
+        </div>
+
+        <template v-if="releaseData">
+          <!-- Windows Section -->
+          <div class="platform-section"
+            v-if="categorizedAssets.windows.gui.length || categorizedAssets.windows.cli.length">
+            <div class="platform-header" @click="toggleSection('windows')">
+              <h2 class="platform-title">Windows</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.windows }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.windows }">
+              <div class="installer-group" v-if="categorizedAssets.windows.gui.length">
+                <h3 class="installer-title">GUI Installers</h3>
+                <div v-for="artifact in categorizedAssets.windows.gui" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'windows', 'gui') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="installer-group" v-if="categorizedAssets.windows.cli.length">
+                <h3 class="installer-title">CLI Installers</h3>
+                <div v-for="artifact in categorizedAssets.windows.cli" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'windows', 'cli') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linux x64 Section -->
+          <div class="platform-section"
+            v-if="categorizedAssets.linuxX64.gui.length || categorizedAssets.linuxX64.cli.length">
+            <div class="platform-header" @click="toggleSection('linuxX64')">
+              <h2 class="platform-title">Linux x64</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.linuxX64 }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.linuxX64 }">
+              <div class="installer-group" v-if="categorizedAssets.linuxX64.gui.length">
+                <h3 class="installer-title">GUI Installers</h3>
+                <div v-for="artifact in categorizedAssets.linuxX64.gui" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'linuxX64', 'gui') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="installer-group" v-if="categorizedAssets.linuxX64.cli.length">
+                <h3 class="installer-title">CLI Installers</h3>
+                <div v-for="artifact in categorizedAssets.linuxX64.cli" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'linuxX64', 'cli') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Linux ARM Section -->
+          <div class="platform-section"
+            v-if="categorizedAssets.linuxARM.gui.length || categorizedAssets.linuxARM.cli.length">
+            <div class="platform-header" @click="toggleSection('linuxARM')">
+              <h2 class="platform-title">Linux ARM</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.linuxARM }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.linuxARM }">
+              <div class="installer-group" v-if="categorizedAssets.linuxARM.gui.length">
+                <h3 class="installer-title">GUI Installers</h3>
+                <div v-for="artifact in categorizedAssets.linuxARM.gui" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'linuxARM', 'gui') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="installer-group" v-if="categorizedAssets.linuxARM.cli.length">
+                <h3 class="installer-title">CLI Installers</h3>
+                <div v-for="artifact in categorizedAssets.linuxARM.cli" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'linuxARM', 'cli') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- macOS Intel Section -->
+          <div class="platform-section"
+            v-if="categorizedAssets.macosIntel.gui.length || categorizedAssets.macosIntel.cli.length">
+            <div class="platform-header" @click="toggleSection('macosIntel')">
+              <h2 class="platform-title">macOS Intel</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.macosIntel }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.macosIntel }">
+              <div class="installer-group" v-if="categorizedAssets.macosIntel.gui.length">
+                <h3 class="installer-title">GUI Installers</h3>
+                <div v-for="artifact in categorizedAssets.macosIntel.gui" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'macosIntel', 'gui') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="installer-group" v-if="categorizedAssets.macosIntel.cli.length">
+                <h3 class="installer-title">CLI Installers</h3>
+                <div v-for="artifact in categorizedAssets.macosIntel.cli" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'macosIntel', 'cli') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- macOS Apple Silicon Section -->
+          <div class="platform-section"
+            v-if="categorizedAssets.macosApple.gui.length || categorizedAssets.macosApple.cli.length">
+            <div class="platform-header" @click="toggleSection('macosApple')">
+              <h2 class="platform-title">macOS Apple Silicon</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.macosApple }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.macosApple }">
+              <div class="installer-group" v-if="categorizedAssets.macosApple.gui.length">
+                <h3 class="installer-title">GUI Installers</h3>
+                <div v-for="artifact in categorizedAssets.macosApple.gui" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'macosApple', 'gui') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="installer-group" v-if="categorizedAssets.macosApple.cli.length">
+                <h3 class="installer-title">CLI Installers</h3>
+                <div v-for="artifact in categorizedAssets.macosApple.cli" :key="artifact.id" class="download-item">
+                  <h3 class="download-name">{{ artifact.name }}</h3>
+                  <p class="download-desc">{{ getDescription(artifact, 'macosApple', 'cli') }}</p>
+                  <div class="download-meta">
+                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                    <div class="download-buttons">
+                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
+                        target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </template>
+    </main>
+
+    <footer>
+      <p>For documentation and source code, visit our repository:
+        <a href="https://github.com/espressif/idf-im-ui" target="_blank">ESP-IDF Installation Manager</a> |
+        <a href="https://docs.espressif.com/projects/idf-im-ui/en/latest/" target="_blank">Documentation</a>
+      </p>
+    </footer>
+  </div>
+
+  <script>
+    const { createApp, ref, onMounted, computed } = Vue;
+
+    const GithubIconButton = {
+      props: ['href'],
+      template: `
+                <a :href="href" class="download-button github-button" target="_blank">
+                    <svg class="github-icon" height="16" width="16" viewBox="0 0 16 16">
+                        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+                    </svg>
+                    GitHub
+                </a>
+            `
+    };
+
+    createApp({
+      components: {
+        'github-icon-button': GithubIconButton
+      },
+      setup() {
+        const releaseData = ref(null);
+        const loading = ref(true);
+        const error = ref(null);
+        const expandedSections = ref({
+          windows: false,
+          linuxX64: false,
+          linuxARM: false,
+          macosIntel: false,
+          macosApple: false
+        });
+
+        // Platform detection
+        const detectPlatform = () => {
+          const userAgent = navigator.userAgent.toLowerCase();
+          if (userAgent.includes('win')) {
+            expandedSections.value.windows = true;
+          } else if (userAgent.includes('linux')) {
+            if (userAgent.includes('arm') || userAgent.includes('aarch64')) {
+              expandedSections.value.linuxARM = true;
+            } else {
+              expandedSections.value.linuxX64 = true;
+            }
+          } else if (userAgent.includes('mac')) {
+            // Default to Apple Silicon for macOS
+            expandedSections.value.macosApple = true;
+          }
+        };
+
+        const categorizedAssets = computed(() => {
+          if (!releaseData.value?.assets) {
+            return {
+              windows: { gui: [], cli: [] },
+              linuxX64: { gui: [], cli: [] },
+              linuxARM: { gui: [], cli: [] },
+              macosIntel: { gui: [], cli: [] },
+              macosApple: { gui: [], cli: [] }
+            };
+          }
+
+          const platformCategories = {
+            windows: { gui: [], cli: [] },
+            linuxX64: { gui: [], cli: [] },
+            linuxARM: { gui: [], cli: [] },
+            macosIntel: { gui: [], cli: [] },
+            macosApple: { gui: [], cli: [] }
+          };
+
+          for (const asset of releaseData.value.assets) {
+            const name = asset.name.toLowerCase();
+            let platform = null;
+            let installerType = null;
+
+            // Platform detection
+            if (name.includes('windows') || name.endsWith('.exe')) {
+              platform = 'windows';
+              installerType = name.includes('gui') || name.endsWith('.exe') ? 'gui' : 'cli';
+            } else if (name.includes('linux')) {
+              if (name.includes('arm') || name.includes('aarch64')) {
+                platform = 'linuxARM';
+              } else {
+                platform = 'linuxX64';
+              }
+            } else if (name.includes('macos') || name.includes('darwin')) {
+              if (name.includes('aarch64') || name.includes('arm64') || name.includes('arm')) {
+                platform = 'macosApple';
+              } else {
+                platform = 'macosIntel';
+              }
+            }
+
+            // Installer type detection for non-Windows platforms
+            if (platform && platform !== 'windows') {
+              installerType = name.includes('cli') && !name.includes('gui') ? 'cli' : 'gui';
+            }
+
+            if (platform && installerType) {
+              platformCategories[platform][installerType].push(asset);
+            }
+          }
+
+          console.log('Categorized assets:', platformCategories);
+          return platformCategories;
+        });
+
+        const getDlEspressifUrl = (githubUrl) => {
+          return githubUrl.replace(
+            'https://github.com/espressif/',
+            'https://dl.espressif.com/github_assets/espressif/'
+          );
+        };
+
+        const getDescription = (artifact, platform, installerType) => {
+          const platformDescriptions = {
+            windows: 'Windows',
+            linuxX64: 'Linux x64',
+            linuxARM: 'Linux ARM',
+            macosIntel: 'macOS Intel',
+            macosApple: 'macOS Apple Silicon'
+          };
+          const typeDescription = installerType === 'gui' ? 'GUI' : 'CLI';
+          return `${platformDescriptions[platform]} ${typeDescription} installer package`;
+        };
+
+        const formatSize = (bytes) => {
+          const units = ['B', 'KB', 'MB', 'GB'];
+          let size = bytes;
+          let unitIndex = 0;
+
+          while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+          }
+
+          return `${size.toFixed(1)} ${units[unitIndex]}`;
+        };
+
+        const formatDate = (dateStr) => {
+          return new Date(dateStr).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+        };
+
+        const toggleSection = (platform) => {
+          // Collapse all sections
+          Object.keys(expandedSections.value).forEach(key => {
+            expandedSections.value[key] = false;
+          });
+          // Expand the selected section
+          expandedSections.value[platform] = true;
+        };
+
+        const fetchRelease = async () => {
+          loading.value = true;
+          error.value = null;
+
+          try {
+            const response = await fetch('eim_unified_release.json');
+            if (response.ok) {
+              releaseData.value = await response.json();
+              console.log('Fetched release data:', releaseData.value);
+              loading.value = false;
+              detectPlatform();
+              return;
+            }
+          } catch (err) {
+            console.log('Local unified file not found, falling back to GitHub API');
+          }
+
+          try {
+            const response = await fetch('https://api.github.com/repos/espressif/idf-im-ui/releases/latest');
+            if (!response.ok) throw new Error('Failed to fetch release data');
+            releaseData.value = await response.json();
+            console.log('Fetched release data from GitHub:', releaseData.value);
+            detectPlatform();
+          } catch (err) {
+            error.value = 'Failed to load release information. Please try again later.';
+            console.error('Error fetching release:', err);
+          } finally {
+            loading.value = false;
+          }
+        };
+
+        onMounted(() => {
+          fetchRelease();
+        });
+
+        return {
+          releaseData,
+          categorizedAssets,
+          loading,
+          error,
+          expandedSections,
+          getDescription,
+          getDlEspressifUrl,
+          formatSize,
+          formatDate,
+          fetchRelease,
+          toggleSection
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+
+</html>
