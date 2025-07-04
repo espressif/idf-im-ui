@@ -173,9 +173,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     }
                 }
                 Err(err) => {
-                    error!("No versions found. Use eim install to install a new ESP-IDF version.");
+                    info!("No versions found. Use eim install to install a new ESP-IDF version.");
                     debug!("Error: {}", err);
-                    Err(anyhow::anyhow!(err))
+                    Ok(())
                 }
             }
         }
