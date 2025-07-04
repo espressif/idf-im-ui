@@ -640,12 +640,13 @@
         };
 
         const toggleSection = (platform) => {
+          let isExpanded = expandedSections.value[platform];
           // Collapse all sections
           Object.keys(expandedSections.value).forEach(key => {
             expandedSections.value[key] = false;
           });
           // Expand the selected section
-          expandedSections.value[platform] = true;
+          expandedSections.value[platform] = !isExpanded;
         };
 
         const fetchRelease = async () => {
