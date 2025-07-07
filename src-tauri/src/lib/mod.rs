@@ -1456,9 +1456,32 @@ pub fn expand_tilde(path: &Path) -> PathBuf {
 /// * `Ok(String)` if the conversion is successful.
 /// * `Err(Box<dyn std::error::Error>)` if an error occurs during the conversion, such as if the path does not exist or cannot be resolved.
 pub fn to_absolute_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let path = Path::new(path);
-    let absolute_path = fs::canonicalize(path)?;
-    Ok(absolute_path.to_string_lossy().to_string().into())
+    let expanded_path = expand_tilde(Path::new(path));
+
+    let absolute_path = if expanded_path.is_absolute() {
+        expanded_path
+    } else {
+        std::env::current_dir()?.join(expanded_path)
+    };
+
+    let mut components = Vec::new();
+    for component in absolute_path.components() {
+        match component {
+            std::path::Component::CurDir => {
+                // Skip "." - it doesn't change the path
+            }
+            std::path::Component::ParentDir => {
+                // ".." - pop the last component if possible
+                components.pop();
+            }
+            _ => {
+                components.push(component);
+            }
+        }
+    }
+
+    let resolved_path = components.iter().collect::<PathBuf>();
+    Ok(resolved_path.to_string_lossy().to_string())
 }
 
 /// Performs post-installation tasks for a single version of ESP-IDF.

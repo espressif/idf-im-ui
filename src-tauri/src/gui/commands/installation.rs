@@ -38,8 +38,7 @@ fn prepare_installation_directories(
   settings: &Settings,
   version: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-  let mut version_path = settings.path.as_ref().unwrap().as_path();
-  version_path.join(version);
+  let version_path = settings.path.as_ref().unwrap().as_path().join(version);
 
   ensure_path(version_path.to_str().unwrap())?;
   send_message(
@@ -51,7 +50,7 @@ fn prepare_installation_directories(
       "info".to_string(),
   );
 
-  Ok(version_path.to_path_buf())
+  Ok(version_path)
 }
 
 /// Spawns a progress monitor thread for installation
@@ -143,7 +142,7 @@ async fn install_single_version(
   let mut using_existing_idf = false;
 
   let p = settings.path.as_ref().unwrap().as_path();
-  let mut idf_path;
+  let idf_path;
   let mut version_path = PathBuf::from(p.clone());
   let mut version = version.clone();
   let mut idf_path_buf = PathBuf::new();
@@ -165,9 +164,10 @@ async fn install_single_version(
     };
 
     debug!("Using IDF version: {}", version);
+    idf_path_buf = idf_path.to_path_buf();
   } else {
     version_path = prepare_installation_directories(&app_handle.clone(), settings, &version)?;
-    idf_path_buf = version_path.clone().join("esp-idf").to_path_buf();
+    idf_path_buf = version_path.clone().join("esp-idf");
     idf_path = idf_path_buf.as_path();
     download_idf(&app_handle, settings, &version, &idf_path_buf).await?;
   }
