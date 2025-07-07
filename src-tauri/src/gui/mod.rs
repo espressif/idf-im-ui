@@ -288,6 +288,7 @@ pub fn run() {
             get_logs_folder,
             show_in_folder,
             is_path_empty_or_nonexistent_command,
+            is_path_idf_directory,
             cpu_count,
         ])
         .run(tauri::generate_context!())

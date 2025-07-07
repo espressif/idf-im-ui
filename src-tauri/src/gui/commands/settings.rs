@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager};
-use idf_im_lib::settings;
+use idf_im_lib::{settings, utils::is_valid_idf_directory};
 use crate::gui::{
   app_state::{self, get_locked_settings, get_settings_non_blocking, update_settings, AppState},
   ui::send_message,
@@ -290,7 +290,6 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
         Ok(s) => s,
         Err(_) => return false,
     };
-    println!("Settings: {:?}", settings);
     let versions = match &settings.idf_versions {
         Some(v) => v.clone(),
         None => {
@@ -306,4 +305,9 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
     };
 
     is_path_empty_or_nonexistent(&path, &versions)
+}
+
+#[tauri::command]
+pub async fn is_path_idf_directory(_app_handle: AppHandle, path: String) -> bool {
+   is_valid_idf_directory(&path)
 }
