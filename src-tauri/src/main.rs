@@ -9,6 +9,7 @@ pub mod gui;
 
 #[cfg(feature = "cli")]
 use clap::Parser;
+use idf_im_lib::settings::Settings;
 #[cfg(feature = "cli")]
 use log::{debug, info};
 #[cfg(feature = "cli")]
@@ -117,6 +118,10 @@ async fn main() {
         setup_interactive_console()
     } else {
         false
+    };
+    match Settings::default().initialize_esp_ide_json() {
+        Ok(_) => log::debug!("ESP-IDF JSON initialized successfully."),
+        Err(e) => log::warn!("Failed to initialize ESP-IDF JSON: {}. It is possible you will face issues with persistance and IDE integration.", e),
     };
     #[cfg(not(feature = "gui"))]
     {

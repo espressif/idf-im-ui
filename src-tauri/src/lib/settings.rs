@@ -405,4 +405,18 @@ impl Settings {
 
         config.to_file(json_path, true, true)
     }
+
+    pub fn initialize_esp_ide_json(&self) -> Result<()> {
+        let json_path = PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default());
+        let file_path = json_path.join("eim_idf.json");
+
+        if file_path.exists() {
+            log::info!("ESP-IDF JSON file already exists at: {:?}", file_path);
+            return Ok(());
+        }
+
+        self.save_esp_ide_json()?;
+
+        Ok(())
+    }
 }
