@@ -1,5 +1,6 @@
 use clap::builder::styling::{AnsiColor, Color, Style, Styles};
 use clap::{arg, command, ColorChoice, Parser, Subcommand};
+use idf_im_lib::to_absolute_path;
 use std::path::PathBuf;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -102,7 +103,10 @@ pub struct InstallArgs {
     #[arg(
         short,
         long,
-        help = "Base Path to which all the files and folder will be installed"
+        help = "Base Path to which all the files and folder will be installed",
+        value_parser = |s: &str| -> Result<String, String> {
+            to_absolute_path(s).map_err(|e| e.to_string())
+        }
     )]
     path: Option<String>,
 

@@ -1445,6 +1445,22 @@ pub fn expand_tilde(path: &Path) -> PathBuf {
     }
 }
 
+/// Converts a relative or absolute path to an absolute path.
+//////
+/// This function takes a string representing a path and returns a `PathBuf`
+/// representing the absolute path. If the input path is already absolute, it will return it as is.
+/// If the input path is relative, it will resolve it against the current working directory.
+////// # Parameters
+/// * `path`: A string slice representing the path to be converted.
+////// # Return Value
+/// * `Ok(String)` if the conversion is successful.
+/// * `Err(Box<dyn std::error::Error>)` if an error occurs during the conversion, such as if the path does not exist or cannot be resolved.
+pub fn to_absolute_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let path = Path::new(path);
+    let absolute_path = fs::canonicalize(path)?;
+    Ok(absolute_path.to_string_lossy().to_string().into())
+}
+
 /// Performs post-installation tasks for a single version of ESP-IDF.
 ///
 /// This function creates a desktop shortcut on Windows systems and generates an activation shell script
