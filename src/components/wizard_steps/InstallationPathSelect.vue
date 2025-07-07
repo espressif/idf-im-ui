@@ -90,7 +90,12 @@ export default {
         multiple: false,
       });
       if (selected) {
-        this.installPath = await path.join(selected, '.espressif');
+        let is_idf_directory = await invoke("is_path_idf_directory", { path: selected });
+        if (!is_idf_directory) {
+          this.installPath = await path.join(selected, '.espressif');
+        } else {
+          this.installPath = selected;
+        }
         this.pathSelected = true;
       }
     },
