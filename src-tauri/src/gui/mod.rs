@@ -37,8 +37,7 @@ fn prepare_installation_directories(
     settings: &Settings,
     version: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut version_path = settings.path.as_ref().unwrap().as_path();
-    version_path.join(version);
+    let version_path = settings.path.as_ref().unwrap().as_path().join(version);
 
     ensure_path(version_path.to_str().unwrap())?;
     send_message(
@@ -50,7 +49,7 @@ fn prepare_installation_directories(
         "info".to_string(),
     );
 
-    Ok(version_path.to_path_buf())
+    Ok(version_path)
 }
 
 async fn download_idf(
