@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager};
-use idf_im_lib::{settings, utils::is_valid_idf_directory};
+use idf_im_lib::{settings,to_absolute_path, utils::is_valid_idf_directory};
 use crate::gui::{
   app_state::{self, get_locked_settings, get_settings_non_blocking, update_settings, AppState},
   ui::send_message,
@@ -86,7 +86,18 @@ pub fn get_installation_path(app_handle: AppHandle) -> String {
 pub fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), String> {
   info!("Setting installation path: {}", path);
   update_settings(&app_handle, |settings| {
-      settings.path = Some(PathBuf::from(path));
+    let p = match to_absolute_path(&path) {
+        Ok(p) => p,
+        Err(e) => {
+            send_message(
+                &app_handle,
+                format!("Failed to set installation path: {}", e),
+                "error".to_string(),
+            );
+            return;
+        }
+    };
+    settings.path = Some(PathBuf::from(p));
   })?;
 
   send_message(
