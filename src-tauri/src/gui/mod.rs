@@ -2,7 +2,7 @@ use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::{
-    add_path_to_path, ensure_path, expand_tilde,
+    add_path_to_path, ensure_path,
     settings::Settings,
     ProgressMessage,
 };
@@ -37,8 +37,8 @@ fn prepare_installation_directories(
     settings: &Settings,
     version: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let mut version_path = expand_tilde(settings.path.as_ref().unwrap().as_path());
-    version_path.push(version);
+    let mut version_path = settings.path.as_ref().unwrap().as_path();
+    version_path.join(version);
 
     ensure_path(version_path.to_str().unwrap())?;
     send_message(
@@ -50,7 +50,7 @@ fn prepare_installation_directories(
         "info".to_string(),
     );
 
-    Ok(version_path)
+    Ok(version_path.to_path_buf())
 }
 
 async fn download_idf(

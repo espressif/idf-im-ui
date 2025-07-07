@@ -338,7 +338,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     let mut using_existing_idf = false;
     for mut idf_version in config.idf_versions.clone().unwrap() {
       let mut version_instalation_path = config.path.clone().unwrap();
-      version_instalation_path = idf_im_lib::expand_tilde(version_instalation_path.as_path());
       let mut idf_path = version_instalation_path.clone();
 
       if is_valid_idf_directory(idf_path.to_str().unwrap()) {
