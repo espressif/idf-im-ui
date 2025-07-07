@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use struct_iterable::Iterable;
 use uuid::Uuid;
 
-use crate::idf_config::{IdfConfig, IdfInstallation};
+use crate::idf_config::{IdfConfig, IdfInstallation, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
 use crate::utils::{get_git_path, is_valid_idf_directory};
 
 macro_rules! merge_fields {
@@ -398,17 +398,18 @@ impl Settings {
                 .unwrap_or_default(),
             idf_installed: idf_installations,
             eim_path: None, // this will be autofilled on file save
+            version: Some(IDF_CONFIG_FILE_VERSION.to_string()), // Set the version of the config file
         };
 
         let json_path =
-            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join("eim_idf.json");
+            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
 
         config.to_file(json_path, true, true)
     }
 
     pub fn initialize_esp_ide_json(&self) -> Result<()> {
         let json_path = PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default());
-        let file_path = json_path.join("eim_idf.json");
+        let file_path = json_path.join(IDF_CONFIG_FILE_NAME);
 
         if file_path.exists() {
             log::info!("ESP-IDF JSON file already exists at: {:?}", file_path);
