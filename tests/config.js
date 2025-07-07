@@ -1,6 +1,6 @@
 const IDFVERSIONSSHOWNONINSTALLER = [
   `master`,
-  `v5.4.1`,
+  `v5.4.2`,
   `v5.3.3`,
   `v5.2.5`,
   `v5.1.6`,
@@ -19,7 +19,7 @@ const TOOLSMIRRORS = {
 const CLIDEFAULTVERSION = "eim 0.2.0";
 const GUIDEFAULTVERSION = "0.2.0";
 
-const IDFDEFAULTINSTALLVERSION = "v5.4.1";
+const IDFDEFAULTINSTALLVERSION = "v5.4.2";
 
 export {
   IDFVERSIONSSHOWNONINSTALLER,

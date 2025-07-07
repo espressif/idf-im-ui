@@ -23,7 +23,7 @@ import { describe } from "mocha";
 import { runGUIStartupTest } from "./scripts/GUIStartup.test.js";
 import { runGUISimplifiedInstallTest } from "./scripts/GUISimplifiedInstall.test.js";
 import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
-import { runPostInstallCleanUp } from "./scripts/postInstall.test.js";
+import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import { GUIDEFAULTVERSION, IDFDEFAULTINSTALLVERSION } from "./config.js";
 
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
@@ -80,7 +80,10 @@ function testRun(script) {
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUISimplifiedInstallTest(test.id, pathToEIM);
-        runPostInstallCleanUp(installFolder, TOOLSFOLDER);
+        runInstallVerification({
+          installFolder,
+          idfList: [IDFDefaultVersion],
+        });
       });
     } else if (test.type === "custom") {
       //routine for expert install with custom settings
@@ -112,7 +115,11 @@ function testRun(script) {
           toolsMirror,
           IDFMirror
         );
-        runPostInstallCleanUp(installFolder, TOOLSFOLDER);
+        runInstallVerification({
+          installFolder,
+          idfList: idfVersionList,
+          validTarget: targetList[0] === "All" ? "esp32" : targetList[0],
+        });
       });
     }
   });

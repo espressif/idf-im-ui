@@ -52,8 +52,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       if (!"-n true" in args) {
         const startTime = Date.now();
         while (Date.now() - startTime < 1800000) {
-          if (await testRunner.waitForPrompt()) {
-            logger.info(">>>>>>>Prompt found!!!!!");
+          if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
           if (await testRunner.waitForOutput("panicked", 1000)) {
@@ -75,13 +75,11 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
           logger.info("Installation timed out after 30 minutes");
         }
 
-        const installationCompleted = await testRunner.waitForOutput(
-          "Do you want to save the installer configuration"
-        );
         expect(
-          installationCompleted,
+          testRunner.output,
           "Failed to ask to save installation configuration - failure to install using full arguments on run time"
-        ).to.be.true;
+        ).to.include("Do you want to save the installer configuration");
+
         expect(
           testRunner.output,
           "Failed to download submodules, missing 'Finished fetching submodules'"
@@ -94,8 +92,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
 
       const startTime = Date.now();
       while (Date.now() - startTime < 1800000) {
-        if (await testRunner.waitForPrompt()) {
-          logger.info(">>>>>>>Prompt found!!!!!");
+        if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+          logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
           break;
         }
         if (await testRunner.waitForOutput("panicked", 1000)) {
@@ -114,14 +112,10 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         logger.info("Installation timed out after 30 minutes");
       }
 
-      const installationSuccessful = await testRunner.waitForOutput(
-        "Successfully installed IDF"
-      );
-
       expect(
-        installationSuccessful,
+        testRunner.output,
         "Failed to complete installation, missing 'Successfully Installed IDF'"
-      ).to.be.true;
+      ).to.include("Successfully installed IDF");
 
       expect(
         testRunner.output,

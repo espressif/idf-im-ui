@@ -22,7 +22,7 @@ import { runCLIPrerequisitesTest } from "./scripts/CLIPrerequisites.test.js";
 import { runCLIArgumentsTest } from "./scripts/CLIArguments.test.js";
 import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
 import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
-import { runPostInstallTest } from "./scripts/postInstall.test.js";
+import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -50,15 +50,10 @@ function testRun(jsonScript) {
 
   const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
 
-  const IDFDEFAULTVERSION =
-    process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
+  const IDFDefaultVersion =
+    process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
-
-  const TOOLSFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\Espressif`;
 
   // Test Runs
   jsonScript.forEach((test) => {
@@ -86,21 +81,12 @@ function testRun(jsonScript) {
           ? path.join(os.homedir(), `.espressif`)
           : `C:\\esp`;
 
-      const pathToIDFScript =
-        os.platform() !== "win32"
-          ? path.join(installFolder, `activate_idf_${IDFDEFAULTVERSION}.sh`)
-          : path.join(
-              installFolder,
-              IDFDEFAULTVERSION,
-              "Microsoft.PowerShell_profile.ps1"
-            );
-
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(2400000);
 
         runCLIWizardInstallTest(PATHTOEIM);
 
-        runPostInstallTest(pathToIDFScript, installFolder, TOOLSFOLDER);
+        runInstallVerification({ installFolder, idfList: [IDFDefaultVersion] });
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
@@ -115,7 +101,9 @@ function testRun(jsonScript) {
       }
 
       const targetList = test.data.targetList || "esp32";
-      const idfVersionList = test.data.idfList || IDFDEFAULTVERSION;
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
 
       let installArgs = [];
 
@@ -138,30 +126,19 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const pathToIDFScript =
-        os.platform() !== "win32"
-          ? path.join(
-              installFolder,
-              `activate_idf_${idfVersionList.split("|")[0]}.sh`
-            )
-          : path.join(
-              installFolder,
-              idfVersionList.split("|")[0],
-              `Microsoft.PowerShell_profile.ps1`
-            );
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
         runCLICustomInstallTest(PATHTOEIM, installArgs);
 
-        runPostInstallTest(
-          pathToIDFScript,
+        runInstallVerification({
           installFolder,
-          TOOLSFOLDER,
-          targetList.split("|")[0] === "all"
-            ? "esp32"
-            : targetList.split("|")[0]
-        );
+          idfList: idfVersionList,
+          validTarget:
+            targetList.split("|")[0] === "all"
+              ? "esp32"
+              : targetList.split("|")[0],
+        });
       });
     }
   });
