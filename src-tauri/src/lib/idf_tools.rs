@@ -7,7 +7,7 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 
-use crate::command_executor::execute_command;
+use crate::command_executor::{execute_command, execute_command_with_env};
 use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
 use crate::utils::{find_by_name_and_extension, find_directories_by_name, versions_match};
 
@@ -535,7 +535,7 @@ pub async fn setup_tools(
     // Download each tool
     for (tool_name, (version, download_link)) in download_links.iter() {
 
-      match verify_tool_installation(tool_name, tools) {
+      match verify_tool_installation(tool_name, tools, install_dir) {
         Ok(ToolStatus::Correct { version }) => {
           progress_callback(DownloadProgress::Verified(download_link.url.clone()));
           progress_callback(DownloadProgress::Complete);
@@ -707,7 +707,7 @@ fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Resu
 }
 
 /// Verify if a tool is installed with the correct version
-pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile) -> Result<ToolStatus> {
+pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install_dir: &PathBuf) -> Result<ToolStatus> {
     // Find the tool in the tools file
     let tool = tools_file.tools.iter()
         .find(|t| t.name == tool_name)
@@ -723,10 +723,25 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile) -> Resu
         .or_else(|| tool.versions.first())
         .ok_or(format!("No version found for tool '{}'", tool_name)).map_err(|e| anyhow!(e))?;
 
+    // adding to PATH the directory where the tool is(or will be) installed
+    let expected_dir = install_dir.join(&tool_name).join(expected_version.clone().name);
+    let mut tmp_path = std::env::var("PATH").unwrap_or_default();
+
+    match std::env::consts::OS {
+        "windows" => {
+            tmp_path.push_str(&format!(";{}", expected_dir.to_str().unwrap()));
+        }
+        _ => {
+            // On Unix-like systems, we add the bin directory to the PATH
+            tmp_path.push_str(&format!(":{}", expected_dir.to_str().unwrap()));
+        }
+    }
+
     // Execute the version command
-    let output = match execute_command(
+    let output = match execute_command_with_env(
         &tool.version_cmd[0],
-        &[&tool.version_cmd[1]],
+        &vec![&tool.version_cmd[1]],
+        vec![("PATH", tmp_path.as_str())]
     ) {
         Ok(output) => output,
         Err(_) => return Ok(ToolStatus::Missing),
