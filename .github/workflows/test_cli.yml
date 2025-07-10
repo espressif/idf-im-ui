@@ -27,7 +27,7 @@ jobs:
           - os: macos-latest
             package_name: macos-aarch64
             run_on: GitHub
-          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest' }}
+          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest' }}
             package_name: linux-x64
             run_on: MirrorRunner
 

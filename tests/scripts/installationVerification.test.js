@@ -410,9 +410,9 @@ function runInstallVerification({
         testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
 
         const startTime = Date.now();
-        while (Date.now() - startTime < 900000) {
-          if (await testRunner.waitForOutput("failed", 1000)) {
-            logger.debug("failed to se target!!!!");
+        while (Date.now() - startTime < 1200000) {
+          if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
+            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
           if (
@@ -421,13 +421,13 @@ function runInstallVerification({
               1000
             )
           ) {
-            logger.debug("Target Set!!!");
+            logger.info("Target Set!!!");
             break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        if (Date.now() - startTime >= 900000) {
-          logger.info("Set Target timed out after 15 minutes");
+        if (Date.now() - startTime >= 1200000) {
+          logger.info("Set Target timed out after 20 minutes");
         }
 
         const targetSet = await testRunner.waitForOutput(
@@ -488,15 +488,15 @@ function runInstallVerification({
 
         const startTime = Date.now();
         while (Date.now() - startTime < 480000) {
-          if (await testRunner.waitForOutput("failed", 1000)) {
-            logger.debug("Build failed!!!!");
+          if (Date.now() - testRunner.lastDataTimestamp >= 300000) {
+            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
           if (await testRunner.waitForOutput("Project build complete", 1000)) {
-            logger.debug("Build Complete!!!");
+            logger.info("Build Complete!!!");
             break;
           }
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
 
         const buildComplete = await testRunner.waitForOutput(
