@@ -288,9 +288,9 @@ async fn download_and_extract_tools(
                 info!("{} checksum verified", filename.to_string());
             }
         }
-        DownloadProgress::Extracted(url) => {
+        DownloadProgress::Extracted(url, dest) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                info!("{} sucessfully extracted", filename.to_string());
+                info!("Successfully extracted {} to {}", filename.to_string(), dest);
             }
         }
     };

@@ -592,7 +592,7 @@ pub enum DownloadProgress {
     Progress(u64, u64), // (downloaded, total)
     Downloaded(String),
     Verified(String),
-    Extracted(String),
+    Extracted(String, String), // (url, destination_path)
     Complete,
     Error(String),
 }
