@@ -156,7 +156,7 @@ pub async fn setup_tools(
                 send_tools_message(&app_handle_clone, filename.to_string(), "match".to_string());
             }
         }
-        DownloadProgress::Extracted(url) => {
+        DownloadProgress::Extracted(url, _dest) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
                 send_tools_message(&app_handle_clone, filename.to_string(), "extracted".to_string());
             }

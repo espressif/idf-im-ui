@@ -633,7 +633,7 @@ pub async fn setup_tools(
             }
           }
         }
-        progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
+        progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
         progress_callback(DownloadProgress::Complete);
         continue;
       }
@@ -679,7 +679,7 @@ pub async fn setup_tools(
                 log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
               }
             }
-            progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
+            progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
             progress_callback(DownloadProgress::Complete);
           } else {
             // Remove corrupted file
