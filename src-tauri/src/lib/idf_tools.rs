@@ -1,13 +1,13 @@
 use log::debug;
 use regex::Regex;
-use serde::Deserialize;
+use serde::{de, Deserialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Result};
 
-use crate::command_executor::execute_command;
+use crate::command_executor::{execute_command, execute_command_with_env};
 use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
 use crate::utils::{find_by_name_and_extension, find_directories_by_name, versions_match};
 
@@ -90,8 +90,57 @@ pub fn read_and_parse_tools_file(path: &str) -> Result<ToolsFile, Box<dyn std::e
     file.read_to_string(&mut contents)?;
 
     let tools_file: ToolsFile = serde_json::from_str(&contents)?;
+    let platform = get_platform_identification()?;
 
-    Ok(tools_file)
+    Ok(apply_platform_overrides(tools_file, &platform))
+}
+
+/// Applies platform-specific overrides to the tools within a `ToolsFile`.
+///
+/// This function iterates through each tool in the provided `ToolsFile` and checks
+/// if it has any `platform_overrides` defined. If overrides exist, it searches
+/// for an override entry that matches the given `platform` string.
+///
+/// Upon finding a matching override, it applies the specified `install` and
+/// `export_paths` from the override entry
+/// to the tool. Only the first matching override for a tool is applied.
+///
+/// After processing, the `platform_overrides` field for each tool is set to `None`
+/// to ensure the function is idempotent (running it multiple times with the same
+/// inputs will produce the same result).
+///
+/// # Arguments
+///
+/// * `tools_file` - A `ToolsFile` struct, which will be mutated to apply overrides.
+/// * `platform` - A string slice representing the current platform (e.g., "windows", "linux", "macos").
+///
+/// # Returns
+///
+/// The modified `ToolsFile` with platform-specific overrides applied and
+/// `platform_overrides` fields cleared.
+pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> ToolsFile {
+    for tool in &mut tools_file.tools {
+        if let Some(platform_overrides) = &tool.platform_overrides {
+            for override_entry in platform_overrides {
+                if override_entry.platforms.contains(&platform.to_string()) {
+                    if let Some(install) = &override_entry.install {
+                        tool.install = install.clone();
+                    }
+
+                    if let Some(export_paths) = &override_entry.export_paths {
+                        tool.export_paths = export_paths.clone();
+                    }
+
+                    break; // Apply only the first matching override
+                }
+            }
+        }
+
+        // Remove platform_overrides to make the function idempotent
+        tool.platform_overrides = None;
+    }
+
+    tools_file
 }
 
 /// Filters a list of tools based on the given target platform.
@@ -534,8 +583,16 @@ pub async fn setup_tools(
     let download_links = get_list_of_tools_to_download(tools.clone(), selected_targets, mirror);
     // Download each tool
     for (tool_name, (version, download_link)) in download_links.iter() {
+      let file_path = Path::new(&download_link.url);
+      let filename = file_path.file_name()
+          .ok_or_else(|| anyhow::anyhow!("Invalid filename in URL"))?
+          .to_str()
+          .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename"))?;
 
-      match verify_tool_installation(tool_name, tools) {
+      let full_file_path = download_dir.join(filename);
+      let this_install_dir = install_dir.join(tool_name).join(version);
+
+      match verify_tool_installation(tool_name, tools, install_dir, version) {
         Ok(ToolStatus::Correct { version }) => {
           progress_callback(DownloadProgress::Verified(download_link.url.clone()));
           progress_callback(DownloadProgress::Complete);
@@ -556,14 +613,7 @@ pub async fn setup_tools(
       }
 
 
-      let file_path = Path::new(&download_link.url);
-      let filename = file_path.file_name()
-          .ok_or_else(|| anyhow::anyhow!("Invalid filename in URL"))?
-          .to_str()
-          .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename"))?;
 
-      let full_file_path = download_dir.join(filename);
-      let this_install_dir = install_dir.join(tool_name).join(version);
 
       // Notify start of processing this tool
       progress_callback(DownloadProgress::Start(download_link.url.clone()));
@@ -573,12 +623,14 @@ pub async fn setup_tools(
         progress_callback(DownloadProgress::Verified(download_link.url.clone()));
         decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
         // this is fix for ninja not having `x` permission in zip archive
-        match add_x_permission_to_tool(&this_install_dir, "ninja") {
-          Ok(_) => {
-            log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
-          }
-          Err(e) => {
-            log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+        if tool_name.contains("ninja") {
+          match add_x_permission_to_tool(&this_install_dir, "ninja") {
+            Ok(_) => {
+              log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
+            }
+            Err(e) => {
+              log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+            }
           }
         }
         progress_callback(DownloadProgress::Extracted(download_link.url.clone()));
@@ -707,26 +759,54 @@ fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Resu
 }
 
 /// Verify if a tool is installed with the correct version
-pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile) -> Result<ToolStatus> {
+pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install_dir: &PathBuf, version: &str) -> Result<ToolStatus> {
     // Find the tool in the tools file
     let tool = tools_file.tools.iter()
         .find(|t| t.name == tool_name)
         .ok_or(format!("Tool '{}' not found in tools file", tool_name)).map_err(|e| anyhow!(e))?;
 
-    // Skip verification if version_cmd is empty
-    if tool.version_cmd.is_empty() {
-        return Ok(ToolStatus::Missing);
-    }
+
 
     // Get the expected version (recommended or first available)
     let expected_version = tool.versions.iter().find(|v| v.status == "recommended")
         .or_else(|| tool.versions.first())
         .ok_or(format!("No version found for tool '{}'", tool_name)).map_err(|e| anyhow!(e))?;
 
+    // adding to PATH the directory where the tool is(or will be) installed
+    let mut expected_dir = install_dir.join(&tool_name).join(expected_version.clone().name);
+    for ex_path in &tool.export_paths {
+        for level in ex_path {
+            expected_dir.push(level);
+        }
+    }
+
+    if tool.version_cmd.is_empty() {
+      match expected_dir.try_exists() {
+          Ok(true) => {
+              return Ok(ToolStatus::Correct {
+                  version: expected_version.name.clone(),
+              });
+          }
+          _ => {
+            return Ok(ToolStatus::Missing);
+          }
+      }
+    }
+
+    let mut tmp_path = std::env::var("PATH").unwrap_or_default();
+    match std::env::consts::OS {
+        "windows" => {
+            tmp_path = format!("{};{}", expected_dir.to_str().unwrap(), tmp_path);
+        }
+        _ => {
+            tmp_path = format!("{}:{}", expected_dir.to_str().unwrap(), tmp_path);
+        }
+    }
     // Execute the version command
-    let output = match execute_command(
+    let output = match execute_command_with_env(
         &tool.version_cmd[0],
-        &[&tool.version_cmd[1]],
+        &vec![&tool.version_cmd[1]],
+        vec![("PATH", tmp_path.as_str())]
     ) {
         Ok(output) => output,
         Err(_) => return Ok(ToolStatus::Missing),
@@ -754,7 +834,7 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile) -> Resu
       };
 
     // Compare versions (major.minor only)
-    if versions_match(installed_version, &expected_version.name) {
+    if installed_version == expected_version.name || versions_match(installed_version, &expected_version.name) {
         Ok(ToolStatus::Correct {
             version: installed_version.to_string(),
         })
@@ -945,5 +1025,65 @@ mod tests {
 
         // Should match one of the expected formats
         assert!(platform_def.contains("-"));
+    }
+
+    #[test]
+    fn test_apply_platform_overrides() {
+        let mut tool = Tool {
+            description: "Test tool".to_string(),
+            export_paths: vec![vec!["bin".to_string()]],
+            export_vars: HashMap::new(),
+            info_url: "https://example.com".to_string(),
+            install: "on_request".to_string(),
+            license: Some("MIT".to_string()),
+            name: "test-tool".to_string(),
+            platform_overrides: Some(vec![
+                PlatformOverride {
+                    install: Some("always".to_string()),
+                    platforms: vec!["win32".to_string(), "win64".to_string()],
+                    export_paths: Some(vec![vec!["windows".to_string(), "bin".to_string()]]),
+                },
+                PlatformOverride {
+                    install: Some("never".to_string()),
+                    platforms: vec!["linux-i686".to_string()],
+                    export_paths: None,
+                },
+            ]),
+            supported_targets: Some(vec!["all".to_string()]),
+            strip_container_dirs: None,
+            version_cmd: vec!["test".to_string(), "--version".to_string()],
+            version_regex: "version ([0-9.]+)".to_string(),
+            version_regex_replace: None,
+            versions: vec![],
+        };
+
+        let tools_file = ToolsFile {
+            tools: vec![tool.clone()],
+            version: 3,
+        };
+
+        // Test applying win64 override
+        let result = apply_platform_overrides(tools_file.clone(), "win64");
+        assert_eq!(result.tools[0].install, "always");
+        assert_eq!(result.tools[0].export_paths, vec![vec!["windows".to_string(), "bin".to_string()]]);
+        assert!(result.tools[0].platform_overrides.is_none());
+
+        // Test applying linux-i686 override
+        let result = apply_platform_overrides(tools_file.clone(), "linux-i686");
+        assert_eq!(result.tools[0].install, "never");
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]); // unchanged
+        assert!(result.tools[0].platform_overrides.is_none());
+
+        // Test applying non-matching platform
+        let result = apply_platform_overrides(tools_file.clone(), "macos");
+        assert_eq!(result.tools[0].install, "on_request"); // unchanged
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]); // unchanged
+        assert!(result.tools[0].platform_overrides.is_none());
+
+        // Test idempotency - applying again should not change anything
+        let result_first = apply_platform_overrides(tools_file.clone(), "win64");
+        let result_second = apply_platform_overrides(result_first.clone(), "win64");
+        assert_eq!(result_first.tools[0].install, result_second.tools[0].install);
+        assert_eq!(result_first.tools[0].export_paths, result_second.tools[0].export_paths);
     }
 }

@@ -749,6 +749,7 @@ pub fn decompress_archive(
     match result {
         Ok(_) => {
             log::info!("Decompression completed successfully.");
+            move_contents_folder_up(destination_path)?;
             Ok(())
         }
         Err(e) => match e {
@@ -937,6 +938,50 @@ fn decompress_tar_xz(
     let cursor = std::io::Cursor::new(decompressed_data);
     let mut archive = Archive::new(cursor);
     archive.unpack(destination_path)?;
+    Ok(())
+}
+
+/// Moves the contents of a single subdirectory up to its parent directory if one exists.
+///
+/// This function is typically used after decompression, where a single top-level directory
+/// might have been created containing all the extracted files. This function identifies
+/// such a scenario and moves the contents of that subdirectory directly into the
+/// `destination_path`.
+///
+/// # Arguments
+///
+/// * `destination_path` - A reference to the path where the contents might need to be moved.
+///                        This is typically the target directory for an extraction.
+///
+/// # Errors
+///
+/// Returns a `DecompressionError` if:
+///
+/// * An I/O error occurs during directory reading, renaming, or removal.
+/// * The `destination_path` is not a valid directory or is inaccessible.
+fn move_contents_folder_up(destination_path: &Path) -> Result<(), DecompressionError> {
+    // Find if there's a single directory in the destination
+    let entries: Vec<_> = std::fs::read_dir(destination_path)?.collect();
+
+    if entries.len() == 1 {
+        let entry = entries[0].as_ref().map_err(|e| DecompressionError::Io(e.kind().into()))?;
+        let path = entry.path();
+
+        if path.is_dir() {
+            // Move all contents from the subdirectory to the parent
+            let temp_dir = destination_path.join(format!("_temp_extract_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis()));
+            std::fs::rename(&path, &temp_dir)?;
+
+            for entry in std::fs::read_dir(&temp_dir)? {
+                let entry = entry?;
+                let dest = destination_path.join(entry.file_name());
+                std::fs::rename(entry.path(), dest)?;
+            }
+
+            std::fs::remove_dir(&temp_dir)?;
+        }
+    }
+
     Ok(())
 }
 
