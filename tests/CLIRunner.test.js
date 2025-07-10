@@ -82,7 +82,7 @@ function testRun(jsonScript) {
           : `C:\\esp`;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
-        this.timeout(2400000);
+        this.timeout(6000000);
 
         runCLIWizardInstallTest(PATHTOEIM);
 

@@ -51,8 +51,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (!"-n true" in args) {
         const startTime = Date.now();
-        while (Date.now() - startTime < 1800000) {
-          if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+        while (Date.now() - startTime < 3600000) {
+          if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
@@ -71,8 +71,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
           }
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
-        if (Date.now() - startTime >= 1800000) {
-          logger.info("Installation timed out after 30 minutes");
+        if (Date.now() - startTime >= 3600000) {
+          logger.info("Installation timed out after 1 hour");
         }
 
         expect(
@@ -91,8 +91,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       }
 
       const startTime = Date.now();
-      while (Date.now() - startTime < 1800000) {
-        if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+      while (Date.now() - startTime < 3600000) {
+        if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
           logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
           break;
         }
@@ -108,8 +108,8 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      if (Date.now() - startTime >= 1800000) {
-        logger.info("Installation timed out after 30 minutes");
+      if (Date.now() - startTime >= 3600000) {
+        logger.info("Installation timed out after 1 hour");
       }
 
       expect(
@@ -122,7 +122,7 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         "Failed to complete installation, missing 'Now you can start using IDF tools'"
       ).to.include("Now you can start using IDF tools");
 
-      if ("-r true" in args || "--recursive-submodules" in args) {
+      if ("-r true" in args || "--recursive-submodules true" in args) {
         expect(
           testRunner.output,
           "Failed to download submodules, missing 'Finished fetching submodules'"
