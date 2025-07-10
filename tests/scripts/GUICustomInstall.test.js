@@ -86,11 +86,9 @@ export function runGUICustomInstallTest(
       expect(requisitesList).to.not.include("❌");
       let expectedRequisites =
         os.platform() === "win32"
-          ? ["git", "cmake", "ninja"]
+          ? ["git"]
           : [
               "git",
-              "cmake",
-              "ninja",
               "wget",
               "flex",
               "bison",
