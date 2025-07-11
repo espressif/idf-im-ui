@@ -337,35 +337,21 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     // Multiple version starts here
     let mut using_existing_idf = false;
     for mut idf_version in config.idf_versions.clone().unwrap() {
-      let mut version_instalation_path = config.path.clone().unwrap();
-      let mut idf_path = version_instalation_path.clone();
+      let paths = config.get_version_paths(&idf_version).map_err(|err| {
+          error!("Failed to get version paths: {}", err);
+          err.to_string()
+      })?;
+      using_existing_idf = paths.using_existing_idf;
 
-      if is_valid_idf_directory(idf_path.to_str().unwrap()) {
-        // the user pointed installer to existing IDF directory
-        info!("Using existing IDF directory: {}", idf_path.display());
-        using_existing_idf = true;
-        idf_version = match idf_im_lib::utils::get_commit_hash(idf_path.to_str().unwrap()) {
-          Ok(hash) => hash,
-          Err(err) => {
-            warn!("Failed to get commit hash: {}", err);
-            idf_version.clone()
-          }
-        };
-        debug!("Using IDF version: {}", idf_version);
-      } else {
-        version_instalation_path.push(&idf_version);
-        idf_path = version_instalation_path.clone();
-        idf_path.push("esp-idf");
-      }
 
-        config.idf_path = Some(idf_path.clone()); // todo: list all of the paths
-        idf_im_lib::add_path_to_path(idf_path.to_str().unwrap());
+      config.idf_path = Some(paths.idf_path.clone()); // todo: list all of the paths
+      idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
       if !using_existing_idf {
 
         // download idf
         let download_config = DownloadConfig {
-            idf_path: idf_path.to_str().unwrap().to_string(),
+            idf_path: paths.idf_path.to_str().unwrap().to_string(),
             repo_stub: config.repo_stub.clone(),
             idf_version: idf_version.to_string(),
             idf_mirror: config.idf_mirror.clone(),
@@ -395,7 +381,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         let tool_download_directory = setup_directory(
             config.wizard_all_questions,
-            &version_instalation_path,
+            &paths.version_installation_path,
             &mut config.tool_download_folder_name,
             "wizard.tools.download.prompt",
             DEFAULT_TOOLS_DOWNLOAD_FOLDER,
@@ -404,7 +390,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // Setup install directory
         let tool_install_directory = setup_directory(
             config.wizard_all_questions,
-            &version_instalation_path,
+            &paths.version_installation_path,
             &mut config.tool_install_folder_name,
             "wizard.tools.install.prompt",
             DEFAULT_TOOLS_INSTALL_FOLDER,
@@ -414,7 +400,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         // tools_json_file
 
-        let tools_json_file = get_tools_json_path(&mut config, &idf_path);
+        let tools_json_file = get_tools_json_path(&mut config, &paths.idf_path);
         let validated_file = validate_tools_json_file(&tools_json_file, &mut config);
 
         debug!("Tools json file: {}", tools_json_file.display());
@@ -444,10 +430,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         };
         match idf_im_lib::python_utils::install_python_env(
-            &idf_version,
+            &paths.actual_version,
             &tool_install_directory,
             true, //TODO: actually read from config
-            &idf_path,
+            &paths.idf_path,
             &config.idf_features.clone().unwrap_or_default(),
         )
         .await
@@ -460,11 +446,8 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
-        let idf_python_env_path = tool_install_directory
-            .join("python")
-            .join(&idf_version)
-            .join("venv"); //todo: move to config
-        ensure_path(idf_python_env_path.to_str().unwrap())
+
+        ensure_path(paths.python_venv_path.to_str().unwrap())
             .map_err(|err| format!("Failed to create Python environment directory: {}", err))?;
 
         let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
@@ -481,14 +464,13 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         })
         .collect();
-        let activation_script_path = config.esp_idf_json_path.clone().unwrap_or_default();
         idf_im_lib::single_version_post_install(
-            &activation_script_path,
-            idf_path.to_str().unwrap(),
-            &idf_version,
+            &paths.activation_script_path.to_str().unwrap(),
+            paths.idf_path.to_str().unwrap(),
+            &paths.actual_version,
             tool_install_directory.to_str().unwrap(),
             export_paths,
-            idf_python_env_path.to_str(),
+            paths.python_venv_path.to_str(),
         )
     }
     save_config_if_desired(&config)?;
@@ -521,30 +503,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("============================================");
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
             for idf_version in config.idf_versions.clone().unwrap() {
-              if using_existing_idf {
-                let hash = match idf_im_lib::utils::get_commit_hash(
-                    config.path.as_ref().unwrap().to_str().unwrap(),
-                ) {
-                    Ok(hash) => hash,
-                    Err(err) => {
-                        warn!("Failed to get commit hash: {}", err);
-                        idf_version.clone()
-                    }
-                };
-                println!(
-                    "       {} \"{}/activate_idf_{}.sh\"",
-                    t!("wizard.posix.finish_steps.line_5"),
-                    config.esp_idf_json_path.clone().unwrap_or_default(),
-                    hash,
-                );
-              } else {
-                println!(
-                    "       {} \"{}/activate_idf_{}.sh\"",
-                    t!("wizard.posix.finish_steps.line_5"),
-                    config.esp_idf_json_path.clone().unwrap_or_default(),
-                    idf_version,
-                );
-              }
+              let paths = config.get_version_paths(&idf_version).map_err(|err| {
+                error!("Failed to get version paths: {}", err);
+                err.to_string()
+              })?;
+              println!(
+                  "       {} \"{}\"",
+                  t!("wizard.posix.finish_steps.line_5"),
+                  paths.activation_script.display()
+              );
             }
             println!("============================================");
         }

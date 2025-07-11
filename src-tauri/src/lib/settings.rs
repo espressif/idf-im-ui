@@ -43,6 +43,21 @@ pub struct Settings {
     pub idf_features: Option<Vec<String>>,
     pub repo_stub: Option<String>,
     pub skip_prerequisites_check: Option<bool>,
+    pub version_name: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VersionPaths {
+    pub idf_path: PathBuf,
+    pub version_installation_path: PathBuf,
+    pub tool_download_directory: PathBuf,
+    pub tool_install_directory: PathBuf,
+    pub python_venv_path: PathBuf,
+    pub python_path: PathBuf,
+    pub activation_script: PathBuf,
+    pub activation_script_path: PathBuf, // Path to the activation script
+    pub actual_version: String, // This might be different from input if using existing IDF
+    pub using_existing_idf: bool, // Indicates if the IDF directory already exists
 }
 
 impl Default for Settings {
@@ -96,6 +111,7 @@ impl Default for Settings {
             idf_features: None,
             repo_stub: None,
             skip_prerequisites_check: Some(false),
+            version_name: None,
         }
     }
 }
@@ -224,6 +240,11 @@ impl Settings {
             {
                 settings.skip_prerequisites_check = cli_settings_struct.skip_prerequisites_check;
             }
+            if cli_settings_struct.version_name.is_some()
+                && !cli_settings_struct.is_default("version_name")
+            {
+                settings.version_name = cli_settings_struct.version_name.clone();
+            }
         }
 
         // Set the config file field
@@ -294,7 +315,9 @@ impl Settings {
             recurse_submodules,
             install_all_prerequisites,
             idf_features,
-            repo_stub
+            repo_stub,
+            skip_prerequisites_check,
+            version_name
         );
     }
 
@@ -340,52 +363,19 @@ impl Settings {
         let mut idf_installations = Vec::new();
 
         if let Some(versions) = &self.idf_versions {
-            let base_path = self
-                .path
-                .as_ref()
-                .ok_or_else(|| anyhow!("Base path not set"))?;
-            let tool_install_folder = self
-                .tool_install_folder_name
-                .as_ref()
-                .ok_or_else(|| anyhow!("Tool install folder name not set"))?;
 
             for version in versions {
-                let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
-                let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
-                let mut idf_path = base_path.clone();
-                let mut idf_version = version.clone();
-                if !using_existing_idf {
-                  idf_path = idf_path.join(version).join("esp-idf");
-                } else {
-                  idf_version = match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
-                    Ok(hash) => hash,
-                    Err(err) => {
-                      warn!("Failed to get commit hash: {}", err);
-                      idf_version
-                    }
-                  };
-                }
-                let tools_path = base_path.join(&idf_version).join(tool_install_folder);
+              let paths = self.get_version_paths(&version)?;
+              let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
 
-                let python_path = match std::env::consts::OS {
-                    "windows" => tools_path.join("python").join(&idf_version).join("venv").join("Scripts").join("Python.exe"),
-                    _ => tools_path.join("python").join(&idf_version).join("venv").join("bin").join("python3"),
-                };
-
-                let activation_script = match std::env::consts::OS {
-                    "windows" => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default())
-                        .join(format!("Microsoft.{}.PowerShell_profile.ps1", idf_version)),
-                    _ => PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(format!("activate_idf_{}.sh", idf_version)),
-                };
-
-                idf_installations.push(IdfInstallation {
-                    id,
-                    name: idf_version.to_string(),
-                    path: idf_path.to_string_lossy().into_owned(),
-                    python: python_path.to_string_lossy().into_owned(),
-                    idf_tools_path: tools_path.to_string_lossy().into_owned(),
-                    activation_script: activation_script.to_string_lossy().into_owned(),
-                });
+              idf_installations.push(IdfInstallation {
+                id,
+                name: paths.actual_version,
+                path: paths.idf_path.to_string_lossy().into_owned(),
+                python: paths.python_path.to_string_lossy().into_owned(),
+                idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
+                activation_script: paths.activation_script.to_string_lossy().into_owned(),
+              });
             }
         }
 
@@ -419,5 +409,88 @@ impl Settings {
         self.save_esp_ide_json()?;
 
         Ok(())
+    }
+
+    /// Constructs all necessary paths for a given IDF version
+    pub fn get_version_paths(&self, version: &str) -> Result<VersionPaths> {
+      let base_path = self
+        .path
+        .as_ref()
+        .ok_or_else(|| anyhow!("Base path not set"))?;
+
+      let tool_install_folder = self
+        .tool_install_folder_name
+        .as_ref()
+        .ok_or_else(|| anyhow!("Tool install folder name not set"))?;
+
+      let tool_download_folder = self
+        .tool_download_folder_name
+        .as_ref()
+        .ok_or_else(|| anyhow!("Tool download folder name not set"))?;
+
+      let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
+
+      let (idf_path, version_installation_path, actual_version) = if using_existing_idf {
+        // Using existing IDF directory
+        let idf_path = base_path.clone();
+        let actual_version = match self.version_name {
+          Some(ref name) => name.to_string(),
+          None =>  match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
+            Ok(hash) => hash,
+            Err(err) => {
+              warn!("Failed to get commit hash: {}", err);
+              version.to_string()
+            }
+          }
+        };
+        (idf_path.clone(), idf_path, actual_version)
+      } else {
+        // New installation
+        let actual_version = match self.version_name {
+          Some(ref name) => name.to_string(),
+          None => version.to_string(),
+        };
+        let version_installation_path = base_path.join(&actual_version);
+        let idf_path = version_installation_path.join("esp-idf");
+        (idf_path, version_installation_path, actual_version)
+      };
+
+      let tool_download_directory = version_installation_path.join(tool_download_folder);
+      let tool_install_directory = version_installation_path.join(tool_install_folder);
+
+      let python_venv_path = match std::env::consts::OS {
+        "windows" => tool_install_directory.join("python").join(&actual_version).join("venv"),
+        _ => tool_install_directory.join("python").join(&actual_version).join("venv"),
+      };
+
+      let python_path = match std::env::consts::OS {
+        "windows" => python_venv_path.join("Scripts").join("python.exe"),
+        _ => python_venv_path.join("bin").join("python"),
+      };
+
+      let activation_script_path = PathBuf::from(self
+        .esp_idf_json_path
+        .clone()
+        .unwrap_or_default());
+
+      let activation_script = match std::env::consts::OS {
+        "windows" => activation_script_path
+          .join(format!("Microsoft.{}.PowerShell_profile.ps1", actual_version)),
+        _ => activation_script_path
+          .join(format!("activate_idf_{}.sh", actual_version)),
+      };
+
+      Ok(VersionPaths {
+        idf_path,
+        version_installation_path,
+        tool_download_directory,
+        tool_install_directory,
+        python_venv_path,
+        python_path,
+        activation_script,
+        activation_script_path,
+        actual_version,
+        using_existing_idf,
+      })
     }
 }
