@@ -221,7 +221,7 @@ pub struct InstallArgs {
 
     #[arg(
         long,
-        help = "Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash. If installing multiple versions at once, it will be used as prefix."
+        help = "Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash."
     )]
     pub version_name: Option<String>,
 }
