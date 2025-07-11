@@ -20,6 +20,9 @@ pub struct IdfInstallation {
     pub python: String,
 }
 
+pub const IDF_CONFIG_FILE_NAME: &str = "eim_idf.json";
+pub const IDF_CONFIG_FILE_VERSION: &str = "1.0";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdfConfig {
     #[serde(rename = "gitPath")]
@@ -30,6 +33,8 @@ pub struct IdfConfig {
     pub idf_selected_id: String,
     #[serde(rename = "eimPath")]
     pub eim_path: Option<String>,
+    #[serde(rename = "version")]
+    pub version: Option<String>,
 }
 
 impl IdfConfig {
@@ -116,6 +121,7 @@ impl IdfConfig {
             Err(_) => debug!("Failed to get current executable path"),
           };
         }
+        self.version = Some(IDF_CONFIG_FILE_VERSION.to_string());
 
         // Convert to JSON string
         let json_string = if pretty {
@@ -283,6 +289,7 @@ mod tests {
                     name: String::from("ESP-IDF v5.4"),
                     path: String::from("/tmp/esp-new/v5.4/esp-idf"),
                     python: String::from("/tmp/esp-new/v5.4/tools/python/bin/python3"),
+
                 },
                 IdfInstallation {
                     activation_script: String::from("/tmp/esp-new/activate_idf_v5.1.5.sh"),
@@ -295,6 +302,7 @@ mod tests {
             ],
             idf_selected_id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
             eim_path: None,
+            version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
         }
     }
 
@@ -482,6 +490,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
         ],
         idf_selected_id: String::from("esp-idf-new-id"),
         eim_path: None,
+        version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
     };
 
     // Append new config to existing file (should replace installation with same path)
