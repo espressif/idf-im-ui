@@ -458,10 +458,7 @@ impl Settings {
       let tool_download_directory = version_installation_path.join(tool_download_folder);
       let tool_install_directory = version_installation_path.join(tool_install_folder);
 
-      let python_venv_path = match std::env::consts::OS {
-        "windows" => tool_install_directory.join("python").join(&actual_version).join("venv"),
-        _ => tool_install_directory.join("python").join(&actual_version).join("venv"),
-      };
+      let python_venv_path = tool_install_directory.join("python").join(&actual_version).join("venv");
 
       let python_path = match std::env::consts::OS {
         "windows" => python_venv_path.join("Scripts").join("python.exe"),
