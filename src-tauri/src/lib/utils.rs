@@ -388,14 +388,14 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         .to_string();
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
         let settings = crate::settings::Settings::default();
-        let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+        let paths = settings.get_version_paths(&tool_set.idf_version)?;
         let idf_python_env_path = tool_set
             .env_vars
             .get("IDF_PYTHON_ENV_PATH")
             .map(|s| s.to_string());
 
         single_version_post_install(
-            &activation_script_path,
+            &paths.activation_script_path.to_string_lossy().into_owned(),
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
@@ -403,25 +403,13 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             idf_python_env_path.as_deref(),
         );
 
-        let new_activation_script = match std::env::consts::OS {
-            "windows" => format!(
-                "{}\\Microsoft.{}.PowerShell_profile.ps1",
-                activation_script_path,
-                &tool_set.idf_version
-            ),
-            _ => format!(
-                "{}/activate_idf_{}.sh",
-                activation_script_path,
-                tool_set.idf_version
-            ),
-        };
         let python = match std::env::consts::OS {
             "windows" => PathBuf::from(idf_python_env_path.unwrap()).join("Scripts").join("python.exe"),
             _ => PathBuf::from(idf_python_env_path.unwrap()).join("bin").join("python"),
         };
         let installation = IdfInstallation {
             id: tool_set.id.to_string(),
-            activation_script: new_activation_script,
+            activation_script: paths.activation_script.to_string_lossy().into_owned(),
             path: tool_set.idf_location,
             name: tool_set.idf_version,
             python: python.to_str()
