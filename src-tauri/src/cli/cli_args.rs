@@ -218,6 +218,12 @@ pub struct InstallArgs {
         help = "Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.",
     )]
     pub skip_prerequisites_check: Option<bool>,
+
+    #[arg(
+        long,
+        help = "Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash."
+    )]
+    pub version_name: Option<String>,
 }
 
 impl IntoIterator for InstallArgs {
@@ -301,6 +307,10 @@ impl IntoIterator for InstallArgs {
             (
                 "skip_prerequisites_check".to_string(),
                 self.skip_prerequisites_check.map(Into::into),
+            ),
+            (
+                "version_name".to_string(),
+                self.version_name.map(Into::into),
             ),
         ]
         .into_iter()

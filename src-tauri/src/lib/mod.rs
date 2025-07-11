@@ -82,7 +82,11 @@ fn format_bash_env_pairs(pairs: &[(String, String)]) -> String {
         .map(|(key, value)| format!("    \"{}:{}\"", key, value))
         .collect();
 
-    format!("env_var_pairs=(\n{}\n)", formatted_pairs.join("\n"))
+    format!("get_env_var_pairs() {{
+cat << 'EOF'
+{}
+EOF
+}}", formatted_pairs.join("\n"))
 }
 
 /// Formats a vector of key-value pairs into a PowerShell-compatible format for environment variables.
