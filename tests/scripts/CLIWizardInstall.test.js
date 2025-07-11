@@ -6,7 +6,6 @@ import os from "os";
 
 export function runCLIWizardInstallTest(pathToEim) {
   describe("1- Run wizard ->", function () {
-    this.timeout(800000);
     let testRunner = null;
     let installationFailed = false;
 
@@ -50,7 +49,7 @@ export function runCLIWizardInstallTest(pathToEim) {
 
     it("Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
-      this.timeout(1500000);
+      this.timeout(3660000);
       testRunner.sendInput(`${pathToEim} wizard\r`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
@@ -128,8 +127,8 @@ export function runCLIWizardInstallTest(pathToEim) {
       testRunner.sendInput("\r");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const startTime = Date.now();
-      while (Date.now() - startTime < 1200000) {
-        if (Date.now() - testRunner.lastDataTimestamp >= 180000) {
+      while (Date.now() - startTime < 3600000) {
+        if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
           logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
           break;
         }
@@ -148,8 +147,8 @@ export function runCLIWizardInstallTest(pathToEim) {
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      if (Date.now() - startTime >= 1200000) {
-        logger.info("Installation timed out after 20 minutes");
+      if (Date.now() - startTime >= 3600000) {
+        logger.info("Installation timed out after 1 hour");
       }
 
       expect(

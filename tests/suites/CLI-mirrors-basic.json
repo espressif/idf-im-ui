@@ -4,6 +4,7 @@
     "type": "custom",
     "name": "Mirrors jihulab and dl_com Default",
     "data": {
+      "idfList": "v5.4.1",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
       "recursive": "true",
@@ -15,6 +16,7 @@
     "type": "custom",
     "name": "Mirrors jihulab and dl_cn Default",
     "data": {
+      "idfList": "v5.4.1",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
       "recursive": "true",

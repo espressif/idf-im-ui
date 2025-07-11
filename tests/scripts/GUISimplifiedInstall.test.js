@@ -39,7 +39,7 @@ export function runGUISimplifiedInstallTest(id, pathToEIM) {
       try {
         await eimRunner.stop();
       } catch (error) {
-        logger.info("Error to close IEM application");
+        logger.info("Error to close EIM application");
       }
     });
 
