@@ -2,11 +2,50 @@
 
 {{env_var_pairs}}
 
+parse_cmake_version() {
+    local cmake_file="{{idf_path_escaped}}/tools/cmake/version.cmake"
+
+    # Check if file exists
+    if [ ! -f "$cmake_file" ]; then
+        echo "Error: CMake version file not found at: $cmake_file" >&2
+        return 1
+    fi
+
+    local major=""
+    local minor=""
+
+    # Read the file and extract version numbers
+    while IFS= read -r line; do
+        line=$(echo "$line" | sed 's/^[[:space:]]*//') # trim leading whitespace
+
+        if [[ "$line" =~ ^set\(IDF_VERSION_MAJOR ]]; then
+            # Extract first number from the line
+            major=$(echo "$line" | grep -o '[0-9]\+' | head -1)
+        elif [[ "$line" =~ ^set\(IDF_VERSION_MINOR ]]; then
+            # Extract first number from the line
+            minor=$(echo "$line" | grep -o '[0-9]\+' | head -1)
+        fi
+    done < "$cmake_file"
+
+    # Check if both versions were found
+    if [ -z "$major" ] || [ -z "$minor" ]; then
+        echo "Error: Could not find both major and minor version numbers" >&2
+        return 1
+    fi
+
+    # Return the version (you can modify format as needed)
+    echo "${major}.${minor}"
+    return 0
+}
+
+IDF_VERSION=$(parse_cmake_version "{{idf_path_escaped}}")
+
+
 # Function to print environment variables
 print_env_variables() {
     echo "PATH={{addition_to_path}}"
     echo "SYSTEM_PATH={{current_system_path}}"
-    echo "ESP_IDF_VERSION={{idf_version}}"
+    echo "ESP_IDF_VERSION=$IDF_VERSION"
     for pair in "${env_var_pairs[@]}"; do
         key="${pair%%:*}"
         value="${pair#*:}"
@@ -16,7 +55,7 @@ print_env_variables() {
 
 # Function to add an environment variable
 add_env_variable() {
-    export ESP_IDF_VERSION="{{idf_version}}"
+    export ESP_IDF_VERSION="$IDF_VERSION"
     echo "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
     for pair in "${env_var_pairs[@]}"; do
         key="${pair%%:*}"
@@ -81,4 +120,4 @@ activate_venv "${IDF_PYTHON_ENV_PATH}"
 
 echo "Environment setup complete for the current shell session."
 echo "These changes will be lost when you close this terminal."
-echo "You are now using IDF version {{idf_version}}."
+echo "You are now using IDF version $IDF_VERSION."
