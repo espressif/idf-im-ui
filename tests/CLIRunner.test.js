@@ -100,7 +100,10 @@ function testRun(jsonScript) {
             : `C:\\esp`;
       }
 
-      const targetList = test.data.targetList || "esp32";
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+
       const idfVersionList = test.data.idfList
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
@@ -109,11 +112,9 @@ function testRun(jsonScript) {
 
       test.data.installFolder && installArgs.push(`-p ${installFolder}`);
 
-      test.data.targetList &&
-        installArgs.push(`-t ${test.data.targetList.split("|").join(",")}`);
+      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
 
-      test.data.idfList &&
-        installArgs.push(`-i ${test.data.idfList.split("|").join(",")}`);
+      test.data.idfList && installArgs.push(`-i ${idfVersionList.join(",")}`);
 
       test.data.toolsMirror &&
         installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror]}`);
@@ -134,10 +135,7 @@ function testRun(jsonScript) {
         runInstallVerification({
           installFolder,
           idfList: idfVersionList,
-          validTarget:
-            targetList.split("|")[0] === "all"
-              ? "esp32"
-              : targetList.split("|")[0],
+          targetList,
         });
       });
     }

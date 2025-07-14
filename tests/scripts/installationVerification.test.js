@@ -9,7 +9,7 @@ import os from "os";
 function runInstallVerification({
   installFolder,
   idfList,
-  validTarget = "esp32",
+  targetList = ["esp32"],
 }) {
   describe("3- Installation verification test ->", function () {
     this.timeout(600000);
@@ -219,7 +219,7 @@ function runInstallVerification({
                 idf,
                 "venv",
                 "bin",
-                "python3"
+                "python"
               )
             : path.join(
                 toolsFolder,
@@ -228,7 +228,7 @@ function runInstallVerification({
                 idf,
                 "venv",
                 "Scripts",
-                "Python.exe"
+                "python.exe"
               )
         );
       }
@@ -243,7 +243,7 @@ function runInstallVerification({
       testRunner = new CLITestRunner();
       logger.info(`Validating tools versions installed on path`);
       let pathToIDFScript;
-      let toolsList;
+      let toolsIndexFile;
       for (let idf of idfList) {
         pathToIDFScript =
           os.platform() !== "win32"
@@ -261,24 +261,104 @@ function runInstallVerification({
           this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
         }
-        toolsList = JSON.parse(
+
+        toolsIndexFile = JSON.parse(
           fs.readFileSync(
             path.join(installFolder, idf, "esp-idf", "tools", "tools.json"),
             "utf-8"
           )
         );
         expect(
-          toolsList,
+          toolsIndexFile,
           `tools.json file not found on the tools folder for IDF ${idf}`
         ).to.be.an("object").that.is.not.empty;
         expect(
-          toolsList,
+          toolsIndexFile,
           `tools.json file does not contain expected tools for IDF ${idf}`
         ).to.have.property("tools");
+
+        // function to get the tag for the operating system to use when reading tools.json
+
+        function getPlatformKey() {
+          const arch = os.arch();
+          const platform = os.platform();
+
+          if (platform === "linux") {
+            if (arch === "x64") return "linux-amd64";
+            if (arch === "arm64") return "linux-arm64";
+            if (arch === "arm") return "linux-armhf"; // or 'linux-armel' depending on your system
+            if (arch === "ia32") return "linux-i686";
+          }
+          if (platform === "darwin") {
+            if (arch === "x64") return "macos";
+            if (arch === "arm64") return "macos-arm64";
+          }
+          if (platform === "win32") {
+            if (arch === "x64") return "win64";
+            if (arch === "ia32") return "win32";
+          }
+          return null;
+        }
+
+        const platformKey = getPlatformKey();
+
+        // Should check which are the tools that are supposed to be installed based on the OS architecture and the selected targets
+        // This information comes from the keys platform_overrides and supported_targets
+
+        const osRequiredTools = toolsIndexFile.tools.filter((tool) => {
+          if (tool.platform_overrides) {
+            for (let entry of tool.platform_overrides) {
+              if (entry.install && entry.platforms.includes(platformKey)) {
+                if (
+                  entry.install === "always" ||
+                  entry.install === "on_request"
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+          if (tool.install === "always" || tool.install === "on_request") {
+            return true;
+          }
+          return false;
+        });
+
+        logger.info(
+          `Required tools for IDF ${idf} on platform ${platformKey}: ${osRequiredTools
+            .map((tool) => tool.name)
+            .join(", ")}`
+        );
+
+        const requiredTools = osRequiredTools
+          .map((tool) => {
+            if (targetList.some((t) => t.toLowerCase() === "all")) {
+              return tool.name;
+            } else if (
+              tool.supported_targets &&
+              (tool.supported_targets.some((t) => t.toLowerCase() === "all") ||
+                targetList.some((target) =>
+                  tool.supported_targets
+                    .map((t) => t.toLowerCase())
+                    .includes(target.toLowerCase())
+                ))
+            ) {
+              return tool.name;
+            }
+            return undefined;
+          })
+          .filter(Boolean);
+
+        logger.info(
+          `Required tools for IDF ${idf} on platform ${platformKey} and targets ${targetList.join(
+            ", "
+          )}: ${requiredTools.join(", ")}`
+        );
+
         let toolVersionOutput;
-        for (let tool of toolsList.tools) {
+        for (let tool of toolsIndexFile.tools) {
           testRunner.output = "";
-          if (tool && tool.install === "always") {
+          if (requiredTools.includes(tool.name)) {
             expect(
               tool,
               `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
@@ -406,6 +486,8 @@ function runInstallVerification({
           logger.info(` Error: ${error}`);
         }
 
+        const validTarget = targetList[0] === "all" ? "esp32" : targetList[0];
+
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
         testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
 
@@ -508,11 +590,11 @@ function runInstallVerification({
 
         expect(
           buildComplete,
-          "Expecting 'Project build complete', filed to build the sample project"
+          "Expecting 'Project build complete', files to build the sample project"
         ).to.be.true;
         expect(
           testRunner.output,
-          "Expecting to successfully create target image, filed to build the sample project"
+          "Expecting to successfully create target image files to build the sample project"
         ).to.include(`Successfully created ${validTarget} image`);
         logger.info("Build Passed");
       }

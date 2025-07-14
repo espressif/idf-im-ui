@@ -118,7 +118,7 @@ function testRun(script) {
         runInstallVerification({
           installFolder,
           idfList: idfVersionList,
-          validTarget: targetList[0] === "All" ? "esp32" : targetList[0],
+          targetList,
         });
       });
     }
