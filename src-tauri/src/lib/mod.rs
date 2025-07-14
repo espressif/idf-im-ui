@@ -753,7 +753,6 @@ pub fn decompress_archive(
     match result {
         Ok(_) => {
             log::info!("Decompression completed successfully.");
-            move_contents_folder_up(destination_path)?;
             Ok(())
         }
         Err(e) => match e {
@@ -984,6 +983,8 @@ fn move_contents_folder_up(destination_path: &Path) -> Result<(), DecompressionE
 
             std::fs::remove_dir(&temp_dir)?;
         }
+    } else {
+      log::debug!("No single subdirectory found in {}", destination_path.display());
     }
 
     Ok(())

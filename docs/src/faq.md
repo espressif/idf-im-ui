@@ -10,7 +10,14 @@
 No, the installer does not require elevated rights and should **not** be run as an administrator. Running the installer with admin privileges is unnecessary and could lead to unintended permission issues.
 
 ### Can I use an existing ESP-IDF Git repository with EIM?
-Yes, EIM is designed to work with existing ESP-IDF Git repositories on your filesystem. During the installation process (both GUI and CLI), when prompted for the installation path, you can specify the path to your existing ESP-IDF repository.
+Yes, simply run:
+```bash
+eim install -p PATH_TO_REPO
+```
+where PATH_TO_REPO is path to your IDF git repository on your local machine.
+
+
+EIM is designed to work with existing ESP-IDF Git repositories on your filesystem. During the installation process (both GUI and CLI), when prompted for the installation path, you can specify the path to your existing ESP-IDF repository.
 
 If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 - **Utilize that existing repository**: It will not download a new copy or overwrite your existing files.
@@ -42,7 +49,7 @@ You can either:
 ### What if I want to install a specific version of IDF that is not listed?
 You can install any tagged version of ESP-IDF using the `-i` or `--idf-version` flag:
 ```bash
-eim -i v4.4.1
+eim install -i v4.4.1
 ```
 
 ### I am getting the error `/lib64/libm.so.6: version 'GLIBC_2.38' not found`. What should I do?

@@ -79,7 +79,7 @@ add_env_variable() {
 
 # Function to add a directory to the system PATH
 add_to_path() {
-    export PATH="$PATH:{{addition_to_path}}"
+    export PATH="{{addition_to_path}}:$PATH"
     printf '%s\n' "Added proper directory to PATH"
 }
 
@@ -102,12 +102,10 @@ if [ "$1" = "-e" ]; then
     exit 0
 fi
 
-is_sourced() {
-    # Check if we can return from the script (only works when sourced)
-    (return 0 2>/dev/null) && return 0 || return 1
-}
+sourced=0
+(return 0 2>/dev/null) || sourced=1
 
-if is_sourced; then
+if [ "$sourced" -eq 0 ]; then
     : # Do nothing, continue with script this due to different shell compatibility
 else
     printf '%s\n' "This script should be sourced, not executed."
