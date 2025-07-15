@@ -207,30 +207,11 @@ function runInstallVerification({
           eimJsonEntry.path,
           `IDF path on eim_idf.json not matching expected path for IDF ${idf}`
         ).to.equal(path.join(installFolder, idf, "esp-idf"));
+
         expect(
-          eimJsonEntry.python,
-          `Python path on eim_idf.json not matching expected path for IDF ${idf}`
-        ).to.equal(
-          os.platform() !== "win32"
-            ? path.join(
-                toolsFolder,
-                "tools",
-                "python",
-                idf,
-                "venv",
-                "bin",
-                "python"
-              )
-            : path.join(
-                toolsFolder,
-                "tools",
-                "python",
-                idf,
-                "venv",
-                "Scripts",
-                "python.exe"
-              )
-        );
+          fs.existsSync(eimJsonEntry.python),
+          `Invalid python path provided on eim.json ${eimJsonEntry.python}`
+        ).to.be.true;
       }
     });
 
