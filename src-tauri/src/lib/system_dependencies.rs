@@ -57,18 +57,20 @@ pub fn get_prequisites() -> Vec<&'static str> {
         _ => vec![],
     }
 }
+
 /// Returns a list of additional system-level prerequisites (development libraries)
 /// required for certain functionalities, based on the detected operating system
 /// and, for Linux, the package manager in use.
 ///
 /// These prerequisites are typically needed for compiling or running applications
-/// that depend on native libraries like `libffi`, `libusb`, or `OpenSSL`.
+/// that depend on native libraries like `libffi`, `libusb`, `OpenSSL`, and
+/// libraries required for QEMU (e.g., `libgcrypt`, `glib`, `pixman`, `sdl2`, `libslirp`).
 ///
 /// # Returns
 ///
 /// A `Vec<&'static str>` containing the names of the packages to be installed.
-/// An empty `Vec` is returned if the operating system is not Linux, or if the
-/// Linux package manager is not recognized or does not have specific prerequisites
+/// An empty `Vec` is returned if the operating system is not Linux (unless it's macOS with specific QEMU needs),
+/// or if the Linux package manager is not recognized or does not have specific prerequisites
 /// defined by this function.
 ///
 /// # Linux Package Manager Mappings:
@@ -77,6 +79,11 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libffi-dev`: Development headers for Foreign Function Interface.
 ///   - `libusb-1.0-0`: Runtime library for USB device access.
 ///   - `libssl-dev`: Development headers for OpenSSL (SSL/TLS cryptography).
+///   - `libgcrypt20`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `libglib2.0-0`: Runtime library for GLib (QEMU dependency).
+///   - `libpixman-1-0`: Runtime library for pixman (QEMU dependency).
+///   - `libsdl2-2.0-0`: Runtime library for SDL2 (QEMU dependency).
+///   - `libslirp0`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **dpkg (Debian/Ubuntu fallback):**
 ///   - Same as `apt`.
@@ -85,31 +92,53 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libffi-devel`: Development headers for Foreign Function Interface.
 ///   - `libusb`: Runtime library for USB device access.
 ///   - `openssl-devel`: Development headers for OpenSSL.
+///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `glib2`: Runtime library for GLib (QEMU dependency).
+///   - `pixman`: Runtime library for pixman (QEMU dependency).
+///   - `SDL2`: Runtime library for SDL2 (QEMU dependency).
+///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **pacman (Arch Linux):**
 ///   - `libusb`: Includes both runtime and development files for USB access.
 ///   - `libffi`: Includes both runtime and development files for Foreign Function Interface.
 ///   - `openssl`: Includes both runtime and development files for OpenSSL.
+///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `glib`: Runtime library for GLib (QEMU dependency).
+///   - `pixman`: Runtime library for pixman (QEMU dependency).
+///   - `sdl2`: Runtime library for SDL2 (QEMU dependency).
+///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **zypper (openSUSE/SUSE Linux Enterprise):**
 ///   - `libusb-1_0-0`: Runtime library for USB device access.
 ///   - `libffi-devel`: Development headers for Foreign Function Interface.
 ///   - `libopenssl-devel`: Development headers for OpenSSL.
+///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `glib2`: Runtime library for GLib (QEMU dependency).
+///   - `pixman-1`: Runtime library for pixman (QEMU dependency).
+///   - `libsdl2-2_0_0`: Runtime library for SDL2 (QEMU dependency).
+///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
-/// For other operating systems (Windows, macOS) or unrecognized Linux package managers,
+/// # macOS Prerequisites:
+/// - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+/// - `glib`: Runtime library for GLib (QEMU dependency).
+/// - `pixman`: Runtime library for pixman (QEMU dependency).
+/// - `sdl2`: Runtime library for SDL2 (QEMU dependency).
+/// - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
+///
+/// For other operating systems (Windows) or unrecognized Linux package managers,
 /// an empty vector is returned.
 pub fn get_additional_prerequisites_based_on_package_manager() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => match determine_package_manager() {
-            Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
-            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
-            Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel"],
-            Some("pacman") => vec!["libusb", "libffi", "openssl"],
-            Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel"],
+            Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev", "libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
+            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev", "libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
+            Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel", "libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
+            Some("pacman") => vec!["libusb", "libffi", "openssl", "libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
+            Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel", "libgcrypt", "glib2", "pixman-1", "libsdl2-2_0_0", "libslirp"],
             _ => vec![],
         },
         "windows" => vec![],
-        "macos" => vec![],
+        "macos" => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
         _ => vec![],
     }
 }
@@ -297,7 +326,23 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                             debug!("{} is already installed: {:?}", tool, o);
                         } else {
                             debug!("check for {} failed: {:?}", tool, o);
-                            unsatisfied.push(tool);
+                            // check if the tool is installed with brew
+                            let output = command_executor::execute_command(
+                                "brew",
+                                &["list", tool],
+                            );
+                            match output {
+                                Ok(o) => {
+                                    if o.status.success() {
+                                        debug!("{} is already installed with brew", tool);
+                                    } else {
+                                        unsatisfied.push(tool);
+                                    }
+                                }
+                                Err(_e) => {
+                                    unsatisfied.push(tool);
+                                }
+                            }
                         }
                     }
                     Err(_e) => {
