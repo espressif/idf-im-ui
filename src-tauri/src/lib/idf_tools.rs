@@ -302,8 +302,10 @@ pub fn get_download_link_by_platform(
     } else {
       preferred_version = tool.versions.first().unwrap();
     }
-    if let Some(download) = preferred_version.downloads.get(platform) {
+    if let Some(download) = preferred_version.downloads.get(platform).or_else(|| preferred_version.downloads.get("any")) {
       tool_links.insert(tool.name.clone(), (preferred_version.name.clone(), download.clone()));
+    } else {
+      log::warn!("Tool {} does not have a download link for platform {}", tool.name, platform);
     }
   }
   tool_links
@@ -780,7 +782,7 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
         }
     }
 
-    if tool.version_cmd.is_empty() {
+    if tool.version_cmd.is_empty() || tool.version_cmd[0].is_empty() {
       match expected_dir.try_exists() {
           Ok(true) => {
               return Ok(ToolStatus::Correct {
@@ -803,9 +805,13 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
         }
     }
     // Execute the version command
+    let args = match tool.version_cmd.get(1) {
+        Some(arg) => vec![arg.as_str()],
+        None => vec![],
+    };
     let output = match execute_command_with_env(
         &tool.version_cmd[0],
-        &vec![&tool.version_cmd[1]],
+        &args,
         vec![("PATH", tmp_path.as_str())]
     ) {
         Ok(output) => output,
@@ -844,6 +850,7 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
             expected: expected_version.name.clone(),
         })
     }
+
 }
 
 #[cfg(test)]
