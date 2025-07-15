@@ -215,18 +215,93 @@ function runInstallVerification({
       }
     });
 
+    it("3 - Check python environment requirements", async function () {
+      /**
+       * This test checks if the Python environment is set up correctly.
+       */
+      logger.info(`Validating python requirements`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
+
+      for (let idf of idfList) {
+        let eimJsonEntry = null;
+        let pathToIDFScript;
+
+        for (let entry of eimJsonContent.idfInstalled) {
+          if (entry.name === idf) {
+            eimJsonEntry = entry;
+            break;
+          }
+        }
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
+          .be.null;
+
+        testRunner = new CLITestRunner();
+
+        let pythonRequirementPath = fs.existsSync(
+          path.join(
+            eimJsonEntry.path,
+            "tools",
+            "requirements",
+            "requirements.core.txt"
+          )
+        )
+          ? path.join(
+              eimJsonEntry.path,
+              "tools",
+              "requirements",
+              "requirements.core.txt"
+            )
+          : path.join(eimJsonEntry.path, "requirements.txt");
+
+        expect(
+          fs.existsSync(pythonRequirementPath),
+          `Python requirements file not found for IDF ${idf}`
+        ).to.be.true;
+
+        try {
+          await testRunner.runIDFTerminal(eimJsonEntry.activationScript);
+        } catch (error) {
+          logger.info("Error to start IDF terminal");
+          logger.info(testRunner.output);
+          this.test.error(new Error("Error starting IDF Terminal"));
+          logger.info(` Error: ${error}`);
+        }
+
+        testRunner.sendInput(
+          `${eimJsonEntry.python} ${path.join(
+            eimJsonEntry.path,
+            "tools",
+            "check_python_dependencies.py"
+          )} -r ${pythonRequirementPath}\r`
+        );
+        const satisfiedReqs = await testRunner.waitForOutput(
+          "Python requirements are satisfied"
+        );
+        expect(satisfiedReqs, "Python Requirements not installed").to.be.true;
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
+      }
+    });
+
     it("3 - Should have correct tools version installed on path", async function () {
       /**
        * This test checks if the tools folder contains the expected tools versions.
        * The tools are activated by the activation script.
        *
        */
-      testRunner = new CLITestRunner();
       logger.info(`Validating tools versions installed on path`);
-      let pathToIDFScript;
-      let toolsIndexFile;
       for (let idf of idfList) {
-        pathToIDFScript =
+        testRunner = new CLITestRunner();
+        let pathToIDFScript =
           os.platform() !== "win32"
             ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
             : path.join(
@@ -243,7 +318,7 @@ function runInstallVerification({
           logger.info(` Error: ${error}`);
         }
 
-        toolsIndexFile = JSON.parse(
+        let toolsIndexFile = JSON.parse(
           fs.readFileSync(
             path.join(installFolder, idf, "esp-idf", "tools", "tools.json"),
             "utf-8"
@@ -336,7 +411,6 @@ function runInstallVerification({
           )}: ${requiredTools.join(", ")}`
         );
 
-        let toolVersionOutput;
         for (let tool of toolsIndexFile.tools) {
           testRunner.output = "";
           if (requiredTools.includes(tool.name)) {
@@ -351,7 +425,7 @@ function runInstallVerification({
 
             if (tool.version_cmd.join(" ") !== "") {
               testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
-              toolVersionOutput = await testRunner.waitForOutput(
+              let toolVersionOutput = await testRunner.waitForOutput(
                 `${tool.versions[0].name}`
               );
               logger.info(
@@ -367,6 +441,14 @@ function runInstallVerification({
             }
           }
         }
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
 
@@ -376,9 +458,9 @@ function runInstallVerification({
        * The commands might differ for each operating system.
        * The assert is based on the existence of the project files in the expected folder.
        */
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - create new project`);
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(installFolder, idf, "project");
         const pathToIDFScript =
           os.platform() !== "win32"
@@ -432,6 +514,15 @@ function runInstallVerification({
         ).to.include("main");
 
         logger.info("sample project creation Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
 
@@ -440,10 +531,10 @@ function runInstallVerification({
        * This test attempts to set a target MCU for the project created in the previous test.
        */
       this.timeout(750000);
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - set target`);
 
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(
           installFolder,
           idf,
@@ -511,6 +602,15 @@ function runInstallVerification({
         ).to.include("Generating done");
 
         logger.info("Set Target Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
 
@@ -520,9 +620,9 @@ function runInstallVerification({
        * The test is successful if the success message is printed in the terminal.
        */
       this.timeout(600000);
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - build project`);
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(
           installFolder,
           idf,
@@ -578,6 +678,15 @@ function runInstallVerification({
           "Expecting to successfully create target image files to build the sample project"
         ).to.include(`Successfully created ${validTarget} image`);
         logger.info("Build Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
   });
