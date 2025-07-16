@@ -104,6 +104,39 @@ fn format_powershell_env_pairs(pairs: &[(String, String)]) -> String {
     format!("$env_var_pairs = @{{\n{}\n}}", formatted_pairs.join("\n"))
 }
 
+/// Extracts the major and minor version numbers from a version string.
+///
+/// This function takes a version string that may optionally begin with a `'v'`
+/// prefix (e.g., `"v1.2.3"` or `"1.2.3"`), removes the prefix if present, and
+/// attempts to extract the first two dot-separated components (major and minor).
+///
+/// # Arguments
+///
+/// * `version` - A string slice representing the version, optionally prefixed with `'v'`.
+///
+/// # Returns
+///
+/// * `Some(String)` containing the `"major.minor"` version if at least two components are present.
+/// * `None` if the version string has fewer than two dot-separated components.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(extract_major_minor("v1.2.3"), Some("1.2".to_string()));
+/// assert_eq!(extract_major_minor("2.5"), Some("2.5".to_string()));
+/// assert_eq!(extract_major_minor("1"), None);
+/// ```
+fn extract_major_minor(version: &str) -> Option<String> {
+    let trimmed = version.strip_prefix('v').unwrap_or(version);
+    let parts: Vec<&str> = trimmed.split('.').collect();
+
+    if parts.len() >= 2 {
+        Some(format!("{}.{}", parts[0], parts[1]))
+    } else {
+        None
+    }
+}
+
 /// Creates an activation shell script for the ESP-IDF toolchain.
 ///
 /// # Parameters
@@ -149,7 +182,7 @@ pub fn create_activation_shell_script(
         "idf_tools_path_escaped",
         &replace_unescaped_spaces_posix(idf_tools_path),
     );
-    context.insert("idf_version", &idf_version);
+    context.insert("idf_version", &extract_major_minor(idf_version).unwrap_or(idf_version.to_string()));
     context.insert("addition_to_path", &export_paths.join(":"));
     context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
 
@@ -286,7 +319,7 @@ fn create_powershell_profile(
     let mut context = Context::new();
     println!("idf_path: {}", replace_unescaped_spaces_win(idf_path));
     context.insert("idf_path", &replace_unescaped_spaces_win(idf_path));
-    context.insert("idf_version", &idf_version);
+    context.insert("idf_version", &extract_major_minor(idf_version).unwrap_or(idf_version.to_string()));
     context.insert(
         "env_var_pairs",
         &format_powershell_env_pairs(&env_var_pairs),
