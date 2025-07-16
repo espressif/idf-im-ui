@@ -94,10 +94,15 @@ export function runGUICustomInstallTest(
               "bison",
               "gperf",
               "ccache",
-              "libffi-dev",
-              "libssl-dev",
               "dfu-util",
+              "libffi-dev",
               "libusb-1.0-0",
+              "libssl-dev",
+              "libgcrypt20",
+              "libglib2.0-0",
+              "libpixman-1-0",
+              "libsdl2-2.0-0",
+              "libslirp0",
             ];
       for (let requisite of expectedRequisites) {
         expect(requisitesList).to.include(requisite);
