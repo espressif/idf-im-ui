@@ -123,6 +123,7 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
         if let Some(platform_overrides) = &tool.platform_overrides {
             for override_entry in platform_overrides {
                 if override_entry.platforms.contains(&platform.to_string()) {
+                    debug!("Applying platform override for tool: {} on platform: {}", tool.name, platform);
                     if let Some(install) = &override_entry.install {
                         tool.install = install.clone();
                     }
@@ -132,6 +133,8 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
                     }
 
                     break; // Apply only the first matching override
+                } else {
+                    debug!("No matching platform override for tool: {} on platform: {}", tool.name, platform);
                 }
             }
         }

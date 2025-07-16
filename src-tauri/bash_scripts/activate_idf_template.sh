@@ -44,7 +44,7 @@ parse_cmake_version() {
 }
 
 IDF_VERSION=$(parse_cmake_version)
-
+ENV_VAR_PAIRS=$(get_env_var_pairs)
 
 # Function to print environment variables
 print_env_variables() {
@@ -96,22 +96,28 @@ activate_venv() {
     fi
 }
 
-# Handle command line arguments
+# Check if the script is being sourced or executed
+is_sourced() {
+  if [ -n "$ZSH_VERSION" ]; then
+      case $ZSH_EVAL_CONTEXT in *:file:*) return 0;; esac
+  else  # Add additional POSIX-compatible shell names here, if needed.
+      case ${0##*/} in dash|-dash|bash|-bash|ksh|-ksh|sh|-sh) return 0;; esac
+  fi
+  return 1  # NOT sourced.
+}
+
+# Sample call.
+is_sourced && sourced=1 || sourced=0
+
 if [ "$1" = "-e" ]; then
     print_env_variables
     exit 0
-fi
-
-sourced=0
-(return 0 2>/dev/null) || sourced=1
-
-if [ "$sourced" -eq 0 ]; then
-    : # Do nothing, continue with script this due to different shell compatibility
 else
-    printf '%s\n' "This script should be sourced, not executed."
-    printf '%s\n' "Usage: source $0 or . $0"
-    printf '%s\n' "If you want to print environment variables, run it with the -e parameter."
-    exit 1
+    if [ "$sourced" -eq 0 ]; then
+        echo "This script should be sourced, not executed."
+        echo "If you want to print environment variables, run it with the -e parameter."
+        exit 1
+    fi
 fi
 
 alias idf.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/tools/idf.py"
