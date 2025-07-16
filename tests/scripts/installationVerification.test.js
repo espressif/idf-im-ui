@@ -390,14 +390,19 @@ function runInstallVerification({
           .map((tool) => {
             if (targetList.some((t) => t.toLowerCase() === "all")) {
               return tool.name;
-            } else if (
-              tool.supported_targets &&
-              (tool.supported_targets.some((t) => t.toLowerCase() === "all") ||
-                targetList.some((target) =>
-                  tool.supported_targets
-                    .map((t) => t.toLowerCase())
-                    .includes(target.toLowerCase())
-                ))
+            }
+            if (!tool.supported_targets) {
+              return tool.name;
+            }
+            if (tool.supported_targets.some((t) => t.toLowerCase() === "all")) {
+              return tool.name;
+            }
+            if (
+              targetList.some((target) =>
+                tool.supported_targets
+                  .map((t) => t.toLowerCase())
+                  .includes(target.toLowerCase())
+              )
             ) {
               return tool.name;
             }
@@ -671,12 +676,12 @@ function runInstallVerification({
 
         expect(
           buildComplete,
-          "Expecting 'Project build complete', files to build the sample project"
+          "Expecting 'Project build complete', failed to build the sample project"
         ).to.be.true;
         const validTarget = targetList[0] === "all" ? "esp32" : targetList[0];
         expect(
           testRunner.output,
-          "Expecting to successfully create target image files to build the sample project"
+          "Expecting to successfully create target image, failed to build the sample project"
         ).to.include(`Successfully created ${validTarget} image`);
         logger.info("Build Passed");
 
