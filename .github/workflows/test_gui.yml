@@ -77,7 +77,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip webkit2gtk-driver
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip webkit2gtk-driver
 
       - name: Run IDF basic install test script (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -105,7 +105,7 @@ jobs:
       - name: Install dependencies (MacOS)
         if: matrix.os == 'macos-latest'
         run: |
-          brew install cmake ninja dfu-util
+          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
 
       - name: Run IDF basic install test script (MacOS)
         if: matrix.os == 'macos-latest'
@@ -265,7 +265,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-venv python3-pip webkit2gtk-driver xvfb
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip webkit2gtk-driver xvfb
 
       - name: Start XVFB (Ubuntu)
         if: matrix.os == 'ubuntu-latest'

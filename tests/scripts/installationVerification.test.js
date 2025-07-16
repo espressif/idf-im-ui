@@ -673,6 +673,7 @@ function runInstallVerification({
           buildComplete,
           "Expecting 'Project build complete', files to build the sample project"
         ).to.be.true;
+        const validTarget = targetList[0] === "all" ? "esp32" : targetList[0];
         expect(
           testRunner.output,
           "Expecting to successfully create target image files to build the sample project"
