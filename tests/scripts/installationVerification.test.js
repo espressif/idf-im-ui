@@ -292,7 +292,7 @@ function runInstallVerification({
       }
     });
 
-    it("3 - Should have correct tools version installed on path", async function () {
+    it("4 - Should have correct tools version installed on path", async function () {
       /**
        * This test checks if the tools folder contains the expected tools versions.
        * The tools are activated by the activation script.
@@ -444,6 +444,37 @@ function runInstallVerification({
                 `Tool ${tool.name} version not matching expected version ${tool.versions[0].name}`
               ).to.be.true;
             }
+
+            if (
+              tool.name === "esp-rom-elfs" &&
+              tool.version_cmd.join(" ") === ""
+            ) {
+              const espRomElfsVersion = tool.versions[0].name;
+              const espRomElfsPath = path.join(
+                toolsFolder,
+                "tools",
+                "esp-rom-elfs",
+                espRomElfsVersion
+              );
+
+              expect(
+                fs.existsSync(espRomElfsPath),
+                `esp-rom-elfs path does not exist: ${espRomElfsPath}`
+              ).to.be.true;
+
+              const pathEntries = process.env.PATH.split(path.delimiter);
+              expect(
+                pathEntries.includes(espRomElfsPath),
+                `esp-rom-elfs path is not in PATH: ${espRomElfsPath}`
+              ).to.be.true;
+
+              const files = fs.readdirSync(espRomElfsPath);
+              const hasRomElf = files.some((f) => f.endsWith("rom.elf"));
+              expect(
+                hasRomElf,
+                `No *rom.elf files found in esp-rom-elfs path: ${espRomElfsPath}`
+              ).to.be.true;
+            }
           }
         }
         try {
@@ -457,7 +488,7 @@ function runInstallVerification({
       }
     });
 
-    it("4 - Should create a new project based on a template", async function () {
+    it("5 - Should create a new project based on a template", async function () {
       /**
        * This test should attempt to create a copy of the Hello World Project into the ~/esp folder
        * The commands might differ for each operating system.
@@ -531,7 +562,7 @@ function runInstallVerification({
       }
     });
 
-    it("5 - Should set the target", async function () {
+    it("6 - Should set the target", async function () {
       /**
        * This test attempts to set a target MCU for the project created in the previous test.
        */
@@ -619,7 +650,7 @@ function runInstallVerification({
       }
     });
 
-    it("6 - Should build project for the selected target", async function () {
+    it("7 - Should build project for the selected target", async function () {
       /**
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.
