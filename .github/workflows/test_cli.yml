@@ -158,11 +158,6 @@ jobs:
           ls ./artifacts/eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}/
           Copy-Item .\artifacts\eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}\eim.exe -Destination test-bin
 
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install ninja -y
-
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |

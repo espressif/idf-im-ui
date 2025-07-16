@@ -145,11 +145,6 @@ jobs:
           ls ./artifacts/eim-gui-${{ matrix.package_name }}-${{ inputs.run_number }}/
           Copy-Item .\artifacts\eim-gui-${{ matrix.package_name }}-${{ inputs.run_number }}\eim.exe -Destination test-bin
 
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install ninja -y
-
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -328,11 +323,6 @@ jobs:
         run: |
           Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
           Start-Process -FilePath setup.exe -Verb RunAs -Wait
-
-      - name: Install dependencies (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          choco install ninja -y
 
       - name: Run IDF basic install test script using GUI (Windows)
         if: matrix.os == 'windows-latest'
