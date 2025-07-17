@@ -44,6 +44,7 @@ The installer uses TOML format for configuration files. Here is an example:
 
 ```toml
 path = "/Users/Username/.espressif"
+idf_path = "/tmp/esp-new/pepajedenakole/esp-idf"
 esp_idf_json_path = "/Users/Username/.espressif/tools"
 tool_download_folder_name = "dist"
 tool_install_folder_name = "tools"
@@ -58,6 +59,8 @@ mirror = "https://github.com"
 idf_mirror = "https://github.com"
 recurse_submodules = false
 install_all_prerequisites = false
+skip_prerequisites_check = false
+version_name = "someversionname"
 ```
 
 After completing installation through either the GUI wizard or CLI, you have the option to save your configuration for future use. This saved configuration can be shared with other users to replicate the same installation setup.

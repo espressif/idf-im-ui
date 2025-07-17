@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, trace};
 use regex::Regex;
 use serde::{de, Deserialize};
 use std::collections::{HashMap, HashSet};
@@ -123,6 +123,7 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
         if let Some(platform_overrides) = &tool.platform_overrides {
             for override_entry in platform_overrides {
                 if override_entry.platforms.contains(&platform.to_string()) {
+                    debug!("Applying platform override for tool: {} on platform: {}", tool.name, platform);
                     if let Some(install) = &override_entry.install {
                         tool.install = install.clone();
                     }
@@ -132,6 +133,8 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
                     }
 
                     break; // Apply only the first matching override
+                } else {
+                    debug!("No matching platform override for tool: {} on platform: {}", tool.name, platform);
                 }
             }
         }
@@ -775,6 +778,7 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
         .ok_or(format!("No version found for tool '{}'", tool_name)).map_err(|e| anyhow!(e))?;
 
     // adding to PATH the directory where the tool is(or will be) installed
+    debug!("Checking tool: {}, expected version: {} and install dir: {}", tool_name, expected_version.name, install_dir.display());
     let mut expected_dir = install_dir.join(&tool_name).join(expected_version.clone().name);
     for ex_path in &tool.export_paths {
         for level in ex_path {
@@ -804,19 +808,55 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
             tmp_path = format!("{}:{}", expected_dir.to_str().unwrap(), tmp_path);
         }
     }
+
     // Execute the version command
-    let args = match tool.version_cmd.get(1) {
+    // first try exactly expected binary
+    let output = {
+      let tool_name = &tool.version_cmd[0];
+      let args = match tool.version_cmd.get(1) {
         Some(arg) => vec![arg.as_str()],
         None => vec![],
-    };
-    let output = match execute_command_with_env(
-        &tool.version_cmd[0],
-        &args,
-        vec![("PATH", tmp_path.as_str())]
-    ) {
-        Ok(output) => output,
-        Err(_) => return Ok(ToolStatus::Missing),
-    };
+      };
+      let env = vec![("PATH", tmp_path.as_str())];
+
+      // Try 1: Exact tool path
+      let exact_tool_path = expected_dir.join(tool_name);
+      if exact_tool_path.try_exists().unwrap_or(false) {
+          log::debug!("Found exact tool at: {}", exact_tool_path.display());
+          if let Ok(output) = execute_command_with_env(&exact_tool_path.to_string_lossy(), &args, env.clone()) {
+              output
+          } else {
+              return Ok(ToolStatus::Missing);
+          }
+      }
+      // Try 2: Windows .exe extension
+      else if std::env::consts::OS == "windows" {
+          let exact_tool_path_exe = expected_dir.join(format!("{}.exe", tool_name));
+          if exact_tool_path_exe.try_exists().unwrap_or(false) {
+              log::debug!("Found exact tool at: {}", exact_tool_path_exe.display());
+              if let Ok(output) = execute_command_with_env(&exact_tool_path_exe.to_string_lossy(), &args, env.clone()) {
+                  output
+              } else {
+                  return Ok(ToolStatus::Missing);
+              }
+          } else {
+              // Try 3: Fallback to PATH
+              log::debug!("Exact tool not found at path: {}, falling back to version command", exact_tool_path.display());
+              match execute_command_with_env(tool_name, &args, env) {
+                  Ok(output) => output,
+                  Err(_) => return Ok(ToolStatus::Missing),
+              }
+          }
+      }
+      // Try 3: Non-Windows fallback to PATH
+      else {
+          log::debug!("Exact tool not found at path: {}, falling back to version command", exact_tool_path.display());
+          match execute_command_with_env(tool_name, &args, env) {
+              Ok(output) => output,
+              Err(_) => return Ok(ToolStatus::Missing),
+          }
+      }
+  };
 
     // Convert output to string
     let output_str = String::from_utf8_lossy(&output.stdout);

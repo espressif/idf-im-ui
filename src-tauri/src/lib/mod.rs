@@ -82,7 +82,11 @@ fn format_bash_env_pairs(pairs: &[(String, String)]) -> String {
         .map(|(key, value)| format!("    \"{}:{}\"", key, value))
         .collect();
 
-    format!("env_var_pairs=(\n{}\n)", formatted_pairs.join("\n"))
+    format!("get_env_var_pairs() {{
+cat << 'EOF'
+{}
+EOF
+}}", formatted_pairs.join("\n"))
 }
 
 /// Formats a vector of key-value pairs into a PowerShell-compatible format for environment variables.
@@ -749,7 +753,6 @@ pub fn decompress_archive(
     match result {
         Ok(_) => {
             log::info!("Decompression completed successfully.");
-            move_contents_folder_up(destination_path)?;
             Ok(())
         }
         Err(e) => match e {
@@ -980,6 +983,8 @@ fn move_contents_folder_up(destination_path: &Path) -> Result<(), DecompressionE
 
             std::fs::remove_dir(&temp_dir)?;
         }
+    } else {
+      log::debug!("No single subdirectory found in {}", destination_path.display());
     }
 
     Ok(())

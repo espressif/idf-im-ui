@@ -5,11 +5,61 @@ param(
 
 {{env_var_pairs}}
 
+function Parse-CMakeVersion {
+
+    $cmakeFile = "{{idf_path}}\tools\cmake\version.cmake"
+
+    # Check if file exists
+    if (-not (Test-Path $cmakeFile)) {
+        Write-Error "CMake version file not found at: $cmakeFile"
+        return $null
+    }
+
+    $major = $null
+    $minor = $null
+
+    try {
+        # Read the file content
+        $content = Get-Content $cmakeFile -ErrorAction Stop
+
+        foreach ($line in $content) {
+            $line = $line.Trim()
+
+            if ($line -match '^set\(IDF_VERSION_MAJOR') {
+                # Extract first number from the line
+                if ($line -match '\d+') {
+                    $major = $matches[0]
+                }
+            }
+            elseif ($line -match '^set\(IDF_VERSION_MINOR') {
+                # Extract first number from the line
+                if ($line -match '\d+') {
+                    $minor = $matches[0]
+                }
+            }
+        }
+
+        # Check if both versions were found
+        if ($null -eq $major -or $null -eq $minor) {
+            Write-Error "Could not find both major and minor version numbers"
+            return $null
+        }
+
+        # Return the version
+        return "$major.$minor"
+    }
+    catch {
+        Write-Error "Failed to read CMake version file: $($_.Exception.Message)"
+        return $null
+    }
+}
+
+$IdfVersion = Parse-CMakeVersion
 
 # Function to print environment variables
 function Print-EnvVariables {
     "PATH={{add_paths_extras}}"
-    "ESP_IDF_VERSION={{idf_version}}"
+    "ESP_IDF_VERSION=$IdfVersion"
     "SYSTEM_PATH={{current_system_path}}"
     $env_var_pairs.GetEnumerator() | ForEach-Object {
         Write-Host "$($_.Key)=$($_.Value)"
@@ -23,13 +73,13 @@ if ($e) {
 }
 
 # Set environment variables
-$env:ESP_IDF_VERSION = "{{idf_version}}"
+$env:ESP_IDF_VERSION = "$IdfVersion"
 $env_var_pairs.GetEnumerator() | ForEach-Object {
     Set-Item -Path "env:$($_.Key)" -Value $_.Value
 }
 
 # Set system path
-$env:PATH += ";{{add_paths_extras}}"
+$env:PATH = "{{add_paths_extras}};$env:PATH"
 
 # Define the Invoke-idfpy function
 function global:Invoke-idfpy {
