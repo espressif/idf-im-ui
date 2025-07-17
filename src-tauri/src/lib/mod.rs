@@ -79,7 +79,7 @@ fn create_executable_shell_script(file_path: &str, content: &str) -> Result<(), 
 fn format_bash_env_pairs(pairs: &[(String, String)]) -> String {
     let formatted_pairs: Vec<String> = pairs
         .iter()
-        .map(|(key, value)| format!("    \"{}:{}\"", key, value))
+        .map(|(key, value)| format!("{}:{}", key, value))
         .collect();
 
     format!("get_env_var_pairs() {{
