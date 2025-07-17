@@ -168,6 +168,7 @@ async fn install_single_version(
       paths.tool_install_directory.to_str().unwrap(),
       export_vars,
       paths.python_venv_path.to_str(),
+      None, // env_vars
   );
 
   Ok(())

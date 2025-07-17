@@ -378,7 +378,21 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
     };
-    if let Some(tool_set) = config.into_iter().next() {
+    let mut settings = crate::settings::Settings::default();
+    let config_path = get_default_config_path();
+    let mut current_config = match IdfConfig::from_file(&config_path) {
+      Ok(config) => config,
+      Err(_e) => {
+        info!("Config file not found, creating a new one at: {}", config_path.display());
+        settings.idf_versions = Some(vec![]);
+        match settings.save_esp_ide_json() {
+          Ok(_) => info!("Created new config file at: {}", config_path.display()),
+          Err(e) => error!("Failed to create config file: {}", e),
+        }
+        IdfConfig::from_file(&config_path).unwrap()
+      }
+    };
+    for tool_set in config.into_iter() {
         let new_idf_tools_path = extract_tools_path_from_python_env_path(
             tool_set.env_vars.get("IDF_PYTHON_ENV_PATH").unwrap(),
         )
@@ -387,12 +401,19 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         .unwrap()
         .to_string();
         let new_export_paths = vec![tool_set.env_vars.get("PATH").unwrap().to_string()];
-        let settings = crate::settings::Settings::default();
+
         let paths = settings.get_version_paths(&tool_set.idf_version)?;
         let idf_python_env_path = tool_set
             .env_vars
             .get("IDF_PYTHON_ENV_PATH")
             .map(|s| s.to_string());
+
+        let mut env_vars = tool_set.env_vars.clone();
+        env_vars.remove("PATH");
+        env_vars.remove("ESP_IDF_VERSION");
+        let env_vars_vec = env_vars.into_iter()
+            .map(|(k, v)| (k, v.to_string()))
+            .collect::<Vec<(String, String)>>();
 
         single_version_post_install(
             &paths.activation_script_path.to_string_lossy().into_owned(),
@@ -401,6 +422,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             &new_idf_tools_path,
             new_export_paths,
             idf_python_env_path.as_deref(),
+            Some(env_vars_vec),
         );
 
         let python = match std::env::consts::OS {
@@ -417,32 +439,19 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
                 .to_string(),
             idf_tools_path: new_idf_tools_path,
         };
-        let config_path = get_default_config_path();
-        let mut current_config = match IdfConfig::from_file(&config_path) {
-            Ok(config) => config,
-            Err(_e) => {
-                info!("Config file not found, creating a new one at: {}", config_path.display());
-                let mut setting = crate::settings::Settings::default();
-                setting.idf_versions = Some(vec![]);
-                match setting.save_esp_ide_json() {
-                    Ok(_) => info!("Created new config file at: {}", config_path.display()),
-                    Err(e) => error!("Failed to create config file: {}", e),
-                }
-                IdfConfig::from_file(&config_path).unwrap()
-            }
-        };
+
         current_config.idf_installed.push(installation);
-        match current_config.to_file(config_path, true, true) {
-            Ok(_) => {
-                debug!("Updated config file with new tool set");
-                return Ok(());
-            }
-            Err(e) => {
-                return Err(anyhow!("Failed to update config file: {}", e));
-            }
-        }
+
     }
-    Ok(())
+    match current_config.to_file(config_path, true, true) {
+      Ok(_) => {
+        debug!("Updated config file with new tool set");
+        return Ok(())
+      }
+      Err(e) => {
+        return Err(anyhow!("Failed to update config file: {}", e))
+      }
+    }
 }
 
 /// Converts a path to a long path compatible with Windows.

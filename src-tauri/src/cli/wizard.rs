@@ -471,6 +471,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             tool_install_directory.to_str().unwrap(),
             export_paths,
             paths.python_venv_path.to_str(),
+            None, // env_vars
         )
     }
     save_config_if_desired(&config)?;
