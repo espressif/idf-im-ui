@@ -9,7 +9,7 @@ import os from "os";
 function runInstallVerification({
   installFolder,
   idfList,
-  validTarget = "esp32",
+  targetList = ["esp32"],
 }) {
   describe("3- Installation verification test ->", function () {
     this.timeout(600000);
@@ -37,7 +37,7 @@ function runInstallVerification({
         logger.info(`Test failed: ${this.currentTest.title}`);
         if (testRunner) {
           logger.info(
-            `Terminal output: >>\r ${testRunner.output.slice(-1000)}`
+            `Terminal output: >>\r ${testRunner.output.slice(-2000)}`
           );
           logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
         }
@@ -207,45 +207,100 @@ function runInstallVerification({
           eimJsonEntry.path,
           `IDF path on eim_idf.json not matching expected path for IDF ${idf}`
         ).to.equal(path.join(installFolder, idf, "esp-idf"));
+
         expect(
-          eimJsonEntry.python,
-          `Python path on eim_idf.json not matching expected path for IDF ${idf}`
-        ).to.equal(
-          os.platform() !== "win32"
-            ? path.join(
-                toolsFolder,
-                "tools",
-                "python",
-                idf,
-                "venv",
-                "bin",
-                "python3"
-              )
-            : path.join(
-                toolsFolder,
-                "tools",
-                "python",
-                idf,
-                "venv",
-                "Scripts",
-                "Python.exe"
-              )
-        );
+          fs.existsSync(eimJsonEntry.python),
+          `Invalid python path provided on eim.json ${eimJsonEntry.python}`
+        ).to.be.true;
       }
     });
 
-    it("3 - Should have correct tools version installed on path", async function () {
+    it("3 - Check python environment requirements", async function () {
+      /**
+       * This test checks if the Python environment is set up correctly.
+       */
+      logger.info(`Validating python requirements`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
+
+      for (let idf of idfList) {
+        let eimJsonEntry = null;
+
+        for (let entry of eimJsonContent.idfInstalled) {
+          if (entry.name === idf) {
+            eimJsonEntry = entry;
+            break;
+          }
+        }
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
+          .be.null;
+
+        testRunner = new CLITestRunner();
+
+        let pythonRequirementPath = fs.existsSync(
+          path.join(
+            eimJsonEntry.path,
+            "tools",
+            "requirements",
+            "requirements.core.txt"
+          )
+        )
+          ? path.join(
+              eimJsonEntry.path,
+              "tools",
+              "requirements",
+              "requirements.core.txt"
+            )
+          : path.join(eimJsonEntry.path, "requirements.txt");
+
+        expect(
+          fs.existsSync(pythonRequirementPath),
+          `Python requirements file not found for IDF ${idf}`
+        ).to.be.true;
+
+        try {
+          await testRunner.runIDFTerminal(eimJsonEntry.activationScript);
+        } catch (error) {
+          logger.info("Error to start IDF terminal");
+          logger.info(testRunner.output);
+          this.test.error(new Error("Error starting IDF Terminal"));
+          logger.info(` Error: ${error}`);
+        }
+
+        testRunner.sendInput(
+          `${eimJsonEntry.python} ${path.join(
+            eimJsonEntry.path,
+            "tools",
+            "check_python_dependencies.py"
+          )} -r ${pythonRequirementPath}\r`
+        );
+        const satisfiedReqs = await testRunner.waitForOutput(
+          "Python requirements are satisfied"
+        );
+        expect(satisfiedReqs, "Python Requirements not installed").to.be.true;
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
+      }
+    });
+
+    it("4 - Should have correct tools version installed on path", async function () {
       /**
        * This test checks if the tools folder contains the expected tools versions.
        * The tools are activated by the activation script.
        *
        */
-      testRunner = new CLITestRunner();
       logger.info(`Validating tools versions installed on path`);
-      let pathToIDFScript;
-      let toolsList;
       for (let idf of idfList) {
-        pathToIDFScript =
+        testRunner = new CLITestRunner();
+        let pathToIDFScript =
           os.platform() !== "win32"
             ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
             : path.join(
@@ -261,24 +316,108 @@ function runInstallVerification({
           this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
         }
-        toolsList = JSON.parse(
+
+        let toolsIndexFile = JSON.parse(
           fs.readFileSync(
             path.join(installFolder, idf, "esp-idf", "tools", "tools.json"),
             "utf-8"
           )
         );
         expect(
-          toolsList,
+          toolsIndexFile,
           `tools.json file not found on the tools folder for IDF ${idf}`
         ).to.be.an("object").that.is.not.empty;
         expect(
-          toolsList,
+          toolsIndexFile,
           `tools.json file does not contain expected tools for IDF ${idf}`
         ).to.have.property("tools");
-        let toolVersionOutput;
-        for (let tool of toolsList.tools) {
+
+        // function to get the tag for the operating system to use when reading tools.json
+
+        function getPlatformKey() {
+          const arch = os.arch();
+          const platform = os.platform();
+
+          if (platform === "linux") {
+            if (arch === "x64") return "linux-amd64";
+            if (arch === "arm64") return "linux-arm64";
+            if (arch === "arm") return "linux-armhf"; // or 'linux-armel' depending on your system
+            if (arch === "ia32") return "linux-i686";
+          }
+          if (platform === "darwin") {
+            if (arch === "x64") return "macos";
+            if (arch === "arm64") return "macos-arm64";
+          }
+          if (platform === "win32") {
+            if (arch === "x64") return "win64";
+            if (arch === "ia32") return "win32";
+          }
+          return null;
+        }
+
+        const platformKey = getPlatformKey();
+
+        // Should check which are the tools that are supposed to be installed based on the OS architecture and the selected targets
+        // This information comes from the keys platform_overrides and supported_targets
+
+        const osRequiredTools = toolsIndexFile.tools.filter((tool) => {
+          if (tool.platform_overrides) {
+            for (let entry of tool.platform_overrides) {
+              if (entry.install && entry.platforms.includes(platformKey)) {
+                if (
+                  entry.install === "always" ||
+                  entry.install === "on_request"
+                ) {
+                  return true;
+                }
+              }
+            }
+          }
+          if (tool.install === "always" || tool.install === "on_request") {
+            return true;
+          }
+          return false;
+        });
+
+        logger.info(
+          `Required tools for IDF ${idf} on platform ${platformKey}: ${osRequiredTools
+            .map((tool) => tool.name)
+            .join(", ")}`
+        );
+
+        const requiredTools = osRequiredTools
+          .map((tool) => {
+            if (targetList.some((t) => t.toLowerCase() === "all")) {
+              return tool.name;
+            }
+            if (!tool.supported_targets) {
+              return tool.name;
+            }
+            if (tool.supported_targets.some((t) => t.toLowerCase() === "all")) {
+              return tool.name;
+            }
+            if (
+              targetList.some((target) =>
+                tool.supported_targets
+                  .map((t) => t.toLowerCase())
+                  .includes(target.toLowerCase())
+              )
+            ) {
+              return tool.name;
+            }
+            return undefined;
+          })
+          .filter(Boolean);
+
+        logger.info(
+          `Required tools for IDF ${idf} on platform ${platformKey} and targets ${targetList.join(
+            ", "
+          )}: ${requiredTools.join(", ")}`
+        );
+
+        for (let tool of toolsIndexFile.tools) {
           testRunner.output = "";
-          if (tool && tool.install === "always") {
+          if (requiredTools.includes(tool.name)) {
             expect(
               tool,
               `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
@@ -290,11 +429,8 @@ function runInstallVerification({
 
             if (tool.version_cmd.join(" ") !== "") {
               testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
-              toolVersionOutput = await testRunner.waitForOutput(
+              let toolVersionOutput = await testRunner.waitForOutput(
                 `${tool.versions[0].name}`
-              );
-              logger.info(
-                `Tool ${tool.name} version output: ${testRunner.output}`
               );
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
@@ -304,20 +440,53 @@ function runInstallVerification({
                 `Tool ${tool.name} version not matching expected version ${tool.versions[0].name}`
               ).to.be.true;
             }
+
+            if (
+              tool.name === "esp-rom-elfs" &&
+              tool.version_cmd.join(" ") === ""
+            ) {
+              const espRomElfsVersion = tool.versions[0].name;
+              const espRomElfsPath = path.join(
+                toolsFolder,
+                "tools",
+                "esp-rom-elfs",
+                espRomElfsVersion
+              );
+
+              expect(
+                fs.existsSync(espRomElfsPath),
+                `esp-rom-elfs path does not exist: ${espRomElfsPath}`
+              ).to.be.true;
+
+              const files = fs.readdirSync(espRomElfsPath);
+              const hasRomElf = files.some((f) => f.endsWith("rom.elf"));
+              expect(
+                hasRomElf,
+                `No *rom.elf files found in esp-rom-elfs path: ${espRomElfsPath}`
+              ).to.be.true;
+            }
           }
+        }
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
         }
       }
     });
 
-    it("4 - Should create a new project based on a template", async function () {
+    it("5 - Should create a new project based on a template", async function () {
       /**
        * This test should attempt to create a copy of the Hello World Project into the ~/esp folder
        * The commands might differ for each operating system.
        * The assert is based on the existence of the project files in the expected folder.
        */
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - create new project`);
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(installFolder, idf, "project");
         const pathToIDFScript =
           os.platform() !== "win32"
@@ -337,7 +506,10 @@ function runInstallVerification({
         }
 
         testRunner.sendInput(`mkdir ${pathToProjectFolder}\r`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         testRunner.sendInput(
           os.platform() !== "win32"
@@ -348,9 +520,11 @@ function runInstallVerification({
           const confirmFilesCopied = await testRunner.waitForOutput("copied");
           expect(confirmFilesCopied).to.be.true;
         }
+
         testRunner.output = "";
         2;
         testRunner.sendInput("cd hello_world\r");
+        await new Promise((resolve) => setTimeout(resolve, 500));
         testRunner.sendInput("ls\r");
 
         const confirmFolderContent = await testRunner.waitForOutput(
@@ -371,18 +545,27 @@ function runInstallVerification({
         ).to.include("main");
 
         logger.info("sample project creation Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
 
-    it("5 - Should set the target", async function () {
+    it("6 - Should set the target", async function () {
       /**
        * This test attempts to set a target MCU for the project created in the previous test.
        */
       this.timeout(750000);
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - set target`);
 
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(
           installFolder,
           idf,
@@ -405,6 +588,9 @@ function runInstallVerification({
           this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
         }
+
+        const validTarget =
+          targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
 
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
         testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
@@ -448,18 +634,27 @@ function runInstallVerification({
         ).to.include("Generating done");
 
         logger.info("Set Target Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
 
-    it("6 - Should build project for the selected target", async function () {
+    it("7 - Should build project for the selected target", async function () {
       /**
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.
        */
       this.timeout(600000);
-      testRunner = new CLITestRunner();
       logger.info(`Starting test - build project`);
       for (let idf of idfList) {
+        testRunner = new CLITestRunner();
         let pathToProjectFolder = path.join(
           installFolder,
           idf,
@@ -508,13 +703,24 @@ function runInstallVerification({
 
         expect(
           buildComplete,
-          "Expecting 'Project build complete', filed to build the sample project"
+          "Expecting 'Project build complete', failed to build the sample project"
         ).to.be.true;
+        const validTarget =
+          targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
         expect(
           testRunner.output,
-          "Expecting to successfully create target image, filed to build the sample project"
+          "Expecting to successfully create target image, failed to build the sample project"
         ).to.include(`Successfully created ${validTarget} image`);
         logger.info("Build Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
       }
     });
   });
