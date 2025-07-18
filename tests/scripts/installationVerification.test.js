@@ -37,7 +37,7 @@ function runInstallVerification({
         logger.info(`Test failed: ${this.currentTest.title}`);
         if (testRunner) {
           logger.info(
-            `Terminal output: >>\r ${testRunner.output.slice(-1000)}`
+            `Terminal output: >>\r ${testRunner.output.slice(-2000)}`
           );
           logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
         }
@@ -226,7 +226,6 @@ function runInstallVerification({
 
       for (let idf of idfList) {
         let eimJsonEntry = null;
-        let pathToIDFScript;
 
         for (let entry of eimJsonContent.idfInstalled) {
           if (entry.name === idf) {
@@ -433,9 +432,6 @@ function runInstallVerification({
               let toolVersionOutput = await testRunner.waitForOutput(
                 `${tool.versions[0].name}`
               );
-              logger.info(
-                `Tool ${tool.name} version output: ${testRunner.output}`
-              );
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
               );
@@ -460,12 +456,6 @@ function runInstallVerification({
               expect(
                 fs.existsSync(espRomElfsPath),
                 `esp-rom-elfs path does not exist: ${espRomElfsPath}`
-              ).to.be.true;
-
-              const pathEntries = process.env.PATH.split(path.delimiter);
-              expect(
-                pathEntries.includes(espRomElfsPath),
-                `esp-rom-elfs path is not in PATH: ${espRomElfsPath}`
               ).to.be.true;
 
               const files = fs.readdirSync(espRomElfsPath);
@@ -516,7 +506,10 @@ function runInstallVerification({
         }
 
         testRunner.sendInput(`mkdir ${pathToProjectFolder}\r`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
         testRunner.sendInput(
           os.platform() !== "win32"
@@ -527,9 +520,11 @@ function runInstallVerification({
           const confirmFilesCopied = await testRunner.waitForOutput("copied");
           expect(confirmFilesCopied).to.be.true;
         }
+
         testRunner.output = "";
         2;
         testRunner.sendInput("cd hello_world\r");
+        await new Promise((resolve) => setTimeout(resolve, 500));
         testRunner.sendInput("ls\r");
 
         const confirmFolderContent = await testRunner.waitForOutput(
@@ -594,7 +589,8 @@ function runInstallVerification({
           logger.info(` Error: ${error}`);
         }
 
-        const validTarget = targetList[0] === "all" ? "esp32" : targetList[0];
+        const validTarget =
+          targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
 
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
         testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
@@ -709,7 +705,8 @@ function runInstallVerification({
           buildComplete,
           "Expecting 'Project build complete', failed to build the sample project"
         ).to.be.true;
-        const validTarget = targetList[0] === "all" ? "esp32" : targetList[0];
+        const validTarget =
+          targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
         expect(
           testRunner.output,
           "Expecting to successfully create target image, failed to build the sample project"

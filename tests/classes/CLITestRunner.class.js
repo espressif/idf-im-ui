@@ -58,7 +58,8 @@ class CLITestRunner {
 
     this.process.onData((data) => {
       let cleanData = stripAnsi(data);
-      cleanData = cleanData.replace(/[\r\n]+/g, " ");
+      cleanData = cleanData.replace(/\\[\r\n]+/g, "");
+      cleanData = cleanData.replace(/[\r\n]+/g, "");
       logger.debug(cleanData);
       this.output += cleanData;
       this.lastDataTimestamp = Date.now();
