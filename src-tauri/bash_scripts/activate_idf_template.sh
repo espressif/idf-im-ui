@@ -66,15 +66,19 @@ add_env_variable() {
     export ESP_IDF_VERSION="$IDF_VERSION"
     printf '%s\n' "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
 
+    # Create a temporary file
+    temp_file=$(mktemp)
+    printf '%s\n' "$ENV_VAR_PAIRS" > "$temp_file"
+
     # Process environment variables
-    printf '%s\n' "$ENV_VAR_PAIRS" | while read -r pair; do
+    while read -r pair; do
         if [ -n "$pair" ]; then
             key="${pair%%:*}"
             value="${pair#*:}"
             eval "export $key=\"$value\""
             printf '%s\n' "Added environment variable $key = $value"
         fi
-    done
+    done < "$temp_file"
 }
 
 # Function to add a directory to the system PATH
