@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -9,7 +10,11 @@ use config::ConfigError;
 use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
+use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::find_by_name_and_extension;
+use idf_im_lib::utils::parse_esp_idf_json;
+use idf_im_lib::utils::try_import_existing_idf;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;
@@ -315,13 +320,107 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
             }
         }
-        Commands::Discover => {
-            // TODO:Implement version discovery
-            unimplemented!("Version discovery not implemented yet");
-            println!("Discovering available versions... (This can take couple of minutes)");
-            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders("/");
+        Commands::Discover {path  } => {
+            info!("Discovering available versions... (This can take couple of minutes)");
+            let path = path.unwrap_or_else(|| {
+                let default_path = match std::env::consts::OS {
+                    "windows" => {
+                        "C:\\".to_string()
+                    }
+                    _ => {
+                        "/".to_string()
+                    }
+                };
+
+
+                debug!("No path provided, using default: {}", default_path);
+                default_path
+            });
+            // first parse existing esp_idf.json (using parse_esp_idf_json) || previous VSCode installations
+            info!("Searching for esp_idf.json files...");
+            let search_patch = Path::new(&path);
+            let esp_idf_json_path = find_by_name_and_extension(
+              search_patch,
+              "esp_idf",
+              "json",
+            );
+            if esp_idf_json_path.is_empty() {
+                info!("No esp_idf.json found");
+            } else {
+                info!("Found {} esp_idf.json files:", esp_idf_json_path.len());
+            }
+            for path in esp_idf_json_path {
+                info!("- {} ", &path);
+               match parse_esp_idf_json(&path) {
+                    Ok(_) => {
+                        info!("Parsed config: {:?}", path);
+                    }
+                    Err(err) => {
+                        info!("Failed to parse esp_idf.json: {}", err);
+                    }
+                }
+            }
+            // second try to find tool_set_config.json (using parse_tool_set_config) || previous Eclipse installations
+            info!("Searching for tool_set_config.json files...");
+            let tool_set_config_path = find_by_name_and_extension(
+                search_patch,
+                "tool_set_config",
+                "json",
+            );
+            if tool_set_config_path.is_empty() {
+                info!("No tool_set_config.json found");
+            } else {
+                info!("Found {} tool_set_config.json files:", tool_set_config_path.len());
+            }
+            for path in tool_set_config_path {
+                info!("- {} ", &path);
+                match idf_im_lib::utils::parse_tool_set_config(&path) {
+                    Ok(_) => {
+                        info!("Parsed config: {:?}", path);
+                    }
+                    Err(err) => {
+                        info!("Failed to parse tool_set_config.json: {}", err);
+                    }
+                }
+            }
+            // third try to find IDF directories (using find_esp_idf_folders) || previous instalation from cli
+            info!("Searching for any other IDF directories...");
+            let idf_dirs = idf_im_lib::version_manager::find_esp_idf_folders(&path);
+            if idf_dirs.is_empty() {
+                info!("No IDF directories found");
+            } else {
+                info!("Found {} IDF directories:", idf_dirs.len());
+            }
+            let config = match idf_im_lib::version_manager::get_esp_ide_config() {
+              Ok(config) => {
+                if config.idf_installed.is_empty() {
+                  debug!(
+                      "No versions found. Every discovered version can be imported."
+                  );
+                }
+                config
+              }
+              Err(_err) => {
+                debug!("No ide config found. New will be created.");
+                IdfConfig::default()
+              }
+            };
+            let mut paths_to_add = vec![];
             for dir in idf_dirs {
-                println!("Found IDF directory: {}", dir);
+              info!("- {} ", &dir);
+              if config.clone().is_path_in_config(dir.clone()) {
+                info!("Already present!");
+              } else {
+                info!("Can be added...");
+                paths_to_add.push(dir);
+              }
+            }
+            if paths_to_add.is_empty() {
+                info!("No new IDF directories found to add.");
+                return Ok(());
+            } else {
+                info!("Found {} new IDF directories available to add:", paths_to_add.len());
+                info!("You can add them using `eim install` command with the `--path` option.");
             }
             Ok(())
         }
