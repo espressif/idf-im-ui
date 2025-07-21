@@ -1554,17 +1554,26 @@ pub fn single_version_post_install(
     tool_install_directory: &str,
     export_paths: Vec<String>,
     idf_python_env_path: Option<&str>,
+    env_vars: Option<Vec<(String, String)>>
 ) {
-    let mut env_vars = setup_environment_variables(
-        &PathBuf::from(tool_install_directory),
-        &PathBuf::from(idf_path),
-    )
-    .unwrap_or_default();
-    env_vars.push((
-        // todo: move to setup_environment_variables
-        "IDF_PYTHON_ENV_PATH".to_string(),
-        idf_python_env_path.unwrap_or_default().to_string(),
-    ));
+    let mut env_vars = match env_vars {
+        Some(vars) => vars,
+        None => {
+          let mut env_vars = setup_environment_variables(
+            &PathBuf::from(tool_install_directory),
+            &PathBuf::from(idf_path),
+        )
+        .unwrap_or_default();
+        env_vars.push((
+          // todo: move to setup_environment_variables
+          "IDF_PYTHON_ENV_PATH".to_string(),
+          idf_python_env_path.unwrap_or_default().to_string(),
+        ));
+        env_vars
+      }
+    };
+
+
     let mut export_paths = export_paths.clone();
     let python_bin_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
     match std::env::consts::OS {
