@@ -1,6 +1,6 @@
 [package]
 name = "eim"
-version = "0.2.7"
+version = "0.2.8"
 description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
