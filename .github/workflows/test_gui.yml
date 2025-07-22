@@ -168,7 +168,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-CLI-in-GUI-results-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: autotest-CLI-in-GUI-results-${{ matrix.package_name }}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
@@ -194,7 +194,7 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: CLI-in-GUI-Autotests-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: CLI-in-GUI-Autotests-${{ matrix.package_name }}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json
@@ -385,7 +385,7 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: GUI-Autotests-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: GUI-Autotests-${{ matrix.package_name }}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json
