@@ -12,7 +12,7 @@ on:
 
 jobs:
   test:
-    name: CLI (${{ matrix.package_name }}-${{ matrix.run_on }})
+    name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -27,6 +27,12 @@ jobs:
           - os: macos-latest
             package_name: macos-aarch64
             run_on: GitHub
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            run_on: ExtraRunner
+          - os: macos-13
+            package_name: macos-x64
+            run_on: ExtraRunner
           - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest' }}
             package_name: linux-x64
             run_on: MirrorRunner
@@ -75,13 +81,13 @@ jobs:
           chmod +x test-bin/eim
 
       - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip
 
       - name: Install dependencies (MacOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
           brew install dfu-util libgcrypt glib pixman sdl2 libslirp
 
@@ -98,7 +104,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script (non-Windows)
-        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && matrix.run_on !='ExtraRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
           export EIM_FILE_PATH="../test-bin/eim"
@@ -186,7 +192,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
@@ -195,7 +201,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: autotest-CLI-install-log-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
           path: |
             ~/.local/share/eim/logs/**/*
 
@@ -210,7 +216,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: autotest-CLI-install-log-${{ matrix.package_name }}
           path: |
             ~/AppData/Local/eim/logs/**/*
 
@@ -219,7 +225,7 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: CLI-Autotests-${{ matrix.package_name }}-${{matrix.run_on}}
+          name: CLI-Autotests-${{ matrix.package_name }}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json

@@ -16,8 +16,8 @@ const TOOLSMIRRORS = {
   dl_cn: "https://dl.espressif.cn/github_assets",
 };
 
-const CLIDEFAULTVERSION = "eim 0.2.0";
-const GUIDEFAULTVERSION = "0.2.0";
+const CLIDEFAULTVERSION = "eim 0.2.8";
+const GUIDEFAULTVERSION = "0.2.8";
 
 const IDFDEFAULTINSTALLVERSION = "v5.4.2";
 
