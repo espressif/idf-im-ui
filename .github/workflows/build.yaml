@@ -613,3 +613,4 @@ jobs:
           curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_unified_release.json
           echo "Latest GUI release tag: $(jq -r .tag_name eim_unified_release.json)"
           aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/dl/eim/eim_unified_release.json
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/eim_unified_release.json"
