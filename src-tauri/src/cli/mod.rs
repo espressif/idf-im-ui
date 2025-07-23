@@ -14,7 +14,6 @@ use idf_im_lib::idf_config::IdfConfig;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::find_by_name_and_extension;
 use idf_im_lib::utils::parse_esp_idf_json;
-use idf_im_lib::utils::try_import_existing_idf;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;

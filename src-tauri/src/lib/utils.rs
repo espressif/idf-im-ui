@@ -490,17 +490,22 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
     };
+    let config_path = get_default_config_path();
+    let mut current_config = match IdfConfig::from_file(&config_path) {
+        Ok(config) => config,
+        Err(_e) => IdfConfig::default(),
+    };
     for (_key, value) in config.idf_installed {
         let idf_version = value.version;
         let idf_path = value.path;
         let python = value.python;
         let tools_path = config.idf_tools_path.clone();
         let settings = crate::settings::Settings::default();
-        let path_for_activation_script = settings.esp_idf_json_path.clone().unwrap_or_default();
+        let paths = settings.get_version_paths(&idf_version)?;
 
         debug!("IDF tools path: {}", tools_path);
         debug!("IDF version: {}", idf_version);
-        debug!("activation script path: {}", &path_for_activation_script);
+        debug!("activation script path: {}", paths.activation_script_path.display());
         debug!("Python path: {}", python);
         // export paths
         let tools_json_file = find_by_name_and_extension(Path::new(&idf_path), "tools", "json");
@@ -531,125 +536,156 @@ pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
         })
         .collect();
         export_paths.push(config.git_path.clone());
-        match import_single_version(
-            &path_for_activation_script,
+
+        if !PathBuf::from(idf_path.clone()).exists() {
+          warn!("Path {} does not exists, skipping", &idf_path);
+          continue;
+        };
+        if current_config.clone().is_path_in_config(idf_path.to_string()) {
+          info!("Path {} already in config, skipping", &idf_path);
+          continue;
+        };
+        let python_env = python.clone().find("bin").map(|index| python[..=index-1].to_string());
+
+        single_version_post_install(
+            &paths.activation_script_path.to_string_lossy().into_owned(),
             &idf_path,
             &idf_version,
             &tools_path,
             export_paths,
-            Some(python),
-        ) {
-            Ok(_) => {
-                debug!("Successfully imported tool set");
-            }
-            Err(e) => {
-                return Err(anyhow!("Failed to import tool set: {}", e));
-            }
-        }
-    }
-    Ok(())
-}
+            python_env.as_deref(),
+            None,
+        );
 
-pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
-  let path = Path::new(idf_path);
-  let default_settings = Settings::default();
+        let python = match std::env::consts::OS {
+            "windows" => PathBuf::from(python_env.unwrap()).join("Scripts").join("python.exe"),
+            _ => PathBuf::from(python_env.unwrap()).join("bin").join("python"),
+        };
+        let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
+        let installation = IdfInstallation {
+            id,
+            activation_script: paths.activation_script.to_string_lossy().into_owned(),
+            path: idf_path.clone(),
+            name: idf_version,
+            python: python.to_str()
+                .unwrap()
+                .to_string(),
+            idf_tools_path: tools_path,
+        };
 
-  // test if was installed by eim
-  if let Some(parent_dir) = path.parent() {
-    let parent_filename = parent_dir.file_name().unwrap().to_str().unwrap();
-    if let Some(grandparent_dir) = parent_dir.parent() {
-      let target_dir = grandparent_dir;
-      if let Ok(entries) = fs::read_dir(target_dir) {
-        for entry in entries {
-          if let Ok(entry) = entry {
-            if let Some(file_name) = entry.file_name().to_str() {
-              if file_name.starts_with(&format!("activate_idf_{}",parent_filename)) && entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
-                // was installed by EIM
-
-                let installation = IdfInstallation {
-                  id: format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", "")),
-                  activation_script: entry.path().to_str().unwrap().to_string(),
-                  path: idf_path.to_string(),
-                  name: parent_filename.to_string(),
-                  python: "python".to_string(),
-                  idf_tools_path: default_settings.idf_tools_path.unwrap(),
-                };
-                let config_path = get_default_config_path();
-                let mut current_config = match IdfConfig::from_file(&config_path) {
-                    Ok(config) => config,
-                    Err(e) => {
-                      IdfConfig::default()
-                    }
-                };
-                current_config.idf_installed.push(installation);
-                match current_config.to_file(config_path, true, false) {
-                    Ok(_) => {
-                        debug!("Updated config file with new tool set");
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        return Err(anyhow!("Failed to update config file: {}", e));
-                    }
-                }
-              }
-            }
-          }
-        }
-     }
+        current_config.idf_installed.push(installation);
     }
-  }
-  // was not installed by eim
-  debug!("Path {} was not installed by EIM", idf_path);
-  let path_to_create_activation_script = match path.parent() {
-    Some(parent) => parent,
-    None => path,
-  };
-  info!("Path to create activation script: {}", path_to_create_activation_script.display());
-  let idf_version = path_to_create_activation_script.file_name().unwrap().to_str().unwrap();
-  let tools_file = match idf_tools::read_and_parse_tools_file(&Path::new(idf_path).join("tools").join("tools.json").to_str().unwrap()){
-    Ok(tools_file) => tools_file,
-    Err(e) => {
-      return Err(anyhow!("Failed to read tools.json file: {}", e));
-    }
-  };
-  let export_paths = idf_tools::get_tools_export_paths(
-    tools_file,
-    ["all".to_string()].to_vec(),
-    &default_settings.tool_install_folder_name.unwrap(),
-  )
-  .into_iter()
-  .map(|p| {
-      if std::env::consts::OS == "windows" {
-          replace_unescaped_spaces_win(&p)
-      } else {
-          p
+    match current_config.to_file(config_path, true, true) {
+      Ok(_) => {
+        debug!("Updated config file with new tool set");
+        return Ok(())
       }
-  })
-  .collect();
-  match import_single_version(
-    path_to_create_activation_script.to_str().unwrap(),
-    idf_path,
-    idf_version,
-    &default_settings.idf_tools_path.unwrap(),
-    export_paths,
-    None,
-  ) {
-    Ok(_) => {
-      debug!("Successfully imported tool set");
+      Err(e) => {
+        return Err(anyhow!("Failed to update config file: {}", e))
+      }
     }
-    Err(e) => {
-      warn!("Failed to import tool set:{} {}", idf_path, e);
-    }
-  }
-  //  TODO: add more approaches for different legacy installations
-  Ok(())
 }
+
+// pub fn try_import_existing_idf(idf_path:&str) -> Result<()> {
+//   let path = Path::new(idf_path);
+//   let default_settings = Settings::default();
+
+//   // test if was installed by eim
+//   if let Some(parent_dir) = path.parent() {
+//     let parent_filename = parent_dir.file_name().unwrap().to_str().unwrap();
+//     if let Some(grandparent_dir) = parent_dir.parent() {
+//       let target_dir = grandparent_dir;
+//       if let Ok(entries) = fs::read_dir(target_dir) {
+//         for entry in entries {
+//           if let Ok(entry) = entry {
+//             if let Some(file_name) = entry.file_name().to_str() {
+//               if file_name.starts_with(&format!("activate_idf_{}",parent_filename)) && entry.file_type().map(|ft| ft.is_file()).unwrap_or(false) {
+//                 // was installed by EIM
+
+//                 let installation = IdfInstallation {
+//                   id: format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", "")),
+//                   activation_script: entry.path().to_str().unwrap().to_string(),
+//                   path: idf_path.to_string(),
+//                   name: parent_filename.to_string(),
+//                   python: "python".to_string(),
+//                   idf_tools_path: default_settings.idf_tools_path.unwrap(),
+//                 };
+//                 let config_path = get_default_config_path();
+//                 let mut current_config = match IdfConfig::from_file(&config_path) {
+//                     Ok(config) => config,
+//                     Err(e) => {
+//                       IdfConfig::default()
+//                     }
+//                 };
+//                 current_config.idf_installed.push(installation);
+//                 match current_config.to_file(config_path, true, false) {
+//                     Ok(_) => {
+//                         debug!("Updated config file with new tool set");
+//                         return Ok(());
+//                     }
+//                     Err(e) => {
+//                         return Err(anyhow!("Failed to update config file: {}", e));
+//                     }
+//                 }
+//               }
+//             }
+//           }
+//         }
+//      }
+//     }
+//   }
+//   // was not installed by eim
+//   debug!("Path {} was not installed by EIM", idf_path);
+//   let path_to_create_activation_script = match path.parent() {
+//     Some(parent) => parent,
+//     None => path,
+//   };
+//   info!("Path to create activation script: {}", path_to_create_activation_script.display());
+//   let idf_version = path_to_create_activation_script.file_name().unwrap().to_str().unwrap();
+//   let tools_file = match idf_tools::read_and_parse_tools_file(&Path::new(idf_path).join("tools").join("tools.json").to_str().unwrap()){
+//     Ok(tools_file) => tools_file,
+//     Err(e) => {
+//       return Err(anyhow!("Failed to read tools.json file: {}", e));
+//     }
+//   };
+//   let export_paths = idf_tools::get_tools_export_paths(
+//     tools_file,
+//     ["all".to_string()].to_vec(),
+//     &default_settings.tool_install_folder_name.unwrap(),
+//   )
+//   .into_iter()
+//   .map(|p| {
+//       if std::env::consts::OS == "windows" {
+//           replace_unescaped_spaces_win(&p)
+//       } else {
+//           p
+//       }
+//   })
+//   .collect();
+//   match import_single_version(
+//     path_to_create_activation_script.to_str().unwrap(),
+//     idf_path,
+//     idf_version,
+//     &default_settings.idf_tools_path.unwrap(),
+//     export_paths,
+//     None,
+//   ) {
+//     Ok(_) => {
+//       debug!("Successfully imported tool set");
+//     }
+//     Err(e) => {
+//       warn!("Failed to import tool set:{} {}", idf_path, e);
+//     }
+//   }
+//   //  TODO: add more approaches for different legacy installations
+//   Ok(())
+// }
 
 pub fn import_single_version(path_to_create_activation_script: &str,idf_location: &str, idf_version: &str, idf_tools_path: &str, export_paths: Vec<String>, python: Option<String>) -> Result<()> {
   let config_path = get_default_config_path();
   let mut current_config = match IdfConfig::from_file(&config_path) {
       Ok(config) => config,
-      Err(e) => IdfConfig::default(),
+      Err(_e) => IdfConfig::default(),
   };
   let idf_path = PathBuf::from(idf_location);
   if !idf_path.exists() {
