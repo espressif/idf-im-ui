@@ -44,7 +44,6 @@ fn determine_package_manager() -> Option<&'static str> {
 pub fn get_prequisites() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => vec![
-            "git",
             "wget",
             "flex",
             "bison",
@@ -52,7 +51,7 @@ pub fn get_prequisites() -> Vec<&'static str> {
             "ccache",
             "dfu-util",
         ],
-        "windows" => vec!["git"],
+        "windows" => vec![],
         "macos" => vec!["dfu-util"],
         _ => vec![],
     }
