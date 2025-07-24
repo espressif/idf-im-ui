@@ -6,6 +6,7 @@ use idf_im_lib::ensure_path;
 use idf_im_lib::idf_tools::get_list_of_tools_to_download;
 use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::parse_cmake_version;
 use idf_im_lib::verify_file_checksum;
 use idf_im_lib::ProgressMessage;
@@ -43,31 +44,6 @@ pub fn create_progress_bar() -> ProgressBar {
 
 pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
     pb.set_position(value);
-}
-
-// Add this function after your existing functions
-pub fn extract_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Extracting archive: {:?} to: {:?}", archive_path, extract_to);
-
-    // Create extraction directory if it doesn't exist
-    fs::create_dir_all(extract_to)?;
-
-    // Read the compressed file
-    let mut compressed_file = File::open(archive_path)?;
-    let mut compressed_data = Vec::new();
-    compressed_file.read_to_end(&mut compressed_data)?;
-
-    println!("Decompressing archive...");
-    // Decompress the zstd data
-    let decompressed_data = decode_all(&compressed_data[..])?;
-
-    println!("Extracting tar archive...");
-    // Extract the tar archive
-    let mut archive = Archive::new(&decompressed_data[..]);
-    archive.unpack(extract_to)?;
-
-    println!("Archive extracted successfully to: {:?}", extract_to);
-    Ok(())
 }
 
 /// Finds all 'requirements.*' files in a given directory,
@@ -276,7 +252,7 @@ async fn main() {
                 settings.repo_stub.as_deref(),
                 &idf_version,
                 settings.idf_mirror.as_deref(),
-                false, // TODO: download submodules
+                true, // TODO: download submodules
                 tx,
             ) {
                 Ok(_) => {
@@ -450,7 +426,7 @@ async fn main() {
             ) {
               Ok(output) => {
                   if output.status.success() {
-                      println!("Successfully upgraded pip.");
+                      println!("Successfully installed pip.");
                   } else {
                       eprintln!(
                           "Failed to upgrade pip: {}",
@@ -494,7 +470,7 @@ async fn main() {
         }
         // Create a .zst file in the current directory
         let output_path = PathBuf::from(format!(
-            "archive_{}.zst",
+            "archive_{}.zst", //TODO: read path from param
             settings
                 .idf_versions
                 .unwrap_or(vec!["default".to_string()])
@@ -533,7 +509,7 @@ async fn main() {
           .unwrap_or_else(|| Path::new("."))
           .join(format!("{}_extracted", archive_stem));
 
-      match extract_archive(&archive_path, &extract_dir) {
+      match extract_zst_archive(&archive_path, &extract_dir) {
           Ok(_) => {
               println!("Successfully extracted archive to: {:?}", extract_dir);
               println!("You can now examine the contents for debugging purposes.");

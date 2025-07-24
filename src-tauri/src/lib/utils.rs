@@ -10,12 +10,14 @@ use git2::Repository;
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
+use tar::Archive;
+use zstd::decode_all;
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self},
-    io,
+    fs::{self, File},
+    io::{self, Read},
     path::{Path, PathBuf},
 };
 use regex::Regex;
@@ -634,6 +636,31 @@ pub fn get_commit_hash(repo_path: &str) -> Result<String, git2::Error> {
     // Get the commit that HEAD points to
     let commit = head.peel_to_commit()?;
     Ok(commit.id().to_string()[..7].to_string()) // Return the first 7 characters of the commit hash
+}
+
+// Add this function after your existing functions
+pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Extracting archive: {:?} to: {:?}", archive_path, extract_to);
+
+    // Create extraction directory if it doesn't exist
+    fs::create_dir_all(extract_to)?;
+
+    // Read the compressed file
+    let mut compressed_file = File::open(archive_path)?;
+    let mut compressed_data = Vec::new();
+    compressed_file.read_to_end(&mut compressed_data)?;
+
+    info!("Decompressing archive...");
+    // Decompress the zstd data
+    let decompressed_data = decode_all(&compressed_data[..])?;
+
+    info!("Extracting tar archive...");
+    // Extract the tar archive
+    let mut archive = Archive::new(&decompressed_data[..]);
+    archive.unpack(extract_to)?;
+
+    info!("Archive extracted successfully to: {:?}", extract_to);
+    Ok(())
 }
 
 #[cfg(test)]
