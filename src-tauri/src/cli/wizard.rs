@@ -3,11 +3,14 @@ use anyhow::Result;
 use dialoguer::FolderSelect;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::copy_dir_contents;
+use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
+use tempfile::TempDir;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -309,6 +312,58 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
+    // TODO: only needed for offline mode
+    let offline_archive_dir = TempDir::new().expect("Failed to create temporary directory");
+    let mut offline_mode = false;
+    if config.use_local_archive.is_some() {
+        debug!("Using local archive: {:?}", config.use_local_archive);
+        if !config.use_local_archive.as_ref().unwrap().exists() {
+            return Err(format!(
+                "Local archive path does not exist: {}",
+                config.use_local_archive.as_ref().unwrap().display()
+            ));
+        }
+        offline_mode = true;
+    }
+
+    if offline_mode { // only setting up temp directory if offline mode is enabled
+
+      debug!("Temporary directory created: {}", offline_archive_dir.path().display());
+      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &offline_archive_dir.path()) {
+        Ok(_) => {
+            info!("Successfully extracted archive to: {:?}", offline_archive_dir);
+        }
+        Err(err) => {
+            return Err(format!("Failed to extract archive: {}", err));
+        }
+      }
+      // TODO: load config from archive after is properly prepared by effline installer tool
+      // load the config from the extracted archive
+      // let config_path = offline_archive_dir.path().join("config.toml");
+      // if config_path.exists() {
+      //   debug!("Loading config from extracted archive: {}", config_path.display());
+      //   match Settings::load(&mut config, &config_path.to_str().unwrap()) {
+      //     Ok(()) => {
+      //       debug!("Config loaded from archive: {:?}", config);
+      //   }
+      //     Err(err) => {
+      //       return Err(format!("Failed to load config from archive: {}", err));
+      //     }
+      //   }
+      // } else {
+      //   warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+      // }
+      match copy_dir_contents(&offline_archive_dir.path().join("v5.5"), &config.clone().path.unwrap().join("v5.5")) {
+        Ok(_) => {
+            info!("Successfully copied content from offline archive to IDF path");
+            // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
+        }
+        Err(err) => {
+            return Err(format!("Failed to copy content from offline archive: {}", err));
+        }
+      }
+    }
+
     if config.skip_prerequisites_check.unwrap_or(false) {
         info!("Skipping prerequisites check as per user request.");
     } else {
@@ -387,6 +442,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             DEFAULT_TOOLS_DOWNLOAD_FOLDER,
         )?;
 
+        if offline_mode {
+          // copy content dist from offline_archive_dir
+          copy_dir_contents(
+            &offline_archive_dir.path().join("dist"),
+            &tool_download_directory,
+          )
+          .map_err(|err| format!("Failed to copy dist directory from offline archive: {}", err))?;
+        }
+
         // Setup install directory
         let tool_install_directory = setup_directory(
             config.wizard_all_questions,
@@ -429,12 +493,18 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
+
         match idf_im_lib::python_utils::install_python_env(
             &paths.actual_version,
             &tool_install_directory,
             true, //TODO: actually read from config
             &paths.idf_path,
             &config.idf_features.clone().unwrap_or_default(),
+            if offline_mode {
+                Some(offline_archive_dir.path())
+            } else {
+                None
+            },
         )
         .await
         {

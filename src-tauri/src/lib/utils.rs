@@ -663,6 +663,33 @@ pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(),
     Ok(())
 }
 
+pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = path.file_name().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid file name for path: {:?}", path),
+            )
+        })?;
+        let dest_path = dst.join(file_name);
+
+        if path.is_dir() {
+            // Recursively copy subdirectories
+            copy_dir_contents(&path, &dest_path)?;
+        } else {
+            // Copy files
+            fs::copy(&path, &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

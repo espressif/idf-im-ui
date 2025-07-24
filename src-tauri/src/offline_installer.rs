@@ -180,7 +180,7 @@ async fn main() {
         let version_list = settings
             .idf_versions
             .clone()
-            .unwrap_or(vec!["v5.4".to_string()]); // TODO: fetch latest version -> or maibe fail because we want to build the offline installer for certain version
+            .unwrap_or(vec!["v5.5".to_string()]); // TODO: fetch latest version -> or maibe fail because we want to build the offline installer for certain version
 
         // check is uv is installed TODO: download uv in case it's missing
         match execute_command(
@@ -204,7 +204,7 @@ async fn main() {
 
         for idf_version in version_list {
             // let version_path = archive_dir.path().join(&idf_version); // TODO: suport multiple versions
-            let version_path = archive_dir.path(); // TODO: suport multiple versions
+            let version_path = archive_dir.path().join(&idf_version); // TODO: suport multiple versions
             ensure_path(version_path.to_str().unwrap())
                 .expect("Failed to ensure path for IDF version");
             println!(
@@ -247,7 +247,7 @@ async fn main() {
                     }
                 }
             });
-            let idf_path = version_path.join("esp_idf");
+            let idf_path = version_path.join("esp-idf");
             match idf_im_lib::get_esp_idf(
                 idf_path.to_str().unwrap(),
                 settings.repo_stub.as_deref(),
@@ -395,7 +395,7 @@ async fn main() {
             match execute_command(
             "uv",
               &[
-                  "venv", "--python", "3.11", python_env.clone().to_str().unwrap() // TODO: Adjust the Python version as needed
+                  "venv", "--relocatable", "--python", "3.11", python_env.clone().to_str().unwrap() // TODO: Adjust the Python version as needed
               ],
             ) {
               Ok(output) => {
