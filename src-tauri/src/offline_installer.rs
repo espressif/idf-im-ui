@@ -16,6 +16,7 @@ use log::warn;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
+use std::io;
 use std::io::{Read, Write as otherwrite};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
@@ -66,6 +67,66 @@ pub fn extract_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box
     archive.unpack(extract_to)?;
 
     println!("Archive extracted successfully to: {:?}", extract_to);
+    Ok(())
+}
+
+/// Finds all 'requirements.*' files in a given directory,
+/// merges their content, and writes it to 'requirements.merged.txt'.
+///
+/// # Arguments
+/// * `folder_path` - The path to the directory to search.
+///
+/// # Returns
+/// `Result<(), io::Error>` - Ok(()) on success, or an io::Error on failure.
+pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
+    let mut merged_content = String::new();
+    let mut requirements_found = false;
+
+    // Ensure the folder exists and is a directory
+    if !folder_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Folder not found: {}", folder_path.display()),
+        ));
+    }
+    if !folder_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Path is not a directory: {}", folder_path.display()),
+        ));
+    }
+
+    for entry in fs::read_dir(folder_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                if file_name.starts_with("requirements.") {
+                    requirements_found = true;
+                    println!("Merging file: {}", path.display());
+                    let mut file = fs::File::open(&path)?;
+                    file.read_to_string(&mut merged_content)?;
+                    // Add a newline to separate content from different files, if they don't end with one
+                    if !merged_content.ends_with('\n') && !merged_content.is_empty() {
+                        merged_content.push('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    if !requirements_found {
+        println!("No 'requirements.*' files found in {}", folder_path.display());
+        return Ok(()); // Or return an error if you consider it an error
+    }
+
+    let output_file_path = folder_path.join("requirements.merged.txt");
+    let mut output_file = fs::File::create(&output_file_path)?;
+    output_file.write_all(merged_content.as_bytes())?;
+
+    println!("Successfully merged requirements files to: {}", output_file_path.display());
+
     Ok(())
 }
 
@@ -215,7 +276,7 @@ async fn main() {
                 settings.repo_stub.as_deref(),
                 &idf_version,
                 settings.idf_mirror.as_deref(),
-                true,
+                false, // TODO: download submodules
                 tx,
             ) {
                 Ok(_) => {
@@ -376,13 +437,42 @@ async fn main() {
                   return;
               }
             }
+            let wheel_dir = version_path.join("wheels");
+            ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
+            let requirements_dir = idf_path.join("tools").join("requirements");
+            merge_requirements_files(&requirements_dir).expect("Failed to merge requirements files");
+
             match execute_command(
-            "uv",
+            python_env.join("bin/python").to_str().unwrap(),
               &[
-                  "pip", "install",
-                  "-r", idf_path.clone().join("tools").join("requirements").join("requirements.core.txt").to_str().unwrap(),
+                  "-m", "ensurepip", "--upgrade"
+              ]
+            ) {
+              Ok(output) => {
+                  if output.status.success() {
+                      println!("Successfully upgraded pip.");
+                  } else {
+                      eprintln!(
+                          "Failed to upgrade pip: {}",
+                          String::from_utf8_lossy(&output.stderr)
+                      );
+                      return;
+                  }
+              }
+              Err(err) => {
+                  eprintln!("Failed to execute command: {}", err);
+                  return;
+              }
+            }
+
+            match execute_command(
+            python_env.join("bin/python").to_str().unwrap(),
+              &[
+                  "-m", "pip", "download",
+                  "-r", requirements_dir.join("requirements.merged.txt").to_str().unwrap(),
                   "-c", constraint_file.unwrap().to_str().unwrap(),
-                  "--python", python_env.join("bin/python").to_str().unwrap() // TODO: make multiple platform compatible
+                  "--dest", wheel_dir.to_str().unwrap(),
+                  // TODO: make multiple platform compatible
               ],
           ) {
               Ok(output) => {
