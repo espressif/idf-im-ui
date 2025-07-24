@@ -14,14 +14,16 @@ use log::debug;
 use log::info;
 use log::warn;
 use std::fmt::Write;
+use std::fs;
 use std::fs::File;
 use std::io::{Read, Write as otherwrite};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 use tar::Builder as TarBuilder;
+use tar::Archive;
 use tempfile::TempDir;
-use zstd::encode_all;
+use zstd::{encode_all, decode_all};
 
 pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(100);
@@ -40,6 +42,31 @@ pub fn create_progress_bar() -> ProgressBar {
 
 pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
     pb.set_position(value);
+}
+
+// Add this function after your existing functions
+pub fn extract_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Extracting archive: {:?} to: {:?}", archive_path, extract_to);
+
+    // Create extraction directory if it doesn't exist
+    fs::create_dir_all(extract_to)?;
+
+    // Read the compressed file
+    let mut compressed_file = File::open(archive_path)?;
+    let mut compressed_data = Vec::new();
+    compressed_file.read_to_end(&mut compressed_data)?;
+
+    println!("Decompressing archive...");
+    // Decompress the zstd data
+    let decompressed_data = decode_all(&compressed_data[..])?;
+
+    println!("Extracting tar archive...");
+    // Extract the tar archive
+    let mut archive = Archive::new(&decompressed_data[..]);
+    archive.unpack(extract_to)?;
+
+    println!("Archive extracted successfully to: {:?}", extract_to);
+    Ok(())
 }
 
 #[derive(Parser, Debug)]
@@ -75,7 +102,7 @@ async fn main() {
             "Creating installation data from configuration file: {:?}",
             args.create_from_config
         );
-        let settings = match args.create_from_config {
+        let mut settings = match args.create_from_config {
             Some(ref config_path) if config_path == "default" => {
                 // Load default settings
                 let settings = Settings::default();
@@ -85,8 +112,15 @@ async fn main() {
             Some(config_path) => {
                 // Load settings from the configuration file
                 let mut settings = Settings::default();
-                settings.load(&config_path);
-                println!("Settings loaded: {:?}", settings);
+                match settings.load(&config_path) {
+                    Ok(_) => {
+                        println!("Settings loaded from {}: {:?}", config_path, settings);
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to load settings from {}: {}", config_path, e);
+                        return;
+                    }
+                }
                 settings
             }
             None => {
@@ -95,13 +129,23 @@ async fn main() {
             }
         };
         let archive_dir = TempDir::new().expect("Failed to create temporary directory");
+        settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
+        match settings.save() {
+          Ok(_) => {
+            println!("Settings saved successfully.");
+          }
+          Err(e) => {
+            eprintln!("Failed to save settings: {}", e);
+            return;
+          }
+        }
         // TODO: Download prerequisities and python
         let version_list = settings
             .idf_versions
             .clone()
-            .unwrap_or(vec!["v5.4".to_string()]);
+            .unwrap_or(vec!["v5.4".to_string()]); // TODO: fetch latest version -> or maibe fail because we want to build the offline installer for certain version
 
-        // check is uv is installed
+        // check is uv is installed TODO: download uv in case it's missing
         match execute_command(
             "uv",
             &["--version"],
@@ -115,7 +159,7 @@ async fn main() {
               }
             }
             Err(err) => {
-                // todo: download uv in case it's missing
+                // todo: download uv in case it's missing -> and maybe pack it with the archive
                 eprintln!("UV is not installed or not found: {}. Please install it and try again.", err);
                 return;
             }
@@ -338,7 +382,7 @@ async fn main() {
                   "pip", "install",
                   "-r", idf_path.clone().join("tools").join("requirements").join("requirements.core.txt").to_str().unwrap(),
                   "-c", constraint_file.unwrap().to_str().unwrap(),
-                  "--python", python_env.join("bin/python").to_str().unwrap()
+                  "--python", python_env.join("bin/python").to_str().unwrap() // TODO: make multiple platform compatible
               ],
           ) {
               Ok(output) => {
@@ -381,12 +425,35 @@ async fn main() {
 
         println!("Compressed archive saved to {:?}", output_path);
         return;
-    } else {
-        // Placeholder for extracting installation data
-        println!(
-            "Extracting installation data from archive: {:?}",
-            args.archive
-        );
-    }
-    unimplemented!("This is a placeholder for the main function of the offline installer module.");
+    } else if let Some(archive_path) = args.archive {
+      // Extract installation data from archive
+      println!("Extracting installation data from archive: {:?}", archive_path);
+
+      if !archive_path.exists() {
+          eprintln!("Archive file does not exist: {:?}", archive_path);
+          return;
+      }
+
+      // Create extraction directory next to the archive
+      let archive_stem = archive_path.file_stem()
+          .and_then(|s| s.to_str())
+          .unwrap_or("extracted");
+
+      let extract_dir = archive_path.parent()
+          .unwrap_or_else(|| Path::new("."))
+          .join(format!("{}_extracted", archive_stem));
+
+      match extract_archive(&archive_path, &extract_dir) {
+          Ok(_) => {
+              println!("Successfully extracted archive to: {:?}", extract_dir);
+              println!("You can now examine the contents for debugging purposes.");
+          }
+          Err(err) => {
+              eprintln!("Failed to extract archive: {}", err);
+          }
+      }
+  } else {
+      eprintln!("Please specify either -c to create an archive or -a to extract one.");
+      eprintln!("Use --help for more information.");
+  }
 }
