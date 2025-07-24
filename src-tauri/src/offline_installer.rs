@@ -203,7 +203,8 @@ async fn main() {
         }
 
         for idf_version in version_list {
-            let version_path = archive_dir.path().join(&idf_version);
+            // let version_path = archive_dir.path().join(&idf_version); // TODO: suport multiple versions
+            let version_path = archive_dir.path(); // TODO: suport multiple versions
             ensure_path(version_path.to_str().unwrap())
                 .expect("Failed to ensure path for IDF version");
             println!(
@@ -288,7 +289,7 @@ async fn main() {
                 settings.clone().target.unwrap_or(vec!["all".to_string()]),
                 settings.mirror.as_deref(),
             );
-            let tool_path = version_path.join("dist");
+            let tool_path = archive_dir.path().join("dist");
             ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
             for (tool_name, (version, download_link)) in download_links.iter() {
                 println!(
@@ -336,7 +337,7 @@ async fn main() {
                 }
             };
             let constraint_file =
-                match download_constraints_file(&version_path, &constrains_idf_version).await {
+                match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
                     Ok(constraint_file) => {
                         info!("Downloaded constraints file: {}", constraint_file.display());
                         Some(constraint_file)
@@ -359,7 +360,7 @@ async fn main() {
                 );
             }
             // download python packages
-            let python_env = version_path.clone().join("python_env");
+            let python_env = archive_dir.path().clone().join("python_env");
             match ensure_path(python_env.to_str().unwrap()) {
                 Ok(_) => {
                     println!("Python environment directory created: {:?}", python_env);
@@ -413,7 +414,7 @@ async fn main() {
                   return;
               }
             }
-            let wheel_dir = version_path.join("wheels");
+            let wheel_dir = archive_dir.path().join("wheels");
             ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
             let requirements_dir = idf_path.join("tools").join("requirements");
             merge_requirements_files(&requirements_dir).expect("Failed to merge requirements files");
