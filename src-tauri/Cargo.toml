@@ -5,6 +5,7 @@ description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
 copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
+default-run = "eim"
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
@@ -24,8 +25,9 @@ name = "eim"
 path = "src/main.rs"
 
 [[bin]]
-name = "offline_installer"
-path = "src/offline_installer.rs"
+name = "offline_installer_builder"
+path = "src/offline_installer_builder.rs"
+required-features = ["offline"]
 
 [build-dependencies]
 tauri-build = { version = "2.0.1", features = [], optional = true }
