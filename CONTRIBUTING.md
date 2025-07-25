@@ -76,10 +76,10 @@ cargo tauri dev -- --bin eim -- --help
 
 Note the double `-- --` syntax: the first `--` separates the Cargo arguments from the Tauri arguments, and the second `--` separates the Tauri arguments from the application arguments.
 
-### Offline Installer
+### Offline Installer Builder
 
 ```bash
-cargo run --bin offline_installer --release --no-default-features --features offline -- --help
+cargo run --bin offline_installer_builder --release --no-default-features --features offline -- --help
 ```
 
 ## Cross-Platform Compatibility

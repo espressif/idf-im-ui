@@ -166,8 +166,8 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "offline_installer",
-    about = "Offline installer for ESP-IDF Installation Manager"
+    name = "offline_installer_builder",
+    about = "Offline installer builder for ESP-IDF Installation Manager"
 )]
 struct Args {
     /// Path to the installation data file
