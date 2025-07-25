@@ -10,6 +10,7 @@ use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
+use serde::de;
 use tempfile::TempDir;
 use std::collections::HashMap;
 use std::sync::mpsc;
@@ -339,29 +340,35 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
       }
       // TODO: load config from archive after is properly prepared by effline installer tool
       // load the config from the extracted archive
-      // let config_path = offline_archive_dir.path().join("config.toml");
-      // if config_path.exists() {
-      //   debug!("Loading config from extracted archive: {}", config_path.display());
-      //   match Settings::load(&mut config, &config_path.to_str().unwrap()) {
-      //     Ok(()) => {
-      //       debug!("Config loaded from archive: {:?}", config);
-      //   }
-      //     Err(err) => {
-      //       return Err(format!("Failed to load config from archive: {}", err));
-      //     }
-      //   }
-      // } else {
-      //   warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
-      // }
-      match copy_dir_contents(&offline_archive_dir.path().join("v5.5"), &config.clone().path.unwrap().join("v5.5")) {
-        Ok(_) => {
-            info!("Successfully copied content from offline archive to IDF path");
-            // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
+      let config_path = offline_archive_dir.path().join("config.toml");
+      if config_path.exists() {
+        // debug!("Loading config from extracted archive: {}", config_path.display());
+        let mut tmp_setting = Settings::default();
+        match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
+          Ok(()) => {
+            debug!("Config loaded from archive: {:?}", config_path.display());
+            debug!("Using only version for now.");
+            config.idf_versions = tmp_setting.idf_versions;
         }
-        Err(err) => {
-            return Err(format!("Failed to copy content from offline archive: {}", err));
+          Err(err) => {
+            return Err(format!("Failed to load config from archive: {}", err));
+          }
+        }
+      } else {
+        warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+      }
+      for archive_version in config.clone().idf_versions.unwrap() {
+        match copy_dir_contents(&offline_archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
+          Ok(_) => {
+              info!("Successfully copied content from offline archive to IDF path");
+              // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
+          }
+          Err(err) => {
+              return Err(format!("Failed to copy content from offline archive: {}", err));
+          }
         }
       }
+
     }
 
     if config.skip_prerequisites_check.unwrap_or(false) {
@@ -391,7 +398,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     // Multiple version starts here
     let mut using_existing_idf = false;
-    for mut idf_version in config.idf_versions.clone().unwrap() {
+    for idf_version in config.idf_versions.clone().unwrap() {
       let paths = config.get_version_paths(&idf_version).map_err(|err| {
           error!("Failed to get version paths: {}", err);
           err.to_string()

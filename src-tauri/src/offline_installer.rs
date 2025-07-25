@@ -12,6 +12,7 @@ use idf_im_lib::verify_file_checksum;
 use idf_im_lib::ProgressMessage;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
+use log::error;
 use log::info;
 use log::warn;
 use std::fmt::Write;
@@ -26,6 +27,63 @@ use tar::Builder as TarBuilder;
 use tar::Archive;
 use tempfile::TempDir;
 use zstd::{encode_all, decode_all};
+use log::LevelFilter;
+use log4rs::append::console::ConsoleAppender;
+use log4rs::append::file::FileAppender;
+use log4rs::config::{Appender, Root};
+use log4rs::encode::pattern::PatternEncoder;
+use idf_im_lib::get_log_directory;
+
+pub const PYTHON_VERSION: &str = "3.11";
+
+fn setup_logging(verbose: u8) -> anyhow::Result<()> {
+    let log_file_name = get_log_directory()
+        .map(|dir| dir.join("offline_installer.log"))
+        .unwrap_or_else(|| {
+            eprintln!("Failed to get log directory, using default offline_installer.log");
+            std::path::PathBuf::from("offline_installer.log")
+        });
+
+    let logfile = FileAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
+        .build(log_file_name)?;
+
+    let stdout = ConsoleAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
+        .build();
+
+    let console_log_level = match verbose {
+        0 => LevelFilter::Info,
+        1 => LevelFilter::Debug,
+        _ => LevelFilter::Trace,
+    };
+
+    let file_log_level = LevelFilter::Trace;
+
+    let config = log4rs::Config::builder()
+        .appender(
+            Appender::builder()
+                .build("file", Box::new(logfile)),
+        )
+        .appender(
+            Appender::builder()
+                .build("stdout", Box::new(stdout)),
+        )
+        .build(
+            Root::builder()
+                .appender("stdout")
+                .appender("file")
+                .build(LevelFilter::Trace),
+        )?;
+
+    log4rs::init_config(config)?;
+
+    log::debug!(
+        "Logging initialized with console level: {:?}, file level: {:?}",
+        console_log_level, file_log_level
+    );
+    Ok(())
+}
 
 pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(100);
@@ -128,14 +186,23 @@ struct Args {
     /// Create installation data from the specified configuration file use "default" to use the default settings
     #[arg(short, long, value_name = "CONFIG")]
     create_from_config: Option<String>,
+
+    /// Increase output verbosity (-v, -vv, -vvv)
+    #[arg(short, long, action = clap::ArgAction::Count)]
+    verbose: u8,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
 
+    // Setup logging
+    if let Err(e) = setup_logging(args.verbose) {
+        error!("Failed to initialize logging: {e}");
+    }
+
     if args.create_from_config.is_some() {
-        println!(
+        info!(
             "Creating installation data from configuration file: {:?}",
             args.create_from_config
         );
@@ -143,7 +210,7 @@ async fn main() {
             Some(ref config_path) if config_path == "default" => {
                 // Load default settings
                 let settings = Settings::default();
-                println!("Default settings loaded: {:?}", settings);
+                info!("Default settings loaded: {:?}", settings);
                 settings
             }
             Some(config_path) => {
@@ -151,36 +218,28 @@ async fn main() {
                 let mut settings = Settings::default();
                 match settings.load(&config_path) {
                     Ok(_) => {
-                        println!("Settings loaded from {}: {:?}", config_path, settings);
+                    info!("Settings loaded from {}: {:?}", config_path, settings);
                     }
                     Err(e) => {
-                        eprintln!("Failed to load settings from {}: {}", config_path, e);
+                    error!("Failed to load settings from {}: {}", config_path, e);
                         return;
                     }
                 }
                 settings
             }
             None => {
-                eprintln!("No configuration file provided for creating installation data.");
+                error!("No configuration file provided for creating installation data.");
                 return;
             }
         };
         let archive_dir = TempDir::new().expect("Failed to create temporary directory");
-        settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
-        match settings.save() {
-          Ok(_) => {
-            println!("Settings saved successfully.");
-          }
-          Err(e) => {
-            eprintln!("Failed to save settings: {}", e);
-            return;
-          }
-        }
+
         // TODO: Download prerequisities and python
+        let versions = idf_im_lib::idf_versions::get_idf_names().await;
         let version_list = settings
             .idf_versions
             .clone()
-            .unwrap_or(vec!["v5.5".to_string()]); // TODO: fetch latest version -> or maibe fail because we want to build the offline installer for certain version
+            .unwrap_or(vec![versions.first().unwrap().clone()]);
 
         // check is uv is installed TODO: download uv in case it's missing
         match execute_command(
@@ -189,25 +248,23 @@ async fn main() {
         ) {
             Ok(output) => {
               if output.status.success() {
-                println!("UV is installed: {:?}", output);
+                info!("UV is installed: {:?}", output);
               } else {
-                eprintln!("UV is not installed or not found: {:?}", output);
+                error!("UV is not installed or not found: {:?}", output);
                 return;
               }
             }
             Err(err) => {
-                // todo: download uv in case it's missing -> and maybe pack it with the archive
-                eprintln!("UV is not installed or not found: {}. Please install it and try again.", err);
+                error!("UV is not installed or not found: {}. Please install it and try again.", err);
                 return;
             }
         }
 
         for idf_version in version_list {
-            // let version_path = archive_dir.path().join(&idf_version); // TODO: suport multiple versions
-            let version_path = archive_dir.path().join(&idf_version); // TODO: suport multiple versions
+            let version_path = archive_dir.path().join(&idf_version);
             ensure_path(version_path.to_str().unwrap())
                 .expect("Failed to ensure path for IDF version");
-            println!(
+            info!(
                 "Preparing installation data for ESP-IDF version: {} to folder {:?}",
                 idf_version,
                 version_path.display()
@@ -253,14 +310,14 @@ async fn main() {
                 settings.repo_stub.as_deref(),
                 &idf_version,
                 settings.idf_mirror.as_deref(),
-                true, // TODO: download submodules
+                true,
                 tx,
             ) {
                 Ok(_) => {
-                    println!("ESP-IDF version {} downloaded successfully.", idf_version);
+                    info!("ESP-IDF version {} downloaded successfully.", idf_version);
                 }
                 Err(err) => {
-                    eprintln!("Failed to download ESP-IDF version: {}", idf_version);
+                    error!("Failed to download ESP-IDF version: {}", idf_version);
                 }
             }
             let tools_json_file = idf_path
@@ -280,7 +337,7 @@ async fn main() {
             let tools = match idf_im_lib::idf_tools::read_and_parse_tools_file(&tools_json_file) {
                 Ok(tools) => tools,
                 Err(err) => {
-                    eprintln!("Failed to read tools json file: {}", err);
+                error!("Failed to read tools json file: {}", err);
                     return;
                 }
             };
@@ -292,7 +349,7 @@ async fn main() {
             let tool_path = archive_dir.path().join("dist");
             ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
             for (tool_name, (version, download_link)) in download_links.iter() {
-                println!(
+                info!(
                     "Preparing tool: {} version: {} download link: {:?}",
                     tool_name, version, download_link
                 );
@@ -308,12 +365,12 @@ async fn main() {
                         )
                         .unwrap()
                         {
-                            println!(
-                                "Tool {} version {} downloaded successfully.",
-                                tool_name, version
-                            );
+                        info!(
+                            "Tool {} version {} downloaded successfully.",
+                            tool_name, version
+                        );
                         } else {
-                            eprintln!(
+                            error!(
                                 "Checksum verification failed for tool {} version {}.",
                                 tool_name, version
                             );
@@ -324,7 +381,7 @@ async fn main() {
                         }
                     }
                     Err(err) => {
-                        eprintln!("Failed to download tool {}: {}", tool_name, err);
+                        error!("Failed to download tool {}: {}", tool_name, err);
                     }
                 }
             }
@@ -348,13 +405,13 @@ async fn main() {
                     }
                 };
             if constraint_file.is_none() {
-                eprintln!(
+                error!(
                     "Failed to download constraints file for IDF version {}",
                     idf_version
                 );
                 return;
             } else {
-                println!(
+                info!(
                     "Constraints file downloaded successfully for IDF version {}",
                     idf_version
                 );
@@ -363,46 +420,47 @@ async fn main() {
             let python_env = archive_dir.path().clone().join("python_env");
             match ensure_path(python_env.to_str().unwrap()) {
                 Ok(_) => {
-                    println!("Python environment directory created: {:?}", python_env);
+                    info!("Python environment directory created: {:?}", python_env);
                 }
                 Err(err) => {
-                    eprintln!("Failed to create Python environment directory: {}", err);
+                    error!("Failed to create Python environment directory: {}", err);
                     return;
                 }
             }
             match execute_command(
             "uv",
               &[
-                  "python", "install", "3.11" // TODO: Adjust the Python version as needed
+                  "python", "install", PYTHON_VERSION
               ],
             ) {
               Ok(output) => {
                   if output.status.success() {
-                      println!("Python 3.11 installed successfully.");
+                      info!("Python {} installed successfully.", PYTHON_VERSION);
                   } else {
-                      eprintln!(
-                          "Failed to install Python 3.11: {}",
+                      error!(
+                          "Failed to install Python {}: {}",
+                          PYTHON_VERSION,
                           String::from_utf8_lossy(&output.stderr)
                       );
                       return;
                   }
               }
               Err(err) => {
-                  eprintln!("Failed to execute command: {}", err);
+                  error!("Failed to execute command: {}", err);
                   return;
               }
             };
             match execute_command(
             "uv",
               &[
-                  "venv", "--relocatable", "--python", "3.11", python_env.clone().to_str().unwrap() // TODO: Adjust the Python version as needed
+                  "venv", "--relocatable", "--python", PYTHON_VERSION, python_env.clone().to_str().unwrap()
               ],
             ) {
               Ok(output) => {
                   if output.status.success() {
-                      println!("Python virtual environment created successfully.");
+                      info!("Python virtual environment created successfully.");
                   } else {
-                      eprintln!(
+                      error!(
                           "Failed to create Python virtual environment: {}",
                           String::from_utf8_lossy(&output.stderr)
                       );
@@ -410,26 +468,34 @@ async fn main() {
                   }
               }
               Err(err) => {
-                  eprintln!("Failed to execute command: {}", err);
+                  error!("Failed to execute command: {}", err);
                   return;
               }
             }
             let wheel_dir = archive_dir.path().join("wheels");
             ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
             let requirements_dir = idf_path.join("tools").join("requirements");
-            merge_requirements_files(&requirements_dir).expect("Failed to merge requirements files");
+            if let Err(e) = merge_requirements_files(&requirements_dir) {
+                error!("Failed to merge requirements files: {}", e);
+                return;
+            }
+
+            let python_executable = match std::env::consts::OS {
+                "windows" => python_env.join("Scripts/python.exe"),
+                _ => python_env.join("bin/python"),
+            };
 
             match execute_command(
-            python_env.join("bin/python").to_str().unwrap(),
+            python_executable.to_str().unwrap(),
               &[
                   "-m", "ensurepip", "--upgrade"
               ]
             ) {
               Ok(output) => {
                   if output.status.success() {
-                      println!("Successfully installed pip.");
+                      info!("Successfully installed pip.");
                   } else {
-                      eprintln!(
+                      error!(
                           "Failed to upgrade pip: {}",
                           String::from_utf8_lossy(&output.stderr)
                       );
@@ -437,26 +503,27 @@ async fn main() {
                   }
               }
               Err(err) => {
-                  eprintln!("Failed to execute command: {}", err);
+                  error!("Failed to execute command: {}", err);
                   return;
               }
             }
 
+
+
             match execute_command(
-            python_env.join("bin/python").to_str().unwrap(),
+                python_executable.to_str().unwrap(),
               &[
                   "-m", "pip", "download",
                   "-r", requirements_dir.join("requirements.merged.txt").to_str().unwrap(),
                   "-c", constraint_file.unwrap().to_str().unwrap(),
                   "--dest", wheel_dir.to_str().unwrap(),
-                  // TODO: make multiple platform compatible
               ],
           ) {
               Ok(output) => {
                   if output.status.success() {
-                      println!("Python packages downloaded successfully.");
+                      info!("Python packages downloaded successfully.");
                   } else {
-                      eprintln!(
+                      error!(
                           "Failed to download Python packages: {}",
                           String::from_utf8_lossy(&output.stderr)
                       );
@@ -464,10 +531,23 @@ async fn main() {
                   }
               }
               Err(err) => {
-                  eprintln!("Failed to execute command: {}", err);
+                  error!("Failed to execute command: {}", err);
                   return;
               }
           };
+        }
+
+        settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
+        settings.idf_path = None;
+
+        match settings.save() {
+          Ok(_) => {
+            info!("Settings saved successfully.");
+          }
+          Err(e) => {
+            error!("Failed to save settings: {}", e);
+            return;
+          }
         }
         // Create a .zst file in the current directory
         let output_path = PathBuf::from(format!(
@@ -477,50 +557,71 @@ async fn main() {
                 .unwrap_or(vec!["default".to_string()])
                 .join("_")
         ));
-        let mut output_file = File::create(&output_path).expect("Failed to create output zst file");
+        let mut output_file = match File::create(&output_path) {
+            Ok(f) => f,
+            Err(e) => {
+                error!("Failed to create output zst file: {}", e);
+                return;
+            }
+        };
 
         // Compress the archive_dir into a .zst file
         let mut tar = TarBuilder::new(Vec::new());
-        tar.append_dir_all(".", archive_dir.path())
-            .expect("Failed to create tar archive");
-        let tar_data = tar.into_inner().expect("Failed to finalize tar archive");
+        if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
+            error!("Failed to create tar archive: {}", e);
+            return;
+        }
+        let tar_data = match tar.into_inner() {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Failed to finalize tar archive: {}", e);
+                return;
+            }
+        };
         // Compression level 3 is almost instant, just IDF  results in 2.2GB archive, level 19 took 8 minutes resulting in 2.1G archive
-        let compressed_data = encode_all(&tar_data[..], 3).expect("Failed to compress with zstd");
-        output_file
-            .write_all(&compressed_data)
-            .expect("Failed to write compressed data");
+        let compressed_data = match encode_all(&tar_data[..], 3) {
+            Ok(data) => data,
+            Err(e) => {
+                error!("Failed to compress with zstd: {}", e);
+                return;
+            }
+        };
+        if let Err(e) = output_file.write_all(&compressed_data) {
+            error!("Failed to write compressed data: {}", e);
+            return;
+        }
 
-        println!("Compressed archive saved to {:?}", output_path);
+        info!("Compressed archive saved to {:?}", output_path);
         return;
     } else if let Some(archive_path) = args.archive {
-      // Extract installation data from archive
-      println!("Extracting installation data from archive: {:?}", archive_path);
+        // Extract installation data from archive
+        info!("Extracting installation data from archive: {:?}", archive_path);
 
-      if !archive_path.exists() {
-          eprintln!("Archive file does not exist: {:?}", archive_path);
-          return;
-      }
+        if !archive_path.exists() {
+            error!("Archive file does not exist: {:?}", archive_path);
+            return;
+        }
 
-      // Create extraction directory next to the archive
-      let archive_stem = archive_path.file_stem()
-          .and_then(|s| s.to_str())
-          .unwrap_or("extracted");
+        // Create extraction directory next to the archive
+        let archive_stem = archive_path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("extracted");
 
-      let extract_dir = archive_path.parent()
-          .unwrap_or_else(|| Path::new("."))
-          .join(format!("{}_extracted", archive_stem));
+        let extract_dir = archive_path.parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(format!("{}_extracted", archive_stem));
 
-      match extract_zst_archive(&archive_path, &extract_dir) {
-          Ok(_) => {
-              println!("Successfully extracted archive to: {:?}", extract_dir);
-              println!("You can now examine the contents for debugging purposes.");
-          }
-          Err(err) => {
-              eprintln!("Failed to extract archive: {}", err);
-          }
-      }
-  } else {
-      eprintln!("Please specify either -c to create an archive or -a to extract one.");
-      eprintln!("Use --help for more information.");
-  }
+        match extract_zst_archive(&archive_path, &extract_dir) {
+            Ok(_) => {
+                info!("Successfully extracted archive to: {:?}", extract_dir);
+                info!("You can now examine the contents for debugging purposes.");
+            }
+            Err(err) => {
+                error!("Failed to extract archive: {}", err);
+            }
+        }
+    } else {
+        error!("Please specify either -c to create an archive or -a to extract one.");
+        error!("Use --help for more information.");
+    }
 }
