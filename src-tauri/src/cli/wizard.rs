@@ -347,6 +347,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
           Ok(()) => {
             debug!("Config loaded from archive: {:?}", config_path.display());
+            debug!("Config: {:?}", tmp_setting);
             debug!("Using only version for now.");
             config.idf_versions = tmp_setting.idf_versions;
         }

@@ -241,6 +241,7 @@ async fn main() {
             .clone()
             .unwrap_or(vec![versions.first().unwrap().clone()]);
 
+        settings.idf_versions = Some(version_list.clone());
         // check is uv is installed TODO: download uv in case it's missing
         match execute_command(
             "uv",
