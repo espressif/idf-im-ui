@@ -144,6 +144,36 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: release_cli/${{ matrix.package_name }}/eim.zip
           asset_name: eim-cli-${{ matrix.package_name }}.zip
+      # offline installer
+      - name: Build offline_installer
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Copy offline_installer binary
+        run: |
+          cp src-tauri/target/${{ matrix.target || 'x86_64-unknown-linux-musl' }}/release/offline_installer release_cli/${{ matrix.package_name }}/offline_installer
+          chmod +x release_cli/${{ matrix.package_name }}/offline_installer
+          cd release_cli/${{ matrix.package_name }}
+          zip -r offline_installer.zip offline_installer
+        shell: bash
+
+      - name: Upload offline_installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/offline_installer
+
+      - name: Upload offline_installer Release Asset - Unix
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer.zip
+          asset_name: offline_installer-${{ matrix.package_name }}.zip
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -315,6 +345,83 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: release_cli/${{ matrix.package_name }}/eim.exe
           asset_name: eim-cli-${{ matrix.package_name }}.exe
+
+      - name: Build offline_installer (Windows)
+        if: runner.os == 'Windows'
+        env:
+          OPENSSL_DIR: 'C:\vcpkg\installed\x64-windows-static-md'
+          OPENSSL_LIB_DIR: 'C:\vcpkg\installed\x64-windows-static-md\lib'
+          OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
+          OPENSSL_STATIC: "1"
+          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.4-thr\\x64\\bin\\perl.exe'
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Build offline_installer (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cd src-tauri
+          cargo build --release --no-default-features --features offline --bin offline_installer ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+        shell: bash
+
+      - name: Copy offline_installer binary (Windows)
+        if: runner.os == 'Windows'
+        run: copy src-tauri\target\release\offline_installer.exe release_cli\${{ matrix.package_name }}\offline_installer.exe
+        shell: cmd
+
+      - name: Copy offline_installer binary (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cp src-tauri/target/${{ matrix.target }}/release/offline_installer release_cli/${{ matrix.package_name }}/offline_installer
+          chmod +x release_cli/${{ matrix.package_name }}/offline_installer
+          cd release_cli/${{ matrix.package_name }}
+          zip -r offline_installer.zip offline_installer
+        shell: bash
+
+      - name: Sign Windows offline_installer Binary
+        if: runner.os == 'Windows'
+        env:
+          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+        run: |
+          & "C:\Program Files (x86)\Windows Kits\10\bin\10.0.17763.0\x86\signtool.exe" sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer.exe
+
+      - name: Codesign macOS offline_installer Binary
+        if: startsWith(matrix.os, 'macos')
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer -v
+          codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer
+
+      - name: Upload offline_installer build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer-${{ matrix.package_name }}-${{ github.run_number }}
+          path: release_cli/${{ matrix.package_name }}/offline_installer${{ runner.os == 'Windows' && '.exe' || '' }}
+
+      - name: Upload offline_installer Release Asset - MacOs
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer.zip
+          asset_name: offline_installer-${{ matrix.package_name }}.zip
+
+      - name: Upload offline_installer Release Asset (Windows)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/${{ matrix.package_name }}/offline_installer.exe
+          asset_name: offline_installer-${{ matrix.package_name }}.exe
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
