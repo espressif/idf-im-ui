@@ -164,9 +164,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         println!("Installed versions:");
                         for version in config.idf_installed {
                             if version.id == config.idf_selected_id {
-                                println!("- {} (selected)", version.name);
+                                println!("- {} (selected) [{}]", version.name, version.path);
                             } else {
-                                println!("- {}", version.name);
+                                println!("- {} [{}]", version.name, version.path);
                             }
                         }
                         Ok(())
