@@ -54,7 +54,7 @@ function testRun(script) {
   const EIMVersion = process.env.EIM_GUI_VERSION || GUIDEFAULTVERSION;
 
   const IDFDefaultVersion =
-    process.env.IDF_VERSION & (process.env.IDF_VERSION !== "null")
+    process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
 

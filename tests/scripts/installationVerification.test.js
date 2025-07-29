@@ -264,8 +264,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(
@@ -313,8 +313,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         let toolsIndexFile = JSON.parse(
@@ -501,8 +501,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(`mkdir ${pathToProjectFolder}\r`);
@@ -585,8 +585,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         const validTarget =
@@ -674,8 +674,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
