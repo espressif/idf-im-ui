@@ -234,7 +234,50 @@ async fn main() {
         };
         let archive_dir = TempDir::new().expect("Failed to create temporary directory");
 
-        // TODO: Download prerequisities and python
+        // Download prerequisities and python
+        match std::env::consts::OS {
+            "windows" => {
+                // scoop package manager is used to install dependencies on Windows
+                let scoop_path = archive_dir.path().join("scoop");
+                ensure_path(scoop_path.to_str().unwrap());
+                let scoop_list = vec![
+                    "https://github.com/ScoopInstaller/Scoop/archive/master.zip",
+                    "https://github.com/ScoopInstaller/Main/archive/master.zip",
+                    "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe#/dl.7z", // git amd64
+                    // "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-arm64.7z.exe#/dl.7z" // git arm64
+                    "https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", // python310 amd64
+                    "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg",
+                    "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg"
+                ];
+                for link in scoop_list {
+                    info!("Downloading Scoop from: {}", link);
+                    match download_file(link, scoop_path.to_str().unwrap(), None).await {
+                        Ok(_) => {
+                            info!("Scoop downloaded successfully from: {}", link);
+                        }
+                        Err(err) => {
+                            error!("Failed to download Scoop from {}: {}", link, err);
+                            return;
+                        }
+                    }
+                }
+                let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
+                fs::write(
+                    scoop_path.join("install_scoop_offline.ps1"),
+                    scoop_install_script,
+                )
+                .expect("Failed to write install_scoop_offline.ps1 script");
+                info!("Scoop install script written to: {:?}", scoop_path.join("install_scoop_offline.ps1"));
+            }
+            "linux" | "macos" => {
+                info!("Detected Unix-like OS, ...");
+                warn!("prerequisites installation is not implemented for Unix-like OSes yet, please install them manually.");
+            }
+            _ => {
+                error!("Unsupported OS: {}", std::env::consts::OS);
+                return;
+            }
+        }
         let versions = idf_im_lib::idf_versions::get_idf_names().await;
         let version_list = settings
             .idf_versions
