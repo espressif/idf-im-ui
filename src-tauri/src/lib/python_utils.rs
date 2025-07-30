@@ -437,17 +437,17 @@ pub async fn install_python_env(
             return Err(format!("failed to ensure venv path: {}", e));
         }
     }
-    // if let Some(offline_dir) = offline_archive_dir {
-    //     offline_mode = true;
-    //     // if offline mode is enabled, copy the contents of the archive to the venv path
-    //     debug!("Copying contents from offline archive directory: {}", offline_dir.display());
-    //     if let Err(e) = copy_dir_contents(&offline_dir.join("python_env"), &venv_path) {
-    //         error!("Failed to copy contents from offline archive directory: {}", e);
-    //         return Err(format!("Failed to copy contents from offline archive directory: {}", e));
-    //     }
-    // } else {
-    //     debug!("No offline archive directory provided, skipping copying contents.");
-    // }
+    if let Some(offline_dir) = offline_archive_dir {
+        offline_mode = true;
+        // if offline mode is enabled, copy the contents of the archive to the venv path
+        // debug!("Copying contents from offline archive directory: {}", offline_dir.display());
+        // if let Err(e) = copy_dir_contents(&offline_dir.join("python_env"), &venv_path) {
+        //     error!("Failed to copy contents from offline archive directory: {}", e);
+        //     return Err(format!("Failed to copy contents from offline archive directory: {}", e));
+        // }
+    } else {
+        debug!("No offline archive directory provided, skipping copying contents.");
+    }
 
     // let python_executable = if offline_mode {
     //   match std::env::consts::OS {

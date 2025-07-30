@@ -674,6 +674,15 @@ pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(),
 }
 
 pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
+    copy_dir_contents_with_retries(src, dst, 3, std::time::Duration::from_millis(100))
+}
+
+pub fn copy_dir_contents_with_retries(
+    src: &Path,
+    dst: &Path,
+    max_retries: u32,
+    retry_delay: std::time::Duration
+) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
@@ -691,13 +700,55 @@ pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
 
         if path.is_dir() {
             // Recursively copy subdirectories
-            copy_dir_contents(&path, &dest_path)?;
+            copy_dir_contents_with_retries(&path, &dest_path, max_retries, retry_delay)?;
         } else {
-            // Copy files
-            fs::copy(&path, &dest_path)?;
+            // Copy files with retry logic
+            copy_file_with_retries(&path, &dest_path, max_retries, retry_delay)?;
         }
     }
     Ok(())
+}
+
+fn copy_file_with_retries(
+    src: &Path,
+    dst: &Path,
+    max_retries: u32,
+    retry_delay: std::time::Duration
+) -> io::Result<()> {
+    let mut attempts = 0;
+
+    loop {
+        match fs::copy(src, dst) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                attempts += 1;
+
+                // Check if it's a retryable error
+                if is_retryable_error(&e) && attempts <= max_retries {
+                    eprintln!("Warning: Failed to copy {:?} to {:?} (attempt {}/{}): {}. Retrying...",
+                             src, dst, attempts, max_retries, e);
+                    std::thread::sleep(retry_delay);
+                    continue;
+                } else {
+                    // Add more context to the error
+                    return Err(io::Error::new(
+                        e.kind(),
+                        format!("Failed to copy {:?} to {:?} after {} attempts: {}",
+                               src, dst, attempts, e)
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn is_retryable_error(error: &io::Error) -> bool {
+    match error.raw_os_error() {
+        Some(5) => true,   // ERROR_ACCESS_DENIED
+        Some(32) => true,  // ERROR_SHARING_VIOLATION
+        Some(33) => true,  // ERROR_LOCK_VIOLATION
+        _ => false,
+    }
 }
 
 #[cfg(test)]
