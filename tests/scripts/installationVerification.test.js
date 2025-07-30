@@ -264,8 +264,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(
@@ -313,8 +313,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         let toolsIndexFile = JSON.parse(
@@ -430,7 +430,8 @@ function runInstallVerification({
             if (tool.version_cmd.join(" ") !== "") {
               testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
               let toolVersionOutput = await testRunner.waitForOutput(
-                `${tool.versions[0].name}`
+                `${tool.versions[0].name}`,
+                20000
               );
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
@@ -501,8 +502,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(`mkdir ${pathToProjectFolder}\r`);
@@ -585,8 +586,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         const validTarget =
@@ -674,8 +675,8 @@ function runInstallVerification({
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
-          this.test.error(new Error("Error starting IDF Terminal"));
           logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
         }
 
         testRunner.sendInput(`cd ${pathToProjectFolder}\r`);

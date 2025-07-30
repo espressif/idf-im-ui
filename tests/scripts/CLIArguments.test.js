@@ -30,7 +30,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
       logger.info(`Starting test - show correct version`);
       await testRunner.start();
       testRunner.sendInput(`${pathToEim} -V\r`);
-      const meetVersion = await testRunner.waitForOutput(eimVersion);
+      const meetVersion = await testRunner.waitForOutput(eimVersion, 15000);
       expect(meetVersion, "EIM showing incorrect version number").to.be.true;
     });
 
