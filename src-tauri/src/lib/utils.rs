@@ -1,22 +1,16 @@
 use crate::{
-    command_executor::execute_command,
-    idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file,
-    single_version_post_install,
-    version_manager::get_default_config_path,
+    command_executor::execute_command, idf_config::{IdfConfig, IdfInstallation}, idf_tools::{read_and_parse_tools_file}, single_version_post_install, version_manager::get_default_config_path
 };
-use anyhow::{anyhow, Result, Error};
+use anyhow::{anyhow, Result};
 use git2::Repository;
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
-    collections::{HashMap, HashSet},
-    fs::{self},
-    io,
-    path::{Path, PathBuf},
+    collections::{HashMap, HashSet}, fs::{self}, io, path::{Path, PathBuf}
 };
 use regex::Regex;
 
@@ -149,14 +143,18 @@ pub fn is_valid_idf_directory(path: &str) -> bool {
     let path = PathBuf::from(path);
     let tools_path = path.join("tools");
     let tools_json_path = tools_path.join("tools.json");
+    debug!("Checking for tools.json at: {}", tools_json_path.display());
     if !tools_json_path.exists() {
         return false;
     }
+    debug!("Found tools.json at: {}", tools_json_path.display());
     match read_and_parse_tools_file(tools_json_path.to_str().unwrap()) {
         Ok(_) => {
+            debug!("Valid IDF directory: {}", path.display());
             true
         }
         Err(_) => {
+            debug!("Invalid IDF directory: {}", path.display());
             false
         }
     }
@@ -373,7 +371,11 @@ fn extract_tools_path_from_python_env_path(path: &str) -> Option<PathBuf> {
 /// It also logs errors if the IDF installation configuration cannot be updated.
 pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
     let config_path = Path::new(config_path);
-    let json_str = std::fs::read_to_string(config_path).unwrap();
+    let json_str = match std::fs::read_to_string(config_path) {
+        Ok(content) => content,
+        Err(e) => return Err(anyhow!("Failed to read config file: {}", e)),
+    };
+    debug!("Parsing tool set config from: {}", config_path.display());
     let config: Vec<IdfToolsConfig> = match serde_json::from_str(&json_str) {
         Ok(config) => config,
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
@@ -442,6 +444,136 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
 
         current_config.idf_installed.push(installation);
 
+    }
+    match current_config.to_file(config_path, true, true) {
+      Ok(_) => {
+        debug!("Updated config file with new tool set");
+        return Ok(())
+      }
+      Err(e) => {
+        return Err(anyhow!("Failed to update config file: {}", e))
+      }
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EspIdfConfig {
+    #[serde(rename = "$schema")]
+    pub schema: String,
+    #[serde(rename = "$id")]
+    pub id: String,
+    #[serde(rename = "_comment")]
+    pub comment: String,
+    #[serde(rename = "_warning")]
+    pub warning: String,
+    #[serde(rename = "gitPath")]
+    pub git_path: String,
+    #[serde(rename = "idfToolsPath")]
+    pub idf_tools_path: String,
+    #[serde(rename = "idfSelectedId")]
+    pub idf_selected_id: String,
+    #[serde(rename = "idfInstalled")]
+    pub idf_installed: HashMap<String, EspIdfVersion>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct EspIdfVersion {
+    pub version: String,
+    pub python: String,
+    pub path: String,
+}
+
+pub fn parse_esp_idf_json(idf_json_path: &str) -> Result<()> {
+    let idf_json_path = Path::new(idf_json_path);
+    let json_str = std::fs::read_to_string(idf_json_path).unwrap();
+    let config: EspIdfConfig = match serde_json::from_str(&json_str) {
+        Ok(config) => config,
+        Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
+    };
+    let config_path = get_default_config_path();
+    let mut current_config = match IdfConfig::from_file(&config_path) {
+        Ok(config) => config,
+        Err(_e) => IdfConfig::default(),
+    };
+    for (_key, value) in config.idf_installed {
+        let idf_version = value.version;
+        let idf_path = value.path;
+        let python = value.python;
+        let tools_path = config.idf_tools_path.clone();
+        let settings = crate::settings::Settings::default();
+        let paths = settings.get_version_paths(&idf_version)?;
+
+        debug!("IDF tools path: {}", tools_path);
+        debug!("IDF version: {}", idf_version);
+        debug!("activation script path: {}", paths.activation_script_path.display());
+        debug!("Python path: {}", python);
+        // export paths
+        let tools_json_file = find_by_name_and_extension(Path::new(&idf_path), "tools", "json");
+        if tools_json_file.is_empty() {
+            return Err(anyhow!("tools.json file not found"));
+        }
+
+        debug!("Tools json file: {:?}", tools_json_file);
+
+        let tools = match crate::idf_tools::read_and_parse_tools_file(&tools_json_file.first().unwrap()){
+            Ok(tools) => tools,
+            Err(e) => {
+                return Err(anyhow!("Failed to read tools.json file: {}", e));
+            }
+        };
+        let mut export_paths:Vec<String> = crate::idf_tools::get_tools_export_paths(
+            tools,
+            vec!["all".to_string()],
+            &tools_path,
+        )
+        .into_iter()
+        .map(|p| {
+            if std::env::consts::OS == "windows" {
+                crate::replace_unescaped_spaces_win(&p)
+            } else {
+                p
+            }
+        })
+        .collect();
+        export_paths.push(config.git_path.clone());
+
+        if !PathBuf::from(idf_path.clone()).exists() {
+          warn!("Path {} does not exists, skipping", &idf_path);
+          continue;
+        };
+        if current_config.clone().is_path_in_config(idf_path.to_string()) {
+          info!("Path {} already in config, skipping", &idf_path);
+          continue;
+        };
+        let python_env = python.clone().find("bin").map(|index| python[..=index-1].to_string());
+
+        single_version_post_install(
+            &paths.activation_script_path.to_string_lossy().into_owned(),
+            &idf_path,
+            &idf_version,
+            &tools_path,
+            export_paths,
+            python_env.as_deref(),
+            None,
+        );
+
+        let python = match std::env::consts::OS {
+            "windows" => PathBuf::from(python_env.unwrap()).join("Scripts").join("python.exe"),
+            _ => PathBuf::from(python_env.unwrap()).join("bin").join("python"),
+        };
+        let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
+        let installation = IdfInstallation {
+            id,
+            activation_script: paths.activation_script.to_string_lossy().into_owned(),
+            path: idf_path.clone(),
+            name: idf_version,
+            python: python.to_str()
+                .unwrap()
+                .to_string(),
+            idf_tools_path: tools_path,
+        };
+
+        current_config.idf_installed.push(installation);
     }
     match current_config.to_file(config_path, true, true) {
       Ok(_) => {
