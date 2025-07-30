@@ -430,7 +430,8 @@ function runInstallVerification({
             if (tool.version_cmd.join(" ") !== "") {
               testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
               let toolVersionOutput = await testRunner.waitForOutput(
-                `${tool.versions[0].name}`
+                `${tool.versions[0].name}`,
+                20000
               );
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
