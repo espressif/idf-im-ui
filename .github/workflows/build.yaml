@@ -455,9 +455,12 @@ jobs:
         run: |
           chmod +x ./offline_installer_builder
 
-      - name: Run offline_installer_builder
+      - name: Install tooling
         run: |
           cargo install --git https://github.com/astral-sh/uv uv
+
+      - name: Run offline_installer_builder
+        run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
             ./offline_installer_builder.exe -c default
           else
