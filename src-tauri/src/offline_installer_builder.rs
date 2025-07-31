@@ -2,6 +2,7 @@ use clap::builder;
 use clap::Parser;
 use idf_im_lib::command_executor::execute_command;
 use idf_im_lib::download_file;
+use idf_im_lib::download_file_and_rename;
 use idf_im_lib::ensure_path;
 use idf_im_lib::idf_tools::get_list_of_tools_to_download;
 use idf_im_lib::python_utils::download_constraints_file;
@@ -241,17 +242,17 @@ async fn main() {
                 let scoop_path = archive_dir.path().join("scoop");
                 ensure_path(scoop_path.to_str().unwrap());
                 let scoop_list = vec![
-                    "https://github.com/ScoopInstaller/Scoop/archive/master.zip",
-                    "https://github.com/ScoopInstaller/Main/archive/master.zip",
-                    "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe#/dl.7z", // git amd64
-                    // "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-arm64.7z.exe#/dl.7z" // git arm64
-                    "https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", // python310 amd64
-                    "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg",
-                    "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg"
+                    ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
+                    ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
+                    ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
+                    // "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-arm64.7z.exe#" // git arm64
+                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", "setup.exe"),
+                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
+                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg")
                 ];
-                for link in scoop_list {
+                for (link, name) in scoop_list {
                     info!("Downloading Scoop from: {}", link);
-                    match download_file(link, scoop_path.to_str().unwrap(), None).await {
+                    match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
                         Ok(_) => {
                             info!("Scoop downloaded successfully from: {}", link);
                         }
@@ -285,7 +286,7 @@ async fn main() {
             .unwrap_or(vec![versions.first().unwrap().clone()]);
 
         settings.idf_versions = Some(version_list.clone());
-        // check is uv is installed TODO: download uv in case it's missing
+        // check is uv is installed TODO: maybe download uv in case it's missing
         match execute_command(
             "uv",
             &["--version"],

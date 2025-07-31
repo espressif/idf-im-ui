@@ -7,24 +7,12 @@
     "architecture": {
         "64bit": {
             "url": [
-                "https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe",
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg",
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg"
+                "file://{{offline_archive_scoop_dir}}/python310-amd64.exe",
+                "file://{{offline_archive_scoop_dir}}/install-pep-514.reg",
+                "file://{{offline_archive_scoop_dir}}/uninstall-pep-514.reg"
             ],
             "hash": [
                 "md5:a55e9c1e6421c84a4bd8b4be41492f51",
-                "27c2d7e74442f356d54d29000379afd55078fb4ede00455fc012f81745e4bcac",
-                "65a46d5a9fec455b6fbc5d75f8a57cd5ee958d31873ef438766866a53759e9f6"
-            ]
-        },
-        "32bit": {
-            "url": [
-                "https://www.python.org/ftp/python/3.10.11/python-3.10.11.exe#/setup.exe",
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg",
-                "https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg"
-            ],
-            "hash": [
-                "md5:83a67e1c4f6f1472bf75dd9681491bf1",
                 "27c2d7e74442f356d54d29000379afd55078fb4ede00455fc012f81745e4bcac",
                 "65a46d5a9fec455b6fbc5d75f8a57cd5ee958d31873ef438766866a53759e9f6"
             ]
