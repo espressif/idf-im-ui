@@ -366,6 +366,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
           "windows" => {
             // Setup Scoop
             let scoop_path = offline_archive_dir.path().join("scoop");
+            let scoop_install_path = dirs::home_dir()
+                        .unwrap()
+                        .join("scoop");
+            let scoop_command = scoop_install_path.join("shims").join("scoop");
             match execute_command(
                 "powershell",
                 &[
@@ -377,8 +381,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     &scoop_path.to_str().unwrap(),
                 ],
             ) {
-                Ok(_) => {
+                Ok(out) => {
+                  if out.status.success() {
                     info!("Scoop installed successfully.");
+
+                    info!("Scoop install path: {}", scoop_install_path.display());
+                    idf_im_lib::add_path_to_path(&scoop_install_path.to_str().unwrap());
+                  } else {
+                    return Err(format!("Failed to install Scoop: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+                  }
                 }
                 Err(err) => {
                     return Err(format!("Failed to install Scoop: {}", err));
@@ -450,30 +461,46 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
             // Install tools using Scoop
             match command_executor::execute_command(
-                "scoop",
+                "powershell",
                 &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    scoop_command.to_str().unwrap(),
                     "install",
                     "--no-update-scoop",
                     &git_manifest_path.to_str().unwrap(),
                 ],
             ) {
-                Ok(_) => {
-                    info!("Git installed successfully.");
+                Ok(out) => {
+                    if out.status.success() {
+                        info!("Git installed successfully.");
+                    } else {
+                        return Err(format!("Failed to install Git: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+                    }
                 }
                 Err(err) => {
                     return Err(format!("Failed to install Git: {}", err));
                 }
             }
             match command_executor::execute_command(
-                "scoop",
+                "powershell",
                 &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    &scoop_command.to_str().unwrap(),
                     "install",
                     "--no-update-scoop",
                     &python_manifest_path.to_str().unwrap(),
                 ],
             ) {
-                Ok(_) => {
-                    info!("Python installed successfully.");
+                Ok(out) => {
+                    if out.status.success() {
+                        info!("Python installed successfully.");
+                    } else {
+                        return Err(format!("Failed to install Python: {:?} | {:?}", out.stdout, out.stderr));
+                    }
                 }
                 Err(err) => {
                     return Err(format!("Failed to install Python: {}", err));
