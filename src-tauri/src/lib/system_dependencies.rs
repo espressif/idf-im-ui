@@ -353,9 +353,12 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
         }
         "windows" => {
             for tool in list_of_required_tools {
-                let output = command_executor::execute_command(
+              let current_path = std::env::var("PATH").unwrap_or_default();
+              let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
+                let output = command_executor::execute_command_with_env(
                     "powershell",
-                    &["-Command", &format!("{} --version", tool)],
+                    &vec!["-Command", &format!("{} --version", tool)],
+                    vec![("PATH", &system_path)],
                 );
                 match output {
                     Ok(o) => {
