@@ -144,6 +144,16 @@ eim discover
 
 This command is planned to discover ESP-IDF installations on your system but is not yet implemented.
 
+### Fix Command
+
+Fix the ESP-IDF installation by reinstalling the tools and dependencies
+
+```bash
+eim fix [PATH]
+```
+
+If no `PATH` is provided, the user will be presented with selection of all known IDF installation to select from.
+
 ## Examples
 
 ```bash

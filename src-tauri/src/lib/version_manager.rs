@@ -173,7 +173,7 @@ pub fn rename_idf_version(identifier: &str, new_name: String) -> Result<String> 
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been removed. On error, returns an `anyhow::Error` with a description of the error.
-pub fn remove_single_idf_version(identifier: &str) -> Result<String> {
+pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Result<String> {
     //TODO: remove also from path
     let config_path = get_default_config_path();
     let mut ide_config = IdfConfig::from_file(&config_path)?;
@@ -183,11 +183,18 @@ pub fn remove_single_idf_version(identifier: &str) -> Result<String> {
         .find(|install| install.id == identifier || install.name == identifier)
     {
         let installation_folder_path = PathBuf::from(installation.path.clone());
-        let installation_folder = installation_folder_path.parent().unwrap();
-        match remove_directory_all(installation_folder) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(anyhow!("Failed to remove installation folder: {}", e));
+        let installation_folder = installation_folder_path.parent().ok_or_else(|| {
+            anyhow!(
+                "Installation path '{}' has no parent directory",
+                installation_folder_path.display()
+            )
+        })?;
+        if !keep_idf_folder {
+            match remove_directory_all(installation_folder) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(anyhow!("Failed to remove installation folder: {}", e));
+                }
             }
         }
         match remove_directory_all(installation.clone().activation_script) {

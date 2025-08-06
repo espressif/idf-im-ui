@@ -10,6 +10,7 @@ use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;
@@ -353,7 +354,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             println!("Available versions:");
                             let options = versions.iter().map(|v| v.name.clone()).collect();
                             match generic_select("Which version do you want to remove?", &options) {
-                                Ok(selected) => match remove_single_idf_version(&selected) {
+                                Ok(selected) => match remove_single_idf_version(&selected, false) {
                                     Ok(_) => {
                                         info!("Removed version: {}", selected);
                                         Ok(())
@@ -367,7 +368,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     Err(err) => Err(anyhow::anyhow!(err)),
                 }
             } else {
-                match remove_single_idf_version(&version.clone().unwrap()) {
+                match remove_single_idf_version(&version.clone().unwrap(), false) {
                     Ok(_) => {
                         println!("Removed version: {}", version.clone().unwrap());
                         Ok(())
@@ -388,7 +389,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         let mut failed = false;
                         for version in versions {
                             info!("Removing version: {}", version.name);
-                            match remove_single_idf_version(&version.name) {
+                            match remove_single_idf_version(&version.name, false) {
                                 Ok(_) => {
                                     info!("Removed version: {}", version.name);
                                 }
@@ -431,6 +432,89 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
                 Err(err) => Err(anyhow::anyhow!(err)),
             }
+        }
+        Commands::Fix { path } => {
+          let path_to_fix = if path.is_some() {
+              // If a path is provided, fix the IDF installation at that path
+              let path = path.unwrap();
+               if is_valid_idf_directory(&path) {
+                PathBuf::from(path)
+               } else {
+                error!("Invalid IDF directory: {}", path);
+                return Err(anyhow::anyhow!("Invalid IDF directory: {}", path));
+               }
+            } else {
+              match idf_im_lib::version_manager::list_installed_versions() {
+                Ok(versions) => {
+                  if versions.is_empty() {
+                      warn!("No versions installed");
+                      return Ok(());
+                  } else {
+                    let options = versions.iter().map(|v| v.path.clone()).collect();
+                    let version_path = match helpers::generic_select(
+                        "Which version do you want to fix?",
+                        &options,
+                    ) {
+                        Ok(selected) => selected,
+                        Err(err) => {
+                            error!("Error: {}", err);
+                            return Err(anyhow::anyhow!(err));
+                        }
+                    };
+                    PathBuf::from(version_path)
+                  }
+                }
+                Err(err) => {
+                  debug!("Error: {}", err);
+                  return Err(anyhow::anyhow!("No versions found. Use eim install to install a new ESP-IDF version."));
+                }
+            }
+          };
+          info!("Fixing IDF installation at path: {}", path_to_fix.display());
+          // The fix logic is just instalation with use of existing repository
+          let mut version_name = None;
+          match idf_im_lib::version_manager::list_installed_versions() {
+            Ok(versions) => {
+              for v in versions {
+                if v.path == path_to_fix.to_str().unwrap() {
+                  info!("Found existing IDF version: {}", v.name);
+                  // Remove the existing activation script and eim_idf.json entry
+                  match remove_single_idf_version(&v.name, true) {
+                    Ok(_) => {
+                      info!("Removed existing IDF version from eim_idf.json: {}", v.name);
+                      version_name = Some(v.name.clone());
+                    }
+                    Err(err) => {
+                      error!("Failed to remove existing IDF version {}: {}", v.name, err);
+                    }
+                  }
+                }
+              }
+            }
+            Err(_) => {
+              info!("Failed to list installed versions. Using default naming.");
+            }
+          }
+
+          let mut settings = Settings::default();
+          settings.path = Some(path_to_fix.clone());
+          settings.non_interactive = Some(true);
+          settings.version_name = version_name;
+          settings.install_all_prerequisites = Some(true);
+          settings.config_file_save_path = None;
+          let result = wizard::run_wizzard_run(settings).await;
+          match result {
+            Ok(r) => {
+              info!("Fix result: {:?}", r);
+              info!("Successfully fixed IDF installation at {}", path_to_fix.display());
+            }
+            Err(err) => {
+              error!("Failed to fix IDF installation: {}", err);
+              return Err(anyhow::anyhow!(err));
+            }
+          }
+          info!("Now you can start using IDF tools");
+          Ok(())
         }
         #[cfg(feature = "gui")]
         Commands::Gui(_install_args) => {
