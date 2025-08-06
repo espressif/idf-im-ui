@@ -96,6 +96,12 @@ pub enum Commands {
     /// Run the ESP-IDF Installer GUI with arguments passed through command line
     #[cfg(feature = "gui")]
     Gui(InstallArgs),
+
+    /// Fix the ESP-IDF installation by reinstalling the tools and dependencies
+    Fix {
+        #[arg(help = "Fix IDF on a specific path")]
+        path: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Default)]

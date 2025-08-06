@@ -191,7 +191,7 @@ jobs:
           perl -MText::Template -e "print 'Text::Template loaded successfully\n'"
           perl -MParams::Check -e "print 'Params::Check loaded successfully\n'"
           perl -MIPC::Cmd -e "print 'IPC::Cmd loaded successfully\n'"
-          $perl_lib_path = "C:\hostedtoolcache\windows\perl\5.38.4-thr\x64\site\lib"
+          $perl_lib_path = "C:\hostedtoolcache\windows\perl\5.38.5-thr\x64\site\lib"
           echo "PERL5LIB=$perl_lib_path" >> $env:GITHUB_ENV
 
       - name: Cache cargo
@@ -211,7 +211,7 @@ jobs:
           OPENSSL_LIB_DIR: 'C:\vcpkg\installed\x64-windows-static-md\lib'
           OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
           OPENSSL_STATIC: "1"
-          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.4-thr\\x64\\bin\\perl.exe'
+          PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.5-thr\\x64\\bin\\perl.exe'
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
