@@ -3,12 +3,15 @@ use git2::{
     build::RepoBuilder, FetchOptions, ObjectType, RemoteCallbacks, Repository,
     SubmoduleUpdateOptions,
 };
+use idf_env::driver;
 use log::{error, info, trace, warn};
 use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};
 use system_dependencies::copy_openocd_rules;
+use tempfile::TempDir;
+use std::collections::{HashMap, HashSet};
 use std::fs::metadata;
 use std::io::BufReader;
 use tar::Archive;
@@ -1678,6 +1681,82 @@ pub fn get_idf_tools_mirrors_list() -> &'static [&'static str] {
         "https://dl.espressif.cn/github_assets",
     ]
 }
+
+pub struct WindowsDriver {
+    pub name: String,
+    pub url: String,
+    pub inf_path: String,
+}
+
+pub fn get_drivers_list() -> Vec<WindowsDriver> {
+    let mut drivers = Vec::new();
+    if std::env::consts::OS == "windows" {
+        drivers.push(WindowsDriver {
+            name: "CP210x USB to UART Bridge VCP Drivers".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CP210x_Universal_Windows_Driver.zip".to_string(),
+            inf_path: "silabs-2021-05-03/silabser.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "FTDI driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CDM_v2.12.28_WHQL_Certified.zip".to_string(),
+            inf_path: "ftdi-2021-05-03/ftdiport.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "ESP32 USB JTAG Driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/ESP32_USB_JTAG_Driver.zip".to_string(),
+            inf_path: "idf-driver-esp32-usb-jtag-2021-07-15/usb_jtag_debug_unit.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "CH341SER Driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CH341SER.ZIP".to_string(),
+            inf_path: "whc-ch343ser-2022-08-02/CH343SER/Driver/CH343SER.INF".to_string(),
+        });
+    }
+    drivers
+}
+
+pub async fn install_drivers() -> Result<(), std::io::Error> {
+    if std::env::consts::OS != "windows" {
+        return Ok(());
+    }
+
+    use idf_env::driver::install_driver;
+
+    let drivers = get_drivers_list();
+    for driver in drivers {
+        let temp_dir = TempDir::new()?;
+        let zip_path = temp_dir.path().join("driver.zip");
+
+        // Download the driver ZIP file
+        let response = download_file(&driver.url, zip_path.to_str().unwrap(), None).await;
+        if response.is_err() {
+            error!("Failed to download driver {}: {}", driver.name, response.unwrap_err());
+            continue;
+        }
+
+        match decompress_archive(
+            zip_path.to_str().unwrap(),
+            temp_dir.path().to_str().unwrap(),
+        ) {
+            Ok(()) => {}
+            Err(err) => {
+                error!("Failed to extract driver {}: {}", driver.name, err);
+                continue;
+            }
+        }
+
+        let driver_path = temp_dir.path().join(&driver.inf_path);
+        if !driver_path.exists() {
+            error!("Driver file not found: {}", driver_path.display());
+            continue;
+        }
+        install_driver(driver_path.to_str().unwrap().to_string());
+
+        info!("Installed driver: {}", driver.name);
+    }
+    Ok(())
+}
+
 
 #[cfg(test)]
 mod tests {
