@@ -169,37 +169,6 @@ impl ToolSetup {
     }
 }
 
-// async fn install_single_version(
-//     app_handle: AppHandle,
-//     settings: &Settings,
-//     version: String,
-// ) -> Result<(), Box<dyn std::error::Error>> {
-//     info!("Installing IDF version: {}", version);
-
-//     let version_path = prepare_installation_directories(app_handle.clone(), settings, &version)?;
-//     let idf_path = version_path.clone().join("esp-idf");
-//     download_idf(&app_handle, settings, &version, &idf_path).await?;
-//     let export_vars = setup_tools(&app_handle, settings, &idf_path, &version).await?;
-//     let tools_install_path = version_path.clone().join(
-//         settings
-//             .tool_install_folder_name
-//             .clone()
-//             .unwrap_or_default(),
-//     );
-//     let idf_python_env_path = tools_install_path.clone().join("python").join(&version).join("venv");
-//     let activation_script_path = settings.esp_idf_json_path.clone().unwrap_or_default();
-//     idf_im_lib::single_version_post_install(
-//         &activation_script_path,
-//         idf_path.to_str().unwrap(),
-//         &version,
-//         tools_install_path.to_str().unwrap(),
-//         export_vars,
-//         Some(idf_python_env_path.to_str().unwrap()),
-//     );
-
-//     Ok(())
-// }
-
 // Helper function to check if a process is running on Windows
 #[cfg(target_os = "windows")]
 fn is_process_running(pid: u32) -> bool {

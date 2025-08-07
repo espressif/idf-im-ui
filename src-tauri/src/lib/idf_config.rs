@@ -37,6 +37,18 @@ pub struct IdfConfig {
     pub version: Option<String>,
 }
 
+impl Default for IdfConfig {
+  fn default() -> Self {
+      IdfConfig {
+        git_path: crate::utils::get_git_path().unwrap_or_default(),
+        idf_installed: [].to_vec(),
+        idf_selected_id: "".to_string(),
+        eim_path: None,
+        version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+      }
+  }
+}
+
 impl IdfConfig {
     /// Saves the configuration to a file.
     ///
@@ -226,6 +238,10 @@ impl IdfConfig {
         }
     }
 
+    pub fn is_path_in_config(self, path:String) -> bool {
+      self.idf_installed.iter().find(|i| i.path == path).is_some()
+    }
+
     /// Removes an IDF installation from the configuration.
     ///
     /// This function searches for an installation matching the given identifier
@@ -261,9 +277,6 @@ impl IdfConfig {
         }
     }
 
-    pub fn is_path_in_config(self, path:String) -> bool {
-      self.idf_installed.iter().find(|i| i.path == path).is_some()
-    }
 }
 
 pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {

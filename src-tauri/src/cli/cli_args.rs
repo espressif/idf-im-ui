@@ -65,8 +65,11 @@ pub enum Commands {
         version: Option<String>,
     },
 
-    /// Discover available ESP-IDF versions (not implemented yet)
-    Discover,
+    /// Discover available ESP-IDF versions
+    Discover {
+        #[arg(help = "Discover available ESP-IDF versions and imports them")]
+        path: Option<String>,
+    },
 
     /// Remove specific ESP-IDF version
     Remove {
@@ -96,6 +99,12 @@ pub enum Commands {
     /// Run the ESP-IDF Installer GUI with arguments passed through command line
     #[cfg(feature = "gui")]
     Gui(InstallArgs),
+
+    /// Fix the ESP-IDF installation by reinstalling the tools and dependencies
+    Fix {
+        #[arg(help = "Fix IDF on a specific path")]
+        path: Option<String>,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Default)]
