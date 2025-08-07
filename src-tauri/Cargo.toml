@@ -46,7 +46,7 @@ thiserror = "1.0"
 rust-i18n = "3.0.1"
 tokio = { version = "1.41.0", features = ["full"] }
 deranged = "=0.4.0"
-idf-env = { git = "https://github.com/espressif/idf-env" }
+idf-env = { git = "https://github.com/espressif/idf-env", rev="fd69ab4f550ef35647bb32d1584caa6623cbfc4e" }
 
 
 # GUI-related dependencies (optional)

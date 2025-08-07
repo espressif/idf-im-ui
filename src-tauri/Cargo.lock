@@ -2673,7 +2673,7 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 [[package]]
 name = "idf-env"
 version = "1.2.32"
-source = "git+https://github.com/espressif/idf-env#02b174c9f813b228569f855288cb283d353f9f2b"
+source = "git+https://github.com/espressif/idf-env?rev=fd69ab4f550ef35647bb32d1584caa6623cbfc4e#fd69ab4f550ef35647bb32d1584caa6623cbfc4e"
 dependencies = [
  "anyhow",
  "clap 2.34.0",
