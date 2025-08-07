@@ -731,9 +731,9 @@ pub fn decompress_archive(
     }
 
     let result = match archive_path.extension().and_then(|ext| ext.to_str()) {
-        Some("zip") => decompress_zip(archive_path, destination_path),
-        Some("tar") => decompress_tar(archive_path, destination_path),
-        Some("gz") | Some("tgz") => {
+        Some("zip") | Some("ZIP") => decompress_zip(archive_path, destination_path),
+        Some("tar") | Some("TAR") => decompress_tar(archive_path, destination_path),
+        Some("gz") | Some("tgz") | Some("GZ") | Some("TGZ") => {
             if archive_path.to_str().unwrap_or("").ends_with(".tar.gz")
                 || archive_path.extension().unwrap() == "tgz"
             {
@@ -1694,22 +1694,22 @@ pub fn get_drivers_list() -> Vec<WindowsDriver> {
         drivers.push(WindowsDriver {
             name: "CP210x USB to UART Bridge VCP Drivers".to_string(),
             url: "https://dl.espressif.com/dl/idf-installer/CP210x_Universal_Windows_Driver.zip".to_string(),
-            inf_path: "silabs-2021-05-03/silabser.inf".to_string(),
+            inf_path: "silabser.inf".to_string(),
         });
         drivers.push(WindowsDriver {
             name: "FTDI driver".to_string(),
             url: "https://dl.espressif.com/dl/idf-installer/CDM_v2.12.28_WHQL_Certified.zip".to_string(),
-            inf_path: "ftdi-2021-05-03/ftdiport.inf".to_string(),
+            inf_path: "ftdiport.inf".to_string(),
         });
         drivers.push(WindowsDriver {
             name: "ESP32 USB JTAG Driver".to_string(),
-            url: "https://dl.espressif.com/dl/idf-installer/ESP32_USB_JTAG_Driver.zip".to_string(),
-            inf_path: "idf-driver-esp32-usb-jtag-2021-07-15/usb_jtag_debug_unit.inf".to_string(),
+            url: "https://dl.espressif.com/dl/idf-driver/idf-driver-esp32-usb-jtag-2021-07-15.zip".to_string(),
+            inf_path: "USB_JTAG_debug_unit.inf".to_string(),
         });
         drivers.push(WindowsDriver {
             name: "CH341SER Driver".to_string(),
             url: "https://dl.espressif.com/dl/idf-installer/CH341SER.ZIP".to_string(),
-            inf_path: "whc-ch343ser-2022-08-02/CH343SER/Driver/CH343SER.INF".to_string(),
+            inf_path: "CH341SER/CH341SER.INF".to_string(),
         });
     }
     drivers
@@ -1724,28 +1724,42 @@ pub async fn install_drivers() -> Result<(), std::io::Error> {
 
     let drivers = get_drivers_list();
     for driver in drivers {
-        let temp_dir = TempDir::new()?;
-        let zip_path = temp_dir.path().join("driver.zip");
+        let temp_directory = TempDir::new()?;
+        let temp_dir = temp_directory.path().join("idf-drivers").join(driver.name.replace(" ", "_"));
+        // let zip_path = temp_dir.path().join("driver.zip");
+        ensure_path(temp_dir.to_str().unwrap());
 
         // Download the driver ZIP file
-        let response = download_file(&driver.url, zip_path.to_str().unwrap(), None).await;
+        let response = download_file(&driver.url, temp_dir.to_str().unwrap(), None).await;
         if response.is_err() {
             error!("Failed to download driver {}: {}", driver.name, response.unwrap_err());
             continue;
         }
 
+        let filename = driver.url
+            .split('/')
+            .last()
+            .unwrap();
+
+        let zip_path = temp_dir.join(filename);
+        if !zip_path.exists() {
+            error!("Driver file not found: {}", zip_path.display());
+        }
+
         match decompress_archive(
             zip_path.to_str().unwrap(),
-            temp_dir.path().to_str().unwrap(),
+            temp_dir.to_str().unwrap(),
         ) {
-            Ok(()) => {}
+            Ok(()) => {
+              info!("Decompressed driver: {}", driver.name);
+            }
             Err(err) => {
                 error!("Failed to extract driver {}: {}", driver.name, err);
                 continue;
             }
         }
 
-        let driver_path = temp_dir.path().join(&driver.inf_path);
+        let driver_path = temp_dir.join(&driver.inf_path);
         if !driver_path.exists() {
             error!("Driver file not found: {}", driver_path.display());
             continue;

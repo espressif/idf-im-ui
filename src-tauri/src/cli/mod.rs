@@ -523,5 +523,18 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             gui::run();
             Ok(())
         }
+        Commands::InstallDrivers => {
+            info!("Installing drivers...");
+            match idf_im_lib::install_drivers().await {
+                Ok(_) => {
+                    info!("Drivers installed successfully.");
+                    Ok(())
+                }
+                Err(err) => {
+                    error!("Failed to install drivers: {}", err);
+                    Err(anyhow::anyhow!(err))
+                }
+            }
+        }
     }
 }
