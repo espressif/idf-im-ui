@@ -1,13 +1,21 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
+use idf_im_lib::command_executor;
+use idf_im_lib::command_executor::execute_command;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::copy_dir_contents;
+use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
+use serde::de;
+use tempfile::TempDir;
+use tera::Context;
+use tera::Tera;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -309,6 +317,222 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
+    // TODO: only needed for offline mode
+    let offline_archive_dir = TempDir::new().expect("Failed to create temporary directory");
+    let mut offline_mode = false;
+    if config.use_local_archive.is_some() {
+        debug!("Using local archive: {:?}", config.use_local_archive);
+        if !config.use_local_archive.as_ref().unwrap().exists() {
+            return Err(format!(
+                "Local archive path does not exist: {}",
+                config.use_local_archive.as_ref().unwrap().display()
+            ));
+        }
+        offline_mode = true;
+    }
+
+    if offline_mode { // only setting up temp directory if offline mode is enabled
+
+      debug!("Temporary directory created: {}", offline_archive_dir.path().display());
+      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &offline_archive_dir.path()) {
+        Ok(_) => {
+            info!("Successfully extracted archive to: {:?}", offline_archive_dir);
+        }
+        Err(err) => {
+            return Err(format!("Failed to extract archive: {}", err));
+        }
+      }
+      // load the config from the extracted archive
+      let config_path = offline_archive_dir.path().join("config.toml");
+      if config_path.exists() {
+        // debug!("Loading config from extracted archive: {}", config_path.display());
+        let mut tmp_setting = Settings::default();
+        match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
+          Ok(()) => {
+            debug!("Config loaded from archive: {:?}", config_path.display());
+            debug!("Config: {:?}", tmp_setting);
+            debug!("Using only version for now.");
+            config.idf_versions = tmp_setting.idf_versions;
+        }
+          Err(err) => {
+            return Err(format!("Failed to load config from archive: {}", err));
+          }
+        }
+      } else {
+        warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+      }
+      // install prerequisites offline
+      match std::env::consts::OS {
+          "windows" => {
+            // Setup Scoop
+            let scoop_path = offline_archive_dir.path().join("scoop");
+            let scoop_install_path = dirs::home_dir()
+                        .unwrap()
+                        .join("scoop");
+            let scoop_command = scoop_install_path.join("shims").join("scoop");
+            match execute_command(
+                "powershell",
+                &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-File",
+                    &scoop_path.join("install_scoop_offline.ps1").to_str().unwrap(),
+                    "-OfflineDir",
+                    &scoop_path.to_str().unwrap(),
+                ],
+            ) {
+                Ok(out) => {
+                  if out.status.success() {
+                    info!("Scoop installed successfully.");
+
+                    info!("Scoop install path: {}", scoop_install_path.display());
+                    idf_im_lib::add_path_to_path(&scoop_install_path.to_str().unwrap());
+                  } else {
+                    return Err(format!("Failed to install Scoop: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+                  }
+                }
+                Err(err) => {
+                    return Err(format!("Failed to install Scoop: {}", err));
+                }
+            }
+            // TODO: disable auto-updates in scoop config.json
+
+            // Create Scoop manifests
+            let mut context = Context::new();
+            context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap());
+
+            let git_scoop_manifest_template = include_str!("../../scoop_manifest_templates/git.json");
+            let mut tera = Tera::default();
+            if let Err(e) = tera.add_raw_template("git_manifest", git_scoop_manifest_template) {
+                error!("Failed to add template: {}", e);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to add template",
+                ).to_string());
+            }
+            let mut rendered_git_manifest = match tera.render("git_manifest", &context) {
+                Err(e) => {
+                    error!("Failed to render template: {}", e);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed to render template",
+                    ).to_string());
+                }
+                Ok(text) => text,
+            };
+            rendered_git_manifest = rendered_git_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
+            let git_manifest_path = scoop_path.join("git.json");
+            if let Err(e) = fs::write(&git_manifest_path, rendered_git_manifest) {
+                error!("Failed to write git manifest: {}", e);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to write git manifest",
+                ).to_string());
+            }
+            info!("Git manifest written to: {}", git_manifest_path.display());
+
+            let python_scoop_manifest_template = include_str!("../../scoop_manifest_templates/python310.json");
+            if let Err(e) = tera.add_raw_template("python_manifest", python_scoop_manifest_template) {
+                error!("Failed to add template: {}", e);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to add template",
+                ).to_string());
+            }
+            let mut rendered_python_manifest = match tera.render("python_manifest", &context) {
+                Err(e) => {
+                    error!("Failed to render template: {}", e);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        "Failed to render template",
+                    ).to_string());
+                }
+                Ok(text) => text,
+            };
+            rendered_python_manifest = rendered_python_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
+            let python_manifest_path = scoop_path.join("python.json");
+            if let Err(e) = fs::write(&python_manifest_path, rendered_python_manifest) {
+                error!("Failed to write python manifest: {}", e);
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    "Failed to write python manifest",
+                ).to_string());
+            }
+
+            // Install tools using Scoop
+            match command_executor::execute_command(
+                "powershell",
+                &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    scoop_command.to_str().unwrap(),
+                    "install",
+                    "--no-update-scoop",
+                    &git_manifest_path.to_str().unwrap(),
+                ],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        info!("Git installed successfully.");
+                    } else {
+                        return Err(format!("Failed to install Git: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
+                    }
+                }
+                Err(err) => {
+                    return Err(format!("Failed to install Git: {}", err));
+                }
+            }
+            match command_executor::execute_command(
+                "powershell",
+                &[
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    &scoop_command.to_str().unwrap(),
+                    "install",
+                    "--no-update-scoop",
+                    &python_manifest_path.to_str().unwrap(),
+                ],
+            ) {
+                Ok(out) => {
+                    if out.status.success() {
+                        info!("Python installed successfully.");
+                    } else {
+                        return Err(format!("Failed to install Python: {:?} | {:?}", out.stdout, out.stderr));
+                    }
+                }
+                Err(err) => {
+                    return Err(format!("Failed to install Python: {}", err));
+                }
+            }
+          }
+          "linux" | "macos" => {
+              info!("On POSIX system, we do not provide prerequisites. Please ensure you have the necessary tools installed.");
+          }
+          _ => {
+              return Err(format!(
+                  "Unsupported OS: {}",
+                  std::env::consts::OS
+              ));
+          }
+      }
+
+      // copy IDFs
+      for archive_version in config.clone().idf_versions.unwrap() {
+        match copy_dir_contents(&offline_archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
+          Ok(_) => {
+              info!("Successfully copied content from offline archive to IDF path");
+              // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
+          }
+          Err(err) => {
+              return Err(format!("Failed to copy content from offline archive: {}", err));
+          }
+        }
+      }
+
+    }
+
     if config.skip_prerequisites_check.unwrap_or(false) {
         info!("Skipping prerequisites check as per user request.");
     } else {
@@ -336,7 +560,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     // Multiple version starts here
     let mut using_existing_idf = false;
-    for mut idf_version in config.idf_versions.clone().unwrap() {
+    for idf_version in config.idf_versions.clone().unwrap() {
       let paths = config.get_version_paths(&idf_version).map_err(|err| {
           error!("Failed to get version paths: {}", err);
           err.to_string()
@@ -344,7 +568,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
       using_existing_idf = paths.using_existing_idf;
 
 
-      config.idf_path = Some(paths.idf_path.clone()); // todo: list all of the paths
+      config.idf_path = Some(paths.idf_path.clone());
       idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
       if !using_existing_idf {
@@ -386,6 +610,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             "wizard.tools.download.prompt",
             DEFAULT_TOOLS_DOWNLOAD_FOLDER,
         )?;
+
+        if offline_mode {
+          // copy content dist from offline_archive_dir
+          copy_dir_contents(
+            &offline_archive_dir.path().join("dist"),
+            &tool_download_directory,
+          )
+          .map_err(|err| format!("Failed to copy dist directory from offline archive: {}", err))?;
+        }
 
         // Setup install directory
         let tool_install_directory = setup_directory(
@@ -429,12 +662,18 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
+
         match idf_im_lib::python_utils::install_python_env(
             &paths.actual_version,
             &tool_install_directory,
             true, //TODO: actually read from config
             &paths.idf_path,
             &config.idf_features.clone().unwrap_or_default(),
+            if offline_mode {
+                Some(offline_archive_dir.path())
+            } else {
+                None
+            },
         )
         .await
         {
