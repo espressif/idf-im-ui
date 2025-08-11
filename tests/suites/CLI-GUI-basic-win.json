@@ -8,6 +8,7 @@
     "id": 3,
     "type": "custom",
     "name": "CLI in GUI Non-Interactive Default",
-    "data": {}
+    "data": {},
+    "deleteAfterTest": true
   }
 ]
