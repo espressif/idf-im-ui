@@ -24,6 +24,7 @@ import { runGUIStartupTest } from "./scripts/GUIStartup.test.js";
 import { runGUISimplifiedInstallTest } from "./scripts/GUISimplifiedInstall.test.js";
 import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
+import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import { GUIDEFAULTVERSION, IDFDEFAULTINSTALLVERSION } from "./config.js";
 
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
@@ -40,7 +41,6 @@ logger.info(`Running test script: ${jsonFilePath}`);
 testRun(testScript);
 
 function testRun(script) {
-  logger.debug(process.env.EIM_GUI_PATH);
   let pathToEIM;
   if (process.env.EIM_GUI_PATH) {
     pathToEIM = process.env.EIM_GUI_PATH;
@@ -49,7 +49,6 @@ function testRun(script) {
       ? (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim"))
       : (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim.exe"));
   }
-  logger.debug(pathToEIM);
 
   const EIMVersion = process.env.EIM_GUI_VERSION || GUIDEFAULTVERSION;
 
@@ -57,6 +56,11 @@ function testRun(script) {
     process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
+
+  const INSTALLFOLDER =
+    os.platform() !== "win32"
+      ? path.join(os.homedir(), `.espressif`)
+      : `C:\\esp`;
 
   const TOOLSFOLDER =
     os.platform() !== "win32"
@@ -73,26 +77,28 @@ function testRun(script) {
       });
     } else if (test.type === "default") {
       //routine for default simplified installation
-      const installFolder =
-        os.platform() !== "win32"
-          ? path.join(os.homedir(), `.espressif`)
-          : `C:\\esp`;
+
+      const deleteAfterTest = test.deleteAfterTest || true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUISimplifiedInstallTest(test.id, pathToEIM);
         runInstallVerification({
-          installFolder,
+          installFolder: INSTALLFOLDER,
           idfList: [IDFDefaultVersion],
+          toolsFolder: TOOLSFOLDER,
+        });
+        runCleanUp({
+          installFolder: INSTALLFOLDER,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     } else if (test.type === "custom") {
       //routine for expert install with custom settings
 
-      const installFolder = test.data.installFolder
+      let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
-        : os.platform() !== "win32"
-        ? path.join(os.homedir(), `.espressif2`)
-        : `C:\\espressif`;
+        : INSTALLFOLDER;
 
       const targetList = test.data.targetList
         ? test.data.targetList.split("|")
@@ -104,6 +110,8 @@ function testRun(script) {
       const toolsMirror = test.data.toolsMirror || "github";
 
       const IDFMirror = test.data.idfMirror || "github";
+
+      const deleteAfterTest = test.deleteAfterTest || true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUICustomInstallTest(
@@ -119,6 +127,13 @@ function testRun(script) {
           installFolder,
           idfList: idfVersionList,
           targetList,
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     }

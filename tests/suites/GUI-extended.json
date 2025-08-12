@@ -8,37 +8,47 @@
       "idfList": "v5.3.3|v5.4.2",
       "installFolder": ".espext1",
       "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "toolsMirror": "github"
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 2,
+    "type": "custom",
+    "name": "GUI Expert v5.2.5",
+    "data": {
+      "targetList": "All",
+      "idfList": "v5.2.5",
+      "installFolder": ".espext2",
+      "idfMirror": "github",
+      "toolsMirror": "github"
+    },
+    "deleteAfterTest": true
+  },
+  {
+    "id": 3,
     "type": "custom",
     "name": "GUI Expert v5.1.6",
     "data": {
       "targetList": "All",
       "idfList": "v5.1.6",
-      "installFolder": ".espext2",
+      "installFolder": ".espext3",
       "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "toolsMirror": "github"
+    },
+    "deleteAfterTest": true
   },
   {
-    "id": 3,
+    "id": 4,
     "type": "custom",
     "name": "GUI Expert master",
     "data": {
       "targetList": "All",
       "idfList": "master",
-      "installFolder": ".espext3",
+      "installFolder": ".espext4",
       "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "toolsMirror": "github"
+    },
+    "deleteAfterTest": true
   }
 ]

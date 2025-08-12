@@ -7,12 +7,16 @@
   {
     "id": 2,
     "type": "default",
-    "name": "CLI Wizard Default"
+    "name": "CLI Wizard Default",
+    "deleteAfterTest": false
   },
   {
     "id": 3,
     "type": "custom",
     "name": "CLI Non-Interactive Default",
-    "data": {}
+    "data": {
+      "idfList": "v5.4.2"
+    },
+    "deleteAfterTest": false
   }
 ]

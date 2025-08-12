@@ -7,12 +7,14 @@
   {
     "id": 2,
     "type": "default",
-    "name": "CLI in GUI Wizard Default"
+    "name": "CLI in GUI Wizard Default",
+    "deleteAfterTest": true
   },
   {
     "id": 3,
     "type": "custom",
     "name": "CLI in GUI Non-Interactive Default",
-    "data": {}
+    "data": {},
+    "deleteAfterTest": true
   }
 ]
