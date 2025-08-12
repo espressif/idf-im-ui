@@ -5,6 +5,7 @@ import fs from "fs";
 
 export function runCleanUp({ installFolder, toolsFolder, deleteAfterTest }) {
   describe("4- Clean up EIM folders from Runner ->", function () {
+    this.timeout(30000);
     after(function () {
       if (deleteAfterTest) {
         logger.info("Running clean up function");
