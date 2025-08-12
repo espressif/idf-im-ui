@@ -7,7 +7,7 @@
     "architecture": {
         "64bit": {
             "url": [
-                "file://{{offline_archive_scoop_dir}}/python310-amd64.exe",
+                "file://{{offline_archive_scoop_dir}}/setup.exe",
                 "file://{{offline_archive_scoop_dir}}/install-pep-514.reg",
                 "file://{{offline_archive_scoop_dir}}/uninstall-pep-514.reg"
             ],
@@ -88,23 +88,5 @@
     "persist": [
         "Scripts",
         "Lib\\site-packages"
-    ],
-    "checkver": {
-        "url": "https://www.python.org/downloads/windows/",
-        "regex": "python-(3\\.10\\.[\\d.]+)-"
-    },
-    "autoupdate": {
-        "architecture": {
-            "64bit": {
-                "url": "https://www.python.org/ftp/python/$version/python-$version-amd64.exe#/setup.exe"
-            },
-            "32bit": {
-                "url": "https://www.python.org/ftp/python/$version/python-$version.exe#/setup.exe"
-            }
-        },
-        "hash": {
-            "url": "https://www.python.org/downloads/release/python-$cleanVersion/",
-            "regex": "(?sm)$basename.*?$md5"
-        }
-    }
+    ]
 }

@@ -35,7 +35,7 @@ use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use idf_im_lib::get_log_directory;
 
-pub const PYTHON_VERSION: &str = "3.11";
+pub const PYTHON_VERSION: &str = "3.10";
 
 fn setup_logging(verbose: u8) -> anyhow::Result<()> {
     let log_file_name = get_log_directory()
@@ -245,10 +245,11 @@ async fn main() {
                     ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
                     ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
                     ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
-                    // "https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-arm64.7z.exe#" // git arm64
-                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", "setup.exe"),
+                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", "python-3.10.11-amd64.exe"),
                     ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg")
+                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
+                    ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
+                    ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip","dark-3.14.1.zip")
                 ];
                 for (link, name) in scoop_list {
                     info!("Downloading Scoop from: {}", link);
@@ -257,7 +258,7 @@ async fn main() {
                             info!("Scoop downloaded successfully from: {}", link);
                         }
                         Err(err) => {
-                            error!("Failed to download Scoop from {}: {}", link, err);
+                            error!("Failed to download Scoop from {} : {}", link, err);
                             return;
                         }
                     }

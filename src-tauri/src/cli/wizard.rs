@@ -372,6 +372,8 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                         .unwrap()
                         .join("scoop");
             let scoop_command = scoop_install_path.join("shims").join("scoop");
+            add_to_path(&scoop_install_path.to_str().unwrap());
+            add_to_path(&scoop_install_path.join("shims").to_str().unwrap());
             match execute_command(
                 "powershell",
                 &[
@@ -397,142 +399,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     return Err(format!("Failed to install Scoop: {}", err));
                 }
             }
+            add_to_path(&scoop_install_path.to_str().unwrap());
+            add_to_path(&scoop_install_path.join("shims").to_str().unwrap());
+
             // TODO: disable auto-updates in scoop config.json
+            setup_scoop_packages(&scoop_path, &scoop_command)?;
 
-            // Create Scoop manifests
-            let mut context = Context::new();
-            context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap());
-
-            let git_scoop_manifest_template = include_str!("../../scoop_manifest_templates/git.json");
-            let mut tera = Tera::default();
-            if let Err(e) = tera.add_raw_template("git_manifest", git_scoop_manifest_template) {
-                error!("Failed to add template: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to add template",
-                ).to_string());
-            }
-            let mut rendered_git_manifest = match tera.render("git_manifest", &context) {
-                Err(e) => {
-                    error!("Failed to render template: {}", e);
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to render template",
-                    ).to_string());
-                }
-                Ok(text) => text,
-            };
-            rendered_git_manifest = rendered_git_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
-            let git_manifest_path = scoop_path.join("git.json");
-            if let Err(e) = fs::write(&git_manifest_path, rendered_git_manifest) {
-                error!("Failed to write git manifest: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to write git manifest",
-                ).to_string());
-            }
-            info!("Git manifest written to: {}", git_manifest_path.display());
-
-            let python_scoop_manifest_template = include_str!("../../scoop_manifest_templates/python310.json");
-            if let Err(e) = tera.add_raw_template("python_manifest", python_scoop_manifest_template) {
-                error!("Failed to add template: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to add template",
-                ).to_string());
-            }
-            let mut rendered_python_manifest = match tera.render("python_manifest", &context) {
-                Err(e) => {
-                    error!("Failed to render template: {}", e);
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to render template",
-                    ).to_string());
-                }
-                Ok(text) => text,
-            };
-            rendered_python_manifest = rendered_python_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
-            let python_manifest_path = scoop_path.join("python.json");
-            if let Err(e) = fs::write(&python_manifest_path, rendered_python_manifest) {
-                error!("Failed to write python manifest: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to write python manifest",
-                ).to_string());
-            }
-
-            // Install tools using Scoop
-            let path_with_scoop = match get_scoop_path() {
-                Some(s) => s,
-                None => {
-                    debug!("Could not get scoop path");
-                    return Err(String::from("Could not get scoop path"));
-                }
-            };
-            let mut main_command = "powershell";
-
-            let test_for_pwsh = command_executor::execute_command("pwsh", &["--version"]);
-            match test_for_pwsh {
-                // this needs to be used in powershell 7
-                Ok(_) => {
-                    debug!("Found powershell core");
-                    main_command = "pwsh";
-                }
-                Err(_) => {
-                    debug!("Powershell core not found, using powershell");
-                }
-            }
-
-            let output = command_executor::execute_command_with_env(
-                main_command,
-                &vec![
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    scoop_command.to_str().unwrap(),
-                    "install",
-                    "--no-update-scoop",
-                    &git_manifest_path.to_str().unwrap(),
-                ],
-                vec![("PATH", &add_to_path(&path_with_scoop).unwrap())],
-            );
-            match output {
-                Ok(out) => {
-                    if out.status.success() {
-                        info!("Git installed successfully.");
-                    } else {
-                        return Err(format!("Failed to install Git: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr)));
-                    }
-                }
-                Err(err) => {
-                    return Err(format!("Failed to install Git: {}", err));
-                }
-            }
-            let output_py = command_executor::execute_command_with_env(
-                main_command,
-                &vec![
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    scoop_command.to_str().unwrap(),
-                    "install",
-                    "--no-update-scoop",
-                    &python_manifest_path.to_str().unwrap(),
-                ],
-                vec![("PATH", &add_to_path(&path_with_scoop).unwrap())],
-            );
-            match output_py {
-                Ok(out) => {
-                    if out.status.success() {
-                        info!("Python installed successfully.");
-                    } else {
-                        return Err(format!("Failed to install Python: {:?} | {:?}", out.stdout, out.stderr));
-                    }
-                }
-                Err(err) => {
-                    return Err(format!("Failed to install Python: {}", err));
-                }
-            }
           }
           "linux" | "macos" => {
               info!("On POSIX system, we do not provide prerequisites. Please ensure you have the necessary tools installed.");
@@ -547,15 +419,66 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
       // copy IDFs
       for archive_version in config.clone().idf_versions.unwrap() {
-        match copy_dir_contents(&offline_archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
-          Ok(_) => {
-              info!("Successfully copied content from offline archive to IDF path");
-              // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
-          }
-          Err(err) => {
-              return Err(format!("Failed to copy content from offline archive: {}", err));
+        match std::env::consts::OS {
+
+          "windows" => {
+            // As on windows the IDF contains too long paths, we need to copy the content from the offline archive to the IDF path
+            // using windows powershell command
+            let mut main_command = "powershell";
+
+            let test_for_pwsh = command_executor::execute_command("pwsh", &["--version"]);
+            match test_for_pwsh {
+                // this needs to be used in powershell 7
+                Ok(_) => {
+                    debug!("Found powershell core");
+                    main_command = "pwsh";
+                }
+                Err(_) => {
+                    debug!("Powershell core not found, using powershell");
+                }
+            }
+
+            let output_cp = command_executor::execute_command(
+                main_command,
+                &vec![
+                    "-ExecutionPolicy",
+                    "Bypass",
+                    "-Command",
+                    "cp",
+                    "-r",
+                    &offline_archive_dir.path().join(&archive_version).to_str().unwrap(),
+                    &config.clone().path.unwrap().join(&archive_version).to_str().unwrap(),
+                ],
+            );
+            match output_cp {
+                Ok(out) => {
+                    if out.status.success() {
+                        info!("Successfully copied content from offline archive to IDF path");
+                    } else {
+                        return Err(format!("Failed to copy content from offline archive: {:?} | {:?}", out.stdout, out.stderr));
+                    }
+                }
+                Err(err) => {
+                    return Err(format!("Failed to copy content from offline archive: {}", err));
+                }
+            }
+
+          },
+          _ => {
+            debug!("Copying IDF version: {}", archive_version);
+            match copy_dir_contents(&offline_archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
+              Ok(_) => {
+                  info!("Successfully copied content from offline archive to IDF path");
+                  // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
+              }
+              Err(err) => {
+                  return Err(format!("Failed to copy content from offline archive: {}", err));
+              }
+            }
           }
         }
+
+
       }
 
     }
@@ -783,5 +706,157 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("============================================");
         }
     }
+    Ok(())
+}
+
+// Structure to define package information with compile-time template content
+struct ScoopPackage {
+    name: &'static str,
+    template_content: &'static str,
+    manifest_filename: &'static str,
+}
+
+// Helper function to create and write a manifest
+fn create_manifest(
+    package: &ScoopPackage,
+    context: &Context,
+    scoop_path: &Path,
+    tera: &mut Tera,
+) -> Result<PathBuf, String> {
+    // Add template to Tera
+    let template_name = format!("{}_manifest", package.name);
+    if let Err(e) = tera.add_raw_template(&template_name, package.template_content) {
+        error!("Failed to add {} template: {}", package.name, e);
+        return Err(format!("Failed to add {} template", package.name));
+    }
+
+    // Render the template
+    let mut rendered_manifest = match tera.render(&template_name, context) {
+        Err(e) => {
+            error!("Failed to render {} template: {}", package.name, e);
+            return Err(format!("Failed to render {} template", package.name));
+        }
+        Ok(text) => text,
+    };
+
+    // Normalize line endings
+    rendered_manifest = rendered_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
+
+    // Write manifest to file
+    let manifest_path = scoop_path.join(package.manifest_filename);
+    if let Err(e) = fs::write(&manifest_path, rendered_manifest) {
+        error!("Failed to write {} manifest: {}", package.name, e);
+        return Err(format!("Failed to write {} manifest", package.name));
+    }
+
+    info!("{} manifest written to: {}", package.name, manifest_path.display());
+    Ok(manifest_path)
+}
+
+// Helper function to install a single package
+fn install_package_with_scoop(
+    main_command: &str,
+    scoop_command: &Path,
+    manifest_path: &Path,
+    package_name: &str,
+    path_with_scoop: &str,
+) -> Result<(), String> {
+    let output = command_executor::execute_command_with_env(
+        main_command,
+        &vec![
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            scoop_command.to_str().unwrap(),
+            "install",
+            "--no-update-scoop",
+            manifest_path.to_str().unwrap(),
+        ],
+        vec![("PATH", &add_to_path(path_with_scoop).unwrap())],
+    );
+
+    match output {
+        Ok(out) => {
+            if out.status.success() {
+                info!("{} installed successfully.", package_name);
+                Ok(())
+            } else {
+                Err(format!(
+                    "Failed to install {}: {:?} | {:?}",
+                    package_name,
+                    String::from_utf8_lossy(&out.stdout),
+                    String::from_utf8_lossy(&out.stderr)
+                ))
+            }
+        }
+        Err(err) => Err(format!("Failed to install {}: {}", package_name, err)),
+    }
+}
+
+// Main function that creates manifests and installs packages
+fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), String> {
+    // Create Tera context
+    let mut context = Context::new();
+    context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap().replace("\\", "/"));
+
+    // Define packages to install with compile-time template content
+    let packages = [
+        ScoopPackage {
+            name: "7zip",
+            template_content: include_str!("../../scoop_manifest_templates/7zip.json"),
+            manifest_filename: "7zip.json",
+        },
+        ScoopPackage {
+            name: "git",
+            template_content: include_str!("../../scoop_manifest_templates/git.json"),
+            manifest_filename: "git.json",
+        },
+        ScoopPackage {
+            name: "dark",
+            template_content: include_str!("../../scoop_manifest_templates/dark.json"),
+            manifest_filename: "dark.json",
+        },
+        ScoopPackage {
+            name: "python",
+            template_content: include_str!("../../scoop_manifest_templates/python310.json"),
+            manifest_filename: "python.json",
+        },
+    ];
+
+    // Create all manifests
+    let mut tera = Tera::default();
+    let mut manifest_paths = Vec::new();
+
+    for package in &packages {
+        let manifest_path = create_manifest(package, &context, scoop_path, &mut tera)?;
+        manifest_paths.push((manifest_path, package.name));
+    }
+
+    // Get Scoop path and determine PowerShell command
+    let path_with_scoop = get_scoop_path()
+        .ok_or_else(|| "Could not get scoop path".to_string())?;
+
+    let main_command = match command_executor::execute_command("pwsh", &["--version"]) {
+        Ok(_) => {
+            debug!("Found powershell core");
+            "pwsh"
+        }
+        Err(_) => {
+            debug!("Powershell core not found, using powershell");
+            "powershell"
+        }
+    };
+
+    // Install all packages
+    for (manifest_path, package_name) in manifest_paths {
+        install_package_with_scoop(
+            main_command,
+            scoop_command,
+            &manifest_path,
+            package_name,
+            &path_with_scoop,
+        )?;
+    }
+
     Ok(())
 }
