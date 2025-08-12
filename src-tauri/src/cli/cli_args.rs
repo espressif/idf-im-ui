@@ -102,6 +102,9 @@ pub enum Commands {
         #[arg(help = "Fix IDF on a specific path")]
         path: Option<String>,
     },
+
+    /// Install drivers for ESP-IDF. This is only available on Windows platforms.
+    InstallDrivers,
 }
 
 #[derive(Parser, Debug, Clone, Default)]

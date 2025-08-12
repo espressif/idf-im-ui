@@ -3,12 +3,16 @@ use git2::{
     build::RepoBuilder, FetchOptions, ObjectType, RemoteCallbacks, Repository,
     SubmoduleUpdateOptions,
 };
+use anyhow::{anyhow, Result};
+use idf_env::driver;
 use log::{error, info, trace, warn};
 use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use sha2::{Digest, Sha256};
 use system_dependencies::copy_openocd_rules;
+use tempfile::TempDir;
+use std::collections::{HashMap, HashSet};
 use std::fs::metadata;
 use std::io::BufReader;
 use tar::Archive;
@@ -728,9 +732,9 @@ pub fn decompress_archive(
     }
 
     let result = match archive_path.extension().and_then(|ext| ext.to_str()) {
-        Some("zip") => decompress_zip(archive_path, destination_path),
-        Some("tar") => decompress_tar(archive_path, destination_path),
-        Some("gz") | Some("tgz") => {
+        Some("zip") | Some("ZIP") => decompress_zip(archive_path, destination_path),
+        Some("tar") | Some("TAR") => decompress_tar(archive_path, destination_path),
+        Some("gz") | Some("tgz") | Some("GZ") | Some("TGZ") => {
             if archive_path.to_str().unwrap_or("").ends_with(".tar.gz")
                 || archive_path.extension().unwrap() == "tgz"
             {
@@ -1678,6 +1682,110 @@ pub fn get_idf_tools_mirrors_list() -> &'static [&'static str] {
         "https://dl.espressif.cn/github_assets",
     ]
 }
+
+pub struct WindowsDriver {
+    pub name: String,
+    pub url: String,
+    pub inf_path: String,
+}
+
+pub fn get_drivers_list() -> Vec<WindowsDriver> {
+    let mut drivers = Vec::new();
+    if std::env::consts::OS == "windows" {
+        drivers.push(WindowsDriver {
+            name: "CP210x USB to UART Bridge VCP Drivers".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CP210x_Universal_Windows_Driver.zip".to_string(),
+            inf_path: "silabser.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "FTDI driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CDM_v2.12.28_WHQL_Certified.zip".to_string(),
+            inf_path: "ftdiport.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "ESP32 USB JTAG Driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-driver/idf-driver-esp32-usb-jtag-2021-07-15.zip".to_string(),
+            inf_path: "USB_JTAG_debug_unit.inf".to_string(),
+        });
+        drivers.push(WindowsDriver {
+            name: "CH341SER Driver".to_string(),
+            url: "https://dl.espressif.com/dl/idf-installer/CH341SER.ZIP".to_string(),
+            inf_path: "CH341SER/CH341SER.INF".to_string(),
+        });
+    }
+    drivers
+}
+
+pub async fn install_drivers() -> Result<()> {
+    if std::env::consts::OS != "windows" {
+        return Ok(());
+    }
+
+    use idf_env::driver::install_driver_res;
+
+    let drivers = get_drivers_list();
+    let mut all_success = true;
+    for driver in drivers {
+        let temp_directory = TempDir::new()?;
+        let temp_dir = temp_directory.path().join("idf-drivers").join(driver.name.replace(" ", "_"));
+        // let zip_path = temp_dir.path().join("driver.zip");
+        ensure_path(temp_dir.to_str().unwrap());
+
+        // Download the driver ZIP file
+        let response = download_file(&driver.url, temp_dir.to_str().unwrap(), None).await;
+        if response.is_err() {
+            error!("Failed to download driver {}: {}", driver.name, response.unwrap_err());
+            all_success = false;
+            continue;
+        }
+
+        let filename = driver.url
+            .split('/')
+            .last()
+            .unwrap();
+
+        let zip_path = temp_dir.join(filename);
+        if !zip_path.exists() {
+            error!("Driver file not found: {}", zip_path.display());
+            continue;
+        }
+
+        match decompress_archive(
+            zip_path.to_str().unwrap(),
+            temp_dir.to_str().unwrap(),
+        ) {
+            Ok(()) => {
+              info!("Decompressed driver: {}", driver.name);
+            }
+            Err(err) => {
+                error!("Failed to extract driver {}: {}", driver.name, err);
+                continue;
+            }
+        }
+
+        let driver_path = temp_dir.join(&driver.inf_path);
+        if !driver_path.exists() {
+            error!("Driver file not found: {}", driver_path.display());
+            continue;
+        }
+        match install_driver_res(driver_path.to_str().unwrap().to_string()) {
+            Ok(_) => info!("Driver installed successfully: {}", driver.name),
+            Err(err) => {
+                error!("Failed to install driver {}: {}", driver.name, err);
+                all_success = false;
+                continue;
+            }
+        }
+
+    }
+    if all_success {
+      info!("All drivers installed successfully");
+      Ok(())
+    } else {
+      Err(anyhow::anyhow!("Some drivers failed to install"))
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
