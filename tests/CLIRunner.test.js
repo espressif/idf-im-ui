@@ -90,7 +90,8 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -142,7 +143,11 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      logger.debug(
+        `Data input ${test.deleteAfterTest} - result ${deleteAfterTest}`
+      );
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
