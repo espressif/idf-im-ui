@@ -714,6 +714,7 @@ struct ScoopPackage {
     name: &'static str,
     template_content: &'static str,
     manifest_filename: &'static str,
+    test_command: &'static str,
 }
 
 // Helper function to create and write a manifest
@@ -753,43 +754,104 @@ fn create_manifest(
     Ok(manifest_path)
 }
 
-// Helper function to install a single package
+// Helper function to install a single package with retry logic
 fn install_package_with_scoop(
     main_command: &str,
     scoop_command: &Path,
     manifest_path: &Path,
-    package_name: &str,
+    package: &ScoopPackage,
     path_with_scoop: &str,
+    max_retries: u32,
 ) -> Result<(), String> {
-    let output = command_executor::execute_command_with_env(
-        main_command,
-        &vec![
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            scoop_command.to_str().unwrap(),
-            "install",
-            "--no-update-scoop",
-            manifest_path.to_str().unwrap(),
-        ],
-        vec![("PATH", &add_to_path(path_with_scoop).unwrap())],
-    );
+    for attempt in 1..=max_retries {
+        info!("Installing {} (attempt {}/{})", package.name, attempt, max_retries);
 
-    match output {
-        Ok(out) => {
-            if out.status.success() {
-                info!("{} installed successfully.", package_name);
-                Ok(())
-            } else {
-                Err(format!(
-                    "Failed to install {}: {:?} | {:?}",
-                    package_name,
-                    String::from_utf8_lossy(&out.stdout),
-                    String::from_utf8_lossy(&out.stderr)
-                ))
+        let output = command_executor::execute_command_with_env(
+            main_command,
+            &vec![
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                scoop_command.to_str().unwrap(),
+                "install",
+                "--no-update-scoop",
+                manifest_path.to_str().unwrap(),
+            ],
+            vec![("PATH", &add_to_path(path_with_scoop).unwrap())],
+        );
+
+        match output {
+            Ok(out) => {
+                if out.status.success() {
+                    info!("{} installation completed.", package.name);
+
+                    // Test if the package is working correctly
+                    if test_package_installation(package.test_command, main_command, path_with_scoop) {
+                        info!("{} installed and tested successfully.", package.name);
+                        return Ok(());
+                    } else {
+                        warn!("{} installed but test command '{}' failed on attempt {}",
+                              package.name, package.test_command, attempt);
+
+                        if attempt == max_retries {
+                            return Err(format!(
+                                "Failed to install {}: package installed but test command '{}' failed after {} attempts",
+                                package.name, package.test_command, max_retries
+                            ));
+                        }
+                        // Continue to next retry attempt
+                    }
+                } else {
+                    warn!("Installation failed for {} on attempt {}: {:?} | {:?}",
+                          package.name, attempt,
+                          String::from_utf8_lossy(&out.stdout),
+                          String::from_utf8_lossy(&out.stderr));
+
+                    if attempt == max_retries {
+                        return Err(format!(
+                            "Failed to install {} after {} attempts: {:?} | {:?}",
+                            package.name, max_retries,
+                            String::from_utf8_lossy(&out.stdout),
+                            String::from_utf8_lossy(&out.stderr)
+                        ));
+                    }
+                    // Continue to next retry attempt
+                }
+            }
+            Err(err) => {
+                warn!("Command execution failed for {} on attempt {}: {}", package.name, attempt, err);
+
+                if attempt == max_retries {
+                    return Err(format!("Failed to install {} after {} attempts: {}", package.name, max_retries, err));
+                }
+                // Continue to next retry attempt
             }
         }
-        Err(err) => Err(format!("Failed to install {}: {}", package_name, err)),
+
+        // Add a small delay between retries
+        if attempt < max_retries {
+            std::thread::sleep(std::time::Duration::from_secs(2));
+        }
+    }
+
+    unreachable!()
+}
+
+// Helper function to test if a package is working
+fn test_package_installation(test_command: &str, main_command: &str, path_with_scoop: &str) -> bool {
+    if test_command == "echo 0" {
+        return true; // Skip test for packages that don't have a meaningful test
+    }
+
+    let test_result = command_executor::execute_command_with_env(
+        main_command,
+        &vec!["-ExecutionPolicy", "Bypass", "-Command", test_command],
+        vec![("PATH", path_with_scoop)],
+    );
+
+    match test_result {
+        Ok(output) => output.status.success(),
+        Err(_) => false,
     }
 }
 
@@ -805,21 +867,25 @@ fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), S
             name: "7zip",
             template_content: include_str!("../../scoop_manifest_templates/7zip.json"),
             manifest_filename: "7zip.json",
+            test_command: "echo 0"
         },
         ScoopPackage {
             name: "git",
             template_content: include_str!("../../scoop_manifest_templates/git.json"),
             manifest_filename: "git.json",
+            test_command: "git --version",
         },
         ScoopPackage {
             name: "dark",
             template_content: include_str!("../../scoop_manifest_templates/dark.json"),
             manifest_filename: "dark.json",
+            test_command: "echo 0"
         },
         ScoopPackage {
             name: "python",
             template_content: include_str!("../../scoop_manifest_templates/python310.json"),
             manifest_filename: "python.json",
+            test_command: "python --version",
         },
     ];
 
@@ -847,14 +913,21 @@ fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), S
         }
     };
 
-    // Install all packages
+    // Install all packages with retry logic
+    const MAX_RETRIES: u32 = 3;
     for (manifest_path, package_name) in manifest_paths {
+        // Find the package struct to get the test command
+        let package = packages.iter()
+            .find(|p| p.name == package_name)
+            .ok_or_else(|| format!("Package {} not found in package definitions", package_name))?;
+
         install_package_with_scoop(
             main_command,
             scoop_command,
             &manifest_path,
-            package_name,
+            package,
             &path_with_scoop,
+            MAX_RETRIES,
         )?;
     }
 

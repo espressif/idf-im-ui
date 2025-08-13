@@ -35,7 +35,7 @@ use log4rs::config::{Appender, Root};
 use log4rs::encode::pattern::PatternEncoder;
 use idf_im_lib::get_log_directory;
 
-pub const PYTHON_VERSION: &str = "3.10";
+pub const PYTHON_VERSION: &str = "3.11";
 
 fn setup_logging(verbose: u8) -> anyhow::Result<()> {
     let log_file_name = get_log_directory()
