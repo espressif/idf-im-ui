@@ -18,5 +18,13 @@
       "idfList": "v5.4.2"
     },
     "deleteAfterTest": false
+  },
+  {
+    "id": 4,
+    "type": "version-management",
+    "name": "CLI Version Management",
+    "data": {
+      "idfList": "default|v5.4.2"
+    }
   }
 ]
