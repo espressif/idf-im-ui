@@ -7,7 +7,7 @@
     "architecture": {
         "64bit": {
             "url": [
-                "file://{{offline_archive_scoop_dir}}/setup.exe",
+                "file://{{offline_archive_scoop_dir}}/python-3.10.11-amd64.exe",
                 "file://{{offline_archive_scoop_dir}}/install-pep-514.reg",
                 "file://{{offline_archive_scoop_dir}}/uninstall-pep-514.reg"
             ],
@@ -38,12 +38,12 @@
     ],
     "installer": {
         "script": [
-            "Expand-DarkArchive \"$dir\\setup.exe\" \"$dir\\_tmp\"",
+            "Expand-DarkArchive \"$dir\\python-3.10.11-amd64.exe\" \"$dir\\_tmp\"",
             "@('path.msi', 'pip.msi') | ForEach-Object {",
             "    Remove-Item \"$dir\\_tmp\\AttachedContainer\\$_\"",
             "}",
             "(Get-ChildItem \"$dir\\_tmp\\AttachedContainer\\*.msi\").FullName | ForEach-Object { Expand-MsiArchive $_ \"$dir\" }",
-            "Remove-Item \"$dir\\_tmp\", \"$dir\\setup.exe\" -Force -Recurse",
+            "Remove-Item \"$dir\\_tmp\", \"$dir\\python-3.10.11-amd64.exe\" -Force -Recurse",
             "if ($global) {",
             "    $pathext = (Get-EnvVar -Name PATHEXT -Global) -replace ';.PYW?', ''",
             "    Set-EnvVar -Name PATHEXT -Value \"$pathext;.PY;.PYW\" -Global",

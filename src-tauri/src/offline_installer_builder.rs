@@ -245,7 +245,7 @@ async fn main() {
                     ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
                     ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
                     ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
-                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe#/setup.exe", "python-3.10.11-amd64.exe"),
+                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe", "python-3.10.11-amd64.exe"),
                     ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
                     ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
                     ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),

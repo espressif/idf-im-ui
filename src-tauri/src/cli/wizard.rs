@@ -377,6 +377,8 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             match execute_command(
                 "powershell",
                 &[
+                    "-Version",
+                    "5",
                     "-ExecutionPolicy",
                     "Bypass",
                     "-File",
@@ -766,16 +768,25 @@ fn install_package_with_scoop(
     for attempt in 1..=max_retries {
         info!("Installing {} (attempt {}/{})", package.name, attempt, max_retries);
 
-        let output = command_executor::execute_command_with_env(
+        // Build the complete PowerShell command as a single string to avoid shell spawning
+        let full_command = format!(
+            "{} install --no-update-scoop '{}'",
+            scoop_command.to_str().unwrap(),
+            manifest_path.to_str().unwrap()
+        );
+
+        // Use the executor directly to ensure proper process handling
+        let executor = command_executor::get_executor();
+        let output = executor.execute_with_env(
             main_command,
             &vec![
+                "-NoProfile",
+                "-NonInteractive",
+                "-NoLogo",
                 "-ExecutionPolicy",
                 "Bypass",
                 "-Command",
-                scoop_command.to_str().unwrap(),
-                "install",
-                "--no-update-scoop",
-                manifest_path.to_str().unwrap(),
+                &full_command,
             ],
             vec![("PATH", &add_to_path(path_with_scoop).unwrap())],
         );
@@ -843,16 +854,43 @@ fn test_package_installation(test_command: &str, main_command: &str, path_with_s
         return true; // Skip test for packages that don't have a meaningful test
     }
 
-    let test_result = command_executor::execute_command_with_env(
-        main_command,
-        &vec!["-ExecutionPolicy", "Bypass", "-Command", test_command],
-        vec![("PATH", path_with_scoop)],
-    );
+    // Add a small delay to allow file system operations to complete
+    std::thread::sleep(std::time::Duration::from_millis(500));
 
-    match test_result {
-        Ok(output) => output.status.success(),
-        Err(_) => false,
+    // Try the test command multiple times with short delays
+    for attempt in 1..=3 {
+        let executor = command_executor::get_executor();
+        let test_result = executor.execute_with_env(
+            main_command,
+            &vec![
+                "-NoProfile",
+                "-NonInteractive",
+                "-NoLogo",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                test_command
+            ],
+            vec![("PATH", path_with_scoop)],
+        );
+
+        match test_result {
+            Ok(output) if output.status.success() => return true,
+            Ok(_) => {
+                debug!("Test command '{}' failed on attempt {}", test_command, attempt);
+            }
+            Err(e) => {
+                debug!("Test command '{}' error on attempt {}: {}", test_command, attempt, e);
+            }
+        }
+
+        // Short delay between test attempts
+        if attempt < 3 {
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
     }
+
+    false
 }
 
 // Main function that creates manifests and installs packages
