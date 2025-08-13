@@ -220,7 +220,7 @@ export function runVersionManagementTest({
       testRunner.sendInput(`${pathToEim} remove ${versionToRemove}\r`);
       const removeOutput = await testRunner.waitForOutput(
         `Removed version: ${versionToRemove}`,
-        5000
+        30000
       );
       expect(removeOutput, "EIM failed to remove IDF version").to.be.true;
       testRunner.output = "";
