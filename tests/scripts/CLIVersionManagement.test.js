@@ -4,7 +4,6 @@ import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import path from "path";
 import fs from "fs";
-import os from "os";
 
 export function runVersionManagementTest({
   pathToEim,
@@ -16,8 +15,6 @@ export function runVersionManagementTest({
     this.timeout(120000);
     let testRunner = null;
     let testStepFailed = false;
-
-    const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
 
     beforeEach(async function () {
       this.timeout(10000);
@@ -99,7 +96,7 @@ export function runVersionManagementTest({
         "Selected version",
         5000
       );
-      expect(selectQuery, "EIM select failed to select idf from prompt").to.be
+      expect(selectedIDF, "EIM select failed to select idf from prompt").to.be
         .true;
       testRunner.output = "";
       testRunner.sendInput(`${pathToEim} list\r`);
