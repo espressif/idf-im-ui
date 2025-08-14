@@ -1,25 +1,21 @@
 import { expect } from "chai";
-import { describe, it, after, beforeEach, afterEach } from "mocha";
+import { describe, it, beforeEach, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
 
-function runInstallVerification({
+export function runInstallVerification({
   installFolder,
   idfList,
   targetList = ["esp32"],
+  toolsFolder,
 }) {
   describe("3- Installation verification test ->", function () {
     this.timeout(600000);
     let testRunner = null;
     let verificationStepFailed = false;
-
-    const toolsFolder =
-      os.platform() !== "win32"
-        ? path.join(os.homedir(), `.espressif`)
-        : `C:\\Espressif`;
 
     const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
 
@@ -52,20 +48,6 @@ function runInstallVerification({
         } finally {
           testRunner = null;
         }
-      }
-    });
-
-    after(function () {
-      logger.info("Post install test completed, starting cleanup");
-      try {
-        fs.rmSync(installFolder, { recursive: true, force: true });
-        fs.rmSync(toolsFolder, {
-          recursive: true,
-          force: true,
-        });
-        logger.info(`Successfully deleted ${installFolder} and tools folder`);
-      } catch (err) {
-        logger.info(`Error deleting ${installFolder}`);
       }
     });
 
@@ -726,5 +708,3 @@ function runInstallVerification({
     });
   });
 }
-
-export { runInstallVerification };

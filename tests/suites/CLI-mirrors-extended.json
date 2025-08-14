@@ -2,25 +2,53 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com v5.2.5",
+    "name": "Mirrors jihulab and dl_com v5.4.2",
     "data": {
-      "idfList": "v5.2.5",
+      "idfList": "v5.4.2",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn v5.2.5",
+    "name": "Mirrors jihulab and dl_cn v5.4.2",
     "data": {
-      "idfList": "v5.2.5",
+      "idfList": "v5.4.2",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
+  },
+  {
+    "id": 3,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_com v5.3.3",
+    "data": {
+      "idfList": "v5.3.3",
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_com",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
+  },
+  {
+    "id": 4,
+    "type": "custom",
+    "name": "Mirrors jihulab and dl_cn v5.3.3",
+    "data": {
+      "idfList": "v5.3.3",
+      "idfMirror": "jihulab",
+      "toolsMirror": "dl_cn",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   }
 ]

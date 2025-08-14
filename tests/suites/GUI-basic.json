@@ -13,18 +13,20 @@
     "id": 3,
     "type": "custom",
     "name": "GUI Expert Default",
-    "data": {}
+    "data": {},
+    "deleteAfterTest": false
   },
   {
     "id": 4,
     "type": "custom",
-    "name": "GUI Expert v5.2.5",
+    "name": "GUI Expert v5.4.2",
     "data": {
       "targetList": "All",
-      "idfList": "v5.2.5",
+      "idfList": "v5.4.2",
       "installFolder": ".espcustom",
       "idfMirror": "github",
       "toolsMirror": "github"
-    }
+    },
+    "deleteAfterTest": false
   }
 ]

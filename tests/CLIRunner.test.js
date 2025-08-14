@@ -11,9 +11,11 @@
             "installFolder": "<folder>", // Folder name to install idf (inside USER folder)
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
             "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
-            "recursive": "false",        // Whether to prevent downloading submodules (set to true if omitted)
-            "nonInteractive": "false"    // Whether to prevent running in non-interactive mode (set to true if omitted)
-        }
+            "recursive": false,        // Whether to prevent downloading submodules (set to true if omitted)
+            "nonInteractive": false    // Whether to prevent running in non-interactive mode (set to true if omitted)
+        },
+        "deleteAfterTest": true        // Whether to remove IDF installation folder and IDF tools folder after test
+
 
  */
 
@@ -23,6 +25,8 @@ import { runCLIArgumentsTest } from "./scripts/CLIArguments.test.js";
 import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
 import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
+import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
+import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -55,6 +59,16 @@ function testRun(jsonScript) {
       ? process.env.IDF_VERSION
       : IDFDEFAULTINSTALLVERSION;
 
+  const INSTALLFOLDER =
+    os.platform() !== "win32"
+      ? path.join(os.homedir(), `.espressif`)
+      : `C:\\esp`;
+
+  const TOOLSFOLDER =
+    os.platform() !== "win32"
+      ? path.join(os.homedir(), `.espressif`)
+      : `C:\\Espressif`;
+
   // Test Runs
   jsonScript.forEach((test) => {
     if (test.type === "prerequisites") {
@@ -76,29 +90,31 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      const installFolder =
-        os.platform() !== "win32"
-          ? path.join(os.homedir(), `.espressif`)
-          : `C:\\esp`;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
         runCLIWizardInstallTest(PATHTOEIM);
 
-        runInstallVerification({ installFolder, idfList: [IDFDefaultVersion] });
+        runInstallVerification({
+          installFolder: INSTALLFOLDER,
+          idfList: [IDFDefaultVersion],
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          installFolder: INSTALLFOLDER,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
-      let installFolder;
-      if (test.data.installFolder) {
-        installFolder = path.join(os.homedir(), test.data.installFolder);
-      } else {
-        installFolder =
-          os.platform() !== "win32"
-            ? path.join(os.homedir(), `.espressif`)
-            : `C:\\esp`;
-      }
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
 
       const targetList = test.data.targetList
         ? test.data.targetList.split("|")
@@ -127,6 +143,9 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
@@ -136,8 +155,41 @@ function testRun(jsonScript) {
           installFolder,
           idfList: idfVersionList,
           targetList,
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
+    } else if (test.type === "version-management") {
+      //routine for version management tests
+      const idfList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const updatedList = idfList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      describe(`Test${test.id} - ${test.name} ->`, function () {
+        this.timeout(60000);
+
+        runVersionManagementTest({
+          pathToEim: PATHTOEIM,
+          idfList: updatedList,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+        });
+      });
+    } else {
+      logger.error(`Unknown test type: ${test.type}`);
     }
   });
 }
