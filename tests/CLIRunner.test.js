@@ -145,9 +145,6 @@ function testRun(jsonScript) {
 
       const deleteAfterTest =
         test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
-      logger.debug(
-        `Data input ${test.deleteAfterTest} - result ${deleteAfterTest}`
-      );
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);

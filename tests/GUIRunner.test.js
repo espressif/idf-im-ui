@@ -78,7 +78,8 @@ function testRun(script) {
     } else if (test.type === "default") {
       //routine for default simplified installation
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUISimplifiedInstallTest(test.id, pathToEIM);
@@ -111,7 +112,8 @@ function testRun(script) {
 
       const IDFMirror = test.data.idfMirror || "github";
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUICustomInstallTest(
