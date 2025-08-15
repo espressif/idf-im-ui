@@ -10,12 +10,14 @@ use git2::Repository;
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
+use tar::Archive;
+use zstd::{decode_all, Decoder};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
     collections::{HashMap, HashSet},
-    fs::{self},
-    io,
+    fs::{self, File},
+    io::{self, BufReader, Read},
     path::{Path, PathBuf},
 };
 use regex::Regex;
@@ -636,6 +638,119 @@ pub fn get_commit_hash(repo_path: &str) -> Result<String, git2::Error> {
     Ok(commit.id().to_string()[..7].to_string()) // Return the first 7 characters of the commit hash
 }
 
+pub fn extract_zst_archive_with_buffer_size(
+    archive_path: &Path,
+    extract_to: &Path,
+    buffer_size: usize
+) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Extracting archive: {:?} to: {:?} with buffer size: {}", archive_path, extract_to, buffer_size);
+
+    // Create extraction directory if it doesn't exist
+    std::fs::create_dir_all(extract_to)?;
+
+    // Open the compressed file
+    let file = File::open(archive_path)?;
+    let buf_reader = BufReader::with_capacity(buffer_size, file);
+
+    info!("Setting up zstd decoder with custom buffer size...");
+    // Create a streaming zstd decoder
+    let decoder = Decoder::new(buf_reader)?;
+
+    info!("Extracting tar archive...");
+    // Create tar archive from the streaming decoder
+    let mut archive = Archive::new(decoder);
+
+    // Extract the archive directly from the stream
+    archive.unpack(extract_to)?;
+
+    info!("Archive extracted successfully to: {:?}", extract_to);
+    Ok(())
+}
+
+/// Convenience function that replaces the original with better defaults
+pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    // Use the streaming version with a reasonable default buffer size (64KB)
+    extract_zst_archive_with_buffer_size(archive_path, extract_to, 64 * 1024)
+}
+
+pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
+    copy_dir_contents_with_retries(src, dst, 3, std::time::Duration::from_millis(100))
+}
+
+pub fn copy_dir_contents_with_retries(
+    src: &Path,
+    dst: &Path,
+    max_retries: u32,
+    retry_delay: std::time::Duration
+) -> io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = path.file_name().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid file name for path: {:?}", path),
+            )
+        })?;
+        let dest_path = dst.join(file_name);
+
+        if path.is_dir() {
+            // Recursively copy subdirectories
+            copy_dir_contents_with_retries(&path, &dest_path, max_retries, retry_delay)?;
+        } else {
+            // Copy files with retry logic
+            copy_file_with_retries(&path, &dest_path, max_retries, retry_delay)?;
+        }
+    }
+    Ok(())
+}
+
+fn copy_file_with_retries(
+    src: &Path,
+    dst: &Path,
+    max_retries: u32,
+    retry_delay: std::time::Duration
+) -> io::Result<()> {
+    let mut attempts = 0;
+
+    loop {
+        match fs::copy(src, dst) {
+            Ok(_) => return Ok(()),
+            Err(e) => {
+                attempts += 1;
+
+                // Check if it's a retryable error
+                if is_retryable_error(&e) && attempts <= max_retries {
+                    eprintln!("Warning: Failed to copy {:?} to {:?} (attempt {}/{}): {}. Retrying...",
+                             src, dst, attempts, max_retries, e);
+                    std::thread::sleep(retry_delay);
+                    continue;
+                } else {
+                    // Add more context to the error
+                    return Err(io::Error::new(
+                        e.kind(),
+                        format!("Failed to copy {:?} to {:?} after {} attempts: {}",
+                               src, dst, attempts, e)
+                    ));
+                }
+            }
+        }
+    }
+}
+
+fn is_retryable_error(error: &io::Error) -> bool {
+    match error.raw_os_error() {
+        Some(5) => true,   // ERROR_ACCESS_DENIED
+        Some(32) => true,  // ERROR_SHARING_VIOLATION
+        Some(33) => true,  // ERROR_LOCK_VIOLATION
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -643,6 +758,31 @@ mod tests {
     use std::io::Write;
     use std::sync::atomic::{AtomicU32, Ordering};
     use tempfile::TempDir;
+    use tar::Builder;
+    use zstd::stream::write::Encoder;
+
+    fn create_test_zst_archive(temp_dir: &TempDir) -> std::path::PathBuf {
+        // Create some test files
+        let test_dir = temp_dir.path().join("test_content");
+        fs::create_dir_all(&test_dir).unwrap();
+
+        for i in 0..5 {
+            let file_path = test_dir.join(format!("test_file_{}.txt", i));
+            fs::write(&file_path, format!("Test content for file {}", i)).unwrap();
+        }
+
+        // Create tar.zst archive
+        let archive_path = temp_dir.path().join("test_archive.tar.zst");
+        let file = File::create(&archive_path).unwrap();
+        let encoder = Encoder::new(file, 0).unwrap(); // Compression level 0 for speed
+        let mut tar_builder = Builder::new(encoder);
+
+        tar_builder.append_dir_all("test_content", &test_dir).unwrap();
+        let encoder = tar_builder.into_inner().unwrap();
+        encoder.finish().unwrap();
+
+        archive_path
+    }
 
     #[test]
     fn test_find_directories_by_name() {
@@ -1062,5 +1202,50 @@ set(IDF_VERSION_MAJOR 5)
         assert!(!versions_match("1.2.3", "1.3.0"));
         assert!(!versions_match("2.0.0", "1.2.0"));
         assert!(!versions_match("invalid", "1.2.0"));
+    }
+
+    #[test]
+    fn test_extract_zst_archive_streaming() {
+        let temp_dir = TempDir::new().unwrap();
+        let archive_path = create_test_zst_archive(&temp_dir);
+        let extract_to = temp_dir.path().join("extracted");
+
+        let result = extract_zst_archive(&archive_path, &extract_to);
+        assert!(result.is_ok());
+
+        // Verify extracted files
+        for i in 0..5 {
+            let extracted_file = extract_to.join("test_content").join(format!("test_file_{}.txt", i));
+            assert!(extracted_file.exists());
+            let content = fs::read_to_string(&extracted_file).unwrap();
+            assert_eq!(content, format!("Test content for file {}", i));
+        }
+    }
+
+    #[test]
+    fn test_extract_zst_archive_with_small_buffer() {
+        let temp_dir = TempDir::new().unwrap();
+        let archive_path = create_test_zst_archive(&temp_dir);
+        let extract_to = temp_dir.path().join("extracted_small_buffer");
+
+        // Use very small buffer to test memory efficiency
+        let result = extract_zst_archive_with_buffer_size(&archive_path, &extract_to, 512);
+        assert!(result.is_ok());
+
+        // Verify extracted files
+        for i in 0..5 {
+            let extracted_file = extract_to.join("test_content").join(format!("test_file_{}.txt", i));
+            assert!(extracted_file.exists());
+        }
+    }
+
+    #[test]
+    fn test_extract_nonexistent_archive() {
+        let temp_dir = TempDir::new().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent.tar.zst");
+        let extract_to = temp_dir.path().join("extracted");
+
+        let result = extract_zst_archive(&nonexistent_path, &extract_to);
+        assert!(result.is_err());
     }
 }
