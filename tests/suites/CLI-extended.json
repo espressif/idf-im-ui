@@ -9,9 +9,10 @@
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": false
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 2,
@@ -23,9 +24,10 @@
       "installFolder": ".espext2",
       "idfMirror": "github",
       "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 3,
@@ -36,9 +38,10 @@
       "installFolder": ".esprext3",
       "idfMirror": "github",
       "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 5,
@@ -49,8 +52,9 @@
       "installFolder": ".esprext5",
       "idfMirror": "github",
       "toolsMirror": "github",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   }
 ]

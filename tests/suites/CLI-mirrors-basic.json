@@ -7,9 +7,10 @@
       "idfList": "v5.5",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   },
   {
     "id": 2,
@@ -19,8 +20,9 @@
       "idfList": "v5.5",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
-      "recursive": "true",
-      "nonInteractive": "true"
-    }
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true
   }
 ]
