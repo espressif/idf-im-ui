@@ -523,5 +523,22 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             gui::run();
             Ok(())
         }
+        Commands::InstallDrivers => {
+          match std::env::consts::OS {
+            "windows" => {
+
+              info!("Installing drivers...");
+              if let Err(err) = idf_im_lib::install_drivers().await {
+                error!("Failed to install drivers: {}", err);
+                return Err(anyhow::anyhow!(err));
+              }
+              info!("Drivers installed successfully.");
+              Ok(())
+            }
+            _ => {
+              return Err(anyhow::anyhow!("Driver installation is only supported on Windows."));
+            }
+          }
+        }
     }
 }
