@@ -1218,7 +1218,7 @@ fn update_submodules(repo: &Repository, tx: Sender<ProgressMessage>) -> Result<(
             // Create new fetch options for this submodule
             let mut fetch_options = FetchOptions::new();
             fetch_options.remote_callbacks(callbacks);
-            fetch_options.depth(1); // Set depth for shallow clone
+            // fetch_options.depth(1); // Set depth for shallow clone - does seems to blow up on components/micro-ecc on hello world build time
 
             // Create update options with the fetch options
             let mut update_options = SubmoduleUpdateOptions::new();
