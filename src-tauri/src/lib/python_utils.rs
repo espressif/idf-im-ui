@@ -266,7 +266,6 @@ pub fn pip_install_requirements(
     constraint_file: &Option<PathBuf>,
     wheel_dir: &Option<PathBuf>,
 ) -> Result<(), std::io::Error> {
-  // pip install --no-index --find-links=./wheels -r requirements.txt
     let python_location = match std::env::consts::OS {
         "windows" => venv_path.join("Scripts").join("python.exe"),
         _ => venv_path.join("bin").join("python3"),
@@ -437,55 +436,27 @@ pub async fn install_python_env(
             return Err(format!("failed to ensure venv path: {}", e));
         }
     }
-    if let Some(offline_dir) = offline_archive_dir {
+    if let Some(_offline_dir) = offline_archive_dir {
         offline_mode = true;
-        // if offline mode is enabled, copy the contents of the archive to the venv path
-        // debug!("Copying contents from offline archive directory: {}", offline_dir.display());
-        // if let Err(e) = copy_dir_contents(&offline_dir.join("python_env"), &venv_path) {
-        //     error!("Failed to copy contents from offline archive directory: {}", e);
-        //     return Err(format!("Failed to copy contents from offline archive directory: {}", e));
-        // }
     } else {
         debug!("No offline archive directory provided, skipping copying contents.");
     }
-
-    // let python_executable = if offline_mode {
-    //   match std::env::consts::OS {
-    //       "windows" => {
-    //           venv_path.join("Scripts").join("python.exe")
-    //               .to_str()
-    //               .unwrap()
-    //               .to_string()
-    //       },
-    //       _ => venv_path.join("bin").join("python3")
-    //           .to_str()
-    //           .unwrap()
-    //           .to_string(),
-    //   }
-    // } else {
-    //     match std::env::consts::OS {
-    //         "windows" => "python.exe".to_string(),
-    //         _ => "python3".to_string(),
-    //     }
-    // };
 
     let python_executable = match std::env::consts::OS {
             "windows" => "python.exe".to_string(),
             _ => "python3".to_string(),
         };
 
-    // if !offline_mode {
-      // create the venv
-      match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
-          Ok(_) => {
-              debug!("venv created");
-          }
-          Err(e) => {
-              error!("failed to create venv: {}", e);
-              return Err(format!("failed to create venv: {}", e));
-          }
-      }
-    // }
+    // create the venv
+    match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
+        Ok(_) => {
+            debug!("venv created");
+        }
+        Err(e) => {
+            error!("failed to create venv: {}", e);
+            return Err(format!("failed to create venv: {}", e));
+        }
+    }
 
     // install the requirements
     let mut requirements_file_list = vec![];

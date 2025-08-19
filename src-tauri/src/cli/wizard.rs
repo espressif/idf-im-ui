@@ -313,8 +313,6 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
-    // TODO: only needed for offline mode
-
     let mut offline_mode = false;
     if config.use_local_archive.is_some() {
         debug!("Using local archive: {:?}", config.use_local_archive);
@@ -347,7 +345,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
       // load the config from the extracted archive
       let config_path = archive_dir.path().join("config.toml");
       if config_path.exists() {
-        // debug!("Loading config from extracted archive: {}", config_path.display());
+        debug!("Loading config from extracted archive: {}", config_path.display());
         let mut tmp_setting = Settings::default();
         match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
           Ok(()) => {

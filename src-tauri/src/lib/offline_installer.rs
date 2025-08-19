@@ -6,15 +6,48 @@ use tera::{Context, Tera};
 
 use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::copy_dir_contents};
 
-// Structure to define package information with compile-time template content
+/// Structure to define package information with compile-time template content.
+///
+/// This struct contains all the necessary information to install a Scoop package
+/// including the template content, manifest filename, and test command to verify
+/// successful installation.
 pub struct ScoopPackage {
+    /// The name of the package (e.g., "git", "python", "7zip")
     pub name: &'static str,
+    /// The JSON template content for the Scoop manifest, embedded at compile time
     pub template_content: &'static str,
+    /// The filename for the generated manifest file (e.g., "git.json")
     pub manifest_filename: &'static str,
+    /// Command used to test if the package was installed successfully
     pub test_command: &'static str,
 }
 
-// Helper function to create and write a manifest
+/// Creates and writes a Scoop manifest file for a given package.
+///
+/// This function takes a package definition, renders its template with the provided context,
+/// normalizes line endings for Windows compatibility, and writes the resulting manifest
+/// to the specified Scoop directory.
+///
+/// # Arguments
+///
+/// * `package` - The package definition containing template content and metadata
+/// * `context` - Tera template context with variables for rendering
+/// * `scoop_path` - Path to the Scoop directory where the manifest will be written
+/// * `tera` - Mutable reference to the Tera template engine
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - Path to the created manifest file on success
+/// * `Err(String)` - Error message if template rendering or file writing fails
+///
+/// # Examples
+///
+/// ```rust
+/// let package = ScoopPackage { /* ... */ };
+/// let mut context = Context::new();
+/// let mut tera = Tera::default();
+/// let manifest_path = create_manifest(&package, &context, &scoop_path, &mut tera)?;
+/// ```
 fn create_manifest(
     package: &ScoopPackage,
     context: &Context,
@@ -51,10 +84,39 @@ fn create_manifest(
     Ok(manifest_path)
 }
 
-// Helper function to install a single package with retry logic
+/// Installs a single package using Scoop with retry logic.
+///
+/// This function attempts to install a package using the Scoop package manager with
+/// automatic retry logic. After installation, it verifies the package works correctly
+/// by running the test command. If the installation or test fails, it will retry up
+/// to the specified maximum number of attempts.
+///
+/// # Arguments
+///
+/// * `main_command` - The PowerShell command to use for execution
+/// * `manifest_path` - Path to the package manifest file
+/// * `package` - The package definition containing test command and metadata
+/// * `path_with_scoop` - Environment PATH variable that includes Scoop directories
+/// * `max_retries` - Maximum number of installation attempts
+///
+/// # Returns
+///
+/// * `Ok(())` - Package installed and tested successfully
+/// * `Err(String)` - Error message if installation fails after all retry attempts
+///
+/// # Examples
+///
+/// ```rust
+/// install_package_with_scoop(
+///     "powershell.exe",
+///     &manifest_path,
+///     &package,
+///     &path_with_scoop,
+///     3
+/// )?;
+/// ```
 fn install_package_with_scoop(
     main_command: &str,
-    scoop_command: &Path,
     manifest_path: &Path,
     package: &ScoopPackage,
     path_with_scoop: &str,
@@ -63,11 +125,8 @@ fn install_package_with_scoop(
     for attempt in 1..=max_retries {
         info!("Installing {} (attempt {}/{})", package.name, attempt, max_retries);
 
-        // Build the complete PowerShell command as a single string to avoid shell spawning
-        // let full_command = &format!("Start-Process -FilePath '{}' -ArgumentList 'install', '--no-update-scoop', '{}' -Wait -NoNewWindow", scoop_command.to_str().unwrap(), manifest_path.to_str().unwrap());
         let full_command = format!(
             "scoop install --no-update-scoop '{}'",
-            // scoop_command.to_str().unwrap(),
             manifest_path.to_str().unwrap()
         );
 
@@ -144,7 +203,37 @@ fn install_package_with_scoop(
     unreachable!()
 }
 
-// Helper function to test if a package is working
+/// Tests if a package installation is working correctly by running its test command.
+///
+/// This function verifies that an installed package is functional by executing
+/// the package's test command. It includes retry logic with small delays to handle
+/// cases where the file system operations haven't completed immediately after
+/// installation.
+///
+/// # Arguments
+///
+/// * `test_command` - Command to run to test the package (e.g., "git --version")
+/// * `main_command` - The PowerShell command to use for execution
+/// * `path_with_scoop` - Environment PATH variable that includes Scoop directories
+///
+/// # Returns
+///
+/// * `true` - Test command executed successfully
+/// * `false` - Test command failed after all retry attempts
+///
+/// # Special Cases
+///
+/// * If `test_command` is "echo 0", the function returns `true` immediately,
+///   indicating packages that don't have meaningful test commands
+///
+/// # Examples
+///
+/// ```rust
+/// let success = test_package_installation("git --version", "powershell.exe", &path_with_scoop);
+/// if success {
+///     println!("Git is working correctly");
+/// }
+/// ```
 fn test_package_installation(test_command: &str, main_command: &str, path_with_scoop: &str) -> bool {
     if test_command == "echo 0" {
         return true; // Skip test for packages that don't have a meaningful test
@@ -189,7 +278,38 @@ fn test_package_installation(test_command: &str, main_command: &str, path_with_s
     false
 }
 
-// Main function that creates manifests and installs packages
+/// Sets up and installs all required Scoop packages from offline manifests.
+///
+/// This function orchestrates the complete installation process for all required
+/// packages. It creates Tera templates, renders manifests for each package,
+/// and then installs them using Scoop with retry logic. The packages installed
+/// include 7zip, Git, Dark (WiX toolset), and Python 3.10.
+///
+/// # Arguments
+///
+/// * `scoop_path` - Path to the Scoop directory containing offline packages
+/// * `scoop_command` - Path to the Scoop PowerShell script
+///
+/// # Returns
+///
+/// * `Ok(())` - All packages installed successfully
+/// * `Err(String)` - Error message if any package installation fails
+///
+/// # Package Installation Order
+///
+/// The function installs packages in the following order:
+/// 1. 7zip - Archive utility
+/// 2. Git - Version control system
+/// 3. Dark - WiX toolset decompiler
+/// 4. Python 3.10 - Python interpreter
+///
+/// # Examples
+///
+/// ```rust
+/// let scoop_path = Path::new("C:\\offline\\scoop");
+/// let scoop_command = Path::new("C:\\Users\\user\\scoop\\shims\\scoop.ps1");
+/// setup_scoop_packages(&scoop_path, &scoop_command)?;
+/// ```
 fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), String> {
     // Create Tera context
     let mut context = Context::new();
@@ -248,7 +368,6 @@ fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), S
 
         install_package_with_scoop(
             &main_command,
-            scoop_command,
             &manifest_path,
             package,
             &path_with_scoop,
@@ -259,6 +378,43 @@ fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), S
     Ok(())
 }
 
+/// Installs prerequisite software packages from an offline archive.
+///
+/// This function handles the installation of development prerequisites on different
+/// operating systems. On Windows, it installs and configures Scoop package manager
+/// and then installs required packages. On Linux and macOS, it simply logs that
+/// users should ensure necessary tools are installed manually.
+///
+/// # Arguments
+///
+/// * `archive_dir` - Temporary directory containing the offline installation archive
+///
+/// # Returns
+///
+/// * `Ok(())` - Prerequisites installed successfully
+/// * `Err(String)` - Error message if installation fails
+///
+/// # Platform Behavior
+///
+/// * **Windows**: Installs Scoop package manager and required development tools
+/// * **Linux/macOS**: Logs informational message about manual tool installation
+/// * **Other platforms**: Returns error for unsupported operating systems
+///
+/// # Windows Installation Process
+///
+/// 1. Sets up Scoop package manager from offline installer
+/// 2. Configures PATH environment variables
+/// 3. Installs development packages (Git, Python, 7zip, Dark)
+/// 4. Validates package installations with test commands
+///
+/// # Examples
+///
+/// ```rust
+/// use tempfile::TempDir;
+///
+/// let archive_dir = TempDir::new().unwrap();
+/// install_prerequisites_offline(&archive_dir)?;
+/// ```
 pub fn install_prerequisites_offline(
     archive_dir: &TempDir,
 ) -> Result<(), String> {
@@ -319,6 +475,54 @@ pub fn install_prerequisites_offline(
     Ok(())
 }
 
+/// Copies ESP-IDF (Espressif IoT Development Framework) files from offline archive.
+///
+/// This function copies ESP-IDF framework files from an offline archive to the
+/// target installation directory. It handles multiple IDF versions as specified
+/// in the configuration and uses platform-specific copy mechanisms to handle
+/// Windows path length limitations.
+///
+/// # Arguments
+///
+/// * `archive_dir` - Temporary directory containing the offline ESP-IDF archive
+/// * `config` - Settings containing IDF versions and target installation path
+///
+/// # Returns
+///
+/// * `Ok(())` - All IDF versions copied successfully
+/// * `Err(String)` - Error message if any copy operation fails
+///
+/// # Platform Behavior
+///
+/// * **Windows**: Uses PowerShell `cp -r` command to handle long path names
+/// * **Other platforms**: Uses custom `copy_dir_contents` utility function
+///
+/// # Configuration Requirements
+///
+/// The `Settings` struct must contain:
+/// * `idf_versions` - Optional vector of IDF version strings to copy
+/// * `path` - Optional target path where IDF versions should be installed
+///
+/// # Examples
+///
+/// ```rust
+/// use tempfile::TempDir;
+///
+/// let archive_dir = TempDir::new().unwrap();
+/// let config = Settings {
+///     idf_versions: Some(vec!["v4.4".to_string(), "v5.0".to_string()]),
+///     path: Some(PathBuf::from("C:\\esp\\esp-idf")),
+///     // ... other fields
+/// };
+///
+/// copy_idf_from_offline_archive(&archive_dir, &config)?;
+/// ```
+///
+/// # Error Handling
+///
+/// The function continues copying other versions even if one fails, but returns
+/// an error if any copy operation was unsuccessful. Individual failures are
+/// logged with error-level messages.
 pub fn copy_idf_from_offline_archive(
     archive_dir: &TempDir,
     config: &Settings
