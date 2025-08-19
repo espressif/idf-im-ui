@@ -5,6 +5,8 @@
  */
 
 import logger from "./classes/logger.class.js";
+import os from "os";
+import path from "path";
 
 // Define default values for offline tests
 let IDFDefaultVersion = "v5.5";
@@ -25,31 +27,36 @@ let availableTargets = [
 
 // IDF versions are provided by json file available at https://dl.espressif.com/dl/esp-idf/idf_versions.json
 const url = "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
-const res = await fetch(url);
-if (res.ok) {
-  const data = await res.json();
-  const idfVersions = data.VERSIONS;
-  if (idfVersions && idfVersions.length > 0) {
-    IDFDefaultVersion =
-      idfVersions.find(
-        (version) => version.old === false && version.pre_release !== true
-      )?.name || IDFDefaultVersion;
-    logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
-    IDFAvailableVersions.push(
-      ...idfVersions
-        .filter((version) => version.old === false)
-        .map((version) => version.name)
-    );
-    logger.info(`Available IDF Versions: ${IDFAvailableVersions.join(", ")}`);
-    availableTargets =
-      idfVersions.find((version) => version.name === "latest")
-        ?.supported_targets || availableTargets;
-    logger.info(`Available Targets: ${availableTargets.join(", ")}`);
+
+try {
+  const res = await fetch(url);
+  if (res.ok) {
+    const data = await res.json();
+    const idfVersions = data.VERSIONS;
+    if (idfVersions && idfVersions.length > 0) {
+      IDFDefaultVersion =
+        idfVersions.find(
+          (version) => version.old === false && version.pre_release !== true
+        )?.name || IDFDefaultVersion;
+      logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
+      IDFAvailableVersions.push(
+        ...idfVersions
+          .filter((version) => version.old === false)
+          .map((version) => version.name)
+      );
+      logger.info(`Available IDF Versions: ${IDFAvailableVersions.join(", ")}`);
+      availableTargets =
+        idfVersions.find((version) => version.name === "latest")
+          ?.supported_targets || availableTargets;
+      logger.info(`Available Targets: ${availableTargets.join(", ")}`);
+    } else {
+      logger.info("No IDF versions found in the response.");
+    }
   } else {
-    logger.info("No IDF versions found in the response.");
+    logger.info(`Failed to fetch IDF versions: ${res.statusText}`);
   }
-} else {
-  logger.info(`Failed to fetch IDF versions: ${res.statusText}`);
+} catch (error) {
+  logger.error(`Error fetching IDF versions file: ${error.message}`);
 }
 
 const IDFMIRRORS = {
@@ -67,22 +74,18 @@ const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.3.0";
 const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.3.0";
 
 // Default path to EIM CLI and GUI executables for offline testing
+//Should use path provided by environment variables or default to home directory
 
-const pathToEIMCLI =
-  process.env.EIM_CLI_PATH ||
+const getEIMPath = (pathFromCI, defaultFolder) =>
+  pathFromCI ||
   path.join(
     os.homedir(),
-    "eim-cli",
+    defaultFolder,
     os.platform() === "win32" ? "eim.exe" : "eim"
   );
 
-const pathToEIMGUI =
-  process.env.EIM_GUI_PATH ||
-  path.join(
-    os.homedir(),
-    "eim-gui",
-    os.platform() === "win32" ? "eim.exe" : "eim"
-  );
+const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
+const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
 
 // Default installation folder
 const INSTALLFOLDER =
