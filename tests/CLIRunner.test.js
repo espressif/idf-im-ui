@@ -30,8 +30,11 @@ import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
-  CLIDEFAULTVERSION,
-  IDFDEFAULTINSTALLVERSION,
+  IDFDefaultVersion,
+  EIMCLIVersion,
+  pathToEIMCLI,
+  INSTALLFOLDER,
+  TOOLSFOLDER,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -48,26 +51,6 @@ logger.info(`Running test script: ${jsonFilePath}`);
 testRun(testScript);
 
 function testRun(jsonScript) {
-  const PATHTOEIM =
-    process.env.EIM_FILE_PATH || path.join(os.homedir(), "eim-cli/eim");
-
-  const EIMVERSION = process.env.EIM_VERSION || CLIDEFAULTVERSION;
-
-  const IDFDefaultVersion =
-    process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
-      ? process.env.IDF_VERSION
-      : IDFDEFAULTINSTALLVERSION;
-
-  const INSTALLFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\esp`;
-
-  const TOOLSFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\Espressif`;
-
   // Test Runs
   jsonScript.forEach((test) => {
     if (test.type === "prerequisites") {
@@ -76,7 +59,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(20000);
 
-        runCLIPrerequisitesTest(PATHTOEIM);
+        runCLIPrerequisitesTest(pathToEIMCLI);
       });
     } else if (test.type === "arguments") {
       //routine for arguments tests
@@ -84,7 +67,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(20000);
 
-        runCLIArgumentsTest(PATHTOEIM, EIMVERSION);
+        runCLIArgumentsTest(pathToEIMCLI, EIMCLIVersion);
       });
     } else if (test.type === "default") {
       //routine for default installation tests
@@ -94,7 +77,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLIWizardInstallTest(PATHTOEIM);
+        runCLIWizardInstallTest(pathToEIMCLI);
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,
@@ -146,7 +129,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLICustomInstallTest(PATHTOEIM, installArgs);
+        runCLICustomInstallTest(pathToEIMCLI, installArgs);
 
         runInstallVerification({
           installFolder,

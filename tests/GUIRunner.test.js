@@ -25,7 +25,13 @@ import { runGUISimplifiedInstallTest } from "./scripts/GUISimplifiedInstall.test
 import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
-import { GUIDEFAULTVERSION, IDFDEFAULTINSTALLVERSION } from "./config.js";
+import {
+  IDFDefaultVersion,
+  pathToEIMGUI,
+  EIMGUIVersion,
+  INSTALLFOLDER,
+  TOOLSFOLDER,
+} from "./config.js";
 
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
@@ -41,39 +47,13 @@ logger.info(`Running test script: ${jsonFilePath}`);
 testRun(testScript);
 
 function testRun(script) {
-  let pathToEIM;
-  if (process.env.EIM_GUI_PATH) {
-    pathToEIM = process.env.EIM_GUI_PATH;
-  } else {
-    os.platform() !== "win32"
-      ? (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim"))
-      : (pathToEIM = path.resolve(os.homedir(), "eim-gui", "eim.exe"));
-  }
-
-  const EIMVersion = process.env.EIM_GUI_VERSION || GUIDEFAULTVERSION;
-
-  const IDFDefaultVersion =
-    process.env.IDF_VERSION && process.env.IDF_VERSION !== "null"
-      ? process.env.IDF_VERSION
-      : IDFDEFAULTINSTALLVERSION;
-
-  const INSTALLFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\esp`;
-
-  const TOOLSFOLDER =
-    os.platform() !== "win32"
-      ? path.join(os.homedir(), `.espressif`)
-      : `C:\\Espressif`;
-
   script.forEach((test) => {
     if (test.type === "startup") {
       //routine for startup test script
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(60000);
 
-        runGUIStartupTest(test.id, pathToEIM, EIMVersion);
+        runGUIStartupTest(test.id, pathToEIMGUI, EIMGUIVersion);
       });
     } else if (test.type === "default") {
       //routine for default simplified installation
@@ -81,7 +61,7 @@ function testRun(script) {
       const deleteAfterTest = test.deleteAfterTest || true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
-        runGUISimplifiedInstallTest(test.id, pathToEIM);
+        runGUISimplifiedInstallTest(test.id, pathToEIMGUI);
         runInstallVerification({
           installFolder: INSTALLFOLDER,
           idfList: [IDFDefaultVersion],
@@ -116,7 +96,7 @@ function testRun(script) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         runGUICustomInstallTest(
           test.id,
-          pathToEIM,
+          pathToEIMGUI,
           installFolder,
           targetList,
           idfVersionList,

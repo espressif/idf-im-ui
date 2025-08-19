@@ -3,9 +3,10 @@ import { describe, it, before, after, afterEach } from "mocha";
 import { By, Key } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import {
-  IDFVERSIONSSHOWNONINSTALLER,
   IDFMIRRORS,
   TOOLSMIRRORS,
+  IDFAvailableVersions,
+  availableTargets,
 } from "../config.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
@@ -123,18 +124,7 @@ export function runGUICustomInstallTest(
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const targetsList = await eimRunner.findByDataId("targets-grid");
       const targetsText = await targetsList.getText();
-      let expected = [
-        "esp32",
-        "esp32c2",
-        "esp32c3",
-        "esp32c5",
-        "esp32c6",
-        "esp32h2",
-        "esp32p4",
-        "esp32s2",
-        "esp32s3",
-      ];
-      for (let target of expected) {
+      for (let target of availableTargets) {
         expect(targetsText).to.include(target);
       }
       let targetAll = await eimRunner.findByText("All");
@@ -179,7 +169,7 @@ export function runGUICustomInstallTest(
       await new Promise((resolve) => setTimeout(resolve, 4000));
       const IDFList = await eimRunner.findByDataId("versions-grid");
       const IDFListText = await IDFList.getText();
-      for (let version of IDFVERSIONSSHOWNONINSTALLER) {
+      for (let version of IDFAvailableVersions) {
         expect(IDFListText).to.include(version);
       }
       let IDFMaster = await eimRunner.findByDataId("version-item-master");
