@@ -601,22 +601,10 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                     }
                 };
                 debug!("Installing {} with scoop: {}", package, path_with_scoop);
-                let mut main_command = "powershell";
-
-                let test_for_pwsh = command_executor::execute_command("pwsh", &["--version"]);
-                match test_for_pwsh {
-                    // this needs to be used in powershell 7
-                    Ok(_) => {
-                        debug!("Found powershell core");
-                        main_command = "pwsh";
-                    }
-                    Err(_) => {
-                        debug!("Powershell core not found, using powershell");
-                    }
-                }
+                let mut main_command = get_correct_powershell_command();
 
                 let output = command_executor::execute_command_with_env(
-                    main_command,
+                    &main_command,
                     &vec![
                         "-ExecutionPolicy",
                         "Bypass",
@@ -648,6 +636,19 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub fn get_correct_powershell_command() -> String {
+    match command_executor::execute_command("pwsh", &["--version"]) {
+        Ok(_) => {
+            debug!("Found powershell core");
+            "pwsh".to_string()
+        }
+        Err(_) => {
+            debug!("Powershell core not found, using powershell");
+            "powershell".to_string()
+        }
+    }
 }
 
 /// Adds a new directory to the system's PATH environment variable.

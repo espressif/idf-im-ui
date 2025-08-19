@@ -1,23 +1,17 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
-use idf_im_lib::command_executor;
-use idf_im_lib::command_executor::execute_command;
 use idf_im_lib::idf_tools::ToolsFile;
+use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
+use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::settings::Settings;
-use idf_im_lib::system_dependencies::add_to_path;
-use idf_im_lib::system_dependencies::get_scoop_path;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
-use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
-use serde::de;
 use tempfile::TempDir;
-use tera::Context;
-use tera::Tera;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -320,7 +314,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
     // TODO: only needed for offline mode
-    let offline_archive_dir = TempDir::new().expect("Failed to create temporary directory");
+
     let mut offline_mode = false;
     if config.use_local_archive.is_some() {
         debug!("Using local archive: {:?}", config.use_local_archive);
@@ -333,19 +327,25 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         offline_mode = true;
     }
 
-    if offline_mode { // only setting up temp directory if offline mode is enabled
+    let offline_archive_dir = if offline_mode {
+        Some(TempDir::new().expect("Failed to create temporary directory"))
+    } else {
+        None
+    };
 
-      debug!("Temporary directory created: {}", offline_archive_dir.path().display());
-      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &offline_archive_dir.path()) {
+    if offline_mode { // only setting up temp directory if offline mode is enabled
+      let archive_dir = offline_archive_dir.as_ref().unwrap();
+      debug!("Temporary directory created: {}", archive_dir.path().display());
+      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &archive_dir.path()) {
         Ok(_) => {
-            info!("Successfully extracted archive to: {:?}", offline_archive_dir);
+            info!("Successfully extracted archive to: {:?}", archive_dir);
         }
         Err(err) => {
             return Err(format!("Failed to extract archive: {}", err));
         }
       }
       // load the config from the extracted archive
-      let config_path = offline_archive_dir.path().join("config.toml");
+      let config_path = archive_dir.path().join("config.toml");
       if config_path.exists() {
         // debug!("Loading config from extracted archive: {}", config_path.display());
         let mut tmp_setting = Settings::default();
@@ -364,123 +364,17 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
       }
       // install prerequisites offline
-      match std::env::consts::OS {
-          "windows" => {
-            // Setup Scoop
-            let scoop_path = offline_archive_dir.path().join("scoop");
-            let scoop_install_path = dirs::home_dir()
-                        .unwrap()
-                        .join("scoop");
-            let scoop_command = scoop_install_path.join("shims").join("scoop.ps1");
-            add_to_path(&scoop_install_path.to_str().unwrap());
-            add_to_path(&scoop_install_path.join("shims").to_str().unwrap());
-            match execute_command(
-                "powershell",
-                &[
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    &scoop_path.join("install_scoop_offline.ps1").to_str().unwrap(),
-                    "-OfflineDir",
-                    &scoop_path.to_str().unwrap(),
-                ],
-            ) {
-                Ok(out) => {
-                  if out.status.success() {
-                    info!("Scoop installed successfully.");
-
-                    info!("Scoop install path: {}", scoop_install_path.display());
-                    idf_im_lib::add_path_to_path(&scoop_install_path.to_str().unwrap());
-                  } else {
-                    warn!("Failed to install Scoop: {:?} | {:?}", String::from_utf8_lossy(&out.stdout), String::from_utf8_lossy(&out.stderr));
-                  }
-                }
-                Err(err) => {
-                    return Err(format!("Failed to install Scoop: {}", err));
-                }
-            }
-            add_to_path(&scoop_install_path.to_str().unwrap());
-            add_to_path(&scoop_install_path.join("shims").to_str().unwrap());
-
-            // TODO: disable auto-updates in scoop config.json
-            setup_scoop_packages(&scoop_path, &scoop_command)?;
-
-          }
-          "linux" | "macos" => {
-              info!("On POSIX system, we do not provide prerequisites. Please ensure you have the necessary tools installed.");
-          }
-          _ => {
-              return Err(format!(
-                  "Unsupported OS: {}",
-                  std::env::consts::OS
-              ));
-          }
+      match install_prerequisites_offline(&archive_dir){
+        Ok(_) => {
+            info!("Successfully installed prerequisites from offline archive.");
+        }
+        Err(err) => {
+            return Err(format!("Failed to install prerequisites from offline archive: {}", err));
+        }
       }
 
       // copy IDFs
-      for archive_version in config.clone().idf_versions.unwrap() {
-        match std::env::consts::OS {
-
-          "windows" => {
-            // As on windows the IDF contains too long paths, we need to copy the content from the offline archive to the IDF path
-            // using windows powershell command
-            let mut main_command = "powershell";
-
-            let test_for_pwsh = command_executor::execute_command("pwsh", &["--version"]);
-            match test_for_pwsh {
-                // this needs to be used in powershell 7
-                Ok(_) => {
-                    debug!("Found powershell core");
-                    main_command = "pwsh";
-                }
-                Err(_) => {
-                    debug!("Powershell core not found, using powershell");
-                }
-            }
-
-            let output_cp = command_executor::execute_command(
-                main_command,
-                &vec![
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-Command",
-                    "cp",
-                    "-r",
-                    &offline_archive_dir.path().join(&archive_version).to_str().unwrap(),
-                    &config.clone().path.unwrap().join(&archive_version).to_str().unwrap(),
-                ],
-            );
-            match output_cp {
-                Ok(out) => {
-                    if out.status.success() {
-                        info!("Successfully copied content from offline archive to IDF path");
-                    } else {
-                        return Err(format!("Failed to copy content from offline archive: {:?} | {:?}", out.stdout, out.stderr));
-                    }
-                }
-                Err(err) => {
-                    return Err(format!("Failed to copy content from offline archive: {}", err));
-                }
-            }
-
-          },
-          _ => {
-            debug!("Copying IDF version: {}", archive_version);
-            match copy_dir_contents(&offline_archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
-              Ok(_) => {
-                  info!("Successfully copied content from offline archive to IDF path");
-                  // config.path = Some(config.clone().path.unwrap().join("v5.5").join("esp-idf"));
-              }
-              Err(err) => {
-                  return Err(format!("Failed to copy content from offline archive: {}", err));
-              }
-            }
-          }
-        }
-
-
-      }
-
+      copy_idf_from_offline_archive(archive_dir, &config)?;
     }
 
     if config.skip_prerequisites_check.unwrap_or(false) {
@@ -564,7 +458,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         if offline_mode {
           // copy content dist from offline_archive_dir
           copy_dir_contents(
-            &offline_archive_dir.path().join("dist"),
+            &offline_archive_dir.as_ref().unwrap().path().join("dist"),
             &tool_download_directory,
           )
           .map_err(|err| format!("Failed to copy dist directory from offline archive: {}", err))?;
@@ -620,7 +514,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             &paths.idf_path,
             &config.idf_features.clone().unwrap_or_default(),
             if offline_mode {
-                Some(offline_archive_dir.path())
+                Some(offline_archive_dir.as_ref().unwrap().path())
             } else {
                 None
             },
@@ -706,267 +600,5 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("============================================");
         }
     }
-    Ok(())
-}
-
-// Structure to define package information with compile-time template content
-struct ScoopPackage {
-    name: &'static str,
-    template_content: &'static str,
-    manifest_filename: &'static str,
-    test_command: &'static str,
-}
-
-// Helper function to create and write a manifest
-fn create_manifest(
-    package: &ScoopPackage,
-    context: &Context,
-    scoop_path: &Path,
-    tera: &mut Tera,
-) -> Result<PathBuf, String> {
-    // Add template to Tera
-    let template_name = format!("{}_manifest", package.name);
-    if let Err(e) = tera.add_raw_template(&template_name, package.template_content) {
-        error!("Failed to add {} template: {}", package.name, e);
-        return Err(format!("Failed to add {} template", package.name));
-    }
-
-    // Render the template
-    let mut rendered_manifest = match tera.render(&template_name, context) {
-        Err(e) => {
-            error!("Failed to render {} template: {}", package.name, e);
-            return Err(format!("Failed to render {} template", package.name));
-        }
-        Ok(text) => text,
-    };
-
-    // Normalize line endings
-    rendered_manifest = rendered_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
-
-    // Write manifest to file
-    let manifest_path = scoop_path.join(package.manifest_filename);
-    if let Err(e) = fs::write(&manifest_path, rendered_manifest) {
-        error!("Failed to write {} manifest: {}", package.name, e);
-        return Err(format!("Failed to write {} manifest", package.name));
-    }
-
-    info!("{} manifest written to: {}", package.name, manifest_path.display());
-    Ok(manifest_path)
-}
-
-// Helper function to install a single package with retry logic
-fn install_package_with_scoop(
-    main_command: &str,
-    scoop_command: &Path,
-    manifest_path: &Path,
-    package: &ScoopPackage,
-    path_with_scoop: &str,
-    max_retries: u32,
-) -> Result<(), String> {
-    for attempt in 1..=max_retries {
-        info!("Installing {} (attempt {}/{})", package.name, attempt, max_retries);
-
-        // Build the complete PowerShell command as a single string to avoid shell spawning
-        // let full_command = &format!("Start-Process -FilePath '{}' -ArgumentList 'install', '--no-update-scoop', '{}' -Wait -NoNewWindow", scoop_command.to_str().unwrap(), manifest_path.to_str().unwrap());
-        let full_command = format!(
-            "scoop install --no-update-scoop '{}'",
-            // scoop_command.to_str().unwrap(),
-            manifest_path.to_str().unwrap()
-        );
-
-        // Use the executor directly to ensure proper process handling
-        let executor = command_executor::get_executor();
-        let output = executor.execute_with_env(
-            main_command,
-            &vec![
-                "-NoProfile",
-                "-NonInteractive",
-                "-NoLogo",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                &full_command,
-            ],
-            vec![("PATH", &add_to_path(path_with_scoop).unwrap())],
-        );
-
-        match output {
-            Ok(out) => {
-                if out.status.success() {
-                    info!("{} installation completed.", package.name);
-
-                    // Test if the package is working correctly
-                    if test_package_installation(package.test_command, main_command, path_with_scoop) {
-                        info!("{} installed and tested successfully.", package.name);
-                        return Ok(());
-                    } else {
-                        warn!("{} installed but test command '{}' failed on attempt {}",
-                              package.name, package.test_command, attempt);
-
-                        if attempt == max_retries {
-                            return Err(format!(
-                                "Failed to install {}: package installed but test command '{}' failed after {} attempts",
-                                package.name, package.test_command, max_retries
-                            ));
-                        }
-                        // Continue to next retry attempt
-                    }
-                } else {
-                    warn!("Installation failed for {} on attempt {}: {:?} | {:?}",
-                          package.name, attempt,
-                          String::from_utf8_lossy(&out.stdout),
-                          String::from_utf8_lossy(&out.stderr));
-
-                    if attempt == max_retries {
-                        return Err(format!(
-                            "Failed to install {} after {} attempts: {:?} | {:?}",
-                            package.name, max_retries,
-                            String::from_utf8_lossy(&out.stdout),
-                            String::from_utf8_lossy(&out.stderr)
-                        ));
-                    }
-                    // Continue to next retry attempt
-                }
-            }
-            Err(err) => {
-                warn!("Command execution failed for {} on attempt {}: {}", package.name, attempt, err);
-
-                if attempt == max_retries {
-                    return Err(format!("Failed to install {} after {} attempts: {}", package.name, max_retries, err));
-                }
-                // Continue to next retry attempt
-            }
-        }
-
-        // Add a small delay between retries
-        if attempt < max_retries {
-            std::thread::sleep(std::time::Duration::from_secs(2));
-        }
-    }
-
-    unreachable!()
-}
-
-// Helper function to test if a package is working
-fn test_package_installation(test_command: &str, main_command: &str, path_with_scoop: &str) -> bool {
-    if test_command == "echo 0" {
-        return true; // Skip test for packages that don't have a meaningful test
-    }
-
-    // Add a small delay to allow file system operations to complete
-    std::thread::sleep(std::time::Duration::from_millis(500));
-
-    // Try the test command multiple times with short delays
-    for attempt in 1..=3 {
-        let executor = command_executor::get_executor();
-        let test_result = executor.execute_with_env(
-            main_command,
-            &vec![
-                "-NoProfile",
-                "-NonInteractive",
-                "-NoLogo",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                test_command
-            ],
-            vec![("PATH", path_with_scoop)],
-        );
-
-        match test_result {
-            Ok(output) if output.status.success() => return true,
-            Ok(_) => {
-                debug!("Test command '{}' failed on attempt {}", test_command, attempt);
-            }
-            Err(e) => {
-                debug!("Test command '{}' error on attempt {}: {}", test_command, attempt, e);
-            }
-        }
-
-        // Short delay between test attempts
-        if attempt < 3 {
-            std::thread::sleep(std::time::Duration::from_millis(200));
-        }
-    }
-
-    false
-}
-
-// Main function that creates manifests and installs packages
-fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), String> {
-    // Create Tera context
-    let mut context = Context::new();
-    context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap().replace("\\", "/"));
-
-    // Define packages to install with compile-time template content
-    let packages = [
-        ScoopPackage {
-            name: "7zip",
-            template_content: include_str!("../../scoop_manifest_templates/7zip.json"),
-            manifest_filename: "7zip.json",
-            test_command: "echo 0"
-        },
-        ScoopPackage {
-            name: "git",
-            template_content: include_str!("../../scoop_manifest_templates/git.json"),
-            manifest_filename: "git.json",
-            test_command: "git --version",
-        },
-        ScoopPackage {
-            name: "dark",
-            template_content: include_str!("../../scoop_manifest_templates/dark.json"),
-            manifest_filename: "dark.json",
-            test_command: "echo 0"
-        },
-        ScoopPackage {
-            name: "python",
-            template_content: include_str!("../../scoop_manifest_templates/python310.json"),
-            manifest_filename: "python.json",
-            test_command: "python3 --version",
-        },
-    ];
-
-    // Create all manifests
-    let mut tera = Tera::default();
-    let mut manifest_paths = Vec::new();
-
-    for package in &packages {
-        let manifest_path = create_manifest(package, &context, scoop_path, &mut tera)?;
-        manifest_paths.push((manifest_path, package.name));
-    }
-
-    // Get Scoop path and determine PowerShell command
-    let path_with_scoop = get_scoop_path()
-        .ok_or_else(|| "Could not get scoop path".to_string())?;
-
-    let main_command = match command_executor::execute_command("pwsh", &["--version"]) {
-        Ok(_) => {
-            debug!("Found powershell core");
-            "pwsh"
-        }
-        Err(_) => {
-            debug!("Powershell core not found, using powershell");
-            "powershell"
-        }
-    };
-
-    // Install all packages with retry logic
-    const MAX_RETRIES: u32 = 3;
-    for (manifest_path, package_name) in manifest_paths {
-        // Find the package struct to get the test command
-        let package = packages.iter()
-            .find(|p| p.name == package_name)
-            .ok_or_else(|| format!("Package {} not found in package definitions", package_name))?;
-
-        install_package_with_scoop(
-            main_command,
-            scoop_command,
-            &manifest_path,
-            package,
-            &path_with_scoop,
-            MAX_RETRIES,
-        )?;
-    }
-
     Ok(())
 }
