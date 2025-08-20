@@ -1,0 +1,116 @@
+name: Build Offline Installer Archives
+
+on:
+  workflow_call:
+    inputs:
+      run_number:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+    branches:
+      - release*
+  pull_request:
+    branches:
+      - release*
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+jobs:
+  build-offline-archives:
+    name: Build Offline Archives (${{ matrix.package_name }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+          - os: windows-latest
+            package_name: windows-x64
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-13
+            package_name: macos-x64
+    steps:
+      - name: Download offline_installer_builder artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          path: ./
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./offline_installer_builder
+
+      - name: Install tooling
+        run: |
+          cargo install --git https://github.com/astral-sh/uv uv
+
+      - name: Run offline_installer_builder
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./offline_installer_builder.exe -c all
+          else
+            ./offline_installer_builder -c all
+          fi
+        shell: bash
+
+      - name: Rename, Upload Artifacts & Release
+        run: |
+          # Flag to check if any archive was processed
+          found_archive=false
+
+          # Loop over all generated .zst archives
+          for archive in archive_*.zst; do
+            # Skip if no files match
+            [ -f "$archive" ] || continue
+            found_archive=true
+
+            # Extract version from filename (e.g., archive_v5.4.2.zst -> v5.4.2)
+            if [[ "$archive" =~ archive_(v[0-9]+\.[0-9]+(\.[0-9]+)?)\.zst ]]; then
+              version="${BASH_REMATCH[1]}"
+            else
+              echo "⚠️ Could not extract version from $archive"
+              continue
+            fi
+
+            # Rename file to include platform
+            new_name="archive_${version}_${{ matrix.package_name }}.zst"
+            mv "$archive" "$new_name"
+            echo "✅ Renamed $archive to $new_name"
+
+            # Upload to workflow artifact (always)
+            echo "📤 Uploading $new_name to workflow artifact..."
+            gh artifact upload "$new_name" \
+              --name "offline-archive-${{ matrix.package_name }}-${version}-${{ github.event.release.tag_name || github.run_number }}" \
+              --repo ${{ github.repository }}
+
+            # If this is a 'release' event, also upload to the GitHub Release
+            if [ "${{ github.event_name }}" = "release" ]; then
+              tag_name="${{ github.event.release.tag_name }}"
+              echo "📦 Uploading $new_name to release: $tag_name"
+              gh release upload "$tag_name" "$new_name" \
+                --repo ${{ github.repository }} \
+                --overwrite  # in case of retry
+            fi
+          done
+
+          # Fail if no archive was found
+          if [ "$found_archive" = false ]; then
+            echo "❌ No archive files found!"
+            exit 1
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash

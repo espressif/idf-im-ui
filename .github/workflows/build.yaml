@@ -424,65 +424,12 @@ jobs:
           asset_name: offline_installer_builder-${{ matrix.package_name }}.exe
 
   build-offline-archives:
-    name: Build Offline Archives (${{ matrix.package_name }})
     needs: [build-cli, build-cli-linux]
     if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped')
-    runs-on: ${{ matrix.os }}
-    continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            package_name: linux-x64
-          - os: ubuntu-24.04-arm
-            package_name: linux-aarch64
-          - os: windows-latest
-            package_name: windows-x64
-          - os: macos-latest
-            package_name: macos-aarch64
-          - os: macos-13
-            package_name: macos-x64
-    steps:
-      - name: Download offline_installer_builder artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
-          path: ./
-
-      - name: Make binary executable (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          chmod +x ./offline_installer_builder
-
-      - name: Install tooling
-        run: |
-          cargo install --git https://github.com/astral-sh/uv uv
-
-      - name: Run offline_installer_builder
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            ./offline_installer_builder.exe -c default
-          else
-            ./offline_installer_builder -c default
-          fi
-        shell: bash
-
-      - name: Rename archive file
-        run: |
-          if [ -f "archive_v5.5.zst" ]; then
-            mv archive_v5.5.zst archive_v5.5_${{ matrix.package_name }}.zst
-          else
-            echo "Archive file not found"
-            exit 1
-          fi
-        shell: bash
-
-      - name: Upload offline archive artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: offline-archive-${{ matrix.package_name }}-${{ github.run_number }}
-          path: archive_v5.5_${{ matrix.package_name }}.zst
+    uses: ./.github/workflows/build_offline_installer_archives.yaml
+    with:
+      run_number: ${{ github.run_number }}
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})

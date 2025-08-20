@@ -184,7 +184,7 @@ struct Args {
     )]
     install_dir: Option<PathBuf>,
 
-    /// Create installation data from the specified configuration file use "default" to use the default settings
+    /// Create installation data from the specified configuration file use "default" to use the default settings or "all" to create data for all available ESP-IDF versions
     #[arg(short, long, value_name = "CONFIG")]
     create_from_config: Option<String>,
 
@@ -207,12 +207,23 @@ async fn main() {
             "Creating installation data from configuration file: {:?}",
             args.create_from_config
         );
-        let mut settings = match args.create_from_config {
+        let mut settings_list = match args.create_from_config {
+            Some(ref config_path) if config_path == "all" => {
+              let versions = idf_im_lib::idf_versions::get_idf_names().await;
+              let mut settings_list = vec![];
+              for version in versions {
+                // Load default settings
+                let mut settings = Settings::default();
+                settings.idf_versions = Some(vec![version.clone()]);
+                settings_list.push(settings);
+              }
+              settings_list
+            }
             Some(ref config_path) if config_path == "default" => {
                 // Load default settings
                 let settings = Settings::default();
                 info!("Default settings loaded: {:?}", settings);
-                settings
+                vec![settings]
             }
             Some(config_path) => {
                 // Load settings from the configuration file
@@ -226,418 +237,421 @@ async fn main() {
                         return;
                     }
                 }
-                settings
+                vec![settings]
             }
             None => {
                 error!("No configuration file provided for creating installation data.");
                 return;
             }
         };
-        let archive_dir = TempDir::new().expect("Failed to create temporary directory");
+        for mut settings in settings_list {
 
-        // Download prerequisities and python
-        match std::env::consts::OS {
-            "windows" => {
-                // scoop package manager is used to install dependencies on Windows
-                let scoop_path = archive_dir.path().join("scoop");
-                ensure_path(scoop_path.to_str().unwrap());
-                let scoop_list = vec![
-                    ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
-                    ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
-                    ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
-                    ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe", "python-3.10.11-amd64.exe"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
-                    ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip","dark-3.14.1.zip")
-                ];
-                for (link, name) in scoop_list {
-                    info!("Downloading Scoop from: {}", link);
-                    match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
-                        Ok(_) => {
-                            info!("Scoop downloaded successfully from: {}", link);
-                        }
-                        Err(err) => {
-                            error!("Failed to download Scoop from {} : {}", link, err);
-                            return;
-                        }
-                    }
-                }
-                let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
-                fs::write(
-                    scoop_path.join("install_scoop_offline.ps1"),
-                    scoop_install_script,
-                )
-                .expect("Failed to write install_scoop_offline.ps1 script");
-                info!("Scoop install script written to: {:?}", scoop_path.join("install_scoop_offline.ps1"));
-            }
-            "linux" | "macos" => {
-                info!("Detected Unix-like OS, ...");
-                warn!("prerequisites installation is not implemented for Unix-like OSes yet, please install them manually.");
-            }
-            _ => {
-                error!("Unsupported OS: {}", std::env::consts::OS);
-                return;
-            }
-        }
-        let versions = idf_im_lib::idf_versions::get_idf_names().await;
-        let version_list = settings
-            .idf_versions
-            .clone()
-            .unwrap_or(vec![versions.first().unwrap().clone()]);
+          let archive_dir = TempDir::new().expect("Failed to create temporary directory");
 
-        settings.idf_versions = Some(version_list.clone());
-        // check is uv is installed TODO: maybe download uv in case it's missing
-        match execute_command(
-            "uv",
-            &["--version"],
-        ) {
-            Ok(output) => {
-              if output.status.success() {
-                info!("UV is installed: {:?}", output);
-              } else {
-                error!("UV is not installed or not found: {:?}", output);
-                return;
-              }
-            }
-            Err(err) => {
-                error!("UV is not installed or not found: {}. Please install it and try again.", err);
-                return;
-            }
-        }
-
-        for idf_version in version_list {
-            let version_path = archive_dir.path().join(&idf_version);
-            ensure_path(version_path.to_str().unwrap())
-                .expect("Failed to ensure path for IDF version");
-            info!(
-                "Preparing installation data for ESP-IDF version: {} to folder {:?}",
-                idf_version,
-                version_path.display()
-            );
-
-            // download idf
-            let (tx, rx) = mpsc::channel();
-
-            let handle = thread::spawn(move || {
-                let mut progress_bar = create_progress_bar();
-
-                loop {
-                    match rx.recv() {
-                        Ok(ProgressMessage::Finish) => {
-                            update_progress_bar_number(&progress_bar, 100);
-                            progress_bar.finish();
-                            progress_bar = create_progress_bar();
-                        }
-                        Ok(ProgressMessage::Update(value)) => {
-                            update_progress_bar_number(&progress_bar, value);
-                        }
-                        Ok(ProgressMessage::SubmoduleUpdate((name, value))) => {
-                            let message = format!("{}: {}", name, value);
-                            progress_bar.set_message(message);
-                            progress_bar.set_position(value);
-                        }
-                        Ok(ProgressMessage::SubmoduleFinish(name)) => {
-                            let message = format!("{}: {}", name, 100);
-                            progress_bar.set_message(message);
-                            progress_bar.finish();
-                            println!("submodule: {}", name);
-                            progress_bar = create_progress_bar();
-                        }
-                        Err(_) => {
-                            break;
-                        }
-                    }
-                }
-            });
-            let idf_path = version_path.join("esp-idf");
-            match idf_im_lib::get_esp_idf(
-                idf_path.to_str().unwrap(),
-                settings.repo_stub.as_deref(),
-                &idf_version,
-                settings.idf_mirror.as_deref(),
-                true,
-                tx,
-            ) {
-                Ok(_) => {
-                    info!("ESP-IDF version {} downloaded successfully.", idf_version);
-                }
-                Err(err) => {
-                    error!("Failed to download ESP-IDF version: {}", idf_version);
-                }
-            }
-            let tools_json_file = idf_path
-                .clone()
-                .join(
-                    settings
-                        .clone()
-                        .tools_json_file
-                        .clone()
-                        .unwrap_or(Settings::default().tools_json_file.unwrap()),
-                )
-                .to_str()
-                .expect("Failed to convert tools json file path to string")
-                .to_string();
-
-            debug!("Tools json file: {}", tools_json_file);
-            let tools = match idf_im_lib::idf_tools::read_and_parse_tools_file(&tools_json_file) {
-                Ok(tools) => tools,
-                Err(err) => {
-                error!("Failed to read tools json file: {}", err);
-                    return;
-                }
-            };
-            let download_links = get_list_of_tools_to_download(
-                tools.clone(),
-                settings.clone().target.unwrap_or(vec!["all".to_string()]),
-                settings.mirror.as_deref(),
-            );
-            let tool_path = archive_dir.path().join("dist");
-            ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
-            for (tool_name, (version, download_link)) in download_links.iter() {
-                info!(
-                    "Preparing tool: {} version: {} download link: {:?}",
-                    tool_name, version, download_link
-                );
-                match download_file(&download_link.url, tool_path.to_str().unwrap(), None).await {
-                    Ok(_) => {
-                        let file_path = Path::new(&download_link.url);
-                        let filename = file_path.file_name().unwrap().to_str().unwrap();
-
-                        let full_file_path = tool_path.join(filename);
-                        if verify_file_checksum(
-                            &download_link.sha256,
-                            full_file_path.to_str().unwrap(),
-                        )
-                        .unwrap()
-                        {
-                        info!(
-                            "Tool {} version {} downloaded successfully.",
-                            tool_name, version
-                        );
-                        } else {
-                            error!(
-                                "Checksum verification failed for tool {} version {}.",
-                                tool_name, version
-                            );
-                            panic!(
-                                "Checksum verification failed for tool {} version {}.",
-                                tool_name, version
-                            );
-                        }
-                    }
-                    Err(err) => {
-                        error!("Failed to download tool {}: {}", tool_name, err);
-                    }
-                }
-            }
-            // download constrain file
-            let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
-                Ok((maj, min)) => format!("v{}.{}", maj, min),
-                Err(e) => {
-                    warn!("Failed to parse CMake version: {}", e);
-                    idf_version.to_string()
-                }
-            };
-            let constraint_file =
-                match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
-                    Ok(constraint_file) => {
-                        info!("Downloaded constraints file: {}", constraint_file.display());
-                        Some(constraint_file)
-                    }
-                    Err(e) => {
-                        warn!("Failed to download constraints file: {}", e);
-                        None
-                    }
-                };
-            if constraint_file.is_none() {
-                error!(
-                    "Failed to download constraints file for IDF version {}",
-                    idf_version
-                );
-                return;
-            } else {
-                info!(
-                    "Constraints file downloaded successfully for IDF version {}",
-                    idf_version
-                );
-            }
-            // download python packages
-            let python_env = archive_dir.path().clone().join("python_env");
-            match ensure_path(python_env.to_str().unwrap()) {
-                Ok(_) => {
-                    info!("Python environment directory created: {:?}", python_env);
-                }
-                Err(err) => {
-                    error!("Failed to create Python environment directory: {}", err);
-                    return;
-                }
-            }
-            match execute_command(
-            "uv",
-              &[
-                  "python", "install", PYTHON_VERSION
-              ],
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Python {} installed successfully.", PYTHON_VERSION);
-                  } else {
-                      error!(
-                          "Failed to install Python {}: {}",
-                          PYTHON_VERSION,
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
+          // Download prerequisities and python
+          match std::env::consts::OS {
+              "windows" => {
+                  // scoop package manager is used to install dependencies on Windows
+                  let scoop_path = archive_dir.path().join("scoop");
+                  ensure_path(scoop_path.to_str().unwrap());
+                  let scoop_list = vec![
+                      ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
+                      ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
+                      ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
+                      ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe", "python-3.10.11-amd64.exe"),
+                      ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
+                      ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
+                      ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
+                      ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip","dark-3.14.1.zip")
+                  ];
+                  for (link, name) in scoop_list {
+                      info!("Downloading Scoop from: {}", link);
+                      match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
+                          Ok(_) => {
+                              info!("Scoop downloaded successfully from: {}", link);
+                          }
+                          Err(err) => {
+                              error!("Failed to download Scoop from {} : {}", link, err);
+                              return;
+                          }
+                      }
                   }
+                  let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
+                  fs::write(
+                      scoop_path.join("install_scoop_offline.ps1"),
+                      scoop_install_script,
+                  )
+                  .expect("Failed to write install_scoop_offline.ps1 script");
+                  info!("Scoop install script written to: {:?}", scoop_path.join("install_scoop_offline.ps1"));
               }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
+              "linux" | "macos" => {
+                  info!("Detected Unix-like OS, ...");
+                  warn!("prerequisites installation is not implemented for Unix-like OSes yet, please install them manually.");
+              }
+              _ => {
+                  error!("Unsupported OS: {}", std::env::consts::OS);
                   return;
               }
-            };
-            match execute_command(
-            "uv",
-              &[
-                  "venv", "--relocatable", "--python", PYTHON_VERSION, python_env.clone().to_str().unwrap()
-              ],
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Python virtual environment created successfully.");
-                  } else {
-                      error!(
-                          "Failed to create Python virtual environment: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
-            }
-            let wheel_dir = archive_dir.path().join("wheels");
-            ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
-            let requirements_dir = idf_path.join("tools").join("requirements");
-            if let Err(e) = merge_requirements_files(&requirements_dir) {
-                error!("Failed to merge requirements files: {}", e);
-                return;
-            }
+          }
+          let versions = idf_im_lib::idf_versions::get_idf_names().await;
+          let version_list = settings
+              .idf_versions
+              .clone()
+              .unwrap_or(vec![versions.first().unwrap().clone()]);
 
-            let python_executable = match std::env::consts::OS {
-                "windows" => python_env.join("Scripts/python.exe"),
-                _ => python_env.join("bin/python"),
-            };
-
-            match execute_command(
-            python_executable.to_str().unwrap(),
-              &[
-                  "-m", "ensurepip", "--upgrade"
-              ]
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Successfully installed pip.");
-                  } else {
-                      error!(
-                          "Failed to upgrade pip: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
-            }
-
-
-
-            match execute_command(
-                python_executable.to_str().unwrap(),
-              &[
-                  "-m", "pip", "download",
-                  "-r", requirements_dir.join("requirements.merged.txt").to_str().unwrap(),
-                  "-c", constraint_file.unwrap().to_str().unwrap(),
-                  "--dest", wheel_dir.to_str().unwrap(),
-              ],
+          settings.idf_versions = Some(version_list.clone());
+          // check is uv is installed TODO: maybe download uv in case it's missing
+          match execute_command(
+              "uv",
+              &["--version"],
           ) {
               Ok(output) => {
-                  if output.status.success() {
-                      info!("Python packages downloaded successfully.");
-                  } else {
-                      error!(
-                          "Failed to download Python packages: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
+                if output.status.success() {
+                  info!("UV is installed: {:?}", output);
+                } else {
+                  error!("UV is not installed or not found: {:?}", output);
+                  return;
+                }
+              }
+              Err(err) => {
+                  error!("UV is not installed or not found: {}. Please install it and try again.", err);
+                  return;
+              }
+          }
+
+          for idf_version in version_list {
+              let version_path = archive_dir.path().join(&idf_version);
+              ensure_path(version_path.to_str().unwrap())
+                  .expect("Failed to ensure path for IDF version");
+              info!(
+                  "Preparing installation data for ESP-IDF version: {} to folder {:?}",
+                  idf_version,
+                  version_path.display()
+              );
+
+              // download idf
+              let (tx, rx) = mpsc::channel();
+
+              let handle = thread::spawn(move || {
+                  let mut progress_bar = create_progress_bar();
+
+                  loop {
+                      match rx.recv() {
+                          Ok(ProgressMessage::Finish) => {
+                              update_progress_bar_number(&progress_bar, 100);
+                              progress_bar.finish();
+                              progress_bar = create_progress_bar();
+                          }
+                          Ok(ProgressMessage::Update(value)) => {
+                              update_progress_bar_number(&progress_bar, value);
+                          }
+                          Ok(ProgressMessage::SubmoduleUpdate((name, value))) => {
+                              let message = format!("{}: {}", name, value);
+                              progress_bar.set_message(message);
+                              progress_bar.set_position(value);
+                          }
+                          Ok(ProgressMessage::SubmoduleFinish(name)) => {
+                              let message = format!("{}: {}", name, 100);
+                              progress_bar.set_message(message);
+                              progress_bar.finish();
+                              println!("submodule: {}", name);
+                              progress_bar = create_progress_bar();
+                          }
+                          Err(_) => {
+                              break;
+                          }
+                      }
+                  }
+              });
+              let idf_path = version_path.join("esp-idf");
+              match idf_im_lib::get_esp_idf(
+                  idf_path.to_str().unwrap(),
+                  settings.repo_stub.as_deref(),
+                  &idf_version,
+                  settings.idf_mirror.as_deref(),
+                  true,
+                  tx,
+              ) {
+                  Ok(_) => {
+                      info!("ESP-IDF version {} downloaded successfully.", idf_version);
+                  }
+                  Err(err) => {
+                      error!("Failed to download ESP-IDF version: {}", idf_version);
+                  }
+              }
+              let tools_json_file = idf_path
+                  .clone()
+                  .join(
+                      settings
+                          .clone()
+                          .tools_json_file
+                          .clone()
+                          .unwrap_or(Settings::default().tools_json_file.unwrap()),
+                  )
+                  .to_str()
+                  .expect("Failed to convert tools json file path to string")
+                  .to_string();
+
+              debug!("Tools json file: {}", tools_json_file);
+              let tools = match idf_im_lib::idf_tools::read_and_parse_tools_file(&tools_json_file) {
+                  Ok(tools) => tools,
+                  Err(err) => {
+                  error!("Failed to read tools json file: {}", err);
+                      return;
+                  }
+              };
+              let download_links = get_list_of_tools_to_download(
+                  tools.clone(),
+                  settings.clone().target.unwrap_or(vec!["all".to_string()]),
+                  settings.mirror.as_deref(),
+              );
+              let tool_path = archive_dir.path().join("dist");
+              ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
+              for (tool_name, (version, download_link)) in download_links.iter() {
+                  info!(
+                      "Preparing tool: {} version: {} download link: {:?}",
+                      tool_name, version, download_link
+                  );
+                  match download_file(&download_link.url, tool_path.to_str().unwrap(), None).await {
+                      Ok(_) => {
+                          let file_path = Path::new(&download_link.url);
+                          let filename = file_path.file_name().unwrap().to_str().unwrap();
+
+                          let full_file_path = tool_path.join(filename);
+                          if verify_file_checksum(
+                              &download_link.sha256,
+                              full_file_path.to_str().unwrap(),
+                          )
+                          .unwrap()
+                          {
+                          info!(
+                              "Tool {} version {} downloaded successfully.",
+                              tool_name, version
+                          );
+                          } else {
+                              error!(
+                                  "Checksum verification failed for tool {} version {}.",
+                                  tool_name, version
+                              );
+                              panic!(
+                                  "Checksum verification failed for tool {} version {}.",
+                                  tool_name, version
+                              );
+                          }
+                      }
+                      Err(err) => {
+                          error!("Failed to download tool {}: {}", tool_name, err);
+                      }
+                  }
+              }
+              // download constrain file
+              let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
+                  Ok((maj, min)) => format!("v{}.{}", maj, min),
+                  Err(e) => {
+                      warn!("Failed to parse CMake version: {}", e);
+                      idf_version.to_string()
+                  }
+              };
+              let constraint_file =
+                  match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
+                      Ok(constraint_file) => {
+                          info!("Downloaded constraints file: {}", constraint_file.display());
+                          Some(constraint_file)
+                      }
+                      Err(e) => {
+                          warn!("Failed to download constraints file: {}", e);
+                          None
+                      }
+                  };
+              if constraint_file.is_none() {
+                  error!(
+                      "Failed to download constraints file for IDF version {}",
+                      idf_version
+                  );
+                  return;
+              } else {
+                  info!(
+                      "Constraints file downloaded successfully for IDF version {}",
+                      idf_version
+                  );
+              }
+              // download python packages
+              let python_env = archive_dir.path().join("python_env");
+              match ensure_path(python_env.to_str().unwrap()) {
+                  Ok(_) => {
+                      info!("Python environment directory created: {:?}", python_env);
+                  }
+                  Err(err) => {
+                      error!("Failed to create Python environment directory: {}", err);
                       return;
                   }
               }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
+              match execute_command(
+              "uv",
+                &[
+                    "python", "install", PYTHON_VERSION
+                ],
+              ) {
+                Ok(output) => {
+                    if output.status.success() {
+                        info!("Python {} installed successfully.", PYTHON_VERSION);
+                    } else {
+                        error!(
+                            "Failed to install Python {}: {}",
+                            PYTHON_VERSION,
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        return;
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to execute command: {}", err);
+                    return;
+                }
+              };
+              match execute_command(
+              "uv",
+                &[
+                    "venv", "--relocatable", "--python", PYTHON_VERSION, python_env.clone().to_str().unwrap()
+                ],
+              ) {
+                Ok(output) => {
+                    if output.status.success() {
+                        info!("Python virtual environment created successfully.");
+                    } else {
+                        error!(
+                            "Failed to create Python virtual environment: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        return;
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to execute command: {}", err);
+                    return;
+                }
+              }
+              let wheel_dir = archive_dir.path().join("wheels");
+              ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
+              let requirements_dir = idf_path.join("tools").join("requirements");
+              if let Err(e) = merge_requirements_files(&requirements_dir) {
+                  error!("Failed to merge requirements files: {}", e);
+                  return;
+              }
+
+              let python_executable = match std::env::consts::OS {
+                  "windows" => python_env.join("Scripts/python.exe"),
+                  _ => python_env.join("bin/python"),
+              };
+
+              match execute_command(
+              python_executable.to_str().unwrap(),
+                &[
+                    "-m", "ensurepip", "--upgrade"
+                ]
+              ) {
+                Ok(output) => {
+                    if output.status.success() {
+                        info!("Successfully installed pip.");
+                    } else {
+                        error!(
+                            "Failed to upgrade pip: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        return;
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to execute command: {}", err);
+                    return;
+                }
+              }
+
+
+
+              match execute_command(
+                  python_executable.to_str().unwrap(),
+                &[
+                    "-m", "pip", "download",
+                    "-r", requirements_dir.join("requirements.merged.txt").to_str().unwrap(),
+                    "-c", constraint_file.unwrap().to_str().unwrap(),
+                    "--dest", wheel_dir.to_str().unwrap(),
+                ],
+            ) {
+                Ok(output) => {
+                    if output.status.success() {
+                        info!("Python packages downloaded successfully.");
+                    } else {
+                        error!(
+                            "Failed to download Python packages: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        return;
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to execute command: {}", err);
+                    return;
+                }
+            };
+          }
+
+          settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
+          settings.idf_path = None;
+
+          match settings.save() {
+            Ok(_) => {
+              info!("Settings saved successfully.");
+            }
+            Err(e) => {
+              error!("Failed to save settings: {}", e);
+              return;
+            }
+          }
+          // Create a .zst file in the current directory
+          let output_path = PathBuf::from(format!(
+              "archive_{}.zst", //TODO: read path from param
+              settings
+                  .idf_versions
+                  .unwrap_or(vec!["default".to_string()])
+                  .join("_")
+          ));
+          let mut output_file = match File::create(&output_path) {
+              Ok(f) => f,
+              Err(e) => {
+                  error!("Failed to create output zst file: {}", e);
                   return;
               }
           };
-        }
 
-        settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
-        settings.idf_path = None;
-
-        match settings.save() {
-          Ok(_) => {
-            info!("Settings saved successfully.");
+          // Compress the archive_dir into a .zst file
+          let mut tar = TarBuilder::new(Vec::new());
+          if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
+              error!("Failed to create tar archive: {}", e);
+              return;
           }
-          Err(e) => {
-            error!("Failed to save settings: {}", e);
-            return;
+          let tar_data = match tar.into_inner() {
+              Ok(data) => data,
+              Err(e) => {
+                  error!("Failed to finalize tar archive: {}", e);
+                  return;
+              }
+          };
+          // Compression level 3 is almost instant, just IDF  results in 2.2GB archive, level 19 took 8 minutes resulting in 2.1G archive
+          let compressed_data = match encode_all(&tar_data[..], 3) {
+              Ok(data) => data,
+              Err(e) => {
+                  error!("Failed to compress with zstd: {}", e);
+                  return;
+              }
+          };
+          if let Err(e) = output_file.write_all(&compressed_data) {
+              error!("Failed to write compressed data: {}", e);
+              return;
           }
-        }
-        // Create a .zst file in the current directory
-        let output_path = PathBuf::from(format!(
-            "archive_{}.zst", //TODO: read path from param
-            settings
-                .idf_versions
-                .unwrap_or(vec!["default".to_string()])
-                .join("_")
-        ));
-        let mut output_file = match File::create(&output_path) {
-            Ok(f) => f,
-            Err(e) => {
-                error!("Failed to create output zst file: {}", e);
-                return;
-            }
-        };
 
-        // Compress the archive_dir into a .zst file
-        let mut tar = TarBuilder::new(Vec::new());
-        if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
-            error!("Failed to create tar archive: {}", e);
-            return;
+          info!("Compressed archive saved to {:?}", output_path);
         }
-        let tar_data = match tar.into_inner() {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to finalize tar archive: {}", e);
-                return;
-            }
-        };
-        // Compression level 3 is almost instant, just IDF  results in 2.2GB archive, level 19 took 8 minutes resulting in 2.1G archive
-        let compressed_data = match encode_all(&tar_data[..], 3) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to compress with zstd: {}", e);
-                return;
-            }
-        };
-        if let Err(e) = output_file.write_all(&compressed_data) {
-            error!("Failed to write compressed data: {}", e);
-            return;
-        }
-
-        info!("Compressed archive saved to {:?}", output_path);
         return;
     } else if let Some(archive_path) = args.archive {
         // Extract installation data from archive
