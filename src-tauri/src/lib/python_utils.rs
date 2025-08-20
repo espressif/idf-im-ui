@@ -17,7 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
+    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -200,7 +200,7 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
 /// - There are insufficient permissions to create directories at `venv_path`.
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
-pub fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
+fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
   info!("Creating Python virtual environment at: {}", venv_path);
 
     let output = match std::env::consts::OS {
@@ -443,7 +443,26 @@ pub async fn install_python_env(
     }
 
     let python_executable = match std::env::consts::OS {
-            "windows" => "python.exe".to_string(),
+            "windows" => {
+              if offline_mode {
+                if let Some(scoop_shims_path) = get_scoop_path() {
+                  // Use the Scoop shims path for the Python executable
+                  let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
+                  match python_executable_path.try_exists() {
+                      Ok(true) => python_executable_path.to_string_lossy().into_owned(),
+                      Ok(false) => "python3.exe".to_string(),
+                      Err(e) => {
+                          warn!("Failed to check if Python executable exists: {}", e);
+                          "python3.exe".to_string()
+                      }
+                  }
+                } else {
+                  "python3.exe".to_string()
+                }
+              } else {
+                "python.exe".to_string()
+              }
+            },
             _ => "python3".to_string(),
         };
 
