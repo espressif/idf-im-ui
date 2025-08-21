@@ -25,6 +25,7 @@ import { runCLIArgumentsTest } from "./scripts/CLIArguments.test.js";
 import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
 import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
+import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import logger from "./classes/logger.class.js";
 import {
@@ -89,7 +90,8 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -141,7 +143,8 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const deleteAfterTest = test.deleteAfterTest || true;
+      const deleteAfterTest =
+        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -161,6 +164,32 @@ function testRun(jsonScript) {
           deleteAfterTest,
         });
       });
+    } else if (test.type === "version-management") {
+      //routine for version management tests
+      const idfList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const updatedList = idfList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      describe(`Test${test.id} - ${test.name} ->`, function () {
+        this.timeout(60000);
+
+        runVersionManagementTest({
+          pathToEim: PATHTOEIM,
+          idfList: updatedList,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+        });
+      });
+    } else {
+      logger.error(`Unknown test type: ${test.type}`);
     }
   });
 }
