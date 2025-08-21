@@ -48,6 +48,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: eim-gui-*
           path: ./artifacts
 
       # Non-Windows steps
@@ -145,29 +146,24 @@ jobs:
         continue-on-error: true
 
       # Upload test results
-      - name: Upload test results
+      - name: Upload test results (non-Windows)
         uses: actions/upload-artifact@v4
-        if: always()
+        if: matrix.os != 'windows-latest'
         with:
           name: autotest-CLI-in-GUI-results-${{ matrix.package_name }}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
-
-      - name: Upload EIM install log (non-windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
-        with:
-          name: autotest-CLI-in-GUI-install-log-${{ matrix.package_name }}
-          path: |
             ~/.local/share/eim/logs/**/*
 
-      - name: Upload EIM install log (windows)
+      - name: Upload test results (Windows)
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-in-GUI-install-log-${{ matrix.package_name }}
+          name: autotest-CLI-in-GUI-results-${{ matrix.package_name }}
           path: |
+            ./tests/results-*.json
+            ./tests/test-*.log
             ~/AppData/Local/eim/logs/**/*
 
       # Publish test results
@@ -213,6 +209,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: eim-gui-*
           path: ./artifacts
 
       # Non-Windows steps
@@ -315,30 +312,26 @@ jobs:
         continue-on-error: true
 
       # Upload test results
-      - name: Upload test results
+      - name: Upload test results (non-Windows)
         uses: actions/upload-artifact@v4
-        if: always()
+        if: matrix.os != 'windows-latest'
         with:
           name: autotest-GUI-results-${{ matrix.package_name }}
           path: |
             ./tests/results-*.json
             ./tests/*.png
             ./tests/test-*.log
-
-      - name: Upload EIM install log (non-windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
-        with:
-          name: autotest-GUI-install-log-${{ matrix.package_name }}
-          path: |
             ~/.local/share/eim/logs/**/*
 
-      - name: Upload EIM install log (windows)
+      - name: Upload test results (Windows)
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-GUI-install-log-${{ matrix.package_name }}
+          name: autotest-GUI-results-${{ matrix.package_name }}
           path: |
+            ./tests/results-*.json
+            ./tests/*.png
+            ./tests/test-*.log
             ~/AppData/Local/eim/logs/**/*
 
       # Publish test results

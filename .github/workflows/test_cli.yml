@@ -51,6 +51,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: eim-cli-*
           path: ./artifacts
 
       # Non-Windows steps
@@ -166,22 +167,25 @@ jobs:
         continue-on-error: true
 
       # Upload test results
-      - name: Upload test results
+      - name: Upload test results (non-windows)
         uses: actions/upload-artifact@v4
-        if: always()
+        if: matrix.os != 'windows-latest'
         with:
           name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
           path: |
             ./tests/results-*.json
             ./tests/test-*.log
-
-      - name: Upload EIM install log (non-windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
-        with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
-          path: |
             ~/.local/share/eim/logs/**/*
+
+      - name: Upload test results (windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
+          path: |
+            ./tests/results-*.json
+            ./tests/test-*.log
+            ~/AppData/Local/eim/logs/**/*
 
       - name: Clean Up runner (Self-hosted MirrorRunner)
         if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER')
@@ -189,14 +193,6 @@ jobs:
           rm -rf ~/.local/share/eim
           rm -rf ~/runner/_work/idf-im-ui
         continue-on-error: true
-
-      - name: Upload EIM install log (windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os == 'windows-latest'
-        with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}
-          path: |
-            ~/AppData/Local/eim/logs/**/*
 
       # Publish test results
       - name: Publish Test Results
