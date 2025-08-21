@@ -33,6 +33,7 @@ try {
   if (res.ok) {
     const data = await res.json();
     const idfVersions = data.VERSIONS;
+    const idfTargets = data.IDF_TARGETS;
     if (idfVersions && idfVersions.length > 0) {
       IDFDefaultVersion =
         idfVersions.find(
@@ -45,12 +46,14 @@ try {
           .map((version) => version.name)
       );
       logger.info(`Available IDF Versions: ${IDFAvailableVersions.join(", ")}`);
-      availableTargets =
-        idfVersions.find((version) => version.name === "latest")
-          ?.supported_targets || availableTargets;
-      logger.info(`Available Targets: ${availableTargets.join(", ")}`);
     } else {
       logger.info("No IDF versions found in the response.");
+    }
+    if (idfTargets && idfTargets.length > 0) {
+      availableTargets = idfTargets.map((target) => target.value);
+      logger.info(`Available IDF Targets: ${availableTargets.join(", ")}`);
+    } else {
+      logger.info("No IDF targets found in the response.");
     }
   } else {
     logger.info(`Failed to fetch IDF versions: ${res.statusText}`);
