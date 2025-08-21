@@ -1,0 +1,29 @@
+name: Publish dl page
+on:
+  release:
+    types:
+      - created
+  push:
+    branches:
+      - master
+      - release/*
+    paths:
+      - "dl_page/**"
+      - ".github/workflows/dl_page.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Publish the dl page
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ap-east-1
+        run: |
+          aws s3 cp --acl=public-read "./dl_page/index.html" s3://espdldata/dl/eim/index.html
