@@ -1,6 +1,12 @@
 import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
+import {
+  IDFMIRRORS,
+  TOOLSMIRRORS,
+  IDFAvailableVersions,
+  availableTargets,
+} from "../config.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
@@ -57,6 +63,14 @@ export function runCLIWizardInstallTest(pathToEim) {
       );
       expect(selectTargetQuestion, "Failed to ask for installation targets").to
         .be.true;
+
+      for (let target of availableTargets) {
+        expect(
+          testRunner.output,
+          `Failed to offer installation for target '${target}'`
+        ).to.include(target);
+      }
+
       expect(
         testRunner.output,
         "Failed to offer installation for 'all' targets"
@@ -70,10 +84,13 @@ export function runCLIWizardInstallTest(pathToEim) {
         "Please select the desired ESP-IDF version"
       );
       expect(selectIDFVersion, "Failed to ask for IDF version").to.be.true;
-      expect(
-        testRunner.output,
-        "Failed to offer installation for master branch"
-      ).to.include("master");
+
+      for (let version of IDFAvailableVersions) {
+        expect(
+          testRunner.output,
+          `Failed to offer installation for IDF version '${version}'`
+        ).to.include(version);
+      }
 
       logger.info("Select IDF Version passed");
       testRunner.output = "";
@@ -84,10 +101,13 @@ export function runCLIWizardInstallTest(pathToEim) {
       );
       expect(selectIDFMirror, "Failed to ask for IDF download mirrors").to.be
         .true;
-      expect(
-        testRunner.output,
-        "Failed to offer github as a download mirror option"
-      ).to.include("https://github.com");
+
+      for (let mirror of Object.values(IDFMIRRORS)) {
+        expect(
+          testRunner.output,
+          `Failed to offer ${mirror} as a download mirror option`
+        ).to.include(mirror);
+      }
 
       logger.info("Select IDF mirror passed");
       testRunner.output = "";
@@ -98,10 +118,13 @@ export function runCLIWizardInstallTest(pathToEim) {
       );
       expect(selectToolsMirror, "Failed to ask for tools download mirror").to.be
         .true;
-      expect(
-        testRunner.output,
-        "Failed to offer github as tools download mirror"
-      ).to.include("https://github.com");
+
+      for (let mirror of Object.values(TOOLSMIRRORS)) {
+        expect(
+          testRunner.output,
+          `Failed to offer ${mirror} as a tool mirror option`
+        ).to.include(mirror);
+      }
 
       logger.info("Select tools mirror passed");
       testRunner.output = "";
