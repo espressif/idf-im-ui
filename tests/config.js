@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 /**
  * General test configuration file.
  * Contains constants and configurations used across tests.
@@ -22,15 +21,6 @@ let availableTargets = [
   "esp32c6",
   "esp32h2",
   "esp32p4",
-=======
-const IDFVERSIONSSHOWNONINSTALLER = [
-  `master`,
-  `v5.5`,
-  `v5.4.2`,
-  `v5.3.4`,
-  `v5.2.5`,
-  `v5.1.6`,
->>>>>>> e3dba76 (First preparation steps for addding offline installer capabilities)
 ];
 
 // Replace default values with Espressif server data.

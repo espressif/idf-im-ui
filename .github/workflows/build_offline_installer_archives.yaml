@@ -1,0 +1,123 @@
+name: Build Offline Installer Archives
+
+on:
+  workflow_call:
+    inputs:
+      run_number:
+        required: true
+        type: string
+      ref:
+        required: true
+        type: string
+  push:
+    tags:
+      - "v*"
+    branches:
+      - release*
+  pull_request:
+    branches:
+      - release*
+  release:
+    types:
+      - created
+  workflow_dispatch:
+
+jobs:
+  build-offline-archives:
+    name: Build Offline Archives (${{ matrix.package_name }})
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+          - os: windows-latest
+            package_name: windows-x64
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-13
+            package_name: macos-x64
+    steps:
+      - name: Download offline_installer_builder artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          path: ./
+
+      - name: Download eim artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          path: ./
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          chmod +x ./offline_installer_builder
+          chmod +x ./eim
+
+      - name: Install tooling
+        run: |
+          cargo install --git https://github.com/astral-sh/uv uv
+
+      - name: Run offline_installer_builder
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            ./offline_installer_builder.exe -c default
+          else
+            ./offline_installer_builder -c default
+          fi
+        shell: bash
+
+      - name: Bundle offline installer
+        run: |
+          # Find the archive file
+          ARCHIVE_FILE=$(find . -name "archive_v*.zst" -type f | head -1)
+          if [ -z "$ARCHIVE_FILE" ]; then
+            echo "Error: No archive_v*.zst file found"
+            exit 1
+          fi
+
+          # Extract version from filename (e.g., archive_v1.2.3.zst -> 1.2.3)
+          VERSION=$(basename "$ARCHIVE_FILE" | sed 's/archive_v\(.*\)\.zst/\1/')
+          echo "Found version: $VERSION"
+
+          # Create the README.md file with installation instructions based on the OS.
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            README_CONTENT="To install, use Powershell and run the following command in the terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`"
+          else
+            README_CONTENT="To install, run the following command in your terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`"
+          fi
+          echo -e "$README_CONTENT" > README.md
+
+          # Create zip archive with eim binary and archive file
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            7z a "offline_installer-${{ matrix.package_name }}-${VERSION}.zip" "$ARCHIVE_FILE" "./eim.exe" "README.md"
+          else
+            zip "offline_installer-${{ matrix.package_name }}-${VERSION}.zip" "$ARCHIVE_FILE" "./eim" "README.md"
+          fi
+
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Upload offline installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}
+          path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
+          retention-days: 30
+
+      - name: Upload to release assets
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
+          asset_name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
+          asset_content_type: application/zip
