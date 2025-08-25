@@ -31,7 +31,7 @@ eim install --use-local-archive PATH_TO_ARCHIVE
 If you are running the command from the same directory where you extracted the archive, the `PATH_TO_ARCHIVE` will simply be the name of the `.zst` file.
 
 > **Important**
-> You **must not** unpack the `.zst` archive. The installer uses the archive directly. Please make sure to not unpack the `.zst` archive.
+> You **must not** unpack the `.zst` archive. The installer uses the compressed archive directly. Unpacking it will cause the installation to fail.
 
 ## Prerequisites
 

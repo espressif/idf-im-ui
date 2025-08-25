@@ -40,7 +40,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - libusb-1.0-0
 - Python with pip capable of creating virtual environments and handling SSL requests
 
-### Other linux prerequisities based on distro
+### Other Linux prerequisites based on distro
 
 #### Debian/Ubuntu
 
@@ -87,4 +87,4 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
 > **Note**
-> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisities already there.
+> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, **Python 3.11** is required.
