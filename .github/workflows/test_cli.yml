@@ -51,6 +51,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
+          name: eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}
           path: ./artifacts
 
       # Non-Windows steps
@@ -63,14 +64,11 @@ jobs:
           STRIPPED_TAG=${LATEST_TAG#v}
           echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
 
-      - name: Extract artifact (non-Windows)
+      - name: Check artifact and make it executable (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          mkdir -p test-bin
           ls -la ./artifacts/
-          ls -la ./artifacts/eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}/
-          cp ./artifacts/eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}/eim test-bin
-          chmod +x test-bin/eim
+          chmod +x artifacts/eim
 
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
@@ -87,7 +85,7 @@ jobs:
         if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner'
         run: |
           export LOG_TO_FILE="true"
-          export EIM_CLI_PATH="../test-bin/eim"
+          export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm ci
@@ -98,7 +96,7 @@ jobs:
         if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && matrix.run_on !='ExtraRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
-          export EIM_CLI_PATH="../test-bin/eim"
+          export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-extended
@@ -108,7 +106,7 @@ jobs:
         if: matrix.run_on == 'MirrorRunner'
         run: |
           export LOG_TO_FILE="true"
-          export EIM_CLI_PATH="../test-bin/eim"
+          export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm ci
@@ -119,7 +117,7 @@ jobs:
         if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
-          export EIM_CLI_PATH="../test-bin/eim"
+          export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm ci
@@ -136,19 +134,16 @@ jobs:
           $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
           echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Extract artifact (Windows)
+      - name: Check artifact (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          mkdir -p test-bin
           ls ./artifacts/
-          ls ./artifacts/eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}/
-          Copy-Item .\artifacts\eim-cli-${{ matrix.package_name }}-${{ inputs.run_number }}\eim.exe -Destination test-bin
 
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           $env:LOG_TO_FILE="true"
-          $env:EIM_CLI_PATH = "..\test-bin\eim.exe"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
@@ -159,29 +154,46 @@ jobs:
         if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           $env:LOG_TO_FILE="true"
-          $env:EIM_CLI_PATH = "..\test-bin\eim.exe"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
           npm run test-CLI-win --file=CLI-extended
         continue-on-error: true
 
+      # Copy eim log files to standard location for easier access
+      - name: Copy EIM Log files (ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'self-hosted'
+        run: |
+          cp ~/.local/share/eim/logs/*.log ./tests/
+
+      - name: Copy EIM Log files (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        run: |
+          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+
+      - name: Copy EIM Log files (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+
       # Upload test results
-      - name: Upload test results
+      - name: Upload test results (non-windows)
         uses: actions/upload-artifact@v4
-        if: always()
+        if: matrix.os != 'windows-latest'
         with:
           name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
           path: |
             ./tests/results-*.json
-            ./tests/test-*.log
+            ./tests/*.log
 
-      - name: Upload EIM install log (non-windows)
+      - name: Upload test results (windows)
         uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
+        if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
           path: |
-            ~/.local/share/eim/logs/**/*
+            ./tests/results-*.json
+            ./tests/*.log
 
       - name: Clean Up runner (Self-hosted MirrorRunner)
         if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER')
@@ -189,14 +201,6 @@ jobs:
           rm -rf ~/.local/share/eim
           rm -rf ~/runner/_work/idf-im-ui
         continue-on-error: true
-
-      - name: Upload EIM install log (windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os == 'windows-latest'
-        with:
-          name: autotest-CLI-install-log-${{ matrix.package_name }}
-          path: |
-            ~/AppData/Local/eim/logs/**/*
 
       # Publish test results
       - name: Publish Test Results

@@ -49,7 +49,7 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       logger.info(`Starting test - IDF custom installation`);
       testRunner.sendInput(`${pathToEim} install ${args.join(" ")}\r`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      if (!"-n true" in args) {
+      if (args.includes("-n false")) {
         const startTime = Date.now();
         while (Date.now() - startTime < 3600000) {
           if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
@@ -80,11 +80,6 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
           "Failed to ask to save installation configuration - failure to install using full arguments on run time"
         ).to.include("Do you want to save the installer configuration");
 
-        expect(
-          testRunner.output,
-          "Failed to download submodules, missing 'Finished fetching submodules'"
-        ).to.include("Finished fetching submodules");
-
         logger.info("Installation completed");
         testRunner.output = "";
         testRunner.sendInput("n");
@@ -101,7 +96,10 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
           break;
         }
         if (
-          await testRunner.waitForOutput("Successfully installed IDF", 1000)
+          await testRunner.waitForOutput(
+            "Now you can start using IDF tools",
+            1000
+          )
         ) {
           logger.info(">>>>>>>Completed!!!");
           break;
@@ -121,13 +119,6 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         testRunner.output,
         "Failed to complete installation, missing 'Now you can start using IDF tools'"
       ).to.include("Now you can start using IDF tools");
-
-      if ("-r true" in args || "--recursive-submodules true" in args) {
-        expect(
-          testRunner.output,
-          "Failed to download submodules, missing 'Finished fetching submodules'"
-        ).to.include("Finished fetching submodules");
-      }
     });
   });
 }

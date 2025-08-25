@@ -12,6 +12,7 @@
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
             "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
         }
+        "deleteAfterTest": true        // Whether to remove IDF installation folder and IDF tools folder after test
 
  */
 

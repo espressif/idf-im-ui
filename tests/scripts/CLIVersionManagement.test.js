@@ -9,7 +9,6 @@ export function runVersionManagementTest({
   pathToEim,
   idfList,
   installFolder,
-  toolsFolder,
 }) {
   describe("3- EIM Version Management test ->", function () {
     this.timeout(120000);

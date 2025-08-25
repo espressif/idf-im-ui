@@ -165,10 +165,9 @@ function testRun(jsonScript) {
         this.timeout(60000);
 
         runVersionManagementTest({
-          pathToEim: PATHTOEIM,
+          pathToEim: pathToEIMCLI,
           idfList: updatedList,
           installFolder,
-          toolsFolder: TOOLSFOLDER,
         });
       });
     } else {
