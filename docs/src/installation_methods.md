@@ -22,4 +22,8 @@ You can use the CLI in two ways:
 1. **Interactive Mode**: Run without parameters for a step-by-step wizard
 2. **Headless Mode**: Use command line arguments for automated installations
 
+## Offline Installation
+
+For environments without an internet connection, EIM provides an offline installation method. This involves downloading a single archive that contains all the necessary components. For more details, see the [Offline Installation](./offline_installation.md) guide.
+
 Choose the installation method that best suits your needs and workflow. 

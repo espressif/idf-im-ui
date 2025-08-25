@@ -23,6 +23,10 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 - **Utilize that existing repository**: It will not download a new copy or overwrite your existing files.
 - **Ignore selected ESP-IDF versions**: Any specific ESP-IDF version you may have chosen in the GUI or via CLI arguments will be disregarded, as EIM will work with the version already present in your existing repository.
 
+### How does offline installation work?
+
+The offline installation allows you to install ESP-IDF without an internet connection. You need to download an offline installer artifact (a zip file) for your specific OS and ESP-IDF version. This artifact contains the installer and a `.zst` archive with all the necessary data. You then run the installer with the `--use-local-archive` flag, pointing to the `.zst` file. Remember **not** to unpack the `.zst` archive. Also, the offline installation currently requires **Python 3.11**. For detailed instructions, please see the [Offline Installation](./offline_installation.md) guide.
+
 ## GUI-Specific Questions
 
 ### Running Installer in Windows Sandbox

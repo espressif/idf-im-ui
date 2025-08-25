@@ -10,6 +10,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 
 > **Note**
 > If any of these prerequisites are missing, the installer will prompt you to install them. If you agree, the installer will automatically install and configure everything required to run ESP-IDF.
+> For offline installations, **Python 3.11** is required.
 
 ## MacOS
 
@@ -23,6 +24,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 
 > **Note**
 > On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed.
+> For offline installations, **Python 3.11** is required.
 
 ## Linux
 

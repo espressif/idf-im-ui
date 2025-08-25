@@ -62,6 +62,7 @@ Options:
 - `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
 - `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing. This can produce installation which will not work or kill your kittens. use at your own risk.
 - `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
+- `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11.
 
 ### Wizard Command
 
