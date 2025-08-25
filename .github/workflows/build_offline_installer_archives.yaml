@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
     inputs:
       run_number:
-        description: 'The run number from which to take binaries'
+        description: "The run number from which to take binaries"
         required: true
         type: string
 
@@ -115,3 +115,11 @@ jobs:
           asset_path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
           asset_name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
           asset_content_type: application/zip
+
+  Autotest-CLI-Offline:
+    needs: [build-offline-archives]
+    if: needs.build-offline-archives.result == 'success'
+    uses: ./.github/workflows/test_offline.yml
+    with:
+      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      version: ${{ needs.build-offline-archives.outputs.VERSION }}

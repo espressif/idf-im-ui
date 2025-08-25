@@ -1,0 +1,175 @@
+name: Autotest
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+
+jobs:
+  test:
+    name: Offline (${{ matrix.package_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            run_on: GitHub
+          - os: windows-latest
+            package_name: windows-x64
+            run_on: GitHub
+          - os: macos-latest
+            package_name: macos-aarch64
+            run_on: GitHub
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            run_on: GitHub
+          - os: macos-13
+            package_name: macos-x64
+            run_on: GitHub
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download Archive
+        uses: actions/download-artifact@v5
+        with:
+          name: offline_installer-${{ matrix.package_name }}-${{ inputs.version }}
+          path: ./artifacts
+
+      # Non-Windows steps
+
+      - name: Get CLI application version number (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          git fetch --tags
+          LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
+          STRIPPED_TAG=${LATEST_TAG#v}
+          echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+
+      - name: Make EIM executable (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ls -la ./artifacts/
+          mv ./artifacts/archive_v${{inputs.version}}.zst /artifacts/archive.zst
+          chmod +x artifacts/eim
+
+      - name: Install dependencies and node.js (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip
+          cd tests
+          npm ci
+
+      - name: Install dependencies and node.js (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        run: |
+          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
+          cd tests
+          npm ci
+
+      - name: Run IDF offline installation (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          export HTTP_PROXY="http://127.0.0.1:9"
+          export HTTPS_PROXY="http://127.0.0.1:9"
+          export NO_PROXY="localhost,127.0.0.1"
+          export LOG_TO_FILE="true"
+          export EIM_FILE_PATH="../artifacts/eim"
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
+          cd tests
+          npm run test-CLI --file=CLI-offline
+          unset HTTP_PROXY HTTPS_PROXY NO_PROXY
+        continue-on-error: true
+
+      # Windows steps
+
+      - name: Get CLI application version number (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          git fetch --tags
+          $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
+          $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
+          echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Check artifact (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          ls ./artifacts/
+          Move-Item "./artifacts/archive_v${{inputs.version}}.zst" "artifacts/archive.zst"
+
+      - name: Run IDF offline installation (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $env:HTTP_PROXY  = 'http://127.0.0.1:9'
+          $env:HTTPS_PROXY = 'http://127.0.0.1:9'
+          $env:NO_PROXY    = 'localhost,127.0.0.1'
+          $env:LOG_TO_FILE="true"
+          $env:EIM_FILE_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          Set-Location -Path "./tests"
+          Expand-Archive node_modules.zip
+          npm run test-CLI-win --file=CLI-offline
+          Remove-Item Env:HTTP_PROXY, Env:HTTPS_PROXY, Env:NO_PROXY -ErrorAction SilentlyContinue
+        continue-on-error: true
+
+      # Copy eim log files to standard location for easier access
+      - name: Copy EIM Log files (ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          cp ~/.local/share/eim/logs/*.log ./tests/
+
+      - name: Copy EIM Log files (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        run: |
+          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+
+      - name: Copy EIM Log files (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+
+      # Upload test results
+      - name: Upload test results (non-windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os != 'windows-latest'
+        with:
+          name: autotest-CLI-Offline-results-${{ matrix.package_name }}
+          path: |
+            ./tests/results-*.json
+            ./tests/*.log
+
+      - name: Upload test results (windows)
+        uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: autotest-CLI-Offline-results-${{ matrix.package_name }}
+          path: |
+            ./tests/results-*.json
+            ./tests/*.log
+
+      # Publish test results
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: CLI-Offline-Autotests-${{ matrix.package_name }}
+          path: ./tests/results-*.json
+          path-replace-backslashes: "false"
+          reporter: mocha-json
+          fail-on-empty: true
