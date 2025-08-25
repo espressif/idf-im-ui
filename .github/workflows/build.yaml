@@ -2,8 +2,6 @@ name: Unified Build Workflow
 
 on:
   push:
-    tags:
-      - "v*"
     branches:
       - master
   pull_request:
@@ -439,7 +437,7 @@ jobs:
 
   build-offline-archives:
     needs: [build-cli, build-cli-linux]
-    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped')
+    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && github.event_name == 'release'
     uses: ./.github/workflows/build_offline_installer_archives.yaml
     with:
       run_number: ${{ github.run_number }}

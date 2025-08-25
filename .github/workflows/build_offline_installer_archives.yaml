@@ -9,18 +9,12 @@ on:
       ref:
         required: true
         type: string
-  push:
-    tags:
-      - "v*"
-    branches:
-      - release*
-  pull_request:
-    branches:
-      - release*
-  release:
-    types:
-      - created
   workflow_dispatch:
+    inputs:
+      run_number:
+        description: 'The run number from which to take binaries'
+        required: true
+        type: string
 
 jobs:
   build-offline-archives:
