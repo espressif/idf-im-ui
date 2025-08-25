@@ -1,4 +1,4 @@
-name: Autotest
+name: Autotest CLI
 
 on:
   workflow_call:

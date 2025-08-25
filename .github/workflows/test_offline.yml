@@ -1,4 +1,4 @@
-name: Autotest
+name: Autotest Offline
 
 on:
   workflow_call:
@@ -6,7 +6,14 @@ on:
       ref:
         required: true
         type: string
-      version:
+      run_id:
+        required: true
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The run id from which to take the offline installer archive"
         required: true
         type: string
 
@@ -48,8 +55,11 @@ jobs:
       - name: Download Archive
         uses: actions/download-artifact@v5
         with:
-          name: offline_installer-${{ matrix.package_name }}-${{ inputs.version }}
+          pattern: offline_installer-${{ matrix.package_name }}-*
+          merge-multiple: true
           path: ./artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
 
@@ -65,7 +75,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           ls -la ./artifacts/
-          mv ./artifacts/archive_v${{inputs.version}}.zst /artifacts/archive.zst
+          mv ./artifacts/archive_v*.zst /artifacts/archive.zst
           chmod +x artifacts/eim
 
       - name: Install dependencies and node.js (Ubuntu)
@@ -111,7 +121,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           ls ./artifacts/
-          Move-Item "./artifacts/archive_v${{inputs.version}}.zst" "artifacts/archive.zst"
+          Move-Item "./artifacts/archive_v*.zst" "artifacts/archive.zst"
 
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
