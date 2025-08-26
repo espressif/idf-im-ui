@@ -1,4 +1,4 @@
-name: Autotest
+name: Autotest Offline
 
 on:
   workflow_call:
@@ -6,7 +6,14 @@ on:
       ref:
         required: true
         type: string
-      version:
+      run_id:
+        required: true
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The run id from which to take the offline installer archive"
         required: true
         type: string
 
@@ -48,8 +55,11 @@ jobs:
       - name: Download Archive
         uses: actions/download-artifact@v5
         with:
-          name: offline_installer-${{ matrix.package_name }}-${{ inputs.version }}
+          pattern: offline_installer-${{ matrix.package_name }}-*
+          merge-multiple: true
           path: ./artifacts
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
 
@@ -65,7 +75,9 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           ls -la ./artifacts/
-          mv ./artifacts/archive_v${{inputs.version}}.zst /artifacts/archive.zst
+          unzip ./artifacts/offline_installer*.zip -d ./artifacts/
+          mv ./artifacts/archive_v*.zst ./artifacts/archive.zst
+          ls -la ./artifacts/
           chmod +x artifacts/eim
 
       - name: Install dependencies and node.js (Ubuntu)
@@ -90,7 +102,7 @@ jobs:
           export HTTPS_PROXY="http://127.0.0.1:9"
           export NO_PROXY="localhost,127.0.0.1"
           export LOG_TO_FILE="true"
-          export EIM_FILE_PATH="../artifacts/eim"
+          export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-offline
@@ -111,7 +123,9 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           ls ./artifacts/
-          Move-Item "./artifacts/archive_v${{inputs.version}}.zst" "artifacts/archive.zst"
+          Expand-Archive ./artifacts/offline_installer*.zip -DestinationPath ./artifacts/
+          ls ./artifacts/
+          Move-Item "./artifacts/archive_v*.zst" "artifacts/archive.zst"
 
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
@@ -120,7 +134,7 @@ jobs:
           $env:HTTPS_PROXY = 'http://127.0.0.1:9'
           $env:NO_PROXY    = 'localhost,127.0.0.1'
           $env:LOG_TO_FILE="true"
-          $env:EIM_FILE_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
@@ -133,16 +147,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
           cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-windows)
