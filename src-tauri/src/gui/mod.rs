@@ -1,12 +1,14 @@
 use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
+use idf_im_lib::idf_config::IdfInstallation;
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     settings::Settings,
     ProgressMessage,
 };
-use log::{error, info};
+use log::{debug, error, info};
+use serde_json::{json, Value};
 use std::process::Command;
 use std::{
     env,
@@ -25,11 +27,104 @@ use app_state::{AppState};
 use ui::{send_message, ProgressBar};
 use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*};
 
+const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
 fn greet(name: &str) -> String {
     log::info!("Greet called with name: {}", name);
     format!("Hello, {}! You've been greeted from Rust!", name)
+}
+
+#[tauri::command]
+fn get_app_info() -> Value {
+    json!({
+      "version": EIM_VERSION
+    })
+}
+
+#[tauri::command]
+fn get_system_arch() -> String {
+    let arch = if cfg!(target_arch = "x86") {
+        "x86"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else if cfg!(target_arch = "arm") {
+        "arm"
+    } else if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "unknown"
+    };
+    arch.to_string()
+}
+
+#[tauri::command]
+fn get_installed_versions() -> Vec<IdfInstallation>{
+  // return vec![];
+  match idf_im_lib::version_manager::get_esp_ide_config() {
+    Ok(config) => {
+      if config.idf_installed.is_empty() {
+        debug!(
+          "No versions found. Use eim install to install a new ESP-IDF version."
+        );
+        vec![]
+      } else {
+        config.idf_installed
+      }
+    }
+    Err(err) => {
+      debug!("No versions found. Use eim install to install a new ESP-IDF version.");
+      debug!("Error: {}", err);
+      vec![]
+    }
+  }
+}
+
+#[tauri::command]
+fn scan_for_archives() -> Vec<String> { // TODO: actually search for them
+  let mut archives = Vec::new();
+  archives.push("archive_5.5.zst".to_string());
+  // // Scan the file system for archive files
+  // for entry in fs::read_dir("/path/to/search").unwrap() {
+  //     let entry = entry.unwrap();
+  //     let path = entry.path();
+
+  //     if path.extension().map(|e| e == "zip" || e == "tar.gz").unwrap_or(false) {
+  //         archives.push(path.to_str().unwrap());
+  //     }
+  // }
+
+  archives
+}
+// fn get_available_versions()
+
+#[tauri::command]
+fn rename_installation(id: String, new_name: String) { // TODO: add messaging to the FE
+  debug!("Renaming installation with id {} to {}", id, new_name);
+
+  match idf_im_lib::version_manager::rename_idf_version(&id, new_name) {
+    Ok(_) => {
+        debug!("Successfully renamed installation {}", id);
+    }
+    Err(e) => {
+      error!("Failed to rename installation: {}", e);
+    }
+  };
+}
+#[tauri::command]
+fn remove_installation(id: String) {
+  debug!("Removing installation with id {}", id);
+
+  match idf_im_lib::version_manager::remove_single_idf_version(&id, false) {
+    Ok(_) => {
+        debug!("Successfully removed installation {}", id);
+    }
+    Err(e) => {
+      error!("Failed to remove installation: {}", e);
+    }
+  };
 }
 
 fn prepare_installation_directories(
@@ -288,7 +383,14 @@ pub fn run() {
             show_in_folder,
             is_path_empty_or_nonexistent_command,
             is_path_idf_directory,
-            cpu_count,
+            cpu_count, //move these to proper submodules
+            get_app_info,
+            get_system_arch,
+            get_installed_versions,
+            scan_for_archives,
+            check_prerequisites_detailed,
+            rename_installation,
+            remove_installation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
