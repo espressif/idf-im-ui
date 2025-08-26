@@ -3,10 +3,17 @@ name: Autotest GUI
 on:
   workflow_call:
     inputs:
-      run_number:
+      run_id:
         required: true
         type: string
       ref:
+        required: true
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "The run id from which to take binaries"
         required: true
         type: string
 
@@ -48,8 +55,11 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ inputs.run_number }}
+          pattern: eim-gui-${{ matrix.package_name }}-*
           path: ./artifacts
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
 
@@ -214,8 +224,11 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ inputs.run_number }}
+          pattern: eim-gui-${{ matrix.package_name }}-*
           path: ./artifacts
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
 

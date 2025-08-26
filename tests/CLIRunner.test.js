@@ -3,7 +3,7 @@
  * Entries should follow this format:
  *     {
         "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "prerequisites", "arguments", "default" or "custom"
+        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom" or "offline"
         "name": "<name>",               // A name for the test to correlate to logs and report
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
@@ -36,6 +36,8 @@ import {
   pathToEIMCLI,
   INSTALLFOLDER,
   TOOLSFOLDER,
+  pathToOfflineArchive,
+  offlineIDFVersion,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -73,8 +75,7 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      const deleteAfterTest =
-        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -126,8 +127,7 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const deleteAfterTest =
-        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -168,6 +168,30 @@ function testRun(jsonScript) {
           pathToEim: pathToEIMCLI,
           idfList: updatedList,
           installFolder,
+        });
+      });
+    } else if (test.type === "offline") {
+      //routine for offline installation test
+
+      const offlineArg = [`--use-local-archive "${pathToOfflineArchive}"`];
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
+      describe(`Test${test.id} - ${test.name} ->`, function () {
+        this.timeout(6000000);
+
+        runCLICustomInstallTest(pathToEIMCLI, offlineArg);
+
+        runInstallVerification({
+          installFolder: INSTALLFOLDER,
+          idfList: [offlineIDFVersion],
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          installFolder: INSTALLFOLDER,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     } else {

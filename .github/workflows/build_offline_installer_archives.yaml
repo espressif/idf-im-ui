@@ -3,16 +3,17 @@ name: Build Offline Installer Archives
 on:
   workflow_call:
     inputs:
-      run_number:
-        required: true
-        type: string
       ref:
         required: true
         type: string
+      run_id:
+        required: true
+        type: string
+
   workflow_dispatch:
     inputs:
-      run_number:
-        description: 'The run number from which to take binaries'
+      run_id:
+        description: "The run id from which to take binaries"
         required: true
         type: string
 
@@ -37,16 +38,22 @@ jobs:
             package_name: macos-x64
     steps:
       - name: Download offline_installer_builder artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          pattern: offline_installer_builder-${{ matrix.package_name }}-*
+          merge-multiple: true
           path: ./
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id || github.run_id }}
 
       - name: Download eim artifact
         uses: actions/download-artifact@v4
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          pattern: eim-cli-${{ matrix.package_name }}-*
+          merge-multiple: true
           path: ./
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.run_id || github.run_id }}
 
       - name: Make binary executable (Unix)
         if: runner.os != 'Windows'
@@ -115,3 +122,11 @@ jobs:
           asset_path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
           asset_name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
           asset_content_type: application/zip
+
+  Autotest-CLI-Offline:
+    needs: [build-offline-archives]
+    if: needs.build-offline-archives.result == 'success'
+    uses: ./.github/workflows/test_offline.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      run_id: ${{ github.run_id }}

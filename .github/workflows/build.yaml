@@ -440,8 +440,8 @@ jobs:
     if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && github.event_name == 'release'
     uses: ./.github/workflows/build_offline_installer_archives.yaml
     with:
-      run_number: ${{ github.run_number }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      run_id: ${{ github.run_id }}
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
@@ -736,7 +736,7 @@ jobs:
     if: needs.build-cli.result == 'success' && needs.build-cli-linux.result == 'success'
     uses: ./.github/workflows/test_cli.yml
     with:
-      run_number: ${{ github.run_number }}
+      run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   Autotest-GUI:
@@ -744,7 +744,7 @@ jobs:
     if: needs.build-gui.result == 'success'
     uses: ./.github/workflows/test_gui.yml
     with:
-      run_number: ${{ github.run_number }}
+      run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
 
   update-release-info:
