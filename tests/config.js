@@ -90,6 +90,11 @@ const getEIMPath = (pathFromCI, defaultFolder) =>
 const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
 const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
 
+// DEfault path for the offline archive file
+const pathToOfflineArchive =
+  process.env.EIM_OFFLINE_ARCHIVE ||
+  path.join(os.homedir(), "eim-offline", "archive.zst");
+
 // Default installation folder
 const INSTALLFOLDER =
   os.platform() !== "win32" ? path.join(os.homedir(), `.espressif`) : `C:\\esp`;
@@ -112,4 +117,5 @@ export {
   EIMCLIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
+  pathToOfflineArchive,
 };

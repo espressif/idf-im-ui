@@ -36,6 +36,7 @@ import {
   pathToEIMCLI,
   INSTALLFOLDER,
   TOOLSFOLDER,
+  pathToOfflineArchive,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -173,7 +174,7 @@ function testRun(jsonScript) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      const offlineArg = ["--use-local-archive archive.zst"];
+      const offlineArg = [`--use-local-archive ${pathToOfflineArchive}`];
 
       const deleteAfterTest =
         test.deleteAfterTest === undefined ? true : test.deleteAfterTest;

@@ -103,6 +103,7 @@ jobs:
           export NO_PROXY="localhost,127.0.0.1"
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
+          export EIM_OFFLINE_ARCHIVE="../artifacts/archive.zst"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-offline
@@ -124,8 +125,8 @@ jobs:
         run: |
           ls ./artifacts/
           Expand-Archive ./artifacts/offline_installer*.zip -DestinationPath ./artifacts/
-          ls ./artifacts/
           Move-Item "./artifacts/archive_v*.zst" "artifacts/archive.zst"
+          ls ./artifacts/
 
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
@@ -135,6 +136,7 @@ jobs:
           $env:NO_PROXY    = 'localhost,127.0.0.1'
           $env:LOG_TO_FILE="true"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_OFFLINE_ARCHIVE = "..\artifacts\archive.zst"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
