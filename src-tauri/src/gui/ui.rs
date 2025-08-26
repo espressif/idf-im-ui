@@ -1,20 +1,91 @@
 use log::{debug, info};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter}; // dep: fork = "0.1"
+use serde::{Serialize, Deserialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum MessageLevel {
+    Info,
+    Warning,
+    Error,
+    Success,
+    Debug,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationStage {
+    Checking,
+    Prerequisites,
+    Download,
+    Extract,
+    Tools,
+    Python,
+    Configure,
+    Complete,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct InstallationProgress {
+    pub stage: InstallationStage,
+    pub percentage: u32,
+    pub message: String,
+    pub detail: Option<String>,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ToolProgress {
+    pub tool_name: String,
+    pub action: String,  // "start", "download", "verify", "extract", "complete", "error"
+    pub percentage: Option<u32>,
+}
 
 /// Emits a message to the frontend
 pub fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
     let _ = app_handle.emit(event_name, json_data);
 }
 
-/// Sends a user message with a specified type
+/// Unified message emitter for all installation events
+pub fn emit_installation_event(
+    app_handle: &AppHandle,
+    progress: InstallationProgress
+) {
+    let _ = app_handle.emit("installation-progress", &progress);
+}
+
+/// Emit tool-specific progress
+pub fn emit_tool_event(
+    app_handle: &AppHandle,
+    tool_progress: ToolProgress
+) {
+    let _ = app_handle.emit("tool-progress", &tool_progress);
+}
+
+/// Emit log messages (for detailed output)
+pub fn emit_log_message(
+    app_handle: &AppHandle,
+    level: MessageLevel,
+    message: String
+) {
+    let _ = app_handle.emit("log-message", json!({
+        "level": level,
+        "message": message,
+        "timestamp": chrono::Utc::now().to_rfc3339()
+    }));
+}
+
+/// Legacy wrapper - gradually phase this out
 pub fn send_message(app_handle: &AppHandle, message: String, message_type: String) {
-    emit_to_fe(
-        app_handle,
-        "user-message",
-        json!({ "type": message_type, "message": message }),
-    );
+    let level = match message_type.as_str() {
+        "error" => MessageLevel::Error,
+        "warning" => MessageLevel::Warning,
+        "success" => MessageLevel::Success,
+        _ => MessageLevel::Info,
+    };
+    emit_log_message(app_handle, level, message);
 }
 
 /// Sends a tools-related message

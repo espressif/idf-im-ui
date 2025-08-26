@@ -1,8 +1,9 @@
 use crate::gui::ui::send_message;
 use idf_im_lib;
 use log::{error, warn};
+use log4rs::encode::json;
 use tauri::AppHandle;
-
+use serde_json::{json, Value};
 
 
 /// Gets the list of prerequisites for ESP-IDF
@@ -35,6 +36,37 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
             vec![]
         }
     }
+}
+#[tauri::command]
+pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value {
+  match idf_im_lib::system_dependencies::check_prerequisites() {
+    Ok(prerequisites) => {
+            if prerequisites.is_empty() {
+              json!({
+                "all_ok": true,
+                "missing": []
+              })
+            } else {
+              json!({
+                "all_ok": false,
+                "missing": prerequisites.into_iter().map(|p| p.to_string()).collect::<Vec<_>>()
+              })
+            }
+        }
+        Err(err) => {
+            send_message(
+                &app_handle,
+                format!("Error checking prerequisites: {}", err),
+                "error".to_string(),
+            );
+            error!("Error checking prerequisites: {}", err);
+            json!({
+                "all_ok": false,
+                "missing": []
+            })
+        }
+    }
+
 }
 
 /// Installs missing prerequisites

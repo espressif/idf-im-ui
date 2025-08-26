@@ -11,6 +11,7 @@ use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
+use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
 use log::debug;
@@ -472,36 +473,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           };
           info!("Fixing IDF installation at path: {}", path_to_fix.display());
           // The fix logic is just instalation with use of existing repository
-          let mut version_name = None;
-          match idf_im_lib::version_manager::list_installed_versions() {
-            Ok(versions) => {
-              for v in versions {
-                if v.path == path_to_fix.to_str().unwrap() {
-                  info!("Found existing IDF version: {}", v.name);
-                  // Remove the existing activation script and eim_idf.json entry
-                  match remove_single_idf_version(&v.name, true) {
-                    Ok(_) => {
-                      info!("Removed existing IDF version from eim_idf.json: {}", v.name);
-                      version_name = Some(v.name.clone());
-                    }
-                    Err(err) => {
-                      error!("Failed to remove existing IDF version {}: {}", v.name, err);
-                    }
-                  }
-                }
-              }
-            }
-            Err(_) => {
-              info!("Failed to list installed versions. Using default naming.");
-            }
-          }
-
-          let mut settings = Settings::default();
-          settings.path = Some(path_to_fix.clone());
-          settings.non_interactive = Some(true);
-          settings.version_name = version_name;
-          settings.install_all_prerequisites = Some(true);
-          settings.config_file_save_path = None;
+          let settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone()).await?;
           let result = wizard::run_wizzard_run(settings).await;
           match result {
             Ok(r) => {

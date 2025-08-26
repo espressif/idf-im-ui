@@ -444,23 +444,19 @@ pub async fn install_python_env(
 
     let python_executable = match std::env::consts::OS {
             "windows" => {
-              if offline_mode {
-                if let Some(scoop_shims_path) = get_scoop_path() {
-                  // Use the Scoop shims path for the Python executable
-                  let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
-                  match python_executable_path.try_exists() {
-                      Ok(true) => python_executable_path.to_string_lossy().into_owned(),
-                      Ok(false) => "python3.exe".to_string(),
-                      Err(e) => {
-                          warn!("Failed to check if Python executable exists: {}", e);
-                          "python3.exe".to_string()
-                      }
-                  }
-                } else {
-                  "python3.exe".to_string()
+              if let Some(scoop_shims_path) = get_scoop_path() {
+                // Use the Scoop shims path for the Python executable
+                let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
+                match python_executable_path.try_exists() {
+                    Ok(true) => python_executable_path.to_string_lossy().into_owned(),
+                    Ok(false) => "python3.exe".to_string(),
+                    Err(e) => {
+                        warn!("Failed to check if Python executable exists: {}", e);
+                        "python3.exe".to_string()
+                    }
                 }
               } else {
-                "python.exe".to_string()
+                "python3.exe".to_string()
               }
             },
             _ => "python3".to_string(),
