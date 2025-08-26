@@ -90,10 +90,14 @@ const getEIMPath = (pathFromCI, defaultFolder) =>
 const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
 const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
 
-// DEfault path for the offline archive file
+// Default path for the offline archive file
 const pathToOfflineArchive =
   process.env.EIM_OFFLINE_ARCHIVE ||
   path.join(os.homedir(), "eim-offline", "archive.zst");
+
+// IDF version for the offline archive
+const offlineIDFVersion =
+  process.env.EIM_OFFLINE_IDF_VERSION || IDFDefaultVersion;
 
 // Default installation folder
 const INSTALLFOLDER =
@@ -118,4 +122,5 @@ export {
   INSTALLFOLDER,
   TOOLSFOLDER,
   pathToOfflineArchive,
+  offlineIDFVersion,
 };

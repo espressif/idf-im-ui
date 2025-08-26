@@ -37,6 +37,7 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   pathToOfflineArchive,
+  offlineIDFVersion,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -74,8 +75,7 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      const deleteAfterTest =
-        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -127,8 +127,7 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const deleteAfterTest =
-        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -174,10 +173,9 @@ function testRun(jsonScript) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      const offlineArg = [`--use-local-archive ${pathToOfflineArchive}`];
+      const offlineArg = [`--use-local-archive "${pathToOfflineArchive}"`];
 
-      const deleteAfterTest =
-        test.deleteAfterTest === undefined ? true : test.deleteAfterTest;
+      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
@@ -186,7 +184,7 @@ function testRun(jsonScript) {
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,
-          idfList: [IDFDefaultVersion],
+          idfList: [offlineIDFVersion],
           toolsFolder: TOOLSFOLDER,
         });
 
