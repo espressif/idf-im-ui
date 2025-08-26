@@ -1,6 +1,9 @@
 use gui::ui::send_message;
-use idf_im_lib;
+use idf_im_lib::{self, ensure_path};
 use log::{error, info};
+use serde_json::{json,Value};
+use tauri_plugin_store::StoreExt;
+use std::fs;
 use std::{
     path::PathBuf,
     process::Command,
@@ -10,6 +13,31 @@ use num_cpus;
 
 use crate::gui;
 use crate::gui::utils::is_path_empty_or_nonexistent;
+
+const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[tauri::command]
+pub fn get_app_info() -> Value {
+    json!({
+      "version": EIM_VERSION
+    })
+}
+
+#[tauri::command]
+pub fn get_system_arch() -> String {
+    let arch = if cfg!(target_arch = "x86") {
+        "x86"
+    } else if cfg!(target_arch = "x86_64") {
+        "x86_64"
+    } else if cfg!(target_arch = "arm") {
+        "arm"
+    } else if cfg!(target_arch = "aarch64") {
+        "aarch64"
+    } else {
+        "unknown"
+    };
+    arch.to_string()
+}
 
 /// Returns the operating system name
 #[tauri::command]
@@ -110,4 +138,81 @@ pub fn quit_app(app_handle: tauri::AppHandle) {
 #[tauri::command]
 pub fn cpu_count() -> usize {
     num_cpus::get()
+}
+
+#[tauri::command]
+pub fn scan_for_archives() -> Vec<String> {
+  let mut archives = Vec::new();
+  for entry in fs::read_dir(".").unwrap() {
+      let entry = entry.unwrap();
+      let path = entry.path();
+
+      if path.extension().map(|e| e == "zst").unwrap_or(false) {
+          archives.push(path.to_str().unwrap().to_string());
+      }
+  }
+
+  archives
+}
+
+#[tauri::command]
+pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
+  let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory").unwrap()
+        .join("eim");
+
+  let config_file = config_dir.join("eim.json");
+  ensure_path(config_dir.to_str().unwrap()).unwrap();
+  match app_handle.store_builder(config_file).build() {
+        Ok(store) => {
+            let first_run = store.get("first_run")
+                .unwrap_or(Value::Bool(true))
+                .clone();
+            let skip_welcome = store.get("skip_welcome")
+                .unwrap_or(Value::Bool(false))
+                .clone();
+
+            json!({
+                "first_run": first_run,
+                "skip_welcome": skip_welcome
+            })
+        }
+        Err(_) => {
+            // If store doesn't exist or can't be loaded, return defaults
+            json!({
+                "first_run": true,
+                "skip_welcome": false
+            })
+        }
+    }
+}
+
+#[tauri::command]
+pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool) {
+  let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory").unwrap()
+        .join("eim");
+
+  let config_file = config_dir.join("eim.json");
+  ensure_path(config_dir.to_str().unwrap()).unwrap();
+
+  match app_handle.store_builder(config_file).build() {
+        Ok(store) => {
+            store.set("first_run".to_string(), Value::Bool(firstRun));
+
+            store.set("skip_welcome".to_string(), Value::Bool(skipWelcome));
+
+            match store.save() {
+              Ok(_) => {
+                  log::info!("App settings saved: first_run={}, skip_welcome={}", firstRun, skipWelcome);
+              }
+              Err(e) => {
+                  error!("Failed to save store: {}", e);
+              }
+            }
+        }
+        Err(e) => {
+            error!("Failed to create/access store: {}", e);
+        }
+    }
 }

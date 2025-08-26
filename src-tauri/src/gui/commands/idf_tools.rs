@@ -1,4 +1,4 @@
-use crate::gui::ui::{send_message, send_tools_message, ProgressBar};
+use crate::gui::ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
@@ -9,7 +9,7 @@ use idf_im_lib::{
 };
 use log::{ error, info};
 use std::{
-  path::{Path, PathBuf},
+  path::{Path, PathBuf}, sync::{Arc, Mutex},
 };
 use tauri::AppHandle;
 
@@ -90,166 +90,326 @@ impl ToolSetup {
 
 /// Sets up ESP-IDF tools based on settings and IDF path
 pub async fn setup_tools(
-  app_handle: &AppHandle,
-  settings: &Settings,
-  idf_path: &PathBuf,
-  idf_version: &str,
+    app_handle: &AppHandle,
+    settings: &Settings,
+    idf_path: &PathBuf,
+    idf_version: &str,
 ) -> Result<Vec<String>> {
-  info!("Setting up tools...");
+    info!("Setting up tools...");
 
-  let version_path = idf_path
-      .parent()
-      .context("Failed to get parent directory of IDF path")?;
+    let version_path = idf_path
+        .parent()
+        .context("Failed to get parent directory of IDF path")?;
 
-  // Initialize tool setup
-  let tool_setup = ToolSetup::new(settings, &PathBuf::from(version_path))
-      .map_err(|e| anyhow!("Failed to initialize tool setup: {}", e))?;
+    // Initialize tool setup
+    let tool_setup = ToolSetup::new(settings, &PathBuf::from(version_path))
+        .map_err(|e| anyhow!("Failed to initialize tool setup: {}", e))?;
 
-  // Create necessary directories
-  tool_setup
-      .create_directories(app_handle)
-      .map_err(|e| anyhow!("Failed to create tool directories: {}", e))?;
+    // Create necessary directories
+    tool_setup
+        .create_directories(app_handle)
+        .map_err(|e| anyhow!("Failed to create tool directories: {}", e))?;
 
-  // Validate tools.json exists
-  tool_setup
-      .validate_tools_json()
-      .map_err(|e| anyhow!("Failed to validate tools.json: {}", e))?;
+    // Validate tools.json exists
+    tool_setup
+        .validate_tools_json()
+        .map_err(|e| anyhow!("Failed to validate tools.json: {}", e))?;
 
-  // Parse tools.json and get list of tools to download
-  let tools = idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
-      .map_err(|e| {
-          send_message(
-              app_handle,
-              format!("Failed to parse tools.json: {}", e),
-              "error".to_string(),
-          );
-          anyhow!("Failed to parse tools.json: {}", e)
-      })?;
-
-  // Setup progress callback for the library function
-  let app_handle_clone = app_handle.clone();
-  let progress_callback = move |progress: DownloadProgress| {
-    match progress {
-        DownloadProgress::Progress(current, total) => {
-            let percentage = current * 100 / total;
-            let progress = ProgressBar::new(app_handle_clone.clone(), "Installing tools");
-            progress.update(percentage, Some(&format!("Downloading... {}%", percentage)));
-        }
-        DownloadProgress::Start(url) => {
-            // Extract filename from URL for tool status updates
-            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                send_tools_message(&app_handle_clone, filename.to_string(), "start".to_string());
-            }
-        }
-        DownloadProgress::Complete => {
-            let progress = ProgressBar::new(app_handle_clone.clone(), "Installing tools");
-            progress.finish();
-        }
-        DownloadProgress::Downloaded(url) => {
-            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                send_tools_message(&app_handle_clone, filename.to_string(), "downloaded".to_string());
-            }
-        }
-        DownloadProgress::Verified(url) => {
-            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                send_tools_message(&app_handle_clone, filename.to_string(), "download_verified".to_string());
-                send_tools_message(&app_handle_clone, filename.to_string(), "match".to_string());
-            }
-        }
-        DownloadProgress::Extracted(url, _dest) => {
-            if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                send_tools_message(&app_handle_clone, filename.to_string(), "extracted".to_string());
-            }
-        }
-        DownloadProgress::Error(err) => {
-            send_message(
-                &app_handle_clone,
-                format!("Download error: {}", err),
-                "error".to_string(),
+    // Parse tools.json and get list of tools to download
+    let tools = idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
+        .map_err(|e| {
+            emit_log_message(
+                app_handle,
+                MessageLevel::Error,
+                format!("Failed to parse tools.json: {}", e),
             );
+            anyhow!("Failed to parse tools.json: {}", e)
+        })?;
+
+    // Start tools installation phase (65% of total progress)
+    emit_installation_event(app_handle, InstallationProgress {
+        stage: InstallationStage::Tools,
+        percentage: 65,
+        message: "Starting development tools installation...".to_string(),
+        detail: Some(format!("Preparing to install {} tools", tools.tools.len())),
+        version: Some(idf_version.to_string()),
+    });
+
+    // Progress tracking with interior mutability
+    let total_tools = tools.tools.len() as f32;
+    let completed_tools = Arc::new(Mutex::new(0u32));
+    let current_tool_name = Arc::new(Mutex::new(String::new()));
+    let base_percentage = 65u32; // Tools start at 65%
+    let tools_range = 25u32; // Tools take 65-90% (25% range)
+
+    // Setup progress callback for the library function
+    let app_handle_clone = app_handle.clone();
+    let idf_version_clone = idf_version.to_string();
+    let completed_tools_clone = completed_tools.clone();
+    let current_tool_name_clone = current_tool_name.clone();
+
+    let progress_callback = move |progress: DownloadProgress| {
+        match progress {
+            DownloadProgress::Progress(current, total) => {
+                if total > 0 {
+                    let tool_progress = current * 100 / total;
+                    let completed = *completed_tools_clone.lock().unwrap();
+                    let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                    let overall_tool_progress = (completed as f32 / total_tools) * tools_range as f32;
+                    let current_tool_contribution = (tool_progress as f32 / 100.0) * (tools_range as f32 / total_tools);
+                    let overall_percentage = base_percentage + overall_tool_progress as u32 + current_tool_contribution as u32;
+
+                    emit_installation_event(&app_handle_clone, InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: overall_percentage.min(89), // Cap at 89% to leave room for completion
+                        message: format!("Downloading: {}",
+                            tool_name.split('/').last()
+                                .unwrap_or(&tool_name)
+                                .replace("-", " ")
+                        ),
+                        detail: Some(format!("Tool {}/{} - {}%",
+                            completed + 1, total_tools as u32, tool_progress)),
+                        version: Some(idf_version_clone.clone()),
+                    });
+                }
+            }
+
+            DownloadProgress::Start(url) => {
+                // Extract tool name from URL
+                let tool_name = if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                    // Try to extract tool name from filename (remove version/platform info)
+                    let clean_name = filename
+                        .split('-')
+                        .take(3) // Take first few parts before version numbers
+                        .collect::<Vec<_>>()
+                        .join("-")
+                        .replace(".tar", "")
+                        .replace(".zip", "");
+                    clean_name
+                } else {
+                    "Unknown tool".to_string()
+                };
+
+                *current_tool_name_clone.lock().unwrap() = tool_name.clone();
+                let completed = *completed_tools_clone.lock().unwrap();
+                let overall_percentage = base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32;
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: overall_percentage.min(89),
+                    message: format!("Preparing: {}",
+                        tool_name.replace("-", " ")
+                    ),
+                    detail: Some(format!("Starting tool {}/{}",
+                        completed + 1, total_tools as u32)),
+                    version: Some(idf_version_clone.clone()),
+                });
+
+                emit_log_message(&app_handle_clone, MessageLevel::Info,
+                    format!("Starting download: {}", tool_name));
+            }
+
+            DownloadProgress::Downloaded(url) => {
+                let completed = *completed_tools_clone.lock().unwrap();
+                let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 1).min(89),
+                    message: format!("Verifying: {}",
+                        tool_name.replace("-", " ")
+                    ),
+                    detail: Some(format!("Downloaded tool {}/{}",
+                        completed + 1, total_tools as u32)),
+                    version: Some(idf_version_clone.clone()),
+                });
+
+                emit_log_message(&app_handle_clone, MessageLevel::Info,
+                    format!("Downloaded: {}", tool_name));
+            }
+
+            DownloadProgress::Verified(url) => {
+                let completed = *completed_tools_clone.lock().unwrap();
+                let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 2).min(89),
+                    message: format!("Extracting: {}",
+                        tool_name.replace("-", " ")
+                    ),
+                    detail: Some(format!("Verified tool {}/{}",
+                        completed + 1, total_tools as u32)),
+                    version: Some(idf_version_clone.clone()),
+                });
+
+                emit_log_message(&app_handle_clone, MessageLevel::Success,
+                    format!("Verified: {}", tool_name));
+            }
+
+            DownloadProgress::Extracted(url, _dest) => {
+                let mut completed = completed_tools_clone.lock().unwrap();
+                *completed += 1;
+                let completed_count = *completed;
+                let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                let overall_percentage = base_percentage + ((completed_count as f32 / total_tools) * tools_range as f32) as u32;
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: overall_percentage.min(89),
+                    message: format!("Installed: {}",
+                        tool_name.replace("-", " ")
+                    ),
+                    detail: Some(format!("Completed {} of {} tools",
+                        completed_count, total_tools as u32)),
+                    version: Some(idf_version_clone.clone()),
+                });
+
+                emit_log_message(&app_handle_clone, MessageLevel::Success,
+                    format!("Installed tool: {} ({}/{})", tool_name, completed_count, total_tools as u32));
+            }
+
+            DownloadProgress::Complete => {
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: 89,
+                    message: "All development tools downloaded".to_string(),
+                    detail: Some(format!("Completed {} tools installation", total_tools as u32)),
+                    version: Some(idf_version_clone.clone()),
+                });
+            }
+
+            DownloadProgress::Error(err) => {
+                let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Error,
+                    percentage: 0,
+                    message: format!("Tool installation failed: {}", tool_name),
+                    detail: Some(err.to_string()),
+                    version: Some(idf_version_clone.clone()),
+                });
+
+                emit_log_message(&app_handle_clone, MessageLevel::Error,
+                    format!("Tool installation error: {}", err));
+            }
         }
+    };
+
+    // Use the library's setup_tools function
+    let installed_tools_list = idf_tools::setup_tools(
+        &tools,
+        settings.target.clone().unwrap_or_default(),
+        &PathBuf::from(&tool_setup.download_dir),
+        &PathBuf::from(&tool_setup.install_dir),
+        settings.mirror.as_deref(),
+        progress_callback,
+    )
+    .await
+    .map_err(|e| {
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: "Failed to setup development tools".to_string(),
+            detail: Some(e.to_string()),
+            version: Some(idf_version.to_string()),
+        });
+        anyhow!("Failed to setup tools: {}", e)
+    })?;
+
+    let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
+
+    info!("Setting up tools... to directory: {}", tools_install_folder.display());
+
+    // Get and validate IDF tools path
+    let mut idf_tools_path = idf_path.clone();
+    idf_tools_path.push(settings.idf_tools_path.clone().unwrap_or_default());
+
+    if std::fs::metadata(&idf_tools_path).is_err() {
+        error!("IDF tools path does not exist");
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: "IDF tools path validation failed".to_string(),
+            detail: Some("IDF tools path does not exist".to_string()),
+            version: Some(idf_version.to_string()),
+        });
+        return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
     }
-  };
 
-  // Use the library's setup_tools function
-  let installed_tools_list = idf_tools::setup_tools(
-      &tools,
-      settings.target.clone().unwrap_or_default(),
-      &PathBuf::from(&tool_setup.download_dir),
-      &PathBuf::from(&tool_setup.install_dir),
-      settings.mirror.as_deref(),
-      progress_callback,
-  )
-  .await
-  .map_err(|e| anyhow!("Failed to setup tools: {}", e))?;
+    // Transition to Python setup phase (90%)
+    emit_installation_event(app_handle, InstallationProgress {
+        stage: InstallationStage::Python,
+        percentage: 90,
+        message: "Setting up Python environment...".to_string(),
+        detail: Some("Installing Python dependencies for ESP-IDF".to_string()),
+        version: Some(idf_version.to_string()),
+    });
 
-  let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
+    // Install Python environment
+    match idf_im_lib::python_utils::install_python_env(
+        &idf_version,
+        &tools_install_folder,
+        true, //TODO: actually read from config
+        &idf_path,
+        &settings.idf_features.clone().unwrap_or_default(),
+        None, // Offline archive directory
+    ).await {
+        Ok(_) => {
+            info!("Python environment installed");
+            emit_installation_event(app_handle, InstallationProgress {
+                stage: InstallationStage::Python,
+                percentage: 93,
+                message: "Python environment configured successfully".to_string(),
+                detail: Some("ESP-IDF Python dependencies installed".to_string()),
+                version: Some(idf_version.to_string()),
+            });
 
-  info!("Setting up tools... to directory: {}", tools_install_folder.display());
+            emit_log_message(app_handle, MessageLevel::Success,
+                "Python environment installed successfully".to_string());
+        }
+        Err(err) => {
+            error!("Failed to install Python environment: {}", err);
+            emit_installation_event(app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: "Python environment setup failed".to_string(),
+                detail: Some(err.to_string()),
+                version: Some(idf_version.to_string()),
+            });
+            return Err(anyhow!("Failed to install Python environment: {}", err));
+        }
+    };
 
-  // Get and validate IDF tools path
-  let mut idf_tools_path = idf_path.clone();
-  idf_tools_path.push(settings.idf_tools_path.clone().unwrap_or_default());
+    // Generate export paths
+    let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
+        tools,
+        installed_tools_list,
+        tools_install_folder.to_str().unwrap(),
+    )
+    .into_iter()
+    .map(|p| {
+        if std::env::consts::OS == "windows" {
+            idf_im_lib::replace_unescaped_spaces_win(&p)
+        } else {
+            p
+        }
+    })
+    .collect();
 
-  if std::fs::metadata(&idf_tools_path).is_err() {
-      error!("IDF tools path does not exist");
-      return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
-  }
+    // Configuration phase (95%)
+    emit_installation_event(app_handle, InstallationProgress {
+        stage: InstallationStage::Configure,
+        percentage: 95,
+        message: "Configuring environment variables...".to_string(),
+        detail: Some("Setting up ESP-IDF development environment".to_string()),
+        version: Some(idf_version.to_string()),
+    });
 
+    emit_log_message(app_handle, MessageLevel::Success,
+        "Tools setup completed successfully".to_string());
 
-  match idf_im_lib::python_utils::install_python_env(
-    &idf_version,
-    &tools_install_folder,
-    true, //TODO: actually read from config
-    &idf_path,
-    &settings.idf_features.clone().unwrap_or_default(),
-    None, // Offline archive directory
-  ).await {
-      Ok(_) => {
-        info!("Python environment installed");
-        send_message(
-          app_handle,
-          "Python environment installed successfully".to_string(),
-          "info".to_string(),
-        );
-      }
-      Err(err) => {
-          error!("Failed to install Python environment: {}", err);
-          send_message(
-            app_handle,
-            "Failed to install Python environment".to_string(),
-            "error".to_string(),
-          );
-          return Err(anyhow!("Failed to install Python environment: {}", err));
-      }
-  };
-
-  send_message(
-      app_handle,
-      "IDF tools setup completed successfully".to_string(),
-      "info".to_string(),
-  );
-
-  let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
-      tools,
-      installed_tools_list,
-      tools_install_folder.to_str().unwrap(),
-  )
-  .into_iter()
-  .map(|p| {
-      if std::env::consts::OS == "windows" {
-          idf_im_lib::replace_unescaped_spaces_win(&p)
-      } else {
-          p
-      }
-  })
-  .collect();
-
-  send_message(
-      app_handle,
-      "Tools setup completed successfully".to_string(),
-      "info".to_string(),
-  );
-
-  Ok(export_paths)
+    Ok(export_paths)
 }
