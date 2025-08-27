@@ -2,7 +2,7 @@
   <div class="simple-setup">
     <div class="setup-header">
       <h1 class="title">Easy Installation</h1>
-      <n-button @click="goBack" quaternary>
+      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -39,10 +39,10 @@
             <span class="summary-label">Estimated Size:</span>
             <span class="summary-value">~3.5 GB</span>
           </div>
-          <!-- <div class="summary-item">
+          <div class="summary-item">
             <span class="summary-label">Estimated Time:</span>
             <span class="summary-value">10-45 minutes</span>
-          </div> -->
+          </div>
         </div>
         <n-alert type="info" :bordered="false" style="margin: 1.5rem 0;">
           This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.
@@ -76,7 +76,7 @@
           :show-details="true"
           :color-scheme="getProgressColorScheme"
           :steps="installationSteps"
-          event-channel="simple-setup-progress"
+          event-channel="installation-progress"
         />
 
         <n-collapse
@@ -123,7 +123,7 @@
         <div class="post-install-info">
           <h3>Next Steps:</h3>
           <ol>
-            <li>Open a new terminal/command prompt</li>
+            <li>Open a new IDF terminal using the icon on your desktop.</li>
             <li>Navigate to your project directory</li>
             <li>Run <code>idf.py create-project my_project</code> to create a new project</li>
             <li>Run <code>idf.py build</code> to build your project</li>
@@ -211,6 +211,8 @@ export default {
     const currentState = ref('checking') // checking, ready, installing, complete, error
     const selectedVersion = ref('latest')
     const installPath = ref('')
+    const currentStep = ref(0)
+
 
     // Installation progress
     const installationTitle = ref('Installing ESP-IDF')
@@ -218,9 +220,12 @@ export default {
     const installationProgress = ref(0)
     const installMessages = ref([])
     const installationSteps = ref([
+      { title: 'Check', description: 'System requirements' },
+      { title: 'Prerequisites', description: 'Installing dependencies' },
       { title: 'Download', description: 'Downloading ESP-IDF' },
       { title: 'Extract', description: 'Extracting files' },
       { title: 'Tools', description: 'Installing tools' },
+      { title: 'Python', description: 'Setting up Python' },
       { title: 'Configure', description: 'Configuring environment' },
       { title: 'Complete', description: 'Finalizing installation' }
     ])
@@ -234,6 +239,7 @@ export default {
     let unlistenProgress = null
     let unlistenComplete = null
     let unlistenError = null
+    let unlistenLog = null
 
     const getStatusIcon = computed(() => {
       if (installationProgress.value < 30) return DownloadOutlined
@@ -262,7 +268,7 @@ export default {
             errorDetails.value = prereqResult.missing.join('\n')
             currentState.value = 'error'
             return false
-          }
+          } // TODO: maybe on windows inform user which prerequisities will be installed
           return true
         })
 
@@ -270,7 +276,7 @@ export default {
 
         // Get default installation path
         const settings = await invoke('get_settings')
-        installPath.value = settings?.path || '/opt/esp'
+        installPath.value = settings?.path
 
         // Check if path is valid
         const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
@@ -305,42 +311,81 @@ export default {
     const startInstallation = async () => {
       currentState.value = 'installing'
       installationProgress.value = 0
+      currentStep.value = 0
       installMessages.value = []
 
+      try {
       // Set up event listeners
-      unlistenProgress = await listen('simple-setup-progress', (event) => {
-        const { message: msg, percentage, step } = event.payload
+      unlistenProgress = await listen('installation-progress', (event) => {
+        const { stage, percentage, message, detail, version } = event.payload;
 
-        if (msg) {
-          installationMessage.value = msg
-          installMessages.value.push(msg)
-        }
+        installationProgress.value = percentage;
+        installationMessage.value = message;
 
+        // Update progress with smooth transitions
         if (percentage !== undefined) {
-          installationProgress.value = percentage
+          // Ensure progress only moves forward (avoid jumping backwards)
+          if (percentage >= installationProgress.value) {
+            installationProgress.value = percentage
+          }
         }
 
-        if (step !== undefined) {
-          updateInstallationStep(step)
+        if (message) {
+          installationMessage.value = message
         }
-      })
 
-      unlistenComplete = await listen('installation_complete', (event) => {
-        const { success, message: msg } = event.payload
+        // Map stage to step for UI
+        const stageToStep = {
+          'checking': 0,
+          'prerequisites': 1,
+          'download': 2,
+          'extract': 3,
+          'tools': 4,
+          'python': 5,
+          'configure': 6,
+          'complete': 7
+        };
 
-        if (success) {
-          currentState.value = 'complete'
-          installationProgress.value = 100
-          message.success('Installation completed successfully!')
-        } else {
+        // For download stage, show submodules step when progress > 10%
+        if (stage === 'download' && percentage > 10) {
+          currentStep.value = 3 // Show submodules step
+          if (stageToStep[stage] !== undefined) {
+            updateInstallationStep(stage)
+          }
+        } else if (stageToStep[stage] !== undefined) {
+          // Only update step if we're moving forward
+          if (stageToStep[stage] >= currentStep.value) {
+            currentStep.value = stageToStep[stage]
+            updateInstallationStep(stage) // Update title based on stage
+          }
+        }
+
+        if (stage === 'error') {
           currentState.value = 'error'
-          errorTitle.value = 'Installation Failed'
-          errorMessage.value = msg || 'An error occurred during installation.'
+          errorMessage.value = message || 'Installation failed'
+          errorDetails.value = detail || ''
+        } else if (stage === 'complete' || percentage === 100) {
+          currentState.value = 'complete'
+          installationProgress.value = 100 // Ensure we show 100%
         }
-      })
+
+        // Auto-advance to complete state when we reach 100%
+        if (percentage >= 100 && stage !== 'error') {
+          setTimeout(() => {
+            if (currentState.value === 'installing') {
+              currentState.value = 'complete'
+            }
+          }, 1000) // Give a moment to show 100% before completing
+        }
+      });
+
+      unlistenLog = await listen('log-message', (event) => {
+        const { level, message } = event.payload;
+        installMessages.value.push(`[${level}] ${message}`);
+      });
 
       // Start installation
-      try {
+
         await invoke('start_simple_setup', {
           version: selectedVersion.value,
           path: installPath.value
@@ -355,11 +400,14 @@ export default {
     const updateInstallationStep = (step) => {
       // Update installation title based on step
       const titles = {
-        download: 'Downloading ESP-IDF',
-        extract: 'Extracting Files',
-        tools: 'Installing Tools',
-        configure: 'Configuring Environment',
-        complete: 'Finalizing Installation'
+        'checking': 'Checking System',
+        'prerequisites': 'Installing Prerequisites',
+        'download': 'Downloading ESP-IDF',
+        'extract': 'Extracting Files',
+        'tools': 'Installing Tools',
+        'python': 'Setting up Python',
+        'configure': 'Configuring Environment',
+        'complete': 'Finalizing Installation'
       }
 
       if (titles[step]) {
@@ -371,12 +419,18 @@ export default {
       currentState.value = 'checking'
       errorMessage.value = ''
       errorDetails.value = ''
+      installationProgress.value = 0
+      currentStep.value = 0
+      installMessages.value = []
       await checkPrerequisites()
     }
 
+
     const viewLogs = async () => {
       try {
-        await invoke('open_logs_folder')
+        // await invoke('open_logs_folder')
+        let logPath = await invoke("get_logs_folder", {});
+        invoke("show_in_folder", { path: logPath });
       } catch (error) {
         message.error('Failed to open logs folder')
       }
@@ -424,10 +478,12 @@ export default {
       if (unlistenProgress) unlistenProgress()
       if (unlistenComplete) unlistenComplete()
       if (unlistenError) unlistenError()
+      if (unlistenLog) unlistenLog()
     })
 
     return {
       currentState,
+      currentStep,
       selectedVersion,
       installPath,
       installationTitle,
@@ -457,7 +513,7 @@ export default {
 <style scoped>
 .simple-setup {
   padding: 2rem;
-  max-width: 900px;
+  /* max-width: 900px; */
   margin: 0 auto;
 }
 

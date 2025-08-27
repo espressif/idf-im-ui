@@ -170,42 +170,101 @@ export default {
     }
 
     const startListening = async () => {
-      unlisten = await listen(props.eventChannel, (event) => {
-        const { message, percentage, status, step } = event.payload
+  unlisten = await listen(props.eventChannel, (event) => {
+    // Handle new InstallationProgress structure
+    if (props.eventChannel === 'installation-progress') {
+      const { stage, percentage, message, detail, version } = event.payload
 
-        if (message !== undefined) {
-          currentMessage.value = message
+      // Update message
+      if (message) {
+        currentMessage.value = message
+        if (detail) {
+          currentMessage.value += ` - ${detail}`
+        }
+      }
+
+      // Update percentage
+      if (percentage !== undefined) {
+        progressPercentage.value = Math.min(100, Math.max(0, percentage))
+        updateEstimatedTime()
+      }
+
+      // Map stage to status and step
+      const stageMapping = {
+        'checking': { status: 'processing', step: 0 },
+        'prerequisites': { status: 'processing', step: 1 },
+        'download': { status: 'processing', step: 2 },
+        'extract': { status: 'processing', step: 3 },
+        'tools': { status: 'processing', step: 4 },
+        'python': { status: 'processing', step: 5 },
+        'configure': { status: 'processing', step: 6 },
+        'complete': { status: 'success', step: 7 },
+        'error': { status: 'error', step: currentStep.value }
+      }
+
+      if (stageMapping[stage]) {
+        const { status, step } = stageMapping[stage]
+
+        // Update status
+        switch (status) {
+          case 'success':
+            statusText.value = 'Completed'
+            processing.value = false
+            break
+          case 'error':
+            statusText.value = 'Failed'
+            processing.value = false
+            break
+          case 'processing':
+            statusText.value = 'In progress'
+            processing.value = true
+            break
         }
 
-        if (percentage !== undefined) {
-          progressPercentage.value = Math.min(100, Math.max(0, percentage))
-          updateEstimatedTime()
-        }
-
-        if (status !== undefined) {
-          switch (status) {
-            case 'success':
-              statusText.value = 'Completed'
-              processing.value = false
-              progressPercentage.value = 100
-              break
-            case 'error':
-              statusText.value = 'Failed'
-              processing.value = false
-              break
-            case 'warning':
-              statusText.value = 'Warning'
-              break
-            default:
-              statusText.value = status
-          }
-        }
-
+        // Update step
         if (step !== undefined && props.steps.length > 0) {
           currentStep.value = Math.min(step, props.steps.length - 1)
         }
-      })
+      }
     }
+    // Handle legacy format (for backwards compatibility)
+    else {
+      const { message, percentage, status, step } = event.payload
+
+      if (message !== undefined) {
+        currentMessage.value = message
+      }
+
+      if (percentage !== undefined) {
+        progressPercentage.value = Math.min(100, Math.max(0, percentage))
+        updateEstimatedTime()
+      }
+
+      if (status !== undefined) {
+        switch (status) {
+          case 'success':
+            statusText.value = 'Completed'
+            processing.value = false
+            progressPercentage.value = 100
+            break
+          case 'error':
+            statusText.value = 'Failed'
+            processing.value = false
+            break
+          case 'warning':
+            statusText.value = 'Warning'
+            break
+          default:
+            statusText.value = status
+        }
+      }
+
+      if (step !== undefined && props.steps.length > 0) {
+        currentStep.value = Math.min(step, props.steps.length - 1)
+      }
+    }
+  })
+}
 
     onMounted(() => {
       startListening()

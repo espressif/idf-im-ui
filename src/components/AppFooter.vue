@@ -220,7 +220,7 @@ export default {
 
     const openDocumentation = async () => {
       try {
-        // await openUrl('https://docs.espressif.com/projects/esp-idf/en/latest/')
+        // await openUrl('https://docs.espressif.com/projects/idf-im-ui/en/latest/')
       } catch (error) {
         message.error('Failed to open documentation')
       }
@@ -228,7 +228,9 @@ export default {
 
     const openLogsFolder = async () => {
       try {
-        await invoke('open_logs_folder')
+        // await invoke('open_logs_folder')
+        let logPath = await invoke("get_logs_folder", {});
+        invoke("show_in_folder", { path: logPath });
         message.success('Logs folder opened')
       } catch (error) {
         message.error('Failed to open logs folder')
