@@ -406,6 +406,12 @@ jobs:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
+          security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p espressif build.keychain
+          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
           codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
           codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
 
