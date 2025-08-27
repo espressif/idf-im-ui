@@ -1,9 +1,14 @@
 # Setup dummy HTTP server on a non-standard port to catch network attempts
 Start-Job -ScriptBlock {
-  $listener = New-Object System.Net.HttpListener
-  $listener.Prefixes.Add("http://127.0.0.1:8888/")
-  $listener.Start()
-  Write-Host "Network monitoring server started on port 8888"
+  try {
+    $listener = New-Object System.Net.HttpListener
+    $listener.Prefixes.Add("http://127.0.0.1:8888/")
+    $listener.Start()
+    Write-Host "Network monitoring server started on port 8888"
+  } catch {
+    Write-Error "Failed to start network monitoring server: $_"
+    throw "Failed to start network monitoring server."
+  }
 
   while ($listener.IsListening) {
     $context = $listener.GetContext()

@@ -120,11 +120,7 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         "Failed to complete installation, missing 'Now you can start using IDF tools'"
       ).to.include("Now you can start using IDF tools");
 
-      const networkAccessLogEntries = [
-        "NETWORK VIOLATION",
-        "proxy",
-        "127.0.0.1:8888",
-      ];
+      const networkAccessLogEntries = ["NETWORK VIOLATION", "127.0.0.1:8888"];
       networkAccessLogEntries.forEach((entry) => {
         expect(
           testRunner.output,

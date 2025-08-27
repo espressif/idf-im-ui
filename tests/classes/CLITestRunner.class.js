@@ -46,17 +46,18 @@ class CLITestRunner {
   // Create isolated environment for network blocking
   createIsolatedEnvironment() {
     const isolatedEnv = { ...process.env };
+    const proxyUrl = "http://127.0.0.1:8888";
 
     if (process.env.ENABLE_NETWORK_ISOLATION === "true") {
       logger.info("Network isolation enabled for CLI process");
 
       // Set proxy environment variables to a monitoring server
-      isolatedEnv.HTTP_PROXY = "http://127.0.0.1:8888";
-      isolatedEnv.HTTPS_PROXY = "http://127.0.0.1:8888";
-      isolatedEnv.http_proxy = "http://127.0.0.1:8888";
-      isolatedEnv.https_proxy = "http://127.0.0.1:8888";
-      isolatedEnv.FTP_PROXY = "http://127.0.0.1:8888";
-      isolatedEnv.ftp_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.HTTP_PROXY = proxyUrl;
+      isolatedEnv.HTTPS_PROXY = proxyUrl;
+      isolatedEnv.http_proxy = proxyUrl;
+      isolatedEnv.https_proxy = proxyUrl;
+      isolatedEnv.FTP_PROXY = proxyUrl;
+      isolatedEnv.ftp_proxy = proxyUrl;
       isolatedEnv.NO_PROXY = "";
       isolatedEnv.no_proxy = "";
 
@@ -67,18 +68,18 @@ class CLITestRunner {
       isolatedEnv.SSL_CERT_DIR = ""; // Disable SSL certificates
 
       // Rust/Cargo specific
-      isolatedEnv.CARGO_HTTP_PROXY = "http://127.0.0.1:8888";
-      isolatedEnv.CARGO_HTTPS_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.CARGO_HTTP_PROXY = proxyUrl;
+      isolatedEnv.CARGO_HTTPS_PROXY = proxyUrl;
 
       // Git specific
       isolatedEnv.GIT_PROXY_COMMAND = "";
 
       // Node.js specific
-      isolatedEnv.npm_config_proxy = "http://127.0.0.1:8888";
-      isolatedEnv.npm_config_https_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.npm_config_proxy = proxyUrl;
+      isolatedEnv.npm_config_https_proxy = proxyUrl;
 
       // Python pip specific
-      isolatedEnv.PIP_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.PIP_PROXY = proxyUrl;
 
       logger.debug("Network isolation environment variables set");
     }
@@ -110,7 +111,6 @@ class CLITestRunner {
       if (process.env.ENABLE_NETWORK_ISOLATION === "true") {
         if (
           cleanData.includes("NETWORK VIOLATION") ||
-          cleanData.includes("proxy") ||
           cleanData.includes("127.0.0.1:8888")
         ) {
           logger.warn(

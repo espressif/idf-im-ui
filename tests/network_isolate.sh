@@ -4,8 +4,7 @@
 python3 -c "
 import http.server
 import socketserver
-import threading
-import time
+import sys
 
 class NetworkBlockHandler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -23,15 +22,15 @@ class NetworkBlockHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         pass  # Suppress default logging
 
-def start_server():
+print('Network monitoring server started on port 8888')
+try:
     with socketserver.TCPServer(('127.0.0.1', 8888), NetworkBlockHandler) as httpd:
         httpd.serve_forever()
-
-server_thread = threading.Thread(target=start_server, daemon=True)
-server_thread.start()
-print('Network monitoring server started on port 8888')
-time.sleep(1)  # Give server time to start
+except OSError as e:
+    print(f'Error starting server: {e}', flush=True)
+    sys.exit(1)
 " &
+sleep 2
 
 # Set proxy environment variables to route traffic through our blocking server
 export HTTP_PROXY=http://127.0.0.1:8888
