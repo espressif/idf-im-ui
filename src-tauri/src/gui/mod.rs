@@ -140,6 +140,13 @@ fn fix_installation(id: String) { // TODO
   //   }
   // };
 }
+#[tauri::command]
+fn get_app_settings() -> Value { // TODO: persist
+    json!({
+        "first_run": true,
+        "skip_welcome": false
+    })
+}
 
 fn prepare_installation_directories(
     app_handle: AppHandle,
@@ -406,6 +413,7 @@ pub fn run() {
             rename_installation,
             remove_installation,
             fix_installation,
+            get_app_settings,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -191,12 +191,12 @@ export default {
 
         // Check for .zst archives in current directory
         const archives = await invoke('scan_for_archives')
-        hasOfflineArchives.value = archives && archives.length > 0
+        hasOfflineArchives.value = false //archives && archives.length > 0
         offlineArchives.value = archives || []
 
         // Check if this is first run
-        const settings = await invoke('get_app_settings')
-        isFirstRun.value = settings?.first_run !== false
+        // const settings = await invoke('get_app_settings')
+        isFirstRun.value = true// settings?.first_run !== false
 
         // Auto-navigate based on status
         setTimeout(() => {
@@ -212,7 +212,7 @@ export default {
 
     const autoNavigate = () => {
       // Don't auto-navigate if user disabled welcome screen
-      if (!isFirstRun.value && dontShowAgain.value) {
+      // if (!isFirstRun.value && dontShowAgain.value) {
         if (hasInstalledVersions.value) {
           router.replace('/version-management')
         } else if (hasOfflineArchives.value) {
@@ -223,7 +223,7 @@ export default {
         } else {
           router.replace('/basic-installer')
         }
-      }
+      // }
     }
 
     const savePreferences = async () => {
