@@ -76,7 +76,7 @@ jobs:
           STRIPPED_TAG=${LATEST_TAG#v}
           echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
 
-      - name: Make EIM executable (non-Windows)
+      - name: Make EIM and script executable (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
           ls -la ./artifacts/
@@ -84,11 +84,11 @@ jobs:
           mv ./artifacts/archive_v*.zst ./artifacts/archive.zst
           ls -la ./artifacts/
           chmod +x artifacts/eim
+          chmod +x tests/network_isolate.sh
 
       - name: Install dependencies and node.js (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
-          sudo add-apt-repository ppa:deadsnakes/ppa -y
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0
           python3 --version
@@ -111,8 +111,9 @@ jobs:
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_OFFLINE_ARCHIVE="../artifacts/archive.zst"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
+          export ENABLE_NETWORK_ISOLATION="true"
           cd tests
-          npm run test-CLI --file=CLI-offline
+          ./network_isolate.sh npm run test-CLI --file=CLI-offline
         continue-on-error: true
 
       # Windows steps
@@ -140,9 +141,10 @@ jobs:
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_OFFLINE_ARCHIVE = "..\artifacts\archive.zst"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          $env:ENABLE_NETWORK_ISOLATION = "true"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
-          npm run test-CLI-win --file=CLI-offline
+          PowerShell -ExecutionPolicy Bypass -File ".\network_isolate.ps1"; npm run test-CLI-win --file=CLI-offline
         continue-on-error: true
 
       # Copy eim log files to standard location for easier access

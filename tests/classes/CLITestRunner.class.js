@@ -43,16 +43,62 @@ class CLITestRunner {
     }
   }
 
+  // Create isolated environment for network blocking
+  createIsolatedEnvironment() {
+    const isolatedEnv = { ...process.env };
+
+    if (process.env.ENABLE_NETWORK_ISOLATION === "true") {
+      logger.info("Network isolation enabled for CLI process");
+
+      // Set proxy environment variables to a monitoring server
+      isolatedEnv.HTTP_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.HTTPS_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.http_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.https_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.FTP_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.ftp_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.NO_PROXY = "";
+      isolatedEnv.no_proxy = "";
+
+      // Additional environment variables that some tools respect
+      isolatedEnv.REQUESTS_CA_BUNDLE = ""; // Disable SSL certificates for Python requests
+      isolatedEnv.CURL_CA_BUNDLE = ""; // Disable SSL certificates for curl
+      isolatedEnv.SSL_CERT_FILE = ""; // Disable SSL certificates
+      isolatedEnv.SSL_CERT_DIR = ""; // Disable SSL certificates
+
+      // Rust/Cargo specific
+      isolatedEnv.CARGO_HTTP_PROXY = "http://127.0.0.1:8888";
+      isolatedEnv.CARGO_HTTPS_PROXY = "http://127.0.0.1:8888";
+
+      // Git specific
+      isolatedEnv.GIT_PROXY_COMMAND = "";
+
+      // Node.js specific
+      isolatedEnv.npm_config_proxy = "http://127.0.0.1:8888";
+      isolatedEnv.npm_config_https_proxy = "http://127.0.0.1:8888";
+
+      // Python pip specific
+      isolatedEnv.PIP_PROXY = "http://127.0.0.1:8888";
+
+      logger.debug("Network isolation environment variables set");
+    }
+
+    return isolatedEnv;
+  }
+
   async start(command = this.command, fullArgs = this.args, timeout = 5000) {
     logger.debug(
       `Starting terminal emulator ${this.command} with args ${this.args}`
     );
+
+    const isolatedEnv = this.createIsolatedEnvironment();
+
     this.process = pty.spawn(command, fullArgs, {
       name: "eim-terminal",
       cols: 80,
       rows: 30,
       cwd: process.cwd(),
-      env: process.env,
+      env: isolatedEnv,
     });
     this.exited = false;
 
@@ -60,6 +106,19 @@ class CLITestRunner {
       let cleanData = stripAnsi(data);
       cleanData = cleanData.replace(/\\[\r\n]+/g, "");
       cleanData = cleanData.replace(/[\r\n]+/g, "");
+
+      if (process.env.ENABLE_NETWORK_ISOLATION === "true") {
+        if (
+          cleanData.includes("NETWORK VIOLATION") ||
+          cleanData.includes("proxy") ||
+          cleanData.includes("127.0.0.1:8888")
+        ) {
+          logger.warn(
+            `Potential network access attempt detected: ${cleanData}`
+          );
+        }
+      }
+
       logger.debug(cleanData);
       this.output += cleanData;
       this.lastDataTimestamp = Date.now();
