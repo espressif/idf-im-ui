@@ -336,7 +336,7 @@ export default {
         })
 
         if (selected) {
-          await invoke('load_configuration', { path: selected })
+          const _ = await invoke("load_settings", { path: selected });
           message.success('Configuration loaded')
           router.push('/installation-progress')
         }

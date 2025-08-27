@@ -1,19 +1,7 @@
 <template>
   <div class="welcome-container">
-    <!-- Splash Screen -->
-    <transition name="fade">
-      <div v-if="showSplash" class="splash-screen">
-        <div class="splash-content">
-          <img src="../assets/espressif_logo.svg" alt="Espressif" class="logo" />
-          <h1>ESP-IDF Installation Manager</h1>
-          <p>Setting up your development environment...</p>
-          <n-spin size="large" />
-        </div>
-      </div>
-    </transition>
-
     <!-- Main Welcome Screen -->
-    <main v-if="!showSplash" class="main-content">
+    <main class="main-content">
       <!-- CPU Check for Windows -->
       <div class="welcome-card" v-if="os === 'windows' && cpuCount == 1">
         <h1>System Requirements</h1>
@@ -84,7 +72,6 @@
 
             <!-- New Installation -->
             <n-card
-              v-if="!hasInstalledVersions || showAllOptions"
               class="decision-card new-action"
               @click="goToBasicInstaller"
               hoverable
@@ -100,13 +87,6 @@
             </n-card>
           </div>
 
-          <!-- Show More Options -->
-          <div v-if="hasInstalledVersions && !showAllOptions" class="more-options">
-            <n-button @click="showAllOptions = true" block size="small">
-              Show more options →
-            </n-button>
-          </div>
-
           <!-- Don't Show Again -->
           <div v-if="isFirstRun" class="preferences">
             <n-checkbox v-model:checked="dontShowAgain">
@@ -116,6 +96,7 @@
         </div>
       </div>
     </main>
+
   </div>
 </template>
 
@@ -147,7 +128,6 @@ export default {
     const cpuCount = ref(0)
 
     // Installation status
-    const showSplash = ref(true)
     const checkingStatus = ref(true)
     const hasInstalledVersions = ref(false)
     const installedVersionsCount = ref(0)
@@ -157,7 +137,6 @@ export default {
     // UI state
     const isFirstRun = ref(true)
     const dontShowAgain = ref(false)
-    const showAllOptions = ref(false)
 
     const getWelcomeMessage = computed(() => {
       if (hasInstalledVersions.value && hasOfflineArchives.value) {
@@ -266,19 +245,12 @@ export default {
 
     onMounted(async () => {
       await checkSystem()
-
-      // Show splash for at least 1.5 seconds
-      setTimeout(() => {
-        showSplash.value = false
-      }, 1500)
-
       await checkInstallationStatus()
     })
 
     return {
       os,
       cpuCount,
-      showSplash,
       checkingStatus,
       hasInstalledVersions,
       installedVersionsCount,
@@ -286,7 +258,6 @@ export default {
       offlineArchives,
       isFirstRun,
       dontShowAgain,
-      showAllOptions,
       getWelcomeMessage,
       goToVersionManagement,
       goToOfflineInstaller,
@@ -300,6 +271,7 @@ export default {
 <style scoped>
 .welcome-container {
   min-height: 100vh;
+  width: 100vw;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -307,20 +279,22 @@ export default {
   background-image: url('../assets/bg.png');
   background-size: cover;
   background-position: center;
+  position: relative;
 }
 
 /* Splash Screen */
 .splash-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: linear-gradient(135deg, #667eea 0%, #E8362D 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 99999;
+}
+
+.hidden {
+  display: none;
 }
 
 .splash-content {
@@ -359,15 +333,19 @@ export default {
 /* Main Content */
 .main-content {
   width: 100%;
-  max-width: 1000px;
-  padding: 2rem;
+  min-width: 1200px;
+  max-width: 80vw;
+  padding: 0 2rem;
+  margin: 0 auto;
 }
 
 .welcome-card {
   background: white;
-  padding: 3rem;
+  padding: 3rem 4rem;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  /* width: 90%; */
+  min-width: 1000px;
 }
 
 .welcome-header {
@@ -407,16 +385,22 @@ export default {
 
 /* Decision Cards */
 .decision-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1.5rem;
+  display: flex;
+  gap: 2rem;
   margin: 2rem 0;
+  justify-content: center;
+  flex-wrap: nowrap;
+  width: 100%;
+  padding: 0 2rem;
 }
 
 .decision-card {
   transition: all 0.3s ease;
   cursor: pointer;
   border: 2px solid transparent;
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
 }
 
 .decision-card:hover {

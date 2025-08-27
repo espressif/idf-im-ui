@@ -4,8 +4,20 @@
       <n-dialog-provider>
         <n-notification-provider>
           <div id="app">
+            <!-- Splash Screen -->
+            <transition name="splash-fade" appear>
+              <div v-if="showSplash" class="splash-screen">
+                <div class="splash-content">
+                  <img src="./assets/espressif_logo.svg" alt="Espressif" class="logo" />
+                  <h1>ESP-IDF Installation Manager</h1>
+                  <p>Setting up your development environment...</p>
+                  <n-spin size="large" />
+                </div>
+              </div>
+            </transition>
+
             <!-- Header -->
-            <header class="app-header">
+            <header class="app-header" v-if="!showSplash">
               <div class="header-content">
                 <div class="header-brand">
                   <img src="./assets/espressif_logo_white.svg" alt="Espressif" class="logo" />
@@ -32,7 +44,7 @@
             </main>
 
             <!-- Footer -->
-            <AppFooter />
+            <AppFooter v-if="!showSplash" />
           </div>
         </n-notification-provider>
       </n-dialog-provider>
@@ -50,6 +62,7 @@ import {
   NNotificationProvider,
   NBreadcrumb,
   NBreadcrumbItem,
+  NSpin,
   darkTheme
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
@@ -63,11 +76,18 @@ export default {
     NNotificationProvider,
     NBreadcrumb,
     NBreadcrumbItem,
+    NSpin,
     AppFooter
   },
   setup() {
     const route = useRoute()
     const theme = ref(null) // null for light theme, darkTheme for dark
+    const showSplash = ref(true)
+
+    // Hide splash screen after delay
+    setTimeout(() => {
+      showSplash.value = false
+    }, 1500)
 
     // Breadcrumb configuration
     const routeToBreadcrumb = {
@@ -129,7 +149,8 @@ export default {
       theme,
       showBreadcrumb,
       breadcrumbs,
-      toggleTheme
+      toggleTheme,
+      showSplash
     }
   }
 }
@@ -229,6 +250,20 @@ html, body {
   opacity: 0;
 }
 
+/* Splash Screen Transitions */
+.splash-fade-enter-active {
+  transition: opacity 0.5s ease;
+}
+
+.splash-fade-leave-active {
+  transition: opacity 0.8s ease;
+}
+
+.splash-fade-enter-from,
+.splash-fade-leave-to {
+  opacity: 0;
+}
+
 /* Scrollbar Styles */
 .app-main::-webkit-scrollbar {
   width: 8px;
@@ -276,6 +311,41 @@ html, body {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+}
+
+/* Splash Screen */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #667eea 0%, #E8362D 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.splash-content {
+  text-align: center;
+  color: white;
+}
+
+.splash-content .logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 2rem;
+  filter: brightness(0) invert(1);
+}
+
+.splash-content h1 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.splash-content p {
+  font-size: 1.125rem;
+  margin-bottom: 2rem;
+  opacity: 0.9;
 }
 
 /* Utility Classes */

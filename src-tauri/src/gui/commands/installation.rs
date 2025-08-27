@@ -333,175 +333,407 @@ async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-  let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
 
-  // Set installation flag
-  if let Err(e) = set_installation_status(&app_handle, true) {
-      return Err(e);
-  }
+    // Set installation flag
+    if let Err(e) = set_installation_status(&app_handle, true) {
+        return Err(e);
+    }
 
-  // Get the settings and save to a temporary config file
-  let settings = get_settings_non_blocking(&app_handle)?;
-  let temp_dir = std::env::temp_dir();
-  let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
+    // Get the settings and save to a temporary config file
+    let settings = get_settings_non_blocking(&app_handle)?;
+    let temp_dir = std::env::temp_dir();
+    let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
 
-  // Make sure settings has proper values
-  let mut settings_clone = settings.clone();
-  settings_clone.config_file_save_path = Some(config_path.clone());
-  settings_clone.non_interactive = Some(true);
-  settings_clone.install_all_prerequisites = Some(true);
+    // Make sure settings has proper values
+    let mut settings_clone = settings.clone();
+    settings_clone.config_file_save_path = Some(config_path.clone());
+    settings_clone.non_interactive = Some(true);
+    settings_clone.install_all_prerequisites = Some(true);
 
-  if !is_path_empty_or_nonexistent(settings_clone.path.clone().unwrap().to_str().unwrap(), &settings_clone.clone().idf_versions.unwrap()) {
-    log::error!("Installation path not avalible: {:?}", settings_clone.path.clone().unwrap());
-    send_simple_setup_message(
-      &app_handle,
-      12,
-      format!("Installation path not avalible"),
-    );
-    return Err(format!("Installation path not avalible: {:?}", settings_clone.path.clone().unwrap()));
-  }
+    // Validate installation path
+    if !is_path_empty_or_nonexistent(settings_clone.path.clone().unwrap().to_str().unwrap(), &settings_clone.clone().idf_versions.unwrap()) {
+        log::error!("Installation path not available: {:?}", settings_clone.path.clone().unwrap());
 
-  // Save settings to temp file
-  if let Err(e) = settings_clone.save() {
-      log::error!("Failed to save temporary config: {}", e);
-      return Err(format!("Failed to save temporary config: {}", e));
-  }
+        emit_installation_event(&app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: "Installation path not available".to_string(),
+            detail: Some(format!("Path: {:?}", settings_clone.path.clone().unwrap())),
+            version: None,
+        });
 
-  log::info!("Saved temporary config to {}", config_path.display());
+        return Err(format!("Installation path not available: {:?}", settings_clone.path.clone().unwrap()));
+    }
 
-  // Get current executable path
-  let current_exe = std::env::current_exe()
-      .map_err(|e| format!("Failed to get current executable path: {}", e))?;
+    // Save settings to temp file
+    if let Err(e) = settings_clone.save() {
+        log::error!("Failed to save temporary config: {}", e);
 
-  send_message(
-      &app_handle,
-      "Starting installation in separate process...".to_string(),
-      "info".to_string(),
-  );
+        emit_installation_event(&app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: "Failed to save temporary configuration".to_string(),
+            detail: Some(e.to_string()),
+            version: None,
+        });
 
-  // Start the process with piped stdout and stderr
-  let mut child = Command::new(current_exe)
-      .arg("install")
-      .arg("-n").arg("true")             // Non-interactive mode
-      .arg("-a").arg("true")             // Install prerequisites
-      .arg("-c").arg(config_path.clone())    // Path to config file
-      .stdout(Stdio::piped())            // Capture stdout
-      .stderr(Stdio::piped())            // Capture stderr
-      .spawn()
-      .map_err(|e| format!("Failed to start installer: {}", e))?;
+        return Err(format!("Failed to save temporary config: {}", e));
+    }
 
-  // Set up monitor thread to read output and send to frontend
-  let monitor_handle = app_handle.clone();
-  let cfg_path = config_path.clone();
-  std::thread::spawn(move || {
-      let pid = child.id();
+    log::info!("Saved temporary config to {}", config_path.display());
 
-      // Get stdout and stderr
-      let mut child = child; // Take ownership of child to wait on it
-      let stdout = child.stdout.take().expect("Failed to capture stdout");
-      let stderr = child.stderr.take().expect("Failed to capture stderr");
+    // Get current executable path
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Failed to get current executable path: {}", e))?;
 
-      // Monitor stdout in a separate thread
-      let stdout_monitor = {
-          let handle = monitor_handle.clone();
-          std::thread::spawn(move || {
-              let stdout_reader = BufReader::new(stdout);
-              for line in stdout_reader.lines() {
-                  if let Ok(line) = line {
-                      // Send output to frontend
-                      let _ = handle.emit("installation_output", json!({
-                          "type": "stdout",
-                          "message": line
-                      }));
+    // Emit initial progress
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Checking,
+        percentage: 0,
+        message: "Starting installation process...".to_string(),
+        detail: Some("Launching installer subprocess".to_string()),
+        version: None,
+    });
 
-                      // Also log it
-                      log::info!("Install process stdout: {}", line);
-                  }
-              }
-          })
-      };
+    emit_log_message(&app_handle, MessageLevel::Info,
+        "Starting installation in separate process...".to_string());
 
-      // Monitor stderr in a separate thread
-      let stderr_monitor = {
-          let handle = monitor_handle.clone();
-          std::thread::spawn(move || {
-              let stderr_reader = BufReader::new(stderr);
-              for line in stderr_reader.lines() {
-                  if let Ok(line) = line {
-                      // Send output to frontend
-                      let _ = handle.emit("installation_output", json!({
-                          "type": "stderr",
-                          "message": line
-                      }));
+    // Start the process with piped stdout and stderr
+    let mut child = Command::new(current_exe)
+        .arg("install")
+        .arg("-n").arg("true")             // Non-interactive mode
+        .arg("-a").arg("true")             // Install prerequisites
+        .arg("-c").arg(config_path.clone())    // Path to config file
+        .stdout(Stdio::piped())            // Capture stdout
+        .stderr(Stdio::piped())            // Capture stderr
+        .spawn()
+        .map_err(|e| {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: "Failed to start installer process".to_string(),
+                detail: Some(e.to_string()),
+                version: None,
+            });
+            format!("Failed to start installer: {}", e)
+        })?;
 
-                      // Also log it
-                      log::error!("Install process stderr: {}", line);
-                  }
-              }
-          })
-      };
+    // Set up monitor thread to read output and send to frontend
+    let monitor_handle = app_handle.clone();
+    let cfg_path = config_path.clone();
+    let versions = settings_clone.idf_versions.clone().unwrap_or_default();
 
-      // Wait for the child process to complete
-      let status = match child.wait() {
-          Ok(status) => {
-              log::info!("Install process completed with status: {:?}", status);
-              status
-          },
-          Err(e) => {
-              log::error!("Failed to wait for install process: {}", e);
-              // Wait a bit to ensure we've processed output
-              std::thread::sleep(std::time::Duration::from_secs(2));
-              return;
-          }
-      };
+    std::thread::spawn(move || {
+        let pid = child.id();
 
-      // Wait for stdout/stderr monitors to finish
-      let _ = stdout_monitor.join();
-      let _ = stderr_monitor.join();
+        // Progress tracking state
+        let mut current_stage = InstallationStage::Checking;
+        let mut current_percentage = 5u32;
+        let mut current_version: Option<String> = None;
+        let mut installation_started = false;
+        let mut tools_phase = false;
+        let mut completed_tools = 0u32;
+        let mut total_tools = 0u32;
 
-      // Clean up
-      if let Err(e) = set_installation_status(&monitor_handle, false) {
-          log::error!("Failed to update installation status: {}", e);
-      }
+        // Get stdout and stderr
+        let mut child = child; // Take ownership of child to wait on it
+        let stdout = child.stdout.take().expect("Failed to capture stdout");
+        let stderr = child.stderr.take().expect("Failed to capture stderr");
 
-      // Let the frontend know installation is complete
-      let success = status.success();
-      log::info!("Emitting installation_complete event with success={}", success);
-      let _ = monitor_handle.emit("installation_complete", json!({
-          "success": success,
-          "message": if success {
-              "Installation process has completed successfully".to_string()
-          } else {
-              format!("Installation process failed with exit code: {}", status.code().unwrap_or(-1))
-          }
-      }));
+        // Helper function to parse and emit progress based on log content
+        let parse_and_emit_progress = |handle: &AppHandle, line: &str,
+                                     stage: &mut InstallationStage,
+                                     percentage: &mut u32,
+                                     current_ver: &mut Option<String>,
+                                     tools_started: &mut bool,
+                                     completed: &mut u32,
+                                     total: &mut u32| {
 
-      // Clean up temporary config file
-      let _ = std::fs::remove_file(&cfg_path);
+            // Extract version information
+            if line.contains("Selected idf version:") {
+                if let Some(start) = line.find('[') {
+                    if let Some(end) = line.find(']') {
+                        let version_str = &line[start+1..end];
+                        let version = version_str.replace("\"", "").trim().to_string();
+                        *current_ver = Some(version.clone());
 
-      log::info!("Installation monitor thread completed");
-  });
+                        emit_installation_event(handle, InstallationProgress {
+                            stage: InstallationStage::Download,
+                            percentage: 10,
+                            message: format!("Starting ESP-IDF {} installation", version),
+                            detail: Some("Preparing to download ESP-IDF".to_string()),
+                            version: Some(version),
+                        });
 
-  Ok(())
+                        *stage = InstallationStage::Download;
+                        *percentage = 10;
+                        return;
+                    }
+                }
+            }
+
+            // Track major phases and estimate progress
+            if line.contains("Checking for prerequisites") {
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Prerequisites,
+                    percentage: 8,
+                    message: "Checking prerequisites...".to_string(),
+                    detail: Some("Verifying system requirements".to_string()),
+                    version: current_ver.clone(),
+                });
+                *stage = InstallationStage::Prerequisites;
+                *percentage = 8;
+
+            } else if line.contains("Python sanity check") {
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Prerequisites,
+                    percentage: 12,
+                    message: "Verifying Python installation...".to_string(),
+                    detail: Some("Checking Python environment".to_string()),
+                    version: current_ver.clone(),
+                });
+                *percentage = 12;
+
+            } else if line.contains("Cloning ESP-IDF") || line.contains("git clone") {
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Download,
+                    percentage: 15,
+                    message: "Downloading ESP-IDF repository...".to_string(),
+                    detail: Some("Cloning main repository".to_string()),
+                    version: current_ver.clone(),
+                });
+                *stage = InstallationStage::Download;
+                *percentage = 15;
+
+            } else if line.contains("Updating submodule") || line.contains("submodule update") {
+                // Submodules phase - this is the long part (15-65%)
+                let submodule_progress = std::cmp::min(65, *percentage + 2);
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Download,
+                    percentage: submodule_progress,
+                    message: "Downloading submodules...".to_string(),
+                    detail: Some("Processing ESP-IDF submodules".to_string()),
+                    version: current_ver.clone(),
+                });
+                *percentage = submodule_progress;
+
+            } else if line.contains("Downloading tools:") {
+                // Extract tools list if possible
+                if let Some(start) = line.find('[') {
+                    if let Some(end) = line.find(']') {
+                        let tools_str = &line[start+1..end];
+                        let tools: Vec<&str> = tools_str.split(',').collect();
+                        *total = tools.len() as u32;
+
+                        emit_installation_event(handle, InstallationProgress {
+                            stage: InstallationStage::Tools,
+                            percentage: 65,
+                            message: format!("Installing {} development tools...", total),
+                            detail: Some("Preparing tools installation".to_string()),
+                            version: current_ver.clone(),
+                        });
+
+                        *stage = InstallationStage::Tools;
+                        *percentage = 65;
+                        *tools_started = true;
+                    }
+                }
+
+            } else if line.contains("Downloading tool:") && *tools_started {
+                if let Some(tool_start) = line.find("tool:") {
+                    let tool_name = line[tool_start + 5..].trim();
+                    let tool_progress = 65 + (*completed * 20 / (*total).max(1));
+
+                    emit_installation_event(handle, InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: tool_progress,
+                        message: format!("Downloading: {}", tool_name),
+                        detail: Some(format!("Tool {} of {}", *completed + 1, *total)),
+                        version: current_ver.clone(),
+                    });
+                    *percentage = tool_progress;
+                }
+
+            } else if line.contains("extracted tool:") || line.contains("Decompression completed") {
+                *completed += 1;
+                let tool_progress = 65 + (*completed * 20 / (*total).max(1));
+
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: tool_progress.min(85),
+                    message: format!("Installed tool ({}/{})", *completed, *total),
+                    detail: Some("Tool installation completed".to_string()),
+                    version: current_ver.clone(),
+                });
+                *percentage = tool_progress.min(85);
+
+            } else if line.contains("Python environment") || line.contains("Installing python") {
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Python,
+                    percentage: 90,
+                    message: "Setting up Python environment...".to_string(),
+                    detail: Some("Configuring Python dependencies".to_string()),
+                    version: current_ver.clone(),
+                });
+                *stage = InstallationStage::Python;
+                *percentage = 90;
+
+            } else if line.contains("Successfully installed IDF") || line.contains("Installation complete") {
+                emit_installation_event(handle, InstallationProgress {
+                    stage: InstallationStage::Complete,
+                    percentage: 100,
+                    message: "ESP-IDF installation completed successfully!".to_string(),
+                    detail: Some("Installation finished".to_string()),
+                    version: current_ver.clone(),
+                });
+                *stage = InstallationStage::Complete;
+                *percentage = 100;
+            }
+        };
+
+        // Monitor stdout in a separate thread
+        let stdout_monitor = {
+            let handle = monitor_handle.clone();
+            let mut stage = current_stage.clone();
+            let mut percentage = current_percentage;
+            let mut current_ver = current_version.clone();
+            let mut tools_started = tools_phase;
+            let mut completed = completed_tools;
+            let mut total = total_tools;
+
+            std::thread::spawn(move || {
+                let stdout_reader = BufReader::new(stdout);
+                for line in stdout_reader.lines() {
+                    if let Ok(line) = line {
+                        // Parse progress and emit structured events
+                        parse_and_emit_progress(&handle, &line, &mut stage, &mut percentage,
+                                              &mut current_ver, &mut tools_started, &mut completed, &mut total);
+
+                        // Skip debug/trace messages from logs
+                        if line.contains("DEBUG") || line.contains("TRACE") {
+                            continue;
+                        }
+
+                        // Clean up log message and emit
+                        let clean_message = if let Some(pos) = line.find(" - ") {
+                            let parts: Vec<&str> = line.splitn(2, " - ").collect();
+                            if parts.len() > 1 {
+                                parts[1].to_string()
+                            } else {
+                                line.clone()
+                            }
+                        } else {
+                            line.clone()
+                        };
+
+                        emit_log_message(&handle, MessageLevel::Info, clean_message);
+                        log::info!("Install process stdout: {}", line);
+                    }
+                }
+            })
+        };
+
+        // Monitor stderr in a separate thread
+        let stderr_monitor = {
+            let handle = monitor_handle.clone();
+            std::thread::spawn(move || {
+                let stderr_reader = BufReader::new(stderr);
+                for line in stderr_reader.lines() {
+                    if let Ok(line) = line {
+                        emit_log_message(&handle, MessageLevel::Error, line.clone());
+                        log::error!("Install process stderr: {}", line);
+                    }
+                }
+            })
+        };
+
+        // Wait for the child process to complete
+        let status = match child.wait() {
+            Ok(status) => {
+                log::info!("Install process completed with status: {:?}", status);
+                status
+            },
+            Err(e) => {
+                log::error!("Failed to wait for install process: {}", e);
+
+                emit_installation_event(&monitor_handle, InstallationProgress {
+                    stage: InstallationStage::Error,
+                    percentage: 0,
+                    message: "Installation process failed".to_string(),
+                    detail: Some(e.to_string()),
+                    version: current_version.clone(),
+                });
+
+                std::thread::sleep(std::time::Duration::from_secs(2));
+                return;
+            }
+        };
+
+        // Wait for stdout/stderr monitors to finish
+        let _ = stdout_monitor.join();
+        let _ = stderr_monitor.join();
+
+        // Clean up installation status
+        if let Err(e) = set_installation_status(&monitor_handle, false) {
+            log::error!("Failed to update installation status: {}", e);
+        }
+
+        // Emit final completion or error event
+        let success = status.success();
+        log::info!("Installation completed with success={}", success);
+
+        if success {
+            emit_installation_event(&monitor_handle, InstallationProgress {
+                stage: InstallationStage::Complete,
+                percentage: 100,
+                message: "Installation completed successfully!".to_string(),
+                detail: Some(format!("All ESP-IDF versions installed: {}", versions.join(", "))),
+                version: None,
+            });
+
+            emit_log_message(&monitor_handle, MessageLevel::Success,
+                "Installation process completed successfully".to_string());
+        } else {
+            let error_msg = format!("Installation failed with exit code: {}", status.code().unwrap_or(-1));
+
+            emit_installation_event(&monitor_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: "Installation process failed".to_string(),
+                detail: Some(error_msg.clone()),
+                version: current_version,
+            });
+
+            emit_log_message(&monitor_handle, MessageLevel::Error, error_msg);
+        }
+
+        // Clean up temporary config file
+        let _ = std::fs::remove_file(&cfg_path);
+
+        log::info!("Installation monitor thread completed");
+    });
+
+    Ok(())
 }
 
 // Helper function to check if a process is running on Windows
 #[cfg(target_os = "windows")]
 fn is_process_running(pid: u32) -> bool {
-  use std::process::Command;
+    use std::process::Command;
 
-  // Check if process exists using tasklist
-  let output = Command::new("tasklist")
-      .args(["/FI", &format!("PID eq {}", pid), "/NH"])
-      .output();
+    // Check if process exists using tasklist
+    let output = Command::new("tasklist")
+        .args(["/FI", &format!("PID eq {}", pid), "/NH"])
+        .output();
 
-  match output {
-      Ok(output) => {
-          let output_str = String::from_utf8_lossy(&output.stdout);
-          output_str.contains(&pid.to_string())
-      },
-      Err(_) => false
-  }
+    match output {
+        Ok(output) => {
+            let output_str = String::from_utf8_lossy(&output.stdout);
+            output_str.contains(&pid.to_string())
+        },
+        Err(_) => false
+    }
 }
 
 #[cfg(not(target_os = "windows"))]
