@@ -127,6 +127,20 @@ fn remove_installation(id: String) {
   };
 }
 
+#[tauri::command]
+fn fix_installation(id: String) { // TODO
+  debug!("Fixing installation with id {}", id);
+
+  // match idf_im_lib::version_manager::fix_idf_version(&id) {
+  //   Ok(_) => {
+  //       debug!("Successfully fixed installation {}", id);
+  //   }
+  //   Err(e) => {
+  //     error!("Failed to fix installation: {}", e);
+  //   }
+  // };
+}
+
 fn prepare_installation_directories(
     app_handle: AppHandle,
     settings: &Settings,
@@ -391,6 +405,7 @@ pub fn run() {
             check_prerequisites_detailed,
             rename_installation,
             remove_installation,
+            fix_installation,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

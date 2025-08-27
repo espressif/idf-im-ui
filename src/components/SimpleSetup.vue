@@ -174,7 +174,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
@@ -255,15 +255,18 @@ export default {
     const checkPrerequisites = async () => {
       try {
         // Check prerequisites
-        const prereqResult = await invoke('check_prerequisites_detailed')
+        const prereqResult = invoke('check_prerequisites_detailed').then(prereqResult => {
+          if (!prereqResult.all_ok && appStore.os !== 'windows') {
+            errorTitle.value = 'Prerequisites Missing'
+            errorMessage.value = 'Some required dependencies are not installed.'
+            errorDetails.value = prereqResult.missing.join('\n')
+            currentState.value = 'error'
+            return false
+          }
+          return true
+        })
 
-        if (!prereqResult.all_ok && appStore.os !== 'windows') {
-          errorTitle.value = 'Prerequisites Missing'
-          errorMessage.value = 'Some required dependencies are not installed.'
-          errorDetails.value = prereqResult.missing.join('\n')
-          currentState.value = 'error'
-          return false
-        }
+
 
         // Get default installation path
         const settings = await invoke('get_settings')
@@ -410,8 +413,11 @@ export default {
     }
 
     onMounted(() => {
-
-      checkPrerequisites()
+      nextTick(() => {
+        setTimeout(() => {
+          checkPrerequisites();
+        }, 300);
+      });
     })
 
     onUnmounted(() => {
