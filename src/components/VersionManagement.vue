@@ -3,12 +3,12 @@
     <div class="management-header">
       <h1 class="title">ESP-IDF Version Management</h1>
       <div class="header-actions">
-        <n-button @click="checkForUpdates" :loading="checkingUpdates" type="info" secondary class="check-updates">
+        <!-- <n-button @click="checkForUpdates" :loading="checkingUpdates" type="info" secondary class="check-updates">
           <template #icon>
             <n-icon><ReloadOutlined /></n-icon>
           </template>
           Check for Updates
-        </n-button>
+        </n-button> -->
       </div>
     </div>
 

@@ -5,7 +5,7 @@
         <n-notification-provider>
           <div id="app">
             <!-- Splash Screen -->
-            <transition name="splash-fade" appear>
+            <transition name="splash-fade">
               <div v-if="showSplash" class="splash-screen">
                 <div class="splash-content">
                   <img src="./assets/espressif_logo.svg" alt="Espressif" class="logo" />
@@ -26,8 +26,13 @@
                 <div class="header-actions">
                   <!-- Navigation breadcrumbs or status could go here -->
                   <n-breadcrumb v-if="showBreadcrumb">
-                    <n-breadcrumb-item v-for="crumb in breadcrumbs" :key="crumb.path">
-                      {{ crumb.label }}
+                    <n-breadcrumb-item
+                      v-for="crumb in breadcrumbs"
+                      :key="crumb.path"
+                      @click="goTo(crumb.path)"
+                      style="cursor: pointer; color: rgb(230, 204, 204) !important"
+                    >
+                      <span style="color: rgb(230, 204, 204)">{{ crumb.label }}</span>
                     </n-breadcrumb-item>
                   </n-breadcrumb>
                 </div>
@@ -66,6 +71,7 @@ import {
   darkTheme
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
+import { useRouter } from 'vue-router'
 
 export default {
   name: 'App',
@@ -83,6 +89,7 @@ export default {
     const route = useRoute()
     const theme = ref(null) // null for light theme, darkTheme for dark
     const showSplash = ref(true)
+    const router = useRouter()
 
     // Hide splash screen after delay
     setTimeout(() => {
@@ -109,6 +116,10 @@ export default {
       }
       return false
     })
+
+    const goTo = (path) => {
+      router.push(path)
+    }
 
     const breadcrumbs = computed(() => {
       const path = route.path
@@ -149,6 +160,7 @@ export default {
       theme,
       showBreadcrumb,
       breadcrumbs,
+      goTo,
       toggleTheme,
       showSplash
     }
@@ -221,7 +233,6 @@ html, body {
   display: flex;
   align-items: center;
 }
-
 /* Breadcrumb in header */
 .app-header .n-breadcrumb {
   color: rgba(255, 255, 255, 0.8);
@@ -367,4 +378,5 @@ html, body {
 .p-2 { padding: 0.5rem; }
 .p-3 { padding: 0.75rem; }
 .p-4 { padding: 1rem; }
+
 </style>
