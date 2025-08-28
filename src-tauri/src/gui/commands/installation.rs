@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager};
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -10,7 +10,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use idf_im_lib::{ensure_path, expand_tilde, utils::{is_valid_idf_directory, parse_cmake_version}, ProgressMessage};
+use idf_im_lib::{ensure_path, expand_tilde, utils::{is_valid_idf_directory, parse_cmake_version}, version_manager::prepare_settings_for_fix_idf_installation, ProgressMessage};
 use log::{debug, error, info, warn};
 use serde_json::json;
 
@@ -1089,4 +1089,145 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
     });
 
     let _res = start_installation(app_handle.clone()).await;
+}
+
+#[tauri::command]
+pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), String> {
+    debug!("Fixing installation with id {}", id);
+
+    // Initial progress - checking installation
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Checking,
+        percentage: 0,
+        message: "Checking installation to repair...".to_string(),
+        detail: Some(format!("Looking up installation ID: {}", id)),
+        version: None,
+    });
+
+    emit_log_message(&app_handle, MessageLevel::Info,
+        format!("Starting repair process for installation: {}", id));
+
+    let versions = get_installed_versions();
+    let installation = match versions.iter().find(|v| v.id == id) {
+        Some(inst) => {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Checking,
+                percentage: 10,
+                message: format!("Found installation: ESP-IDF {}", inst.name),
+                detail: Some(format!("Path: {}", inst.path)),
+                version: Some(inst.name.clone()),
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Info,
+                format!("Found installation {} at: {}", inst.name, inst.path));
+
+            inst
+        }
+        None => {
+            let error_msg = format!("Installation with ID {} not found", id);
+            error!("{}", error_msg);
+
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: "Installation not found".to_string(),
+                detail: Some(error_msg.clone()),
+                version: None,
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
+
+            return Err(error_msg);
+        }
+    };
+
+    // Preparing settings
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Checking,
+        percentage: 20,
+        message: "Preparing repair configuration...".to_string(),
+        detail: Some("Setting up installation parameters".to_string()),
+        version: Some(installation.name.clone()),
+    });
+
+    let settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone())).await {
+        Ok(settings) => {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Prerequisites,
+                percentage: 30,
+                message: "Configuration prepared successfully".to_string(),
+                detail: Some("Ready to begin repair process".to_string()),
+                version: Some(installation.name.clone()),
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Success,
+                "Repair configuration prepared successfully".to_string());
+
+            settings
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to prepare settings for repair: {}", e);
+            error!("{}", error_msg);
+
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: "Failed to prepare repair configuration".to_string(),
+                detail: Some(e.to_string()),
+                version: Some(installation.name.clone()),
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
+
+            return Err(error_msg);
+        }
+    };
+
+    // Starting actual repair (reinstallation)
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Download,
+        percentage: 35,
+        message: format!("Starting ESP-IDF {} repair...", installation.name),
+        detail: Some("Beginning reinstallation process".to_string()),
+        version: Some(installation.name.clone()),
+    });
+
+    emit_log_message(&app_handle, MessageLevel::Info,
+        format!("Starting repair installation for ESP-IDF {}", installation.name));
+
+    // The actual repair process - this will generate detailed progress events
+    match install_single_version(app_handle.clone(), &settings, installation.name.clone()).await {
+        Ok(_) => {
+            // Final completion
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Complete,
+                percentage: 100,
+                message: format!("ESP-IDF {} repair completed successfully!", installation.name),
+                detail: Some(format!("Installation repaired at: {}", installation.path)),
+                version: Some(installation.name.clone()),
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Success,
+                format!("Successfully repaired ESP-IDF {} installation", installation.name));
+
+            info!("Successfully fixed installation {}", id);
+            Ok(())
+        }
+        Err(e) => {
+            let error_msg = format!("Failed to repair installation: {}", e);
+            error!("{}", error_msg);
+
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: format!("ESP-IDF {} repair failed", installation.name),
+                detail: Some(e.to_string()),
+                version: Some(installation.name.clone()),
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
+
+            Err(error_msg)
+        }
+    }
 }

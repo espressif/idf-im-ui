@@ -130,36 +130,7 @@ fn remove_installation(id: String) {
   };
 }
 
-#[tauri::command]
-async fn fix_installation(app_handle: AppHandle, id: String) {
-  debug!("Fixing installation with id {}", id);
-  let versions = get_installed_versions();
-  let installation = match versions.iter().find(|v| v.id == id){
-    Some(inst) => inst,
-    None => {
-      error!("Installation with id {} not found", id);
-      return;
-    }
-  };
 
-  let settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone())).await {
-    Ok(settings) => settings,
-    Err(e) => {
-      error!("Failed to prepare settings for fixing installation: {}", e);
-      return;
-    }
-  };
-
-  match install_single_version(app_handle,&settings,installation.name.clone()).await {
-    Ok(_) => {
-      info!("Successfully fixed installation {}", id);
-    }
-    Err(e) => {
-      error!("Failed to fix installation: {}", e);
-    }
-  };
-
-}
 
 #[tauri::command]
 fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist

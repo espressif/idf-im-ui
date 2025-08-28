@@ -356,8 +356,9 @@ export default {
 
     const confirmFix = async () => {
       try {
-        await invoke('fix_installation', { id: selectedVersion.value.id })
+        invoke('fix_installation', { id: selectedVersion.value.id })
         message.success('Fix process started')
+        router.push('/installation-progress')
       } catch (error) {
         message.error('Failed to fix installation')
       }
