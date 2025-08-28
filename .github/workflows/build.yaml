@@ -301,7 +301,7 @@ jobs:
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
           echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          security create-keychain -p espressif build.keychain
+          security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
           security default-keychain -s build.keychain
           security unlock-keychain -p espressif build.keychain
           security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
@@ -406,12 +406,12 @@ jobs:
           MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
           MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
         run: |
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p espressif build.keychain
-          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+          echo $MACOS_CERTIFICATE | base64 --decode > certificate_offline.p12
+          security create-keychain -p espressif build_offline.keychain
+          security default-keychain -s build_offline.keychain
+          security unlock-keychain -p espressif build_offline.keychain
+          security import certificate_offline.p12 -k build_offline.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build_offline.keychain
           codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
           codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
 
@@ -448,6 +448,10 @@ jobs:
     with:
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
       run_id: ${{ github.run_id }}
+    secrets:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
 
   build-gui:
     name: Build GUI (${{ matrix.package_name }})
@@ -764,6 +768,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-east-1
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           # GUI release info
           curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_unified_release.json
