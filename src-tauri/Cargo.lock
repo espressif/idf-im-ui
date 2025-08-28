@@ -1448,6 +1448,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-log",
  "tauri-plugin-shell",
+ "tauri-plugin-store",
  "tempfile",
  "tera",
  "thiserror 1.0.69",
@@ -2681,7 +2682,7 @@ dependencies = [
  "anyhow",
  "clap 2.34.0",
  "clap-nested",
- "dirs 4.0.0",
+ "dirs 6.0.0",
  "flate2",
  "git2",
  "guess_host_triple",
@@ -6472,6 +6473,22 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.12",
  "tokio",
+]
+
+[[package]]
+name = "tauri-plugin-store"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5916c609664a56c82aeaefffca9851fd072d4d41f73d63f22ee3ee451508194f"
+dependencies = [
+ "dunce",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-plugin",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ use idf_im_lib::{
 };
 use log::{debug, error, info};
 use serde_json::{json, Value};
+use tauri_plugin_store::StoreExt;
 use std::process::Command;
 use std::{
     env,
@@ -140,17 +141,67 @@ fn fix_installation(id: String) { // TODO
   //   }
   // };
 }
+
 #[tauri::command]
-fn get_app_settings() -> Value { // TODO: persist
-    json!({
-        "first_run": true,
-        "skip_welcome": false
-    })
+fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
+  let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory").unwrap()
+        .join("eim");
+
+  let config_file = config_dir.join("eim.json");
+  ensure_path(config_dir.to_str().unwrap()).unwrap();
+  match app_handle.store_builder(config_file).build() {
+        Ok(store) => {
+            let first_run = store.get("first_run")
+                .unwrap_or(Value::Bool(true))
+                .clone();
+            let skip_welcome = store.get("skip_welcome")
+                .unwrap_or(Value::Bool(false))
+                .clone();
+
+            json!({
+                "first_run": first_run,
+                "skip_welcome": skip_welcome
+            })
+        }
+        Err(_) => {
+            // If store doesn't exist or can't be loaded, return defaults
+            json!({
+                "first_run": true,
+                "skip_welcome": false
+            })
+        }
+    }
 }
 
 #[tauri::command]
-fn save_app_settings(settings: Value) {
-    // TODO: implement saving logic
+async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool) {
+  let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory").unwrap()
+        .join("eim");
+
+  let config_file = config_dir.join("eim.json");
+  ensure_path(config_dir.to_str().unwrap()).unwrap();
+
+  match app_handle.store_builder(config_file).build() {
+        Ok(store) => {
+            store.set("first_run".to_string(), Value::Bool(firstRun));
+
+            store.set("skip_welcome".to_string(), Value::Bool(skipWelcome));
+
+            match store.save() {
+              Ok(_) => {
+                  log::info!("App settings saved: first_run={}, skip_welcome={}", firstRun, skipWelcome);
+              }
+              Err(e) => {
+                  error!("Failed to save store: {}", e);
+              }
+            }
+        }
+        Err(e) => {
+            error!("Failed to create/access store: {}", e);
+        }
+    }
 }
 
 fn prepare_installation_directories(
@@ -343,6 +394,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
             let app_state = AppState::default();
             app.manage(app_state);

@@ -175,7 +175,9 @@ export default {
 
         // Check if this is first run
         const settings = await invoke('get_app_settings')
+        console.log(`App settings: ${JSON.stringify(settings)}`)
         isFirstRun.value = settings?.first_run !== false
+        dontShowAgain.value = settings?.skip_welcome === true
 
         // Auto-navigate based on status
         setTimeout(() => {
@@ -209,7 +211,8 @@ export default {
       if (dontShowAgain.value) {
         try {
           await invoke('save_app_settings', {
-            settings: { first_run: false, skip_welcome: true }
+            firstRun: false,
+            skipWelcome: true
           })
         } catch (error) {
           console.error('Failed to save preferences:', error)
