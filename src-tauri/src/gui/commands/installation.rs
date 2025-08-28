@@ -288,7 +288,7 @@ app_handle: &AppHandle,
 }
 
 /// Installs a single ESP-IDF version
-async fn install_single_version(
+pub async fn install_single_version(
   app_handle: AppHandle,
   settings: &Settings,
   version: String,

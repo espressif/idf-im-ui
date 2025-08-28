@@ -2,6 +2,7 @@ use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::idf_config::IdfInstallation;
+use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     settings::Settings,
@@ -9,6 +10,7 @@ use idf_im_lib::{
 };
 use log::{debug, error, info};
 use serde_json::{json, Value};
+use tauri::http::version;
 use tauri_plugin_store::StoreExt;
 use std::process::Command;
 use std::{
@@ -129,17 +131,34 @@ fn remove_installation(id: String) {
 }
 
 #[tauri::command]
-fn fix_installation(id: String) { // TODO
+async fn fix_installation(app_handle: AppHandle, id: String) {
   debug!("Fixing installation with id {}", id);
+  let versions = get_installed_versions();
+  let installation = match versions.iter().find(|v| v.id == id){
+    Some(inst) => inst,
+    None => {
+      error!("Installation with id {} not found", id);
+      return;
+    }
+  };
 
-  // match idf_im_lib::version_manager::fix_idf_version(&id) {
-  //   Ok(_) => {
-  //       debug!("Successfully fixed installation {}", id);
-  //   }
-  //   Err(e) => {
-  //     error!("Failed to fix installation: {}", e);
-  //   }
-  // };
+  let settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone())).await {
+    Ok(settings) => settings,
+    Err(e) => {
+      error!("Failed to prepare settings for fixing installation: {}", e);
+      return;
+    }
+  };
+
+  match install_single_version(app_handle,&settings,installation.name.clone()).await {
+    Ok(_) => {
+      info!("Successfully fixed installation {}", id);
+    }
+    Err(e) => {
+      error!("Failed to fix installation: {}", e);
+    }
+  };
+
 }
 
 #[tauri::command]
