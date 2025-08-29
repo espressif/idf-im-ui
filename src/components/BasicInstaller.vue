@@ -384,11 +384,11 @@ export default {
     }
 
     onMounted(() => {
-      nextTick(() => {
-        setTimeout(() => {
-          checkPrerequisites();
-        }, 300);
-      });
+      // nextTick(() => {
+      //   setTimeout(() => {
+      //     checkPrerequisites();
+      //   }, 300);
+      // });
     })
 
     return {

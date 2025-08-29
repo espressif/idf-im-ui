@@ -354,15 +354,32 @@ export default {
       showFixModal.value = true
     }
 
+
     const confirmFix = async () => {
       try {
+        // Start the fix process
         invoke('fix_installation', { id: selectedVersion.value.id })
-        message.success('Fix process started')
-        router.push('/installation-progress')
+
+        message.success('Repair process started')
+
+        // Navigate to installation progress with fix mode parameters
+        router.push({
+          path: '/installation-progress',
+          query: {
+            mode: 'fix',
+            id: selectedVersion.value.id,
+            name: selectedVersion.value.name,
+            path: selectedVersion.value.path,
+            // Add auto-tracking flag so it knows repair is already in progress
+            autotrack: 'true'
+          }
+        })
       } catch (error) {
-        message.error('Failed to fix installation')
+        console.error('Fix installation error:', error)
+        message.error(`Failed to start repair: ${error}`)
       }
     }
+
 
     const openInExplorer = async (version) => {
       try {

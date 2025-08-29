@@ -1,9 +1,13 @@
 <template>
   <div class="installation-progress" data-id="installation-progress">
-    <h1 class="title" data-id="installation-title">Installation Progress</h1>
+    <h1 class="title" data-id="installation-title">
+      {{ is_fix_mode ? 'Repair Progress' : 'Installation Progress' }}
+    </h1>
+
     <n-alert title="Installation Error" type="error" v-if="error_message">
       {{ error_message }}
     </n-alert>
+
     <n-card class="progress-card" data-id="progress-card">
       <div class="summary-section" data-id="installation-summary"
         v-if="!installation_running && !installation_finished && !installation_failed">
@@ -35,9 +39,10 @@
           </div>
         </div>
 
-        <div data-id="start-button-container" v-if="!is_fix_mode">
+        <!-- Start Installation Button - Only show when appropriate -->
+        <div data-id="start-button-container" v-if="shouldShowStartButton()">
           <n-button @click="startInstallation()" type="error" size="large" :loading="installation_running"
-            :disabled="installation_running" data-id="start-installation-button" v-if="!installation_failed">
+            :disabled="installation_running" data-id="start-installation-button">
             {{ installation_running ? 'Installing...' : 'Start Installation' }}
           </n-button>
         </div>
@@ -85,54 +90,21 @@
         </div>
       </div>
 
-      <!-- Tools Progress Display -->
-      <!-- <div v-if="tools_tabs.length > 0 && showToolsTable" class="tools-section" data-id="tools-section">
-        <n-tabs type="card" class="tools-tabs" data-id="tools-tabs">
-          <n-tab-pane v-for="version in tools_tabs" :key="version" :tab="version" :name="version"
-            :data-id="`tools-tab-${version}`">
-            <n-table striped data-id="tools-table">
-              <thead>
-                <tr data-id="tools-table-header">
-                  <th>Tool</th>
-                  <th>Status</th>
-                  <th>Progress</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(tool, name) in tools[version]" :key="name" :data-id="`tool-row-${version}-${name}`">
-                  <td data-id="tool-name">{{ tool.displayName || name }}</td>
-                  <td>
-                    <span
-                      :class="getToolStatusClass(tool.status)"
-                      :data-id="`tool-status-${version}-${name}`"
-                    >
-                      {{ getToolStatusText(tool.status) }}
-                    </span>
-                  </td>
-                  <td>
-                    <div class="tool-progress">
-                      {{ tool.progress || 0 }}%
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </n-table>
-          </n-tab-pane>
-        </n-tabs>
-      </div> -->
-
+      <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
-        <h3 data-id="error-title">Error during installation:</h3>
+        <h3 data-id="error-title">Error during {{ is_fix_mode ? 'repair' : 'installation' }}:</h3>
         <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
         <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">Go Back</n-button>
       </div>
 
+      <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
-        <n-button @click="nextstep" type="error" size="large" data-id="complete-installation-button-footer">
-          Complete Installation
+        <n-button @click="handleCompletion()" type="error" size="large" data-id="complete-installation-button-footer">
+          {{ is_fix_mode ? 'Complete Repair' : 'Complete Installation' }}
         </n-button>
       </div>
 
+      <!-- Installation/Repair Summary -->
       <div v-if="installation_finished && !installation_failed" class="installation-summary"
         data-id="installation-summary">
         <h3>{{ is_fix_mode ? 'Repair Complete' : 'Installation Complete' }}</h3>
@@ -150,6 +122,7 @@
         </div>
       </div>
 
+      <!-- Installation Log -->
       <n-collapse arrow-placement="right" v-if="log_messages.length > 0">
         <n-collapse-item title="Installation Log" name="1">
           <div class="log-container">
@@ -238,7 +211,7 @@ export default {
 
   methods: {
     goHome: function () {
-      this.store.setStep(1);
+      this.store.resetWizard();
       this.$router.push('/');
     },
 
@@ -489,7 +462,96 @@ export default {
 
     get_os: async function () {
       this.os = await invoke("get_operating_system", {});
-    }
+    },
+    // Enhanced navigation handler
+    handleCompletion() {
+      if (this.nextstep && typeof this.nextstep === 'function') {
+        // Called from wizard flow - use provided nextstep function
+        this.nextstep();
+      } else {
+        // Called directly via router - handle navigation here
+        this.handleDirectNavigation();
+      }
+    },
+
+    handleDirectNavigation() {
+      if (this.is_fix_mode) {
+        // For fix mode, return to version management
+        this.$router.push({
+          path: '/version-management',
+          query: {
+            fixed: this.fixing_version?.id,
+            message: `Successfully repaired ESP-IDF ${this.fixing_version?.name}`
+          }
+        });
+      } else {
+        // For direct installation, go to welcome with success message
+        this.$router.push({
+          path: '/welcome',
+          query: {
+            installed: 'true',
+            versions: this.installed_versions.join(','),
+            message: `Successfully installed ESP-IDF versions: ${this.installed_versions.join(', ')}`
+          }
+        });
+      }
+    },
+
+    goHome() {
+      // Handle home navigation consistently
+      if (this.store && this.store.setStep) {
+        // If we have wizard store, reset it
+        this.store.setStep(1);
+      }
+
+      if (this.is_fix_mode) {
+        // For fix mode, return to version management
+        this.$router.push('/version-management');
+      } else {
+        // For normal installation, go to welcome
+        this.$router.push('/welcome');
+      }
+    },
+
+    // Enhanced start installation to handle both modes
+    startInstallation: async function () {
+      this.installation_running = true;
+      this.installation_finished = false;
+      this.installation_failed = false;
+      this.error_message = "";
+      this.log_messages = [];
+      this.currentProgress = 0;
+
+      try {
+        if (this.is_fix_mode) {
+          // For fix mode, the installation should already be started by the confirmFix call
+          if (this.fixing_version) {
+            this.current_version = this.fixing_version.name;
+            this.currentActivity = `Repairing ${this.fixing_version.name}...`;
+          }
+        } else {
+          // Normal installation
+          await invoke("start_installation", {});
+        }
+      } catch (e) {
+        console.error('Error during installation:', e);
+        this.error_message = e.toString();
+        this.installation_failed = true;
+        this.installation_running = false;
+      }
+    },
+
+    // Add method to determine if we should show start button
+    shouldShowStartButton() {
+      // Show start button only if:
+      // 1. Not in fix mode (fix starts automatically)
+      // 2. Installation not running and not failed
+      // 3. Not already finished
+      return !this.is_fix_mode &&
+            !this.installation_running &&
+            !this.installation_failed &&
+            !this.installation_finished;
+    },
   },
 
   computed: {
@@ -530,13 +592,24 @@ export default {
     this.get_os();
     this.get_settings();
     this.startListening();
-    // If we're in fix mode and coming from the router, start tracking immediately
+
+    // Handle different entry modes
     if (this.is_fix_mode && this.$route.query.mode === 'fix') {
-      this.installation_running = true;
-      if (this.fixing_version) {
-        this.current_version = this.fixing_version.name;
-        this.currentActivity = `Preparing to repair ${this.fixing_version.name}...`;
+        // Fix mode - installation should already be started
+        this.installation_running = true;
+        if (this.fixing_version) {
+          this.current_version = this.fixing_version.name;
+          this.currentActivity = `Preparing to repair ${this.fixing_version.name}...`;
+        }
+      } else if (this.$route.query.autostart === 'true') {
+        // Auto-start installation (e.g., from simple setup)
+        this.startInstallation();
       }
+
+      // Handle any success/error messages passed via route
+      if (this.$route.query.message) {
+        // You could show a toast notification here
+        console.log('Route message:', this.$route.query.message);
     }
   },
 

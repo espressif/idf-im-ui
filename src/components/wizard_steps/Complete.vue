@@ -79,7 +79,7 @@ export default {
       this.os = (await invoke("get_operating_system", {})).toLowerCase();
     },
     goHome() {
-      this.wizStore.goToStep(0);
+      this.wizStore.resetWizard();
       this.router.push('/');
     },
     save_config: async () => {
