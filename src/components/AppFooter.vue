@@ -160,6 +160,8 @@
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 // import { open as openUrl } from '@tauri-apps/api/shell'
+import { openUrl } from '@tauri-apps/plugin-opener';
+
 import {
   NButton, NIcon, NDivider, NModal, NAlert, NCheckbox, useMessage
 } from 'naive-ui'
@@ -220,15 +222,15 @@ export default {
 
     const openDocumentation = async () => {
       try {
-        // await openUrl('https://docs.espressif.com/projects/idf-im-ui/en/latest/')
+        await openUrl('https://docs.espressif.com/projects/idf-im-ui/en/latest/')
       } catch (error) {
         message.error('Failed to open documentation')
+        console.log(error)
       }
     }
 
     const openLogsFolder = async () => {
       try {
-        // await invoke('open_logs_folder')
         let logPath = await invoke("get_logs_folder", {});
         invoke("show_in_folder", { path: logPath });
         message.success('Logs folder opened')
@@ -278,7 +280,7 @@ ${includeLogs.value ? `Log bundle has been generated at: ${bundlePath}` : 'No lo
 ## Additional Information
         `.trim())
 
-        await openUrl(`https://github.com/espressif/idf-installer/issues/new?title=${issueTitle}&body=${issueBody}`)
+        await openUrl(`https://github.com/espressif/idf-im-ui/issues/new?title=${issueTitle}&body=${issueBody}`)
 
         showReportModal.value = false
       } catch (error) {
@@ -294,7 +296,7 @@ ${includeLogs.value ? `Log bundle has been generated at: ${bundlePath}` : 'No lo
 
     const openGitHub = async () => {
       try {
-        await openUrl('https://github.com/espressif/idf-installer')
+        await openUrl('https://github.com/espressif/idf-im-ui')
       } catch (error) {
         message.error('Failed to open GitHub page')
       }
