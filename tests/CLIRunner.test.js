@@ -38,6 +38,7 @@ import {
   TOOLSFOLDER,
   pathToOfflineArchive,
   offlineIDFVersion,
+  runInDebug,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -80,7 +81,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLIWizardInstallTest(pathToEIMCLI);
+        runCLIWizardInstallTest({ pathToEim: pathToEIMCLI, runInDebug });
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,
@@ -109,6 +110,8 @@ function testRun(jsonScript) {
         : [IDFDefaultVersion];
 
       let installArgs = [];
+
+      runInDebug && installArgs.push("-vvv");
 
       test.data.installFolder && installArgs.push(`-p ${installFolder}`);
 
@@ -173,7 +176,9 @@ function testRun(jsonScript) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      const offlineArg = [`--use-local-archive "${pathToOfflineArchive}"`];
+      const offlineArg = [
+        `${runInDebug && "-vvv "}--use-local-archive "${pathToOfflineArchive}"`,
+      ];
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
 
