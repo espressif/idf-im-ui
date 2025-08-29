@@ -7,7 +7,25 @@
     <n-card class="progress-card" data-id="progress-card">
       <div class="summary-section" data-id="installation-summary"
         v-if="!installation_running && !installation_finished && !installation_failed">
-        <div class="versions-info" v-if="all_settings" data-id="versions-info">
+
+        <!-- Fix Mode Summary -->
+        <div v-if="is_fix_mode" class="fix-info" data-id="fix-info">
+          <h3 data-id="fix-title">Repairing ESP-IDF Installation:</h3>
+          <div class="fix-version-info">
+            <div class="idf-version" v-if="fixing_version">
+              {{ fixing_version.name || 'Unknown Version' }}
+            </div>
+            <div class="fix-path" v-if="fixing_version">
+              <strong>Path:</strong> {{ fixing_version.path || 'Unknown Path' }}
+            </div>
+          </div>
+          <div class="fix-description">
+            <p>This will reinstall the selected ESP-IDF version and repair any corrupted or missing components.</p>
+          </div>
+        </div>
+
+        <!-- Normal Install Mode Summary -->
+        <div v-else class="versions-info" v-if="all_settings" data-id="versions-info">
           <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
           <div class="version-chips" data-id="version-chips">
             <div v-for="version in idf_versions" :key="version" type="info" :data-id="`version-tag-${version}`"
@@ -16,7 +34,8 @@
             </div>
           </div>
         </div>
-        <div data-id="start-button-container">
+
+        <div data-id="start-button-container" v-if="!is_fix_mode">
           <n-button @click="startInstallation()" type="error" size="large" :loading="installation_running"
             :disabled="installation_running" data-id="start-installation-button" v-if="!installation_failed">
             {{ installation_running ? 'Installing...' : 'Start Installation' }}
@@ -116,17 +135,17 @@
 
       <div v-if="installation_finished && !installation_failed" class="installation-summary"
         data-id="installation-summary">
-        <h3>Installation Complete</h3>
-        <p>Successfully installed ESP-IDF and all required tools.</p>
+        <h3>{{ is_fix_mode ? 'Repair Complete' : 'Installation Complete' }}</h3>
+        <p>{{ is_fix_mode ? 'Successfully repaired ESP-IDF installation and all required tools.' : 'Successfully installed ESP-IDF and all required tools.' }}</p>
         <div class="summary-details">
           <div v-if="installed_versions.length > 0">
-            <strong>Installed Versions:</strong> {{ installed_versions.join(', ') }}
+            <strong>{{ is_fix_mode ? 'Repaired Version:' : 'Installed Versions:' }}</strong> {{ installed_versions.join(', ') }}
           </div>
           <div v-if="installationPath">
             <strong>Installation Path:</strong> {{ installationPath }}
           </div>
           <div v-if="completedToolsCount > 0">
-            <strong>Tools Installed:</strong> {{ completedToolsCount }}
+            <strong>Tools {{ is_fix_mode ? 'Repaired' : 'Installed' }}:</strong> {{ completedToolsCount }}
           </div>
         </div>
       </div>
@@ -148,12 +167,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem, NAlert, NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 import { useWizardStore } from '../../store'
-import { useRouter } from 'vue-router'
 
 export default {
   name: 'InstallationProgress',
   props: {
-    nextstep: Function
+    nextstep: Function,
+    mode: {
+      type: String,
+      default: 'install' // 'install' or 'fix'
+    },
+    fixVersionId: {
+      type: String,
+      default: null
+    }
   },
   components: {
     NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse,
@@ -165,7 +191,6 @@ export default {
     all_settings: undefined,
     loading: true,
     tools: {},
-    router: useRouter(),
 
     // Event listeners
     unlistenProgress: undefined,
@@ -213,7 +238,12 @@ export default {
 
   methods: {
     goHome: function () {
-      this.router.push('/');
+      this.store.setStep(1);
+      this.$router.push('/');
+    },
+
+    iosFixMode: function () {
+      return this.mode === 'fix';
     },
 
     startInstallation: async function () {
@@ -478,6 +508,7 @@ export default {
     this.get_os();
     this.get_settings();
     this.startListening();
+
   },
 
   beforeDestroy() {
@@ -733,6 +764,41 @@ export default {
 
 .log-message.log-success {
   color: #059669;
+}
+
+/* Fix mode specific styles */
+.fix-info {
+  text-align: center;
+}
+
+.fix-info h3 {
+  font-size: 1.1rem;
+  color: #374151;
+  margin-bottom: 1rem;
+}
+
+.fix-version-info {
+  margin: 1rem 0;
+}
+
+.fix-path {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.fix-description {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #fffbeb;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+}
+
+.fix-description p {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.9rem;
 }
 
 .n-button {

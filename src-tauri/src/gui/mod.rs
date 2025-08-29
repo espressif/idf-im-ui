@@ -86,25 +86,25 @@ fn get_installed_versions() -> Vec<IdfInstallation>{
 }
 
 #[tauri::command]
-fn scan_for_archives() -> Vec<String> { // TODO: actually search for them
+fn scan_for_archives() -> Vec<String> {
   let mut archives = Vec::new();
-  archives.push("archive_5.5.zst".to_string());
-  // // Scan the file system for archive files
-  // for entry in fs::read_dir("/path/to/search").unwrap() {
-  //     let entry = entry.unwrap();
-  //     let path = entry.path();
+  // archives.push("archive_5.5.zst".to_string());
+  // Scan the file system for archive files
+  for entry in fs::read_dir(".").unwrap() {
+      let entry = entry.unwrap();
+      let path = entry.path();
 
-  //     if path.extension().map(|e| e == "zip" || e == "tar.gz").unwrap_or(false) {
-  //         archives.push(path.to_str().unwrap());
-  //     }
-  // }
+      if path.extension().map(|e| e == "zst").unwrap_or(false) {
+          archives.push(path.to_str().unwrap().to_string());
+      }
+  }
 
   archives
 }
 // fn get_available_versions()
 
 #[tauri::command]
-fn rename_installation(id: String, new_name: String) { // TODO: add messaging to the FE
+fn rename_installation(id: String, new_name: String) {
   debug!("Renaming installation with id {} to {}", id, new_name);
 
   match idf_im_lib::version_manager::rename_idf_version(&id, new_name) {

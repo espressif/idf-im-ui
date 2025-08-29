@@ -1211,7 +1211,6 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
                 format!("Successfully repaired ESP-IDF {} installation", installation.name));
 
             info!("Successfully fixed installation {}", id);
-            Ok(())
         }
         Err(e) => {
             let error_msg = format!("Failed to repair installation: {}", e);
@@ -1227,7 +1226,65 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
 
-            Err(error_msg)
+            return Err(error_msg);
         }
     }
+    let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
+     match settings.save_esp_ide_json() {
+        Ok(_) => {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Configure,
+                percentage: 93,
+                message: "IDE configuration saved successfully".to_string(),
+                detail: Some(format!("Configuration saved to: {}", ide_json_path)),
+                version: None,
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Success,
+                format!("IDE JSON file saved to: {}", ide_json_path));
+        }
+        Err(e) => {
+            // Don't fail the entire installation for IDE config save failure
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Configure,
+                percentage: 93,
+                message: "Warning: IDE configuration save failed".to_string(),
+                detail: Some(e.to_string()),
+                version: None,
+            });
+
+            emit_log_message(&app_handle, MessageLevel::Warning,
+                format!("Failed to save IDE JSON file: {}", e));
+        }
+    }
+    // Final completion (95-100%)
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Configure,
+        percentage: 97,
+        message: "Finalizing installation...".to_string(),
+        detail: Some("Completing setup process".to_string()),
+        version: None,
+    });
+
+    // Small delay to show finalization
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    let total_versions = 1;
+    // Complete!
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Complete,
+        percentage: 100,
+        message: format!("All {} ESP-IDF version{} installed successfully!",
+            total_versions, if total_versions == 1 { "" } else { "s" }),
+        detail: Some(format!("Completed installation of: {}", versions.iter().map(|v| v.name.clone()).collect::<Vec<_>>().join(", "))),
+        version: None,
+    });
+
+    emit_log_message(&app_handle, MessageLevel::Success,
+        format!("Batch installation completed successfully - {} version(s) installed", total_versions));
+
+    // Clear installation flag
+    set_installation_status(&app_handle, false)?;
+
+    Ok(())
 }
