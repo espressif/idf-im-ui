@@ -1,6 +1,8 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use log::debug;
+use log::error;
+use log::info;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -239,4 +241,41 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .filter(|p| crate::utils::is_valid_idf_directory(p))
         .cloned()
         .collect()
+}
+
+pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf) -> anyhow::Result<Settings> {
+    info!("Fixing IDF installation at path: {}", path_to_fix.display());
+    // The fix logic is just instalation with use of existing repository
+    let mut version_name = None;
+    match list_installed_versions() {
+        Ok(versions) => {
+            for v in versions {
+                if v.path == path_to_fix.to_str().unwrap() {
+                    info!("Found existing IDF version: {}", v.name);
+                    // Remove the existing activation script and eim_idf.json entry
+                    match remove_single_idf_version(&v.name, true) {
+                        Ok(_) => {
+                            info!("Removed existing IDF version from eim_idf.json: {}", v.name);
+                            version_name = Some(v.name.clone());
+                        }
+                        Err(err) => {
+                            error!("Failed to remove existing IDF version {}: {}", v.name, err);
+                        }
+                    }
+                }
+            }
+        }
+        Err(_) => {
+            info!("Failed to list installed versions. Using default naming.");
+        }
+    }
+
+    let mut settings = Settings::default();
+    settings.path = Some(path_to_fix.clone());
+    settings.non_interactive = Some(true);
+    settings.version_name = version_name;
+    settings.install_all_prerequisites = Some(true);
+    settings.config_file_save_path = None;
+    return Ok(settings);
+
 }
