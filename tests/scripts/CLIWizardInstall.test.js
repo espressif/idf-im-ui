@@ -10,7 +10,7 @@ import {
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-export function runCLIWizardInstallTest(pathToEim) {
+export function runCLIWizardInstallTest({ pathToEim, runInDebug }) {
   describe("1- Run wizard ->", function () {
     let testRunner = null;
     let installationFailed = false;
@@ -56,7 +56,7 @@ export function runCLIWizardInstallTest(pathToEim) {
     it("Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} wizard\r`);
+      testRunner.sendInput(`${pathToEim} ${runInDebug && "-vvv "}wizard\r`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         20000

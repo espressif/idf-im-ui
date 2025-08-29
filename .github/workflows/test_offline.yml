@@ -107,6 +107,7 @@ jobs:
       - name: Run IDF offline installation (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
+          export DEBUG="true"
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_OFFLINE_ARCHIVE="../artifacts/archive.zst"
