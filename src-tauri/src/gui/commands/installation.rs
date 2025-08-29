@@ -160,7 +160,9 @@ app_handle: &AppHandle,
                     submodule_count = completed_submodules; // Track actual count
 
                     // More frequent updates for submodule completion since it's the main work
-                    let submodule_progress = 10 + (completed_submodules * 55 / total_estimated_submodules.max(completed_submodules));
+                    let effective_total = total_estimated_submodules.max(completed_submodules);
+                    let submodule_progress = 10 + (completed_submodules * 55 / effective_total);
+                    // let submodule_progress = 10 + (completed_submodules * 55 / total_estimated_submodules.max(completed_submodules));
 
                     emit_installation_event(&app_handle_clone, InstallationProgress {
                         stage: InstallationStage::Download,

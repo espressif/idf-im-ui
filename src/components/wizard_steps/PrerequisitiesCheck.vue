@@ -282,7 +282,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  background-color: rgba(155, 65, 65, 0.7); /* Dark overlay with some transparency */
+  background-color: rgba(123, 80, 80, 0.7); /* Dark overlay with some transparency */
   z-index: 20; /* Ensure overlay is above the list items but below the spinner */
   border-radius: inherit; /* Inherit border-radius from n-card if any */
 }
