@@ -483,6 +483,43 @@
               </div>
             </div>
           </div>
+          <!-- Offline Installer Section -->
+          <!-- Offline Installer Section -->
+          <div class="platform-section" v-if="offlineInstallers.length">
+            <div class="platform-header" @click="toggleSection('offline')">
+              <h2 class="platform-title">Offline Installer</h2>
+              <span class="platform-toggle" :class="{ expanded: expandedSections.offline }">›</span>
+            </div>
+            <div class="platform-content" :class="{ expanded: expandedSections.offline }">
+              <p class="download-desc" style="color: #dc2626; font-weight: 600; margin-bottom: 1rem;">
+                ⚠️ Warning: Offline installer is approximately <strong>3.5 GB</strong>.
+                Only download if you have poor internet or need to install on multiple machines.
+              </p>
+              <div class="installer-group">
+                <h3 class="installer-title">Full Offline Installation Archive</h3>
+                <div v-for="item in offlineInstallers" :key="item.platform" class="download-item">
+                  <h3 class="download-name">{{ item.filename }}</h3>
+                  <p class="download-desc">
+                    Complete offline package for
+                    {{
+                    item.platform === 'windows' ? 'Windows' :
+                    item.platform === 'linuxX64' ? 'Linux x64' :
+                    item.platform === 'linuxARM' ? 'Linux ARM64' :
+                    item.platform === 'macosIntel' ? 'macOS Intel' :
+                    'macOS Apple Silicon'
+                    }}
+                  </p>
+                  <div class="download-meta">
+                    <span class="download-size">~3.5 GB</span>
+                    <div class="download-buttons">
+                      <!-- No GitHub button (not on GitHub) -->
+                      <a :href="item.url" class="download-button" target="_blank">Download</a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </template>
       </template>
     </main>
@@ -518,13 +555,23 @@
         const releaseData = ref(null);
         const loading = ref(true);
         const error = ref(null);
+        const offlineVersion = ref('5.5');
         const expandedSections = ref({
           windows: false,
           linuxX64: false,
           linuxARM: false,
           macosIntel: false,
-          macosApple: false
+          macosApple: false,
+          offline: false
+
         });
+        const platformFilenames = {
+          windows: { key: 'windows', arch: 'x64' },
+          linuxX64: { key: 'linux', arch: 'x64' },
+          linuxARM: { key: 'linux', arch: 'aarch64' },
+          macosIntel: { key: 'macos', arch: 'x64' },
+          macosApple: { key: 'macos', arch: 'aarch64' }
+        };
 
         // Platform detection
         const detectPlatform = () => {
@@ -550,7 +597,8 @@
               linuxX64: { gui: [], cli: [] },
               linuxARM: { gui: [], cli: [] },
               macosIntel: { gui: [], cli: [] },
-              macosApple: { gui: [], cli: [] }
+              macosApple: { gui: [], cli: [] },
+              offline: { windows: [], linuxX64: [], linuxARM: [], macosIntel: [], macosApple: [] }
             };
           }
 
@@ -559,11 +607,13 @@
             linuxX64: { gui: [], cli: [] },
             linuxARM: { gui: [], cli: [] },
             macosIntel: { gui: [], cli: [] },
-            macosApple: { gui: [], cli: [] }
+            macosApple: { gui: [], cli: [] },
+            offline: { windows: [], linuxX64: [], linuxARM: [], macosIntel: [], macosApple: [] }
           };
 
           for (const asset of releaseData.value.assets) {
             const name = asset.name.toLowerCase();
+
             let platform = null;
             let installerType = null;
 
@@ -597,6 +647,33 @@
 
           console.log('Categorized assets:', platformCategories);
           return platformCategories;
+        });
+
+        const offlineInstallers = computed(() => {
+          const list = [];
+
+          // Define expected size (~3.5GB)
+          const size = 3.5 * 1024 * 1024 * 1024; // 3.5 GB in bytes
+
+          Object.keys(platformFilenames).forEach(platformKey => {
+            const hasGui = categorizedAssets.value[platformKey]?.gui?.length > 0;
+            const hasCli = categorizedAssets.value[platformKey]?.cli?.length > 0;
+
+            if (hasGui || hasCli) {
+              const { key, arch } = platformFilenames[platformKey];
+              const filename = `offline_installer-${key}-${arch}-${offlineVersion.value}.zip`;
+              const url = `https://dl.espressif.com/dl/eim/${filename}`;
+
+              list.push({
+                platform: platformKey,
+                filename,
+                url,
+                size
+              });
+            }
+          });
+
+          return list;
         });
 
         const getDlEspressifUrl = (githubUrl) => {
@@ -695,7 +772,8 @@
           formatSize,
           formatDate,
           fetchRelease,
-          toggleSection
+          toggleSection,
+          offlineInstallers
         };
       }
     }).mount('#app');
