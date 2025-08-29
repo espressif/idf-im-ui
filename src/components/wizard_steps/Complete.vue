@@ -24,6 +24,9 @@
             <n-button @click="save_config" type="info" class="save-button" dashed data-id="save-config-button">
               Save Configuration
             </n-button>
+            <n-button @click="goHome" class="home-button" type="error" data-id="home-button">
+              Home
+            </n-button>
             <n-button @click="quit" class="exit-button" type="info" data-id="exit-button">
               Exit Installer
             </n-button>
@@ -52,6 +55,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NResult, NAlert } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog';
 import loading from "naive-ui/es/_internal/loading";
+import { useRouter } from 'vue-router'
+import { useWizardStore } from '../../store'
+
 
 export default {
   name: 'Complete',
@@ -61,10 +67,20 @@ export default {
   components: { NButton, NResult, NAlert },
   data: () => ({
     os: undefined,
+    router: useRouter()
   }),
+  computed: {
+    wizStore() {
+      return useWizardStore()
+    },
+  },
   methods: {
     async get_os() {
       this.os = (await invoke("get_operating_system", {})).toLowerCase();
+    },
+    goHome() {
+      this.wizStore.goToStep(0);
+      this.router.push('/');
     },
     save_config: async () => {
       const selected = await save({
@@ -170,8 +186,11 @@ export default {
 
 .n-result-icon svg {
   width: 40px;
-  color: red;
-  ;
+  color: #E8362D;
+}
+
+.home-button {
+  color: #E8362D;
 }
 
 .n-result-header {

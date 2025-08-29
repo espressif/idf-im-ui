@@ -86,7 +86,7 @@
       </div>
 
       <!-- Tools Progress Display -->
-      <div v-if="tools_tabs.length > 0 && showToolsTable" class="tools-section" data-id="tools-section">
+      <!-- <div v-if="tools_tabs.length > 0 && showToolsTable" class="tools-section" data-id="tools-section">
         <n-tabs type="card" class="tools-tabs" data-id="tools-tabs">
           <n-tab-pane v-for="version in tools_tabs" :key="version" :tab="version" :name="version"
             :data-id="`tools-tab-${version}`">
@@ -119,7 +119,7 @@
             </n-table>
           </n-tab-pane>
         </n-tabs>
-      </div>
+      </div> -->
 
       <div v-if="installation_failed" class="error-message" data-id="error-message">
         <h3 data-id="error-title">Error during installation:</h3>
@@ -242,10 +242,6 @@ export default {
       this.$router.push('/');
     },
 
-    iosFixMode: function () {
-      return this.mode === 'fix';
-    },
-
     startInstallation: async function () {
       this.installation_running = true;
       this.installation_finished = false;
@@ -255,7 +251,17 @@ export default {
       this.currentProgress = 0;
 
       try {
-        await invoke("start_installation", {});
+        if (this.is_fix_mode) {
+          // For fix mode, the installation should already be started by the confirmFix call
+          // Just ensure we're tracking the right version
+          if (this.fixing_version) {
+            this.current_version = this.fixing_version.name;
+            this.currentActivity = `Repairing ${this.fixing_version.name}...`;
+          }
+        } else {
+          // Normal installation
+          await invoke("start_installation", {});
+        }
       } catch (e) {
         console.error('Error during installation:', e);
         this.error_message = e.toString();
@@ -501,6 +507,22 @@ export default {
         ...this.failed_versions,
         ...(this.current_version ? [this.current_version] : [])
       ])];
+    },
+    // Fix the fix mode detection
+    is_fix_mode() {
+      return this.mode === 'fix' || this.$route.query.mode === 'fix';
+    },
+
+    // Get the version being fixed from route params
+    fixing_version() {
+      if (this.is_fix_mode) {
+        return {
+          id: this.$route.query.id || this.fixVersionId,
+          name: this.$route.query.name || 'Unknown Version',
+          path: this.$route.query.path || 'Unknown Path'
+        };
+      }
+      return null;
     }
   },
 
@@ -508,7 +530,14 @@ export default {
     this.get_os();
     this.get_settings();
     this.startListening();
-
+    // If we're in fix mode and coming from the router, start tracking immediately
+    if (this.is_fix_mode && this.$route.query.mode === 'fix') {
+      this.installation_running = true;
+      if (this.fixing_version) {
+        this.current_version = this.fixing_version.name;
+        this.currentActivity = `Preparing to repair ${this.fixing_version.name}...`;
+      }
+    }
   },
 
   beforeDestroy() {
