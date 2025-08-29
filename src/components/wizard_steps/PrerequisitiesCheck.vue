@@ -78,7 +78,7 @@ export default {
   methods: {
     get_prerequisities_list: async function () {
       this.loading = true;
-      this.all_prerequisities = await invoke("get_prequisites", {});;
+      this.all_prerequisities = await invoke("get_prequisites", {});
       this.loading = false;
       this.display_prerequisities = this.all_prerequisities.map(p => ({
         name: p,
@@ -88,15 +88,19 @@ export default {
     },
     check_prerequisites: async function () {
       this.loading = true;
-      const missing_list = await invoke("check_prequisites", {});
-      this.missing_prerequisities = missing_list;
-      console.log("missing prerequisities: ", missing_list);
-      this.display_prerequisities = this.display_prerequisities.map(p => ({
-        name: p.name,
-        icon: missing_list.includes(p.name) ? '❌' : '✔',
-      }));
-      this.did_the_check_run = true;
-      this.loading = false;
+      setTimeout(() => {
+        invoke("check_prequisites", {}).then(missing_list => {
+          this.missing_prerequisities = missing_list;
+          console.log("missing prerequisities: ", missing_list);
+          this.did_the_check_run = true;
+          this.loading = false;
+          this.display_prerequisities = this.display_prerequisities.map(p => ({
+            name: p.name,
+            icon: missing_list.includes(p.name) ? '❌' : '✔',
+          }));
+        });
+      }, 200);
+
       return false;
     },
     install_prerequisites: async function () {
@@ -236,5 +240,25 @@ export default {
   width: 50%;
   margin: auto;
   margin-top: 2rem;
+}
+
+/* Enhanced spinner styles */
+:deep(.n-spin-container) {
+  position: relative;
+  padding: 2rem;
+}
+
+:deep(.n-spin) {
+  transform: scale(1.5);
+}
+
+:deep(.n-spin .n-spin-body) {
+  color: var(--espressif-red-color);
+}
+
+:deep(.n-spin-description) {
+  font-size: 1.1rem;
+  color: #374151;
+  margin-top: 1rem;
 }
 </style>
