@@ -8,13 +8,14 @@
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
             "idfList": "v5.3.2",        // Which IDF version to install "v5.4|v.5.3.2"
-            "installFolder": "<folder>", // Folder name to install idf (inside USER folder)
+            "installFolder": "<folder>" // Folder name to install idf (inside USER folder)
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
             "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
-            "recursive": false,        // Whether to prevent downloading submodules (set to true if omitted)
-            "nonInteractive": false    // Whether to prevent running in non-interactive mode (set to true if omitted)
+            "recursive": false,         // Whether to prevent downloading submodules (set to true if omitted)
+            "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
-        "deleteAfterTest": true        // Whether to remove IDF installation folder and IDF tools folder after test
+        "deleteAfterTest": true         // Whether to remove IDF installation folder and IDF tools folder after test
+        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log"
 
 
  */
@@ -38,6 +39,7 @@ import {
   TOOLSFOLDER,
   pathToOfflineArchive,
   offlineIDFVersion,
+  runInDebug,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -76,11 +78,15 @@ function testRun(jsonScript) {
       //routine for default installation tests
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLIWizardInstallTest(pathToEIMCLI);
+        runCLIWizardInstallTest({
+          pathToEim: pathToEIMCLI,
+          testProxyMode,
+        });
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,
@@ -110,6 +116,8 @@ function testRun(jsonScript) {
 
       let installArgs = [];
 
+      runInDebug && installArgs.push("-vvv");
+
       test.data.installFolder && installArgs.push(`-p ${installFolder}`);
 
       test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
@@ -128,11 +136,16 @@ function testRun(jsonScript) {
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLICustomInstallTest(pathToEIMCLI, installArgs);
+        runCLICustomInstallTest({
+          pathToEim: pathToEIMCLI,
+          args: installArgs,
+          testProxyMode,
+        });
 
         runInstallVerification({
           installFolder,
@@ -173,14 +186,23 @@ function testRun(jsonScript) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      const offlineArg = [`--use-local-archive "${pathToOfflineArchive}"`];
+      const offlineArg = [
+        `${
+          runInDebug ? "-vvv " : ""
+        }--use-local-archive "${pathToOfflineArchive}"`,
+      ];
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? "block";
 
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(6000000);
 
-        runCLICustomInstallTest(pathToEIMCLI, offlineArg);
+        runCLICustomInstallTest({
+          pathToEim: pathToEIMCLI,
+          args: offlineArg,
+          testProxyMode,
+        });
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,

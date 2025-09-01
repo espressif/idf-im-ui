@@ -12,7 +12,8 @@
       "recursive": true,
       "nonInteractive": false
     },
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": false
   },
   {
     "id": 2,
@@ -27,7 +28,8 @@
       "recursive": true,
       "nonInteractive": true
     },
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": false
   },
   {
     "id": 3,
@@ -41,7 +43,8 @@
       "recursive": true,
       "nonInteractive": true
     },
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": false
   },
   {
     "id": 5,
@@ -55,6 +58,7 @@
       "recursive": true,
       "nonInteractive": true
     },
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": false
   }
 ]

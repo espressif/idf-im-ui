@@ -2,10 +2,16 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import TestProxy from "../classes/testProxy.class.js";
 
-export function runCLICustomInstallTest(pathToEim, args = []) {
+export function runCLICustomInstallTest({
+  pathToEim,
+  args = [],
+  testProxyMode = false,
+}) {
   describe("1- Run custom ->", function () {
     let testRunner = null;
+    let proxy = null;
 
     before(async function () {
       logger.debug(
@@ -13,6 +19,15 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       );
       this.timeout(5000);
       testRunner = new CLITestRunner();
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({ mode: testProxyMode });
+          await proxy.start();
+          testRunner.createIsolatedEnvironment();
+        } catch {
+          logger.info("Error to start proxy server");
+        }
+      }
       try {
         await testRunner.start();
       } catch {
@@ -36,6 +51,11 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       } catch (error) {
         logger.info("Error to clean up terminal after test");
         logger.info(` Error: ${error}`);
+      }
+      try {
+        await proxy.stop();
+      } catch {
+        logger.info("Error stopping proxy server");
       }
     });
 
@@ -119,6 +139,13 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         testRunner.output,
         "Failed to complete installation, missing 'Now you can start using IDF tools'"
       ).to.include("Now you can start using IDF tools");
+
+      if (testProxyMode === "block") {
+        expect(
+          proxy.attempts,
+          "Network access attempt detected during installation"
+        ).to.be.empty;
+      }
     });
   });
 }

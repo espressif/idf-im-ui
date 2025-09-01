@@ -9,6 +9,7 @@
     "type": "custom",
     "name": "CLI in GUI Non-Interactive Default",
     "data": {},
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": false
   }
 ]

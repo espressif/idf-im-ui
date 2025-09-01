@@ -14,7 +14,8 @@
     "type": "custom",
     "name": "GUI Expert Default",
     "data": {},
-    "deleteAfterTest": false
+    "deleteAfterTest": false,
+    "testProxyMode": false
   },
   {
     "id": 4,
@@ -27,6 +28,7 @@
       "idfMirror": "github",
       "toolsMirror": "github"
     },
-    "deleteAfterTest": false
+    "deleteAfterTest": false,
+    "testProxyMode": false
   }
 ]

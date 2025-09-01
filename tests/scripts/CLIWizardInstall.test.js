@@ -6,11 +6,13 @@ import {
   TOOLSMIRRORS,
   IDFAvailableVersions,
   availableTargets,
+  runInDebug,
 } from "../config.js";
+import TestProxy from "../classes/testProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-export function runCLIWizardInstallTest(pathToEim) {
+export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
   describe("1- Run wizard ->", function () {
     let testRunner = null;
     let installationFailed = false;
@@ -19,6 +21,15 @@ export function runCLIWizardInstallTest(pathToEim) {
       logger.debug(`Starting installation wizard with default options`);
       this.timeout(5000);
       testRunner = new CLITestRunner();
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({ mode: testProxyMode });
+          await proxy.start();
+          testRunner.createIsolatedEnvironment();
+        } catch {
+          logger.info("Error to start proxy server");
+        }
+      }
       try {
         await testRunner.start();
       } catch {
@@ -44,6 +55,11 @@ export function runCLIWizardInstallTest(pathToEim) {
         logger.info("Error to clean up terminal after test");
         logger.info(`${error}`);
       }
+      try {
+        await proxy.stop();
+      } catch {
+        logger.info("Error stopping proxy server");
+      }
     });
 
     /** Run install wizard
@@ -56,7 +72,7 @@ export function runCLIWizardInstallTest(pathToEim) {
     it("Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} wizard\r`);
+      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard\r`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         20000
