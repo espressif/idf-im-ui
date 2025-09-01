@@ -8,7 +8,7 @@ import {
   availableTargets,
   runInDebug,
 } from "../config.js";
-import TestProxy from "../classes/testProxy.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
@@ -16,6 +16,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
   describe("1- Run wizard ->", function () {
     let testRunner = null;
     let installationFailed = false;
+    let proxy = null;
 
     before(async function () {
       logger.debug(`Starting installation wizard with default options`);
@@ -25,15 +26,18 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
         try {
           proxy = new TestProxy({ mode: testProxyMode });
           await proxy.start();
-          testRunner.createIsolatedEnvironment();
-        } catch {
+        } catch (error) {
           logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
         }
       }
       try {
-        await testRunner.start();
-      } catch {
+        await testRunner.start({
+          isolatedEnvironment: testProxyMode === false ? false : true,
+        });
+      } catch (error) {
         logger.info("Error to start terminal");
+        logger.debug(`Error: ${error}`);
       }
     });
 
@@ -57,8 +61,9 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
       }
       try {
         await proxy.stop();
-      } catch {
+      } catch (error) {
         logger.info("Error stopping proxy server");
+        logger.info(`${error}`);
       }
     });
 

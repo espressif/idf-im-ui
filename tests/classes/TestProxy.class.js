@@ -7,14 +7,14 @@ class TestProxy {
   constructor({ mode = "log" } = {}) {
     this.port = 8888;
     this.host = "127.0.0.1";
-    this.mode = mode; // "block" | "log"
+    this.mode = mode;
     this.attempts = [];
     this.server = null;
   }
 
   async start() {
     logger.info(`Starting proxy server with mode ${this.mode}`);
-    if (this.server) return; // already started
+    if (this.server) return;
 
     this.server = http.createServer((req, res) => {
       this.attempts.push({ type: "http", method: req.method, url: req.url });
@@ -27,11 +27,23 @@ class TestProxy {
         return;
       }
 
-      const parsedUrl = url.parse(req.url);
+      const hostHeader = req.headers["host"];
+      let hostname, port;
+
+      if (req.url.startsWith("http://") || req.url.startsWith("https://")) {
+        const parsedUrl = url.parse(req.url);
+        hostname = parsedUrl.hostname;
+        port = parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80);
+        req.url = parsedUrl.path;
+      } else {
+        [hostname, port] = hostHeader.split(":");
+        port = port || 80;
+      }
+
       const options = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port || 80,
-        path: parsedUrl.path,
+        hostname,
+        port,
+        path: req.url,
         method: req.method,
         headers: req.headers,
       };
@@ -55,9 +67,9 @@ class TestProxy {
       logger.info(`New HTTPS connection attempt: ${req.url}`);
 
       if (this.mode === "block") {
+        logger.debug("HTTPS Connection blocked");
         clientSocket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
         clientSocket.end();
-        logger.debug("HTTPS Connection blocked");
         return;
       }
 
@@ -81,6 +93,7 @@ class TestProxy {
   }
 
   async stop() {
+    logger.info("attempts:", this.attempts);
     if (!this.server) return;
     return new Promise((resolve) => {
       this.server.close(() => {

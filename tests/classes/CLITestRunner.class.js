@@ -18,7 +18,6 @@ class CLITestRunner {
         ? []
         : ["-ExecutionPolicy", "Bypass", "-NoProfile"];
     this.environment = { ...process.env };
-    this.isolatedEnvironment = false;
   }
 
   async runIDFTerminal(loadScript, timeout = 3000) {
@@ -78,15 +77,22 @@ class CLITestRunner {
 
     // Python pip specific
     this.environment.PIP_PROXY = proxyUrl;
-    this.isolatedEnvironment = true;
 
     logger.debug("Network isolation environment variables set");
   }
 
-  async start(command = this.command, fullArgs = this.args, timeout = 5000) {
+  async start({
+    command = this.command,
+    fullArgs = this.args,
+    isolatedEnvironment = false,
+  } = {}) {
     logger.debug(
       `Starting terminal emulator ${this.command} with args ${this.args}`
     );
+
+    if (isolatedEnvironment) {
+      this.createIsolatedEnvironment();
+    }
 
     this.process = pty.spawn(command, fullArgs, {
       name: "eim-terminal",
