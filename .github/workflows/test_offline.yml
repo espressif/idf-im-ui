@@ -109,7 +109,10 @@ jobs:
         run: |
           set +e
           brew install python@3.11
+          rm /usr/local/bin/python3
+          rm /opt/homebrew/bin/python3
           ln -s ../Cellar/python@3.11/3.11.13/bin/python3.11 /usr/local/bin/python3
+          ln -s ../Cellar/python@3.11/3.11.13/bin/python3.11 /opt/homebrew/bin/python3
           python3 --version
 
       - name: Run IDF offline installation (non-Windows)
