@@ -484,7 +484,6 @@
             </div>
           </div>
           <!-- Offline Installer Section -->
-          <!-- Offline Installer Section -->
           <div class="platform-section" v-if="offlineInstallers.length">
             <div class="platform-header" @click="toggleSection('offline')">
               <h2 class="platform-title">Offline Installer</h2>
@@ -501,16 +500,10 @@
                   <h3 class="download-name">{{ item.filename }}</h3>
                   <p class="download-desc">
                     Complete offline package for
-                    {{
-                    item.platform === 'windows' ? 'Windows' :
-                    item.platform === 'linuxX64' ? 'Linux x64' :
-                    item.platform === 'linuxARM' ? 'Linux ARM64' :
-                    item.platform === 'macosIntel' ? 'macOS Intel' :
-                    'macOS Apple Silicon'
-                    }}
+                    {{ getPlatformDisplayName(item.platform) }}
                   </p>
                   <div class="download-meta">
-                    <span class="download-size">~3.5 GB</span>
+                    <span class="download-size">~{{ formatSize(item.size) }}</span>
                     <div class="download-buttons">
                       <!-- No GitHub button (not on GitHub) -->
                       <a :href="item.url" class="download-button" target="_blank">Download</a>
@@ -572,6 +565,8 @@
           macosIntel: { key: 'macos', arch: 'x64' },
           macosApple: { key: 'macos', arch: 'aarch64' }
         };
+
+        const getPlatformDisplayName = (platform) => { const names = { windows: 'Windows', linuxX64: 'Linux x64', linuxARM: 'Linux ARM64', macosIntel: 'macOS Intel', macosApple: 'macOS Apple Silicon' }; return names[platform] || 'Unknown Platform'; };
 
         // Platform detection
         const detectPlatform = () => {
