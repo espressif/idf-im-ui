@@ -4,8 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico"
-    type="image/vnd.microsoft.icon">
+  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico" type="image/vnd.microsoft.icon">
   <title>ESP-IDF Installation Manager Downloads</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
   <style>
@@ -250,7 +249,6 @@
       0% {
         transform: rotate(0deg);
       }
-
       100% {
         transform: rotate(360deg);
       }
@@ -296,8 +294,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -311,8 +308,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -337,8 +333,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -352,8 +347,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -378,8 +372,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -393,8 +386,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -419,8 +411,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -434,8 +425,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -460,8 +450,7 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
@@ -475,14 +464,14 @@
                     <span class="download-size">{{ formatSize(artifact.size) }}</span>
                     <div class="download-buttons">
                       <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button"
-                        target="_blank">Download</a>
+                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
+
           <!-- Offline Installer Section -->
           <div class="platform-section" v-if="offlineInstallers.length">
             <div class="platform-header" @click="toggleSection('offline')">
@@ -491,21 +480,18 @@
             </div>
             <div class="platform-content" :class="{ expanded: expandedSections.offline }">
               <p class="download-desc" style="color: #dc2626; font-weight: 600; margin-bottom: 1rem;">
-                ⚠️ Warning: Offline installer is approximately <strong>3.5 GB</strong>.
-                Only download if you have poor internet or need to install on multiple machines.
+                ⚠️ Warning: Offline installer is large. Only download if you have poor internet or need to install on multiple machines.
               </p>
               <div class="installer-group">
                 <h3 class="installer-title">Full Offline Installation Archive</h3>
                 <div v-for="item in offlineInstallers" :key="item.platform" class="download-item">
                   <h3 class="download-name">{{ item.filename }}</h3>
                   <p class="download-desc">
-                    Complete offline package for
-                    {{ getPlatformDisplayName(item.platform) }}
+                    Complete offline package for {{ getPlatformDisplayName(item.platform) }}
                   </p>
                   <div class="download-meta">
-                    <span class="download-size">~{{ formatSize(item.size) }}</span>
+                    <span class="download-size">{{ formatSize(item.size) }}</span>
                     <div class="download-buttons">
-                      <!-- No GitHub button (not on GitHub) -->
                       <a :href="item.url" class="download-button" target="_blank">Download</a>
                     </div>
                   </div>
@@ -531,13 +517,13 @@
     const GithubIconButton = {
       props: ['href'],
       template: `
-                <a :href="href" class="download-button github-button" target="_blank">
-                    <svg class="github-icon" height="16" width="16" viewBox="0 0 16 16">
-                        <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
-                    </svg>
-                    GitHub
-                </a>
-            `
+        <a :href="href" class="download-button github-button" target="_blank">
+          <svg class="github-icon" height="16" width="16" viewBox="0 0 16 16">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path>
+          </svg>
+          GitHub
+        </a>
+      `
     };
 
     createApp({
@@ -546,9 +532,9 @@
       },
       setup() {
         const releaseData = ref(null);
+        const offlineArchiveData = ref([]);
         const loading = ref(true);
         const error = ref(null);
-        const offlineVersion = ref('5.5');
         const expandedSections = ref({
           windows: false,
           linuxX64: false,
@@ -556,19 +542,29 @@
           macosIntel: false,
           macosApple: false,
           offline: false
-
         });
-        const platformFilenames = {
-          windows: { key: 'windows', arch: 'x64' },
-          linuxX64: { key: 'linux', arch: 'x64' },
-          linuxARM: { key: 'linux', arch: 'aarch64' },
-          macosIntel: { key: 'macos', arch: 'x64' },
-          macosApple: { key: 'macos', arch: 'aarch64' }
+
+        // Map between platform keys in the app and offline archive format
+        const platformMapping = {
+          windows: 'windows-x64',
+          linuxX64: 'linux-x64',
+          linuxARM: 'linux-aarch64',
+          macosIntel: 'macos-x64',
+          macosApple: 'macos-aarch64'
         };
 
-        const getPlatformDisplayName = (platform) => { const names = { windows: 'Windows', linuxX64: 'Linux x64', linuxARM: 'Linux ARM64', macosIntel: 'macOS Intel', macosApple: 'macOS Apple Silicon' }; return names[platform] || 'Unknown Platform'; };
+        const getPlatformDisplayName = (platform) => {
+          const names = {
+            windows: 'Windows',
+            linuxX64: 'Linux x64',
+            linuxARM: 'Linux ARM64',
+            macosIntel: 'macOS Intel',
+            macosApple: 'macOS Apple Silicon'
+          };
+          return names[platform] || 'Unknown Platform';
+        };
 
-        // Platform detection
+        // Detect user platform and auto-expand
         const detectPlatform = () => {
           const userAgent = navigator.userAgent.toLowerCase();
           if (userAgent.includes('win')) {
@@ -580,57 +576,41 @@
               expandedSections.value.linuxX64 = true;
             }
           } else if (userAgent.includes('mac')) {
-            // Default to Apple Silicon for macOS
             expandedSections.value.macosApple = true;
           }
         };
 
         const categorizedAssets = computed(() => {
-          if (!releaseData.value?.assets) {
-            return {
-              windows: { gui: [], cli: [] },
-              linuxX64: { gui: [], cli: [] },
-              linuxARM: { gui: [], cli: [] },
-              macosIntel: { gui: [], cli: [] },
-              macosApple: { gui: [], cli: [] },
-              offline: { windows: [], linuxX64: [], linuxARM: [], macosIntel: [], macosApple: [] }
-            };
-          }
+          if (!releaseData.value?.assets) return {
+            windows: { gui: [], cli: [] },
+            linuxX64: { gui: [], cli: [] },
+            linuxARM: { gui: [], cli: [] },
+            macosIntel: { gui: [], cli: [] },
+            macosApple: { gui: [], cli: [] }
+          };
 
           const platformCategories = {
             windows: { gui: [], cli: [] },
             linuxX64: { gui: [], cli: [] },
             linuxARM: { gui: [], cli: [] },
             macosIntel: { gui: [], cli: [] },
-            macosApple: { gui: [], cli: [] },
-            offline: { windows: [], linuxX64: [], linuxARM: [], macosIntel: [], macosApple: [] }
+            macosApple: { gui: [], cli: [] }
           };
 
           for (const asset of releaseData.value.assets) {
             const name = asset.name.toLowerCase();
-
             let platform = null;
             let installerType = null;
 
-            // Platform detection
             if (name.includes('windows') || name.endsWith('.exe')) {
               platform = 'windows';
               installerType = name.includes('gui') || name.endsWith('.exe') ? 'gui' : 'cli';
             } else if (name.includes('linux')) {
-              if (name.includes('arm') || name.includes('aarch64')) {
-                platform = 'linuxARM';
-              } else {
-                platform = 'linuxX64';
-              }
+              platform = name.includes('arm') || name.includes('aarch64') ? 'linuxARM' : 'linuxX64';
             } else if (name.includes('macos') || name.includes('darwin')) {
-              if (name.includes('aarch64') || name.includes('arm64') || name.includes('arm')) {
-                platform = 'macosApple';
-              } else {
-                platform = 'macosIntel';
-              }
+              platform = name.includes('aarch64') || name.includes('arm64') || name.includes('arm') ? 'macosApple' : 'macosIntel';
             }
 
-            // Installer type detection for non-Windows platforms
             if (platform && platform !== 'windows') {
               installerType = name.includes('cli') && !name.includes('gui') ? 'cli' : 'gui';
             }
@@ -640,35 +620,29 @@
             }
           }
 
-          console.log('Categorized assets:', platformCategories);
           return platformCategories;
         });
 
         const offlineInstallers = computed(() => {
-          const list = [];
+          if (!releaseData.value || !offlineArchiveData.value.length) return [];
 
-          // Define expected size (~3.5GB)
-          const size = 3.5 * 1024 * 1024 * 1024; // 3.5 GB in bytes
+          const available = [];
 
-          Object.keys(platformFilenames).forEach(platformKey => {
-            const hasGui = categorizedAssets.value[platformKey]?.gui?.length > 0;
-            const hasCli = categorizedAssets.value[platformKey]?.cli?.length > 0;
+          for (const item of offlineArchiveData.value) {
 
-            if (hasGui || hasCli) {
-              const { key, arch } = platformFilenames[platformKey];
-              const filename = `offline_installer-${key}-${arch}-${offlineVersion.value}.zip`;
-              const url = `https://dl.espressif.com/dl/eim/${filename}`;
+            const platformKey = Object.keys(platformMapping).find(key => platformMapping[key] === item.platform);
+            // if (!platformKey || !categorizedAssets.value[platformKey]) continue;
 
-              list.push({
-                platform: platformKey,
-                filename,
-                url,
-                size
-              });
-            }
-          });
+            const url = `https://dl.espressif.com/dl/eim/${item.filename}`;
+            available.push({
+              platform: platformKey,
+              filename: item.filename,
+              url,
+              size: item.size || 3.5 * 1024 * 1024 * 1024 // fallback if size missing
+            });
+          }
 
-          return list;
+          return available;
         });
 
         const getDlEspressifUrl = (githubUrl) => {
@@ -679,45 +653,33 @@
         };
 
         const getDescription = (artifact, platform, installerType) => {
-          const platformDescriptions = {
+          const platformNames = {
             windows: 'Windows',
             linuxX64: 'Linux x64',
             linuxARM: 'Linux ARM',
             macosIntel: 'macOS Intel',
             macosApple: 'macOS Apple Silicon'
           };
-          const typeDescription = installerType === 'gui' ? 'GUI' : 'CLI';
-          return `${platformDescriptions[platform]} ${typeDescription} installer package`;
+          const type = installerType === 'gui' ? 'GUI' : 'CLI';
+          return `${platformNames[platform]} ${type} installer package`;
         };
 
         const formatSize = (bytes) => {
           const units = ['B', 'KB', 'MB', 'GB'];
           let size = bytes;
           let unitIndex = 0;
-
           while (size >= 1024 && unitIndex < units.length - 1) {
             size /= 1024;
             unitIndex++;
           }
-
           return `${size.toFixed(1)} ${units[unitIndex]}`;
         };
 
-        const formatDate = (dateStr) => {
-          return new Date(dateStr).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          });
-        };
-
         const toggleSection = (platform) => {
-          let isExpanded = expandedSections.value[platform];
-          // Collapse all sections
+          const isExpanded = expandedSections.value[platform];
           Object.keys(expandedSections.value).forEach(key => {
             expandedSections.value[key] = false;
           });
-          // Expand the selected section
           expandedSections.value[platform] = !isExpanded;
         };
 
@@ -726,30 +688,41 @@
           error.value = null;
 
           try {
-            const response = await fetch('eim_unified_release.json');
-            if (response.ok) {
-              releaseData.value = await response.json();
-              console.log('Fetched release data:', releaseData.value);
-              loading.value = false;
-              detectPlatform();
-              return;
+            // Try local unified file first
+            const unifiedResponse = await fetch('eim_unified_release.json');
+            if (unifiedResponse.ok) {
+              releaseData.value = await unifiedResponse.json();
             }
           } catch (err) {
-            console.log('Local unified file not found, falling back to GitHub API');
+            console.log('Local unified file not found, falling back to GitHub');
           }
 
-          try {
-            const response = await fetch('https://api.github.com/repos/espressif/idf-im-ui/releases/latest');
-            if (!response.ok) throw new Error('Failed to fetch release data');
-            releaseData.value = await response.json();
-            console.log('Fetched release data from GitHub:', releaseData.value);
-            detectPlatform();
-          } catch (err) {
-            error.value = 'Failed to load release information. Please try again later.';
-            console.error('Error fetching release:', err);
-          } finally {
-            loading.value = false;
+          // If not loaded, fetch from GitHub
+          if (!releaseData.value) {
+            try {
+              const response = await fetch('https://api.github.com/repos/espressif/idf-im-ui/releases/latest');
+              if (!response.ok) throw new Error('GitHub API error');
+              releaseData.value = await response.json();
+            } catch (err) {
+              error.value = 'Failed to load release data from GitHub.';
+              console.error(err);
+            }
           }
+
+          // Load offline archives
+          try {
+            const offlineResponse = await fetch('offline_archives.json');
+            if (offlineResponse.ok) {
+              offlineArchiveData.value = await offlineResponse.json();
+            } else {
+              console.warn('Failed to load offline_archives.json');
+            }
+          } catch (err) {
+            console.warn('Could not fetch offline_archives.json:', err);
+          }
+
+          loading.value = false;
+          detectPlatform();
         };
 
         onMounted(() => {
@@ -758,6 +731,7 @@
 
         return {
           releaseData,
+          offlineArchiveData,
           categorizedAssets,
           loading,
           error,
@@ -765,10 +739,10 @@
           getDescription,
           getDlEspressifUrl,
           formatSize,
-          formatDate,
           fetchRelease,
           toggleSection,
-          offlineInstallers
+          offlineInstallers,
+          getPlatformDisplayName
         };
       }
     }).mount('#app');
