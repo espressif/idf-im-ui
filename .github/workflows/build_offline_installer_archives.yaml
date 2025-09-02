@@ -120,31 +120,6 @@ jobs:
           path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
           retention-days: 30
 
-      # Release assets are limited to 2gb, until optimisation makes the archive less than 2gigs...
-      # - name: Upload to release assets
-      #   if: github.event_name == 'release'
-      #   uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ github.event.release.upload_url }}
-      #     asset_path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
-      #     asset_name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
-      #     asset_content_type: application/zip
-
-      - name: Upload installer to S3
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-east-1
-          VERSION: ${{ env.VERSION }}
-          PACKAGE_NAME: ${{ matrix.package_name }}
-          FILENAME: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
-        shell: bash
-        run: |
-          # Only upload the installer ZIP
-          aws s3 cp --acl=public-read "$FILENAME" "s3://espdldata/dl/eim/$FILENAME"
-
       - name: Create build info file
         env:
           VERSION: ${{ env.VERSION }}
@@ -152,12 +127,19 @@ jobs:
           FILENAME: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
         shell: bash
         run: |
-          # Create build info file
+          # Calculate file size in bytes
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            FILE_SIZE=$(stat -f %z "$FILENAME")
+          else
+            FILE_SIZE=$(stat -c %s "$FILENAME")
+          fi
+          # Create build info file with size
           jq -n \
             --arg version "$VERSION" \
             --arg platform "$PACKAGE_NAME" \
             --arg filename "$FILENAME" \
-            '{"version": $version, "platform": $platform, "filename": $filename}' \
+            --arg size "$FILE_SIZE" \
+            '{"version": $version, "platform": $platform, "filename": $filename, "size": ($size | tonumber)}' \
             > build-info.json
 
       - name: Save build info as artifact
@@ -174,7 +156,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           pattern: build-info-*
-          merge-multiple: true
           path: build-infos/
 
       - name: Update offline_archives.json
@@ -183,35 +164,40 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: ap-east-1
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
-          VERSION: ${{ env.VERSION }}
         shell: bash
         run: |
+          # Debug: List downloaded artifacts
+          echo "Listing downloaded artifacts:"
+          find build-infos/ -type f
+
           # Download existing JSON or create empty array
-          if curl -f -s -o offline_archives.json http://dl.espressif.com/dl/eim/offline_archives.json; then
-            echo "Downloaded existing offline_archives.json"
-            if ! jq empty offline_archives.json 2>/dev/null; then
-              echo "Downloaded JSON is invalid, creating new empty array"
-              echo "[]" > offline_archives.json
-            fi
-          else
-            echo "offline_archives.json does not exist, creating new empty array"
+          aws s3 cp s3://espdldata/dl/eim/offline_archives.json offline_archives.json 2>/dev/null || echo "[]" > offline_archives.json
+
+          # Ensure valid JSON array
+          if ! jq -e 'type == "array"' offline_archives.json >/dev/null 2>&1; then
+            echo "Invalid or not an array, initializing with empty array"
             echo "[]" > offline_archives.json
           fi
 
-          # Ensure valid JSON array
-          if [ ! -s offline_archives.json ] || ! jq -e 'type == "array"' offline_archives.json >/dev/null 2>&1; then
-            echo "File is empty or not a valid JSON array, initializing with empty array"
-            echo "[]" > offline_archives.json
-          fi
+          # Debug: Show current offline_archives.json
+          echo "Current offline_archives.json:"
+          cat offline_archives.json
 
           # Collect all new build info
           new_entries="[]"
-          for build_info in build-infos/*.json; do
+          for build_info in build-infos/*/build-info.json; do
             if [ -f "$build_info" ]; then
+              echo "Processing $build_info"
               entry=$(cat "$build_info")
-              new_entries=$(echo "$new_entries" | jq ". + [$entry]")
+              new_entries=$(echo "$new_entries" | jq --argjson entry "$entry" '. + [$entry]')
+            else
+              echo "No build-info.json found in $build_info"
             fi
           done
+
+          # Debug: Show new_entries
+          echo "New entries:"
+          echo "$new_entries"
 
           # Remove existing entries with same filenames, then add all new entries
           updated_json=$(jq --argjson new_entries "$new_entries" '
@@ -220,6 +206,11 @@ jobs:
             ($original | map(select(.filename as $f | $new_filenames | index($f) | not))) + $new_entries
           ' offline_archives.json)
 
+          # Debug: Show updated JSON
+          echo "Updated JSON:"
+          echo "$updated_json"
+
+          # Write updated JSON to file
           echo "$updated_json" > updated_archives.json
 
           # Verify the updated JSON is valid
@@ -231,7 +222,7 @@ jobs:
           # Upload updated JSON to S3
           aws s3 cp --acl=public-read updated_archives.json s3://espdldata/dl/eim/offline_archives.json
 
-          # Invalidate Cache
+          # Invalidate CloudFront cache
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/offline_archives.json"
 
   Autotest-CLI-Offline:
