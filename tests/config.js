@@ -109,6 +109,9 @@ const TOOLSFOLDER =
     ? path.join(os.homedir(), `.espressif`)
     : `C:\\Espressif`;
 
+// Enable running EIM in debug mode
+const runInDebug = (process.env.DEBUG || "false") === "true";
+
 export {
   IDFMIRRORS,
   TOOLSMIRRORS,
@@ -123,4 +126,5 @@ export {
   TOOLSFOLDER,
   pathToOfflineArchive,
   offlineIDFVersion,
+  runInDebug,
 };

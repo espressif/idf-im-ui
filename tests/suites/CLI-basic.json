@@ -8,7 +8,8 @@
     "id": 2,
     "type": "default",
     "name": "CLI Wizard Default",
-    "deleteAfterTest": false
+    "deleteAfterTest": false,
+    "testProxyMode": false
   },
   {
     "id": 3,
@@ -17,7 +18,8 @@
     "data": {
       "idfList": "v5.4.2"
     },
-    "deleteAfterTest": false
+    "deleteAfterTest": false,
+    "testProxyMode": false
   },
   {
     "id": 4,

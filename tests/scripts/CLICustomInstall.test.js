@@ -2,10 +2,16 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 
-export function runCLICustomInstallTest(pathToEim, args = []) {
+export function runCLICustomInstallTest({
+  pathToEim,
+  args = [],
+  testProxyMode = false,
+}) {
   describe("1- Run custom ->", function () {
     let testRunner = null;
+    let proxy = null;
 
     before(async function () {
       logger.debug(
@@ -13,10 +19,22 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       );
       this.timeout(5000);
       testRunner = new CLITestRunner();
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({ mode: testProxyMode });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
-        await testRunner.start();
-      } catch {
+        await testRunner.start({
+          isolatedEnvironment: testProxyMode === false ? false : true,
+        });
+      } catch (error) {
         logger.info("Error to start terminal");
+        logger.debug(`Error: ${error}`);
       }
     });
 
@@ -36,6 +54,12 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
       } catch (error) {
         logger.info("Error to clean up terminal after test");
         logger.info(` Error: ${error}`);
+      }
+      try {
+        await proxy.stop();
+      } catch (error) {
+        logger.info("Error stopping proxy server");
+        logger.debug(`Error: ${error}`);
       }
     });
 
@@ -119,6 +143,12 @@ export function runCLICustomInstallTest(pathToEim, args = []) {
         testRunner.output,
         "Failed to complete installation, missing 'Now you can start using IDF tools'"
       ).to.include("Now you can start using IDF tools");
+
+      if (testProxyMode === "block" && proxy.attempts.length > 0) {
+        logger.error(
+          ">>>>>>>>>>>>>>>>>>Internet Connection Attempt Detected - This should be a failure"
+        );
+      }
     });
   });
 }

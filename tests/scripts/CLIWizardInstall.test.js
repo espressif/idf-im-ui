@@ -6,23 +6,38 @@ import {
   TOOLSMIRRORS,
   IDFAvailableVersions,
   availableTargets,
+  runInDebug,
 } from "../config.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-export function runCLIWizardInstallTest(pathToEim) {
+export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
   describe("1- Run wizard ->", function () {
     let testRunner = null;
     let installationFailed = false;
+    let proxy = null;
 
     before(async function () {
       logger.debug(`Starting installation wizard with default options`);
       this.timeout(5000);
       testRunner = new CLITestRunner();
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({ mode: testProxyMode });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
-        await testRunner.start();
-      } catch {
+        await testRunner.start({
+          isolatedEnvironment: testProxyMode === false ? false : true,
+        });
+      } catch (error) {
         logger.info("Error to start terminal");
+        logger.debug(`Error: ${error}`);
       }
     });
 
@@ -44,6 +59,12 @@ export function runCLIWizardInstallTest(pathToEim) {
         logger.info("Error to clean up terminal after test");
         logger.info(`${error}`);
       }
+      try {
+        await proxy.stop();
+      } catch (error) {
+        logger.info("Error stopping proxy server");
+        logger.info(`${error}`);
+      }
     });
 
     /** Run install wizard
@@ -56,7 +77,7 @@ export function runCLIWizardInstallTest(pathToEim) {
     it("Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} wizard\r`);
+      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard\r`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         20000

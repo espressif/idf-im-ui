@@ -28,14 +28,14 @@ jobs:
           - os: ubuntu-latest
             package_name: linux-x64
             run_on: GitHub
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            run_on: GitHub
           - os: windows-latest
             package_name: windows-x64
             run_on: GitHub
           - os: macos-latest
             package_name: macos-aarch64
-            run_on: GitHub
-          - os: ubuntu-24.04-arm
-            package_name: linux-aarch64
             run_on: GitHub
           - os: macos-13
             package_name: macos-x64
@@ -83,38 +83,47 @@ jobs:
       - name: Install dependencies and node.js (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
-          sudo add-apt-repository ppa:deadsnakes/ppa -y
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3.11 python3.11-venv python3-pip
-          sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 3
-          python3 --version
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0
           cd tests
           npm ci
+
+      - name: Install python3.11 (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          sudo add-apt-repository ppa:deadsnakes/ppa -y
+          sudo apt-get update
+          sudo apt-get install -y python3.11 python3.11-venv
+          sudo update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1
+          python3 --version
 
       - name: Install dependencies and node.js (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
-          brew install dfu-util libgcrypt glib pixman sdl2 libslirp python3
-          brew install python@3.11
-          rm /opt/homebrew/bin/python3
-          ln -s ../Cellar/python@3.11/3.11.13/bin/python3.11 /opt/homebrew/bin/python3
-          python3 --version
+          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
           cd tests
           npm ci
+
+      - name: Install python 3.11 (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        run: |
+          set +e
+          brew install python@3.11
+          rm /usr/local/bin/python3
+          rm /opt/homebrew/bin/python3
+          ln -s ../Cellar/python@3.11/3.11.13/bin/python3.11 /usr/local/bin/python3
+          ln -s ../Cellar/python@3.11/3.11.13/bin/python3.11 /opt/homebrew/bin/python3
+          python3 --version
 
       - name: Run IDF offline installation (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          export HTTP_PROXY="http://127.0.0.1:9"
-          export HTTPS_PROXY="http://127.0.0.1:9"
-          export NO_PROXY="localhost,127.0.0.1"
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_OFFLINE_ARCHIVE="../artifacts/archive.zst"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-offline
-          unset HTTP_PROXY HTTPS_PROXY NO_PROXY
         continue-on-error: true
 
       # Windows steps
@@ -138,9 +147,6 @@ jobs:
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          $env:HTTP_PROXY  = 'http://127.0.0.1:9'
-          $env:HTTPS_PROXY = 'http://127.0.0.1:9'
-          $env:NO_PROXY    = 'localhost,127.0.0.1'
           $env:LOG_TO_FILE="true"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_OFFLINE_ARCHIVE = "..\artifacts\archive.zst"
@@ -148,7 +154,6 @@ jobs:
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
           npm run test-CLI-win --file=CLI-offline
-          Remove-Item Env:HTTP_PROXY, Env:HTTPS_PROXY, Env:NO_PROXY -ErrorAction SilentlyContinue
         continue-on-error: true
 
       # Copy eim log files to standard location for easier access

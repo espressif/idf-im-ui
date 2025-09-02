@@ -8,6 +8,7 @@
     "id": 2,
     "type": "offline",
     "name": "CLI Offline Installation",
-    "deleteAfterTest": true
+    "deleteAfterTest": true,
+    "testProxyMode": "block"
   }
 ]
