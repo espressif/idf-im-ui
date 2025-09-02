@@ -24,6 +24,9 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
           AWS_DEFAULT_REGION: ap-east-1
         run: |
           aws s3 cp --acl=public-read "./dl_page/index.html" s3://espdldata/dl/eim/index.html
+          # Invalidate Cache
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/index.html"
