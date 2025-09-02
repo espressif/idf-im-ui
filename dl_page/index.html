@@ -14,6 +14,8 @@
       --secondary: #6b7280;
       --background: #f8fafc;
       --card: #ffffff;
+      --tab-active: #e7352c;
+      --tab-inactive: #9ca3af;
     }
 
     * {
@@ -61,6 +63,51 @@
       font-size: 1rem;
       color: var(--secondary);
       margin-top: 0.5rem;
+    }
+
+    .tab-container {
+      margin-bottom: 2rem;
+    }
+
+    .tab-buttons {
+      display: flex;
+      justify-content: center;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      /* background: var(--card); */
+      border-radius: 12px;
+      padding: 0.5rem;
+      /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); */
+    }
+
+    .tab-button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--tab-inactive);
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .tab-button.active {
+      background: var(--tab-active);
+      color: white;
+      box-shadow: 0 2px 4px rgba(231, 53, 44, 0.3);
+    }
+
+    .tab-button:hover:not(.active) {
+      background: #f3f4f6;
+      color: var(--secondary);
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
     }
 
     .platform-section {
@@ -230,6 +277,16 @@
       font-weight: 500;
     }
 
+    .warning-message {
+      color: #dc2626;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
     footer {
       text-align: center;
       padding: 2rem 0;
@@ -277,225 +334,53 @@
         </div>
 
         <template v-if="releaseData">
-          <!-- Windows Section -->
-          <div class="platform-section"
-            v-if="categorizedAssets.windows.gui.length || categorizedAssets.windows.cli.length">
-            <div class="platform-header" @click="toggleSection('windows')">
-              <h2 class="platform-title">Windows</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.windows }">›</span>
+          <div class="tab-container">
+            <div class="tab-buttons">
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'online' }"
+                @click="activeTab = 'online'; updateUrlOnTabChange('online')"
+              >
+                Online Installer
+              </button>
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'offline' }"
+                @click="activeTab = 'offline'; updateUrlOnTabChange('offline')"
+              >
+                Offline Installer
+              </button>
             </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.windows }">
-              <div class="installer-group" v-if="categorizedAssets.windows.gui.length">
-                <h3 class="installer-title">GUI Installers</h3>
-                <div v-for="artifact in categorizedAssets.windows.gui" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'windows', 'gui') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="installer-group" v-if="categorizedAssets.windows.cli.length">
-                <h3 class="installer-title">CLI Installers</h3>
-                <div v-for="artifact in categorizedAssets.windows.cli" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'windows', 'cli') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Linux x64 Section -->
-          <div class="platform-section"
-            v-if="categorizedAssets.linuxX64.gui.length || categorizedAssets.linuxX64.cli.length">
-            <div class="platform-header" @click="toggleSection('linuxX64')">
-              <h2 class="platform-title">Linux x64</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.linuxX64 }">›</span>
+            <!-- Online Installers Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'online' }">
+              <platform-section
+                v-for="(platformData, platformKey) in categorizedAssets"
+                :key="platformKey"
+                :platform-key="platformKey"
+                :platform-data="platformData"
+                :platform-title="getPlatformDisplayName(platformKey)"
+                :expanded-sections="expandedSections"
+                @toggle-section="toggleSection"
+              ></platform-section>
             </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.linuxX64 }">
-              <div class="installer-group" v-if="categorizedAssets.linuxX64.gui.length">
-                <h3 class="installer-title">GUI Installers</h3>
-                <div v-for="artifact in categorizedAssets.linuxX64.gui" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'linuxX64', 'gui') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="installer-group" v-if="categorizedAssets.linuxX64.cli.length">
-                <h3 class="installer-title">CLI Installers</h3>
-                <div v-for="artifact in categorizedAssets.linuxX64.cli" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'linuxX64', 'cli') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          <!-- Linux ARM Section -->
-          <div class="platform-section"
-            v-if="categorizedAssets.linuxARM.gui.length || categorizedAssets.linuxARM.cli.length">
-            <div class="platform-header" @click="toggleSection('linuxARM')">
-              <h2 class="platform-title">Linux ARM</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.linuxARM }">›</span>
-            </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.linuxARM }">
-              <div class="installer-group" v-if="categorizedAssets.linuxARM.gui.length">
-                <h3 class="installer-title">GUI Installers</h3>
-                <div v-for="artifact in categorizedAssets.linuxARM.gui" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'linuxARM', 'gui') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="installer-group" v-if="categorizedAssets.linuxARM.cli.length">
-                <h3 class="installer-title">CLI Installers</h3>
-                <div v-for="artifact in categorizedAssets.linuxARM.cli" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'linuxARM', 'cli') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- macOS Intel Section -->
-          <div class="platform-section"
-            v-if="categorizedAssets.macosIntel.gui.length || categorizedAssets.macosIntel.cli.length">
-            <div class="platform-header" @click="toggleSection('macosIntel')">
-              <h2 class="platform-title">macOS Intel</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.macosIntel }">›</span>
-            </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.macosIntel }">
-              <div class="installer-group" v-if="categorizedAssets.macosIntel.gui.length">
-                <h3 class="installer-title">GUI Installers</h3>
-                <div v-for="artifact in categorizedAssets.macosIntel.gui" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'macosIntel', 'gui') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="installer-group" v-if="categorizedAssets.macosIntel.cli.length">
-                <h3 class="installer-title">CLI Installers</h3>
-                <div v-for="artifact in categorizedAssets.macosIntel.cli" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'macosIntel', 'cli') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- macOS Apple Silicon Section -->
-          <div class="platform-section"
-            v-if="categorizedAssets.macosApple.gui.length || categorizedAssets.macosApple.cli.length">
-            <div class="platform-header" @click="toggleSection('macosApple')">
-              <h2 class="platform-title">macOS Apple Silicon</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.macosApple }">›</span>
-            </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.macosApple }">
-              <div class="installer-group" v-if="categorizedAssets.macosApple.gui.length">
-                <h3 class="installer-title">GUI Installers</h3>
-                <div v-for="artifact in categorizedAssets.macosApple.gui" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'macosApple', 'gui') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div class="installer-group" v-if="categorizedAssets.macosApple.cli.length">
-                <h3 class="installer-title">CLI Installers</h3>
-                <div v-for="artifact in categorizedAssets.macosApple.cli" :key="artifact.id" class="download-item">
-                  <h3 class="download-name">{{ artifact.name }}</h3>
-                  <p class="download-desc">{{ getDescription(artifact, 'macosApple', 'cli') }}</p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(artifact.size) }}</span>
-                    <div class="download-buttons">
-                      <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                      <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Offline Installer Section -->
-          <div class="platform-section" v-if="offlineInstallers.length">
-            <div class="platform-header" @click="toggleSection('offline')">
-              <h2 class="platform-title">Offline Installer</h2>
-              <span class="platform-toggle" :class="{ expanded: expandedSections.offline }">›</span>
-            </div>
-            <div class="platform-content" :class="{ expanded: expandedSections.offline }">
-              <p class="download-desc" style="color: #dc2626; font-weight: 600; margin-bottom: 1rem;">
+            <!-- Offline Installers Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'offline' }">
+              <div class="warning-message">
                 ⚠️ Warning: Offline installer is large. Only download if you have poor internet or need to install on multiple machines.
-              </p>
-              <div class="installer-group">
-                <h3 class="installer-title">Full Offline Installation Archive</h3>
-                <div v-for="item in offlineInstallers" :key="item.platform" class="download-item">
-                  <h3 class="download-name">{{ item.filename }}</h3>
-                  <p class="download-desc">
-                    Complete offline package for {{ getPlatformDisplayName(item.platform) }}
-                  </p>
-                  <div class="download-meta">
-                    <span class="download-size">{{ formatSize(item.size) }}</span>
-                    <div class="download-buttons">
-                      <a :href="item.url" class="download-button" target="_blank">Download</a>
-                    </div>
-                  </div>
-                </div>
+              </div>
+
+              <offline-installer-section
+                v-if="offlineInstallers.length"
+                :offline-installers="offlineInstallers"
+                :expanded-sections="expandedSections"
+                @toggle-section="toggleSection"
+              ></offline-installer-section>
+
+              <div v-else class="download-item">
+                <h3 class="download-name">No Offline Installers Available</h3>
+                <p class="download-desc">Offline installers are currently not available for this release.</p>
               </div>
             </div>
           </div>
@@ -526,15 +411,181 @@
       `
     };
 
-    createApp({
+    const PlatformSection = {
+      props: ['platformKey', 'platformData', 'platformTitle', 'expandedSections'],
+      emits: ['toggle-section'],
       components: {
         'github-icon-button': GithubIconButton
+      },
+      methods: {
+        getDlEspressifUrl(githubUrl) {
+          return githubUrl.replace(
+            'https://github.com/espressif/',
+            'https://dl.espressif.com/github_assets/espressif/'
+          );
+        },
+        getDescription(artifact, platform, installerType) {
+          const platformNames = {
+            windows: 'Windows',
+            linuxX64: 'Linux x64',
+            linuxARM: 'Linux ARM',
+            macosIntel: 'macOS Intel',
+            macosApple: 'macOS Apple Silicon'
+          };
+          const type = installerType === 'gui' ? 'GUI' : 'CLI';
+          return `${platformNames[platform]} ${type} installer package`;
+        },
+        formatSize(bytes) {
+          const units = ['B', 'KB', 'MB', 'GB'];
+          let size = bytes;
+          let unitIndex = 0;
+          while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+          }
+          return `${size.toFixed(1)} ${units[unitIndex]}`;
+        },
+        toggleSection() {
+          this.$emit('toggle-section', this.platformKey);
+        }
+      },
+      computed: {
+        hasContent() {
+          return this.platformData.gui.length || this.platformData.cli.length;
+        }
+      },
+      template: `
+        <div class="platform-section" v-if="hasContent">
+          <div class="platform-header" @click="toggleSection">
+            <h2 class="platform-title">{{ platformTitle }}</h2>
+            <span class="platform-toggle" :class="{ expanded: expandedSections[platformKey] }">›</span>
+          </div>
+          <div class="platform-content" :class="{ expanded: expandedSections[platformKey] }">
+            <div class="installer-group" v-if="platformData.gui.length">
+              <h3 class="installer-title">GUI Installers</h3>
+              <div v-for="artifact in platformData.gui" :key="artifact.id" class="download-item">
+                <h3 class="download-name">{{ artifact.name }}</h3>
+                <p class="download-desc">{{ getDescription(artifact, platformKey, 'gui') }}</p>
+                <div class="download-meta">
+                  <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                  <div class="download-buttons">
+                    <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="installer-group" v-if="platformData.cli.length">
+              <h3 class="installer-title">CLI Installers</h3>
+              <div v-for="artifact in platformData.cli" :key="artifact.id" class="download-item">
+                <h3 class="download-name">{{ artifact.name }}</h3>
+                <p class="download-desc">{{ getDescription(artifact, platformKey, 'cli') }}</p>
+                <div class="download-meta">
+                  <span class="download-size">{{ formatSize(artifact.size) }}</span>
+                  <div class="download-buttons">
+                    <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    const OfflineInstallerSection = {
+      props: ['offlineInstallers', 'expandedSections'],
+      emits: ['toggle-section'],
+      methods: {
+        formatSize(bytes) {
+          const units = ['B', 'KB', 'MB', 'GB'];
+          let size = bytes;
+          let unitIndex = 0;
+          while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+          }
+          return `${size.toFixed(1)} ${units[unitIndex]}`;
+        },
+        getPlatformDisplayName(platform) {
+          const names = {
+            windows: 'Windows',
+            linuxX64: 'Linux x64',
+            linuxARM: 'Linux ARM64',
+            macosIntel: 'macOS Intel',
+            macosApple: 'macOS Apple Silicon'
+          };
+          return names[platform] || 'Unknown Platform';
+        },
+        toggleSection() {
+          this.$emit('toggle-section', 'offline');
+        }
+      },
+      template: `
+        <div class="platform-section">
+          <div class="platform-header" @click="toggleSection">
+            <h2 class="platform-title">Full Offline Installation Archives</h2>
+            <span class="platform-toggle" :class="{ expanded: expandedSections.offline }">›</span>
+          </div>
+          <div class="platform-content" :class="{ expanded: expandedSections.offline }">
+            <div class="installer-group">
+              <h3 class="installer-title">Complete Offline Packages</h3>
+              <div v-for="item in offlineInstallers" :key="item.platform" class="download-item">
+                <h3 class="download-name">{{ item.filename }}</h3>
+                <p class="download-desc">
+                  Complete offline package for {{ getPlatformDisplayName(item.platform) }}
+                </p>
+                <div class="download-meta">
+                  <span class="download-size">{{ formatSize(item.size) }}</span>
+                  <div class="download-buttons">
+                    <a :href="item.url" class="download-button" target="_blank">Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
+    createApp({
+      components: {
+        'github-icon-button': GithubIconButton,
+        'platform-section': PlatformSection,
+        'offline-installer-section': OfflineInstallerSection
       },
       setup() {
         const releaseData = ref(null);
         const offlineArchiveData = ref([]);
         const loading = ref(true);
         const error = ref(null);
+        const activeTab = ref('online');
+
+        // Initialize tab from URL parameter
+        const initializeTabFromUrl = () => {
+          const urlParams = new URLSearchParams(window.location.search);
+          const tabParam = urlParams.get('tab');
+          if (tabParam === 'offline' || tabParam === 'online') {
+            activeTab.value = tabParam;
+            // Auto-expand offline section if coming from URL with offline tab
+            if (tabParam === 'offline') {
+              expandedSections.value.offline = true;
+            }
+          }
+        };
+
+        // Update URL when tab changes
+        const updateUrlOnTabChange = (newTab) => {
+          const url = new URL(window.location);
+          url.searchParams.set('tab', newTab);
+          window.history.replaceState({}, '', url);
+
+          // Auto-expand offline section when switching to offline tab
+          if (newTab === 'offline') {
+            expandedSections.value.offline = true;
+          }
+        };
         const expandedSections = ref({
           windows: false,
           linuxX64: false,
@@ -629,9 +680,7 @@
           const available = [];
 
           for (const item of offlineArchiveData.value) {
-
             const platformKey = Object.keys(platformMapping).find(key => platformMapping[key] === item.platform);
-            // if (!platformKey || !categorizedAssets.value[platformKey]) continue;
 
             const url = `https://dl.espressif.com/dl/eim/${item.filename}`;
             available.push({
@@ -644,36 +693,6 @@
 
           return available;
         });
-
-        const getDlEspressifUrl = (githubUrl) => {
-          return githubUrl.replace(
-            'https://github.com/espressif/',
-            'https://dl.espressif.com/github_assets/espressif/'
-          );
-        };
-
-        const getDescription = (artifact, platform, installerType) => {
-          const platformNames = {
-            windows: 'Windows',
-            linuxX64: 'Linux x64',
-            linuxARM: 'Linux ARM',
-            macosIntel: 'macOS Intel',
-            macosApple: 'macOS Apple Silicon'
-          };
-          const type = installerType === 'gui' ? 'GUI' : 'CLI';
-          return `${platformNames[platform]} ${type} installer package`;
-        };
-
-        const formatSize = (bytes) => {
-          const units = ['B', 'KB', 'MB', 'GB'];
-          let size = bytes;
-          let unitIndex = 0;
-          while (size >= 1024 && unitIndex < units.length - 1) {
-            size /= 1024;
-            unitIndex++;
-          }
-          return `${size.toFixed(1)} ${units[unitIndex]}`;
-        };
 
         const toggleSection = (platform) => {
           const isExpanded = expandedSections.value[platform];
@@ -726,6 +745,7 @@
         };
 
         onMounted(() => {
+          initializeTabFromUrl();
           fetchRelease();
         });
 
@@ -735,14 +755,13 @@
           categorizedAssets,
           loading,
           error,
+          activeTab,
           expandedSections,
-          getDescription,
-          getDlEspressifUrl,
-          formatSize,
           fetchRelease,
           toggleSection,
           offlineInstallers,
-          getPlatformDisplayName
+          getPlatformDisplayName,
+          updateUrlOnTabChange
         };
       }
     }).mount('#app');
