@@ -152,6 +152,7 @@
       title="Rename Installation"
       positive-text="Rename"
       negative-text="Cancel"
+      :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRename"
     >
       <n-input
@@ -168,6 +169,7 @@
       title="Remove Installation"
       positive-text="Remove"
       negative-text="Cancel"
+      :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRemove"
     >
       Are you sure you want to remove <strong>{{ selectedVersion?.name }}</strong>?
@@ -184,6 +186,7 @@
       title="Reinstall Installation"
       positive-text="Reinstall"
       negative-text="Cancel"
+      :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmFix"
     >
       Are you sure you want to reinstall <strong>{{ selectedVersion?.name }}</strong>?
@@ -200,6 +203,7 @@
       title="Purge All Installations"
       positive-text="Purge All"
       negative-text="Cancel"
+      :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmPurge"
     >
       <n-alert type="error" :bordered="false">
@@ -605,6 +609,12 @@ export default {
   color: #e5e7eb;
 }
 .purge-all {
+  color: #e5e7eb;
+}
+.n-button {
+  color: #e5e7eb;
+}
+.n-button__content {
   color: #e5e7eb;
 }
 </style>
