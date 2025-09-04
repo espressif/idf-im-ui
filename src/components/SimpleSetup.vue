@@ -2,7 +2,7 @@
   <div class="simple-setup">
     <div class="setup-header">
       <h1 class="title">Easy Installation</h1>
-      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'">
+            <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'" text-color="white">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -147,7 +147,7 @@
           </template>
           <template #footer>
             <div class="error-actions">
-              <n-button @click="viewLogs" size="large">
+              <n-button @click="viewLogs" type="info" size="large">
                 View Logs
               </n-button>
               <n-button @click="retry" type="warning" size="large">
@@ -703,5 +703,11 @@ export default {
 
 .n-button[type="primary"] {
   background-color: #E8362D;
+  color: #e5e7eb;
 }
+
+.setup-header .n-button {
+  color: white !important;
+}
+
 </style>

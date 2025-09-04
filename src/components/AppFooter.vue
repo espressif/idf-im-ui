@@ -140,7 +140,7 @@
         </n-checkbox>
 
         <div class="modal-actions">
-          <n-button @click="showReportModal = false">
+          <n-button @click="showReportModal = false" class="cancel-button">
             Cancel
           </n-button>
           <n-button
@@ -159,7 +159,6 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-// import { open as openUrl } from '@tauri-apps/api/shell'
 import { openUrl } from '@tauri-apps/plugin-opener';
 
 import {
@@ -457,6 +456,10 @@ ${includeLogs.value ? `Log bundle has been generated at: ${bundlePath}` : 'No lo
   gap: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #e5e7eb;
+}
+
+.cancel-button {
+  color: #e5e7eb;
 }
 
 /* Modal button styles - only apply to buttons inside modals */

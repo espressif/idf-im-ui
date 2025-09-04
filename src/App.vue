@@ -19,7 +19,7 @@
             <!-- Header -->
             <header class="app-header" v-if="!showSplash">
               <div class="header-content">
-                <div class="header-brand">
+                <div class="header-brand" @click="$router.push('/')" style="cursor: pointer">
                   <img src="./assets/espressif_logo_white.svg" alt="Espressif" class="logo" />
                   <span class="header-title">ESP-IDF Installation Manager</span>
                 </div>
