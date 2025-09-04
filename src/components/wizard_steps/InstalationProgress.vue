@@ -123,11 +123,55 @@
       </div>
 
       <!-- Installation Log -->
-      <n-collapse arrow-placement="right" v-if="log_messages.length > 0">
+      <n-collapse arrow-placement="right" v-if="totalLogCount > 0">
         <n-collapse-item title="Installation Log" name="1">
+          <template #header-extra>
+            <span class="log-count">({{ totalLogCount }} entries)</span>
+            <!-- <n-button
+              size="small"
+              type="tertiary"
+              @click.stop="clearLogs()"
+              style="margin-left: 8px;"
+            >
+              Clear
+            </n-button> -->
+          </template>
+
           <div class="log-container">
-            <pre v-for="(message, index) in log_messages" :key="index" class="log-message"
-              :class="getLogMessageClass(message)">{{ message.text }}</pre>
+            <!-- Virtual scrolling container -->
+            <div
+              class="log-virtual-container"
+              ref="virtualContainer"
+              @scroll="onLogScroll"
+            >
+              <!-- Spacer for items above viewport -->
+              <div
+                class="virtual-spacer-top"
+                :style="{ height: topSpacerHeight + 'px' }"
+              ></div>
+
+              <!-- Only render visible items -->
+              <div class="log-scroll-container">
+                <div
+                  v-for="(message, index) in visibleLogs"
+                  :key="`log-${startIndex + index}-${message.timestamp}`"
+                  class="log-entry"
+                  :style="{ height: itemHeight + 'px' }"
+                >
+                  <pre
+                    class="log-message"
+                    :class="getLogMessageClass(message)"
+                    v-text="message.text"
+                  ></pre>
+                </div>
+              </div>
+
+              <!-- Spacer for items below viewport -->
+              <div
+                class="virtual-spacer-bottom"
+                :style="{ height: bottomSpacerHeight + 'px' }"
+              ></div>
+            </div>
           </div>
         </n-collapse-item>
       </n-collapse>
@@ -176,9 +220,9 @@ export default {
     error_message: "",
 
     // Progress tracking
-    currentProgress: 0,
-    currentActivity: "Preparing installation...",
-    currentDetail: "",
+    // currentProgress: 0,
+    // currentActivity: "Preparing installation...",
+    // currentDetail: "",
     currentStep: 0,
     currentStage: 'checking',
 
@@ -199,15 +243,40 @@ export default {
       { title: 'Complete', description: 'Installation complete' }
     ],
 
-    // Logging
-    log_messages: [],
+    // Logging with Virtual scrolling
+    visibleLogs: [], // Only visible log entries (reactive)
+    totalLogCount: 0, // Total number of logs (reactive for UI)
+    scrollTop: 0,
+    containerHeight: 300, // Height of the scroll container
+    itemHeight: 24, // Height of each log item in pixels
+    visibleCount: 15, // Number of items to render
+    startIndex: 0, // Starting index of visible items
 
     // UI state
     installationPath: "",
     completedToolsCount: 0,
     totalToolsCount: 0,
-    showToolsTable: false
+    showToolsTable: false,
+
+    // progress tracking
+    progressUpdateTrigger: 0,
+    lastProgressUpdate: 0
   }),
+
+  created() {
+    this._allLogs = [];
+    this.BUFFER_SIZE = 2; // Extra items to render for smooth scrolling
+
+    this._progressData = {
+      currentProgress: 0,
+      currentActivity: "Preparing installation...",
+      currentDetail: "",
+      lastUpdate: Date.now()
+    };
+
+    // Throttle UI updates to prevent memory explosion
+    this._progressThrottle = null;
+  },
 
   methods: {
     goHome: function () {
@@ -246,7 +315,6 @@ export default {
     startListening: async function () {
       // Listen for installation progress events
       this.unlistenProgress = await listen('installation-progress', (event) => {
-        console.log('Progress event received:', event.payload);
         this.handleProgressEvent(event.payload);
       });
 
@@ -259,68 +327,114 @@ export default {
 
     handleProgressEvent: function (payload) {
       const { stage, percentage, message, detail, version } = payload;
+      const now = Date.now();
 
       // Update basic progress info
-      this.currentProgress = percentage || 0;
-      this.currentActivity = message || this.currentActivity;
-      this.currentDetail = detail || "";
-      this.currentStage = stage;
+      // this.currentProgress = percentage || 0;
+      // this.currentActivity = message || this.currentActivity;
+      // this.currentDetail = detail || "";
+      // this.currentStage = stage;
+
+      // Store in non-reactive object (no memory leak)
+      this._progressData.currentProgress = percentage || 0;
+      this._progressData.currentActivity = message || this._progressData.currentActivity;
+      this._progressData.currentDetail = detail || "";
+      this._progressData.lastUpdate = now;
 
       // Update current version if provided
       if (version && version !== this.current_version) {
         this.current_version = version;
       }
 
-      // Handle different stages
+      // Update stage (reactive, but changes rarely)
+      if (stage !== this.currentStage) {
+        this.currentStage = stage;
+      }
+      let newStep = this.currentStep;
+
       switch (stage) {
-        case 'checking':
-          this.currentStep = 0;
-          break;
-        case 'prerequisites':
-          this.currentStep = 1;
-          break;
+        case 'checking': newStep = 0; break;
+        case 'prerequisites': newStep = 1; break;
         case 'download':
-          this.currentStep = 2;
+          newStep = 2;
           // Show submodules step when progress > 10%
-          if (percentage > 10) {
-            this.currentStep = 3;
-          }
+          if (percentage > 10) newStep = 3;
           break;
-        case 'extract':
-          this.currentStep = 3;
-          break;
+        case 'extract': newStep = 3; break;
         case 'tools':
-          this.currentStep = 4;
-          this.showToolsTable = true;
-          this.handleToolsProgress(message, detail, percentage);
+          newStep = 4;
+          if (!this.showToolsTable) this.showToolsTable = true;
           break;
-        case 'python':
-          this.currentStep = 5;
-          break;
-        case 'configure':
-          this.currentStep = 6;
-          break;
+        case 'python': newStep = 5; break;
+        case 'configure': newStep = 6; break;
         case 'complete':
-          this.currentStep = 7;
+          newStep = 7;
           this.handleInstallationComplete(version);
           break;
         case 'error':
           this.handleInstallationError(message, detail);
           break;
       }
+
+      // Only update reactive step if it actually changed
+      if (newStep !== this.currentStep) {
+        this.currentStep = newStep;
+      }
+
+      // Throttle UI updates to max 2 per second to prevent memory explosion
+      this.throttledProgressUpdate();
+    },
+
+    throttledProgressUpdate() {
+      if (this._progressThrottle) {
+        clearTimeout(this._progressThrottle);
+      }
+
+      this._progressThrottle = setTimeout(() => {
+        const now = Date.now();
+        // Only update if enough time has passed (100ms = 10fps)
+        if (now - this.lastProgressUpdate > 100) {
+          this.progressUpdateTrigger++;
+          this.lastProgressUpdate = now;
+        }
+        this._progressThrottle = null;
+      }, 100);
+    },
+
+    forceProgressUpdate() {
+      this.progressUpdateTrigger++;
+      this.lastProgressUpdate = Date.now();
     },
 
     handleLogMessage: function (payload) {
       const { level, message } = payload;
-      this.log_messages.push({
+
+      // Create log entry (non-reactive)
+      const logEntry = {
         level,
         text: message,
-        timestamp: new Date().toLocaleTimeString()
-      });
+        timestamp: Date.now(),
+        id: this._allLogs.length
+      };
 
-      // Keep log size manageable
-      if (this.log_messages.length > 1000) {
-        this.log_messages = this.log_messages.slice(-800);
+      // Add to non-reactive array
+      this._allLogs.unshift(logEntry);
+
+      // Keep reasonable limit
+      const MAX_LOG_ENTRIES = 1000;
+      if (this._allLogs.length > MAX_LOG_ENTRIES) {
+        this._allLogs = this._allLogs.slice(0, MAX_LOG_ENTRIES);
+      }
+
+      // Update reactive counter
+      this.totalLogCount = this._allLogs.length;
+
+      // Update visible logs
+      this.updateVisibleLogs();
+
+      // Auto-scroll to top for new messages
+      if (this.scrollTop < this.itemHeight) {
+        this.scrollToTop();
       }
 
       // Extract installation path from logs if available
@@ -331,6 +445,74 @@ export default {
         }
       }
     },
+
+    updateVisibleLogs() {
+      const startIndex = Math.max(0, Math.floor(this.scrollTop / this.itemHeight) - this.BUFFER_SIZE);
+      const endIndex = Math.min(
+        startIndex + this.maxVisibleItems,
+        this._allLogs.length
+      );
+
+      this.startIndex = startIndex;
+
+      // Only update reactive array with visible subset
+      this.visibleLogs = this._allLogs.slice(startIndex, endIndex).map(log => ({
+        ...log
+      }));
+    },
+
+    onLogScroll(event) {
+      const newScrollTop = event.target.scrollTop;
+
+      // Throttle updates for performance
+      if (Math.abs(newScrollTop - this.scrollTop) > this.itemHeight / 2) {
+        this.scrollTop = newScrollTop;
+        this.updateVisibleLogs();
+      }
+    },
+
+    scrollToTop() {
+      this.$nextTick(() => {
+        const container = this.$refs.virtualContainer;
+        if (container) {
+          container.scrollTop = 0;
+          this.scrollTop = 0;
+          this.updateVisibleLogs();
+        }
+      });
+    },
+
+    clearLogs: function() {
+      this._allLogs = [];
+      this.visibleLogs = [];
+      this.totalLogCount = 0;
+      this.scrollTop = 0;
+      this.startIndex = 0;
+
+      // Force update
+      this.$forceUpdate();
+    },
+
+    measureContainer() {
+      this.$nextTick(() => {
+        const container = this.$refs.virtualContainer;
+        if (container) {
+          this.containerHeight = container.clientHeight;
+          this.updateVisibleLogs();
+        }
+      });
+    },
+
+    getLogMessageClass: function (message) {
+      if (message.level === 'error') return 'log-message log-error';
+      if (message.level === 'warning') return 'log-message log-warning';
+      if (message.level === 'success') return 'log-message log-success';
+      if (message.text && (message.text.includes('WARN') || message.text.includes('ERR'))) {
+        return 'log-message highlight';
+      }
+      return 'log-message';
+    },
+
 
     handleToolsProgress: function (message, detail, percentage) {
       if (!this.current_version) return;
@@ -435,22 +617,21 @@ export default {
     },
 
     getLogMessageClass: function (message) {
-      const classes = ['log-message'];
-
+      // Cache class combinations to avoid repeated string concatenation
       if (message.level === 'error') {
-        classes.push('log-error');
+        return 'log-message log-error';
       } else if (message.level === 'warning') {
-        classes.push('log-warning');
+        return 'log-message log-warning';
       } else if (message.level === 'success') {
-        classes.push('log-success');
+        return 'log-message log-success';
       }
 
-      // Highlight important messages
+      // Check for highlights only if needed
       if (message.text.includes('WARN') || message.text.includes('ERR')) {
-        classes.push('highlight');
+        return 'log-message highlight';
       }
 
-      return classes.join(' ');
+      return 'log-message';
     },
 
     get_settings: async function () {
@@ -520,14 +701,29 @@ export default {
       this.installation_failed = false;
       this.error_message = "";
       this.log_messages = [];
-      this.currentProgress = 0;
+      // this.currentProgress = 0;
+
+      this.clearLogs();
+
+      // Reset progress data
+      this._progressData = {
+        currentProgress: 0,
+        currentActivity: "Preparing installation...",
+        currentDetail: "",
+        lastUpdate: Date.now()
+      };
+
+      this.currentStep = 0;
+      this.currentStage = 'checking';
+      this.forceProgressUpdate();
 
       try {
         if (this.is_fix_mode) {
           // For fix mode, the installation should already be started by the confirmFix call
           if (this.fixing_version) {
             this.current_version = this.fixing_version.name;
-            this.currentActivity = `Repairing ${this.fixing_version.name}...`;
+            // this.currentActivity = `Repairing ${this.fixing_version.name}...`;
+            this._progressData.currentActivity = `Repairing ${this.fixing_version.name}...`;
           }
         } else {
           // Normal installation
@@ -552,7 +748,38 @@ export default {
             !this.installation_failed &&
             !this.installation_finished;
     },
+
+    cleanupProgressData() {
+      if (this._progressThrottle) {
+        clearTimeout(this._progressThrottle);
+        this._progressThrottle = null;
+      }
+      this._progressData = null;
+    },
+
+    cleanup: function() {
+      // Enhanced cleanup
+      this.clearLogs();
+      this.cleanupProgressData();
+
+      // Remove event listeners
+      window.removeEventListener('resize', this.measureContainer);
+
+      if (this.unlistenProgress) {
+        this.unlistenProgress();
+        this.unlistenProgress = null;
+      }
+      if (this.unlistenLog) {
+        this.unlistenLog();
+        this.unlistenLog = null;
+      }
+
+      // Clean up non-reactive reference
+      this._allLogs = null;
+    },
   },
+
+
 
   computed: {
     store() {
@@ -585,6 +812,35 @@ export default {
         };
       }
       return null;
+    },
+    // Calculate spacer heights for virtual scrolling
+    topSpacerHeight() {
+      return this.startIndex * this.itemHeight;
+    },
+
+    bottomSpacerHeight() {
+      const remainingItems = Math.max(0, this.totalLogCount - (this.startIndex + this.visibleLogs.length));
+      return remainingItems * this.itemHeight;
+    },
+
+    // Calculate how many items can fit in the container
+    maxVisibleItems() {
+      return Math.ceil(this.containerHeight / this.itemHeight) + (this.BUFFER_SIZE * 2);
+    },
+    currentProgress() {
+      // Depend on the trigger to know when to update
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentProgress : 0;
+    },
+
+    currentActivity() {
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentActivity : "Preparing installation...";
+    },
+
+    currentDetail() {
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentDetail : "";
     }
   },
 
@@ -592,6 +848,8 @@ export default {
     this.get_os();
     this.get_settings();
     this.startListening();
+    this.measureContainer();
+    window.addEventListener('resize', this.measureContainer);
 
     // Handle different entry modes
     if (this.is_fix_mode && this.$route.query.mode === 'fix') {
@@ -614,8 +872,10 @@ export default {
   },
 
   beforeDestroy() {
-    if (this.unlistenProgress) this.unlistenProgress();
-    if (this.unlistenLog) this.unlistenLog();
+    this.cleanup();
+  },
+  beforeUnmount() {
+    this.cleanup();
   },
 }
 </script>
@@ -830,42 +1090,130 @@ export default {
   gap: 0.5rem;
 }
 
+/* Virtual Scrolling Styles */
 .log-container {
   text-align: left;
   background-color: white;
-  max-height: 300px;
+}
+
+.log-virtual-container {
+  height: 300px; /* Fixed height for virtual scrolling */
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Hardware acceleration for smooth scrolling */
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+  /* Improve scrolling performance */
+  scroll-behavior: smooth;
+}
+
+.virtual-spacer-top,
+.virtual-spacer-bottom {
+  /* Spacers to maintain scroll height */
+  width: 100%;
+  pointer-events: none;
+}
+
+.log-scroll-container {
+  /* Container for visible items */
+  contain: layout style;
+}
+
+.log-entry {
+  /* Fixed height for consistent virtual scrolling */
+  height: 24px; /* Must match itemHeight in data */
+  display: flex;
+  align-items: flex-start;
+  contain: layout;
+  /* Prevent layout thrashing */
+  box-sizing: border-box;
 }
 
 .log-message {
   margin: 0;
-  padding: 2px 0;
+  padding: 2px 4px;
   font-family: monospace;
   font-size: 0.85rem;
+  line-height: 20px; /* Ensure consistent height */
+  /* Optimize text rendering */
+  text-rendering: optimizeSpeed;
+  /* Prevent text wrapping to maintain height */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* Full width */
+  width: 100%;
+  flex: 1;
+}
+
+/* Log level styling */
+.log-message.log-error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-left: 3px solid #ef4444;
+}
+
+.log-message.log-warning {
+  background-color: #fef3c7;
+  color: #d97706;
+  border-left: 3px solid #f59e0b;
+}
+
+.log-message.log-success {
+  color: #059669;
+  border-left: 3px solid #10b981;
 }
 
 .log-message.highlight {
   background-color: #fff9c2;
   font-weight: 500;
   border-left: 3px solid #E8362D;
-  padding-left: 6px;
 }
 
-.log-message.log-error {
-  background-color: #fee2e2;
-  color: #b91c1c;
-  padding: 4px;
-  margin: 2px 0;
+.log-count {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: normal;
 }
 
-.log-message.log-warning {
-  background-color: #fef3c7;
-  color: #d97706;
-  padding: 2px 4px;
+/* Scrollbar styling */
+.log-virtual-container::-webkit-scrollbar {
+  width: 8px;
 }
 
-.log-message.log-success {
-  color: #059669;
+.log-virtual-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.log-virtual-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.log-virtual-container::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Performance optimizations */
+.log-virtual-container * {
+  /* Reduce repaints */
+  backface-visibility: hidden;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .log-virtual-container {
+    height: 250px;
+  }
+
+  .log-entry {
+    height: 28px; /* Slightly taller on mobile */
+  }
+
+  .log-message {
+    line-height: 24px;
+  }
 }
 
 /* Fix mode specific styles */
