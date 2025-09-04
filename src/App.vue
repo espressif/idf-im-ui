@@ -25,7 +25,7 @@
                 </div>
                 <div class="header-actions">
                   <!-- Navigation breadcrumbs or status could go here -->
-                  <n-breadcrumb v-if="showBreadcrumb">
+                  <!-- <n-breadcrumb v-if="showBreadcrumb">
                     <n-breadcrumb-item
                       v-for="crumb in breadcrumbs"
                       :key="crumb.path"
@@ -34,7 +34,7 @@
                     >
                       <span style="color: rgb(230, 204, 204)">{{ crumb.label }}</span>
                     </n-breadcrumb-item>
-                  </n-breadcrumb>
+                  </n-breadcrumb> -->
                 </div>
               </div>
             </header>
