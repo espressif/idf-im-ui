@@ -54,6 +54,7 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  zoom: 0.8;
 }
 
 .n-layout-header {
@@ -158,7 +159,7 @@ h2 {
 .header img {
   height: 40px;
   padding: -1rem;
-  width: auto; 
+  width: auto;
   object-fit: contain;
 }
 
@@ -180,7 +181,7 @@ h2 {
   align-items: center;
   justify-content: center;
   padding: 2rem;
-  
+
 }
 
 .welcome-card {

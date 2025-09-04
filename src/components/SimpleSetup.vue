@@ -1,364 +1,717 @@
 <template>
   <div class="simple-setup">
-    <div class="wizard-header">
-      <h1 class="header-title">Simplified Mode</h1>
+    <div class="setup-header">
+      <h1 class="title">Easy Installation</h1>
+            <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'" text-color="white">
+        <template #icon>
+          <n-icon><ArrowLeftOutlined /></n-icon>
+        </template>
+        Back
+      </n-button>
     </div>
-    <n-card class="status-card">
-      <div class="status-content">
-        <!-- Complete Component -->
-        <div v-if="current_state_code === 11">
-          <Complete />
+
+    <!-- Pre-installation Check -->
+    <n-card v-if="currentState === 'checking'" class="status-card">
+      <div class="checking-status">
+        <n-spin size="large" />
+        <h2>Preparing Installation</h2>
+        <p>Checking system requirements and prerequisites...</p>
+      </div>
+    </n-card>
+
+    <!-- Ready to Install -->
+    <n-card v-else-if="currentState === 'ready'" class="status-card">
+      <div class="ready-status">
+        <n-icon :size="64" color="#52c41a">
+          <CheckCircleOutlined />
+        </n-icon>
+        <h2>Ready to Install</h2>
+        <div class="installation-summary">
+          <div class="summary-item">
+            <span class="summary-label">Version:</span>
+            <span class="summary-value">{{ selectedVersion }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Installation Path:</span>
+            <span class="summary-value">{{ installPath }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Estimated Size:</span>
+            <span class="summary-value">~3.5 GB</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">Estimated Time:</span>
+            <span class="summary-value">10-45 minutes</span>
+          </div>
+        </div>
+        <n-alert type="info" :bordered="false" style="margin: 1.5rem 0;">
+          This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.
+        </n-alert>
+        <n-button
+          @click="startInstallation"
+          type="primary"
+          size="large"
+          block
+        >
+          Start Installation
+        </n-button>
+      </div>
+    </n-card>
+
+    <!-- Installation Progress -->
+    <n-card v-else-if="currentState === 'installing'" class="status-card">
+      <div class="installing-status">
+        <div class="status-header">
+          <n-icon :size="48" :class="getStatusIconClass">
+            <component :is="getStatusIcon" />
+          </n-icon>
+          <h2>{{ installationTitle }}</h2>
         </div>
 
-        <!-- Status Messages -->
-        <div class="status-message" v-else>
-          <div class="status-message-header">
-            <n-icon :size="32" :class="getCurrentStateStatus" class="icon">
-              <ExclamationCircleFilled />
-            </n-icon>
-            <h1 class="title" data-id="target-select-title">{{ getCurrentStateTitle }}</h1>
-          </div>
-          <div class="status-message-body">
-            <p class="description" data-id="target-select-description">{{ getCurrentStateDescription }}</p>
-          </div>
-          <div :class="['user-message', 'user-message-' + last_user_message_type]" v-if="last_user_message.length > 0">
-            {{ last_user_message }}
-          </div>
-          <div class="action-buttons">
-            <n-button v-if="showRetryButton" @click="startInstalation" ghost type="error">
-              Try Again
-            </n-button>
-            <n-button v-if="showExpertButton" @click="$router.push('/wizard/1')" type="info">
-              Expert Mode
-            </n-button>
-          </div>
-        </div>
+        <p class="status-description">{{ installationMessage }}</p>
 
+        <GlobalProgress
+          :initial-message="installationMessage"
+          :initial-progress="installationProgress"
+          :show-details="true"
+          :color-scheme="getProgressColorScheme"
+          :steps="installationSteps"
+          event-channel="installation-progress"
+        />
 
-
-        <GlobalProgress messagePosition="left"
-          v-if="(current_state_code > 0 && !showRetryButton ) && last_user_message_type != 'error' && current_state_code != 11" />
-
-        <!-- Installation Log -->
-        <n-collapse arrow-placement="right" v-if="messages.length > 0">
+        <n-collapse
+          v-if="installMessages.length > 0"
+          style="margin-top: 2rem;"
+        >
           <n-collapse-item title="Installation Log" name="1">
-            <div class="log-container">
-              <pre v-for="message in messages" :key="message" class="log-message">{{ message }}</pre>
-            </div>
+            <n-scrollbar style="max-height: 180px">
+              <pre class="log-content">{{ installMessages.join('\n') }}</pre>
+            </n-scrollbar>
           </n-collapse-item>
         </n-collapse>
+      </div>
+    </n-card>
+
+    <!-- Installation Complete -->
+    <n-card v-else-if="currentState === 'complete'" class="status-card">
+      <div class="complete-status">
+        <n-result
+          status="success"
+          title="Installation Complete!"
+          description="ESP-IDF has been successfully installed on your system."
+        >
+          <template #icon>
+            <n-icon :size="72" color="#52c41a">
+              <CheckCircleOutlined />
+            </n-icon>
+          </template>
+          <template #footer>
+            <div class="completion-actions">
+              <n-button @click="viewDocumentation" size="large">
+                View Documentation
+              </n-button>
+              <!-- <n-button @click="openIDE" type="info" size="large">
+                Open VS Code
+              </n-button> -->
+              <n-button @click="goToManagement" type="primary" size="large">
+                Go to Dashboard
+              </n-button>
+            </div>
+          </template>
+        </n-result>
+
+        <div class="post-install-info">
+          <h3>Next Steps:</h3>
+          <ol>
+            <li>Open a new IDF terminal using the icon on your desktop.</li>
+            <li>Navigate to your project directory</li>
+            <li>Run <code>idf.py create-project my_project</code> to create a new project</li>
+            <li>Run <code>idf.py build</code> to build your project</li>
+          </ol>
+        </div>
+      </div>
+    </n-card>
+
+    <!-- Installation Failed -->
+    <n-card v-else-if="currentState === 'error'" class="status-card">
+      <div class="error-status">
+        <n-result
+          status="error"
+          :title="errorTitle"
+          :description="errorMessage"
+        >
+          <template #icon>
+            <n-icon :size="72" color="#ff4d4f">
+              <CloseCircleOutlined />
+            </n-icon>
+          </template>
+          <template #footer>
+            <div class="error-actions">
+              <n-button @click="viewLogs" type="info" size="large">
+                View Logs
+              </n-button>
+              <n-button @click="retry" type="warning" size="large">
+                Try Again
+              </n-button>
+              <n-button @click="useWizard" type="info" size="large">
+                Use Custom Installation
+              </n-button>
+            </div>
+          </template>
+        </n-result>
+
+        <n-alert
+          v-if="errorDetails"
+          type="error"
+          style="margin-top: 2rem;"
+        >
+          <template #header>Error Details</template>
+          <pre class="error-details">{{ errorDetails }}</pre>
+        </n-alert>
       </div>
     </n-card>
   </div>
 </template>
 
 <script>
-import { NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem } from 'naive-ui'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
+import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { invoke } from "@tauri-apps/api/core";
-import Complete from './wizard_steps/Complete.vue';
-import GlobalProgress from './GlobalProgress.vue';
-import { ExclamationCircleFilled } from '@vicons/antd'
+import {
+  NButton, NCard, NIcon, NSpin, NResult, NAlert,
+  NCollapse, NCollapseItem, NScrollbar, useMessage
+} from 'naive-ui'
+import {
+  ArrowLeftOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  LoadingOutlined,
+  DownloadOutlined,
+  ToolOutlined
+} from '@vicons/antd'
+import GlobalProgress from './GlobalProgress.vue'
+import { useAppStore } from '../store'
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 export default {
   name: 'SimpleSetup',
   components: {
-    Complete, NProgress, NSpin, NCard, NButton, NResult, NCollapse, NCollapseItem, ExclamationCircleFilled, GlobalProgress
+    NButton, NCard, NIcon, NSpin, NResult, NAlert,
+    NCollapse, NCollapseItem, NScrollbar,
+    ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
+    LoadingOutlined, DownloadOutlined, ToolOutlined,
+    GlobalProgress
   },
-  data: () => ({
-    messages: [],
-    current_state_code: 0,
-    last_user_message: '',
-    last_user_message_type: 0,
-    unlisten: undefined,
-    unlisten_win: undefined,
-    listener: undefined,
-    user_message_unlisten: undefined,
-    path_valid: true,
-  }),
-  computed: {
-    isInProgress() {
-      return [1, 2, 5, 8, 10].includes(this.current_state_code);
-    },
-    showStatusMessage() {
-      return [3, 4, 6, 7, 9, 12].includes(this.current_state_code);
-    },
-    showRetryButton() {
-      return [3, 4, 6, 7, 12].includes(this.current_state_code) || this.last_user_message_type == 'error';
-    },
-    showExpertButton() {
-      return [3, 4, 6, 7, 9, 12].includes(this.current_state_code) || this.last_user_message_type == 'error';
-    },
-    getCurrentStateStatus() {
-      switch (this.current_state_code) {
-        case 11:
-          return 'success';
-        case 1:
-        case 2:
-        case 5:
-        case 8:
-        case 10:
-          return 'info';
-        default:
-          return 'error';
+  setup() {
+    const router = useRouter()
+    const message = useMessage()
+    const appStore = useAppStore()
+
+    // State management
+    const currentState = ref('checking') // checking, ready, installing, complete, error
+    const selectedVersion = ref('latest')
+    const installPath = ref('')
+    const currentStep = ref(0)
+
+
+    // Installation progress
+    const installationTitle = ref('Installing ESP-IDF')
+    const installationMessage = ref('Preparing installation...')
+    const installationProgress = ref(0)
+    const installMessages = ref([])
+    const installationSteps = ref([
+      { title: 'Check', description: 'System requirements' },
+      { title: 'Prerequisites', description: 'Installing dependencies' },
+      { title: 'Download', description: 'Downloading ESP-IDF' },
+      { title: 'Extract', description: 'Extracting files' },
+      { title: 'Tools', description: 'Installing tools' },
+      { title: 'Python', description: 'Setting up Python' },
+      { title: 'Configure', description: 'Configuring environment' },
+      { title: 'Complete', description: 'Finalizing installation' }
+    ])
+
+    // Error handling
+    const errorTitle = ref('Installation Failed')
+    const errorMessage = ref('')
+    const errorDetails = ref('')
+
+    // Event listeners
+    let unlistenProgress = null
+    let unlistenComplete = null
+    let unlistenError = null
+    let unlistenLog = null
+
+    const getStatusIcon = computed(() => {
+      if (installationProgress.value < 30) return DownloadOutlined
+      if (installationProgress.value < 70) return ToolOutlined
+      if (installationProgress.value < 100) return LoadingOutlined
+      return CheckCircleOutlined
+    })
+
+    const getStatusIconClass = computed(() => { // TODO
+      return installationProgress.value < 100 ? 'rotating' : ''
+    })
+
+    const getProgressColorScheme = computed(() => {
+      if (currentState.value === 'error') return 'error'
+      if (installationProgress.value === 100) return 'success'
+      return 'primary'
+    })
+
+    const checkPrerequisites = async () => {
+      try {
+        currentState.value = 'checking'
+        // Check prerequisites
+        const prereqResult = invoke('check_prerequisites_detailed').then(prereqResult => {
+          if (!prereqResult.all_ok && appStore.os !== 'windows') {
+            errorTitle.value = 'Prerequisites Missing'
+            errorMessage.value = 'Some required dependencies are not installed.'
+            errorDetails.value = prereqResult.missing.join('\n')
+            currentState.value = 'error'
+            return false
+          } // TODO: maybe on windows inform user which prerequisities will be installed
+          // Get default installation path
+          invoke('get_settings').then(settings => {
+            installPath.value = settings?.path
+          });
+          // Check if path is valid
+          invoke('is_path_empty_or_nonexistent_command', {
+            path: installPath.value
+          }).then(pathValid => {
+            if (!pathValid) {
+              errorTitle.value = 'Installation Path Not Empty'
+              errorMessage.value = `The default installation path (${installPath.value}) is not empty.`
+              errorDetails.value = 'Please use custom installation to select a different path.'
+              currentState.value = 'error'
+              return false
+            }
+          // Get latest ESP-IDF version
+          invoke('get_idf_versions').then(versions => {
+            selectedVersion.value = versions?.[0].name || 'v5.5';
+            currentState.value = 'ready';
+
+          });
+        });
+
+          return true
+        })
+
+        return true
+
+      } catch (error) {
+        console.error('Failed to check prerequisites:', error)
+        errorTitle.value = 'System Check Failed'
+        errorMessage.value = 'Failed to verify system requirements.'
+        errorDetails.value = error.toString()
+        currentState.value = 'error'
+        return false
       }
-    },
-    getCurentClass() {
-      return "simple_install_result_negative";
-    },
-    getCurrentStateMessage() {
-      const messages = {
-        1: 'Starting Installation...',
-        2: 'Installing Prerequisites...',
-        5: 'Setting up Python...',
-        8: 'Getting ESP-IDF Versions...',
-        10: 'Installing ESP-IDF...'
-      };
-      return messages[this.current_state_code] || '';
-    },
-    getCurrentStateTitle() {
+    }
+
+    const startInstallation = async () => {
+      currentState.value = 'installing'
+      installationProgress.value = 0
+      currentStep.value = 0
+      installMessages.value = []
+
+      try {
+      // Set up event listeners
+      unlistenProgress = await listen('installation-progress', (event) => {
+        const { stage, percentage, message, detail, version } = event.payload;
+
+        installationProgress.value = percentage;
+        installationMessage.value = message;
+
+        // Update progress with smooth transitions
+        if (percentage !== undefined) {
+          // Ensure progress only moves forward (avoid jumping backwards)
+          if (percentage >= installationProgress.value) {
+            installationProgress.value = percentage
+          }
+        }
+
+        if (message) {
+          installationMessage.value = message
+        }
+
+        // Map stage to step for UI
+        const stageToStep = {
+          'checking': 0,
+          'prerequisites': 1,
+          'download': 2,
+          'extract': 3,
+          'tools': 4,
+          'python': 5,
+          'configure': 6,
+          'complete': 7
+        };
+
+        // For download stage, show submodules step when progress > 10%
+        if (stage === 'download' && percentage > 10) {
+          currentStep.value = 3 // Show submodules step
+          if (stageToStep[stage] !== undefined) {
+            updateInstallationStep(stage)
+          }
+        } else if (stageToStep[stage] !== undefined) {
+          // Only update step if we're moving forward
+          if (stageToStep[stage] >= currentStep.value) {
+            currentStep.value = stageToStep[stage]
+            updateInstallationStep(stage) // Update title based on stage
+          }
+        }
+
+        if (stage === 'error') {
+          currentState.value = 'error'
+          errorMessage.value = message || 'Installation failed'
+          errorDetails.value = detail || ''
+        } else if (stage === 'complete' || percentage === 100) {
+          currentState.value = 'complete'
+          installationProgress.value = 100 // Ensure we show 100%
+        }
+
+        // Auto-advance to complete state when we reach 100%
+        if (percentage >= 100 && stage !== 'error') {
+          setTimeout(() => {
+            if (currentState.value === 'installing') {
+              currentState.value = 'complete'
+            }
+          }, 1000) // Give a moment to show 100% before completing
+        }
+      });
+
+      unlistenLog = await listen('log-message', (event) => {
+        const { level, message } = event.payload;
+        installMessages.value.push(`[${level}] ${message}`);
+      });
+
+      // Start installation
+
+        await invoke('start_simple_setup', {
+          version: selectedVersion.value,
+          path: installPath.value
+        })
+      } catch (error) {
+        currentState.value = 'error'
+        errorTitle.value = 'Failed to Start Installation'
+        errorMessage.value = error.toString()
+      }
+    }
+
+    const updateInstallationStep = (step) => {
+      // Update installation title based on step
       const titles = {
-        1: 'Starting Installation...',
-        2: 'Installing Prerequisites...',
-        3: 'Prerequisites Installation Failed',
-        4: 'Missing Prerequisites',
-        5: 'Python Setup...',
-        6: 'Python Setup Failed',
-        7: 'Python Version Not Found',
-        8: 'Getting ESP-IDF Versions...',
-        9: 'Version Selection Failed',
-        10: 'Installing ESP-IDF...',
-        11: 'Installation Complete',
-        12: 'Installation Failed'
-      };
-      return titles[this.current_state_code] || '';
-    },
-    getCurrentStateDescription() {
-      if ([3, 4].includes(this.current_state_code)) {
-        return `Missing prerequisites: ${this.messages[this.messages.length - 1]}`;
+        'checking': 'Checking System',
+        'prerequisites': 'Installing Prerequisites',
+        'download': 'Downloading ESP-IDF',
+        'extract': 'Extracting Files',
+        'tools': 'Installing Tools',
+        'python': 'Setting up Python',
+        'configure': 'Configuring Environment',
+        'complete': 'Finalizing Installation'
       }
-      if ([6, 7].includes(this.current_state_code)) {
-        return 'Please install Python 3.10 or later with pip, venv and SSL support';
-      }
-      if (this.current_state_code === 9) {
-        return 'Please use expert mode to manually select ESP-IDF version';
-      }
-      if (this.getCurrentStateStatus === 'error') {
-        if (this.path_valid == false) {
-          return 'The default installation path is not empty. Please switch to expert mode for more control with possibility to select custom path';
-        }
-        return 'Please try again or switch to expert mode for more control';
-      } else {
-        return '';
+
+      if (titles[step]) {
+        installationTitle.value = titles[step]
       }
     }
-  },
-  methods: {
-    async startListening() {
-      this.unlisten = await listen('simple-setup-message', (event) => {
-        console.log(event.payload);
-        this.messages.push(event.payload.message);
-        this.current_state_code = event.payload.code;
+
+    const retry = async () => {
+      currentState.value = 'checking'
+      errorMessage.value = ''
+      errorDetails.value = ''
+      installationProgress.value = 0
+      currentStep.value = 0
+      installMessages.value = []
+      nextTick(() => {
+        setTimeout(() => {
+          checkPrerequisites();
+        }, 300);
       });
-      this.unlisten_win = await listen('installation_complete', (event) => {
-        const { success, message } = event.payload;
-        if (success) {
-          this.current_state_code = 11;
-        } else {
-          this.current_state_code = 12;
-        }
-        this.messages.push(message);
-      });
-    },
-    startInstalation: async function () {
-      this.path_valid = await this.validate_path();
-      if (!this.path_valid) {
-        this.current_state_code = 12;
-        return;
-      }
-      this.listener = await listen('user-message', (event) => {
-        this.last_user_message = event.payload.message;
-        this.last_user_message_type = event.payload.type;
-        this.messages.push(event.payload.message);
-      });
-      await invoke("start_simple_setup", {});
-    },
-    validate_path: async function () {
-      let all_settings = await invoke("get_settings", {});
-      if (all_settings && all_settings.path) {
-        let installationPath = all_settings.path;
-        console.info(`Installation path: ${installationPath}`);
-        let result = await invoke("is_path_empty_or_nonexistent_command", { path: installationPath });
-        console.info(`Installation path: ${installationPath} is valid: ${result}`);
-        return result;
-      } else {
-        return false;
-      }
-    },
-  },
-  async mounted() {
-    this.startListening();
-    this.startInstalation();
-  },
-  beforeUnmount() {
-    if (this.unlisten) {
-      this.unlisten();
     }
-    if (this.listener) {
-      this.listener();
+
+
+    const viewLogs = async () => {
+      try {
+        // await invoke('open_logs_folder')
+        let logPath = await invoke("get_logs_folder", {});
+        invoke("show_in_folder", { path: logPath });
+      } catch (error) {
+        message.error('Failed to open logs folder')
+      }
+    }
+
+    const viewDocumentation = async () => {
+      try {
+        await openUrl('https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started/')
+      } catch (error) {
+        message.error('Failed to open documentation')
+      }
+    }
+
+    const openIDE = async () => {
+      try {
+        await invoke('open_vscode')
+      } catch (error) {
+        message.info('Please install VS Code with ESP-IDF extension')
+      }
+    }
+
+    const useWizard = () => {
+      router.push('/wizard/1')
+    }
+
+    const goToManagement = () => {
+      router.push('/version-management')
+    }
+
+    const goBack = () => {
+      router.push('/basic-installer')
+    }
+
+    onMounted(() => {
+      nextTick(() => {
+        setTimeout(() => {
+          checkPrerequisites();
+        }, 300);
+      });
+    })
+
+    onUnmounted(() => {
+      if (unlistenProgress) unlistenProgress()
+      if (unlistenComplete) unlistenComplete()
+      if (unlistenError) unlistenError()
+      if (unlistenLog) unlistenLog()
+    })
+
+    return {
+      currentState,
+      currentStep,
+      selectedVersion,
+      installPath,
+      installationTitle,
+      installationMessage,
+      installationProgress,
+      installMessages,
+      installationSteps,
+      errorTitle,
+      errorMessage,
+      errorDetails,
+      getStatusIcon,
+      getStatusIconClass,
+      getProgressColorScheme,
+      startInstallation,
+      retry,
+      viewLogs,
+      viewDocumentation,
+      openIDE,
+      useWizard,
+      goToManagement,
+      goBack
     }
   }
 }
 </script>
 
 <style scoped>
-.header-title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 36px;
-  font-weight: 500;
-  color: #111827;
+.simple-setup {
+  padding: 2rem;
+  /* max-width: 900px; */
+  margin: 0 auto;
 }
 
-.simple-setup {
-  min-height: calc(100vh - 130px - 4rem);
-  padding: 2rem;
-  max-width: 1440px;
-  margin: 0 auto;
-  margin-left: 80px;
-  margin-right: 80px;
+.setup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 2rem;
+  color: #1f2937;
+  margin: 0;
 }
 
 .status-card {
   background: white;
+  padding: 2rem;
 }
 
-.status-content {
+/* Checking Status */
+.checking-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 0;
+  gap: 1rem;
+}
+
+.checking-status h2 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.5rem;
+  color: #1f2937;
+  margin: 0;
+}
+
+.checking-status p {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Ready Status */
+.ready-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.5rem;
+}
+
+.ready-status h2 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.75rem;
+  color: #1f2937;
+  margin: 0;
+}
+
+.installation-summary {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  width: 100%;
+  max-width: 500px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-item:last-child {
+  border-bottom: none;
+}
+
+.summary-label {
+  font-weight: 500;
+  color: #6b7280;
+}
+
+.summary-value {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* Installing Status */
+.installing-status {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.status-header h2 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.5rem;
+  color: #1f2937;
+  margin: 0;
+}
+
+.status-description {
+  text-align: center;
+  color: #6b7280;
+  margin: 0;
+}
+
+.rotating {
+  animation: rotate 2s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Complete/Error Status */
+.complete-status,
+.error-status {
   display: flex;
   flex-direction: column;
   gap: 2rem;
 }
 
-.progress-spinner {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
-  background: rgba(220, 38, 38, 0.03);
-  border-radius: 8px;
-  padding: 2rem;
-}
-
-.spinner-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  text-align: center;
-}
-
-.spinner-text h3 {
-  color: #374151;
-  font-size: 1.25rem;
-  margin-bottom: 0.5rem;
-}
-
-.spinner-text p {
-  color: #6b7280;
-}
-
-.status-message {
-  padding: 1rem;
-}
-
-.action-buttons {
+.completion-actions,
+.error-actions {
   display: flex;
   gap: 1rem;
   justify-content: center;
+  flex-wrap: wrap;
 }
 
-.log-container {
-  max-height: 300px;
-  overflow-y: auto;
-  background: #f3f4f6;
-  border-radius: 0.375rem;
-  padding: 1rem;
+.post-install-info {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: left;
 }
 
-.log-message {
-  margin: 0;
-  padding: 0.25rem 0;
+.post-install-info h3 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.125rem;
+  color: #1f2937;
+  margin: 0 0 1rem 0;
+}
+
+.post-install-info ol {
+  padding-left: 1.5rem;
+  color: #4b5563;
+  line-height: 1.8;
+}
+
+.post-install-info code {
+  background: #e5e7eb;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
   font-family: monospace;
   font-size: 0.875rem;
+}
+
+.log-content,
+.error-details {
+  font-family: monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
   color: #374151;
+  margin: 0;
   white-space: pre-wrap;
+  word-break: break-all;
 }
 
-.n-collapse {
-  background-color: #FAFAFA;
-  border: 1px solid #D5D5D5;
+.error-details {
+  color: #991b1b;
 }
 
-.n-collapse-item__header-main {
-  display: flex;
-  align-items: center;
+.n-button[type="primary"] {
+  background-color: #E8362D;
+  color: #e5e7eb;
 }
 
-.log-container {
-  text-align: left;
-  background-color: white;
+.setup-header .n-button {
+  color: white !important;
 }
 
-.title {
-  font-size: 27px;
-}
-
-.n-icon {
-  margin-top: 10px;
-  margin-right: 16px;
-}
-
-.n-icon.error {
-  color: #E8362D;
-}
-
-.n-icon.success {
-  color: #5AC8FA;
-}
-
-.n-icon.info {
-  color: #5AC8FA;
-}
-
-.status-message-header {
-  width: 100%;
-  display: flex;
-  vertical-align: middle;
-  justify-content: center;
-  align-items: center;
-}
-
-.status-message-body {
-  width: 100%;
-  display: flex;
-  vertical-align: middle;
-  justify-content: center;
-  align-items: center;
-}
-
-.user-message {
-  margin-left: 20%;
-  margin-right: 20%;
-  margin-bottom: 10px;
-  padding: 10px;
-}
-
-.user-message-error {
-  background-color: #fdeae8;
-  border-left: 4px solid #E8362D;
-}
-
-.user-message-info {
-  background-color: #eaf3fb;
-  border-left: 4px solid #5AC8FA;
-}
 </style>
