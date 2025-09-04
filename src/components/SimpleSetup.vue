@@ -261,6 +261,7 @@ export default {
 
     const checkPrerequisites = async () => {
       try {
+        currentState.value = 'checking'
         // Check prerequisites
         const prereqResult = invoke('check_prerequisites_detailed').then(prereqResult => {
           if (!prereqResult.all_ok && appStore.os !== 'windows') {
@@ -270,33 +271,32 @@ export default {
             currentState.value = 'error'
             return false
           } // TODO: maybe on windows inform user which prerequisities will be installed
+          // Get default installation path
+          invoke('get_settings').then(settings => {
+            installPath.value = settings?.path
+          });
+          // Check if path is valid
+          invoke('is_path_empty_or_nonexistent_command', {
+            path: installPath.value
+          }).then(pathValid => {
+            if (!pathValid) {
+              errorTitle.value = 'Installation Path Not Empty'
+              errorMessage.value = `The default installation path (${installPath.value}) is not empty.`
+              errorDetails.value = 'Please use custom installation to select a different path.'
+              currentState.value = 'error'
+              return false
+            }
+          // Get latest ESP-IDF version
+          invoke('get_idf_versions').then(versions => {
+            selectedVersion.value = versions?.[0].name || 'v5.5';
+            currentState.value = 'ready';
+
+          });
+        });
+
           return true
         })
 
-
-
-        // Get default installation path
-        const settings = await invoke('get_settings')
-        installPath.value = settings?.path
-
-        // Check if path is valid
-        const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
-          path: installPath.value
-        })
-
-        if (!pathValid) {
-          errorTitle.value = 'Installation Path Not Empty'
-          errorMessage.value = `The default installation path (${installPath.value}) is not empty.`
-          errorDetails.value = 'Please use custom installation to select a different path.'
-          currentState.value = 'error'
-          return false
-        }
-
-        // Get latest ESP-IDF version
-        const versions = await invoke('get_idf_versions')
-        selectedVersion.value = versions?.[0].name || 'v5.5'
-
-        currentState.value = 'ready'
         return true
 
       } catch (error) {
@@ -423,7 +423,11 @@ export default {
       installationProgress.value = 0
       currentStep.value = 0
       installMessages.value = []
-      await checkPrerequisites()
+      nextTick(() => {
+        setTimeout(() => {
+          checkPrerequisites();
+        }, 300);
+      });
     }
 
 
