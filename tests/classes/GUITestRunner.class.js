@@ -140,14 +140,16 @@ class GUITestRunner {
   async clickButton(text, timeout = 5000) {
     try {
       const button = await this.driver.wait(
-        until.elementLocated(By.xpath(`//*[contains(text(), '${text}')]`)),
+        until.elementLocated(
+          By.xpath(`//*[contains(text(), '${text}')]/ancestor::button`)
+        ),
         timeout,
         `Button with text "${text}" not found`
       );
       logger.debug(
         `Selected button element with text ${await button.getText()}`
       );
-      await button.click();
+      await this.driver.executeScript("arguments[0].click();", button);
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
