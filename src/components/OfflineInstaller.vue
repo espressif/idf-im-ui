@@ -2,7 +2,7 @@
   <div class="offline-installer">
     <div class="installer-header">
       <h1 class="title">Offline Installation</h1>
-      <n-button @click="goBack" quaternary>
+      <n-button @click="goBack" type="primary" quaternary>
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -16,7 +16,7 @@
 
       <!-- Selected Archives -->
       <div class="section">
-        <h3>Selected Archives</h3>
+        <h3>Selected Archive</h3>
         <div v-if="archives.length > 0" class="archive-list">
           <n-card v-for="(archive, index) in archives" :key="index" size="small">
             <div class="archive-item">
@@ -24,16 +24,16 @@
                 <n-icon size="24"><FileZipOutlined /></n-icon>
                 <div>
                   <div class="archive-name">{{ getFileName(archive) }}</div>
-                  <div class="archive-details">
+                  <!-- <div class="archive-details">
                     Version: {{ extractVersion(archive) || 'Unknown' }}
-                  </div>
+                  </div> -->
                 </div>
               </div>
               <n-button
                 @click="removeArchive(index)"
                 quaternary
                 circle
-                type="error"
+                type="primary"
               >
                 <template #icon>
                   <n-icon><CloseOutlined /></n-icon>
@@ -48,6 +48,7 @@
           dashed
           block
           style="margin-top: 1rem;"
+          v-if="archives.length < 1"
         >
           <template #icon>
             <n-icon><PlusOutlined /></n-icon>
@@ -88,20 +89,20 @@
       </div>
 
       <!-- Installation Options -->
-      <div class="section">
+      <!-- <div class="section">
         <h3>Options</h3>
         <n-space vertical>
-          <!-- <n-checkbox v-model:checked="validateChecksum">
+          <n-checkbox v-model:checked="validateChecksum">
             Validate archive checksum
-          </n-checkbox> -->
+          </n-checkbox>
           <n-checkbox v-model:checked="createShortcuts">
             Create desktop shortcuts (Windows)
           </n-checkbox>
-          <!-- <n-checkbox v-model:checked="addToPath">
+          <n-checkbox v-model:checked="addToPath">
             Add to system PATH
-          </n-checkbox> -->
+          </n-checkbox>
         </n-space>
-      </div>
+      </div> -->
 
       <!-- Action Buttons -->
       <div class="actions">
@@ -591,8 +592,12 @@ export default {
   color: #374151;
   margin: 0;
 }
+.n-button {
+  color: #e5e7eb;
+}
 
 .n-button[type="primary"] {
+  color: #e5e7eb;
   background-color: #E8362D;
 }
 </style>
