@@ -4,7 +4,7 @@ use log::{debug, error, info, warn};
 use tempfile::TempDir;
 use tera::{Context, Tera};
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::copy_dir_contents};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::{copy_dir_contents, extract_zst_archive}};
 
 /// Structure to define package information with compile-time template content.
 ///
@@ -582,4 +582,41 @@ pub fn copy_idf_from_offline_archive(
   } else {
     Err("Failed to copy some IDF versions".into())
   }
+}
+
+pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {
+    debug!("Using offline archive: {:?}", config.use_local_archive);
+    if !config.use_local_archive.as_ref().unwrap().exists() {
+        return Err(format!(
+            "Local archive path does not exist: {}",
+            config.use_local_archive.as_ref().unwrap().display()
+        ));
+    }
+    match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &offline_archive_dir.path()) {
+      Ok(_) => {
+          info!("Successfully extracted archive to: {:?}", offline_archive_dir);
+      }
+      Err(err) => {
+          return Err(format!("Failed to extract archive: {}", err));
+      }
+    }
+    let config_path = offline_archive_dir.path().join("config.toml");
+    if config_path.exists() {
+      debug!("Loading config from extracted archive: {}", config_path.display());
+      let mut tmp_setting = Settings::default();
+      match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
+        Ok(()) => {
+          debug!("Config loaded from archive: {:?}", config_path.display());
+          debug!("Config: {:?}", tmp_setting);
+          debug!("Using only version for now.");
+          config.idf_versions = tmp_setting.idf_versions;
+      }
+        Err(err) => {
+          return Err(format!("Failed to load config from archive: {}", err));
+        }
+      }
+    } else {
+      warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+    }
+    Ok(config)
 }

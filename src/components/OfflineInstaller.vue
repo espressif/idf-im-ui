@@ -391,21 +391,17 @@ export default {
       })
 
       // Start installation
-      try {
-        await invoke('start_offline_installation', {
+      invoke('start_offline_installation', {
           archives: archives.value,
-          installPath: useDefaultPath.value ? null : installPath.value,
-          options: {
-            validate_checksum: validateChecksum.value,
-            create_shortcuts: createShortcuts.value,
-            add_to_path: addToPath.value
-          }
-        })
-      } catch (error) {
+          installPath: useDefaultPath.value ? "" : installPath.value,
+      }).then(() => {
+        // Handle successful installation start
+        console.log('#!!# Installation finished successfully')
+      }).catch((error) => {
         installationError.value = true
         currentStatus.value = 'Installation Failed'
         currentMessage.value = error.toString()
-      }
+      })
     }
 
     const retry = () => {

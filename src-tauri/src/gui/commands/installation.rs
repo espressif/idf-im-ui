@@ -1,4 +1,5 @@
 use tauri::{AppHandle, Emitter, Manager};
+use tempfile::TempDir;
 use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
 use std::{
   fs,
@@ -10,7 +11,7 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use idf_im_lib::{ensure_path, expand_tilde, idf_config::IdfConfig, utils::{is_valid_idf_directory, parse_cmake_version}, version_manager::{get_default_config_path, prepare_settings_for_fix_idf_installation}, ProgressMessage};
+use idf_im_lib::{ensure_path, expand_tilde, idf_config::IdfConfig, offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive}, utils::{copy_dir_contents, extract_zst_archive, is_valid_idf_directory, parse_cmake_version}, version_manager::{get_default_config_path, prepare_settings_for_fix_idf_installation}, ProgressMessage};
 use log::{debug, error, info, warn};
 use serde_json::json;
 
@@ -1388,6 +1389,159 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<String>, install_path: String) -> Result<(), String> {
+    // Implementation goes here
+    if archives.len() == 0 {
+        return Err("No archives provided for offline installation".to_string());
+    }
+    for archive in &archives {
+        let archive_path = std::path::PathBuf::from(archive);
+        if !archive_path.try_exists().unwrap_or(false) {
+            return Err(format!("Archive file does not exist: {}", archive));
+        }
+        let offline_archive_dir = TempDir::new().expect("Failed to create temporary directory");
+
+        let mut settings = get_settings_non_blocking(&app_handle)?;
+        if install_path != "" && is_path_empty_or_nonexistent(&install_path, &[]) { //TODO: parse version from archive name
+            settings.path = Some(PathBuf::from(install_path.clone()));
+        }
+        settings.use_local_archive = Some(archive_path);
+
+        settings = match use_offline_archive(settings, &offline_archive_dir){
+          Ok(updated_config) => updated_config,
+          Err(err) => {
+            error!("Failed to use offline archive: {}", err);
+            return Err(err);
+          }
+        };
+
+        // install prerequisites offline
+        if std::env::consts::OS == "windows" {
+          match install_prerequisites_offline(&offline_archive_dir){
+            Ok(_) => {
+                info!("Successfully installed prerequisites from offline archive.");
+                settings.skip_prerequisites_check = Some(true);
+            }
+            Err(err) => {
+                return Err(format!("Failed to install prerequisites from offline archive: {}", err));
+            }
+          }
+        } else {
+          let prereq =  check_prequisites(app_handle.clone());
+          if prereq.len() > 0 {
+              return Err(format!("Missing prerequisites: {}", prereq.join(", ")));
+          }
+          let mut python_sane = true;
+          for result in idf_im_lib::python_utils::python_sanity_check(None) {
+              match result {
+                  Ok(_) => {}
+                  Err(err) => {
+                      python_sane = false;
+                      send_message(
+                          &app_handle,
+                          format!("Python sanity check failed: {}", err),
+                          "warning".to_string(),
+                      );
+                      warn!("{:?}", err)
+                  }
+              }
+          }
+          if !python_sane {
+              return Err("Python sanity check failed".to_string());
+          }
+      }
+      match copy_idf_from_offline_archive(&offline_archive_dir, &settings) {
+          Ok(_) => {
+              info!("Successfully copied ESP-IDF from offline archive.");
+          }
+          Err(err) => {
+              error!("Failed to copy ESP-IDF from offline archive: {}", err);
+              return Err(err);
+          }
+      }
+      for idf_version in settings.idf_versions.clone().unwrap() {
+        let paths = match settings.get_version_paths(&idf_version) {
+            Ok(paths) => paths,
+            Err(err) => {
+                error!("Failed to get version paths: {}", err);
+                return Err(err.to_string());
+            }
+        };
+        settings.idf_path = Some(paths.idf_path.clone());
+        idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
+
+        match copy_dir_contents(
+            &offline_archive_dir.path().join("dist"),
+          &paths.tool_download_directory,
+        ) {
+          Ok(_) => {}
+          Err(err) => {
+              error!("Failed to copy tool directory: {}", err);
+              return Err(err.to_string());
+          }
+        }
+        idf_im_lib::add_path_to_path(paths.tool_install_directory.to_str().unwrap());
+
+        let export_vars = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version).await {
+          Ok(vars) => vars,
+          Err(err) => {
+              error!("Failed to setup tools: {}", err);
+              return Err(err.to_string());
+          }
+        };
+
+        match idf_im_lib::python_utils::install_python_env(
+            &paths.actual_version,
+            &paths.tool_install_directory,
+            true, //TODO: actually read from config
+            &paths.idf_path,
+            &settings.idf_features.clone().unwrap_or_default(),
+            Some(offline_archive_dir.path())
+        )
+        .await
+        {
+            Ok(_) => {
+                info!("Python environment installed");
+            }
+            Err(err) => {
+                error!("Failed to install Python environment: {}", err);
+                return Err(err.to_string());
+            }
+        };
+
+        idf_im_lib::single_version_post_install(
+            &paths.activation_script_path.to_str().unwrap(),
+            paths.idf_path.to_str().unwrap(),
+            &paths.actual_version,
+            paths.tool_install_directory.to_str().unwrap(),
+            export_vars,
+            paths.python_venv_path.to_str(),
+            None, // env_vars
+        );
+
+        let ide_conf_path_tmp = PathBuf::from(&settings.esp_idf_json_path.clone().unwrap_or_default());
+        debug!("IDE configuration path: {}", ide_conf_path_tmp.display());
+        match ensure_path(ide_conf_path_tmp.to_str().unwrap()) {
+            Ok(_) => (),
+            Err(err) => {
+                error!("Failed to create IDE configuration directory: {}", err);
+                return Err(err.to_string());
+            }
+        }
+        match settings.save_esp_ide_json() {
+            Ok(_) => debug!("IDE configuration saved."),
+            Err(err) => {
+                error!("Failed to save IDE configuration: {}", err);
+                return Err(err.to_string());
+            }
+        };
+      }
+    }
 
     Ok(())
 }
