@@ -24,9 +24,6 @@
                 <n-icon size="24"><FileZipOutlined /></n-icon>
                 <div>
                   <div class="archive-name">{{ getFileName(archive) }}</div>
-                  <!-- <div class="archive-details">
-                    Version: {{ extractVersion(archive) || 'Unknown' }}
-                  </div> -->
                 </div>
               </div>
               <n-button
@@ -53,7 +50,7 @@
           <template #icon>
             <n-icon><PlusOutlined /></n-icon>
           </template>
-          Add More Archives
+          Add Archive
         </n-button>
       </div>
 
@@ -88,22 +85,6 @@
         </n-alert>
       </div>
 
-      <!-- Installation Options -->
-      <!-- <div class="section">
-        <h3>Options</h3>
-        <n-space vertical>
-          <n-checkbox v-model:checked="validateChecksum">
-            Validate archive checksum
-          </n-checkbox>
-          <n-checkbox v-model:checked="createShortcuts">
-            Create desktop shortcuts (Windows)
-          </n-checkbox>
-          <n-checkbox v-model:checked="addToPath">
-            Add to system PATH
-          </n-checkbox>
-        </n-space>
-      </div> -->
-
       <!-- Action Buttons -->
       <div class="actions">
         <n-button @click="goBack" size="large">
@@ -122,89 +103,129 @@
 
     <!-- Installation Progress -->
     <n-card v-else class="progress-card">
-      <h2>Installing ESP-IDF</h2>
+      <h2>Installing ESP-IDF from Offline Archive</h2>
 
-      <div class="progress-section">
-        <div class="current-status">
-          <n-spin v-if="!installationComplete && !installationError" />
-          <n-icon v-else-if="installationComplete" size="48" color="#52c41a">
-            <CheckCircleOutlined />
-          </n-icon>
-          <n-icon v-else size="48" color="#ff4d4f">
-            <CloseCircleOutlined />
-          </n-icon>
+      <n-alert title="Installation Error" type="error" v-if="error_message">
+        {{ error_message }}
+      </n-alert>
 
-          <h3>{{ currentStatus }}</h3>
-          <p>{{ currentMessage }}</p>
+      <!-- Current Activity Display -->
+      <div v-if="installation_running" class="current-activity" data-id="current-activity">
+        <div class="current-step">
+          <h3>Current Activity:</h3>
+          <div class="activity-status">{{ currentActivity }}</div>
+          <div v-if="currentDetail" class="activity-detail">{{ currentDetail }}</div>
         </div>
 
-        <n-progress
-          v-if="!installationComplete && !installationError"
-          type="line"
-          :percentage="progressPercentage"
-          :indicator-placement="'inside'"
-          :processing="true"
-          color="#E8362D"
-        />
+        <div class="progress-section">
+          <div class="progress-label">Overall Progress</div>
+          <n-progress
+            type="line"
+            :percentage="currentProgress"
+            :processing="installation_running"
+            :indicator-placement="'inside'"
+            color="#E8362D"
+          />
+        </div>
 
         <!-- Installation Steps -->
-        <n-steps
-          v-if="!installationError"
-          :current="currentStep"
-          size="small"
-          style="margin-top: 2rem;"
-        >
-          <n-step title="Extract Archive" />
-          <n-step title="Verify Files" />
-          <n-step title="Install Tools" />
-          <n-step title="Configure Environment" />
-          <n-step title="Complete" />
-        </n-steps>
+        <div class="installation-steps" v-if="installationSteps.length > 0">
+          <div class="steps-container">
+            <div
+              v-for="(step, index) in installationSteps"
+              :key="index"
+              class="step-item"
+              :class="{
+                'active': index === currentStep,
+                'completed': index < currentStep,
+                'pending': index > currentStep
+              }"
+            >
+              <div class="step-indicator">{{ index + 1 }}</div>
+              <div class="step-content">
+                <div class="step-title">{{ step.title }}</div>
+                <div class="step-description">{{ step.description }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <!-- Installation Log -->
-      <n-collapse
-        v-if="installMessages.length > 0"
-        style="margin-top: 2rem;"
-      >
-        <n-collapse-item title="Installation Log" name="1">
-          <n-scrollbar style="max-height: 300px">
-            <pre class="log-content">{{ installMessages.join('\n') }}</pre>
-          </n-scrollbar>
-        </n-collapse-item>
-      </n-collapse>
+      <!-- Error State -->
+      <div v-if="installation_failed" class="error-message" data-id="error-message">
+        <h3 data-id="error-title">Error during offline installation:</h3>
+        <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
+        <n-button @click="retry" type="error" size="large" data-id="retry-installation-button">Retry Installation</n-button>
+        <n-button @click="goBack" type="default" size="large" style="margin-left: 1rem;" data-id="back-installation-button">Go Back</n-button>
+      </div>
 
       <!-- Completion Actions -->
-      <div v-if="installationComplete || installationError" class="completion-actions">
-        <n-button
-          v-if="installationError"
-          @click="retry"
-          type="warning"
-          size="large"
-        >
-          Retry Installation
-        </n-button>
-        <n-button
-          @click="viewLogs"
-          size="large"
-        >
-          View Full Logs
-        </n-button>
-        <n-button
-          @click="finish"
-          type="primary"
-          size="large"
-        >
-          {{ installationComplete ? 'Finish' : 'Go Back' }}
+      <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
+        <n-button @click="finish" type="error" size="large" data-id="complete-installation-button-footer">
+          Complete Installation
         </n-button>
       </div>
+
+      <!-- Installation Summary -->
+      <div v-if="installation_finished && !installation_failed" class="installation-summary" data-id="installation-summary">
+        <h3>Offline Installation Complete</h3>
+        <p>Successfully installed ESP-IDF and all required tools from offline archive.</p>
+        <div class="summary-details">
+          <div v-if="installed_versions.length > 0">
+            <strong>Installed Versions:</strong> {{ installed_versions.join(', ') }}
+          </div>
+          <div v-if="installationPath">
+            <strong>Installation Path:</strong> {{ installationPath }}
+          </div>
+        </div>
+      </div>
+
+      <!-- Installation Log with Virtual Scrolling -->
+      <n-collapse arrow-placement="right" v-if="totalLogCount > 0">
+        <n-collapse-item title="Installation Log" name="1">
+          <template #header-extra>
+            <span class="log-count">({{ totalLogCount }} entries)</span>
+          </template>
+
+          <div class="log-container">
+            <div
+              class="log-virtual-container"
+              ref="virtualContainer"
+              @scroll="onLogScroll"
+            >
+              <div
+                class="virtual-spacer-top"
+                :style="{ height: topSpacerHeight + 'px' }"
+              ></div>
+
+              <div class="log-scroll-container">
+                <div
+                  v-for="(message, index) in visibleLogs"
+                  :key="`log-${startIndex + index}-${message.timestamp}`"
+                  class="log-entry"
+                  :style="{ height: itemHeight + 'px' }"
+                >
+                  <pre
+                    class="log-message"
+                    :class="getLogMessageClass(message)"
+                    v-text="message.text"
+                  ></pre>
+                </div>
+              </div>
+
+              <div
+                class="virtual-spacer-bottom"
+                :style="{ height: bottomSpacerHeight + 'px' }"
+              ></div>
+            </div>
+          </div>
+        </n-collapse-item>
+      </n-collapse>
     </n-card>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog';
 import { listen } from '@tauri-apps/api/event'
@@ -229,68 +250,135 @@ export default {
     CloseOutlined, FileZipOutlined, CheckCircleOutlined,
     CloseCircleOutlined
   },
-  setup() {
-    const router = useRouter()
-    const route = useRoute()
-    const message = useMessage()
 
-    // Configuration
-    const archives = ref([])
-    const installPath = ref('')
-    const useDefaultPath = ref(true)
-    const pathValid = ref(true)
-    const validateChecksum = ref(true)
-    const createShortcuts = ref(true)
-    const addToPath = ref(true)
+  data() {
+    return {
+      // Configuration
+      archives: [],
+      installPath: '',
+      useDefaultPath: true,
+      pathValid: true,
 
-    // Installation state
-    const installationStarted = ref(false)
-    const installationComplete = ref(false)
-    const installationError = ref(false)
-    const currentStatus = ref('Preparing installation...')
-    const currentMessage = ref('')
-    const currentStep = ref(1)
-    const progressPercentage = ref(0)
-    const installMessages = ref([])
+      // Installation state
+      installationStarted: false,
+      installation_running: false,
+      installation_finished: false,
+      installation_failed: false,
+      error_message: '',
 
-    let unlistenProgress = null
-    let unlistenComplete = null
+      // Progress tracking
+      currentStep: 0,
+      currentStage: 'checking',
+      installed_versions: [],
 
-    const loadArchivesFromQuery = () => {
-      if (route.query.archives) {
-        console.log('Loading archives from query:', route.query.archives)
+      // Installation steps
+      installationSteps: [
+        { title: 'Check', description: 'Validating archives' },
+        { title: 'Extract', description: 'Extracting archive contents' },
+        { title: 'Prerequisites', description: 'Installing dependencies' },
+        { title: 'Install', description: 'Installing ESP-IDF' },
+        { title: 'Tools', description: 'Setting up development tools' },
+        { title: 'Python', description: 'Configuring Python environment' },
+        { title: 'Configure', description: 'Finalizing configuration' },
+        { title: 'Complete', description: 'Installation complete' }
+      ],
+
+      // Event listeners
+      unlistenProgress: null,
+      unlistenLog: null,
+
+      // Virtual scrolling for logs
+      visibleLogs: [],
+      totalLogCount: 0,
+      scrollTop: 0,
+      containerHeight: 300,
+      itemHeight: 24,
+      visibleCount: 15,
+      startIndex: 0,
+      BUFFER_SIZE: 2,
+
+      // UI state
+      installationPath: "",
+
+      // Progress tracking
+      progressUpdateTrigger: 0,
+      lastProgressUpdate: 0
+    }
+  },
+
+  created() {
+    this._allLogs = [];
+    this._progressData = {
+      currentProgress: 0,
+      currentActivity: "Preparing offline installation...",
+      currentDetail: "",
+      lastUpdate: Date.now()
+    };
+    this._progressThrottle = null;
+  },
+
+  computed: {
+    // Calculate spacer heights for virtual scrolling
+    topSpacerHeight() {
+      return this.startIndex * this.itemHeight;
+    },
+
+    bottomSpacerHeight() {
+      const remainingItems = Math.max(0, this.totalLogCount - (this.startIndex + this.visibleLogs.length));
+      return remainingItems * this.itemHeight;
+    },
+
+    // Calculate how many items can fit in the container
+    maxVisibleItems() {
+      return Math.ceil(this.containerHeight / this.itemHeight) + (this.BUFFER_SIZE * 2);
+    },
+
+    currentProgress() {
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentProgress : 0;
+    },
+
+    currentActivity() {
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentActivity : "Preparing offline installation...";
+    },
+
+    currentDetail() {
+      this.progressUpdateTrigger;
+      return this._progressData ? this._progressData.currentDetail : "";
+    }
+  },
+
+  methods: {
+    loadArchivesFromQuery() {
+      if (this.$route.query.archives) {
+        console.log('Loading archives from query:', this.$route.query.archives)
         try {
-          archives.value = JSON.parse(route.query.archives)
+          this.archives = JSON.parse(this.$route.query.archives)
         } catch (e) {
           console.error('Failed to parse archives:', e)
         }
       }
-    }
+    },
 
-    const getDefaultPath = async () => {
+    async getDefaultPath() {
       try {
         const settings = await invoke('get_settings')
-        installPath.value = settings?.path || ''
+        this.installPath = settings?.path || ''
       } catch (error) {
         console.error('Failed to get default path:', error)
       }
-    }
+    },
 
-    const getFileName = (path) => {
+    getFileName(path) {
       return path.split(/[/\\]/).pop()
-    }
+    },
 
-    const extractVersion = (path) => {
-      const filename = getFileName(path)
-      const match = filename.match(/esp-idf[_-]v?([\d.]+)/i)
-      return match ? match[1] : null
-    }
+    removeArchive(index) {
+      this.archives.splice(index, 1)
+    },
 
-    const removeArchive = (index) => {
-      archives.value.splice(index, 1)
-    }
-
-    const addMoreArchives = async () => {
+    async addMoreArchives() {
       try {
         const selected = await open({
           multiple: true,
@@ -302,14 +390,14 @@ export default {
 
         if (selected) {
           const newArchives = Array.isArray(selected) ? selected : [selected]
-          archives.value.push(...newArchives)
+          this.archives.push(...newArchives)
         }
       } catch (error) {
-        message.error('Failed to select archives')
+        this.$message.error('Failed to select archives')
       }
-    }
+    },
 
-    const browsePath = async () => {
+    async browsePath() {
       try {
         const selected = await open({
           directory: true,
@@ -317,157 +405,300 @@ export default {
         })
 
         if (selected) {
-          installPath.value = selected
-          await validatePath()
+          this.installPath = selected
+          await this.validatePath()
         }
       } catch (error) {
-        message.error('Failed to select path')
+        this.$message.error('Failed to select path')
       }
-    }
+    },
 
-    const validatePath = async () => {
+    async validatePath() {
       try {
-        pathValid.value = await invoke('is_path_empty_or_nonexistent_command', {
-          path: installPath.value
+        this.pathValid = await invoke('is_path_empty_or_nonexistent_command', {
+          path: this.installPath
         })
       } catch (error) {
-        pathValid.value = false
+        this.pathValid = false
       }
-    }
+    },
 
-    const startInstallation = async () => {
-      installationStarted.value = true
-      currentStep.value = 1
+    async startListening() {
+      // Listen for installation progress events
+      this.unlistenProgress = await listen('installation-progress', (event) => {
+        this.handleProgressEvent(event.payload);
+      });
 
-      // Set up event listeners
-      unlistenProgress = await listen('offline-install-progress', (event) => {
-        const { stage, message: msg, progress } = event.payload
+      // Listen for log messages
+      this.unlistenLog = await listen('log-message', (event) => {
+        console.log('Log message received:', event.payload);
+        this.handleLogMessage(event.payload);
+      });
+    },
 
-        currentMessage.value = msg
-        progressPercentage.value = progress || 0
+    handleProgressEvent(payload) {
+      const { stage, percentage, message, detail, version } = payload;
+      const now = Date.now();
 
-        if (msg) {
-          installMessages.value.push(msg)
+      // Store in non-reactive object (no memory leak)
+      this._progressData.currentProgress = percentage || 0;
+      this._progressData.currentActivity = message || this._progressData.currentActivity;
+      this._progressData.currentDetail = detail || "";
+      this._progressData.lastUpdate = now;
+
+      // Update stage (reactive, but changes rarely)
+      if (stage !== this.currentStage) {
+        this.currentStage = stage;
+      }
+
+      let newStep = this.currentStep;
+
+      switch (stage) {
+        case 'checking': newStep = 0; break;
+        case 'extract': newStep = 1; break;
+        case 'prerequisites': newStep = 2; break;
+        case 'download': newStep = 3; break;
+        case 'tools': newStep = 4; break;
+        case 'python': newStep = 5; break;
+        case 'configure': newStep = 6; break;
+        case 'complete':
+          newStep = 7;
+          this.handleInstallationComplete(version);
+          break;
+        case 'error':
+          this.handleInstallationError(message, detail);
+          break;
+      }
+
+      // Only update reactive step if it actually changed
+      if (newStep !== this.currentStep) {
+        this.currentStep = newStep;
+      }
+
+      // Throttle UI updates
+      this.throttledProgressUpdate();
+    },
+
+    throttledProgressUpdate() {
+      if (this._progressThrottle) {
+        clearTimeout(this._progressThrottle);
+      }
+
+      this._progressThrottle = setTimeout(() => {
+        const now = Date.now();
+        if (now - this.lastProgressUpdate > 100) {
+          this.progressUpdateTrigger++;
+          this.lastProgressUpdate = now;
         }
+        this._progressThrottle = null;
+      }, 100);
+    },
 
-        // Update step based on stage
-        switch(stage) {
-          case 'extracting':
-            currentStep.value = 1
-            currentStatus.value = 'Extracting archive...'
-            break
-          case 'verifying':
-            currentStep.value = 2
-            currentStatus.value = 'Verifying files...'
-            break
-          case 'installing_tools':
-            currentStep.value = 3
-            currentStatus.value = 'Installing tools...'
-            break
-          case 'configuring':
-            currentStep.value = 4
-            currentStatus.value = 'Configuring environment...'
-            break
-          case 'complete':
-            currentStep.value = 5
-            currentStatus.value = 'Installation complete!'
-            break
+    handleLogMessage(payload) {
+      const { level, message } = payload;
+
+      const logEntry = {
+        level,
+        text: message,
+        timestamp: Date.now(),
+        id: this._allLogs.length
+      };
+
+      this._allLogs.unshift(logEntry);
+
+      const MAX_LOG_ENTRIES = 1000;
+      if (this._allLogs.length > MAX_LOG_ENTRIES) {
+        this._allLogs = this._allLogs.slice(0, MAX_LOG_ENTRIES);
+      }
+
+      this.totalLogCount = this._allLogs.length;
+      this.updateVisibleLogs();
+
+      if (this.scrollTop < this.itemHeight) {
+        this.scrollToTop();
+      }
+
+      // Extract installation path from logs if available
+      if (message.includes('installed at:') || message.includes('Location:')) {
+        const pathMatch = message.match(/(?:installed at:|Location:)\s*(.+)/i);
+        if (pathMatch && pathMatch[1]) {
+          this.installationPath = pathMatch[1].trim();
         }
-      })
+      }
+    },
 
-      unlistenComplete = await listen('installation_complete', (event) => {
-        const { success, message: msg } = event.payload
+    updateVisibleLogs() {
+      const startIndex = Math.max(0, Math.floor(this.scrollTop / this.itemHeight) - this.BUFFER_SIZE);
+      const endIndex = Math.min(
+        startIndex + this.maxVisibleItems,
+        this._allLogs.length
+      );
 
-        if (success) {
-          installationComplete.value = true
-          currentStatus.value = 'Installation Complete!'
-          currentMessage.value = msg || 'ESP-IDF has been successfully installed.'
-          progressPercentage.value = 100
-        } else {
-          installationError.value = true
-          currentStatus.value = 'Installation Failed'
-          currentMessage.value = msg || 'An error occurred during installation.'
+      this.startIndex = startIndex;
+      this.visibleLogs = this._allLogs.slice(startIndex, endIndex).map(log => ({
+        ...log
+      }));
+    },
+
+    onLogScroll(event) {
+      const newScrollTop = event.target.scrollTop;
+
+      if (Math.abs(newScrollTop - this.scrollTop) > this.itemHeight / 2) {
+        this.scrollTop = newScrollTop;
+        this.updateVisibleLogs();
+      }
+    },
+
+    scrollToTop() {
+      this.$nextTick(() => {
+        const container = this.$refs.virtualContainer;
+        if (container) {
+          container.scrollTop = 0;
+          this.scrollTop = 0;
+          this.updateVisibleLogs();
         }
-      })
+      });
+    },
 
-      // Start installation
-      invoke('start_offline_installation', {
-          archives: archives.value,
-          installPath: useDefaultPath.value ? "" : installPath.value,
-      }).then(() => {
-        // Handle successful installation start
-        console.log('#!!# Installation finished successfully')
-      }).catch((error) => {
-        installationError.value = true
-        currentStatus.value = 'Installation Failed'
-        currentMessage.value = error.toString()
-      })
-    }
+    getLogMessageClass(message) {
+      if (message.level === 'error') return 'log-message log-error';
+      if (message.level === 'warning') return 'log-message log-warning';
+      if (message.level === 'success') return 'log-message log-success';
+      if (message.text && (message.text.includes('WARN') || message.text.includes('ERR'))) {
+        return 'log-message highlight';
+      }
+      return 'log-message';
+    },
 
-    const retry = () => {
-      installationStarted.value = false
-      installationComplete.value = false
-      installationError.value = false
-      currentStep.value = 1
-      progressPercentage.value = 0
-      installMessages.value = []
-    }
+    handleInstallationComplete(version) {
+      this.installation_running = false;
+      this.installation_finished = true;
 
-    const viewLogs = async () => {
+      if (version && !this.installed_versions.includes(version)) {
+        this.installed_versions.push(version);
+      }
+    },
+
+    handleInstallationError(message, detail) {
+      this.installation_running = false;
+      this.installation_failed = true;
+      this.error_message = message || "Offline installation failed";
+    },
+
+    async startInstallation() {
+      this.installationStarted = true;
+      this.installation_running = true;
+      this.installation_finished = false;
+      this.installation_failed = false;
+      this.error_message = "";
+      this.installed_versions = [];
+
+      // Reset progress data
+      this._progressData = {
+        currentProgress: 0,
+        currentActivity: "Starting offline installation...",
+        currentDetail: "",
+        lastUpdate: Date.now()
+      };
+
+      this.currentStep = 0;
+      this.currentStage = 'checking';
+      this.progressUpdateTrigger++;
+
+      // Clear logs
+      this._allLogs = [];
+      this.visibleLogs = [];
+      this.totalLogCount = 0;
+      this.scrollTop = 0;
+      this.startIndex = 0;
+
       try {
-        await invoke('open_logs_folder')
+        await invoke('start_offline_installation', {
+          archives: this.archives,
+          installPath: this.useDefaultPath ? "" : this.installPath,
+        });
       } catch (error) {
-        message.error('Failed to open logs folder')
+        console.error('Offline installation failed:', error);
+        this.error_message = error.toString();
+        this.installation_failed = true;
+        this.installation_running = false;
       }
-    }
+    },
 
-    const finish = () => {
-      if (installationComplete.value) {
-        router.push('/version-management')
+    retry() {
+      this.installationStarted = false;
+      this.installation_running = false;
+      this.installation_finished = false;
+      this.installation_failed = false;
+      this.error_message = "";
+      this.currentStep = 0;
+      this.installed_versions = [];
+
+      // Reset progress data
+      this._progressData = {
+        currentProgress: 0,
+        currentActivity: "Preparing offline installation...",
+        currentDetail: "",
+        lastUpdate: Date.now()
+      };
+      this.progressUpdateTrigger++;
+    },
+
+    finish() {
+      if (this.installation_finished) {
+        this.$router.push('/version-management');
       } else {
-        goBack()
+        this.goBack();
       }
-    }
+    },
 
-    const goBack = () => {
-      router.push('/basic-installer')
-    }
+    goBack() {
+      this.$router.push('/basic-installer');
+    },
 
-    onMounted(() => {
-      loadArchivesFromQuery()
-      if (useDefaultPath.value) {
-        getDefaultPath()
+    measureContainer() {
+      this.$nextTick(() => {
+        const container = this.$refs.virtualContainer;
+        if (container) {
+          this.containerHeight = container.clientHeight;
+          this.updateVisibleLogs();
+        }
+      });
+    },
+
+    cleanup() {
+      if (this._progressThrottle) {
+        clearTimeout(this._progressThrottle);
+        this._progressThrottle = null;
       }
-    })
+      this._progressData = null;
 
-    return {
-      archives,
-      installPath,
-      useDefaultPath,
-      pathValid,
-      validateChecksum,
-      createShortcuts,
-      addToPath,
-      installationStarted,
-      installationComplete,
-      installationError,
-      currentStatus,
-      currentMessage,
-      currentStep,
-      progressPercentage,
-      installMessages,
-      getFileName,
-      extractVersion,
-      removeArchive,
-      addMoreArchives,
-      browsePath,
-      validatePath,
-      startInstallation,
-      retry,
-      viewLogs,
-      finish,
-      goBack
+      if (this.unlistenProgress) {
+        this.unlistenProgress();
+        this.unlistenProgress = null;
+      }
+      if (this.unlistenLog) {
+        this.unlistenLog();
+        this.unlistenLog = null;
+      }
+
+      this._allLogs = null;
     }
+  },
+
+  async mounted() {
+    this.loadArchivesFromQuery();
+    if (this.useDefaultPath) {
+      await this.getDefaultPath();
+    }
+    await this.startListening();
+    this.measureContainer();
+    window.addEventListener('resize', this.measureContainer);
+  },
+
+  beforeUnmount() {
+    this.cleanup();
+    window.removeEventListener('resize', this.measureContainer);
   }
 }
 </script>
@@ -475,7 +706,7 @@ export default {
 <style scoped>
 .offline-installer {
   padding: 2rem;
-  max-width: 900px;
+  max-width: 1000px;
   margin: 0 auto;
 }
 
@@ -496,6 +727,9 @@ export default {
 .config-card, .progress-card {
   background: white;
   padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-content: center;
 }
 
 .config-card h2, .progress-card h2 {
@@ -540,13 +774,7 @@ export default {
   color: #1f2937;
 }
 
-.archive-details {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
-}
-
-.actions, .completion-actions {
+.actions {
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
@@ -554,46 +782,281 @@ export default {
   border-top: 1px solid #e5e7eb;
 }
 
-.progress-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-.current-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  padding: 2rem;
-  background: #f9fafb;
+/* Current Activity Display */
+.current-activity {
+  margin: 1rem 0;
+  padding: 1rem;
+  background-color: #f9fafb;
   border-radius: 8px;
+  border-left: 4px solid #428ED2;
 }
 
-.current-status h3 {
-  font-size: 1.25rem;
-  color: #1f2937;
-  margin: 1rem 0 0.5rem 0;
-}
-
-.current-status p {
+.current-step h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
   color: #6b7280;
-  margin: 0;
 }
 
-.log-content {
-  font-family: monospace;
-  font-size: 0.875rem;
-  line-height: 1.5;
+.activity-status {
+  font-size: 1.1rem;
+  font-weight: 500;
   color: #374151;
-  margin: 0;
 }
+
+.activity-detail {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-top: 0.5rem;
+}
+
+.progress-section {
+  margin-top: 1rem;
+}
+
+.progress-label {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+/* Installation Steps */
+.installation-steps {
+  margin-top: 1.5rem;
+}
+
+.steps-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+}
+
+.step-item.active {
+  border-color: #428ED2;
+  background-color: #eff6ff;
+}
+
+.step-item.completed {
+  border-color: #10b981;
+  background-color: #f0fdf4;
+}
+
+.step-item.completed .step-indicator {
+  background-color: #10b981;
+  color: white;
+}
+
+.step-item.active .step-indicator {
+  background-color: #428ED2;
+  color: white;
+}
+
+.step-indicator {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: bold;
+  margin-right: 0.75rem;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-title {
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.step-description {
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-top: 0.25rem;
+}
+
+/* Error State */
+.error-message {
+  margin-top: 1rem;
+  border: 1px dotted #E8362D;
+  padding: 1rem;
+}
+
+/* Completion Actions */
+.action-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+/* Installation Summary */
+.installation-summary {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+}
+
+.summary-details {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Virtual Scrolling Styles */
+.log-container {
+  text-align: left;
+  background-color: white;
+}
+
+.log-virtual-container {
+  height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  will-change: scroll-position;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.virtual-spacer-top,
+.virtual-spacer-bottom {
+  width: 100%;
+  pointer-events: none;
+}
+
+.log-scroll-container {
+  contain: layout style;
+}
+
+.log-entry {
+  height: 24px;
+  display: flex;
+  align-items: flex-start;
+  contain: layout;
+  box-sizing: border-box;
+}
+
+.log-message {
+  margin: 0;
+  padding: 2px 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  line-height: 20px;
+  text-rendering: optimizeSpeed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+  flex: 1;
+}
+
+/* Log level styling */
+.log-message.log-error {
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-left: 3px solid #ef4444;
+}
+
+.log-message.log-warning {
+  background-color: #fef3c7;
+  color: #d97706;
+  border-left: 3px solid #f59e0b;
+}
+
+.log-message.log-success {
+  color: #059669;
+  border-left: 3px solid #10b981;
+}
+
+.log-message.highlight {
+  background-color: #fff9c2;
+  font-weight: 500;
+  border-left: 3px solid #E8362D;
+}
+
+.log-count {
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+/* Scrollbar styling */
+.log-virtual-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.log-virtual-container::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.log-virtual-container::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.log-virtual-container::-webkit-scrollbar-thumb:hover {
+  background: #a1a1a1;
+}
+
+/* Performance optimizations */
+.log-virtual-container * {
+  backface-visibility: hidden;
+}
+
+/* Button styling */
 .n-button {
   color: #e5e7eb;
+  background: #E8362D;
 }
 
 .n-button[type="primary"] {
   color: #e5e7eb;
   background-color: #E8362D;
+}
+
+.n-card {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0px;
+}
+
+.n-collapse {
+  background-color: #FAFAFA;
+  border: 1px solid #D5D5D5;
+  max-height: 300px;
+  overflow: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .log-virtual-container {
+    height: 250px;
+  }
+
+  .log-entry {
+    height: 28px;
+  }
+
+  .log-message {
+    line-height: 24px;
+  }
 }
 </style>
