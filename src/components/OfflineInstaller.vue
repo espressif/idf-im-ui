@@ -257,6 +257,7 @@ export default {
 
     const loadArchivesFromQuery = () => {
       if (route.query.archives) {
+        console.log('Loading archives from query:', route.query.archives)
         try {
           archives.value = JSON.parse(route.query.archives)
         } catch (e) {
