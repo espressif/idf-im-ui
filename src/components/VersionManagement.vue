@@ -431,8 +431,11 @@ export default {
 
     const installDrivers = async () => {
       try {
-        await invoke('install_drivers')
-        message.success('Driver installation started')
+        await invoke('install_drivers').then(() => {
+          message.success('Driver installation started')
+        }).catch((error) => {
+          message.error('Failed to install drivers')
+        })
       } catch (error) {
         message.error('Failed to install drivers')
       }

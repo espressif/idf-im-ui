@@ -216,3 +216,26 @@ pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcom
         }
     }
 }
+
+#[tauri::command]
+pub async fn install_drivers() -> Result<(), Box<dyn std::error::Error>> {
+    // Implementation for installing drivers
+    match std::env::consts::OS {
+      "windows" => {
+        info!("Installing drivers...");
+        match idf_im_lib::install_drivers().await {
+          Ok(_) => {
+            info!("Drivers installed successfully.");
+          }
+          Err(err) => {
+            error!("Failed to install drivers: {}", err);
+            return Err(format!("Failed to install drivers: {}", err).into());
+          }
+        }
+        Ok(())
+      }
+      _ => {
+        return Err(format!("Driver installation is only supported on Windows.").into());
+      }
+    }
+}
