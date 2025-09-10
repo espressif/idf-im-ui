@@ -16,6 +16,7 @@
       --card: #ffffff;
       --tab-active: #e7352c;
       --tab-inactive: #9ca3af;
+      --tab-border: #e5e7eb;
     }
 
     * {
@@ -72,38 +73,40 @@
     .tab-buttons {
       display: flex;
       justify-content: center;
-      gap: 0.5rem;
-      margin-bottom: 2rem;
-      /* background: var(--card); */
-      border-radius: 12px;
-      padding: 0.5rem;
-      /* box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); */
+      margin-bottom: 0;
+      border-bottom: 2px solid var(--tab-border);
+      background: none;
     }
 
     .tab-button {
-      padding: 0.75rem 1.5rem;
+      padding: 1rem 2rem;
       border: none;
-      border-radius: 8px;
+      border-bottom: 3px solid transparent;
       background: transparent;
       color: var(--tab-inactive);
-      font-weight: 500;
+      font-weight: 600;
+      font-size: 1rem;
       cursor: pointer;
       transition: all 0.3s ease;
+      position: relative;
+      margin-bottom: -2px;
     }
 
     .tab-button.active {
-      background: var(--tab-active);
-      color: white;
-      box-shadow: 0 2px 4px rgba(231, 53, 44, 0.3);
+      color: var(--tab-active);
+      border-bottom-color: var(--tab-active);
+      background: none;
+      box-shadow: none;
     }
 
     .tab-button:hover:not(.active) {
-      background: #f3f4f6;
-      color: var(--secondary);
+      color: var(--primary-dark);
+      border-bottom-color: #d1d5db;
     }
 
     .tab-content {
       display: none;
+      padding-top: 2rem;
     }
 
     .tab-content.active {
@@ -350,6 +353,13 @@
               >
                 Offline Installer
               </button>
+              <button
+                class="tab-button"
+                :class="{ active: activeTab === 'builder' }"
+                @click="activeTab = 'builder'; updateUrlOnTabChange('builder')"
+              >
+                Offline Builder Tools
+              </button>
             </div>
 
             <!-- Online Installers Tab -->
@@ -381,6 +391,21 @@
               <div v-else class="download-item">
                 <h3 class="download-name">No Offline Installers Available</h3>
                 <p class="download-desc">Offline installers are currently not available for this release.</p>
+              </div>
+            </div>
+
+            <!-- Offline Builder Tools Tab -->
+            <div class="tab-content" :class="{ active: activeTab === 'builder' }">
+              <builder-tools-section
+                v-if="builderTools.length"
+                :builder-tools="builderTools"
+                :expanded-sections="expandedSections"
+                @toggle-section="toggleSection"
+              ></builder-tools-section>
+
+              <div v-else class="download-item">
+                <h3 class="download-name">No Builder Tools Available</h3>
+                <p class="download-desc">Offline installer builder tools are currently not available for this release.</p>
               </div>
             </div>
           </div>
@@ -549,11 +574,77 @@
       `
     };
 
+    const BuilderToolsSection = {
+      props: ['builderTools', 'expandedSections'],
+      emits: ['toggle-section'],
+      components: {
+        'github-icon-button': GithubIconButton
+      },
+      methods: {
+        getDlEspressifUrl(githubUrl) {
+          return githubUrl.replace(
+            'https://github.com/espressif/',
+            'https://dl.espressif.com/github_assets/espressif/'
+          );
+        },
+        formatSize(bytes) {
+          const units = ['B', 'KB', 'MB', 'GB'];
+          let size = bytes;
+          let unitIndex = 0;
+          while (size >= 1024 && unitIndex < units.length - 1) {
+            size /= 1024;
+            unitIndex++;
+          }
+          return `${size.toFixed(1)} ${units[unitIndex]}`;
+        },
+        getPlatformDisplayName(platform) {
+          const names = {
+            windows: 'Windows',
+            linuxX64: 'Linux x64',
+            linuxARM: 'Linux ARM64',
+            macosIntel: 'macOS Intel',
+            macosApple: 'macOS Apple Silicon'
+          };
+          return names[platform] || 'Unknown Platform';
+        },
+        toggleSection() {
+          this.$emit('toggle-section', 'builder');
+        }
+      },
+      template: `
+        <div class="platform-section">
+          <div class="platform-header" @click="toggleSection">
+            <h2 class="platform-title">Offline Installer Builder Tools</h2>
+            <span class="platform-toggle" :class="{ expanded: expandedSections.builder }">›</span>
+          </div>
+          <div class="platform-content" :class="{ expanded: expandedSections.builder }">
+            <div class="installer-group">
+              <h3 class="installer-title">Builder Tools</h3>
+              <div v-for="tool in builderTools" :key="tool.id" class="download-item">
+                <h3 class="download-name">{{ tool.name }}</h3>
+                <p class="download-desc">
+                  Offline installer builder tool for {{ getPlatformDisplayName(tool.platform) }}
+                </p>
+                <div class="download-meta">
+                  <span class="download-size">{{ formatSize(tool.size) }}</span>
+                  <div class="download-buttons">
+                    <github-icon-button :href="tool.browser_download_url"></github-icon-button>
+                    <a :href="getDlEspressifUrl(tool.browser_download_url)" class="download-button" target="_blank">Download</a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `
+    };
+
     createApp({
       components: {
         'github-icon-button': GithubIconButton,
         'platform-section': PlatformSection,
-        'offline-installer-section': OfflineInstallerSection
+        'offline-installer-section': OfflineInstallerSection,
+        'builder-tools-section': BuilderToolsSection
       },
       setup() {
         const releaseData = ref(null);
@@ -566,11 +657,13 @@
         const initializeTabFromUrl = () => {
           const urlParams = new URLSearchParams(window.location.search);
           const tabParam = urlParams.get('tab');
-          if (tabParam === 'offline' || tabParam === 'online') {
+          if (tabParam === 'offline' || tabParam === 'online' || tabParam === 'builder') {
             activeTab.value = tabParam;
-            // Auto-expand offline section if coming from URL with offline tab
+            // Auto-expand corresponding section if coming from URL
             if (tabParam === 'offline') {
               expandedSections.value.offline = true;
+            } else if (tabParam === 'builder') {
+              expandedSections.value.builder = true;
             }
           }
         };
@@ -581,18 +674,22 @@
           url.searchParams.set('tab', newTab);
           window.history.replaceState({}, '', url);
 
-          // Auto-expand offline section when switching to offline tab
+          // Auto-expand corresponding section when switching tabs
           if (newTab === 'offline') {
             expandedSections.value.offline = true;
+          } else if (newTab === 'builder') {
+            expandedSections.value.builder = true;
           }
         };
+
         const expandedSections = ref({
           windows: false,
           linuxX64: false,
           linuxARM: false,
           macosIntel: false,
           macosApple: false,
-          offline: false
+          offline: false,
+          builder: false
         });
 
         // Map between platform keys in the app and offline archive format
@@ -650,20 +747,27 @@
 
           for (const asset of releaseData.value.assets) {
             const name = asset.name.toLowerCase();
+
+            // Skip offline installer builder files
+            if (name.includes('offline_installer_builder')) {
+              continue;
+            }
+
             let platform = null;
             let installerType = null;
 
             if (name.includes('windows') || name.endsWith('.exe')) {
               platform = 'windows';
-              installerType = name.includes('gui') || name.endsWith('.exe') ? 'gui' : 'cli';
+              // For Windows: CLI files have 'eim-cli' in name, everything else is GUI
+              installerType = name.includes('eim-cli') ? 'cli' : 'gui';
             } else if (name.includes('linux')) {
               platform = name.includes('arm') || name.includes('aarch64') ? 'linuxARM' : 'linuxX64';
+              // For Linux: CLI files have 'eim-cli' in name, everything else is GUI
+              installerType = name.includes('eim-cli') ? 'cli' : 'gui';
             } else if (name.includes('macos') || name.includes('darwin')) {
               platform = name.includes('aarch64') || name.includes('arm64') || name.includes('arm') ? 'macosApple' : 'macosIntel';
-            }
-
-            if (platform && platform !== 'windows') {
-              installerType = name.includes('cli') && !name.includes('gui') ? 'cli' : 'gui';
+              // For macOS: CLI files have 'eim-cli' in name, everything else is GUI
+              installerType = name.includes('eim-cli') ? 'cli' : 'gui';
             }
 
             if (platform && installerType) {
@@ -672,6 +776,40 @@
           }
 
           return platformCategories;
+        });
+
+        const builderTools = computed(() => {
+          if (!releaseData.value?.assets) return [];
+
+          const tools = [];
+
+          for (const asset of releaseData.value.assets) {
+            const name = asset.name.toLowerCase();
+
+            // Only include offline installer builder files
+            if (!name.includes('offline_installer_builder')) {
+              continue;
+            }
+
+            let platform = null;
+
+            if (name.includes('windows') || name.endsWith('.exe')) {
+              platform = 'windows';
+            } else if (name.includes('linux')) {
+              platform = name.includes('arm') || name.includes('aarch64') ? 'linuxARM' : 'linuxX64';
+            } else if (name.includes('macos') || name.includes('darwin')) {
+              platform = name.includes('aarch64') || name.includes('arm64') || name.includes('arm') ? 'macosApple' : 'macosIntel';
+            }
+
+            if (platform) {
+              tools.push({
+                ...asset,
+                platform
+              });
+            }
+          }
+
+          return tools;
         });
 
         const offlineInstallers = computed(() => {
@@ -753,6 +891,7 @@
           releaseData,
           offlineArchiveData,
           categorizedAssets,
+          builderTools,
           loading,
           error,
           activeTab,
