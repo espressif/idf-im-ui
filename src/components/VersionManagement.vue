@@ -416,7 +416,7 @@ export default {
         message.success('All installations removed')
         await loadInstalledVersions()
       } catch (error) {
-        message.error('Failed to purge installations')
+        message.error(`Failed to purge installations: ${error}`)
       }
     }
 
@@ -425,7 +425,7 @@ export default {
         await invoke('install_prerequisites')
         message.success('Prerequisites installation started')
       } catch (error) {
-        message.error('Failed to install prerequisites')
+        message.error(`Failed to install prerequisites: ${error}`)
       }
     }
 
@@ -434,10 +434,10 @@ export default {
         await invoke('install_drivers').then(() => {
           message.success('Driver installation started')
         }).catch((error) => {
-          message.error('Failed to install drivers')
+          message.error(`Failed to install drivers: ${error}`)
         })
       } catch (error) {
-        message.error('Failed to install drivers')
+        message.error(`Failed to install drivers: ${error}`)
       }
     }
 
