@@ -523,7 +523,7 @@ export default {
 }
 
 /* Responsive adjustments for Windows */
-@media (max-width: 1200px) {
+@media (max-width: 1100px) {
   .main-content {
     max-width: 95%;
     padding: 0 1rem;
@@ -535,7 +535,7 @@ export default {
   }
 
   .decision-cards {
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     gap: 1rem;
   }
