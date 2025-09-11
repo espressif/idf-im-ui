@@ -431,8 +431,13 @@ export default {
 
     const installDrivers = async () => {
       try {
+        let res = await invoke('check_elevation')
+        if (!res) {
+          message.error('Insufficient permissions to install drivers. Please run the application as an administrator.')
+          return
+        }
         await invoke('install_drivers').then(() => {
-          message.success('Driver installation started')
+          message.success('Driver installation successful.')
         }).catch((error) => {
           message.error(`Failed to install drivers: ${error}`)
         })

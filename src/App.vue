@@ -182,10 +182,15 @@ export default {
 html, body {
   height: 100%;
   overflow: hidden;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  position: relative;
 }
 
 #app {
   height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
@@ -193,6 +198,18 @@ html, body {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
+  overflow: hidden;
+  position: relative;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: 60px;
+  position: relative;
+  height: calc(100vh - 60px - 60px);
+  min-height: 0;
 }
 
 /* Header Styles */

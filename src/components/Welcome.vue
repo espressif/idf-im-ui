@@ -273,8 +273,9 @@ export default {
 
 <style scoped>
 .welcome-container {
-  min-height: 100vh;
-  width: 100vw;
+  min-height: 100%;
+  height: 100%;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -283,6 +284,8 @@ export default {
   background-size: cover;
   background-position: center;
   position: relative;
+  overflow: hidden;
+  padding: 2rem 0;
 }
 
 /* Splash Screen */
@@ -336,10 +339,13 @@ export default {
 /* Main Content */
 .main-content {
   width: 100%;
-  min-width: 1200px;
-  max-width: 80vw;
+  max-width: 1200px;
   padding: 0 2rem;
   margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
 }
 
 .welcome-card {
@@ -347,9 +353,12 @@ export default {
   padding: 3rem 4rem;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
-  /* width: 90%; */
-  min-width: 1000px;
+  width: 100%;
+  max-width: 1000px;
+  margin: auto;
+  position: relative;
 }
+
 
 .welcome-header {
   display: flex;
@@ -392,9 +401,9 @@ export default {
   gap: 2rem;
   margin: 2rem 0;
   justify-content: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   width: 100%;
-  padding: 0 2rem;
+  padding: 0 1rem;
 }
 
 .decision-card {
@@ -402,8 +411,8 @@ export default {
   cursor: pointer;
   border: 2px solid transparent;
   flex: 1;
-  min-width: 300px;
-  max-width: 400px;
+  min-width: 280px;
+  max-width: 350px;
 }
 
 .decision-card:hover {
@@ -473,5 +482,67 @@ export default {
 
 .n-button[type="info"] {
   background-color: #1290d8;
+}
+
+.app-main::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+@media screen and (-webkit-min-device-pixel-ratio: 1) {
+  .welcome-container {
+    transform: translateZ(0); /* Force hardware acceleration */
+  }
+
+  .main-content {
+    transform: translateZ(0); /* Force hardware acceleration */
+  }
+}
+
+/* Fix for Windows high DPI displays */
+@media screen and (min-resolution: 120dpi) {
+  .welcome-card {
+    border: 1px solid rgba(0, 0, 0, 0.05); /* Add subtle border for better definition */
+  }
+}
+
+/* Responsive adjustments for Windows */
+@media (max-width: 1200px) {
+  .main-content {
+    max-width: 95%;
+    padding: 0 1rem;
+  }
+
+  .welcome-card {
+    padding: 2rem;
+    max-width: none;
+  }
+
+  .decision-cards {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .decision-card {
+    max-width: 400px;
+    min-width: 300px;
+  }
 }
 </style>
