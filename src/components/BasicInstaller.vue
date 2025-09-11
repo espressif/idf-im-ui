@@ -112,7 +112,7 @@
       <n-card
         class="option-card offline-mode-card"
         hoverable
-        @click="showOfflineModal = true"
+        @click="selectOfflineArchive"
       >
         <div class="option-content">
           <div class="option-icon offline">
@@ -122,16 +122,9 @@
           <p class="option-description">
             Install from local archive files (.zst). No internet required.
           </p>
-          <div
-            class="drop-zone"
-            :class="{ 'dragging': isDragging }"
-            @drop.prevent="handleDrop"
-            @dragover.prevent="isDragging = true"
-            @dragleave.prevent="isDragging = false"
-          >
-            <n-icon :size="32"><InboxOutlined /></n-icon>
-            <p>Drop .zst archive here or click to browse</p>
-          </div>
+          <n-button type="primary" size="large" block>
+            Browse Archive File
+          </n-button>
         </div>
       </n-card>
 
@@ -157,61 +150,7 @@
     </div>
     </transition>
 
-    <!-- Offline Installation Modal -->
-    <n-modal
-      v-model:show="showOfflineModal"
-      preset="card"
-      title="Offline Installation"
-      style="width: 600px"
-    >
-      <div class="offline-modal-content">
-        <n-upload
-          v-model:file-list="fileList"
-          :accept="'.zst'"
-          :max="5"
-          @change="handleFileChange"
-          directory-dnd
-        >
-          <n-upload-dragger>
-            <div style="margin-bottom: 12px">
-              <n-icon size="48" :depth="3">
-                <InboxOutlined />
-              </n-icon>
-            </div>
-            <n-text style="font-size: 16px">
-              Click or drag .zst archive files here
-            </n-text>
-            <n-p depth="3" style="margin: 8px 0 0 0">
-              Select one or more ESP-IDF offline installation archives
-            </n-p>
-          </n-upload-dragger>
-        </n-upload>
 
-        <div v-if="fileList.length > 0" class="file-list-preview">
-          <h4>Selected Archives:</h4>
-          <n-tag
-            v-for="file in fileList"
-            :key="file.id"
-            closable
-            @close="removeFile(file)"
-            style="margin: 4px"
-          >
-            {{ file.name }}
-          </n-tag>
-        </div>
-
-        <div class="modal-actions">
-          <n-button @click="showOfflineModal = false">Cancel</n-button>
-          <n-button
-            type="primary"
-            @click="proceedOfflineInstall"
-            :disabled="fileList.length === 0"
-          >
-            Proceed with Installation
-          </n-button>
-        </div>
-      </div>
-    </n-modal>
   </div>
 </template>
 
@@ -255,9 +194,7 @@ export default {
     const os = ref('unknown')
     const prerequisitesOk = ref(true)
     const missingPrerequisites = ref([])
-    const showOfflineModal = ref(false)
-    const isDragging = ref(false)
-    const fileList = ref([])
+
 
     const checkPrerequisites = async () => {
       try {
@@ -345,38 +282,25 @@ export default {
       }
     }
 
-    const handleDrop = (e) => {
-      isDragging.value = false
-      const files = Array.from(e.dataTransfer.files)
-      const zstFiles = files.filter(f => f.name.endsWith('.zst'))
+    const selectOfflineArchive = async () => {
+      try {
+        const selected = await open({
+          multiple: false,
+          filters: [{
+            name: 'ESP-IDF Archive',
+            extensions: ['zst']
+          }]
+        })
 
-      if (zstFiles.length > 0) {
-        fileList.value = zstFiles.map(f => ({
-          id: Math.random(),
-          name: f.name,
-          path: f.path,
-          file: f
-        }))
-        showOfflineModal.value = true
-      } else {
-        message.warning('Please drop .zst archive files only')
+        if (selected) {
+          router.push({
+            path: '/offline-installer',
+            query: { archives: JSON.stringify([selected]) }
+          })
+        }
+      } catch (error) {
+        message.error('Failed to select archive file')
       }
-    }
-
-    const handleFileChange = (options) => {
-      fileList.value = options.fileList
-    }
-
-    const removeFile = (file) => {
-      fileList.value = fileList.value.filter(f => f.id !== file.id)
-    }
-
-    const proceedOfflineInstall = () => {
-      const paths = fileList.value.map(f => f.path || f.file?.path)
-      router.push({
-        path: '/offline-installer',
-        query: { archives: JSON.stringify(paths) }
-      })
     }
 
     const goBack = () => {
@@ -398,18 +322,12 @@ export default {
       os,
       prerequisitesOk,
       missingPrerequisites,
-      showOfflineModal,
-      isDragging,
-      fileList,
+      selectOfflineArchive,
       checkPrerequisites,
       installPrerequisites,
       startEasyMode,
       startWizard,
       loadConfig,
-      handleDrop,
-      handleFileChange,
-      removeFile,
-      proceedOfflineInstall,
       goBack
     }
   }
@@ -577,7 +495,7 @@ export default {
 
 .option-description {
   color: #6b7280;
-  margin-bottom: 0rem;
+  margin-bottom: 0.5rem;
   min-height: 1rem;
 }
 
