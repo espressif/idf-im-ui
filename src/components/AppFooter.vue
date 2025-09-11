@@ -135,9 +135,12 @@
           </div>
         </div>
 
-        <n-checkbox v-model:checked="includeLogs" style="margin: 1rem 0;">
+        <!-- <n-checkbox v-model:checked="includeLogs" style="margin: 1rem 0;">
           Include installation logs in report
-        </n-checkbox>
+        </n-checkbox> -->
+        <div>
+          Please describe the issue you encountered in the GitHub issue page that opens next. And attach all logs from the logs folder ( accessible through button in app footer)
+        </div>
 
         <div class="modal-actions">
           <n-button @click="showReportModal = false" class="cancel-button">
@@ -194,7 +197,8 @@ export default {
     const systemInfo = ref({
       os: 'Unknown',
       arch: 'Unknown',
-      cpuCount: 'Unknown'
+      cpuCount: 'Unknown',
+      additionalSystemInfo: 'Unknown'
     })
 
     const getAppInfo = async () => {
@@ -212,7 +216,8 @@ export default {
         const os = await invoke('get_operating_system')
         const arch = await invoke('get_system_arch')
         const cpuCount = await invoke('cpu_count')
-        systemInfo.value = { os, arch, cpuCount }
+        const additionalSystemInfo = await invoke('get_system_info')
+        systemInfo.value = { os, arch, cpuCount , additionalSystemInfo }
         appStore.setSystemInfo(systemInfo.value)
       } catch (error) {
         console.error('Failed to get system info:', error)
@@ -246,19 +251,12 @@ export default {
       generatingReport.value = true
 
       try {
-        // Generate log bundle
-        const bundlePath = await invoke('generate_log_bundle', {
-          includeLogs: includeLogs.value
-        })
-
-        message.success('Log bundle created: ' + bundlePath)
 
         // Open GitHub issue page with template
         const issueTitle = encodeURIComponent('[Bug Report] Issue with ESP-IDF Installation')
         const issueBody = encodeURIComponent(`
 ## System Information
-- **OS**: ${systemInfo.value.os}
-- **Architecture**: ${systemInfo.value.arch}
+- **OS info**: ${systemInfo.value.additionalSystemInfo}
 - **App Version**: ${appVersion.value}
 
 ## Description
@@ -274,7 +272,7 @@ Please describe the issue you encountered:
 ## Actual Behavior
 
 ## Logs
-${includeLogs.value ? `Log bundle has been generated at: ${bundlePath}` : 'No logs included'}
+Please attach logs from the app logs folder.
 
 ## Additional Information
         `.trim())

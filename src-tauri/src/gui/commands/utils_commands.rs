@@ -59,6 +59,17 @@ pub fn get_operating_system() -> String {
     std::env::consts::OS.to_string()
 }
 
+#[tauri::command]
+pub fn get_system_info() -> String {
+    let info = os_info::get();
+    format!("OS: {} {} | Architecture: {} | Kernel: {}",
+        info.os_type(),
+        info.version(),
+        info.architecture().unwrap_or("unknown"),
+        std::env::consts::ARCH
+    )
+}
+
 /// Gets the logs folder path
 #[tauri::command]
 pub fn get_logs_folder(app_handle: AppHandle) -> PathBuf {

@@ -264,6 +264,7 @@ pub fn run() {
             start_offline_installation,
             check_elevation,
             install_drivers,
+            get_system_info,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
