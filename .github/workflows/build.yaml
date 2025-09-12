@@ -108,7 +108,6 @@ jobs:
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
           LZMA_API_STATIC: 1
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: |
           cd src-tauri
           unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -252,7 +251,6 @@ jobs:
           OPENSSL_INCLUDE_DIR: 'C:\vcpkg\installed\x64-windows-static-md\include'
           OPENSSL_STATIC: "1"
           PERL: 'C:\\hostedtoolcache\\windows\\perl\\5.38.5-thr\\x64\\bin\\perl.exe'
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: |
           cd src-tauri
           cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -263,7 +261,6 @@ jobs:
         env:
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: |
           cd src-tauri
           unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -559,7 +556,6 @@ jobs:
           APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
           APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: |
           security create-keychain -p espressif notary.keychain
           security default-keychain -s notary.keychain
@@ -568,14 +564,10 @@ jobs:
 
       - name: Build GUI (macOS) - non-release
         if: startsWith(matrix.os, 'macos') && github.event_name != 'release'
-        env:
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: yarn tauri build
 
       - name: Build GUI (non-macOS)
         if: ${{ !startsWith(matrix.os, 'macos') }}
-        env:
-          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: yarn tauri build
 
       - name: Sign Windows Binary
