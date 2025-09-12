@@ -13,6 +13,7 @@ use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
+use idf_im_lib::telemetry::track_event;
 use log::debug;
 use log::error;
 use log::info;
@@ -101,6 +102,7 @@ fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<(
 }
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
+  track_event("CLI started", serde_json::json!({}));
     // let cli = cli_args::Cli::parse();
     #[cfg(feature = "gui")]
     let command = cli
