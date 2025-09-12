@@ -12,7 +12,10 @@ static CONNECTION_STRING: Option<&str> = option_env!("APP_INSIGHTS_CONNECTION_ST
 
 static CLIENT: Lazy<Option<reqwest::Client>> = Lazy::new(|| {
     if CONNECTION_STRING.is_none() {
+        println!("Telemetry disabled");
         return None;
+    } else {
+      println!("Telemetry enabled");
     }
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
