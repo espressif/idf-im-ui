@@ -240,6 +240,7 @@ export default {
     installationPlan: null,
     currentVersionIndex: 0,
     completedVersions: [],
+    timeStarted: null,
 
     // Version tracking
     current_version: null,
@@ -259,8 +260,8 @@ export default {
     ],
 
     // Logging with Virtual scrolling
-    visibleLogs: [], // Only visible log entries (reactive)
-    totalLogCount: 0, // Total number of logs (reactive for UI)
+    visibleLogs: [],
+    totalLogCount: 0,
     scrollTop: 0,
     containerHeight: 300, // Height of the scroll container
     itemHeight: 24, // Height of each log item in pixels
@@ -306,6 +307,15 @@ export default {
       this.error_message = "";
       this.log_messages = [];
       this.currentProgress = 0;
+      this.timeStarted = new Date(); // Add this line
+
+      // Add this tracking block
+      try {
+        const eventName = this.is_fix_mode ? "GUI fix installation started" : "GUI wizard installation started";
+        await invoke("track_event_command", { name: eventName });
+      } catch (error) {
+        console.warn('Failed to track event:', error);
+      }
 
       try {
         if (this.is_fix_mode) {
@@ -613,6 +623,18 @@ export default {
       if (this.current_version && !this.installed_versions.includes(this.current_version)) {
         this.installed_versions.push(this.current_version);
       }
+      try {
+        const eventName = this.is_fix_mode ? "GUI fix installation succeeded" : "GUI wizard installation succeeded";
+        invoke("track_event_command", {
+          name: eventName,
+          additional_data: {
+            duration_seconds: (new Date() - this.timeStarted) / 1000,
+            version: version || this.current_version
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to track event:', error);
+      }
     },
 
     handleInstallationError: function (message, detail) {
@@ -622,6 +644,22 @@ export default {
 
       if (this.current_version && !this.failed_versions.includes(this.current_version)) {
         this.failed_versions.push(this.current_version);
+      }
+
+      // Add this tracking block
+      try {
+        const eventName = this.is_fix_mode ? "GUI fix installation failed" : "GUI wizard installation failed";
+        invoke("track_event_command", {
+          name: eventName,
+          additional_data: {
+            duration_seconds: (new Date() - this.timeStarted) / 1000,
+            version: this.current_version,
+            errorMessage: message,
+            errorDetails: detail
+          }
+        });
+      } catch (error) {
+        console.warn('Failed to track event:', error);
       }
     },
 

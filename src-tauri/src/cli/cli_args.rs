@@ -48,6 +48,14 @@ pub struct Cli {
 
     #[arg(long, help = "file in which logs will be stored (default: eim.log)")]
     pub log_file: Option<String>,
+
+    #[arg(
+        long,
+        help = "If set to true, the installer will not send any usage data. Default is false.",
+        default_value_t = false,
+        action = clap::ArgAction::Set
+    )]
+    pub do_not_track: bool,
 }
 
 // todo: add fix command which will reinstall using the existing IDF repository

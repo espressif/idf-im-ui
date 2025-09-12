@@ -20,9 +20,9 @@
       <div class="welcome-card" v-else>
         <div class="welcome-header">
           <h1>Welcome to <span>ESP-IDF</span> Installation Manager</h1>
-          <n-tag v-if="!isFirstRun" type="info">
+          <!-- <n-tag v-if="!isFirstRun" type="info">
             {{ installedVersionsCount }} version(s) installed
-          </n-tag>
+          </n-tag> -->
         </div>
 
         <div class="content">
@@ -91,6 +91,9 @@
           <div v-if="isFirstRun" class="preferences">
             <n-checkbox v-model:checked="dontShowAgain">
               Don't show this welcome screen again
+            </n-checkbox><br></br>
+            <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange">
+              Allow sending usage statistics
             </n-checkbox>
           </div>
         </div>
@@ -137,6 +140,7 @@ export default {
     // UI state
     const isFirstRun = ref(true)
     const dontShowAgain = ref(false)
+    const allowUsageTracking = ref(true)
 
     const getWelcomeMessage = computed(() => {
       if (hasInstalledVersions.value && hasOfflineArchives.value) {
@@ -206,13 +210,40 @@ export default {
         }
       }
     }
-
-    const savePreferences = async () => {
-      if (dontShowAgain.value) {
+    const handleUsageTrackingChange = async (checked) => {
+      if (checked) {
+        message.success('Thank you for allowing usage tracking!')
         try {
           await invoke('save_app_settings', {
             firstRun: false,
-            skipWelcome: true
+            skipWelcome: dontShowAgain.value,
+            usageStatistics: checked
+          })
+        } catch (error) {
+          console.error('Failed to change usage tracking settings:', error)
+        }
+      } else {
+        try {
+          await invoke('save_app_settings', {
+            firstRun: false,
+            skipWelcome: dontShowAgain.value,
+            usageStatistics: checked
+          })
+        } catch (error) {
+          console.error('Failed to change usage tracking settings:', error)
+        }
+        message.info('You have disabled usage tracking.')
+
+      }
+    }
+
+    const savePreferences = async () => {
+      if (dontShowAgain.value || allowUsageTracking.value === false) {
+        try {
+          await invoke('save_app_settings', {
+            firstRun: false,
+            skipWelcome: true,
+            usageStatistics: allowUsageTracking.value
           })
         } catch (error) {
           console.error('Failed to save preferences:', error)
@@ -262,6 +293,8 @@ export default {
       isFirstRun,
       dontShowAgain,
       getWelcomeMessage,
+      allowUsageTracking,
+      handleUsageTrackingChange,
       goToVersionManagement,
       goToOfflineInstaller,
       goToBasicInstaller,
@@ -362,7 +395,7 @@ export default {
 
 .welcome-header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-bottom: 2rem;
 }
