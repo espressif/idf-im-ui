@@ -1,3 +1,4 @@
+use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
 use idf_im_lib::telemetry::track_event;
@@ -30,13 +31,6 @@ use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, 
 fn greet(name: &str) -> String {
     log::info!("Greet called with name: {}", name);
     format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
-async fn track_event_command(name: &str) -> Result<(), String> {
-    log::debug!("Track event called with name: {}", name);
-    track_event("GUI event", serde_json::json!({"event_name": name})).await;
-    Ok(())
 }
 
 fn prepare_installation_directories(
@@ -237,6 +231,7 @@ pub fn run() {
         error!("Failed to get log directory.");
         PathBuf::from("")
     });
+    track_event("GUI started", serde_json::json!({}));
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -296,7 +291,6 @@ pub fn run() {
             is_path_empty_or_nonexistent_command,
             is_path_idf_directory,
             cpu_count,
-            track_event_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

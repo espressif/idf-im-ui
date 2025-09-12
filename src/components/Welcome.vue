@@ -72,10 +72,6 @@ export default {
       this.cpu = await invoke("cpu_count", {});
       return false;
     },
-    send_telemetry: async function () {
-      await invoke("track_event_command", { name: "GUI started" });
-      return false;
-    },
     quit() {
       const _ = invoke("quit_app", {});
     }
@@ -83,7 +79,6 @@ export default {
   mounted() {
     this.get_os();
     this.get_cpu();
-    this.send_telemetry();
   }
 }
 </script>

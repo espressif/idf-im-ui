@@ -102,7 +102,7 @@ fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<(
 }
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
-  track_event("CLI started", serde_json::json!({})).await;
+  track_event("CLI started", serde_json::json!({}));
     // let cli = cli_args::Cli::parse();
     #[cfg(feature = "gui")]
     let command = cli
