@@ -1,7 +1,6 @@
 use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
-use idf_im_lib::telemetry::track_event;
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     settings::Settings,
@@ -231,7 +230,6 @@ pub fn run() {
         error!("Failed to get log directory.");
         PathBuf::from("")
     });
-    track_event("GUI started", serde_json::json!({}));
     tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()

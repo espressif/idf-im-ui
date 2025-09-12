@@ -31,7 +31,6 @@ pub mod system_dependencies;
 pub mod utils;
 pub mod version_manager;
 pub mod offline_installer;
-pub mod telemetry;
 use std::fs::{set_permissions, File};
 use std::{
     env,

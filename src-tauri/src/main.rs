@@ -1,4 +1,3 @@
-#![feature(const_option_ops)]
 // Apply windows_subsystem = "windows" only if "gui" feature is present and not in debug mode
 #![cfg_attr(
     all(feature = "gui", not(debug_assertions)),
