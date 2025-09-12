@@ -289,6 +289,7 @@ pub fn run() {
             is_path_empty_or_nonexistent_command,
             is_path_idf_directory,
             cpu_count,
+            track_event_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
