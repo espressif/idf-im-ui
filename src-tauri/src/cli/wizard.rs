@@ -4,6 +4,7 @@ use dialoguer::FolderSelect;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
+use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
@@ -313,18 +314,7 @@ async fn download_and_extract_tools(
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!("Config entering wizard: {:?}", config);
 
-    let mut offline_mode = false;
-    if config.use_local_archive.is_some() {
-        debug!("Using local archive: {:?}", config.use_local_archive);
-        if !config.use_local_archive.as_ref().unwrap().exists() {
-            return Err(format!(
-                "Local archive path does not exist: {}",
-                config.use_local_archive.as_ref().unwrap().display()
-            ));
-        }
-        offline_mode = true;
-    }
-
+    let offline_mode = config.use_local_archive.is_some();
     let offline_archive_dir = if offline_mode {
         Some(TempDir::new().expect("Failed to create temporary directory"))
     } else {
@@ -333,34 +323,13 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     if offline_mode { // only setting up temp directory if offline mode is enabled
       let archive_dir = offline_archive_dir.as_ref().unwrap();
-      debug!("Temporary directory created: {}", archive_dir.path().display());
-      match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &archive_dir.path()) {
-        Ok(_) => {
-            info!("Successfully extracted archive to: {:?}", archive_dir);
-        }
+      config = match use_offline_archive(config, archive_dir){
+        Ok(updated_config) => updated_config,
         Err(err) => {
-            return Err(format!("Failed to extract archive: {}", err));
+          error!("Failed to use offline archive: {}", err);
+          return Err(err);
         }
-      }
-      // load the config from the extracted archive
-      let config_path = archive_dir.path().join("config.toml");
-      if config_path.exists() {
-        debug!("Loading config from extracted archive: {}", config_path.display());
-        let mut tmp_setting = Settings::default();
-        match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
-          Ok(()) => {
-            debug!("Config loaded from archive: {:?}", config_path.display());
-            debug!("Config: {:?}", tmp_setting);
-            debug!("Using only version for now.");
-            config.idf_versions = tmp_setting.idf_versions;
-        }
-          Err(err) => {
-            return Err(format!("Failed to load config from archive: {}", err));
-          }
-        }
-      } else {
-        warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
-      }
+      };
       // install prerequisites offline
       if std::env::consts::OS == "windows" {
         match install_prerequisites_offline(&archive_dir){

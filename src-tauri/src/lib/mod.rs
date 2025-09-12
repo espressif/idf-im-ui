@@ -1790,9 +1790,13 @@ pub async fn install_drivers() -> Result<()> {
         match install_driver_res(driver_path.to_str().unwrap().to_string()) {
             Ok(_) => info!("Driver installed successfully: {}", driver.name),
             Err(err) => {
-                error!("Failed to install driver {}: {}", driver.name, err);
-                all_success = false;
-                continue;
+              if err.to_string().contains("installed") {
+                  info!("Driver is already installed: {}", driver.name);
+              } else {
+                  error!("Failed to install driver {}: {}", driver.name, err);
+                  all_success = false;
+                  continue;
+              }
             }
         }
 

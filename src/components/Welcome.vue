@@ -1,209 +1,548 @@
 <template>
-
-
-  <!-- Main content -->
-  <main class="main-content">
-    <div class="welcome-card" v-if="os === 'windows' && cpu == 1">
-      <h1>Welcome to <span>ESP-IDF</span> Installation Manager!</h1>
-      <div class="content">
-        <p>This tool needs a system with at least 2 CPU cores when using Windows OS.</p>
-        <p>Sorry for the inconvenience</p>
-        <n-button @click="quit" class="exit-button" type="info">
-          Exit Installer
-        </n-button>
-      </div>
-
-    </div>
-    <div class="welcome-card" v-else >
-      <h1>Welcome to <span>ESP-IDF</span> Installation Manager!</h1>
-
-      <div class="content">
-        <p>This tool will guide you through the installation process.</p>
-
-        <div class="features">
-          <div class="feature">
-            <div class="feature-icon">✓</div>
-            <span>Install required dependencies</span>
-          </div>
-
-          <div class="feature">
-            <div class="feature-icon">✓</div>
-            <span>Configure development environment</span>
-          </div>
-
-          <div class="feature">
-            <div class="feature-icon">✓</div>
-            <span>Set up ESP-IDF toolchain</span>
-          </div>
+  <div class="welcome-container">
+    <!-- Main Welcome Screen -->
+    <main class="main-content">
+      <!-- CPU Check for Windows -->
+      <div class="welcome-card" v-if="os === 'windows' && cpuCount == 1">
+        <h1>System Requirements</h1>
+        <div class="content">
+          <n-alert type="error" :bordered="false">
+            This tool requires a system with at least 2 CPU cores when using Windows OS.
+          </n-alert>
+          <p>Sorry for the inconvenience</p>
+          <n-button @click="quit" type="error" size="large">
+            Exit Installer
+          </n-button>
         </div>
       </div>
 
-      <n-button @click="getStarted" type="error" size="large" class="get-started">
-        Get Started
-      </n-button>
-    </div>
-  </main>
+      <!-- Normal Welcome Flow -->
+      <div class="welcome-card" v-else>
+        <div class="welcome-header">
+          <h1>Welcome to <span>ESP-IDF</span> Installation Manager</h1>
+          <n-tag v-if="!isFirstRun" type="info">
+            {{ installedVersionsCount }} version(s) installed
+          </n-tag>
+        </div>
 
+        <div class="content">
+          <p class="subtitle">{{ getWelcomeMessage }}</p>
 
+          <!-- Quick Status -->
+          <div v-if="checkingStatus" class="status-check">
+            <n-spin size="small" />
+            <span>Checking installation status...</span>
+          </div>
+
+          <!-- Decision Cards -->
+          <div v-else class="decision-cards">
+            <!-- Version Management (if versions exist) -->
+            <n-card
+              v-if="hasInstalledVersions"
+              class="decision-card primary-action"
+              @click="goToVersionManagement"
+              hoverable
+            >
+              <div class="card-content">
+                <n-icon :size="48" color="#E8362D">
+                  <DashboardOutlined />
+                </n-icon>
+                <h3>Manage Installations</h3>
+                <p>View and manage your {{ installedVersionsCount }} installed ESP-IDF version(s)</p>
+                <n-button type="primary" block>Open Dashboard</n-button>
+              </div>
+            </n-card>
+
+            <!-- Offline Installation (if archives detected) -->
+            <n-card
+              v-if="hasOfflineArchives"
+              class="decision-card offline-action"
+              @click="goToOfflineInstaller"
+              hoverable
+            >
+              <div class="card-content">
+                <n-icon :size="48" color="#52c41a">
+                  <FileZipOutlined />
+                </n-icon>
+                <h3>Offline Installation</h3>
+                <p>{{ offlineArchives.length }} archive(s) detected in current directory</p>
+                <n-button type="success" block>Install from Archive</n-button>
+              </div>
+            </n-card>
+
+            <!-- New Installation -->
+            <n-card
+              class="decision-card new-action"
+              @click="goToBasicInstaller"
+              hoverable
+            >
+              <div class="card-content">
+                <n-icon :size="48" color="#1290d8">
+                  <PlusCircleOutlined />
+                </n-icon>
+                <h3>New Installation</h3>
+                <p>Install ESP-IDF development environment</p>
+                <n-button type="info" block>Start Installation</n-button>
+              </div>
+            </n-card>
+          </div>
+
+          <!-- Don't Show Again -->
+          <div v-if="isFirstRun" class="preferences">
+            <n-checkbox v-model:checked="dontShowAgain">
+              Don't show this welcome screen again
+            </n-checkbox>
+          </div>
+        </div>
+      </div>
+    </main>
+
+  </div>
 </template>
 
 <script>
-import { c, NButton } from 'naive-ui'
-import { invoke } from "@tauri-apps/api/core";
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { invoke } from '@tauri-apps/api/core'
+import {
+  NButton, NCard, NIcon, NTag, NSpin, NCheckbox, NAlert, useMessage
+} from 'naive-ui'
+import {
+  DashboardOutlined,
+  FileZipOutlined,
+  PlusCircleOutlined
+} from '@vicons/antd'
 
 export default {
   name: 'Welcome',
-  components: { NButton },
-  data() {
-    return {
-      cpu: 0,
-      os: "unknown"
-    };
+  components: {
+    NButton, NCard, NIcon, NTag, NSpin, NCheckbox, NAlert,
+    DashboardOutlined, FileZipOutlined, PlusCircleOutlined
   },
-  methods: {
-    getStarted() {
-      this.$router.push('/load_config');
-    },
-    get_os: async function () {
-      this.os = await invoke("get_operating_system", {});
-      return false;
-    },
-    get_cpu: async function () {
-      this.cpu = await invoke("cpu_count", {});
-      return false;
-    },
-    quit() {
-      const _ = invoke("quit_app", {});
+  setup() {
+    const router = useRouter()
+    const message = useMessage()
+
+    // System info
+    const os = ref('unknown')
+    const cpuCount = ref(0)
+
+    // Installation status
+    const checkingStatus = ref(true)
+    const hasInstalledVersions = ref(false)
+    const installedVersionsCount = ref(0)
+    const hasOfflineArchives = ref(false)
+    const offlineArchives = ref([])
+
+    // UI state
+    const isFirstRun = ref(true)
+    const dontShowAgain = ref(false)
+
+    const getWelcomeMessage = computed(() => {
+      if (hasInstalledVersions.value && hasOfflineArchives.value) {
+        return 'Choose how you want to proceed:'
+      } else if (hasInstalledVersions.value) {
+        return 'Manage your existing installations or install a new version:'
+      } else if (hasOfflineArchives.value) {
+        return 'Offline archives detected. You can install from local files or download online:'
+      } else {
+        return 'Get started with ESP-IDF development environment:'
+      }
+    })
+
+    const checkSystem = async () => {
+      try {
+        os.value = await invoke('get_operating_system')
+        cpuCount.value = await invoke('cpu_count')
+      } catch (error) {
+        console.error('Failed to check system:', error)
+      }
     }
-  },
-  mounted() {
-    this.get_os();
-    this.get_cpu();
+
+    const checkInstallationStatus = async () => {
+      checkingStatus.value = true
+
+      try {
+        // Check for eim_idf.json and installed versions
+        const versions = await invoke('get_installed_versions')
+        hasInstalledVersions.value = versions && versions.length > 0
+        installedVersionsCount.value = versions ? versions.length : 0
+
+        // Check for .zst archives in current directory
+        const archives = await invoke('scan_for_archives')
+        hasOfflineArchives.value = archives && archives.length > 0
+        offlineArchives.value = archives || []
+
+        // Check if this is first run
+        const settings = await invoke('get_app_settings')
+        console.log(`App settings: ${JSON.stringify(settings)}`)
+        isFirstRun.value = settings?.first_run !== false
+        dontShowAgain.value = settings?.skip_welcome === true
+
+        // Auto-navigate based on status
+        setTimeout(() => {
+          autoNavigate()
+        }, 500)
+
+      } catch (error) {
+        console.error('Failed to check installation status:', error)
+      } finally {
+        checkingStatus.value = false
+      }
+    }
+
+    const autoNavigate = () => {
+      // Don't auto-navigate if user disabled welcome screen
+      if (!isFirstRun.value && dontShowAgain.value) {
+        if (hasInstalledVersions.value) {
+          router.replace('/version-management')
+        } else if (hasOfflineArchives.value) {
+          router.replace({
+            path: '/offline-installer',
+            query: { archives: JSON.stringify(offlineArchives.value) }
+          })
+        } else {
+          router.replace('/basic-installer')
+        }
+      }
+    }
+
+    const savePreferences = async () => {
+      if (dontShowAgain.value) {
+        try {
+          await invoke('save_app_settings', {
+            firstRun: false,
+            skipWelcome: true
+          })
+        } catch (error) {
+          console.error('Failed to save preferences:', error)
+        }
+      }
+    }
+
+    const goToVersionManagement = async () => {
+      await savePreferences()
+      router.push('/version-management')
+    }
+
+    const goToOfflineInstaller = async () => {
+      await savePreferences()
+      router.push({
+        path: '/offline-installer',
+        query: { archives: JSON.stringify(offlineArchives.value) }
+      })
+    }
+
+    const goToBasicInstaller = async () => {
+      await savePreferences()
+      router.push('/basic-installer')
+    }
+
+    const quit = async () => {
+      try {
+        await invoke('quit_app')
+      } catch (error) {
+        console.error('Failed to quit:', error)
+      }
+    }
+
+    onMounted(async () => {
+      await checkSystem()
+      await checkInstallationStatus()
+    })
+
+    return {
+      os,
+      cpuCount,
+      checkingStatus,
+      hasInstalledVersions,
+      installedVersionsCount,
+      hasOfflineArchives,
+      offlineArchives,
+      isFirstRun,
+      dontShowAgain,
+      getWelcomeMessage,
+      goToVersionManagement,
+      goToOfflineInstaller,
+      goToBasicInstaller,
+      quit
+    }
   }
 }
 </script>
 
-
-
 <style scoped>
-.installer {
-  min-height: 100vh;
+.welcome-container {
+  min-height: 100%;
+  height: 100%;
+  width: 100%;
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   background-color: #f5f5f5;
+  background-image: url('../assets/bg.png');
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  overflow: hidden;
+  padding: 2rem 0;
 }
 
-.header {
-  background-color: #dc2626;
+/* Splash Screen */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(135deg, #667eea 0%, #E8362D 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.hidden {
+  display: none;
+}
+
+.splash-content {
+  text-align: center;
   color: white;
-  padding: 1rem;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.header h2 {
-  margin: 0;
-  font-size: 1.25rem;
+.splash-content .logo {
+  width: 120px;
+  height: auto;
+  margin-bottom: 2rem;
+  filter: brightness(0) invert(1);
 }
 
+.splash-content h1 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.splash-content p {
+  font-size: 1.125rem;
+  margin-bottom: 2rem;
+  opacity: 0.9;
+}
+
+/* Fade transition */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+/* Main Content */
+.main-content {
+  width: 100%;
+  max-width: 1200px;
+  padding: 0 2rem;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100%;
+}
 
 .welcome-card {
   background: white;
-  padding: 2rem;
-  border-radius: 0.5rem;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  max-width: 948px;
+  padding: 3rem 4rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   width: 100%;
-  text-align: center;
+  max-width: 1000px;
+  margin: auto;
+  position: relative;
+}
+
+
+.welcome-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
 }
 
 .welcome-card h1 {
   font-family: 'Trueno-bold', sans-serif;
-  font-weight: bold;
-  font-size: 2rem;
+  font-size: 2.25rem;
   color: #1f2937;
-  margin-bottom: 1.5rem;
+  margin: 0;
 }
 
 .welcome-card h1 span {
-  color: #E8362D
+  color: #E8362D;
 }
 
-.content {
+.subtitle {
+  font-family: 'Trueno-regular', sans-serif;
+  font-size: 1.25rem;
+  color: #4b5563;
   margin-bottom: 2rem;
 }
 
-.content p {
-  color: #4b5563;
-  font-family: 'Trueno-regular', sans-serif;
-  font-size: 1.5rem;
-  font-weight: bold;
-  margin-bottom: 1.5rem;
-}
-
-.features {
+.status-check {
   display: flex;
-  flex-direction: row;
-  justify-content: space-between;
   align-items: center;
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 20px;
-  position: relative;
+  gap: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  color: #6b7280;
 }
 
-.feature {
+/* Decision Cards */
+.decision-cards {
+  display: flex;
+  gap: 2rem;
+  margin: 2rem 0;
+  justify-content: center;
+  flex-wrap: wrap;
+  width: 100%;
+  padding: 0 1rem;
+}
+
+.decision-card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border: 2px solid transparent;
+  flex: 1;
+  min-width: 280px;
+  max-width: 350px;
+}
+
+.decision-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.decision-card.primary-action:hover {
+  border-color: #E8362D;
+}
+
+.decision-card.offline-action:hover {
+  border-color: #52c41a;
+}
+
+.decision-card.new-action:hover {
+  border-color: #1290d8;
+}
+
+.card-content {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  position: relative;
-  width: 250px;
-  height: 65px;
+  gap: 1rem;
 }
 
-.feature span {
-
-  font-size: 1.3rem;
-  color: #4b5563;
+.card-content h3 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.25rem;
+  color: #1f2937;
+  margin: 0;
 }
 
-.feature-icon {
-  background-color: #1290d8;
-  font-size: 1.6rem;
-  color: white;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 10px;
-  z-index: 1;
+.card-content p {
+  color: #6b7280;
+  font-size: 0.95rem;
+  margin: 0;
+  min-height: 2.5rem;
 }
 
-.feature:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  top: 15px;
-  left: 65%;
-  width: calc(100% - 65px);
-  height: 4px;
-  border-radius: 2px;
-  background-color: #2196F3;
+.more-options {
+  text-align: center;
+  margin-top: 1rem;
+  padding-left: 5rem;
+  padding-right: 5rem;
 }
 
-.get-started {
-  width: 100%;
-  max-width: 175px;
-  margin: 0 auto;
-  margin-top: 1.5rem;
+.more-options .n-button {
+  color: #e5e7eb;
+}
+
+.preferences {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.n-button[type="primary"] {
   background-color: #E8362D;
 }
 
-.footer {
-  padding: 1rem;
-  text-align: center;
-  color: #6b7280;
-  font-size: 0.875rem;
+.n-button[type="success"] {
+  background-color: #52c41a;
+}
+
+.n-button[type="info"] {
+  background-color: #1290d8;
+}
+
+.app-main::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+
+.app-main::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+@media screen and (-webkit-min-device-pixel-ratio: 1) {
+  .welcome-container {
+    transform: translateZ(0); /* Force hardware acceleration */
+  }
+
+  .main-content {
+    transform: translateZ(0); /* Force hardware acceleration */
+  }
+}
+
+/* Fix for Windows high DPI displays */
+@media screen and (min-resolution: 120dpi) {
+  .welcome-card {
+    border: 1px solid rgba(0, 0, 0, 0.05); /* Add subtle border for better definition */
+  }
+}
+
+/* Responsive adjustments for Windows */
+@media (max-width: 1100px) {
+  .main-content {
+    max-width: 95%;
+    padding: 0 1rem;
+  }
+
+  .welcome-card {
+    padding: 2rem;
+    max-width: none;
+  }
+
+  .decision-cards {
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .decision-card {
+    max-width: 400px;
+    min-width: 300px;
+  }
 }
 </style>

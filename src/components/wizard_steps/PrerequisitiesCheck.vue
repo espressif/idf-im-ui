@@ -12,17 +12,20 @@
           </div>
         </template>
 
-        <n-spin :show="loading" data-id="prerequisites-spinner">
-          <ul class="items-list" data-id="prerequisites-items-list">
-            <li v-for="p in display_prerequisities" :key="p.name"
-              :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }"
-              :data-id="`prerequisite-item-${p.name}`">
-              <span class="item-name" :data-id="`prerequisite-name-${p.name}`">{{ p.name }}</span>
-              <span class="item-icon" :data-id="`prerequisite-icon-${p.name}`">{{ p.icon }}</span>
-            </li>
-          </ul>
-          <n-progress type="line" color="#ff0000" rail-color="#ffgg00" :percentage="percentage" />
-        </n-spin>
+        <div class="loading-overlay-wrapper">
+          <n-spin :show="loading" description="Checking prerequisites..." data-id="prerequisites-spinner">
+            <ul class="items-list" :class="{ 'overlay-active': loading }" data-id="prerequisites-items-list">
+              <li v-for="p in display_prerequisities" :key="p.name"
+                :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }"
+                :data-id="`prerequisite-item-${p.name}`">
+                <span class="item-name" :data-id="`prerequisite-name-${p.name}`">{{ p.name }}</span>
+                <span class="item-icon" :data-id="`prerequisite-icon-${p.name}`">{{ p.icon }}</span>
+              </li>
+            </ul>
+            <n-progress type="line" color="#ff0000" rail-color="#ffgg00" :percentage="percentage" />
+          </n-spin>
+          <div class="overlay" data-id="prerequisites-overlay" :style="loading ? { display: 'block' } : { display: 'none' }"></div>
+        </div>
       </n-card>
       <div v-if="did_the_check_run">
         <div v-if="missing_prerequisities.length === 0">
@@ -58,14 +61,14 @@
 
 <script>
 import { invoke } from "@tauri-apps/api/core";
-import { NButton, NSpin, NProgress } from 'naive-ui'
+import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
 
 export default {
   name: 'PrerequisitiesCheck',
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin, NProgress },
+  components: { NButton, NSpin, NProgress, NCard }, // Added NCard here
   data: () => ({
     loading: false,
     installing_prerequisities: false,
@@ -77,9 +80,7 @@ export default {
   }),
   methods: {
     get_prerequisities_list: async function () {
-      this.loading = true;
-      this.all_prerequisities = await invoke("get_prequisites", {});;
-      this.loading = false;
+      this.all_prerequisities = await invoke("get_prequisites", {});
       this.display_prerequisities = this.all_prerequisities.map(p => ({
         name: p,
         icon: '❓',
@@ -88,15 +89,19 @@ export default {
     },
     check_prerequisites: async function () {
       this.loading = true;
-      const missing_list = await invoke("check_prequisites", {});
-      this.missing_prerequisities = missing_list;
-      console.log("missing prerequisities: ", missing_list);
-      this.display_prerequisities = this.display_prerequisities.map(p => ({
-        name: p.name,
-        icon: missing_list.includes(p.name) ? '❌' : '✔',
-      }));
-      this.did_the_check_run = true;
-      this.loading = false;
+      setTimeout(() => {
+        invoke("check_prequisites", {}).then(missing_list => {
+          this.missing_prerequisities = missing_list;
+          console.log("missing prerequisities: ", missing_list);
+          this.did_the_check_run = true;
+          this.loading = false;
+          this.display_prerequisities = this.display_prerequisities.map(p => ({
+            name: p.name,
+            icon: missing_list.includes(p.name) ? '❌' : '✔',
+          }));
+        });
+      }, 400);
+
       return false;
     },
     install_prerequisites: async function () {
@@ -156,6 +161,7 @@ export default {
 .prerequisites-list {
   border: none;
   background: white;
+  position: relative; /* Added for positioning the overlay */
 }
 
 .card-header {
@@ -173,6 +179,8 @@ export default {
   list-style: none;
   padding: 0;
   margin: 0;
+  position: relative; /* Added for positioning the overlay */
+  z-index: 1; /* Ensure list content is below overlay */
 }
 
 .item {
@@ -236,5 +244,51 @@ export default {
   width: 50%;
   margin: auto;
   margin-top: 2rem;
+}
+
+/* Enhanced spinner styles */
+:deep(.n-spin-container) {
+  position: relative;
+  padding: 2rem;
+}
+
+:deep(.n-spin) {
+  transform: scale(1.5);
+  position: absolute; /* Position the spinner over the overlay */
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3; /* Ensure spinner is above the overlay */
+}
+
+:deep(.n-spin .n-spin-body) {
+  color: var(--espressif-red-color);
+}
+
+:deep(.n-spin-description) {
+  font-size: 1.1rem;
+  color: #374151;
+  margin-top: 1rem;
+}
+
+/* New styles for the overlay */
+.loading-overlay-wrapper {
+  position: relative; /* Container for the list and overlay */
+}
+
+.overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(123, 80, 80, 0.7); /* Dark overlay with some transparency */
+  z-index: 20; /* Ensure overlay is above the list items but below the spinner */
+  border-radius: inherit; /* Inherit border-radius from n-card if any */
+}
+
+/* When overlay is active, make list items less interactive */
+.items-list.overlay-active {
+  pointer-events: none;
 }
 </style>
