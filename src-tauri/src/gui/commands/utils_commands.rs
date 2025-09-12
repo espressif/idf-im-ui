@@ -1,5 +1,6 @@
 use gui::ui::send_message;
 use idf_im_lib;
+use idf_im_lib::telemetry::track_event;
 use log::{error, info};
 use std::{
     path::PathBuf,
@@ -110,4 +111,11 @@ pub fn quit_app(app_handle: tauri::AppHandle) {
 #[tauri::command]
 pub fn cpu_count() -> usize {
     num_cpus::get()
+}
+
+#[tauri::command]
+pub async fn track_event_command(name: &str) -> Result<(), String> {
+    log::debug!("Track event called with name: {}", name);
+    track_event("GUI event", serde_json::json!({"event_name": name})).await;
+    Ok(())
 }
