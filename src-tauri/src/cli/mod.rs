@@ -14,6 +14,7 @@ use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
+use idf_im_lib::telemetry::track_event;
 use log::debug;
 use log::error;
 use log::info;
@@ -24,7 +25,9 @@ use log4rs::append::file::FileAppender;
 use log4rs::config::Appender;
 use log4rs::config::Root;
 use log4rs::encode::pattern::PatternEncoder;
+use serde_json::json;
 
+use crate::cli::helpers::track_cli_event;
 #[cfg(feature = "gui")]
 use crate::gui;
 
@@ -101,8 +104,11 @@ fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<(
     Ok(())
 }
 
+
+
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
-    // let cli = cli_args::Cli::parse();
+  let do_not_track = cli.do_not_track;
+    // Initial tracking of CLI start
     #[cfg(feature = "gui")]
     let command = cli
         .clone()
@@ -128,6 +134,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             setup_logging(&cli, false).context("Failed to setup logging")?;
         }
     }
+    if !do_not_track {
+        track_cli_event("CLI started", Some(json!({
+          "command": format!("{:?}", command)
+        }))).await;
+    }
     match command {
         Commands::Install(install_args) => {
             let settings = Settings::new(
@@ -139,15 +150,34 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                   if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
                   }
+                  let time = std::time::SystemTime::now();
+                  if !do_not_track {
+                      track_cli_event("CLI installation started", Some(json!({
+                        "versions": format!("{:?}", settings.idf_versions),
+                      }))).await;
+                  }
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
                         Ok(r) => {
                             info!("Wizard result: {:?}", r);
                             info!("Successfully installed IDF");
                             info!("Now you can start using IDF tools");
+                            if !do_not_track {
+                              track_cli_event("CLI installation finished", Some(json!({
+                                "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
+                              }))).await;
+                            }
                             Ok(())
                         }
-                        Err(err) => Err(anyhow::anyhow!(err))
+                        Err(err) => {
+                          if !do_not_track {
+                            track_cli_event("CLI installation failed", Some(json!({
+                              "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
+                              "error": format!("{:?}", err),
+                            }))).await;
+                          }
+                            Err(anyhow::anyhow!(err))
+                        }
                     }
                 }
                 Err(err) => Err(anyhow::anyhow!(err))
@@ -420,15 +450,32 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             match settings {
                 Ok(mut settings) => {
                     settings.non_interactive = Some(false);
+                    let time = std::time::SystemTime::now();
+                    if !do_not_track {
+                      track_cli_event("CLI wizard started", Some(json!({}))).await;
+                    }
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
                         Ok(r) => {
                             info!("Wizard result: {:?}", r);
                             info!("Successfully installed IDF");
                             info!("Now you can start using IDF tools");
+                            if !do_not_track {
+                              track_cli_event("CLI wizard finished", Some(json!({
+                                "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
+                              }))).await;
+                            }
                             Ok(())
                         }
-                        Err(err) => Err(anyhow::anyhow!(err)),
+                        Err(err) => {
+                          if !do_not_track {
+                            track_cli_event("CLI wizard failed", Some(json!({
+                              "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
+                              "error": format!("{:?}", err),
+                            }))).await;
+                          }
+                          Err(anyhow::anyhow!(err))
+                        }
                     }
                 }
                 Err(err) => Err(anyhow::anyhow!(err)),

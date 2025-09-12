@@ -249,7 +249,6 @@ pub fn run() {
             show_in_folder,
             is_path_empty_or_nonexistent_command,
             is_path_idf_directory,
-            cpu_count, //move these to proper submodules
             get_app_info,
             get_system_arch,
             get_installed_versions,
@@ -265,6 +264,8 @@ pub fn run() {
             check_elevation,
             install_drivers,
             get_system_info,
+            cpu_count,
+            track_event_command,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

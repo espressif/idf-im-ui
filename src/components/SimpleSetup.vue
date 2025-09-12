@@ -213,6 +213,7 @@ export default {
     const selectedVersion = ref('latest')
     const installPath = ref('')
     const currentStep = ref(0)
+    const timeStarted = ref(null)
 
 
     // Installation progress
@@ -314,10 +315,18 @@ export default {
       installationProgress.value = 0
       currentStep.value = 0
       installMessages.value = []
+      timeStarted.value = new Date()
+
+
+      try { // tracking should never fail installation
+        await invoke("track_event_command", { name: "GUI simple installation started" });
+      } catch (error) {
+        console.warn('Failed to track event:', error);
+      }
 
       try {
       // Set up event listeners
-      unlistenProgress = await listen('installation-progress', (event) => {
+      unlistenProgress = await listen('installation-progress', async (event) => {
         const { stage, percentage, message, detail, version } = event.payload;
 
         installationProgress.value = percentage;
@@ -365,9 +374,19 @@ export default {
           currentState.value = 'error'
           errorMessage.value = message || 'Installation failed'
           errorDetails.value = detail || ''
+          try { // tracking should never fail installation
+            await invoke("track_event_command", { name: "GUI simple installation failed", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version, errorMessage: message, errorDetails: detail } });
+          } catch (error) {
+            console.warn('Failed to track event:', error);
+          }
         } else if (stage === 'complete' || percentage === 100) {
           currentState.value = 'complete'
           installationProgress.value = 100 // Ensure we show 100%
+          try { // tracking should never fail installation
+            await invoke("track_event_command", { name: "GUI simple installation succeeded", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version } });
+          } catch (error) {
+            console.warn('Failed to track event:', error);
+          }
         }
 
         // Auto-advance to complete state when we reach 100%

@@ -1,5 +1,6 @@
 use console::Style;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
+use idf_im_lib::telemetry::track_event;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use rust_i18n::t;
@@ -120,4 +121,22 @@ pub fn create_progress_bar() -> ProgressBar {
 
 pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
     pb.set_position(value);
+}
+
+const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+pub async fn track_cli_event(event_name: &str, additional_data: Option<serde_json::Value>) {
+  let info = os_info::get();
+  let system_info = format!("OS: {} {} | Architecture: {} | Kernel: {}",
+        info.os_type(),
+        info.version(),
+        info.architecture().unwrap_or("unknown"),
+        std::env::consts::ARCH
+    );
+    track_event("CLI event", serde_json::json!({
+      "event_name": event_name,
+      "system_info": system_info,
+      "eim_version": EIM_VERSION,
+      "additional_data": additional_data
+    })).await;
 }

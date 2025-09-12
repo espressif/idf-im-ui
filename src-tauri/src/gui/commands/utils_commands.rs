@@ -1,5 +1,6 @@
 use gui::ui::send_message;
 use idf_im_lib::{self, ensure_path};
+use idf_im_lib::telemetry::track_event;
 use log::{error, info};
 use serde_json::{json,Value};
 use tauri_plugin_store::StoreExt;
@@ -10,7 +11,7 @@ use std::{
 };
 use tauri::AppHandle;
 use num_cpus;
-use anyhow::Result;
+use anyhow::{Result};
 
 use crate::gui;
 use crate::gui::utils::is_path_empty_or_nonexistent;
@@ -209,9 +210,14 @@ pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
                 .unwrap_or(Value::Bool(false))
                 .clone();
 
+            let usage_statistics = store.get("usage_statistics")
+                .unwrap_or(Value::Bool(false))
+                .clone();
+
             json!({
                 "first_run": first_run,
-                "skip_welcome": skip_welcome
+                "skip_welcome": skip_welcome,
+                "usage_statistics": usage_statistics
             })
         }
         Err(_) => {
@@ -225,7 +231,7 @@ pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
 }
 
 #[tauri::command]
-pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool) {
+pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool, usageStatistics: bool) {
   let config_dir = dirs::config_dir()
         .ok_or("Failed to get config directory").unwrap()
         .join("eim");
@@ -239,9 +245,11 @@ pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcom
 
             store.set("skip_welcome".to_string(), Value::Bool(skipWelcome));
 
+            store.set("usage_statistics".to_string(), Value::Bool(usageStatistics));
+
             match store.save() {
               Ok(_) => {
-                  log::info!("App settings saved: first_run={}, skip_welcome={}", firstRun, skipWelcome);
+                  log::info!("App settings saved: first_run={}, skip_welcome={}, usage_statistics={}", firstRun, skipWelcome, usageStatistics);
               }
               Err(e) => {
                   error!("Failed to save store: {}", e);
@@ -315,7 +323,6 @@ pub fn check_elevation() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn install_drivers() -> Result<(), String> {
-    // Implementation for installing drivers
     match std::env::consts::OS {
       "windows" => {
         info!("Installing drivers...");
@@ -336,3 +343,28 @@ pub async fn install_drivers() -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_data: Option<serde_json::Value>) -> Result<(), String> {
+  let app_settings = get_app_settings(app_handle);
+  let usage_statistics = match app_settings.get("usage_statistics"){
+    Some(val) => val,
+    None => {
+      log::debug!("Usage statistics setting not found, skipping event tracking.");
+      return Ok(()) // If the setting is not found, do not track
+    }
+  };
+  if usage_statistics != &Value::Bool(true) {
+    log::debug!("Usage statistics not allowed, skipping event tracking.");
+    return Ok(());
+  }
+  let system_info = get_system_info();
+  log::debug!("System info: {}", system_info);
+  log::debug!("Track event called with name: {}", name);
+  track_event("GUI event", serde_json::json!({
+    "event_name": name,
+    "system_info": system_info,
+    "eim_version": EIM_VERSION,
+    "additional_data": additional_data
+  })).await;
+  Ok(())
+}
