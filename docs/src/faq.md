@@ -29,6 +29,22 @@ The offline installation allows you to install ESP-IDF without an internet conne
 
 ## GUI-Specific Questions
 
+### What is the new Report Issue button for?
+
+The **Report Issue** button in the footer opens a modal that helps you quickly report bugs. It gathers key system information and directs you to the GitHub issue page where you can submit a detailed bug report, including your logs.
+
+### Can I manage multiple installed ESP-IDF versions?
+
+Yes. If you have an existing installation, the welcome screen will give you the option to **Manage Installations**, which takes you to the **Version Management** dashboard. From there, you can view, rename, reinstall, and delete your different ESP-IDF environments.
+
+### Why do I see different welcome screens when I launch the installer?
+
+The installer's welcome screen is dynamic. It will adapt to your environment:
+
+  * If no installation is present, it will offer a **New Installation**.
+  * If an offline archive is detected in the same directory, it will offer an **Offline Installation**.
+  * If one or more versions are already installed, it will offer a **Manage Installations** button.
+
 ### Running Installer in Windows Sandbox
 
 If you intend to run the ESP-IDF installer within a Windows Sandbox environment, you might encounter issues if the 'WebView2 Runtime' is not present in the sandbox. The installer relies on WebView2 for its graphical user interface.

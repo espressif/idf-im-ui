@@ -60,22 +60,25 @@ eim install
 Use TOML format configuration files for reproducible installations:
 
 ```toml
-path = "/opt/esp-idf"
-esp_idf_json_path = "/opt/esp-idf/tools"
-tool_download_folder_name = "dist"
-tool_install_folder_name = "tools"
+path = "/Users/testusername/.espressif"
+idf_path = "/Users/testusername/.espressif/v5.5/esp-idf"
+esp_idf_json_path = "/Users/testusername/.espressif/tools"
+tool_download_folder_name = "/Users/testusername/.espressif/dist"
+tool_install_folder_name = "/Users/testusername/.espressif/tools"
 target = ["all"]
-idf_versions = ["v5.3.2"]
+idf_versions = ["v5.5"]
 tools_json_file = "tools/tools.json"
 idf_tools_path = "tools/idf_tools.py"
-config_file_save_path = "config.toml"
-non_interactive = false
+config_file_save_path = "eim_config.toml"
+non_interactive = true
 wizard_all_questions = false
-mirror = "https://github.com"
-idf_mirror = "https://github.com"
+mirror = "[https://github.com](https://github.com)"
+idf_mirror = "[https://github.com](https://github.com)"
 recurse_submodules = true
-install_all_prerequisites = false
+install_all_prerequisites = true
+skip_prerequisites_check = false
 ```
+
 
 Load a configuration file:
 ```bash
