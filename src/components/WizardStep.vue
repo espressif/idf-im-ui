@@ -124,7 +124,7 @@ export default {
       // 2. We're not in the installation or completion steps (currentStep < 7)
       // 3. We're not trying to navigate to a step after our current position
       if (this.currentStep > stepNumber && this.currentStep < 7) {
-        this.store.setStep(stepNumber);
+        this.store.goToStep(stepNumber);
       }
     },
     nextStep() {
