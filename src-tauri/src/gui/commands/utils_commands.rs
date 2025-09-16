@@ -166,18 +166,30 @@ pub fn cpu_count() -> usize {
 }
 
 #[tauri::command]
-pub fn scan_for_archives() -> Vec<String> {
-  let mut archives = Vec::new();
-  for entry in fs::read_dir(".").unwrap() {
-      let entry = entry.unwrap();
-      let path = entry.path();
+pub fn scan_for_archives() -> Result<Vec<String>, String> {
+    let binary = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(e) => {
+            error!("Failed to get current executable path: {}", e);
+            return Err("Failed to get current executable path".to_string());
+        }
+    };
+    let scan_dir = binary
+        .parent()
+        .ok_or("Could not get parent directory")?;
 
-      if path.extension().map(|e| e == "zst").unwrap_or(false) {
-          archives.push(path.to_str().unwrap().to_string());
-      }
-  }
+    let mut archives = Vec::new();
 
-  archives
+    for entry in fs::read_dir(scan_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+
+        if path.extension().map(|e| e == "zst").unwrap_or(false) {
+            archives.push(path.to_string_lossy().to_string());
+        }
+    }
+
+    Ok(archives)
 }
 
 #[tauri::command]
