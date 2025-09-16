@@ -399,6 +399,7 @@ export function runInstallVerification({
 
         for (let tool of toolsIndexFile.tools) {
           testRunner.output = "";
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           if (requiredTools.includes(tool.name)) {
             expect(
               tool,
