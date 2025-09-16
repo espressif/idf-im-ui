@@ -13,7 +13,8 @@
             <n-radio-group v-model:value="selected_idf_mirror" class="mirror-options" data-id="idf-mirror-radio-group">
               <div v-for="mirror in idf_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_idf_mirror === mirror.value }"
-                :data-id="`idf-mirror-option-${mirror.value}`">
+                :data-id="`idf-mirror-option-${mirror.value}`"
+                @click="selected_idf_mirror = mirror.value">
                 <n-radio :value="mirror.value" :data-id="`idf-mirror-radio-${mirror.value}`">
                   <div class="mirror-content" :data-id="`idf-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`idf-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
@@ -32,7 +33,8 @@
               data-id="tools-mirror-radio-group">
               <div v-for="mirror in tools_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_tools_mirror === mirror.value }"
-                :data-id="`tools-mirror-option-${mirror.value}`">
+                :data-id="`tools-mirror-option-${mirror.value}`"
+                @click="selected_tools_mirror = mirror.value">
                 <n-radio :value="mirror.value" :data-id="`tools-mirror-radio-${mirror.value}`">
                   <div class="mirror-content" :data-id="`tools-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`tools-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
@@ -190,6 +192,7 @@ export default {
   border-radius: 0.375rem;
   background: white;
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .mirror-option:hover {
@@ -206,6 +209,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  pointer-events: none;
 }
 
 .mirror-url {

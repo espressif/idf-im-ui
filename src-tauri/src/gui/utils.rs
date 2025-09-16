@@ -1,6 +1,4 @@
-use std::{fs, path::Path};
-
-use log::debug;
+use std::{ fs, path::Path};
 
 /// Checks if a path is empty or doesn't exist
 ///
@@ -9,7 +7,7 @@ use log::debug;
 /// - The path exists, is a directory, and is empty
 /// - The path exists, is a directory, and contains only the specified version directories
 pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
-    debug!("Checking if path is empty or non-existent: {}", path);
+    log::info!("Checking if path is empty or non-existent: {} with versions: {:?}", path, versions);
     let path = Path::new(path);
 
     // If path doesn't exist, return true
@@ -35,8 +33,11 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
                 }
                 true
             }
-            Err(_) => false, // Return false if we can't read the directory
-        }
+            Err(e) => {
+              log::error!("Failed to read directory {}: {}", path.display(), e);
+              false
+            }
+          }
     } else {
         // Path is a file which is conflicting with the directory
         false

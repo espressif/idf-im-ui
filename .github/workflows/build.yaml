@@ -556,15 +556,20 @@ jobs:
           APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
           APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+          LIBZ_SYS_STATIC: 1
+          ZLIB_STATIC: 1
         run: |
           security create-keychain -p espressif notary.keychain
           security default-keychain -s notary.keychain
           security unlock-keychain -p espressif notary.keychain
-          yarn tauri build
+          unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && yarn tauri build
 
       - name: Build GUI (macOS) - non-release
         if: startsWith(matrix.os, 'macos') && github.event_name != 'release'
-        run: yarn tauri build
+        env:
+          LIBZ_SYS_STATIC: 1
+          ZLIB_STATIC: 1
+        run: unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && yarn tauri build
 
       - name: Build GUI (non-macOS)
         if: ${{ !startsWith(matrix.os, 'macos') }}
