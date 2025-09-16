@@ -23,6 +23,11 @@ on:
         description: "The run id from which to take binaries"
         required: true
         type: string
+      update_json:
+        description: "Update offline_archives.json in S3"
+        required: false
+        type: boolean
+        default: true
 
 jobs:
   build-offline-archives:
@@ -151,6 +156,7 @@ jobs:
   update-json:
     needs: build-offline-archives
     runs-on: ubuntu-latest
+    if: ${{ inputs.update_json }}
     steps:
       - name: Download all build info artifacts
         uses: actions/download-artifact@v4
