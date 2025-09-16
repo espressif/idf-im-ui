@@ -354,20 +354,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     settings_clone.non_interactive = Some(true);
     settings_clone.install_all_prerequisites = Some(true);
 
-    // Validate installation path
-    if !is_path_empty_or_nonexistent(settings_clone.path.clone().unwrap().to_str().unwrap(), &settings_clone.clone().idf_versions.unwrap()) {
-        log::error!("Installation path not available: {:?}", settings_clone.path.clone().unwrap());
-
-        emit_installation_event(&app_handle, InstallationProgress {
-            stage: InstallationStage::Error,
-            percentage: 0,
-            message: "Installation path not available".to_string(),
-            detail: Some(format!("Path: {:?}", settings_clone.path.clone().unwrap())),
-            version: None,
-        });
-
-        return Err(format!("Installation path not available: {:?}", settings_clone.path.clone().unwrap()));
-    }
+    // Validate installation path is not needed as it's done before
 
     // Save settings to temp file
     if let Err(e) = settings_clone.save() {
@@ -913,13 +900,13 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
-pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
+pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
     println!("Starting simple setup");
     let settings = match get_locked_settings(&app_handle) {
         Ok(s) => s,
         Err(e) => {
-            emit_log_message(&app_handle, MessageLevel::Error, e);
-            return;
+            emit_log_message(&app_handle, MessageLevel::Error, e.clone());
+            return Err(e);
         }
     };
 
@@ -954,7 +941,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
                 detail: Some(format!("Missing: {}", prerequisites.join(", "))),
                 version: None,
             });
-            return;
+            return Err("Failed to install prerequisites".to_string());
         }
 
         prerequisites = check_prequisites(app_handle.clone());
@@ -969,7 +956,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
             detail: Some(format!("Please install: {}", prerequisites.join(", "))),
             version: None,
         });
-        return;
+        return Err("Prerequisites missing".to_string());
     }
 
     emit_installation_event(&app_handle, InstallationProgress {
@@ -1001,7 +988,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
                 detail: Some("Python installation failed".to_string()),
                 version: None,
             });
-            return;
+            return Err("Failed to install Python".to_string());
         }
 
         python_found = python_sanity_check(app_handle.clone(), None);
@@ -1013,10 +1000,10 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
             stage: InstallationStage::Error,
             percentage: 0,
             message: "Python not found".to_string(),
-            detail: Some("Please install Python 3.8 or later manually".to_string()),
+            detail: Some("Please install Python 3.11 manually".to_string()),
             version: None,
         });
-        return;
+        return Err("Python not found".to_string());
     }
 
     emit_installation_event(&app_handle, InstallationProgress {
@@ -1047,7 +1034,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
                 detail: Some("Could not retrieve version list from server".to_string()),
                 version: None,
             });
-            return;
+            return Err("Failed to fetch ESP-IDF versions".to_string());
         }
 
         let version = versions[0]["name"]
@@ -1079,7 +1066,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
                     detail: Some(e.to_string()),
                     version: None,
                 });
-                return;
+                return Err(e);
             }
         }
     }
@@ -1093,7 +1080,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) {
         version: settings.idf_versions.as_ref().and_then(|v| v.first().cloned()),
     });
 
-    let _res = start_installation(app_handle.clone()).await;
+    start_installation(app_handle.clone()).await
 }
 
 #[tauri::command]
