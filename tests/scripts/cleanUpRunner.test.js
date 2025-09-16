@@ -5,14 +5,13 @@ import fs from "fs";
 
 export function runCleanUp({ installFolder, toolsFolder, deleteAfterTest }) {
   describe("4- Clean up EIM folders from Runner ->", function () {
-    logger.info(
-      `Running clean up tests with deleteAfterTest: ${deleteAfterTest}`
-    );
     this.timeout(30000);
 
     after(function () {
       if (deleteAfterTest) {
-        logger.info("Running clean up function");
+        logger.info(
+          `Running clean up function with Delete After Test = ${deleteAfterTest}`
+        );
         try {
           fs.rmSync(installFolder, { recursive: true, force: true });
           logger.info(`Successfully deleted ${installFolder} folder`);

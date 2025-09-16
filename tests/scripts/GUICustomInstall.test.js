@@ -60,24 +60,36 @@ export function runGUICustomInstallTest(
     });
 
     it("01- Should show welcome page", async function () {
-      this.timeout(10000);
+      this.timeout(25000);
       // Wait for the header to be present
+      await new Promise((resolve) => setTimeout(resolve, 10000));
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
-      expect(text).to.equal("Welcome to ESP-IDF Installation Manager!");
+      expect(text, "Expected welcome text").to.equal(
+        "Welcome to ESP-IDF Installation Manager"
+      );
     });
 
     it("02- Should show expert installation option", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton("Get Started");
-      const expert = await eimRunner.findByDataId("expert-title");
-      expect(await expert.getText()).to.equal("Expert Installation");
-      expect(await expert.isDisplayed()).to.be.true;
+      await eimRunner.clickButton("Start Installation");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const header = await eimRunner.findByCSS("h1");
+      const text = await header.getText();
+      expect(text, "Expected installation setup screen").to.equal(
+        "Install ESP-IDF"
+      );
+      const custom = await eimRunner.findByText("Custom Installation");
+      expect(custom, "Expected option for custom installation").to.not.be.false;
+      expect(
+        await custom.isDisplayed(),
+        "Expected option for simplified installation"
+      ).to.be.true;
     });
 
     it("03- Should check prerequisites", async function () {
       this.timeout(20000);
-      await eimRunner.clickButton("Start Expert Setup");
+      await eimRunner.clickButton("Start Configuration Wizard");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const prerequisitesList = await eimRunner.findByDataId(
         "prerequisites-items-list"
@@ -135,19 +147,19 @@ export function runGUICustomInstallTest(
       expect(await targetESP32.getAttribute("class")).to.not.include(
         "selected"
       );
-      await eimRunner.clickButton("esp32");
+      await eimRunner.clickElement("esp32");
       expect(
         await targetAll.findElement(By.css("Div")).getAttribute("class")
       ).not.to.include("checked");
       expect(await targetESP32.getAttribute("class")).to.include("selected");
-      await eimRunner.clickButton("esp32");
+      await eimRunner.clickElement("esp32");
       expect(
         await targetAll.findElement(By.css("Div")).getAttribute("class")
       ).to.include("checked");
-      await eimRunner.clickButton("All");
+      await eimRunner.clickElement("All");
 
       for (let target of targetList) {
-        await eimRunner.clickButton(target);
+        await eimRunner.clickElement(target);
         if (target === "All") {
           expect(
             await targetAll.findElement(By.css("Div")).getAttribute("class")
@@ -174,15 +186,19 @@ export function runGUICustomInstallTest(
       }
       let IDFMaster = await eimRunner.findByDataId("version-item-master");
       expect(await IDFMaster.getAttribute("class")).to.not.include("selected");
-      await eimRunner.clickButton("master");
+      await eimRunner.clickElement("master");
       expect(await IDFMaster.getAttribute("class")).to.include("selected");
       const selectedMaster = await eimRunner.findByDataId(
         "selected-tag-master"
       );
-      await selectedMaster.findElement(By.css("button")).click();
+      let closeButton = await selectedMaster.findElement(By.css("button"));
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        closeButton
+      );
       expect(await IDFMaster.getAttribute("class")).to.not.include("selected");
       for (let version of idfVersionList) {
-        await eimRunner.clickButton(version);
+        await eimRunner.clickElement(version);
       }
 
       const selectedVersions = await eimRunner.findByText("Selected versions");
@@ -197,8 +213,10 @@ export function runGUICustomInstallTest(
       this.timeout(15000);
       await eimRunner.clickButton("Continue Installation");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const IDFMirrorsList = await eimRunner.findByDataId(
-        "idf-mirror-radio-group"
+      const IDFMirrorsList = await eimRunner.findByRelation(
+        "parent",
+        "div",
+        "ESP-IDF Repository Mirror"
       );
       let IDFMirrorsListText = await IDFMirrorsList.getText();
       for (let mirror of Object.values(IDFMIRRORS)) {
@@ -215,22 +233,33 @@ export function runGUICustomInstallTest(
       expect(await jihulabMirror.getAttribute("class")).to.not.include(
         "selected"
       );
-      await jihulabMirror.findElement(By.css("input")).click();
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        jihulabMirror
+      );
       expect(await githubMirror.getAttribute("class")).to.not.include(
         "selected"
       );
       expect(await jihulabMirror.getAttribute("class")).to.include("selected");
 
       idfMirror === "github" &&
-        (await githubMirror.findElement(By.css("input")).click());
+        (await eimRunner.driver.executeScript(
+          "arguments[0].click();",
+          githubMirror
+        ));
       idfMirror === "jihulab" &&
-        (await jihulabMirror.findElement(By.css("input")).click());
+        (await eimRunner.driver.executeScript(
+          "arguments[0].click();",
+          jihulabMirror
+        ));
     });
 
     it("08- Should show tools download mirrors", async function () {
       this.timeout(10000);
-      const toolsMirrorsList = await eimRunner.findByDataId(
-        "tools-mirror-radio-group"
+      const toolsMirrorsList = await eimRunner.findByRelation(
+        "parent",
+        "div",
+        "ESP-IDF Tools Mirror"
       );
       let toolsMirrorsListText = await toolsMirrorsList.getText();
       for (let mirror of Object.values(TOOLSMIRRORS)) {
@@ -252,7 +281,10 @@ export function runGUICustomInstallTest(
       expect(await espressifCnMirror.getAttribute("class")).to.not.include(
         "selected"
       );
-      await espressifComMirror.findElement(By.css("input")).click();
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        espressifComMirror
+      );
       expect(await githubMirror.getAttribute("class")).to.not.include(
         "selected"
       );
@@ -262,7 +294,10 @@ export function runGUICustomInstallTest(
       expect(await espressifCnMirror.getAttribute("class")).to.not.include(
         "selected"
       );
-      await espressifCnMirror.findElement(By.css("input")).click();
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        espressifCnMirror
+      );
       expect(await githubMirror.getAttribute("class")).to.not.include(
         "selected"
       );
@@ -274,11 +309,20 @@ export function runGUICustomInstallTest(
       );
 
       toolsMirror === "github" &&
-        (await githubMirror.findElement(By.css("input")).click());
+        (await eimRunner.driver.executeScript(
+          "arguments[0].click();",
+          githubMirror
+        ));
       toolsMirror === "dl_com" &&
-        (await espressifComMirror.findElement(By.css("input")).click());
+        (await eimRunner.driver.executeScript(
+          "arguments[0].click();",
+          espressifComMirror
+        ));
       toolsMirror === "dl_cn" &&
-        (await espressifCnMirror.findElement(By.css("input")).click());
+        (await eimRunner.driver.executeScript(
+          "arguments[0].click();",
+          espressifCnMirror
+        ));
     });
 
     it("09- Should show installation path", async function () {
