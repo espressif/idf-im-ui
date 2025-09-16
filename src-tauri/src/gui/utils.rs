@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{ fs, path::Path};
 
 use log::debug;
 
@@ -35,8 +35,11 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
                 }
                 true
             }
-            Err(_) => false, // Return false if we can't read the directory
-        }
+            Err(e) => {
+              log::error!("Failed to read directory {}: {}", path.display(), e);
+              false
+            }
+          }
     } else {
         // Path is a file which is conflicting with the directory
         false

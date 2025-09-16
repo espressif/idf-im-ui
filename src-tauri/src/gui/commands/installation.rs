@@ -354,7 +354,20 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     settings_clone.non_interactive = Some(true);
     settings_clone.install_all_prerequisites = Some(true);
 
-    // Validate installation path is not needed as it's done before
+    // Validate installation path
+    if !is_path_empty_or_nonexistent(settings_clone.path.clone().unwrap().to_str().unwrap(), &settings_clone.clone().idf_versions.unwrap()) {
+        log::error!("Installation path not available: {:?}", settings_clone.path.clone().unwrap());
+
+        emit_installation_event(&app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: "Installation path not available".to_string(),
+            detail: Some(format!("Path: {:?}", settings_clone.path.clone().unwrap())),
+            version: None,
+        });
+
+        return Err(format!("Installation path not available: {:?}", settings_clone.path.clone().unwrap()));
+    }
 
     // Save settings to temp file
     if let Err(e) = settings_clone.save() {
