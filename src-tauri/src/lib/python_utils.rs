@@ -398,7 +398,7 @@ fn detect_python_version(python_executable: &str) -> Result<String, String> {
     }
 }
 
-/// Finds the appropriate wheel directory for the detected Python version from offline installation archive.
+/// Finds the appropriate wheel directory for the detected Python version
 ///
 /// # Arguments
 /// * `offline_archive_dir` - Base offline archive directory
@@ -407,15 +407,21 @@ fn detect_python_version(python_executable: &str) -> Result<String, String> {
 /// # Returns
 /// * `Option<PathBuf>` - Path to the appropriate wheel directory, or None if not found
 fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Option<PathBuf> {
-    // Convert "3.11" to "py311" format
-    let version_suffix = python_version.replace('.', "");
-    let versioned_wheel_dir = offline_archive_dir.join(format!("wheels_{}", version_suffix));
+    // Try different naming formats
+    let possible_formats = vec![
+        format!("wheels_py{}", python_version.replace('.', "")),
+        format!("wheels_py{}", python_version.replace('.', "_")),
+        format!("wheels_py{}", python_version.replace(".", "_")),
+    ];
 
-    debug!("Looking for wheels in: {}", versioned_wheel_dir.display());
+    for format_name in possible_formats {
+        let versioned_wheel_dir = offline_archive_dir.join(&format_name);
+        debug!("Looking for wheels in: {}", versioned_wheel_dir.display());
 
-    if versioned_wheel_dir.exists() {
-        info!("Found Python {}-specific wheel directory: {}", python_version, versioned_wheel_dir.display());
-        return Some(versioned_wheel_dir);
+        if versioned_wheel_dir.exists() {
+            info!("Found Python {}-specific wheel directory: {}", python_version, versioned_wheel_dir.display());
+            return Some(versioned_wheel_dir);
+        }
     }
 
     // Fallback: try the old "wheels" directory for backward compatibility

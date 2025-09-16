@@ -12,7 +12,10 @@ use idf_im_lib::utils::parse_cmake_version;
 use idf_im_lib::verify_file_checksum;
 use idf_im_lib::ProgressMessage;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
-use log::{debug, info, warn, error};
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
@@ -209,7 +212,7 @@ async fn download_wheels_for_python_versions(
 
         // Create version-specific directories
         let python_env = archive_dir.join(format!("python_env_{}", python_version.replace('.', "_")));
-        let wheel_dir = archive_dir.join(format!("wheels_py{}", python_version.replace('.', "_")));
+        let wheel_dir = archive_dir.join(format!("wheels_py{}", python_version.replace('.', "")));
 
         // Ensure directories exist
         ensure_path(python_env.to_str().unwrap())
