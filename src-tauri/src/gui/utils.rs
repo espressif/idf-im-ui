@@ -1,7 +1,5 @@
 use std::{ fs, path::Path};
 
-use log::debug;
-
 /// Checks if a path is empty or doesn't exist
 ///
 /// Returns true if:
@@ -9,7 +7,7 @@ use log::debug;
 /// - The path exists, is a directory, and is empty
 /// - The path exists, is a directory, and contains only the specified version directories
 pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
-    debug!("Checking if path is empty or non-existent: {}", path);
+    log::info!("Checking if path is empty or non-existent: {} with versions: {:?}", path, versions);
     let path = Path::new(path);
 
     // If path doesn't exist, return true
