@@ -36,6 +36,7 @@ use log4rs::encode::pattern::PatternEncoder;
 use idf_im_lib::get_log_directory;
 
 pub const PYTHON_VERSION: &str = "3.11";
+pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13"];
 
 fn setup_logging(verbose: u8) -> anyhow::Result<()> {
     let log_file_name = get_log_directory()
@@ -165,6 +166,159 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
+/// Downloads wheels for multiple Python versions
+///
+/// # Arguments
+/// * `archive_dir` - Base directory for the archive
+/// * `requirements_path` - Path to the requirements file
+/// * `constraint_file` - Path to the constraints file
+/// * `python_versions` - List of Python versions to download wheels for
+///
+/// # Returns
+/// `Result<(), String>` - Ok(()) on success, error message on failure
+async fn download_wheels_for_python_versions(
+    archive_dir: &Path,
+    requirements_path: &Path,
+    constraint_file: &Path,
+    python_versions: &[&str],
+) -> Result<(), String> {
+    info!("Downloading wheels for Python versions: {:?}", python_versions);
+
+    // First, ensure all Python versions are installed
+    for python_version in python_versions {
+        info!("Installing Python {}...", python_version);
+        match execute_command("uv", &["python", "install", python_version]) {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Python {} installed successfully.", python_version);
+                } else {
+                    warn!(
+                        "Python {} might already be installed or failed to install: {}",
+                        python_version,
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    // Continue anyway, it might already be installed
+                }
+            }
+            Err(err) => {
+                error!("Failed to install Python {}: {}", python_version, err);
+                return Err(format!("Failed to install Python {}: {}", python_version, err));
+            }
+        }
+    }
+
+    for python_version in python_versions {
+        info!("Processing Python version: {}", python_version);
+
+        // Create version-specific directories
+        let python_env = archive_dir.join(format!("python_env_{}", python_version.replace('.', "_")));
+        let wheel_dir = archive_dir.join(format!("wheels_py{}", python_version.replace('.', "")));
+
+        // Ensure directories exist
+        ensure_path(python_env.to_str().unwrap())
+            .map_err(|e| format!("Failed to create Python env directory for {}: {}", python_version, e))?;
+        ensure_path(wheel_dir.to_str().unwrap())
+            .map_err(|e| format!("Failed to create wheel directory for {}: {}", python_version, e))?;
+
+        info!("Creating virtual environment for Python {}...", python_version);
+
+        // Create virtual environment for this Python version
+        match execute_command(
+            "uv",
+            &[
+                "venv",
+                "--relocatable",
+                "--python",
+                python_version,
+                python_env.to_str().unwrap(),
+            ],
+        ) {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Python {} virtual environment created successfully.", python_version);
+                } else {
+                    error!(
+                        "Failed to create Python {} virtual environment: {}",
+                        python_version,
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    continue; // Skip this version and continue with others
+                }
+            }
+            Err(err) => {
+                error!("Failed to create venv for Python {}: {}", python_version, err);
+                continue; // Skip this version and continue with others
+            }
+        }
+
+        // Determine Python executable path
+        let python_executable = match std::env::consts::OS {
+            "windows" => python_env.join("Scripts/python.exe"),
+            _ => python_env.join("bin/python"),
+        };
+
+        // Ensure pip is available
+        info!("Ensuring pip is available for Python {}...", python_version);
+        match execute_command(
+            python_executable.to_str().unwrap(),
+            &["-m", "ensurepip", "--upgrade"],
+        ) {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Successfully ensured pip for Python {}.", python_version);
+                } else {
+                    warn!(
+                        "Failed to upgrade pip for Python {}: {}",
+                        python_version,
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    // Continue anyway, pip might already be available
+                }
+            }
+            Err(err) => {
+                warn!("Failed to ensure pip for Python {}: {}", python_version, err);
+                // Continue anyway
+            }
+        }
+
+        // Download wheels for this Python version
+        info!("Downloading wheels for Python {}...", python_version);
+        match execute_command(
+            python_executable.to_str().unwrap(),
+            &[
+                "-m",
+                "pip",
+                "download",
+                "-r",
+                requirements_path.to_str().unwrap(),
+                "-c",
+                constraint_file.to_str().unwrap(),
+                "--dest",
+                wheel_dir.to_str().unwrap(),
+            ],
+        ) {
+            Ok(output) => {
+                if output.status.success() {
+                    info!("Python {} packages downloaded successfully.", python_version);
+                } else {
+                    error!(
+                        "Failed to download Python {} packages: {}",
+                        python_version,
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                    // Continue with other versions even if one fails
+                }
+            }
+            Err(err) => {
+                error!("Failed to download packages for Python {}: {}", python_version, err);
+                // Continue with other versions even if one fails
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Parser, Debug)]
 #[command(
     name = "offline_installer_builder",
@@ -199,6 +353,11 @@ struct Args {
         default_value = PYTHON_VERSION,
     )]
     python_version: Option<String>,
+
+    /// Python versions to download wheels for (comma-separated, e.g., "3.10,3.11,3.12")
+    /// If not specified, uses all supported versions for POSIX systems, single version for Windows
+    #[arg(long, value_delimiter = ',')]
+    wheel_python_versions: Option<Vec<String>>,
 }
 
 #[tokio::main]
@@ -244,6 +403,19 @@ async fn main() {
         let archive_dir = TempDir::new().expect("Failed to create temporary directory");
         let global_python_version = args.python_version.unwrap_or_else(|| PYTHON_VERSION.to_string());
         info!("Using Python version: {}", global_python_version);
+
+        // Determine which Python versions to download wheels for
+        let wheel_python_versions: Vec<String> = if let Some(versions) = args.wheel_python_versions {
+            versions
+        } else {
+            // Default behavior: for Windows, use single version; for POSIX, use all supported
+            match std::env::consts::OS {
+                "windows" => vec![global_python_version.clone()],
+                _ => SUPPORTED_PYTHON_VERSIONS.iter().map(|s| s.to_string()).collect(),
+            }
+        };
+
+        info!("Will download wheels for Python versions: {:?}", wheel_python_versions);
 
         // Download prerequisities and python
         match std::env::consts::OS {
@@ -473,125 +645,29 @@ async fn main() {
                     idf_version
                 );
             }
-            // download python packages
-            let python_env = archive_dir.path().clone().join("python_env");
-            match ensure_path(python_env.to_str().unwrap()) {
-                Ok(_) => {
-                    info!("Python environment directory created: {:?}", python_env);
-                }
-                Err(err) => {
-                    error!("Failed to create Python environment directory: {}", err);
-                    return;
-                }
-            }
-            match execute_command(
-            "uv",
-              &[
-                  "python", "install", &global_python_version
-              ],
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Python {} installed successfully.", global_python_version);
-                  } else {
-                      error!(
-                          "Failed to install Python {}: {}",
-                          global_python_version,
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
-            };
-            match execute_command(
-            "uv",
-              &[
-                  "venv", "--relocatable", "--python", &global_python_version, python_env.clone().to_str().unwrap()
-              ],
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Python virtual environment created successfully.");
-                  } else {
-                      error!(
-                          "Failed to create Python virtual environment: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
-            }
-            let wheel_dir = archive_dir.path().join("wheels");
-            ensure_path(wheel_dir.to_str().unwrap()).expect("Failed to ensure path for wheel files");
+
+            // Merge requirements files
             let requirements_dir = idf_path.join("tools").join("requirements");
             if let Err(e) = merge_requirements_files(&requirements_dir) {
                 error!("Failed to merge requirements files: {}", e);
                 return;
             }
 
-            let python_executable = match std::env::consts::OS {
-                "windows" => python_env.join("Scripts/python.exe"),
-                _ => python_env.join("bin/python"),
-            };
+            // Download wheels for multiple Python versions
+            let requirements_file = requirements_dir.join("requirements.merged.txt");
+            let constraint_file = constraint_file.unwrap();
 
-            match execute_command(
-            python_executable.to_str().unwrap(),
-              &[
-                  "-m", "ensurepip", "--upgrade"
-              ]
-            ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Successfully installed pip.");
-                  } else {
-                      error!(
-                          "Failed to upgrade pip: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
+            let wheel_versions: Vec<&str> = wheel_python_versions.iter().map(|s| s.as_str()).collect();
+
+            if let Err(e) = download_wheels_for_python_versions(
+                archive_dir.path(),
+                &requirements_file,
+                &constraint_file,
+                &wheel_versions,
+            ).await {
+                error!("Failed to download wheels: {}", e);
+                return;
             }
-
-
-
-            match execute_command(
-                python_executable.to_str().unwrap(),
-              &[
-                  "-m", "pip", "download",
-                  "-r", requirements_dir.join("requirements.merged.txt").to_str().unwrap(),
-                  "-c", constraint_file.unwrap().to_str().unwrap(),
-                  "--dest", wheel_dir.to_str().unwrap(),
-              ],
-          ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!("Python packages downloaded successfully.");
-                  } else {
-                      error!(
-                          "Failed to download Python packages: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      return;
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to execute command: {}", err);
-                  return;
-              }
-          };
         }
 
         settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));

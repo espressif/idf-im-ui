@@ -368,6 +368,88 @@ pub fn pip_install_requirements(
     }
 }
 
+/// Detects the Python version being used in the virtual environment
+///
+/// # Arguments
+/// * `python_executable` - Path to the Python executable
+///
+/// # Returns
+/// * `Result<String, String>` - Python version string (e.g., "3.11") or error
+fn detect_python_version(python_executable: &str) -> Result<String, String> {
+    use crate::command_executor::execute_command;
+
+    match execute_command(python_executable, &["--version"]) {
+        Ok(output) => {
+            if output.status.success() {
+                let version_output = String::from_utf8_lossy(&output.stdout);
+                // Parse "Python 3.11.x" to get "3.11"
+                if let Some(version_part) = version_output.split_whitespace().nth(1) {
+                    let version_parts: Vec<&str> = version_part.split('.').collect();
+                    if version_parts.len() >= 2 {
+                        return Ok(format!("{}.{}", version_parts[0], version_parts[1]));
+                    }
+                }
+                Err(format!("Could not parse Python version from: {}", version_output))
+            } else {
+                Err(format!("Failed to get Python version: {}", String::from_utf8_lossy(&output.stderr)))
+            }
+        }
+        Err(e) => Err(format!("Failed to execute Python version check: {}", e))
+    }
+}
+
+/// Finds the appropriate wheel directory for the detected Python version
+///
+/// # Arguments
+/// * `offline_archive_dir` - Base offline archive directory
+/// * `python_version` - Python version string (e.g., "3.11")
+///
+/// # Returns
+/// * `Option<PathBuf>` - Path to the appropriate wheel directory, or None if not found
+fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Option<PathBuf> {
+    // Try different naming formats
+    let possible_formats = vec![
+        format!("wheels_py{}", python_version.replace('.', "")),
+        format!("wheels_py{}", python_version.replace('.', "_")),
+        format!("wheels_py{}", python_version.replace(".", "_")),
+    ];
+
+    for format_name in possible_formats {
+        let versioned_wheel_dir = offline_archive_dir.join(&format_name);
+        debug!("Looking for wheels in: {}", versioned_wheel_dir.display());
+
+        if versioned_wheel_dir.exists() {
+            info!("Found Python {}-specific wheel directory: {}", python_version, versioned_wheel_dir.display());
+            return Some(versioned_wheel_dir);
+        }
+    }
+
+    // Fallback: try the old "wheels" directory for backward compatibility
+    let legacy_wheel_dir = offline_archive_dir.join("wheels");
+    if legacy_wheel_dir.exists() {
+        warn!("Using legacy wheel directory (may not be compatible): {}", legacy_wheel_dir.display());
+        return Some(legacy_wheel_dir);
+    }
+
+    // List available wheel directories for debugging
+    if let Ok(entries) = std::fs::read_dir(offline_archive_dir) {
+        let wheel_dirs: Vec<String> = entries
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| {
+                entry.file_name().to_string_lossy().starts_with("wheels_")
+            })
+            .map(|entry| entry.file_name().to_string_lossy().to_string())
+            .collect();
+
+        if !wheel_dirs.is_empty() {
+            warn!("Available wheel directories: {:?}", wheel_dirs);
+            warn!("Could not find wheels for Python {}, you might need to rebuild the offline archive with this Python version", python_version);
+        }
+    }
+
+    None
+}
+
 /// Installs or updates the Python virtual environment for a specific ESP-IDF version.
 ///
 /// This asynchronous function orchestrates the creation of a Python virtual environment,
@@ -388,6 +470,8 @@ pub fn pip_install_requirements(
 /// * `features` - A slice of `String`s, where each string represents an additional
 ///   feature whose Python requirements should be installed (e.g., "esp_gh_action").
 ///   These correspond to files like `requirements_esp_gh_action.txt`.
+/// * `offline_archive_dir` - Optional path to offline archive directory containing
+///   pre-downloaded wheels and constraints files.
 ///
 /// # Returns
 ///
@@ -519,13 +603,32 @@ pub async fn install_python_env(
           }
       }
     };
-    //
-    // install the requirements from files
+
+    // Determine the appropriate wheel directory for offline mode
     let wheel_dir = if offline_mode {
-        Some(offline_archive_dir.unwrap().join("wheels"))
+        let archive_dir = offline_archive_dir.unwrap();
+
+        // Detect the Python version being used
+        let python_version = detect_python_version(&python_executable)
+            .map_err(|e| format!("Failed to detect Python version: {}", e))?;
+
+        info!("Detected Python version: {}", python_version);
+
+        // Find the appropriate wheel directory
+        match find_wheel_directory(archive_dir, &python_version) {
+            Some(wheel_path) => Some(wheel_path),
+            None => {
+                return Err(format!(
+                    "No compatible wheel directory found for Python {}. Available wheel directories should be named like 'wheels_py311', 'wheels_py312', etc.",
+                    python_version
+                ));
+            }
+        }
     } else {
         None
     };
+
+    // install the requirements from files
     for requirements_file in requirements_file_list {
         match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir) {
             Ok(_) => {
