@@ -8,6 +8,7 @@
   - [Expert Installation (GUI)](./expert_installation.md)
   - [Command Line Installation](./cli_installation.md)
   - [Offline Installation](./offline_installation.md)
+  - [Offline Archive Builder](./offline_archive_builder.md)
 - [Configuration](./configuration.md)
   - [GUI Configuration](./gui_configuration.md)
   - [CLI Configuration](./cli_configuration.md)

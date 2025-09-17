@@ -42,3 +42,7 @@ On Windows, the offline installer will automatically install the necessary prere
 
 > **Important Note on Python Version**
 > The offline installation currently **only supports Python 3.11**. Please ensure you have Python 3.11 installed and available in your system's PATH before starting the installation. This applies to all operating systems.
+
+## Creating Your Own Offline Archive
+
+If you need to create a custom offline installer with specific ESP-IDF versions or configurations, you can use the **Offline Archive Builder** tool. For more information, see the [Offline Archive Builder](./offline_archive_builder.md) documentation.
