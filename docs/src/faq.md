@@ -2,6 +2,24 @@
 
 ## General Questions
 
+### What about my privacy? Do you collect any data?
+
+To help us improve the ESP-IDF Installation Manager, we collect some anonymous usage data. We are transparent about what we collect and you can opt-out at any time.
+
+We collect:
+- **Environment / System Info**: OS & version, architecture, and app version.
+- **User Flows**: Whether you used online or offline installation.
+- **Usage Tracking**: Selected ESP-IDF version and installation time.
+- **Error & Failure Tracking**: Failed installation steps and error messages.
+
+This data is anonymous and helps us debug issues and prioritize features.
+
+**How to disable it:**
+- **GUI**: Uncheck the telemetry checkbox on the welcome screen.
+- **CLI**: Use the `--do-not-track true` flag.
+
+For more details, see the "Privacy and Data Collection" section in our documentation.
+
 ### Where can I find more information about ESP-IDF?
 - [ESP-IDF Documentation](https://docs.espressif.com/projects/esp-idf/en/latest/)
 - [ESP-IDF Forum](https://www.esp32.com/viewforum.php?f=20)

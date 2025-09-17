@@ -88,3 +88,34 @@ If you need help with EIM:
 - Check the [FAQ](./faq.md) for common questions
 - Visit the [ESP32 forum](https://esp32.com/) for community support
 - Open an issue on [GitHub](https://github.com/espressif/idf-im-ui/issues) for bug reports
+
+## Privacy and Data Collection
+
+To help us improve the ESP-IDF Installation Manager, we collect some anonymous usage data. We are committed to transparency and want you to be fully informed about what data we collect and how to opt-out.
+
+### What data do we collect?
+
+We collect the following information to understand how the installer is used and to identify areas for improvement:
+
+- **Environment / System Info**
+  - OS & version (Windows, macOS, Linux)
+  - Architecture (x64, ARM, etc.)
+  - App version (EIM version)
+- **User Flows**
+  - Online Installation
+  - Offline Installation
+- **Usage Tracking**
+  - Which ESP-IDF version was selected for installation
+  - Time taken for the installation
+- **Error & Failure Tracking**
+  - Installation step that failed
+  - Error message related to the failure
+
+This data is completely anonymous and does not contain any personal information.
+
+### How to disable data collection?
+
+You have full control over data collection.
+
+- **GUI**: On the welcome page of the installer, you will find a checkbox to disable telemetry. Unchecking this box will completely prevent any data from being sent.
+- **CLI**: When using the command-line interface, you can use the `--do-not-track true` flag to disable telemetry for that session.
