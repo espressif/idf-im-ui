@@ -15,6 +15,7 @@ These options can be used with any command:
 - `-l, --locale <LOCALE>`: Set the language for the wizard (en, cn)
 - `-v, --verbose`: Increase verbosity level (can be used multiple times)
 - `--log-file <LOG_FILE>`: File in which logs will be stored (default: eim.log)
+- `--do-not-track <DO_NOT_TRACK>`: If set to true, the installer will not send any usage data. Default is false. [possible values: true, false]
 - `-h, --help`: Print help information
 - `-V, --version`: Print version information
 

@@ -13,6 +13,10 @@ From the initial screen, you have the following choices to begin a new installat
   * **Load Configuration**: A button that allows you to load a configuration file from your computer to automate the setup process.
   * **Offline Installation**: If an offline installer archive (`.zst` file) is detected in the same folder as the installer, this option becomes available to perform the installation without an internet connection.
 
+## Privacy Settings
+
+On the welcome screen, you will find a checkbox to control usage data tracking. By default, the installer collects anonymous data to help us improve the product. If you wish to disable this, simply uncheck the box. For more details on what data is collected, please see the [Privacy and Data Collection section in General Information](./general_info.md#privacy-and-data-collection).
+
 ## Simplified Installation
 
 The simplified installation uses default settings optimized for most users. While it requires minimal configuration, you can still:
