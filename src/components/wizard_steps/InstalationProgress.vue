@@ -54,6 +54,20 @@
           <h3>Current Activity:</h3>
           <div class="activity-status">{{ currentActivity }}</div>
           <div v-if="currentDetail" class="activity-detail">{{ currentDetail }}</div>
+          <div v-if="installationPlan && installationPlan.total_versions > 1" class="multi-version-progress">
+            <div class="version-overview">
+              Installing {{ installationPlan.total_versions }} versions:
+              <span v-for="(version, index) in installationPlan.versions" :key="version"
+                    class="version-indicator"
+                    :class="{
+                      'completed': completedVersions.includes(version),
+                      'active': index === currentVersionIndex,
+                      'pending': !completedVersions.includes(version) && index !== currentVersionIndex
+                    }">
+                {{ version }}
+              </span>
+            </div>
+          </div>
         </div>
 
         <div class="progress-section">
@@ -212,6 +226,7 @@ export default {
     // Event listeners
     unlistenProgress: undefined,
     unlistenLog: undefined,
+    unlistenPlan: undefined,
 
     // Installation state
     installation_running: false,
@@ -220,11 +235,11 @@ export default {
     error_message: "",
 
     // Progress tracking
-    // currentProgress: 0,
-    // currentActivity: "Preparing installation...",
-    // currentDetail: "",
     currentStep: 0,
     currentStage: 'checking',
+    installationPlan: null,
+    currentVersionIndex: 0,
+    completedVersions: [],
 
     // Version tracking
     current_version: null,
@@ -323,7 +338,20 @@ export default {
         console.log('Log message received:', event.payload);
         this.handleLogMessage(event.payload);
       });
+      this.unlistenPlan = await listen('installation-plan', (event) => {
+        this.handleInstallationPlan(event.payload);
+      });
     },
+
+    handleInstallationPlan: function(plan) {
+      this.installationPlan = plan;
+      if (plan.current_version_index !== null && plan.current_version_index !== undefined) {
+        this.currentVersionIndex = plan.current_version_index;
+      }
+
+      console.log('Installation plan received:', plan);
+    },
+
 
     handleProgressEvent: function (payload) {
       const { stage, percentage, message, detail, version } = payload;
@@ -368,7 +396,12 @@ export default {
         case 'python': newStep = 5; break;
         case 'configure': newStep = 6; break;
         case 'complete':
+          if (version && !this.completedVersions.includes(version)) {
+            this.completedVersions.push(version);
+          }
+
           newStep = 7;
+          // The backend already decided this is a completion event, so handle it
           this.handleInstallationComplete(version);
           break;
         case 'error':
@@ -772,6 +805,10 @@ export default {
       if (this.unlistenLog) {
         this.unlistenLog();
         this.unlistenLog = null;
+      }
+      if (this.unlistenPlan) {
+        this.unlistenPlan();
+        this.unlistenPlan = null;
       }
 
       // Clean up non-reactive reference
@@ -1285,5 +1322,44 @@ tr > td:first-child {
 .n-tab-pane {
   max-height: 300px;
   overflow-y: auto;
+}
+.multi-version-progress {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+.version-overview {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.version-indicator {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  margin: 0.25rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.version-indicator.completed {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.version-indicator.active {
+  background-color: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.version-indicator.pending {
+  background-color: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #cbd5e1;
 }
 </style>
