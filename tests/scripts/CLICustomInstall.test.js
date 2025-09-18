@@ -54,6 +54,8 @@ export function runCLICustomInstallTest({
       } catch (error) {
         logger.info("Error to clean up terminal after test");
         logger.info(` Error: ${error}`);
+      } finally {
+        testRunner = null;
       }
       try {
         await proxy.stop();
@@ -71,7 +73,7 @@ export function runCLICustomInstallTest({
 
     it("Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
-      testRunner.sendInput(`${pathToEim} install ${args.join(" ")}\r`);
+      testRunner.sendInput(`${pathToEim} install ${args.join(" ")}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (args.includes("-n false")) {
         const startTime = Date.now();

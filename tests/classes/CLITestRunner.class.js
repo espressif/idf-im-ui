@@ -28,7 +28,7 @@ class CLITestRunner {
           ? `source ${loadScript}`
           : `. "${loadScript}"`;
       logger.debug(`Script load command sent to terminal ${loadCommand}`);
-      this.sendInput(`${loadCommand}\r`);
+      this.sendInput(`${loadCommand}`);
       const startTime = Date.now();
       while (Date.now() - startTime < timeout) {
         if (!this.exited && !this.error && this.output.includes("(venv)")) {
@@ -107,7 +107,6 @@ class CLITestRunner {
       let cleanData = stripAnsi(data);
       cleanData = cleanData.replace(/\\[\r\n]+/g, "");
       cleanData = cleanData.replace(/[\r\n]+/g, "");
-      logger.debug(cleanData);
       this.output += cleanData;
       this.lastDataTimestamp = Date.now();
     });
@@ -150,7 +149,8 @@ class CLITestRunner {
     logger.debug(`Attempting to send ${input.replace(/\r$/, "")} to terminal`);
     if (this.process && !this.exited) {
       try {
-        this.process.write(input);
+        const lineEnding = os.platform() !== "win32" ? "\n" : "\r";
+        this.process.write(`${input}${lineEnding}`);
       } catch (error) {
         logger.info(`Error sending input:>>${error}<<`);
         this.error = error;
@@ -189,7 +189,7 @@ class CLITestRunner {
   async stop(timeout = 3000) {
     if (this.process && !this.exited) {
       try {
-        this.sendInput("exit\r");
+        this.sendInput("exit");
         const exitTime = Date.now();
         while (Date.now() - exitTime < timeout) {
           if (this.exited) {
@@ -199,9 +199,9 @@ class CLITestRunner {
           await new Promise((resolve) => setTimeout(resolve, 200));
         }
         logger.info("Terminal didn't exit gracefully, repeat Attempt");
-        this.sendInput("\x03");
-        this.sendInput("\x03");
-        this.sendInput("exit\r");
+        this.process.write("\x03");
+        this.process.write("\x03");
+        this.sendInput("exit");
         const closeTime = Date.now();
         while (Date.now() - closeTime < timeout) {
           if (this.exited) {

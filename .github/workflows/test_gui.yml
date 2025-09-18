@@ -135,6 +135,12 @@ jobs:
         run: |
           ls ./artifacts/
 
+      - name: Update Python (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -151,16 +157,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'self-hosted'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
           cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-Windows)
@@ -299,6 +308,12 @@ jobs:
         run: |
           ls ./artifacts/
 
+      - name: Update Python (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Update WebView2 Runtime
         if: matrix.os == 'windows-latest'
         run: |
@@ -331,11 +346,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-Windows)

@@ -34,7 +34,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
       testRunner = new InteractiveCLITestRunner();
       try {
         await testRunner.start();
-        testRunner.sendInput(`${pathToEim}\r`);
+        testRunner.sendInput(`${pathToEim}`);
       } catch (error) {
         logger.info(`Error starting process: ${error}`);
         logger.info(` Error: ${error}`);
@@ -112,7 +112,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
             "EIM did not offer to install the missing prerequisites"
           ).to.be.true;
 
-          testRunner.sendInput("n");
+          testRunner.sendInput("");
 
           const terminalExited = await testRunner.waitForOutput(
             "Please install the missing prerequisites and try again"

@@ -32,7 +32,7 @@ describe("Check Pre-requisites installation on Windows ->", function () {
     testRunner = new InteractiveCLITestRunner();
     try {
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim}\r`);
+      testRunner.sendInput(`${pathToEim}`);
     } catch (error) {
       logger.info(`Error starting process: ${error}`);
       logger.info(` Error: ${error}`);
