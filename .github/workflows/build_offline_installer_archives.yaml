@@ -9,6 +9,10 @@ on:
       run_id:
         required: true
         type: string
+      update_json:
+        required: false
+        type: boolean
+        default: true
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -62,7 +66,7 @@ jobs:
       - name: Download eim artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: eim-cli-${{ matrix.package_name }}-*
+          pattern: eim-gui-${{ matrix.package_name }}-*
           merge-multiple: true
           path: ./
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -102,9 +106,9 @@ jobs:
 
           # Create the README.md file with installation instructions based on the OS.
           if [ "${{ runner.os }}" = "Windows" ]; then
-            README_CONTENT="To install, use Powershell and run the following command in the terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`"
+            README_CONTENT="You can install the application by simply launching the GUI app named **eim**.\n\nAlternatively, if you prefer using the command line, open PowerShell and run:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`\n\nWhen using the GUI, the offline installer archive will be offered on the welcome screen. You can also find it manually under the **Install New Version** section."
           else
-            README_CONTENT="To install, run the following command in your terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`"
+            README_CONTENT="You can install the application by simply launching the GUI app named **eim**.\n\nAlternatively, if you prefer using the command line, run the following in your terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`\n\nWhen using the GUI, the offline installer archive will be offered on the welcome screen. You can also find it manually under the **Install New Version** section."
           fi
           echo -e "$README_CONTENT" > README.md
 
