@@ -41,7 +41,7 @@ eim install --use-local-archive PATH_TO_ARCHIVE
 On Windows, the offline installer will automatically install the necessary prerequisites (Git and Python) if they are not found. On macOS and Linux, you must have the required prerequisites installed on your system before running the offline installer.
 
 > **Important Note on Python Version**
-> The offline installation currently **only supports Python 3.11**. Please ensure you have Python 3.11 installed and available in your system's PATH before starting the installation. This applies to all operating systems.
+> The offline installation currently **only supports Python 3.11 to 3.13**. Please ensure you have a compatible Python version installed and available in your system's PATH before starting the installation.
 
 ## Creating Your Own Offline Archive
 
