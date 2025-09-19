@@ -13,6 +13,7 @@
             "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
         }
         "deleteAfterTest": true        // Whether to remove IDF installation folder and IDF tools folder after test
+        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log", false
 
  */
 

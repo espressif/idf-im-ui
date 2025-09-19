@@ -60,6 +60,7 @@ export function runInstallVerification({
        *
        */
       logger.info(`Validating eim_idf.json file contents`);
+      logger.debug(`EIM Json file path: ${eimJsonFilePath}`);
       expect(
         fs.existsSync(eimJsonFilePath),
         "eim-idf.json file not found on the tools folder."
@@ -67,6 +68,7 @@ export function runInstallVerification({
       const eimJsonContent = JSON.parse(
         fs.readFileSync(eimJsonFilePath, "utf-8")
       );
+      logger.debug(`EIM Json file content: ${eimJsonContent}`);
       expect(
         eimJsonContent,
         "Content of eim_ide.json is not an object"
@@ -158,6 +160,7 @@ export function runInstallVerification({
       const eimJsonContent = JSON.parse(
         fs.readFileSync(eimJsonFilePath, "utf-8")
       );
+      logger.debug(`EIM Json file content: ${eimJsonContent}`);
 
       for (let idf of idfList) {
         let eimJsonEntry = null;
@@ -168,7 +171,7 @@ export function runInstallVerification({
             break;
           }
         }
-
+        logger.debug(`EIM Json entry for IDF ${idf}: ${eimJsonEntry}`);
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
           .be.null;
 
@@ -255,7 +258,7 @@ export function runInstallVerification({
             eimJsonEntry.path,
             "tools",
             "check_python_dependencies.py"
-          )} -r ${pythonRequirementPath}\r`
+          )} -r ${pythonRequirementPath}`
         );
         const satisfiedReqs = await testRunner.waitForOutput(
           "Python requirements are satisfied"
@@ -399,6 +402,7 @@ export function runInstallVerification({
 
         for (let tool of toolsIndexFile.tools) {
           testRunner.output = "";
+          await new Promise((resolve) => setTimeout(resolve, 1000));
           if (requiredTools.includes(tool.name)) {
             expect(
               tool,
@@ -410,7 +414,7 @@ export function runInstallVerification({
             ).to.have.property("version_cmd");
 
             if (tool.version_cmd.join(" ") !== "") {
-              testRunner.sendInput(`${tool.version_cmd.join(" ")}\r`);
+              testRunner.sendInput(`${tool.version_cmd.join(" ")}`);
               let toolVersionOutput = await testRunner.waitForOutput(
                 `${tool.versions[0].name}`,
                 20000
@@ -488,16 +492,16 @@ export function runInstallVerification({
           throw new Error("Error starting IDF Terminal");
         }
 
-        testRunner.sendInput(`mkdir ${pathToProjectFolder}\r`);
+        testRunner.sendInput(`mkdir ${pathToProjectFolder}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
 
-        testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
+        testRunner.sendInput(`cd ${pathToProjectFolder}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         testRunner.sendInput(
           os.platform() !== "win32"
-            ? `cp -r $IDF_PATH/examples/get-started/hello_world .\r`
-            : `xcopy /E /I $env:IDF_PATH\\examples\\get-started\\hello_world hello_world\r`
+            ? `cp -r $IDF_PATH/examples/get-started/hello_world .`
+            : `xcopy /E /I $env:IDF_PATH\\examples\\get-started\\hello_world hello_world`
         );
         if (os.platform() === "win32") {
           const confirmFilesCopied = await testRunner.waitForOutput("copied");
@@ -506,9 +510,9 @@ export function runInstallVerification({
 
         testRunner.output = "";
         2;
-        testRunner.sendInput("cd hello_world\r");
+        testRunner.sendInput("cd hello_world");
         await new Promise((resolve) => setTimeout(resolve, 500));
-        testRunner.sendInput("ls\r");
+        testRunner.sendInput("ls");
 
         const confirmFolderContent = await testRunner.waitForOutput(
           "sdkconfig.ci"
@@ -575,8 +579,8 @@ export function runInstallVerification({
         const validTarget =
           targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
 
-        testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
-        testRunner.sendInput(`idf.py set-target ${validTarget}\r`);
+        testRunner.sendInput(`cd ${pathToProjectFolder}`);
+        testRunner.sendInput(`idf.py set-target ${validTarget}`);
 
         const startTime = Date.now();
         while (Date.now() - startTime < 1200000) {
@@ -661,8 +665,8 @@ export function runInstallVerification({
           throw new Error("Error starting IDF Terminal");
         }
 
-        testRunner.sendInput(`cd ${pathToProjectFolder}\r`);
-        testRunner.sendInput("idf.py build\r");
+        testRunner.sendInput(`cd ${pathToProjectFolder}`);
+        testRunner.sendInput("idf.py build");
 
         const startTime = Date.now();
         while (Date.now() - startTime < 480000) {

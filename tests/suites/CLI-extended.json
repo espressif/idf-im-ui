@@ -47,12 +47,12 @@
     "testProxyMode": false
   },
   {
-    "id": 5,
+    "id": 4,
     "type": "custom",
     "name": "CLI Non-Interactive master",
     "data": {
       "idfList": "master",
-      "installFolder": ".esprext5",
+      "installFolder": ".esprext4",
       "idfMirror": "github",
       "toolsMirror": "github",
       "recursive": true,

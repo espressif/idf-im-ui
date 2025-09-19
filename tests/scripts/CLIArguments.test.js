@@ -29,7 +29,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
     it("should show correct version number", async function () {
       logger.info(`Starting test - show correct version`);
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} -V\r`);
+      testRunner.sendInput(`${pathToEim} -V`);
       const meetVersion = await testRunner.waitForOutput(eimVersion, 15000);
       expect(meetVersion, "EIM showing incorrect version number").to.be.true;
     });
@@ -37,7 +37,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
     it("should show help with --help argument", async function () {
       logger.info(`Starting test - show help`);
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} --help\r`);
+      testRunner.sendInput(`${pathToEim} --help`);
       const printHelp = await testRunner.waitForOutput("Options:");
       expect(printHelp, "EIM failed to print help options").to.be.true;
       expect(testRunner.output, "EIM failed to print usage help").to.include(
@@ -48,7 +48,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
     it("should handle invalid arguments", async function () {
       logger.info(`Starting test - invalid argument`);
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} --KK\r`);
+      testRunner.sendInput(`${pathToEim} --KK`);
       const wrongArgument = await testRunner.waitForOutput(
         "unexpected argument"
       );

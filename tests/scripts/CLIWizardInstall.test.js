@@ -44,8 +44,8 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
     afterEach(function () {
       if (this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
-        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
-        logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
+        logger.info(`Terminal output: >>${testRunner.output.slice(-1000)}`);
+        logger.debug(`Terminal output on failure: >>${testRunner.output}`);
         installationFailed = true;
       }
     });
@@ -58,6 +58,8 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
       } catch (error) {
         logger.info("Error to clean up terminal after test");
         logger.info(`${error}`);
+      } finally {
+        testRunner = null;
       }
       try {
         await proxy.stop();
@@ -77,7 +79,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
     it("Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard\r`);
+      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         20000
@@ -99,7 +101,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Select Target Passed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
 
       const selectIDFVersion = await testRunner.waitForOutput(
         "Please select the desired ESP-IDF version"
@@ -115,7 +117,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Select IDF Version passed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
 
       const selectIDFMirror = await testRunner.waitForOutput(
         "Select the source from which to download esp-idf"
@@ -132,7 +134,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Select IDF mirror passed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
 
       const selectToolsMirror = await testRunner.waitForOutput(
         "Select a source from which to download tools"
@@ -149,7 +151,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Select tools mirror passed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
 
       const selectInstallPath = await testRunner.waitForOutput(
         "Please select the ESP-IDF installation location"
@@ -168,7 +170,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Select install path passed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
@@ -207,7 +209,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
 
       logger.info("Installation completed");
       testRunner.output = "";
-      testRunner.sendInput("\r");
+      testRunner.sendInput("");
 
       const installationSuccessful = await testRunner.waitForOutput(
         "Successfully installed IDF"

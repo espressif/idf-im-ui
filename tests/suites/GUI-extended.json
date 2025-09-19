@@ -2,10 +2,10 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "GUI Expert v5.3.3 & v5.4.2",
+    "name": "GUI Expert v5.3.4 & v5.4.2",
     "data": {
       "targetList": "esp32s2|esp32h2",
-      "idfList": "v5.3.3|v5.4.2",
+      "idfList": "v5.3.4|v5.4.2",
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github"

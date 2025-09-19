@@ -135,6 +135,12 @@ jobs:
         run: |
           ls ./artifacts/
 
+      - name: Update Python (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -151,16 +157,19 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'self-hosted'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
           cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-Windows)
@@ -205,6 +214,9 @@ jobs:
           - os: windows-latest
             package_name: windows-x64
             run_on: GitHub
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            run_on: ExtraRunner
 
     steps:
       - name: Checkout repository
@@ -248,13 +260,13 @@ jobs:
           chmod +x ./artifacts/eim
 
       - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip webkit2gtk-driver xvfb
 
       - name: Start XVFB (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo Xvfb :99 -ac -screen 0 1920x1080x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
@@ -296,6 +308,12 @@ jobs:
         run: |
           ls ./artifacts/
 
+      - name: Update Python (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
       - name: Update WebView2 Runtime
         if: matrix.os == 'windows-latest'
         run: |
@@ -325,14 +343,16 @@ jobs:
 
       # Copy eim log files to standard location for easier access
       - name: Copy EIM Log files (ubuntu)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
+        continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-Windows)

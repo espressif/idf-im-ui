@@ -15,7 +15,7 @@
             "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
         "deleteAfterTest": true         // Whether to remove IDF installation folder and IDF tools folder after test
-        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log"
+        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log", false
 
 
  */

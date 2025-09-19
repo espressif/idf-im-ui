@@ -137,17 +137,53 @@ class GUITestRunner {
     }
   }
 
+  async findByRelation(relation, tag, text, timeout = 5000) {
+    try {
+      const element = await this.driver.wait(
+        until.elementLocated(
+          By.xpath(`//*[contains(text(), '${text}')]/${relation}::${tag}`)
+        ),
+        timeout,
+        `Element ${tag} containing text "${text}" not found`
+      );
+      logger.debug(`Selected html element ${await element.getTagName()}`);
+      return element;
+    } catch (error) {
+      logger.debug(`Error during selection: ${error}`);
+      return false;
+    }
+  }
+
   async clickButton(text, timeout = 5000) {
     try {
       const button = await this.driver.wait(
-        until.elementLocated(By.xpath(`//*[contains(text(), '${text}')]`)),
+        until.elementLocated(
+          By.xpath(`//*[contains(text(), '${text}')]/ancestor-or-self::button`)
+        ),
         timeout,
         `Button with text "${text}" not found`
       );
       logger.debug(
         `Selected button element with text ${await button.getText()}`
       );
-      await button.click();
+      await this.driver.executeScript("arguments[0].click();", button);
+    } catch (error) {
+      logger.debug(`Error during selection: ${error}`);
+      return false;
+    }
+  }
+
+  async clickElement(text, timeout = 5000) {
+    try {
+      const element = await this.driver.wait(
+        until.elementLocated(By.xpath(`//*[contains(text(), '${text}')]`)),
+        timeout,
+        `Element with text "${text}" not found`
+      );
+      logger.debug(
+        `Selected element ${await element.getTagName()} with text ${await element.getText()}`
+      );
+      await this.driver.executeScript("arguments[0].click();", element);
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
