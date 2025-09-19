@@ -812,3 +812,131 @@ jobs:
           echo "Latest GUI release tag: $(jq -r .tag_name eim_unified_release.json)"
           aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/dl/eim/eim_unified_release.json
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/eim_unified_release.json"
+
+  update-homebrew:
+    name: Update Homebrew Formula and Cask
+    needs: [build-cli, build-cli-linux, build-gui, update-release-info]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout main repository
+        uses: actions/checkout@v4
+        with:
+          path: main-repo
+
+      - name: Checkout homebrew repository
+        uses: actions/checkout@v4
+        with:
+          repository: espressif/homebrew-eim
+          token: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          path: homebrew-repo
+
+      - name: Get release information
+        id: release-info
+        run: |
+          echo "tag_name=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          echo "release_url=${{ github.event.release.html_url }}" >> $GITHUB_OUTPUT
+
+      - name: Download and calculate checksums for CLI
+        id: cli-checksums
+        run: |
+          # Download CLI binaries and calculate SHA256
+          wget -q "${{ github.event.release.assets_url }}" -O assets.json
+
+          # macOS x64 CLI
+          macos_x64_url=$(jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url' assets.json)
+          wget -q "$macos_x64_url" -O eim-cli-macos-x64.zip
+          macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
+
+          # macOS ARM64 CLI
+          macos_arm64_url=$(jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url' assets.json)
+          wget -q "$macos_arm64_url" -O eim-cli-macos-aarch64.zip
+          macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
+
+          echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
+          echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
+          echo "macos_arm64_url=$macos_arm64_url" >> $GITHUB_OUTPUT
+          echo "macos_arm64_sha=$macos_arm64_sha" >> $GITHUB_OUTPUT
+
+      - name: Download and calculate checksums for GUI
+        id: gui-checksums
+        run: |
+          # macOS x64 GUI
+          macos_x64_gui_url=$(jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url' assets.json)
+          wget -q "$macos_x64_gui_url" -O eim-gui-macos-x64.dmg
+          macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)
+
+          # macOS ARM64 GUI
+          macos_arm64_gui_url=$(jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url' assets.json)
+          wget -q "$macos_arm64_gui_url" -O eim-gui-macos-aarch64.dmg
+          macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)
+
+          echo "macos_x64_gui_url=$macos_x64_gui_url" >> $GITHUB_OUTPUT
+          echo "macos_x64_gui_sha=$macos_x64_gui_sha" >> $GITHUB_OUTPUT
+          echo "macos_arm64_gui_url=$macos_arm64_gui_url" >> $GITHUB_OUTPUT
+          echo "macos_arm64_gui_sha=$macos_arm64_gui_sha" >> $GITHUB_OUTPUT
+
+      - name: Generate Homebrew Formula for CLI
+        run: |
+          mkdir -p homebrew-repo/Formula
+          cat > homebrew-repo/Formula/eim.rb << 'EOF'
+          class Eim < Formula
+            desc "ESP-IDF Installer and Manager CLI"
+            homepage "https://github.com/espressif/idf-im-ui"
+            version "${{ steps.release-info.outputs.tag_name }}"
+
+            if Hardware::CPU.intel?
+              url "${{ steps.cli-checksums.outputs.macos_x64_url }}"
+              sha256 "${{ steps.cli-checksums.outputs.macos_x64_sha }}"
+            elsif Hardware::CPU.arm?
+              url "${{ steps.cli-checksums.outputs.macos_arm64_url }}"
+              sha256 "${{ steps.cli-checksums.outputs.macos_arm64_sha }}"
+            end
+
+            def install
+              bin.install "eim"
+            end
+
+            test do
+              system "#{bin}/eim", "--version"
+            end
+          end
+          EOF
+
+      - name: Generate Homebrew Cask for GUI
+        run: |
+          mkdir -p homebrew-repo/Casks
+          cat > homebrew-repo/Casks/eim-gui.rb << 'EOF'
+          cask "eim-gui" do
+            version "${{ steps.release-info.outputs.tag_name }}"
+
+            if Hardware::CPU.intel?
+              url "${{ steps.gui-checksums.outputs.macos_x64_gui_url }}"
+              sha256 "${{ steps.gui-checksums.outputs.macos_x64_gui_sha }}"
+            elsif Hardware::CPU.arm?
+              url "${{ steps.gui-checksums.outputs.macos_arm64_gui_url }}"
+              sha256 "${{ steps.gui-checksums.outputs.macos_arm64_gui_sha }}"
+            end
+
+            name "ESP-IDF Installer and Manager"
+            desc "GUI application for managing ESP-IDF installations"
+            homepage "https://github.com/espressif/idf-im-ui"
+
+            app "eim.app"
+
+            zap trash: [
+              "~/Library/Application Support/eim",
+              "~/Library/Caches/eim",
+              "~/Library/Preferences/com.espressif.eim.plist",
+            ]
+          end
+          EOF
+
+      - name: Commit and push changes
+        run: |
+          cd homebrew-repo
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Formula/eim.rb Casks/eim-gui.rb
+          git commit -m "Update eim formula and cask to version ${{ steps.release-info.outputs.tag_name }}" || exit 0
+          git push
