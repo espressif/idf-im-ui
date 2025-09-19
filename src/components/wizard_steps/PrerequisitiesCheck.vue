@@ -6,11 +6,6 @@
 
     <div class="check-section" data-id="check-section">
       <n-card class="prerequisites-list" data-id="prerequisites-card">
-        <template #header>
-          <div class="card-header" data-id="prerequisites-card-header">
-            <span class="header-title" data-id="prerequisites-header-title">Prerequisites</span>
-          </div>
-        </template>
 
         <div class="loading-overlay-wrapper">
           <n-spin :show="loading" description="Checking prerequisites..." data-id="prerequisites-spinner">
