@@ -27,6 +27,17 @@ use crate::gui::{
 
 use super::{prequisites::{check_prequisites, install_prerequisites, python_install, python_sanity_check}, settings};
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct InstallationPlan {
+    pub total_versions: usize,
+    pub versions: Vec<String>,
+    pub current_version_index: Option<usize>,
+}
+
+pub fn emit_installation_plan(app_handle: &AppHandle, plan: InstallationPlan) {
+    let _ = app_handle.emit("installation-plan", plan);
+}
+
 // Checks if an installation is currently in progress
 #[tauri::command]
 pub fn is_installing(app_handle: AppHandle) -> bool {
@@ -427,6 +438,12 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let cfg_path = config_path.clone();
     let versions = settings_clone.idf_versions.clone().unwrap_or_default();
 
+    emit_installation_plan(&app_handle, InstallationPlan {
+        total_versions: versions.len(),
+        versions: versions.clone(),
+        current_version_index: None,
+    });
+
     std::thread::spawn(move || {
         let pid = child.id();
 
@@ -445,7 +462,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         let stderr = child.stderr.take().expect("Failed to capture stderr");
 
         // Helper function to parse and emit progress based on log content
-        let parse_and_emit_progress = |handle: &AppHandle, line: &str,
+        let version_clone = versions.clone();
+        let parse_and_emit_progress = move |handle: &AppHandle, line: &str,
                                      stage: &mut InstallationStage,
                                      percentage: &mut u32,
                                      current_ver: &mut Option<String>,
@@ -460,6 +478,14 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         let version_str = &line[start+1..end];
                         let version = version_str.replace("\"", "").trim().to_string();
                         *current_ver = Some(version.clone());
+
+                        if let Some(version_index) = version_clone.iter().position(|v| v == &version) {
+                            emit_installation_plan(&handle, InstallationPlan {
+                                total_versions: version_clone.len(),
+                                versions: version_clone.clone(),
+                                current_version_index: Some(version_index),
+                            });
+                        }
 
                         emit_installation_event(handle, InstallationProgress {
                             stage: InstallationStage::Download,
@@ -773,6 +799,12 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         }
     };
 
+    emit_installation_plan(&app_handle, InstallationPlan {
+      total_versions: versions.len(),
+      versions: versions.clone(),
+      current_version_index: None,
+    });
+
     let total_versions = versions.len();
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
@@ -789,6 +821,12 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
     // Install each version with progress tracking
     for (index, version) in versions.iter().enumerate() {
+        emit_installation_plan(&app_handle, InstallationPlan {
+          total_versions: versions.len(),
+          versions: versions.clone(),
+          current_version_index: Some(index),
+        });
+
         let version_start_percentage = (index * 90) / total_versions; // Each version gets equal share of 0-90%
         let version_end_percentage = ((index + 1) * 90) / total_versions;
 
@@ -808,12 +846,13 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         match install_single_version(app_handle.clone(), &settings, version.clone()).await {
             Ok(_) => {
                 emit_installation_event(&app_handle, InstallationProgress {
-                    stage: InstallationStage::Complete,
-                    percentage: version_end_percentage as u32,
-                    message: format!("ESP-IDF {} installed successfully", version),
-                    detail: Some(format!("Completed {} of {} versions", index + 1, total_versions)),
-                    version: Some(version.clone()),
+                  stage: if index < versions.len() - 1 { InstallationStage::Configure } else { InstallationStage::Complete },
+                  percentage: version_end_percentage as u32,
+                  message: format!("ESP-IDF {} installed successfully", version),
+                  detail: Some(format!("Completed {} of {} versions, continuing...", index + 1, total_versions)),
+                  version: Some(version.clone()),
                 });
+
 
                 emit_log_message(&app_handle, MessageLevel::Success,
                     format!("ESP-IDF version {} installed successfully ({}/{})",
@@ -837,6 +876,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 return Err(format!("Installation failed for version {}: {}", version, e));
             }
         }
+
     }
 
     // Configuration phase - saving IDE JSON (90-95%)
