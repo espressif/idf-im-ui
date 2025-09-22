@@ -1,0 +1,338 @@
+.TH EIM 1 "2025" "ESP-IDF Installation Manager" "User Commands"
+.SH NAME
+eim \- ESP-IDF Installation Manager command-line interface
+.SH SYNOPSIS
+.B eim
+[\fIOPTIONS\fR] [\fICOMMAND\fR]
+.SH DESCRIPTION
+The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the setup process for ESP-IDF and integrated development environments (IDEs) across multiple platforms. This cross-platform installer facilitates the installation of prerequisites, ESP-IDF itself, and essential tools, offering a consistent and user-friendly experience on macOS, Linux, and Windows.
+
+EIM provides both a graphical user interface (GUI) and a command-line interface (CLI) for maximum flexibility in different environments.
+
+.SH GLOBAL OPTIONS
+These options can be used with any command:
+
+.TP
+.BR \-l ", " \-\-locale " " \fILOCALE\fR
+Set the language for the wizard (en, cn)
+
+.TP
+.BR \-v ", " \-\-verbose
+Increase verbosity level (can be used multiple times)
+
+.TP
+.B \-\-log\-file \fILOG_FILE\fR
+File in which logs will be stored (default: eim.log)
+
+.TP
+.B \-\-do\-not\-track \fIDO_NOT_TRACK\fR
+If set to true, the installer will not send any usage data. Default is false. [possible values: true, false]
+
+.TP
+.BR \-h ", " \-\-help
+Print help information
+
+.TP
+.BR \-V ", " \-\-version
+Print version information
+
+.SH COMMANDS
+
+.SS install
+Non-interactive installation of ESP-IDF versions. This command runs in non-interactive mode by default.
+
+.B eim install
+[\fIOPTIONS\fR]
+
+.B Install Options:
+.TP
+.BR \-p ", " \-\-path " " \fIPATH\fR
+Base path to which all files and folders will be installed
+
+.TP
+.B \-\-esp\-idf\-json\-path \fIESP_IDF_JSON_PATH\fR
+Absolute path to save eim_idf.json file
+
+.TP
+.BR \-c ", " \-\-config " " \fIFILE\fR
+Path to configuration file
+
+.TP
+.BR \-t ", " \-\-target " " \fITARGET\fR
+Target platforms (comma-separated)
+
+.TP
+.BR \-i ", " \-\-idf\-versions " " \fIIDF_VERSIONS\fR
+ESP-IDF versions to install (comma-separated)
+
+.TP
+.B \-\-tool\-download\-folder\-name \fITOOL_DOWNLOAD_FOLDER_NAME\fR
+Name of the folder for tool downloads
+
+.TP
+.B \-\-tool\-install\-folder\-name \fITOOL_INSTALL_FOLDER_NAME\fR
+Name of the folder for tool installations
+
+.TP
+.B \-\-idf\-tools\-path \fIIDF_TOOLS_PATH\fR
+Path to idf_tools.py file relative from ESP-IDF installation folder
+
+.TP
+.B \-\-tools\-json\-file \fITOOLS_JSON_FILE\fR
+Path to tools.json file relative from ESP-IDF installation folder
+
+.TP
+.BR \-n ", " \-\-non\-interactive " " \fINON_INTERACTIVE\fR
+Run in interactive mode if set to false (default is true for non-interactive mode)
+
+.TP
+.BR \-m ", " \-\-mirror " " \fIMIRROR\fR
+URL for tools download mirror to be used instead of github.com
+
+.TP
+.B \-\-idf\-mirror \fIIDF_MIRROR\fR
+URL for ESP-IDF download mirror to be used instead of github.com
+
+.TP
+.BR \-r ", " \-\-recurse\-submodules " " \fIRECURSE_SUBMODULES\fR
+Should the installer recurse into submodules of the ESP-IDF repository (default true)
+
+.TP
+.BR \-a ", " \-\-install\-all\-prerequisites " " \fIINSTALL_ALL_PREREQUISITES\fR
+Should the installer attempt to install all missing prerequisites (Windows only)
+
+.TP
+.B \-\-config\-file\-save\-path \fICONFIG_FILE_SAVE_PATH\fR
+Path to save the configuration file
+
+.TP
+.B \-\-idf\-features \fIIDF_FEATURES\fR
+Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF
+
+.TP
+.B \-\-repo\-stub \fIREPO_STUB\fR
+Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
+
+.TP
+.B \-\-skip\-prerequisites\-check
+Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing. This can produce installation which will not work or kill your kittens. Use at your own risk.
+
+.TP
+.B \-\-version\-name \fIVERSION_NAME\fR
+Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
+
+.TP
+.B \-\-use\-local\-archive \fIPATH_TO_ARCHIVE\fR
+Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a .zst file. Do not unpack the .zst archive. This option is not compatible with online installation options like --idf-versions, --mirror, etc. At this time, offline installation only supports Python 3.11 to 3.13.
+
+.SS wizard
+Run the interactive ESP-IDF Installer Wizard.
+
+.B eim wizard
+[\fIOPTIONS\fR]
+
+The wizard command accepts the same options as the install command but runs in interactive mode, guiding you through the installation process with a series of prompts.
+
+.SS list
+List all installed ESP-IDF versions.
+
+.B eim list
+
+This command displays all ESP-IDF versions installed on your system, with the currently selected version marked.
+
+.SS select
+Select an ESP-IDF version as active.
+
+.B eim select
+[\fIVERSION\fR]
+
+If VERSION is not provided, the command will prompt you to select from available versions. Selecting version means setting the idfSelectedId in the eim_idf.json file. This is used by the IDEs to know which of the IDF versions you prefer to use.
+
+.SS rename
+Rename a specific ESP-IDF version.
+
+.B eim rename
+[\fIVERSION\fR] [\fINEW_NAME\fR]
+
+If VERSION is not provided, the command will prompt you to select from available versions.
+If NEW_NAME is not provided, the command will prompt you to enter a new name.
+
+.SS remove
+Remove a specific ESP-IDF version.
+
+.B eim remove
+[\fIVERSION\fR]
+
+If VERSION is not provided, the command will prompt you to select from available versions.
+
+.SS purge
+Purge all ESP-IDF installations.
+
+.B eim purge
+
+This command removes all known ESP-IDF installations from your system.
+
+.SS import
+Import an existing ESP-IDF installation using a tools_set_config.json file.
+
+.B eim import
+[\fIPATH\fR]
+
+If PATH is not provided, the command will inform you that no config file was specified.
+
+.SS fix
+Fix the ESP-IDF installation by reinstalling the tools and dependencies
+
+.B eim fix
+[\fIPATH\fR]
+
+If no PATH is provided, the user will be presented with selection of all known IDF installation to select from.
+
+.SS discover
+Discover available ESP-IDF versions (not implemented yet).
+
+.B eim discover
+
+This command is planned to discover ESP-IDF installations on your system but is not yet implemented.
+
+.SH CONFIGURATION
+
+EIM supports multiple configuration methods with the following priority (highest to lowest):
+
+1. Command line arguments
+2. Environment variables
+3. Configuration files
+4. Default values
+
+.SS Environment Variables
+Override any configuration setting using environment variables prefixed with ESP_. For example:
+.IP \[bu] 2
+ESP_TARGET: Set target platform
+.IP \[bu] 2
+ESP_PATH: Set installation path
+.IP \[bu] 2
+ESP_IDF_VERSION: Set IDF version
+
+.SS Configuration Files
+Use TOML format configuration files for reproducible installations. Load a configuration file with:
+
+.B eim install \-\-config path/to/config.toml
+
+.SH EXAMPLES
+
+.TP
+Install ESP-IDF v5.3.2 non-interactively (default behavior)
+.B eim install \-i v5.3.2
+
+.TP
+Install ESP-IDF v5.3.2 in interactive mode
+.B eim install \-i v5.3.2 \-n false
+
+.TP
+Install using custom repository mirror and stub
+.B eim install \-i v5.3.2 \-\-mirror https://my.custom.mirror \-\-repo\-stub my-custom-idf
+
+.TP
+Run the interactive wizard
+.B eim wizard
+
+.TP
+List installed versions
+.B eim list
+
+.TP
+Select a specific version
+.B eim select v5.3.2
+
+.TP
+Rename a version
+.B eim rename v5.3.2 "ESP-IDF 5.3.2 Stable"
+
+.TP
+Remove a specific version
+.B eim remove v5.3.2
+
+.TP
+Purge all installations
+.B eim purge
+
+.TP
+Import from a config file
+.B eim import /path/to/tools_set_config.json
+
+.TP
+Offline installation
+.B eim install \-\-use\-local\-archive path/to/archive.zst
+
+.TP
+Set environment variables for automation
+.nf
+export ESP_PATH="/opt/esp-idf"
+export ESP_IDF_VERSION="v5.3.2"
+eim install
+.fi
+
+.SH OFFLINE INSTALLATION
+
+The offline installation feature allows you to install ESP-IDF without an active internet connection. Download the appropriate offline installer artifact from the Espressif Download Portal, extract it, and use:
+
+.B eim install \-\-use\-local\-archive PATH_TO_ARCHIVE
+
+Important notes:
+.IP \[bu] 2
+Do not unpack the .zst archive file; the installer uses it directly
+.IP \[bu] 2
+Offline installation currently only supports Python 3.11 to 3.13
+.IP \[bu] 2
+On macOS and Linux, install all prerequisites manually before running
+
+.SH CUSTOM REPOSITORIES
+
+When installing from custom repositories:
+
+.TP
+For GitHub repositories:
+.B eim install \-i v5.3.2 \-\-repo\-stub my-github-user/my-custom-idf
+
+.TP
+For completely custom repositories (GitLab, self-hosted):
+.B eim install \-i v5.3.2 \-\-mirror https://gitlab.example.com \-\-repo\-stub my-gitlab-user/my-custom-idf
+
+.SH PRIVACY
+
+EIM collects anonymous usage data to improve the installer. This includes system information, user flows, usage tracking, and error reporting. No personal information is collected.
+
+To disable data collection:
+.IP \[bu] 2
+CLI: Use \-\-do\-not\-track true
+.IP \[bu] 2
+GUI: Uncheck the telemetry checkbox on the welcome page
+
+.SH FILES
+
+.TP
+.I ~/.espressif/
+Default installation directory for ESP-IDF and tools
+
+.TP
+.I eim.log
+Default log file (can be changed with \-\-log\-file)
+
+.TP
+.I eim_idf.json
+Configuration file containing information about installed ESP-IDF versions
+
+.SH SEE ALSO
+.BR git (1),
+.BR python3 (1)
+
+ESP-IDF Documentation: https://docs.espressif.com/projects/esp-idf/
+
+.SH BUGS
+Report bugs at: https://github.com/espressif/idf-im-ui/issues
+
+.SH AUTHOR
+Espressif Systems
+
+.SH COPYRIGHT
+This software is licensed under the MIT License.
