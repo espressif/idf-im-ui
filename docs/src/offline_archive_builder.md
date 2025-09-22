@@ -1,64 +1,159 @@
 # Offline Archive Builder
 
-The ESP-IDF Installation Manager provides a command-line tool called `offline-installer-builder` that allows you to create your own custom offline installation archives. This is useful for distributing a specific version of ESP-IDF with a custom set of tools and configurations within an organization.
+The ESP-IDF Installation Manager provides a command-line tool called `offline-installer-builder` that allows you to create **custom offline installation archives** for specific or all ESP-IDF versions. These archives contain everything needed for offline installation — ESP-IDF source, tools, Python wheels, and prerequisites — making them ideal for air-gapped environments, enterprise deployment, or CI/CD pipelines.
 
-## Getting the tool
+## Getting the Tool
 
-You can download the `offline-installer-builder` from two locations:
+You can download the `offline-installer-builder` from:
 
--   **Espressif Download Portal**: [https://dl.espressif.com/dl/eim/?tab=builder](https://dl.espressif.com/dl/eim/?tab=builder)
--   **GitHub Releases**: The tool is included as an asset in the [latest release](https://github.com/espressif/idf-im-ui/releases/latest) of the ESP-IDF Installation Manager. Look for `eim-offline-builder-<your-platform>.zip` (e.g., `eim-offline-builder-x86_64-pc-windows-msvc.zip`).
+-   **GitHub Releases**: The tool is included as an asset in the [latest release](https://github.com/espressif/idf-im-ui/releases/latest) of the ESP-IDF Installation Manager. Look for `offline_installer_builder-<platform>-*.zip` (e.g., `offline_installer_builder-windows-x64-*.zip`).
 
 ## Prerequisites
 
-Before using the `offline-installer-builder`, you need to have the following software installed on your system:
+Before using the `offline-installer-builder`, ensure the following is installed:
 
--   **uv**: The tool uses `uv` to install a Python distribution and create a virtual environment. You can find installation instructions for `uv` [here](https://github.com/astral-sh/uv).
+-   **uv**: A fast Python package and project manager. The builder uses `uv` to install Python and manage virtual environments.
+    - Install from: https://github.com/astral-sh/uv
+    - Verify with: `uv --version`
+
+> 💡 The builder does **not** bundle `uv` — you must install it separately.
+
+---
 
 ## Usage
 
-The `offline-installer-builder` is a command-line tool. After downloading and unzipping it, you can run it from your terminal. On Linux and macOS, you may need to make it executable first (e.g., `chmod +x ./offline-installer-builder`).
+After downloading and extracting the builder, run it from your terminal. On Linux/macOS, make it executable first:
+
+```bash
+chmod +x ./offline_installer_builder
+```
+
+On Windows, use `offline_installer_builder.exe`.
+
+---
 
 ### Creating an Offline Archive
 
-To create an offline archive, you use the `--create-from-config` option.
+#### 1. Build Archive for a Specific IDF Version
 
 ```bash
-./offline-installer-builder --create-from-config <CONFIG_PATH>
+./offline_installer_builder -c default --idf-version-override v5.1.2
 ```
 
--   `<CONFIG_PATH>`: Path to a TOML configuration file that specifies which ESP-IDF versions and tools to include in the archive. You can also use `"default"` to use the default settings, which will create an archive with the latest ESP-IDF version.
+This creates a single `.zst` archive for version `v5.1.2`, named like:
+`archive_v5.1.2_<platform>.zst` (e.g., `archive_v5.1.2_linux-x64.zst`)
 
-The builder will download all the necessary components (ESP-IDF, tools, Python packages) and bundle them into a `.zst` archive file in the current directory.
+#### 2. Build Archives for All Supported IDF Versions
 
-#### Configuration File
+```bash
+./offline_installer_builder -c default --build-all-versions
+```
 
-The configuration file uses the same TOML format as the main installer. Here is an example:
+This builds **one `.zst` archive per supported IDF version**, each named with its version and platform.
+
+> ✅ Use this for full offline mirror creation.
+
+#### 3. Build Using a Custom Configuration File
+
+```bash
+./offline_installer_builder -c /path/to/your/config.toml
+```
+
+Your `config.toml` can specify which versions and targets to include. Example:
 
 ```toml
-# Example config.toml for the offline archive builder
-idf_versions = ["v5.1", "v5.0.2"]
-target = ["esp32", "esp32s3"]
+# config.toml
+idf_versions = ["v5.0.4", "v5.1.2"]
+target = ["esp32", "esp32s3", "esp32c3"]
 mirror = "https://github.com"
+tools_json_file = "tools/tools.json"
 ```
 
-This configuration will create an archive containing ESP-IDF versions `v5.1` and `v5.0.2`, with tools for `esp32` and `esp32s3` targets.
+> ⚠️ When using `--build-all-versions` or `--idf-version-override`, the `idf_versions` field in your config is **ignored**.
+
+---
 
 ### Command-Line Options
 
-Here are the available command-line options for the `offline-installer-builder`:
+| Short | Long | Description |
+|-------|------|-------------|
+| `-c` | `--create-from-config <CONFIG>` | Create archive from TOML config. Use `"default"` for defaults. |
+| `-a` | `--archive <FILE>` | Extract a `.zst` archive for inspection. |
+| `-p` | `--python-version <VERSION>` | Python version to bundle (default: `3.11`). |
+| `--wheel-python-versions <V1,V2,...>` | Comma-separated Python versions for which to download wheels (e.g., `3.10,3.11,3.12`). Defaults to all supported on POSIX, single version on Windows. |
+| `--idf-version-override <VERSION>` | Build archive for **only** this IDF version (e.g., `v5.1.2`). |
+| `--build-all-versions` | Build **separate archives for all** supported IDF versions. |
+| `-v` | `--verbose` | Increase log verbosity (use `-vv` or `-vvv` for more detail). |
 
--   `-c, --create-from-config <CONFIG>`: Create installation data from a specified configuration file. Use `"default"` to use default settings.
--   `-a, --archive <FILE>`: Extract an existing `.zst` archive for inspection or debugging.
--   `-p, --python-version <VERSION>`: Specify the Python version to be included in the archive. The default is `3.11`.
--   `-v, --verbose`: Increase the verbosity of the output for debugging purposes. Can be used multiple times (e.g., `-vv`).
+---
 
 ### Inspecting an Archive
 
-If you want to see the contents of an existing offline archive, you can use the `--archive` option:
+To examine the contents of a `.zst` archive:
 
 ```bash
-./offline-installer-builder --archive <PATH_TO_ARCHIVE.zst>
+./offline_installer_builder --archive archive_v5.1.2_linux-x64.zst
 ```
 
-This will extract the contents of the `.zst` file into a new directory named `<ARCHIVE_NAME>_extracted`, allowing you to inspect the bundled files.
+This extracts the archive into a directory named `archive_v5.1.2_linux-x64.zst_extracted/`.
+
+Useful for debugging or verifying contents.
+
+---
+
+## Output
+
+The builder generates `.zst` archives in the **current working directory**. Each archive is self-contained and can be used with:
+
+```bash
+eim install --use-local-archive archive_v5.1.2_linux-x64.zst
+```
+
+> 📁 **Archive structure** (when extracted):
+> ```
+> ├── esp-idf/           # ESP-IDF source
+> ├── dist/              # Downloaded tools (xtensa-esp-elf, etc.)
+> ├── python_env_*/      # Python virtual environments
+> ├── wheels_py*/        # Pre-downloaded Python wheels
+> ├── scoop/             # (Windows only) Offline Scoop prerequisites
+> └── config.toml        # Configuration used to build this archive
+> ```
+
+---
+
+## Advanced Usage
+
+### Building for CI/CD or Release Automation
+
+You can integrate the builder into GitHub Actions or other CI systems. Example workflow:
+
+```yaml
+- name: Build all versions
+  run: |
+    ./offline_installer_builder -c default --build-all-versions
+    mkdir -p artifacts
+    mv archive_v* artifacts/
+```
+
+Each platform (Linux, Windows, macOS) must run the builder separately — archives are platform-specific.
+
+---
+
+### Python Wheel Compatibility
+
+By default, the builder downloads wheels for multiple Python versions to maximize compatibility. You can override this:
+
+```bash
+./offline_installer_builder -c default --idf-version-override v5.1.2 --wheel-python-versions 3.11,3.12
+```
+
+This ensures the archive includes wheels compatible with Python 3.11 and 3.12.
+
+---
+
+## Troubleshooting
+
+-   **“UV not found”**: Install `uv` first. See https://github.com/astral-sh/uv
+-   **No archives generated**: Check logs (`offline_installer.log`). Ensure network connectivity and disk space.
+-   **Checksum failures**: Retry or check mirror URLs in config.
+-   **Windows prerequisites fail**: Ensure you’re running in an environment with internet access during build.

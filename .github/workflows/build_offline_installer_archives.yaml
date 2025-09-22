@@ -91,7 +91,9 @@ jobs:
           aws-region: ap-east-1
 
       - name: Download current offline_archives.json
+        if: runner.os != 'Windows'
         id: download_json
+        shell: bash
         run: |
           aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null || echo "[]" > ./offline_archives.json
           if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
@@ -100,6 +102,30 @@ jobs:
           fi
           echo "Current offline_archives.json:"
           cat ./offline_archives.json
+
+      - name: Download current offline_archives.json (Windows)
+        if: runner.os == 'Windows'
+        id: download_json_windows
+        shell: pwsh
+        run: |
+          try {
+            aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json
+          } catch {
+            Set-Content -Path "./offline_archives.json" -Value "[]"
+          }
+
+          try {
+            $json = Get-Content "./offline_archives.json" | ConvertFrom-Json
+            if (-not ($json -is [array])) {
+              throw "Not an array"
+            }
+          } catch {
+            Write-Host "Invalid JSON, resetting to empty array"
+            Set-Content -Path "./offline_archives.json" -Value "[]"
+          }
+
+          Write-Host "Current offline_archives.json:"
+          Get-Content "./offline_archives.json"
 
       - name: Purge existing archives (if requested)
         if: github.event_name == 'release' || inputs.purge_all == true
