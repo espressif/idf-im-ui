@@ -1,4 +1,4 @@
-name: Build Offline Installer Archives
+name: Build & Upload Offline Installer Archives
 
 on:
   workflow_call:
@@ -9,10 +9,10 @@ on:
       run_id:
         required: true
         type: string
-      update_json:
+      idf_version:
         required: false
-        type: boolean
-        default: true
+        type: string
+        description: "Specific IDF version to build (e.g., v5.1.2). If empty, builds all versions."
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -27,17 +27,24 @@ on:
         description: "The run id from which to take binaries"
         required: true
         type: string
-      update_json:
-        description: "Update offline_archives.json in S3"
+      idf_version:
+        description: "Specific IDF version to build (e.g., v5.1.2). Leave empty to build all."
+        required: false
+        type: string
+      purge_all:
+        description: "Purge all existing archives from S3 before upload (DANGEROUS)"
         required: false
         type: boolean
-        default: true
+        default: false
+
+  release:
+    types: [published]
 
 jobs:
-  build-offline-archives:
-    name: Build Offline Archives (${{ matrix.package_name }})
+  build-and-upload:
+    name: Build & Upload (${{ matrix.package_name }})
     runs-on: ${{ matrix.os }}
-    continue-on-error: true
+    continue-on-error: false
 
     strategy:
       fail-fast: false
@@ -53,7 +60,11 @@ jobs:
             package_name: macos-aarch64
           - os: macos-13
             package_name: macos-x64
+
     steps:
+      - name: Checkout (for scripts if needed)
+        uses: actions/checkout@v4
+
       - name: Download offline_installer_builder artifact
         uses: actions/download-artifact@v5
         with:
@@ -63,181 +74,214 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ inputs.run_id || github.run_id }}
 
-      - name: Download eim artifact
-        uses: actions/download-artifact@v4
-        with:
-          pattern: eim-gui-${{ matrix.package_name }}-*
-          merge-multiple: true
-          path: ./
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.run_id || github.run_id }}
-
       - name: Make binary executable (Unix)
         if: runner.os != 'Windows'
         run: |
           chmod +x ./offline_installer_builder
-          chmod +x ./eim
 
-      - name: Install tooling
+      - name: Install UV (Python package manager)
         run: |
           cargo install --git https://github.com/astral-sh/uv uv
 
-      - name: Run offline_installer_builder
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            ./offline_installer_builder.exe -c default
-          else
-            ./offline_installer_builder -c default
-          fi
-        shell: bash
-
-      - name: Bundle offline installer
-        run: |
-          # Find the archive file
-          ARCHIVE_FILE=$(find . -name "archive_v*.zst" -type f | head -1)
-          if [ -z "$ARCHIVE_FILE" ]; then
-            echo "Error: No archive_v*.zst file found"
-            exit 1
-          fi
-
-          # Extract version from filename (e.g., archive_v1.2.3.zst -> 1.2.3)
-          VERSION=$(basename "$ARCHIVE_FILE" | sed 's/archive_v\(.*\)\.zst/\1/')
-          echo "Found version: $VERSION"
-
-          # Create the README.md file with installation instructions based on the OS.
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            README_CONTENT="You can install the application by simply launching the GUI app named **eim**.\n\nAlternatively, if you prefer using the command line, open PowerShell and run:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`\n\nWhen using the GUI, the offline installer archive will be offered on the welcome screen. You can also find it manually under the **Install New Version** section."
-          else
-            README_CONTENT="You can install the application by simply launching the GUI app named **eim**.\n\nAlternatively, if you prefer using the command line, run the following in your terminal:\n\n\`eim install --use-local-archive $(basename "$ARCHIVE_FILE")\`\n\nWhen using the GUI, the offline installer archive will be offered on the welcome screen. You can also find it manually under the **Install New Version** section."
-          fi
-          echo -e "$README_CONTENT" > README.md
-
-          # Create zip archive with eim binary and archive file
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            7z a "offline_installer-${{ matrix.package_name }}-${VERSION}.zip" "$ARCHIVE_FILE" "./eim.exe" "README.md"
-          else
-            zip "offline_installer-${{ matrix.package_name }}-${VERSION}.zip" "$ARCHIVE_FILE" "./eim" "README.md"
-          fi
-
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-        shell: bash
-
-      - name: Upload offline installer artifact
-        uses: actions/upload-artifact@v4
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}
-          path: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
-          retention-days: 30
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
 
-      - name: Create build info file
-        env:
-          VERSION: ${{ env.VERSION }}
-          PACKAGE_NAME: ${{ matrix.package_name }}
-          FILENAME: offline_installer-${{ matrix.package_name }}-${{ env.VERSION }}.zip
-        shell: bash
+      - name: Download current offline_archives.json
+        id: download_json
         run: |
-          # Calculate file size in bytes
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            FILE_SIZE=$(stat -f %z "$FILENAME")
-          else
-            FILE_SIZE=$(stat -c %s "$FILENAME")
+          aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null || echo "[]" > ./offline_archives.json
+          if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
+            echo "Invalid JSON, resetting to empty array"
+            echo "[]" > ./offline_archives.json
           fi
-          # Create build info file with size
-          jq -n \
-            --arg version "$VERSION" \
-            --arg platform "$PACKAGE_NAME" \
-            --arg filename "$FILENAME" \
-            --arg size "$FILE_SIZE" \
-            '{"version": $version, "platform": $platform, "filename": $filename, "size": ($size | tonumber)}' \
-            > build-info.json
-
-      - name: Save build info as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info-${{ matrix.package_name }}
-          path: build-info.json
-
-  update-json:
-    needs: build-offline-archives
-    runs-on: ubuntu-latest
-    if: ${{ inputs.update_json }}
-    steps:
-      - name: Download all build info artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: build-info-*
-          path: build-infos/
-
-      - name: Update offline_archives.json
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-east-1
-          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
-        shell: bash
-        run: |
-          # Debug: List downloaded artifacts
-          echo "Listing downloaded artifacts:"
-          find build-infos/ -type f
-
-          # Download existing JSON or create empty array
-          aws s3 cp s3://espdldata/dl/eim/offline_archives.json offline_archives.json 2>/dev/null || echo "[]" > offline_archives.json
-
-          # Ensure valid JSON array
-          if ! jq -e 'type == "array"' offline_archives.json >/dev/null 2>&1; then
-            echo "Invalid or not an array, initializing with empty array"
-            echo "[]" > offline_archives.json
-          fi
-
-          # Debug: Show current offline_archives.json
           echo "Current offline_archives.json:"
-          cat offline_archives.json
+          cat ./offline_archives.json
 
-          # Collect all new build info
-          new_entries="[]"
-          for build_info in build-infos/*/build-info.json; do
-            if [ -f "$build_info" ]; then
-              echo "Processing $build_info"
-              entry=$(cat "$build_info")
-              new_entries=$(echo "$new_entries" | jq --argjson entry "$entry" '. + [$entry]')
-            else
-              echo "No build-info.json found in $build_info"
+      - name: Purge existing archives (if requested)
+        if: github.event_name == 'release' || inputs.purge_all == true
+        run: |
+          echo "Purging existing archives from S3..."
+          jq -r '.[] | .filename' ./offline_archives.json | while read filename; do
+            if [ -n "$filename" ]; then
+              echo "Deleting s3://espdldata/dl/eim/$filename"
+              aws s3 rm "s3://espdldata/dl/eim/$filename" || echo "Failed to delete $filename, continuing..."
             fi
           done
 
-          # Debug: Show new_entries
-          echo "New entries:"
-          echo "$new_entries"
+      - name: Build archives
+        id: build
+        run: |
+          # Determine binary name
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BINARY="./offline_installer_builder.exe"
+          else
+            BINARY="./offline_installer_builder"
+          fi
 
-          # Remove existing entries with same filenames, then add all new entries
-          updated_json=$(jq --argjson new_entries "$new_entries" '
-            . as $original |
-            ($new_entries | map(.filename)) as $new_filenames |
-            ($original | map(select(.filename as $f | $new_filenames | index($f) | not))) + $new_entries
-          ' offline_archives.json)
+          # Determine arguments
+          if [ -n "${{ inputs.idf_version }}" ]; then
+            echo "Building specific version: ${{ inputs.idf_version }}"
+            ARGS="-c default --idf-version-override ${{ inputs.idf_version }}"
+          else
+            echo "Building ALL versions"
+            ARGS="-c default --build-all-versions"
+          fi
 
-          # Debug: Show updated JSON
-          echo "Updated JSON:"
-          echo "$updated_json"
+          # Run it
+          $BINARY $ARGS
 
-          # Write updated JSON to file
-          echo "$updated_json" > updated_archives.json
+          # Collect and rename all built .zst files to include platform
+          PLATFORM="${{ matrix.package_name }}"
+          mkdir -p built_archives
 
-          # Verify the updated JSON is valid
-          if ! jq empty updated_archives.json 2>/dev/null; then
-            echo "Error: Generated JSON is invalid"
+          for file in archive_v*.zst; do
+            if [ ! -f "$file" ]; then continue; fi
+
+            # Extract version: archive_v5.1.2.zst → 5.1.2
+            VERSION=$(echo "$file" | sed -E 's/archive_v(.*)\.zst/\1/')
+            NEW_NAME="archive_v${VERSION}_${PLATFORM}.zst"
+
+            echo "Renaming $file → $NEW_NAME"
+            mv "$file" "built_archives/$NEW_NAME"
+          done
+
+          # List built files
+          echo "Built archives:"
+          ls -la built_archives/
+
+          # Fail if nothing built
+          if [ ! "$(ls -A built_archives/ 2>/dev/null)" ]; then
+            echo "ERROR: No archives built!" >&2
             exit 1
           fi
 
-          # Upload updated JSON to S3
-          aws s3 cp --acl=public-read updated_archives.json s3://espdldata/dl/eim/offline_archives.json
+        shell: bash
 
-          # Invalidate CloudFront cache
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/offline_archives.json"
+      - name: Upload archives to S3 and generate build info
+        id: upload
+        run: |
+          PLATFORM="${{ matrix.package_name }}"
+          mkdir -p build-infos
 
-  Autotest-CLI-Offline:
-    needs: [build-offline-archives]
-    if: needs.build-offline-archives.result == 'success'
+          # Upload each .zst and record metadata
+          for archive in built_archives/*.zst; do
+            if [ ! -f "$archive" ]; then continue; fi
+
+            # Extract version from new filename: archive_v5.1.2_linux-x64.zst → 5.1.2
+            FILENAME=$(basename "$archive")
+            VERSION=$(echo "$FILENAME" | sed -E 's/archive_v([^_]+)_.*/\1/')
+
+            # Get file size
+            if [ "${{ runner.os }}" = "macOS" ]; then
+              SIZE=$(stat -f %z "$archive")
+            else
+              SIZE=$(stat -c %s "$archive")
+            fi
+
+            # Upload to S3
+            aws s3 cp --acl=public-read "$archive" "s3://espdldata/dl/eim/$FILENAME"
+
+            # Generate build info
+            jq -n \
+              --arg version "$VERSION" \
+              --arg platform "$PLATFORM" \
+              --arg filename "$FILENAME" \
+              --argjson size $SIZE \
+              '{"version": $version, "platform": $platform, "filename": $filename, "size": $size}' \
+              > "build-infos/build-info-${VERSION}-${PLATFORM}.json"
+
+            echo "Uploaded $FILENAME ($SIZE bytes)"
+          done
+
+      - name: Save build infos as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-infos-${{ matrix.package_name }}
+          path: build-infos/
+          retention-days: 7
+
+  update-json:
+    needs: build-and-upload
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Download current offline_archives.json
+        run: |
+          aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null || echo "[]" > ./offline_archives.json
+          if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
+            echo "[]" > ./offline_archives.json
+          fi
+
+      - name: Download all build infos
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-infos-*
+          path: ./all-build-infos/
+          merge-multiple: true
+
+      - name: Merge and update JSON
+        run: |
+          # Collect all new entries
+          NEW_ENTRIES="[]"
+          for info_file in all-build-infos/build-infos/*/build-info-*.json; do
+            if [ -f "$info_file" ]; then
+              echo "Processing: $info_file"
+              entry=$(cat "$info_file")
+              NEW_ENTRIES=$(echo "$NEW_ENTRIES" | jq --argjson entry "$entry" '. + [$entry]')
+            fi
+          done
+
+          # Load current JSON
+          CURRENT=$(cat offline_archives.json)
+
+          # Remove existing entries that are being replaced (same platform + version)
+          # Keep entries for platforms/versions NOT rebuilt
+          UPDATED=$(jq --argjson new "$NEW_ENTRIES" '
+            . as $current |
+            ($new | map({version, platform})) as $to_replace |
+            ($current | map(select(
+              (.version + "-" + .platform) as $key |
+              ($to_replace | map(.version + "-" + .platform) | index($key)) | not
+            ))) + $new
+          ' offline_archives.json)
+
+          echo "Final offline_archives.json:"
+          echo "$UPDATED" | jq .
+
+          # Validate
+          echo "$UPDATED" > updated_offline_archives.json
+          if ! jq empty updated_offline_archives.json; then
+            echo "Generated JSON is invalid!" >&2
+            exit 1
+          fi
+
+          # Upload
+          aws s3 cp --acl=public-read updated_offline_archives.json s3://espdldata/dl/eim/offline_archives.json
+
+          # Invalidate CloudFront
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.DL_DISTRIBUTION_ID }} \
+            --paths "/dl/eim/offline_archives.json" "/dl/eim/archive_*.zst"
+
+      - name: Upload final JSON as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-offline-archives-json
+          path: updated_offline_archives.json
+
+  autotest:
+    needs: [build-and-upload, update-json]
+    if: always() && needs.build-and-upload.result == 'success'
     uses: ./.github/workflows/test_offline.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
