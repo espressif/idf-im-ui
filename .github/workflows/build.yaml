@@ -178,6 +178,44 @@ jobs:
           asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.zip
           asset_name: offline_installer_builder-${{ matrix.package_name }}.zip
 
+      - name: Prepare manpage for deb package
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: |
+          mkdir -p src-tauri/man
+          cp man/eim.1 src-tauri/man/
+        shell: bash
+
+      - name: Build CLI .deb package
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: |
+          cd src-tauri
+          # Install cargo-deb if not present
+          cargo install cargo-deb || true
+          # Build .deb with version from tag
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+          cargo deb --no-build --no-default-features --features cli \
+            --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
+            --deb-version $VERSION
+        shell: bash
+
+      - name: Upload CLI .deb artifact
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}-deb
+          path: src-tauri/target/debian/eim*.deb
+          if-no-files-found: warn
+
+      - name: Upload CLI .deb Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/debian/eim*.deb
+          asset_name: eim-cli-${{ matrix.package_name }}.deb
+
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -940,3 +978,320 @@ jobs:
           git add Formula/eim.rb Casks/eim-gui.rb
           git commit -m "Update eim formula and cask to version ${{ steps.release-info.outputs.tag_name }}" || exit 0
           git push
+
+  uupdate-apt-repo:
+    name: Update APT Repository on S3
+    needs: [build-cli-linux, build-gui, update-release-info]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Install dependencies for APT repo tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils gzip
+
+      - name: Download GUI linux-x64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-x64-${{ github.run_number }}-deb
+          path: new-debs/
+
+      - name: Download GUI linux-aarch64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-aarch64-${{ github.run_number }}-deb
+          path: new-debs/
+        continue-on-error: true
+
+      - name: Download CLI linux-x64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ github.run_number }}-deb
+          path: new-debs/
+
+      - name: Download CLI linux-aarch64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ github.run_number }}-deb
+          path: new-debs/
+        continue-on-error: true
+
+      - name: Create proper APT repository structure
+        run: |
+          # Create proper directory structure
+          mkdir -p apt-repo/pool/main
+          mkdir -p apt-repo/dists/stable/main/binary-amd64
+          mkdir -p apt-repo/dists/stable/main/binary-arm64
+
+          # Sync existing .deb files from S3 pool
+          aws s3 sync s3://espdldata/dl/eim/apt/pool/main/ apt-repo/pool/main/ --exclude "*" --include "*.deb" || echo "No existing pool found"
+
+          # Copy new .deb files to pool
+          find new-debs -name "*.deb" -exec cp {} apt-repo/pool/main/ \; || echo "Warning: Some .deb files could not be copied"
+
+          # Debug: Show what's in the pool
+          echo "Pool contents:"
+          ls -la apt-repo/pool/main/
+
+      - name: Generate APT repository metadata
+        working-directory: apt-repo
+        run: |
+          # Generate Packages files for each architecture
+          # AMD64 packages
+          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
+          gzip -k -f dists/stable/main/binary-amd64/Packages
+
+          # ARM64 packages
+          dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages
+          gzip -k -f dists/stable/main/binary-arm64/Packages
+
+          # Generate Release file
+          cd dists/stable
+          cat > Release << EOF
+          Origin: Espressif Systems
+          Label: ESP-IDF Installation Manager
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: ESP-IDF Installation Manager packages
+          Date: $(date -Ru)
+          EOF
+
+          # Add file hashes to Release
+          apt-ftparchive release . >> Release
+
+          echo "Generated Release file:"
+          cat Release
+
+      - name: Upload repository to S3
+        run: |
+          # Upload the entire repository structure
+          aws s3 sync apt-repo/ s3://espdldata/dl/eim/apt/ --acl public-read --delete
+
+          # Verify upload
+          echo "Uploaded repository structure:"
+          aws s3 ls s3://espdldata/dl/eim/apt/ --recursive
+
+      - name: Invalidate CloudFront cache
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/apt/*"
+
+  generate-windows-packages:
+      name: Generate Windows Packages
+      needs: [build-cli, build-gui, update-release-info]
+      runs-on: windows-latest
+      if: github.event_name == 'release' && github.event.action == 'created'
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v4
+
+        - name: Download CLI windows-x64 artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: eim-cli-windows-x64-${{ github.run_number }}
+            path: artifacts/cli/
+
+        - name: Download GUI windows-x64 artifact
+          uses: actions/download-artifact@v4
+          with:
+            name: eim-gui-windows-x64-${{ github.run_number }}
+            path: artifacts/gui/
+
+        - name: Setup .NET 6.0
+          uses: actions/setup-dotnet@v4
+          with:
+            dotnet-version: '6.0.x'
+
+        - name: Generate Scoop manifests
+          shell: powershell
+          env:
+            VERSION: ${{ github.ref_name }}
+          run: |
+            $version = "${env:VERSION}".Replace('v','')
+            mkdir manifests-scoop -Force
+
+            # CLI Scoop manifest
+            $cliJson = @{
+                version = $version
+                description = "ESP-IDF CLI Manager"
+                homepage = "https://github.com/espressif/idf-im-ui"
+                license = "MIT"
+                architecture = @{
+                    "64bit" = @{
+                        url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-cli-windows-x64.exe"
+                        hash = (Get-FileHash artifacts/cli/eim.exe -Algorithm SHA256).Hash.ToLower()
+                        bin = "eim.exe"
+                    }
+                }
+                checkver = @{
+                    github = "https://github.com/espressif/idf-im-ui"
+                }
+                autoupdate = @{
+                    architecture = @{
+                        "64bit" = @{
+                            url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-cli-windows-x64.exe"
+                        }
+                    }
+                }
+            } | ConvertTo-Json -Depth 10
+            $cliJson | Out-File -FilePath manifests-scoop/eim-cli.json -Encoding UTF8
+
+            # GUI Scoop manifest
+            $guiJson = @{
+                version = $version
+                description = "ESP-IDF GUI Manager"
+                homepage = "https://github.com/espressif/idf-im-ui"
+                license = "MIT"
+                architecture = @{
+                    "64bit" = @{
+                        url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-gui-windows-x64.exe"
+                        hash = (Get-FileHash artifacts/gui/eim.exe -Algorithm SHA256).Hash.ToLower()
+                        bin = "eim.exe"
+                    }
+                }
+                checkver = @{
+                    github = "https://github.com/espressif/idf-im-ui"
+                }
+                autoupdate = @{
+                    architecture = @{
+                        "64bit" = @{
+                            url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-gui-windows-x64.exe"
+                        }
+                    }
+                }
+            } | ConvertTo-Json -Depth 10
+            $guiJson | Out-File -FilePath manifests-scoop/eim.json -Encoding UTF8
+
+        - name: Generate WinGet manifests
+          shell: powershell
+          env:
+            VERSION: ${{ github.ref_name }}
+          run: |
+            # Download WingetCreate
+            Invoke-WebRequest https://aka.ms/wingetcreate/latest -OutFile wingetcreate.exe
+
+            $version = "${env:VERSION}".Replace('v','')
+
+            # Create CLI WinGet manifest files manually (simpler than using wingetcreate new)
+            mkdir -p winget-manifests/e/Espressif/eim-cli/$version -Force
+
+            # CLI Version manifest
+            @"
+            PackageIdentifier: Espressif.eim-cli
+            PackageVersion: $version
+            DefaultLocale: en-US
+            ManifestType: version
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim-cli/$version/Espressif.eim-cli.yaml" -Encoding UTF8
+
+            # CLI Installer manifest
+            @"
+            PackageIdentifier: Espressif.eim-cli
+            PackageVersion: $version
+            Installers:
+            - Architecture: x64
+              InstallerType: exe
+              InstallerUrl: https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-cli-windows-x64.exe
+              InstallerSha256: $((Get-FileHash artifacts/cli/eim.exe -Algorithm SHA256).Hash.ToUpper())
+              InstallerSwitches:
+                Silent: /S
+                SilentWithProgress: /S
+            ManifestType: installer
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim-cli/$version/Espressif.eim-cli.installer.yaml" -Encoding UTF8
+
+            # CLI Locale manifest
+            @"
+            PackageIdentifier: Espressif.eim-cli
+            PackageVersion: $version
+            PackageLocale: en-US
+            Publisher: Espressif Systems
+            PackageName: ESP-IDF Installer CLI
+            License: MIT
+            LicenseUrl: https://github.com/espressif/idf-im-ui/blob/master/LICENSE
+            ShortDescription: ESP-IDF CLI Manager
+            PackageUrl: https://github.com/espressif/idf-im-ui
+            ManifestType: defaultLocale
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim-cli/$version/Espressif.eim-cli.locale.en-US.yaml" -Encoding UTF8
+
+            # Create GUI WinGet manifest files
+            mkdir -p winget-manifests/e/Espressif/eim/$version -Force
+
+            # GUI Version manifest
+            @"
+            PackageIdentifier: Espressif.eim
+            PackageVersion: $version
+            DefaultLocale: en-US
+            ManifestType: version
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim/$version/Espressif.eim.yaml" -Encoding UTF8
+
+            # GUI Installer manifest
+            @"
+            PackageIdentifier: Espressif.eim
+            PackageVersion: $version
+            Installers:
+            - Architecture: x64
+              InstallerType: exe
+              InstallerUrl: https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-gui-windows-x64.exe
+              InstallerSha256: $((Get-FileHash artifacts/gui/eim.exe -Algorithm SHA256).Hash.ToUpper())
+              InstallerSwitches:
+                Silent: /S
+                SilentWithProgress: /S
+            ManifestType: installer
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim/$version/Espressif.eim.installer.yaml" -Encoding UTF8
+
+            # GUI Locale manifest
+            @"
+            PackageIdentifier: Espressif.eim
+            PackageVersion: $version
+            PackageLocale: en-US
+            Publisher: Espressif Systems
+            PackageName: ESP-IDF Installer GUI
+            License: MIT
+            LicenseUrl: https://github.com/espressif/idf-im-ui/blob/master/LICENSE
+            ShortDescription: ESP-IDF GUI Manager
+            PackageUrl: https://github.com/espressif/idf-im-ui
+            ManifestType: defaultLocale
+            ManifestVersion: 1.6.0
+            "@ | Out-File -FilePath "winget-manifests/e/Espressif/eim/$version/Espressif.eim.locale.en-US.yaml" -Encoding UTF8
+
+        - name: Upload to GitHub Release
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          run: |
+            # Create archives of the WinGet manifests
+            7z a winget-manifests.zip winget-manifests/*
+            gh release upload ${{ github.ref_name }} winget-manifests.zip manifests-scoop/*.json
+          shell: bash
+
+        - name: Update Scoop bucket (if you have a dedicated repo)
+          if: false # disabled by default; set to true to enable
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            SCOOP_REPO: espressif/eim-scoop
+          run: |
+            git clone https://github.com/espressif/eim-scoop.git scoop-bucket
+            Copy-Item manifests-scoop/*.json scoop-bucket/bucket/
+            cd scoop-bucket
+            git config user.name "GitHub Action"
+            git config user.email "action@github.com"
+            git add bucket/*.json
+            git commit -m "Update eim to ${{ github.ref_name }}" || exit 0
+            git push
+          shell: bash
