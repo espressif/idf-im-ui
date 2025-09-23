@@ -92,6 +92,21 @@ class GUITestRunner {
     }
   }
 
+  async findMultipleByClass(className, timeout = 5000) {
+    try {
+      const element = await this.driver.wait(
+        until.elementsLocated(By.className(className)),
+        timeout,
+        `Elements with class ${className} not found`
+      );
+      logger.debug(`Selected html elements matching class ${className}`);
+      return element;
+    } catch (error) {
+      logger.debug(`Error during selection: ${error}`);
+      return false;
+    }
+  }
+
   async findByCSS(cssAttribute, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -167,6 +182,7 @@ class GUITestRunner {
         `Selected button element with text ${await button.getText()}`
       );
       await this.driver.executeScript("arguments[0].click();", button);
+      return true;
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
