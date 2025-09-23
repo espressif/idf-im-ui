@@ -368,16 +368,30 @@ struct Args {
     /// Each version will create its own .zst archive file
     #[arg(long)]
     build_all_versions: bool,
+
+    /// List all supported IDF versions in machine-readable format and exit
+    /// Output format: one version per line
+    #[arg(long)]
+    list_versions: bool,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    if args.list_versions {
+        let versions = idf_im_lib::idf_versions::get_idf_names().await;
+        for version in versions {
+            println!("{}", version);
+        }
+        return;
+    }
 
     // Setup logging
     if let Err(e) = setup_logging(args.verbose) {
         error!("Failed to initialize logging: {e}");
     }
+
+
 
     if args.create_from_config.is_some() {
         info!(
