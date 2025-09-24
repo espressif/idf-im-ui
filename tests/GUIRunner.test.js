@@ -26,6 +26,7 @@ import { runGUIStartupTest } from "./scripts/GUIStartup.test.js";
 import { runGUISimplifiedInstallTest } from "./scripts/GUISimplifiedInstall.test.js";
 import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
+import { runGUIAfterInstallTest } from "./scripts/GUIAfterInstall.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import {
   IDFDefaultVersion,
@@ -55,7 +56,11 @@ function testRun(script) {
       describe(`Test${test.id} - ${test.name} ->`, function () {
         this.timeout(60000);
 
-        runGUIStartupTest(test.id, pathToEIMGUI, EIMGUIVersion);
+        runGUIStartupTest({
+          id: test.id,
+          pathToEIM: pathToEIMGUI,
+          eimVersion: EIMGUIVersion,
+        });
       });
     } else if (test.type === "default") {
       //routine for default simplified installation
@@ -69,6 +74,13 @@ function testRun(script) {
           idfList: [IDFDefaultVersion],
           toolsFolder: TOOLSFOLDER,
         });
+
+        runGUIAfterInstallTest({
+          id: test.id,
+          pathToEIM: pathToEIMGUI,
+          idfList: [IDFDefaultVersion],
+        });
+
         runCleanUp({
           installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
@@ -85,9 +97,14 @@ function testRun(script) {
       const targetList = test.data.targetList
         ? test.data.targetList.split("|")
         : ["All"];
+
       const idfVersionList = test.data.idfList
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
 
       const toolsMirror = test.data.toolsMirror || "github";
 
@@ -101,15 +118,22 @@ function testRun(script) {
           pathToEIMGUI,
           installFolder,
           targetList,
-          idfVersionList,
+          idfUpdatedList,
           toolsMirror,
           IDFMirror
         );
+
         runInstallVerification({
           installFolder,
-          idfList: idfVersionList,
+          idfList: idfUpdatedList,
           targetList,
           toolsFolder: TOOLSFOLDER,
+        });
+
+        runGUIAfterInstallTest({
+          id: test.id,
+          pathToEIM: pathToEIMGUI,
+          idfList: idfUpdatedList,
         });
 
         runCleanUp({

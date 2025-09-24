@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { describe, it, beforeEach, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import { getPlatformKey } from "../helper.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -68,7 +69,7 @@ export function runInstallVerification({
       const eimJsonContent = JSON.parse(
         fs.readFileSync(eimJsonFilePath, "utf-8")
       );
-      logger.debug(`EIM Json file content: ${eimJsonContent}`);
+      logger.debug("EIM Json file content:", eimJsonContent);
       expect(
         eimJsonContent,
         "Content of eim_ide.json is not an object"
@@ -160,7 +161,7 @@ export function runInstallVerification({
       const eimJsonContent = JSON.parse(
         fs.readFileSync(eimJsonFilePath, "utf-8")
       );
-      logger.debug(`EIM Json file content: ${eimJsonContent}`);
+      logger.debug("EIM Json file content: ", eimJsonContent);
 
       for (let idf of idfList) {
         let eimJsonEntry = null;
@@ -171,7 +172,7 @@ export function runInstallVerification({
             break;
           }
         }
-        logger.debug(`EIM Json entry for IDF ${idf}: ${eimJsonEntry}`);
+        logger.debug(`EIM Json entry for IDF ${idf}: `, eimJsonEntry);
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
           .be.null;
 
@@ -317,34 +318,10 @@ export function runInstallVerification({
           `tools.json file does not contain expected tools for IDF ${idf}`
         ).to.have.property("tools");
 
-        // function to get the tag for the operating system to use when reading tools.json
-
-        function getPlatformKey() {
-          const arch = os.arch();
-          const platform = os.platform();
-
-          if (platform === "linux") {
-            if (arch === "x64") return "linux-amd64";
-            if (arch === "arm64") return "linux-arm64";
-            if (arch === "arm") return "linux-armhf"; // or 'linux-armel' depending on your system
-            if (arch === "ia32") return "linux-i686";
-          }
-          if (platform === "darwin") {
-            if (arch === "x64") return "macos";
-            if (arch === "arm64") return "macos-arm64";
-          }
-          if (platform === "win32") {
-            if (arch === "x64") return "win64";
-            if (arch === "ia32") return "win32";
-          }
-          return null;
-        }
-
-        const platformKey = getPlatformKey();
-
         // Should check which are the tools that are supposed to be installed based on the OS architecture and the selected targets
         // This information comes from the keys platform_overrides and supported_targets
 
+        const platformKey = getPlatformKey();
         const osRequiredTools = toolsIndexFile.tools.filter((tool) => {
           if (tool.platform_overrides) {
             for (let entry of tool.platform_overrides) {

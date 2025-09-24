@@ -114,6 +114,10 @@ function testRun(jsonScript) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
+      const idfUpdatedList = idfVersionList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
       let installArgs = [];
 
       runInDebug && installArgs.push("-vvv");
@@ -122,7 +126,7 @@ function testRun(jsonScript) {
 
       test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
 
-      test.data.idfList && installArgs.push(`-i ${idfVersionList.join(",")}`);
+      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
 
       test.data.toolsMirror &&
         installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror]}`);
@@ -149,7 +153,7 @@ function testRun(jsonScript) {
 
         runInstallVerification({
           installFolder,
-          idfList: idfVersionList,
+          idfList: idfUpdatedList,
           targetList,
           toolsFolder: TOOLSFOLDER,
         });
@@ -162,11 +166,11 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "version-management") {
       //routine for version management tests
-      const idfList = test.data.idfList
+      const idfVersionList = test.data.idfList
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const updatedList = idfList.map((idf) =>
+      const idfUpdatedList = idfVersionList.map((idf) =>
         idf === "default" ? IDFDefaultVersion : idf
       );
 
@@ -179,7 +183,7 @@ function testRun(jsonScript) {
 
         runVersionManagementTest({
           pathToEim: pathToEIMCLI,
-          idfList: updatedList,
+          idfList: idfUpdatedList,
           installFolder,
         });
       });
