@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico" type="image/vnd.microsoft.icon">
   <title>ESP-IDF Installation Manager Downloads</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
   <style>
     :root {
       --primary: #e7352c;
@@ -290,6 +291,67 @@
       padding: 1rem;
     }
 
+    #offline-installer-creator {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    #offline-installer-creator h3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 1rem;
+    }
+
+    #offline-installer-creator div {
+      margin-bottom: 1rem;
+    }
+
+    #offline-installer-creator label {
+      font-weight: 600;
+      color: var(--secondary);
+      margin-right: 1rem;
+    }
+
+    #offline-installer-creator select {
+      padding: 0.5rem;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+    }
+
+    #download-offline-installer {
+      background: var(--primary);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    #download-offline-installer:hover {
+      background: var(--primary-dark);
+    }
+
+    #progress-bar {
+      width: 100%;
+      background-color: #e5e7eb;
+      border-radius: 6px;
+      margin-top: 1rem;
+    }
+
+    #progress {
+      height: 20px;
+      background-color: var(--primary);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+    }
+
     footer {
       text-align: center;
       padding: 2rem 0;
@@ -315,7 +377,435 @@
     }
   </style>
 </head>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico" type="image/vnd.microsoft.icon">
+  <title>ESP-IDF Installation Manager Downloads</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+  <style>
+    :root {
+      --primary: #e7352c;
+      --primary-dark: #e7210a;
+      --secondary: #6b7280;
+      --background: #f8fafc;
+      --card: #ffffff;
+      --tab-active: #e7352c;
+      --tab-inactive: #9ca3af;
+      --tab-border: #e5e7eb;
+    }
 
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+
+    body {
+      background: var(--background);
+      min-height: 100vh;
+      color: #1a1a1a;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 2rem 0;
+    }
+
+    .logo-title {
+      font-size: 3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--primary) 0%, #00a3ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+
+    .subtitle {
+      font-size: 1.125rem;
+      color: var(--secondary);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .release-version {
+      font-size: 1rem;
+      color: var(--secondary);
+      margin-top: 0.5rem;
+    }
+
+    .tab-container {
+      margin-bottom: 2rem;
+    }
+
+    .tab-buttons {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 0;
+      border-bottom: 2px solid var(--tab-border);
+      background: none;
+    }
+
+    .tab-button {
+      padding: 1rem 2rem;
+      border: none;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--tab-inactive);
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      position: relative;
+      margin-bottom: -2px;
+    }
+
+    .tab-button.active {
+      color: var(--tab-active);
+      border-bottom-color: var(--tab-active);
+      background: none;
+      box-shadow: none;
+    }
+
+    .tab-button:hover:not(.active) {
+      color: var(--primary-dark);
+      border-bottom-color: #d1d5db;
+    }
+
+    .tab-content {
+      display: none;
+      padding-top: 2rem;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .platform-section {
+      margin-bottom: 1.5rem;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .platform-header {
+      background: var(--card);
+      padding: 1.5rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background-color 0.3s ease;
+    }
+
+    .platform-header:hover {
+      background: #f1f5f9;
+    }
+
+    .platform-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .platform-toggle {
+      font-size: 1.5rem;
+      color: var(--secondary);
+      transition: transform 0.3s ease;
+    }
+
+    .platform-toggle.expanded {
+      transform: rotate(90deg);
+    }
+
+    .platform-content {
+      background: var(--card);
+      padding: 0 1.5rem 1.5rem;
+      display: none;
+    }
+
+    .platform-content.expanded {
+      display: block;
+    }
+
+    .installer-group {
+      margin-top: 1rem;
+    }
+
+    .installer-title {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--secondary);
+      margin-bottom: 1rem;
+      border-bottom: 1px solid #e5e7eb;
+      padding-bottom: 0.5rem;
+    }
+
+    .download-item {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+      transition: all 0.3s ease;
+    }
+
+    .download-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .download-name {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+
+    .download-desc {
+      color: var(--secondary);
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .download-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .download-size {
+      color: var(--secondary);
+      font-size: 0.875rem;
+    }
+
+    .download-buttons {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .download-button {
+      background: var(--primary);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+    }
+
+    .download-button:hover {
+      background: var(--primary-dark);
+    }
+
+    .github-button {
+      background: #24292e;
+    }
+
+    .github-button:hover {
+      background: #000000;
+    }
+
+    .github-icon {
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 3rem 0;
+      color: var(--secondary);
+    }
+
+    .loading-spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      padding: 1.5rem;
+      text-align: center;
+      color: #dc2626;
+      margin-bottom: 1.5rem;
+    }
+
+    .retry-button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .warning-message {
+      color: #dc2626;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    #offline-installer-creator {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    #offline-installer-creator h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 1.5rem;
+      text-align: center;
+    }
+
+    .creator-form {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 1.5rem;
+      width: 100%;
+      max-width: 500px;
+    }
+
+    .form-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .form-row label {
+      font-weight: 600;
+      color: var(--secondary);
+    }
+
+    .radio-button-group {
+      display: flex;
+      border-radius: 6px;
+      overflow: hidden;
+      border: 1px solid #e5e7eb;
+    }
+
+    .radio-button-group input[type="radio"] {
+      display: none;
+    }
+
+    .radio-button-group label {
+      flex: 1;
+      text-align: center;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+      background: #f9fafb;
+      color: var(--secondary);
+      transition: all 0.2s ease-in-out;
+      border-right: 1px solid #e5e7eb;
+    }
+
+    .radio-button-group label:last-child {
+      border-right: none;
+    }
+
+    .radio-button-group input[type="radio"]:checked + label {
+      background: var(--primary);
+      color: white !important;
+      font-weight: 600;
+    }
+
+    #offline-installer-creator select {
+      padding: 0.75rem;
+      border-radius: 6px;
+      border: 1px solid #e5e7eb;
+      width: 100%;
+      font-size: 1rem;
+    }
+
+    #download-offline-installer {
+      background: var(--primary);
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background-color 0.3s ease;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      width: 100%;
+    }
+
+    #download-offline-installer:hover {
+      background: var(--primary-dark);
+    }
+
+    #progress-bar {
+      width: 100%;
+      background-color: #e5e7eb;
+      border-radius: 6px;
+      margin-top: 1rem;
+      overflow: hidden;
+    }
+
+    #progress {
+      height: 20px;
+      background-color: var(--primary);
+      border-radius: 6px;
+      transition: width 0.3s ease;
+      width: 0%;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem 0;
+      color: var(--secondary);
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    @keyframes spin {
+      0% {
+        transform: rotate(0deg);
+      }
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
 <body>
   <div id="app" class="container">
     <header>
@@ -381,6 +871,33 @@
                 ⚠️ Warning: Offline installer is large. Only download if you have poor internet or need to install on multiple machines.
               </div>
 
+              <div id="offline-installer-creator">
+                <h3>Offline Installer Creator</h3>
+                <div class="creator-form">
+                  <div class="form-row">
+                    <label>Installer Type</label>
+                    <div class="radio-button-group">
+                      <input type="radio" id="gui-installer" name="installer-type" value="gui" checked>
+                      <label for="gui-installer">GUI</label>
+                      <input type="radio" id="cli-installer" name="installer-type" value="cli">
+                      <label for="cli-installer">CLI</label>
+                    </div>
+                  </div>
+                  <div class="form-row">
+                    <label for="platform">Platform</label>
+                    <select id="platform"></select>
+                  </div>
+                  <div class="form-row">
+                    <label for="idf-version">IDF Version</label>
+                    <select id="idf-version"></select>
+                  </div>
+                  <button id="download-offline-installer">Download</button>
+                  <div id="progress-bar" style="display: none;">
+                    <div id="progress"></div>
+                  </div>
+                </div>
+              </div>
+
               <offline-installer-section
                 v-if="offlineInstallers.length"
                 :offline-installers="offlineInstallers"
@@ -422,7 +939,7 @@
   </div>
 
   <script>
-    const { createApp, ref, onMounted, computed } = Vue;
+    const { createApp, ref, onMounted, computed, nextTick } = Vue;
 
     const GithubIconButton = {
       props: ['href'],
@@ -882,9 +1399,133 @@
           detectPlatform();
         };
 
+        function updateVersionDropdown() {
+          const idfVersionSelect = document.getElementById('idf-version');
+          const platformSelect = document.getElementById('platform');
+          const selectedPlatform = platformSelect.value;
+
+          idfVersionSelect.innerHTML = '';
+
+          const versions = [...new Set(
+            offlineArchiveData.value
+              .filter(item => item.platform === selectedPlatform)
+              .map(item => item.version)
+          )];
+
+          versions.sort().reverse();
+
+          versions.forEach(version => {
+            const option = document.createElement('option');
+            option.value = version;
+            option.textContent = version;
+            idfVersionSelect.appendChild(option);
+          });
+        }
+
+        function populateOfflineCreator() {
+          const platformSelect = document.getElementById('platform');
+
+          const platforms = [...new Set(offlineArchiveData.value.map(item => item.platform))];
+          platforms.forEach(platform => {
+            const option = document.createElement('option');
+            option.value = platform;
+            option.textContent = platform;
+            platformSelect.appendChild(option);
+          });
+
+          const userAgent = navigator.userAgent.toLowerCase();
+          const availablePlatforms = Array.from(platformSelect.options).map(o => o.value);
+          let selectedPlatform = null;
+
+          if (userAgent.includes('win')) {
+            if (availablePlatforms.includes('windows-x64')) {
+              selectedPlatform = 'windows-x64';
+            }
+          } else if (userAgent.includes('linux')) {
+            if (userAgent.includes('aarch64') && availablePlatforms.includes('linux-aarch64')) {
+              selectedPlatform = 'linux-aarch64';
+            } else if (availablePlatforms.includes('linux-x64')) {
+              selectedPlatform = 'linux-x64';
+            }
+          } else if (userAgent.includes('mac')) {
+            const hasAarch64 = availablePlatforms.includes('macos-aarch64');
+            const hasX64 = availablePlatforms.includes('macos-x64');
+            if (hasAarch64 && hasX64) {
+              selectedPlatform = 'macos-aarch64';
+            } else if (hasAarch64) {
+              selectedPlatform = 'macos-aarch64';
+            } else if (hasX64) {
+              selectedPlatform = 'macos-x64';
+            }
+          }
+
+          if (selectedPlatform) {
+            platformSelect.value = selectedPlatform;
+          }
+
+          platformSelect.addEventListener('change', updateVersionDropdown);
+
+          updateVersionDropdown();
+        }
+
         onMounted(() => {
           initializeTabFromUrl();
-          fetchRelease();
+          fetchRelease().then(() => {
+            nextTick(() => {
+              populateOfflineCreator();
+              document.getElementById('download-offline-installer').addEventListener('click', async () => {
+                const installerType = document.querySelector('input[name="installer-type"]:checked').value;
+                const idfVersion = document.getElementById('idf-version').value;
+                const platform = document.getElementById('platform').value;
+
+                const archive = offlineArchiveData.value.find(item => item.version === idfVersion && item.platform === platform);
+                if (!archive) {
+                  alert('Selected archive not found.');
+                  return;
+                }
+
+                const installerAsset = releaseData.value.assets.find(asset => {
+                  const name = asset.name.toLowerCase();
+                  return name.includes(`eim-${installerType}`) && name.includes(platform);
+                });
+
+                if (!installerAsset) {
+                  alert('Selected installer not found.');
+                  return;
+                }
+
+                const archiveUrl = `https://dl.espressif.com/dl/eim/${archive.filename}`;
+                const installerUrl = installerAsset.browser_download_url;
+
+                const progressBar = document.getElementById('progress');
+                const progressBarContainer = document.getElementById('progress-bar');
+                progressBarContainer.style.display = 'block';
+
+                try {
+                  const zip = new JSZip();
+
+                  const [installerResponse, archiveResponse] = await Promise.all([
+                    fetch(installerUrl),
+                    fetch(archiveUrl)
+                  ]);
+
+                  zip.file(installerAsset.name, installerResponse.blob());
+                  zip.file(archive.filename, archiveResponse.blob());
+
+                  const content = await zip.generateAsync({ type: 'blob' }, (metadata) => {
+                    progressBar.style.width = metadata.percent.toFixed(2) + '%';
+                  });
+
+                  saveAs(content, `esp-idf-offline-installer-${idfVersion}-${platform}.zip`);
+                } catch (error) {
+                  console.error('Error creating zip file:', error);
+                  alert('Failed to create zip file.');
+                } finally {
+                  progressBarContainer.style.display = 'none';
+                }
+              });
+            });
+          });
         });
 
         return {

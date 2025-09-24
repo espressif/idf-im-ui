@@ -358,16 +358,40 @@ struct Args {
     /// If not specified, uses all supported versions for POSIX systems, single version for Windows
     #[arg(long, value_delimiter = ',')]
     wheel_python_versions: Option<Vec<String>>,
+
+    /// Override IDF version (e.g., "v5.1.2", "v5.0.4")
+    /// If specified, only this version will be processed instead of versions from config
+    #[arg(long)]
+    idf_version_override: Option<String>,
+
+    /// Build separate archives for all supported IDF versions
+    /// Each version will create its own .zst archive file
+    #[arg(long)]
+    build_all_versions: bool,
+
+    /// List all supported IDF versions in machine-readable format and exit
+    /// Output format: one version per line
+    #[arg(long)]
+    list_versions: bool,
 }
 
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    if args.list_versions {
+        let versions = idf_im_lib::idf_versions::get_idf_names().await;
+        for version in versions {
+            println!("{}", version);
+        }
+        return;
+    }
 
     // Setup logging
     if let Err(e) = setup_logging(args.verbose) {
         error!("Failed to initialize logging: {e}");
     }
+
+
 
     if args.create_from_config.is_some() {
         info!(
@@ -417,71 +441,31 @@ async fn main() {
 
         info!("Will download wheels for Python versions: {:?}", wheel_python_versions);
 
-        // Download prerequisities and python
-        match std::env::consts::OS {
-            "windows" => {
-                // scoop package manager is used to install dependencies on Windows
-                let scoop_path = archive_dir.path().join("scoop");
-                ensure_path(scoop_path.to_str().unwrap());
-                let scoop_list = vec![
-                    ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
-                    ("https://github.com/ScoopInstaller/Main/archive/master.zip","main-master.zip"),
-                    ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
-                    // ("https://www.python.org/ftp/python/3.10.11/python-3.10.11-amd64.exe", "python-3.10.11-amd64.exe"),
-                    ("https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe", "python-3.11.9-amd64.exe"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
-                    ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
-                    ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip","dark-3.14.1.zip")
-                ];
-                for (link, name) in scoop_list {
-                    info!("Downloading Scoop from: {}", link);
-                    match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
-                        Ok(_) => {
-                            info!("Scoop downloaded successfully from: {}", link);
-                        }
-                        Err(err) => {
-                            error!("Failed to download Scoop from {} : {}", link, err);
-                            return;
-                        }
-                    }
-                }
-                let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
-                fs::write(
-                    scoop_path.join("install_scoop_offline.ps1"),
-                    scoop_install_script,
-                )
-                .expect("Failed to write install_scoop_offline.ps1 script");
-                info!("Scoop install script written to: {:?}", scoop_path.join("install_scoop_offline.ps1"));
-            }
-            "linux" | "macos" => {
-                info!("Detected Unix-like OS, ...");
-                warn!("prerequisites installation is not implemented for Unix-like OSes yet, please install them manually.");
-            }
-            _ => {
-                error!("Unsupported OS: {}", std::env::consts::OS);
-                return;
-            }
-        }
         let versions = idf_im_lib::idf_versions::get_idf_names().await;
-        let version_list = settings
-            .idf_versions
-            .clone()
-            .unwrap_or(vec![versions.first().unwrap().clone()]);
+        let version_list = if let Some(override_version) = args.idf_version_override {
+            info!("Using IDF version override: {}", override_version);
+            vec![override_version]
+        } else if args.build_all_versions {
+            info!("Building separate archives for all supported versions: {:?}", versions);
+            versions.clone() // We'll iterate over all
+        } else {
+            settings
+                .idf_versions
+                .clone()
+                .unwrap_or(vec![versions.first().unwrap().clone()])
+        };
 
         settings.idf_versions = Some(version_list.clone());
-        // check is uv is installed TODO: maybe download uv in case it's missing
-        match execute_command(
-            "uv",
-            &["--version"],
-        ) {
+
+        // Check if uv is installed
+        match execute_command("uv", &["--version"]) {
             Ok(output) => {
-              if output.status.success() {
-                info!("UV is installed: {:?}", output);
-              } else {
-                error!("UV is not installed or not found: {:?}", output);
-                return;
-              }
+                if output.status.success() {
+                    info!("UV is installed: {:?}", output);
+                } else {
+                    error!("UV is not installed or not found: {:?}", output);
+                    return;
+                }
             }
             Err(err) => {
                 error!("UV is not installed or not found: {}. Please install it and try again.", err);
@@ -489,22 +473,73 @@ async fn main() {
             }
         }
 
+        // DOWNLOAD SHARED PREREQUISITES ONCE (Windows only)
+        let shared_prereq_dir: Option<TempDir> = if std::env::consts::OS == "windows" {
+            let temp_shared = TempDir::new().expect("Failed to create shared prereq temp dir");
+            let scoop_path = temp_shared.path().join("scoop");
+            ensure_path(scoop_path.to_str().unwrap()).expect("Failed to create scoop dir");
+
+            let scoop_list = vec![
+                ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
+                ("https://github.com/ScoopInstaller/Main/archive/master.zip", "main-master.zip"),
+                ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
+                ("https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe", "python-3.11.9-amd64.exe"),
+                ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
+                ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
+                ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
+                ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip", "dark-3.14.1.zip"),
+            ];
+
+            for (link, name) in scoop_list {
+                info!("Downloading Scoop prereq: {} as {}", link, name);
+                match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
+                    Ok(_) => info!("Downloaded: {}", name),
+                    Err(err) => {
+                        error!("Failed to download {}: {}", name, err);
+                        return;
+                    }
+                }
+            }
+
+            let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
+            fs::write(scoop_path.join("install_scoop_offline.ps1"), scoop_install_script)
+                .expect("Failed to write install_scoop_offline.ps1 script");
+
+            info!("Shared Windows prerequisites downloaded to: {:?}", temp_shared.path());
+            Some(temp_shared)
+        } else if std::env::consts::OS == "linux" || std::env::consts::OS == "macos" {
+            info!("Detected Unix-like OS, prerequisites installation not implemented — skipping.");
+            None
+        } else {
+            error!("Unsupported OS: {}", std::env::consts::OS);
+            return;
+        };
+
+        // ITERATE OVER EACH VERSION AND BUILD SEPARATE ARCHIVE
         for idf_version in version_list {
+            info!("=== Processing ESP-IDF version: {} ===", idf_version);
+
+            // Create a fresh temp dir for this version
+            let archive_dir = TempDir::new().expect("Failed to create version-specific temp dir");
             let version_path = archive_dir.path().join(&idf_version);
-            ensure_path(version_path.to_str().unwrap())
-                .expect("Failed to ensure path for IDF version");
-            info!(
-                "Preparing installation data for ESP-IDF version: {} to folder {:?}",
-                idf_version,
-                version_path.display()
-            );
+            ensure_path(version_path.to_str().unwrap()).expect("Failed to ensure version path");
 
-            // download idf
+            // 👇 COPY SHARED PREREQUISITES (if any)
+            if let Some(ref shared_dir) = shared_prereq_dir {
+                let dest_scoop = archive_dir.path().join("scoop");
+                info!("Copying shared prerequisites to: {:?}", dest_scoop);
+                fs_extra::dir::copy(
+                    shared_dir.path().join("scoop"),
+                    &dest_scoop,
+                    &fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true),
+                )
+                .expect("Failed to copy shared prerequisites");
+            }
+
+            // Download ESP-IDF for this version
             let (tx, rx) = mpsc::channel();
-
             let handle = thread::spawn(move || {
                 let mut progress_bar = create_progress_bar();
-
                 loop {
                     match rx.recv() {
                         Ok(ProgressMessage::Finish) => {
@@ -527,12 +562,11 @@ async fn main() {
                             println!("submodule: {}", name);
                             progress_bar = create_progress_bar();
                         }
-                        Err(_) => {
-                            break;
-                        }
+                        Err(_) => break,
                     }
                 }
             });
+
             let idf_path = version_path.join("esp-idf");
             match idf_im_lib::get_esp_idf(
                 idf_path.to_str().unwrap(),
@@ -542,79 +576,60 @@ async fn main() {
                 true,
                 tx,
             ) {
-                Ok(_) => {
-                    info!("ESP-IDF version {} downloaded successfully.", idf_version);
-                }
+                Ok(_) => info!("ESP-IDF version {} downloaded successfully.", idf_version),
                 Err(err) => {
-                    error!("Failed to download ESP-IDF version: {}", idf_version);
+                    error!("Failed to download ESP-IDF version {}: {}", idf_version, err);
+                    continue; // Skip to next version
                 }
             }
+            handle.join().unwrap(); // Wait for progress bar thread to finish
+
+            // Read tools.json
             let tools_json_file = idf_path
-                .clone()
-                .join(
-                    settings
-                        .clone()
-                        .tools_json_file
-                        .clone()
-                        .unwrap_or(Settings::default().tools_json_file.unwrap()),
-                )
+                .join(settings.tools_json_file.clone().unwrap_or_else(|| Settings::default().tools_json_file.unwrap()))
                 .to_str()
-                .expect("Failed to convert tools json file path to string")
+                .expect("Failed to convert tools json path")
                 .to_string();
 
-            debug!("Tools json file: {}", tools_json_file);
             let tools = match idf_im_lib::idf_tools::read_and_parse_tools_file(&tools_json_file) {
                 Ok(tools) => tools,
                 Err(err) => {
-                error!("Failed to read tools json file: {}", err);
-                    return;
+                    error!("Failed to read tools json file: {}", err);
+                    continue;
                 }
             };
+
             let download_links = get_list_of_tools_to_download(
                 tools.clone(),
                 settings.clone().target.unwrap_or(vec!["all".to_string()]),
                 settings.mirror.as_deref(),
             );
+
             let tool_path = archive_dir.path().join("dist");
-            ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure path for tools");
+            ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure tools path");
+
             for (tool_name, (version, download_link)) in download_links.iter() {
-                info!(
-                    "Preparing tool: {} version: {} download link: {:?}",
-                    tool_name, version, download_link
-                );
+                info!("Preparing tool: {} version: {} from: {}", tool_name, version, download_link.url);
                 match download_file(&download_link.url, tool_path.to_str().unwrap(), None).await {
                     Ok(_) => {
-                        let file_path = Path::new(&download_link.url);
-                        let filename = file_path.file_name().unwrap().to_str().unwrap();
-
+                        let filename = Path::new(&download_link.url).file_name().unwrap().to_str().unwrap();
                         let full_file_path = tool_path.join(filename);
-                        if verify_file_checksum(
-                            &download_link.sha256,
-                            full_file_path.to_str().unwrap(),
-                        )
-                        .unwrap()
-                        {
-                        info!(
-                            "Tool {} version {} downloaded successfully.",
-                            tool_name, version
-                        );
+
+                        if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()).unwrap() {
+                            info!("Tool {} version {} downloaded and verified.", tool_name, version);
                         } else {
-                            error!(
-                                "Checksum verification failed for tool {} version {}.",
-                                tool_name, version
-                            );
-                            panic!(
-                                "Checksum verification failed for tool {} version {}.",
-                                tool_name, version
-                            );
+                            error!("Checksum failed for tool {} version {}.", tool_name, version);
+                            continue;
                         }
                     }
                     Err(err) => {
                         error!("Failed to download tool {}: {}", tool_name, err);
+                        continue;
                     }
                 }
             }
-            // download constrain file
+
+            // Download constraints file
             let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
                 Ok((maj, min)) => format!("v{}.{}", maj, min),
                 Err(e) => {
@@ -622,110 +637,92 @@ async fn main() {
                     idf_version.to_string()
                 }
             };
-            let constraint_file =
-                match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
-                    Ok(constraint_file) => {
-                        info!("Downloaded constraints file: {}", constraint_file.display());
-                        Some(constraint_file)
-                    }
-                    Err(e) => {
-                        warn!("Failed to download constraints file: {}", e);
-                        None
-                    }
-                };
-            if constraint_file.is_none() {
-                error!(
-                    "Failed to download constraints file for IDF version {}",
-                    idf_version
-                );
-                return;
-            } else {
-                info!(
-                    "Constraints file downloaded successfully for IDF version {}",
-                    idf_version
-                );
-            }
 
-            // Merge requirements files
+            let constraint_file = match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
+                Ok(file) => {
+                    info!("Downloaded constraints: {}", file.display());
+                    file
+                }
+                Err(e) => {
+                    error!("Failed to download constraints for {}: {}", idf_version, e);
+                    continue;
+                }
+            };
+
+            // Merge requirements
             let requirements_dir = idf_path.join("tools").join("requirements");
             if let Err(e) = merge_requirements_files(&requirements_dir) {
-                error!("Failed to merge requirements files: {}", e);
-                return;
+                error!("Failed to merge requirements: {}", e);
+                continue;
             }
 
-            // Download wheels for multiple Python versions
             let requirements_file = requirements_dir.join("requirements.merged.txt");
-            let constraint_file = constraint_file.unwrap();
 
             let wheel_versions: Vec<&str> = wheel_python_versions.iter().map(|s| s.as_str()).collect();
-
             if let Err(e) = download_wheels_for_python_versions(
                 archive_dir.path(),
                 &requirements_file,
                 &constraint_file,
                 &wheel_versions,
             ).await {
-                error!("Failed to download wheels: {}", e);
-                return;
+                error!("Failed to download wheels for {}: {}", idf_version, e);
+                continue;
             }
+
+            // Save settings for this version
+            let mut version_settings = settings.clone();
+            version_settings.idf_versions = Some(vec![idf_version.clone()]);
+            version_settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
+            version_settings.idf_path = None;
+
+            if let Err(e) = version_settings.save() {
+                error!("Failed to save settings for {}: {}", idf_version, e);
+                continue;
+            }
+
+            // CREATE INDIVIDUAL ARCHIVE PER VERSION
+            let output_path = PathBuf::from(format!("archive_{}.zst", idf_version));
+            let mut output_file = match File::create(&output_path) {
+                Ok(f) => f,
+                Err(e) => {
+                    error!("Failed to create output file {}: {}", output_path.display(), e);
+                    continue;
+                }
+            };
+
+            // Tar + Zstd compress
+            let mut tar = TarBuilder::new(Vec::new());
+            if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
+                error!("Failed to create tar for {}: {}", idf_version, e);
+                continue;
+            }
+
+            let tar_data = match tar.into_inner() {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to finalize tar for {}: {}", idf_version, e);
+                    continue;
+                }
+            };
+
+            let compressed_data = match encode_all(&tar_data[..], 3) {
+                Ok(data) => data,
+                Err(e) => {
+                    error!("Failed to compress with zstd for {}: {}", idf_version, e);
+                    continue;
+                }
+            };
+
+            if let Err(e) = output_file.write_all(&compressed_data) {
+                error!("Failed to write compressed data for {}: {}", idf_version, e);
+                continue;
+            }
+
+            info!("✅ Archive for {} saved to: {:?}", idf_version, output_path);
         }
 
-        settings.config_file_save_path = Some(archive_dir.path().join("config.toml"));
-        settings.idf_path = None;
-
-        match settings.save() {
-          Ok(_) => {
-            info!("Settings saved successfully.");
-          }
-          Err(e) => {
-            error!("Failed to save settings: {}", e);
-            return;
-          }
-        }
-        // Create a .zst file in the current directory
-        let output_path = PathBuf::from(format!(
-            "archive_{}.zst", //TODO: read path from param
-            settings
-                .idf_versions
-                .unwrap_or(vec!["default".to_string()])
-                .join("_")
-        ));
-        let mut output_file = match File::create(&output_path) {
-            Ok(f) => f,
-            Err(e) => {
-                error!("Failed to create output zst file: {}", e);
-                return;
-            }
-        };
-
-        // Compress the archive_dir into a .zst file
-        let mut tar = TarBuilder::new(Vec::new());
-        if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
-            error!("Failed to create tar archive: {}", e);
-            return;
-        }
-        let tar_data = match tar.into_inner() {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to finalize tar archive: {}", e);
-                return;
-            }
-        };
-        // Compression level 3 is almost instant, just IDF  results in 2.2GB archive, level 19 took 8 minutes resulting in 2.1G archive
-        let compressed_data = match encode_all(&tar_data[..], 3) {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to compress with zstd: {}", e);
-                return;
-            }
-        };
-        if let Err(e) = output_file.write_all(&compressed_data) {
-            error!("Failed to write compressed data: {}", e);
-            return;
-        }
-
-        info!("Compressed archive saved to {:?}", output_path);
-        return;
+        info!("🎉 All requested versions processed.");
+        return; // Exit after creating archives
     } else if let Some(archive_path) = args.archive {
         // Extract installation data from archive
         info!("Extracting installation data from archive: {:?}", archive_path);
