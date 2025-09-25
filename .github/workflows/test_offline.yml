@@ -52,10 +52,10 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Download Archive
+      - name: Download Build Info files
         uses: actions/download-artifact@v5
         with:
-          pattern: offline_installer-${{ matrix.package_name }}-*
+          pattern: build-info-*-${{ matrix.package_name }}
           merge-multiple: true
           path: ./artifacts
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -63,21 +63,15 @@ jobs:
 
       # Non-Windows steps
 
-      - name: Get CLI application version number (non-Windows)
+      - name: Download latest EIM CLI binary (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          git fetch --tags
-          LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
-          STRIPPED_TAG=${LATEST_TAG#v}
-          echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
+          latest_release=$(curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
+          eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.zip")) | .browser_download_url')
+          curl -L -o ./artifacts/eim-cli.zip "$eim_cli_url"
 
-      - name: Make EIM executable (non-Windows)
-        if: matrix.os != 'windows-latest'
-        run: |
           ls -la ./artifacts/
-          unzip ./artifacts/offline_installer*.zip -d ./artifacts/
-          mv ./artifacts/archive_v*.zst ./artifacts/archive.zst
-          ls -la ./artifacts/
+          unzip ./artifacts/eim-cli.zip -d ./artifacts/
           chmod +x artifacts/eim
 
       - name: Install dependencies and node.js (Ubuntu)
@@ -102,28 +96,20 @@ jobs:
         run: |
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
-          export EIM_OFFLINE_ARCHIVE="../artifacts/archive.zst"
-          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
+          export BUILD_INFO_PATH="../artifacts"
           cd tests
-          npm run test-CLI --file=CLI-offline
+          npm run test-offline
         continue-on-error: true
 
       # Windows steps
 
-      - name: Get CLI application version number (Windows)
+      - name: Download latest EIM CLI binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          git fetch --tags
-          $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
-          $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
-          echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
+          latest_release=$(curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
+          eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.exe")) | .browser_download_url')
+          curl -L -o ./artifacts/eim-cli.exe "$eim_cli_url"
 
-      - name: Check artifact (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          ls ./artifacts/
-          Expand-Archive ./artifacts/offline_installer*.zip -DestinationPath ./artifacts/
-          Move-Item "./artifacts/archive_v*.zst" "artifacts/archive.zst"
           ls ./artifacts/
 
       - name: Update Python (Windows)
@@ -137,11 +123,10 @@ jobs:
         run: |
           $env:LOG_TO_FILE="true"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
-          $env:EIM_OFFLINE_ARCHIVE = "..\artifacts\archive.zst"
-          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          $env:BUILD_INFO_PATH = "..\artifacts"
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
-          npm run test-CLI-win --file=CLI-offline
+          npm run test-offline
         continue-on-error: true
 
       # Copy eim log files to standard location for easier access

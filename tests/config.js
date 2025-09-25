@@ -96,6 +96,9 @@ const getEIMPath = (pathFromCI, defaultFolder) =>
 const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
 const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
 
+// Get path for build info file
+const pathToBuildInfo = process.env.BUILD_INFO_PATH || "~/build_info";
+
 // Default installation folder
 const INSTALLFOLDER =
   os.platform() !== "win32" ? path.join(os.homedir(), `.espressif`) : `C:\\esp`;
@@ -117,6 +120,7 @@ export {
   availableTargets,
   pathToEIMCLI,
   pathToEIMGUI,
+  pathToBuildInfo,
   EIMGUIVersion,
   EIMCLIVersion,
   INSTALLFOLDER,

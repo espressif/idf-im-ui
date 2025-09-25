@@ -8,7 +8,8 @@
     "test-CLI": "export JSON_FILENAME=$npm_config_file && npx mocha --exit --reporter json --reporter-options output=./results-$JSON_FILENAME.json CLIRunner.test.js",
     "test-CLI-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; npx mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json CLIRunner.test.js\"",
     "test-GUI": "export JSON_FILENAME=$npm_config_file && npx mocha --exit --reporter json --reporter-options output=./results-$JSON_FILENAME.json GUIRunner.test.js",
-    "test-GUI-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; npx mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json GUIRunner.test.js\""
+    "test-GUI-win": "powershell -Command \"$env:JSON_FILENAME=$env:npm_config_file; npx mocha --exit --reporter json --reporter-options output=./results-$env:JSON_FILENAME.json GUIRunner.test.js\"",
+    "test-offline": "npx mocha --exit --reporter json --reporter-options output=./results-offline.json offlineRunner.test.js"
   },
   "author": "",
   "license": "ISC",
