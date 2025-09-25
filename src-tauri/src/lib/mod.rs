@@ -1464,9 +1464,12 @@ pub fn get_esp_idf(
         None => format!("https://github.com/{}", repo_part_url),
     };
 
+    let mut shallow = true;
     // Parse version into a GitReference
     let reference = if version == "master" {
         GitReference::Branch("master".to_string())
+    } else if version.contains("release")  {
+        GitReference::Branch(version.to_string().replace("release-", "release/"))
     } else if version.len() == 40 && version.chars().all(|c| c.is_ascii_hexdigit()) {
         // If version is a 40-character hex string, assume it's a commit hash
         GitReference::Commit(version.to_string())
@@ -1480,7 +1483,7 @@ pub fn get_esp_idf(
         path: path.to_string(),
         reference,
         recurse_submodules: with_submodules,
-        shallow: true, // Default to shallow clone when possible
+        shallow: shallow, // Default to shallow clone when possible
     };
 
     match clone_repository(clone_options, tx) {
