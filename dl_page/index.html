@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico" type="image/vnd.microsoft.icon">
+  <link rel="shortcut icon" href="https://www.espressif.com/sites/all/themes/espressif/favicon.ico"
+    type="image/vnd.microsoft.icon">
   <title>ESP-IDF Installation Manager Downloads</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.0/FileSaver.min.js"></script>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-EHECCZ34FN"></script>
+  <script>
+    window.dataLayer = window.dataLayer || []; function gtag() { dataLayer.push(arguments); } gtag('js', new Date()); gtag('config', 'G-EHECCZ34FN');
+  </script>
   <style>
     :root {
       --primary: #e7352c;
@@ -296,7 +303,7 @@
       border-radius: 12px;
       padding: 2rem;
       margin-bottom: 1.5rem;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -356,7 +363,7 @@
       border-right: none;
     }
 
-    .radio-button-group input[type="radio"]:checked + label {
+    .radio-button-group input[type="radio"]:checked+label {
       background: var(--primary);
       color: white !important;
       font-weight: 600;
@@ -437,12 +444,14 @@
       0% {
         transform: rotate(0deg);
       }
+
       100% {
         transform: rotate(360deg);
       }
     }
   </style>
 </head>
+
 <body>
   <div id="app" class="container">
     <header>
@@ -466,46 +475,33 @@
         <template v-if="releaseData">
           <div class="tab-container">
             <div class="tab-buttons">
-              <button
-                class="tab-button"
-                :class="{ active: activeTab === 'online' }"
-                @click="activeTab = 'online'; updateUrlOnTabChange('online')"
-              >
+              <button class="tab-button" :class="{ active: activeTab === 'online' }"
+                @click="activeTab = 'online'; updateUrlOnTabChange('online')">
                 Online Installer
               </button>
-              <button
-                class="tab-button"
-                :class="{ active: activeTab === 'offline' }"
-                @click="activeTab = 'offline'; updateUrlOnTabChange('offline')"
-              >
+              <button class="tab-button" :class="{ active: activeTab === 'offline' }"
+                @click="activeTab = 'offline'; updateUrlOnTabChange('offline')">
                 Offline Installer
               </button>
-              <button
-                class="tab-button"
-                :class="{ active: activeTab === 'builder' }"
-                @click="activeTab = 'builder'; updateUrlOnTabChange('builder')"
-              >
+              <button class="tab-button" :class="{ active: activeTab === 'builder' }"
+                @click="activeTab = 'builder'; updateUrlOnTabChange('builder')">
                 Offline Builder Tools
               </button>
             </div>
 
             <!-- Online Installers Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'online' }">
-              <platform-section
-                v-for="(platformData, platformKey) in categorizedAssets"
-                :key="platformKey"
-                :platform-key="platformKey"
-                :platform-data="platformData"
-                :platform-title="getPlatformDisplayName(platformKey)"
-                :expanded-sections="expandedSections"
-                @toggle-section="toggleSection"
-              ></platform-section>
+              <platform-section v-for="(platformData, platformKey) in categorizedAssets" :key="platformKey"
+                :platform-key="platformKey" :platform-data="platformData"
+                :platform-title="getPlatformDisplayName(platformKey)" :expanded-sections="expandedSections"
+                @toggle-section="toggleSection"></platform-section>
             </div>
 
             <!-- Offline Installers Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'offline' }">
               <div class="warning-message">
-                ⚠️ Warning: Offline installer files are large (3-4GB). Due to browser memory limitations, you will receive separate installer and archive files to use together.
+                ⚠️ Warning: Offline installer files are large (3-4GB). Due to browser memory limitations, you will
+                receive separate installer and archive files to use together.
               </div>
 
               <div id="offline-installer-creator">
@@ -538,12 +534,8 @@
                 </div>
               </div>
 
-              <offline-installer-section
-                v-if="offlineInstallers.length"
-                :offline-installers="offlineInstallers"
-                :expanded-sections="expandedSections"
-                @toggle-section="toggleSection"
-              ></offline-installer-section>
+              <offline-installer-section v-if="offlineInstallers.length" :offline-installers="offlineInstallers"
+                :expanded-sections="expandedSections" @toggle-section="toggleSection"></offline-installer-section>
 
               <div v-else class="download-item">
                 <h3 class="download-name">No Offline Installers Available</h3>
@@ -553,16 +545,13 @@
 
             <!-- Offline Builder Tools Tab -->
             <div class="tab-content" :class="{ active: activeTab === 'builder' }">
-              <builder-tools-section
-                v-if="builderTools.length"
-                :builder-tools="builderTools"
-                :expanded-sections="expandedSections"
-                @toggle-section="toggleSection"
-              ></builder-tools-section>
+              <builder-tools-section v-if="builderTools.length" :builder-tools="builderTools"
+                :expanded-sections="expandedSections" @toggle-section="toggleSection"></builder-tools-section>
 
               <div v-else class="download-item">
                 <h3 class="download-name">No Builder Tools Available</h3>
-                <p class="download-desc">Offline installer builder tools are currently not available for this release.</p>
+                <p class="download-desc">Offline installer builder tools are currently not available for this release.
+                </p>
               </div>
             </div>
           </div>
@@ -600,6 +589,19 @@
         'github-icon-button': GithubIconButton
       },
       methods: {
+        trackDownload(artifact, source, installerType) {
+          try {
+            gtag('event', 'download_online_installer', {
+              'event_category': 'Download',
+              'installerType': installerType,
+              'filename': artifact.name,
+              'platform': this.platformKey,
+              'source': source
+            });
+          } catch (err) {
+            console.debug('Error sending google analytics:', err);
+          }
+        },
         getDlEspressifUrl(githubUrl) {
           return githubUrl.replace(
             'https://github.com/espressif/',
@@ -651,8 +653,8 @@
                 <div class="download-meta">
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
                   <div class="download-buttons">
-                    <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
+                    <github-icon-button :href="artifact.browser_download_url" @click="trackDownload(artifact, 'github', 'gui')"></github-icon-button>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'gui')">Download</a>
                   </div>
                 </div>
               </div>
@@ -665,8 +667,8 @@
                 <div class="download-meta">
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
                   <div class="download-buttons">
-                    <github-icon-button :href="artifact.browser_download_url"></github-icon-button>
-                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank">Download</a>
+                    <github-icon-button :href="artifact.browser_download_url" @click="trackDownload(artifact, 'github', 'cli')"></github-icon-button>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'cli')">Download</a>
                   </div>
                 </div>
               </div>
@@ -1003,6 +1005,17 @@
           const installerType = document.querySelector('input[name="installer-type"]:checked').value;
           const idfVersion = document.getElementById('idf-version').value;
           const platform = document.getElementById('platform').value;
+          try { // Google Analytics event should not block download
+            gtag('event', 'download_offline_installer', {
+              'event_category': 'Download',
+              'installerType': installerType,
+              'idfVersion': idfVersion,
+              'platform': platform
+            });
+          } catch (err) {
+            console.debug('Error sending google analytics:', err);
+          }
+
 
           const archive = offlineArchiveData.value.find(item => item.version === idfVersion && item.platform === platform);
           const installerAsset = releaseData.value.assets.find(asset => {
