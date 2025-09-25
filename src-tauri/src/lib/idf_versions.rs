@@ -173,7 +173,6 @@ pub async fn get_idf_names() -> Vec<String> {
             let mut names = vec![];
             for version in &releases.VERSIONS {
                 if version.end_of_life
-                    || version.pre_release
                     || version.old
                     || version.name == "latest"
                 {
