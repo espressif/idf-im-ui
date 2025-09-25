@@ -94,13 +94,13 @@ class GUITestRunner {
 
   async findMultipleByClass(className, timeout = 5000) {
     try {
-      const element = await this.driver.wait(
+      const elements = await this.driver.wait(
         until.elementsLocated(By.className(className)),
         timeout,
         `Elements with class ${className} not found`
       );
       logger.debug(`Selected html elements matching class ${className}`);
-      return element;
+      return elements;
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
