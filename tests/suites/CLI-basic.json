@@ -28,5 +28,12 @@
     "data": {
       "idfList": "default|v5.4.2"
     }
+  },
+  {
+    "id": 5,
+    "type": "offline",
+    "name": "CLI Offline Installation",
+    "deleteAfterTest": true,
+    "testProxyMode": "block"
   }
 ]

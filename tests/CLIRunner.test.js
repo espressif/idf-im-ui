@@ -37,10 +37,9 @@ import {
   pathToEIMCLI,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pathToOfflineArchive,
-  offlineIDFVersion,
   runInDebug,
 } from "./config.js";
+import { downloadOfflineArchive } from "./helper.js";
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -189,18 +188,21 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "offline") {
       //routine for offline installation test
-
-      const offlineArg = [
-        `${
-          runInDebug ? "-vvv " : ""
-        }--use-local-archive "${pathToOfflineArchive}"`,
-      ];
-
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? "block";
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id} - ${test.name} ->`, async function () {
         this.timeout(6000000);
+
+        const pathToOfflineArchive = await downloadOfflineArchive({
+          idfVersion: IDFDefaultVersion,
+        });
+
+        const offlineArg = [
+          `${
+            runInDebug ? "-vvv " : ""
+          }--use-local-archive "${pathToOfflineArchive}"`,
+        ];
 
         runCLICustomInstallTest({
           pathToEim: pathToEIMCLI,
@@ -210,7 +212,7 @@ function testRun(jsonScript) {
 
         runInstallVerification({
           installFolder: INSTALLFOLDER,
-          idfList: [offlineIDFVersion],
+          idfList: [IDFDefaultVersion],
           toolsFolder: TOOLSFOLDER,
         });
 

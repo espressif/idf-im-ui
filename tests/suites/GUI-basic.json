@@ -30,5 +30,12 @@
     },
     "deleteAfterTest": true,
     "testProxyMode": false
+  },
+  {
+    "id": 5,
+    "type": "offline",
+    "name": "GUI Offline Installation",
+    "deleteAfterTest": true,
+    "testProxyMode": "block"
   }
 ]

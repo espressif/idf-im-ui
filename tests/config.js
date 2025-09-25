@@ -9,7 +9,7 @@ import os from "os";
 import path from "path";
 
 // Define default values for offline tests
-let IDFDefaultVersion = "v5.5";
+let IDFDefaultVersion = "v5.5.1";
 let IDFAvailableVersions = ["master"];
 let availableTargets = [
   "esp32",
@@ -73,8 +73,14 @@ const TOOLSMIRRORS = {
 };
 
 // Default versions for EIM CLI and GUI for offline testing
-const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.3.0";
-const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.3.0";
+const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.5.0";
+const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.5.0";
+
+// Get platform name from environmental variables
+const pkgName =
+  process.env.PACKAGE_NAME || os.platform() !== "win32"
+    ? "windows-x64"
+    : "linux-x64";
 
 // Default path to EIM CLI and GUI executables for offline testing
 //Should use path provided by environment variables or default to home directory
@@ -89,15 +95,6 @@ const getEIMPath = (pathFromCI, defaultFolder) =>
 
 const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
 const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
-
-// Default path for the offline archive file
-const pathToOfflineArchive =
-  process.env.EIM_OFFLINE_ARCHIVE ||
-  path.join(os.homedir(), "eim-offline", "archive.zst");
-
-// IDF version for the offline archive
-const offlineIDFVersion =
-  process.env.EIM_OFFLINE_IDF_VERSION || IDFDefaultVersion;
 
 // Default installation folder
 const INSTALLFOLDER =
@@ -124,7 +121,6 @@ export {
   EIMCLIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pathToOfflineArchive,
-  offlineIDFVersion,
+  pkgName,
   runInDebug,
 };

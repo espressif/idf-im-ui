@@ -1,6 +1,12 @@
 import logger from "./classes/logger.class.js";
+import { IDFDefaultVersion, pkgName } from "./config.js";
+import { Readable } from "stream";
+import { finished } from "stream/promises";
 import os from "os";
 import path from "path";
+
+// Base url for offline archive files
+const offlineBaseUrl = "https://dl.espressif.com/dl/eim/archive_";
 
 // function to get the tag for the operating system to use when reading tools.json
 function getPlatformKey() {
@@ -51,4 +57,51 @@ function getArchitecture() {
   return "Unknown Architecture";
 }
 
-export { getPlatformKey, getOSName, getArchitecture };
+// function to download the offline archive for a given IDF version and provide
+// the path to the downloaded file
+const downloadOfflineArchive = async ({
+  idfVersion = IDFDefaultVersion,
+  packageName = pkgName,
+}) => {
+  const archiveUrl = `${offlineBaseUrl}${idfVersion}_${packageName}.zst`;
+  const pathToOfflineArchive = path.resolve(
+    process.cwd(),
+    `offlineArchive_${idfVersion}.zst`
+  );
+  logger.info(`Downloading offline archive from ${archiveUrl}...`);
+  try {
+    const res = await fetch(archiveUrl);
+    if (res.ok) {
+      const fileSize = parseInt(res.headers.get("content-length") || "0");
+      let downloadedBytes = 0;
+
+      // Create write stream
+      const fileStream = fs.createWriteStream(pathToOfflineArchive);
+
+      // Create readable stream from response body
+      const readStream = Readable.fromWeb(res.body);
+
+      // Log progress on data chunks
+      readStream.on("data", (chunk) => {
+        downloadedBytes += chunk.length;
+        const progress = (downloadedBytes / fileSize) * 100;
+
+        // Log every 5% progress
+        if (progress % 5 < (chunk.length / fileSize) * 100) {
+          logger.info(`Download progress: ${progress.toFixed(1)}%`);
+        }
+      });
+      // Pipe response to file and wait for completion
+      await finished(readStream.pipe(fileStream));
+      logger.info(`Offline archive downloaded to ${pathToOfflineArchive}`);
+      return pathToOfflineArchive;
+    } else {
+      throw new Error(`Failed to download archive: ${res.statusText}`);
+    }
+  } catch (error) {
+    logger.error(`Error downloading offline archive: ${error.message}`);
+    return false;
+  }
+};
+
+export { getPlatformKey, getOSName, getArchitecture, downloadOfflineArchive };
