@@ -18,74 +18,72 @@ import {
   pathToEIMCLI,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  downloadOfflineArchive,
-  runInDebug,
   pathToBuildInfo,
 } from "./config.js";
-import os from "os";
 import path from "path";
 import fs from "fs";
 
-let buildInfo = {};
+let buildInfo = [];
 
 if (fs.existsSync(pathToBuildInfo)) {
-  const files = fs
-    .readdirSync(pathToBuildInfo)
-    .filter((file) => file.endsWith(".json"));
-  files.forEach((file) => {
-    const filePath = path.join(pathToBuildInfo, file);
-    try {
-      const content = fs.readFileSync(filePath, "utf8");
-      const jsonData = JSON.parse(content);
-      buildInfo[file] = jsonData;
-    } catch (err) {
-      logger.error(`Failed to read or parse ${file}: ${err.message}`);
-    }
-  });
+  function readJsonFilesRecursively(dir) {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    entries.forEach((entry) => {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        readJsonFilesRecursively(fullPath);
+      } else if (entry.isFile() && entry.name.endsWith(".json")) {
+        try {
+          const content = fs.readFileSync(fullPath, "utf8");
+          const jsonData = JSON.parse(content);
+          buildInfo.push(jsonData);
+        } catch (err) {
+          logger.error(`Failed to read or parse ${fullPath}: ${err.message}`);
+        }
+      }
+    });
+  }
+  readJsonFilesRecursively(pathToBuildInfo);
 } else {
   logger.error(`Directory not found: ${pathToBuildInfo}`);
 }
 
 logger.info("Running test script:", buildInfo);
 
-// testRun(buildInfo);
+testRun(buildInfo);
 
-// function testRun(archiveInfo) {
-//   // run tests for each archive information
-//   archiveInfo.forEach(async (info) => {
-//     const pathToOfflineArchive = await downloadOfflineArchive({
-//       idfVersion: info.version,
-//     });
+function testRun(archiveInfo) {
+  // run tests for each archive information
+  archiveInfo.forEach((info, idx) => {
+    describe(`Test${idx + 1}- Test Package ${info.filename} |`, function () {
+      logger.info(
+        `Testing for IDF version: ${info.version} on platform: ${info.platform}`
+      );
+      // Set timeout to 100 minutes for installation tests
+      // as downloading and installing can take a while
+      this.timeout(6000000);
 
-//     const offlineArg = [
-//       `${
-//         runInDebug ? "-vvv " : ""
-//       }--use-local-archive "${pathToOfflineArchive}"`,
-//     ];
+      runCLICustomInstallTest({
+        id: `11`,
+        pathToEim: pathToEIMCLI,
+        offlineIDFVersion: info.version,
+        offlinePkgName: info.platform,
+        testProxyMode: "block",
+      });
 
-//     const deleteAfterTest = test.deleteAfterTest ?? true;
-//     const testProxyMode = test.testProxyMode ?? "block";
+      runInstallVerification({
+        id: `12`,
+        installFolder: INSTALLFOLDER,
+        idfList: [info.version],
+        toolsFolder: TOOLSFOLDER,
+      });
 
-//     describe(`Test${test.id} - ${test.name} ->`, function () {
-//       this.timeout(6000000);
-
-//       runCLICustomInstallTest({
-//         pathToEim: pathToEIMCLI,
-//         args: offlineArg,
-//         testProxyMode,
-//       });
-
-//       runInstallVerification({
-//         installFolder: INSTALLFOLDER,
-//         idfList: [IDFDefaultVersion],
-//         toolsFolder: TOOLSFOLDER,
-//       });
-
-//       runCleanUp({
-//         installFolder: INSTALLFOLDER,
-//         toolsFolder: TOOLSFOLDER,
-//         deleteAfterTest,
-//       });
-//     });
-//   });
-// }
+      runCleanUp({
+        id: `13`,
+        installFolder: INSTALLFOLDER,
+        toolsFolder: TOOLSFOLDER,
+        deleteAfterTest: true,
+      });
+    });
+  });
+}

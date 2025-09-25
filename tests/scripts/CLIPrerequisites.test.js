@@ -16,7 +16,7 @@ import path from "path";
  *
  */
 
-export function runCLIPrerequisitesTest(pathToEim) {
+export function runCLIPrerequisitesTest({ id, pathToEim }) {
   // let pathToEim;
 
   // if (process.env.EIM_FILE_PATH) {
@@ -25,7 +25,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
   //     pathToEim = path.join(os.homedir(), "eim-cli/eim");
   // }
 
-  describe("Check for prerequisites ->", function () {
+  describe(`${id}- Check for prerequisites |`, function () {
     this.timeout(600000);
     let testRunner;
 
@@ -69,7 +69,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
           }
         });
 
-        it("Should detect missing requirements", async function () {
+        it("1- Should detect missing requirements", async function () {
           logger.info(`Starting test - confirm requirements are missing`);
           this.timeout(25000);
           const missingRequisites = await testRunner.waitForOutput(
@@ -100,7 +100,7 @@ export function runCLIPrerequisitesTest(pathToEim) {
           }
         });
 
-        it("should offer to install prerequisites and exit upon negative answer", async function () {
+        it("1- should offer to install prerequisites and exit upon negative answer", async function () {
           logger.info(`Starting test - confirm requirements are missing`);
           this.timeout(25000);
           const promptRequisites = await testRunner.waitForOutput(

@@ -3,22 +3,36 @@ import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import TestProxy from "../classes/TestProxy.class.js";
+import { downloadOfflineArchive } from "../helper.js";
+import fs from "fs";
 
 export function runCLICustomInstallTest({
+  id,
   pathToEim,
   args = [],
+  offlineIDFVersion = null,
+  offlinePkgName = null,
   testProxyMode = false,
 }) {
-  describe("1- Run custom ->", function () {
+  describe(`${id}- Run custom |`, function () {
     let testRunner = null;
     let proxy = null;
+    let pathToOfflineArchive = null;
 
     before(async function () {
       logger.debug(
         `Installing custom IDF version with parameters ${args.join(" ")}`
       );
-      this.timeout(5000);
+      this.timeout(900000);
       testRunner = new CLITestRunner();
+      if (offlineIDFVersion) {
+        pathToOfflineArchive = await downloadOfflineArchive({
+          idfVersion: offlineIDFVersion,
+          packageName: offlinePkgName,
+        });
+
+        args.push(`--use-local-archive "${pathToOfflineArchive}"`);
+      }
       if (testProxyMode) {
         try {
           proxy = new TestProxy({ mode: testProxyMode });
@@ -63,6 +77,8 @@ export function runCLICustomInstallTest({
         logger.info("Error stopping proxy server");
         logger.debug(`Error: ${error}`);
       }
+      //remove offline archive to save space in the runner
+      fs.rmSync(pathToOfflineArchive, { force: true });
     });
 
     /** Run installation with full parameters, no need to ask questions
@@ -71,7 +87,7 @@ export function runCLICustomInstallTest({
      *
      */
 
-    it("Should install IDF using specified parameters", async function () {
+    it("1- Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
       testRunner.sendInput(`${pathToEim} install ${args.join(" ")}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));

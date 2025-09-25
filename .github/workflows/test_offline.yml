@@ -56,7 +56,6 @@ jobs:
         uses: actions/download-artifact@v5
         with:
           pattern: build-info-*-${{ matrix.package_name }}
-          merge-multiple: true
           path: ./artifacts
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ inputs.run_id }}
@@ -66,7 +65,7 @@ jobs:
       - name: Download latest EIM CLI binary (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          latest_release=$(curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
+          latest_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
           eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.zip")) | .browser_download_url')
           curl -L -o ./artifacts/eim-cli.zip "$eim_cli_url"
 
@@ -106,9 +105,9 @@ jobs:
       - name: Download latest EIM CLI binary (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          latest_release=$(curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
-          eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.exe")) | .browser_download_url')
-          curl -L -o ./artifacts/eim-cli.exe "$eim_cli_url"
+          $latest_release = Invoke-RestMethod -Uri "https://api.github.com/repos/espressif/idf-im-ui/releases/latest"
+          $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}.exe" } | Select-Object -ExpandProperty browser_download_url
+          Invoke-WebRequest -Uri $eim_cli_url -OutFile ".\artifacts\eim.exe"
 
           ls ./artifacts/
 

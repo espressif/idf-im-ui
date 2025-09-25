@@ -3,8 +3,13 @@ import { describe, it, after } from "mocha";
 import logger from "../classes/logger.class.js";
 import fs from "fs";
 
-export function runCleanUp({ installFolder, toolsFolder, deleteAfterTest }) {
-  describe("4- Clean up EIM folders from Runner ->", function () {
+export function runCleanUp({
+  id,
+  installFolder,
+  toolsFolder,
+  deleteAfterTest,
+}) {
+  describe(`${id}- Clean up EIM folders from Runner |`, function () {
     this.timeout(120000);
 
     after(function () {
@@ -26,7 +31,7 @@ export function runCleanUp({ installFolder, toolsFolder, deleteAfterTest }) {
       }
     });
 
-    it("1. Install and Tools folder should exist", async function () {
+    it("1- Install and Tools folder should exist", async function () {
       logger.info("Validating folders exist before deleting");
       expect(fs.existsSync(installFolder), "IDF Installation folder missing").to
         .be.true;
