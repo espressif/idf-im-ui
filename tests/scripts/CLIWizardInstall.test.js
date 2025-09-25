@@ -12,8 +12,12 @@ import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
-  describe("1- Run wizard ->", function () {
+export function runCLIWizardInstallTest({
+  id,
+  pathToEim,
+  testProxyMode = false,
+}) {
+  describe(`${id}- Run wizard |`, function () {
     let testRunner = null;
     let installationFailed = false;
     let proxy = null;
@@ -76,7 +80,7 @@ export function runCLIWizardInstallTest({ pathToEim, testProxyMode = false }) {
      *
      */
 
-    it("Should install IDF using wizard and default values", async function () {
+    it("1- Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
       testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard`);

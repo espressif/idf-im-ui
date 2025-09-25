@@ -3,6 +3,7 @@ import { IDFDefaultVersion, pkgName } from "./config.js";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import os from "os";
+import fs from "fs";
 import path from "path";
 
 // Base url for offline archive files
@@ -64,11 +65,12 @@ const downloadOfflineArchive = async ({
   packageName = pkgName,
 }) => {
   const archiveUrl = `${offlineBaseUrl}${idfVersion}_${packageName}.zst`;
+
   const pathToOfflineArchive = path.resolve(
     process.cwd(),
     `offlineArchive_${idfVersion}.zst`
   );
-  logger.info(`Downloading offline archive from ${archiveUrl}...`);
+  logger.info(`Downloading offline archive from ${archiveUrl}`);
   try {
     const res = await fetch(archiveUrl);
     if (res.ok) {
