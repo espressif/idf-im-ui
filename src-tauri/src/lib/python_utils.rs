@@ -583,11 +583,14 @@ pub async fn install_python_env(
     };
 
     let constraint_file = if offline_mode {
+      let filename = format!("espidf.constraints.{}.txt", remove_after_second_dot(&constrains_idf_version));
+      let src_path = offline_archive_dir.unwrap().join(filename.clone());
+      let dest_path = idf_tools_path.join(filename.clone());
       fs::copy(
-          offline_archive_dir.unwrap().join("espidf.constraints.v5.5.txt"), //TODO: not hardcoded
-          idf_tools_path.join("espidf.constraints.v5.5.txt"),
-      ).map_err(|e| format!("Failed to copy constraints file: {}", e))?;
-      Some(idf_tools_path.join("espidf.constraints.v5.5.txt"))
+          src_path.clone(),
+          dest_path.clone(),
+      ).map_err(|e| format!("Failed to copy constraints file: {} error: {}", src_path.display(), e))?;
+      Some(dest_path)
     } else {
       match download_constraints_file(idf_tools_path, &constrains_idf_version)
           .await
