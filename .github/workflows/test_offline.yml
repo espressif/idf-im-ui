@@ -9,6 +9,10 @@ on:
       run_id:
         required: true
         type: string
+      eim_cli_run_id:
+        required: false
+        type: string
+        default: "release"
 
   workflow_dispatch:
     inputs:
@@ -16,6 +20,11 @@ on:
         description: "The run id from which to take the offline installer archive"
         required: true
         type: string
+      eim_cli_run_id:
+        description: "The run id from which to take the eim-cli binary - Use 'release' to take from latest release"
+        required: false
+        type: string
+        default: "release"
 
 jobs:
   test-offline:
@@ -60,10 +69,20 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           run-id: ${{ inputs.run_id }}
 
+      - name: Download EIM-CLI artifacts from another run id
+        uses: actions/download-artifact@v4
+        if: inputs.eim_cli_run_id != 'release'
+        with:
+          pattern: eim-cli-${{ matrix.package_name }}-*
+          path: ./artifacts
+          merge-multiple: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.eim_cli_run_id }}
+
       # Non-Windows steps
 
       - name: Download latest EIM CLI binary (non-Windows)
-        if: matrix.os != 'windows-latest'
+        if: matrix.os != 'windows-latest' && inputs.eim_cli_run_id == 'release'
         run: |
           latest_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
           eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.zip")) | .browser_download_url')
@@ -71,6 +90,11 @@ jobs:
 
           ls -la ./artifacts/
           unzip ./artifacts/eim-cli.zip -d ./artifacts/
+
+      - name: Check artifact and make it executable (non-Windows)
+        if: matrix.os != 'windows-latest'
+        run: |
+          ls -la ./artifacts/
           chmod +x artifacts/eim
 
       - name: Install dependencies and node.js (Ubuntu)
@@ -103,7 +127,7 @@ jobs:
       # Windows steps
 
       - name: Download latest EIM CLI binary (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && inputs.eim_cli_run_id == 'release'
         run: |
           $latest_release = Invoke-RestMethod -Uri "https://api.github.com/repos/espressif/idf-im-ui/releases/latest"
           $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}.exe" } | Select-Object -ExpandProperty browser_download_url
