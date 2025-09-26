@@ -9,8 +9,8 @@
               <div v-if="showSplash" class="splash-screen">
                 <div class="splash-content">
                   <img src="./assets/espressif_logo.svg" alt="Espressif" class="logo" />
-                  <h1>ESP-IDF Installation Manager</h1>
-                  <p>Setting up your development environment...</p>
+                  <h1>{{ $t('app.title') }}</h1>
+                  <p>{{ $t('app.settingUp') }}</p>
                   <n-spin size="large" />
                 </div>
               </div>
@@ -21,7 +21,7 @@
               <div class="header-content">
                 <div class="header-brand" @click="$router.push('/')" style="cursor: pointer">
                   <img src="./assets/espressif_logo_white.svg" alt="Espressif" class="logo" />
-                  <span class="header-title">ESP-IDF Installation Manager</span>
+                  <span class="header-title">{{ $t('app.title') }}</span>
                 </div>
                 <div class="header-actions">
                   <!-- Navigation breadcrumbs or status could go here -->
@@ -32,7 +32,9 @@
                       @click="goTo(crumb.path)"
                       style="cursor: pointer; color: rgb(230, 204, 204) !important"
                     >
-                      <span style="color: rgb(230, 204, 204)">{{ crumb.label }}</span>
+                      <span style="color: rgb(230, 204, 204)">
+                        {{ crumb.params ? $t(crumb.label, crumb.params) : $t(crumb.label) }}
+                      </span>
                     </n-breadcrumb-item>
                   </n-breadcrumb> -->
                 </div>
@@ -98,13 +100,13 @@ export default {
 
     // Breadcrumb configuration
     const routeToBreadcrumb = {
-      '/welcome': { label: 'Welcome', show: false },
-      '/version-management': { label: 'Version Management', show: true },
-      '/basic-installer': { label: 'Installation Options', show: true },
-      '/offline-installer': { label: 'Offline Installation', show: true },
-      '/simple-setup': { label: 'Easy Installation', show: true },
-      '/installation-progress': { label: 'Installation Progress', show: true },
-      '/wizard': { label: 'Configuration Wizard', show: true }
+      '/welcome': { label: 'routes.welcome', show: false },
+      '/version-management': { label: 'routes.versionManagement', show: true },
+      '/basic-installer': { label: 'routes.installationOptions', show: true },
+      '/offline-installer': { label: 'routes.offlineInstallation', show: true },
+      '/simple-setup': { label: 'routes.easyInstallation', show: true },
+      '/installation-progress': { label: 'routes.installationProgress', show: true },
+      '/wizard': { label: 'routes.configurationWizard', show: true }
     }
 
     const showBreadcrumb = computed(() => {
@@ -123,7 +125,7 @@ export default {
 
     const breadcrumbs = computed(() => {
       const path = route.path
-      const crumbs = [{ path: '/', label: 'Home' }]
+      const crumbs = [{ path: '/', label: 'app.home' }]
 
       for (const [key, value] of Object.entries(routeToBreadcrumb)) {
         if (path.startsWith(key)) {
@@ -135,7 +137,11 @@ export default {
       // Add wizard step if applicable
       if (path.startsWith('/wizard/')) {
         const step = route.params.step
-        crumbs.push({ path: path, label: `Step ${step}` })
+        crumbs.push({ 
+          path: path, 
+          label: 'routes.step', 
+          params: { n: step } 
+        })
       }
 
       return crumbs

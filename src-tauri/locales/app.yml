@@ -35,7 +35,7 @@ python.sanitycheck.ok:
 python.sanitycheck.fail:
   en: Python is missing, or it does not meet the requirements. Please install python3 with pip, venv and ssl support and try again
   cn: Python 缺失或不符合要求。请安装 python3, pip 和 ssl 支持并重试
-pythhon.install.prompt:
+python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 python?
 python.install.success:
@@ -65,6 +65,12 @@ wizard.idf.failure:
 wizard.idf.user_cancelled:
   en: Canceling the instalation
   cn: 取消安装 ESP-IDF
+wizard.idf.cloning:
+  en: Cloning ESP-IDF
+  cn: 正在克隆 ESP-IDF
+wizard.idf_version.selected:
+  en: "Selected IDF version: %{version}"
+  cn: "已选择 IDF 版本: %{version}"
 wizard.tools.donwload.prompt:
   en: Choose the folder where the tools will be downloaded
   cn: 请选择要下载的工具所在目录
@@ -131,6 +137,9 @@ wizard.select_target.prompt:
 wizard.select_target.prompt.failure:
   en: We were unable to fetch available targets
   cn: 无法获取可用的目标平台
+wizard.target.selected:
+  en: "Selected target: %{target}"
+  cn: "已选择目标: %{target}"
 wizard.select_idf_version.prompt:
   en: Please select the desired ESP-IDF version
   cn: 请选择要使用的 ESP-IDF 版本
@@ -173,6 +182,15 @@ wizard.tool.extracted:
 wizard.tool.extract_failed:
   en: Failed to extract the tool
   cn: 解压工具失败
+wizard.tool.download.success:
+  en: "%{filename} successfully downloaded"
+  cn: "%{filename} 下载成功"
+wizard.tool.checksum.success:
+  en: "%{filename} checksum verified"
+  cn: "%{filename} 校验和验证成功"
+wizard.tool.extract.success:
+  en: "Successfully extracted %{filename} to %{dest}"
+  cn: "成功解压 %{filename} 到 %{dest}"
 wizard.after_install.add_to_path.prompt:
   en: Do you want to add ESP-IDF to your PATH permanently?
   cn: 是否要永久加入 ESP-IDF 到 PATH 中?
@@ -197,6 +215,9 @@ wizard.after_install.desktop_shortcut.created:
 wizard.after_install.desktop_shortcut.failed:
   en: Failed to create desktop shortcut
   cn: 创建 desktop 快捷方式失败
+wizard.generic.error:
+  en: "Error: %{error}"
+  cn: "错误: %{error}"
 wizard.posix.finish_steps.line_1:
   en: You have successfully installed ESP-IDF
   cn: 已成功安装 ESP-IDF
@@ -212,9 +233,84 @@ wizard.posix.finish_steps.line_4:
 wizard.posix.finish_steps.line_5:
   en: source
   cn: source
+wizard.separator.line:
+  en: "==========================================="
+  cn: "==========================================="
 wizard.windows.finish_steps.line_1:
   en: You have successfully installed ESP-IDF
   cn: 已成功安装 ESP-IDF
 wizard.windows.finish_steps.line_2:
   en: the installer placed shortcuts for PowerShell terminal with activated ESP-IDF environment to your desktop
   cn: 安装器将在桌面上放置带有激活 ESP-IDF 环境的 PowerShell 终端快捷方式
+wizard.debug.target.selected:
+  en: "Selected target: %{target}"
+  cn: "已选择目标: %{target}"
+wizard.debug.idf_version.selected:
+  en: "Selected IDF version: %{version}"
+  cn: "已选择 IDF 版本: %{version}"
+wizard.debug.submodule.progress:
+  en: "%{name}: %{progress}"
+  cn: "%{name}: %{progress}"
+wizard.shell.unsupported:
+  en: Unsupported shell
+  cn: 不支持的 shell
+wizard.tool.downloaded:
+  en: "%{filename} downloaded"
+  cn: "%{filename} 已下载"
+wizard.tool.verified:
+  en: "%{filename} verified"
+  cn: "%{filename} 已验证"
+wizard.tool.extracted:
+  en: "%{filename} extracted to %{dest}"
+  cn: "%{filename} 已解压到 %{dest}"
+wizard.prerequisites.offline_install.success:
+  en: Successfully installed prerequisites from offline archive
+  cn: 已成功从离线存档安装依赖项
+wizard.prerequisites.skip_check:
+  en: Skipping prerequisites check as per user request
+  cn: 根据用户请求跳过依赖项检查
+wizard.python.env_installed:
+  en: Python environment installed
+  cn: Python 环境已安装
+wizard.debug.config_entering:
+  en: "Config entering wizard: %{config}"
+  cn: "配置进入向导: %{config}"
+wizard.debug.tools_json_file:
+  en: "Tools json file: %{path}"
+  cn: "工具 JSON 文件: %{path}"
+wizard.debug.ide_config_path:
+  en: "IDE configuration path: %{path}"
+  cn: "IDE 配置路径: %{path}"
+wizard.debug.ide_config_saved:
+  en: IDE configuration saved
+  cn: IDE 配置已保存
+wizard.error.prerequisites_offline_install:
+  en: "Failed to install prerequisites from offline archive: %{error}"
+  cn: "无法从离线存档安装依赖项: %{error}"
+wizard.error.copy_dist_directory:
+  en: "Failed to copy dist directory from offline archive: %{error}"
+  cn: "无法从离线存档复制 dist 目录: %{error}"
+wizard.error.create_python_env:
+  en: "Failed to create Python environment directory: %{error}"
+  cn: "无法创建 Python 环境目录: %{error}"
+wizard.error.create_temp_dir:
+  en: "Failed to create temporary directory"
+  cn: "无法创建临时目录"
+debug.python_sanity_check:
+  en: Python sanity check passed.
+  cn: Python 健全性检查通过。
+debug.using_python:
+  en: "Using Python: %{path}"
+  cn: "使用 Python：%{path}"
+error.path_to_string:
+  en: Unable to convert path to string
+  cn: 无法将路径转换为字符串
+debug.non_interactive_save:
+  en: Saving config in non-interactive mode.
+  cn: 在非交互模式下保存配置。
+debug.skip_save:
+  en: Skipping config save in non-interactive mode.
+  cn: 在非交互模式下跳过保存配置。
+noninteractive.default:
+  en: Non-interactive mode, selecting first available IDF version.
+  cn: 非交互模式，选择第一个可用 IDF 版本。

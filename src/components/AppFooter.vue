@@ -3,77 +3,48 @@
     <div class="footer-content">
       <div class="footer-section">
         <span class="version-info">
-          ESP-IDF Installation Manager v{{ appVersion }}
+          {{ $t('footer.app.version', { version: appVersion }) }}
         </span>
       </div>
 
       <div class="footer-section center">
-        <n-button
-          @click="openDocumentation"
-          text
-          tag="a"
-          size="small"
-        >
-          <template #icon>
-            <n-icon><BookOutlined /></n-icon>
-          </template>
-          Documentation
+        <n-button @click="openDocumentation" text tag="a" size="small">
+          <template #icon><n-icon><BookOutlined /></n-icon></template>
+          {{ $t('footer.buttons.documentation') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="openLogsFolder"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><FolderOpenOutlined /></n-icon>
-          </template>
-          Logs
+        <n-button @click="openLogsFolder" text size="small">
+          <template #icon><n-icon><FolderOpenOutlined /></n-icon></template>
+          {{ $t('footer.buttons.logs') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="reportIssue"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><BugOutlined /></n-icon>
-          </template>
-          Report Issue
+        <n-button @click="reportIssue" text size="small">
+          <template #icon><n-icon><BugOutlined /></n-icon></template>
+          {{ $t('footer.buttons.reportIssue') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="showAbout"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><InfoCircleOutlined /></n-icon>
-          </template>
-          About
+        <n-button @click="showAbout" text size="small">
+          <template #icon><n-icon><InfoCircleOutlined /></n-icon></template>
+          {{ $t('footer.buttons.about') }}
         </n-button>
       </div>
 
       <div class="footer-section">
         <span class="copyright">
-          © 2024 Espressif Systems
+          {{ $t('footer.copyright', { year: new Date().getFullYear() }) }}
         </span>
       </div>
     </div>
 
     <!-- About Modal -->
-    <n-modal
-      v-model:show="showAboutModal"
-      preset="card"
-      title="About ESP-IDF Installation Manager"
-      style="width: 500px"
-    >
+    <n-modal v-model:show="showAboutModal" preset="card" 
+             :title="$t('footer.modal.about.title')" style="width: 500px">
       <div class="about-content">
         <div class="about-logo">
           <img src="../assets/espressif_logo.svg" alt="Espressif" />
@@ -106,12 +77,8 @@
     </n-modal>
 
     <!-- Report Issue Modal -->
-    <n-modal
-      v-model:show="showReportModal"
-      preset="card"
-      title="Report an Issue"
-      style="width: 600px"
-    >
+    <n-modal v-model:show="showReportModal" preset="card"
+             :title="$t('footer.modal.report.title')" style="width: 600px">
       <div class="report-content">
         <n-alert type="info" :bordered="false" style="margin-bottom: 1rem;">
           This will create a log bundle and open the issue reporting page.
@@ -162,7 +129,8 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { useI18n } from 'vue-i18n'
 
 import {
   NButton, NIcon, NDivider, NModal, NAlert, NCheckbox, useMessage
@@ -184,6 +152,7 @@ export default {
     InfoCircleOutlined, GithubOutlined
   },
   setup() {
+    const { t } = useI18n()
     const message = useMessage()
 
     const appVersion = ref('0.3.0')
@@ -228,7 +197,7 @@ export default {
       try {
         await openUrl('https://docs.espressif.com/projects/idf-im-ui/en/latest/')
       } catch (error) {
-        message.error('Failed to open documentation')
+        message.error(t('footer.messages.error.documentation'))
         console.log(error)
       }
     }
@@ -237,9 +206,9 @@ export default {
       try {
         let logPath = await invoke("get_logs_folder", {});
         invoke("show_in_folder", { path: logPath });
-        message.success('Logs folder opened')
+        message.success(t('footer.messages.success.logsOpened'))
       } catch (error) {
-        message.error('Failed to open logs folder')
+        message.error(t('footer.messages.error.logs'))
       }
     }
 

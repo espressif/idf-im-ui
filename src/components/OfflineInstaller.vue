@@ -1,22 +1,22 @@
 <template>
   <div class="offline-installer">
     <div class="installer-header">
-      <h1 class="title">Offline Installation</h1>
+      <h1 class="title">{{ $t('offlineInstaller.title') }}</h1>
       <n-button @click="goBack" type="primary" quaternary>
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
-        Back
+        {{ $t('offlineInstaller.back') }}
       </n-button>
     </div>
 
     <!-- Archive Selection -->
     <n-card v-if="!installationStarted" class="config-card">
-      <h2>Installation Configuration</h2>
+      <h2>{{ $t('offlineInstaller.config.title') }}</h2>
 
       <!-- Selected Archives -->
       <div class="section">
-        <h3>Selected Archive</h3>
+        <h3>{{ $t('offlineInstaller.config.archive.title') }}</h3>
         <div v-if="archives.length > 0" class="archive-list">
           <n-card v-for="(archive, index) in archives" :key="index" size="small">
             <div class="archive-item">
@@ -50,45 +50,45 @@
           <template #icon>
             <n-icon><PlusOutlined /></n-icon>
           </template>
-          Add Archive
+          {{ $t('offlineInstaller.config.archive.addButton') }}
         </n-button>
       </div>
 
       <!-- Installation Path -->
       <div class="section">
-        <h3>Installation Path</h3>
+        <h3>{{ $t('offlineInstaller.config.path.title') }}</h3>
         <n-input-group>
           <n-input
             v-model:value="installPath"
-            placeholder="Select installation directory"
+            :placeholder="$t('offlineInstaller.config.path.placeholder')"
             :disabled="useDefaultPath"
           />
           <n-button @click="browsePath" :disabled="useDefaultPath">
             <template #icon>
               <n-icon><FolderOpenOutlined /></n-icon>
             </template>
-            Browse
+            {{ $t('offlineInstaller.config.archive.browse') }}
           </n-button>
         </n-input-group>
         <n-checkbox
           v-model:checked="useDefaultPath"
           style="margin-top: 0.5rem;"
         >
-          Use default installation path
+          {{ $t('offlineInstaller.config.path.useDefault') }}
         </n-checkbox>
         <n-alert
           v-if="!pathValid && installPath"
           type="warning"
           style="margin-top: 1rem;"
         >
-          The selected path is not empty. Installation may fail if files already exist.
+          {{ $t('offlineInstaller.config.path.warning') }}
         </n-alert>
       </div>
 
       <!-- Action Buttons -->
       <div class="actions">
         <n-button @click="goBack" size="large">
-          Cancel
+          {{ $t('offlineInstaller.cancel') }}
         </n-button>
         <n-button
           @click="startInstallation"
@@ -96,14 +96,14 @@
           size="large"
           :disabled="archives.length === 0 || !installPath"
         >
-          Start Installation
+          {{ $t('offlineInstaller.config.startButton') }}
         </n-button>
       </div>
     </n-card>
 
     <!-- Installation Progress -->
     <n-card v-else class="progress-card">
-      <h2>Installing ESP-IDF from Offline Archive</h2>
+      <h2>{{ $t('offlineInstaller.installation.title') }}</h2>
 
       <n-alert title="Installation Error" type="error" v-if="error_message">
         {{ error_message }}
@@ -112,13 +112,13 @@
       <!-- Current Activity Display -->
       <div v-if="installation_running" class="current-activity" data-id="current-activity">
         <div class="current-step">
-          <h3>Current Activity:</h3>
+          <h3>{{ $t('offlineInstaller.installation.currentActivity') }}</h3>
           <div class="activity-status">{{ currentActivity }}</div>
           <div v-if="currentDetail" class="activity-detail">{{ currentDetail }}</div>
         </div>
 
         <div class="progress-section">
-          <div class="progress-label">Overall Progress</div>
+          <div class="progress-label">{{ $t('offlineInstaller.installation.overallProgress') }}</div>
           <n-progress
             type="line"
             :percentage="currentProgress"
@@ -153,29 +153,33 @@
 
       <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
-        <h3 data-id="error-title">Error during offline installation:</h3>
-        <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
-        <n-button @click="retry" type="error" size="large" data-id="retry-installation-button">Retry Installation</n-button>
-        <n-button @click="goBack" type="default" size="large" style="margin-left: 1rem;" data-id="back-installation-button">Go Back</n-button>
+        <h3 data-id="error-title">{{ $t('offlineInstaller.installation.error.title') }}</h3>
+        <p data-id="error-message-text">{{ error_message }} <br> {{ $t('offlineInstaller.installation.error.info') }}</p>
+        <n-button @click="retry" type="error" size="large" data-id="retry-installation-button">
+          {{ $t('offlineInstaller.installation.error.retry') }}
+        </n-button>
+        <n-button @click="goBack" type="default" size="large" style="margin-left: 1rem;" data-id="back-installation-button">
+          {{ $t('offlineInstaller.installation.error.back') }}
+        </n-button>
       </div>
 
       <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
         <n-button @click="finish" type="error" size="large" data-id="complete-installation-button-footer">
-          Complete Installation
+          {{ $t('offlineInstaller.installation.complete') }}
         </n-button>
       </div>
 
       <!-- Installation Summary -->
       <div v-if="installation_finished && !installation_failed" class="installation-summary" data-id="installation-summary">
-        <h3>Offline Installation Complete</h3>
-        <p>Successfully installed ESP-IDF and all required tools from offline archive.</p>
+        <h3>{{ $t('offlineInstaller.installation.summary.title') }}</h3>
+        <p>{{ $t('offlineInstaller.installation.summary.success') }}</p>
         <div class="summary-details">
           <div v-if="installed_versions.length > 0">
-            <strong>Installed Versions:</strong> {{ installed_versions.join(', ') }}
+            <strong>{{ $t('offlineInstaller.installation.summary.installedVersions') }}:</strong> {{ installed_versions.join(', ') }}
           </div>
           <div v-if="installationPath">
-            <strong>Installation Path:</strong> {{ installationPath }}
+            <strong>{{ $t('offlineInstaller.installation.summary.path') }}:</strong> {{ installationPath }}
           </div>
         </div>
       </div>
@@ -239,6 +243,7 @@ import {
   CloseOutlined, FileZipOutlined, CheckCircleOutlined,
   CloseCircleOutlined
 } from '@vicons/antd'
+import { useI18n } from 'vue-i18n'
 
 export default {
   name: 'OfflineInstaller',
@@ -273,14 +278,14 @@ export default {
 
       // Installation steps
       installationSteps: [
-        { title: 'Check', description: 'Validating archives' },
-        { title: 'Extract', description: 'Extracting archive contents' },
-        { title: 'Prerequisites', description: 'Installing dependencies' },
-        { title: 'Install', description: 'Installing ESP-IDF' },
-        { title: 'Tools', description: 'Setting up development tools' },
-        { title: 'Python', description: 'Configuring Python environment' },
-        { title: 'Configure', description: 'Finalizing configuration' },
-        { title: 'Complete', description: 'Installation complete' }
+        { title: this.$t('offlineInstaller.installation.steps.check.title'), description: this.$t('offlineInstaller.installation.steps.check.description') },
+        { title: this.$t('offlineInstaller.installation.steps.extract.title'), description: this.$t('offlineInstaller.installation.steps.extract.description') },
+        { title: this.$t('offlineInstaller.installation.steps.prerequisites.title'), description: this.$t('offlineInstaller.installation.steps.prerequisites.description') },
+        { title: this.$t('offlineInstaller.installation.steps.install.title'), description: this.$t('offlineInstaller.installation.steps.install.description') },
+        { title: this.$t('offlineInstaller.installation.steps.tools.title'), description: this.$t('offlineInstaller.installation.steps.tools.description') },
+        { title: this.$t('offlineInstaller.installation.steps.python.title'), description: this.$t('offlineInstaller.installation.steps.python.description') },
+        { title: this.$t('offlineInstaller.installation.steps.configure.title'), description: this.$t('offlineInstaller.installation.steps.configure.description') },
+        { title: this.$t('offlineInstaller.installation.steps.complete.title'), description: this.$t('offlineInstaller.installation.steps.complete.description') }
       ],
 
       // Event listeners
@@ -394,7 +399,7 @@ export default {
           this.archives.push(...newArchives)
         }
       } catch (error) {
-        this.$message.error('Failed to select archives')
+        this.$message.error(this.$t('offlineInstaller.messages.errors.selectArchives'))
       }
     },
 
@@ -410,7 +415,7 @@ export default {
           await this.validatePath()
         }
       } catch (error) {
-        this.$message.error('Failed to select path')
+        this.$message.error(this.$t('offlineInstaller.messages.errors.selectPath'))
       }
     },
 
