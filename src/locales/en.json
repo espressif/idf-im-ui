@@ -130,5 +130,279 @@
         "report": "Failed to generate report: {error}"
       }
     }
+  },
+  "basicInstaller": {
+    "title": "Install ESP-IDF",
+    "back": "Back",
+    "loading": {
+      "title": "Checking System Requirements",
+      "checkingPrerequisites": "Checking prerequisites...",
+      "detectingOS": "Detecting operating system...",
+      "scanningArchives": "Scanning for offline archives...",
+      "verifyingPaths": "Verifying installation paths..."
+    },
+    "prerequisites": {
+      "header": "Prerequisites Missing",
+      "message": "The following prerequisites are missing:",
+      "installButton": "Install Prerequisites Automatically",
+      "manualInstall": "Please install the missing prerequisites before continuing.",
+      "warning": "Please install prerequisites first"
+    },
+    "cards": {
+      "easy": {
+        "title": "Easy Installation",
+        "description": "Quick setup with recommended defaults. Perfect for beginners.",
+        "feature1": "Latest stable ESP-IDF version",
+        "feature2": "Default installation path",
+        "feature3": "Automatic configuration",
+        "button": "Start Easy Installation"
+      },
+      "custom": {
+        "title": "Custom Installation",
+        "description": "Full control over installation settings. For advanced users.",
+        "feature1": "Choose ESP-IDF version",
+        "feature2": "Custom installation path",
+        "feature3": "Advanced options",
+        "button": "Start Configuration Wizard"
+      },
+      "offline": {
+        "title": "Offline Installation",
+        "description": "Install from local archive files (.zst). No internet required.",
+        "button": "Browse Archive File"
+      },
+      "config": {
+        "title": "Load Configuration",
+        "description": "Import existing installation configuration file.",
+        "button": "Browse Configuration File"
+      }
+    },
+    "messages": {
+      "startingPrerequisites": "Starting prerequisites installation...",
+      "configLoaded": "Configuration loaded",
+      "errors": {
+        "systemRequirements": "Failed to check system requirements",
+        "prerequisites": "Failed to install prerequisites",
+        "loadConfig": "Failed to load configuration",
+        "selectArchive": "Failed to select archive file"
+      }
+    }
+  },
+  "progress": {
+    "defaultMessage": "Processing...",
+    "status": {
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "failed": "Failed",
+      "warning": "Warning"
+    },
+    "estimatedTime": "Est. time remaining: {time}",
+    "stages": {
+      "checking": "Checking...",
+      "prerequisites": "Installing prerequisites...",
+      "download": "Downloading...",
+      "extract": "Extracting...",
+      "tools": "Installing tools...",
+      "python": "Configuring Python...",
+      "configure": "Configuring...",
+      "complete": "Installation complete",
+      "error": "Installation failed"
+    }
+  },
+  "offlineInstaller": {
+    "title": "Offline Installation",
+    "back": "Back",
+    "cancel": "Cancel",
+    "config": {
+      "title": "Installation Configuration",
+      "archive": {
+        "title": "Selected Archive",
+        "addButton": "Add Archive",
+        "browse": "Browse"
+      },
+      "path": {
+        "title": "Installation Path",
+        "placeholder": "Select installation directory",
+        "useDefault": "Use default installation path",
+        "warning": "The selected path is not empty. Installation may fail if files already exist."
+      },
+      "startButton": "Start Installation"
+    },
+    "installation": {
+      "title": "Installing ESP-IDF from Offline Archive",
+      "currentActivity": "Current Activity:",
+      "overallProgress": "Overall Progress",
+      "steps": {
+        "check": {
+          "title": "Check",
+          "description": "Validating archives"
+        },
+        "extract": {
+          "title": "Extract",
+          "description": "Extracting archive contents"
+        },
+        "prerequisites": {
+          "title": "Prerequisites",
+          "description": "Installing dependencies"
+        },
+        "install": {
+          "title": "Install",
+          "description": "Installing ESP-IDF"
+        },
+        "tools": {
+          "title": "Tools",
+          "description": "Setting up development tools"
+        },
+        "python": {
+          "title": "Python",
+          "description": "Configuring Python environment"
+        },
+        "configure": {
+          "title": "Configure",
+          "description": "Finalizing configuration"
+        },
+        "complete": {
+          "title": "Complete",
+          "description": "Installation complete"
+        }
+      },
+      "error": {
+        "title": "Error during offline installation:",
+        "description": "For more information consult the log file.",
+        "retry": "Retry Installation",
+        "back": "Go Back"
+      },
+      "success": {
+        "title": "Offline Installation Complete",
+        "description": "Successfully installed ESP-IDF and all required tools from offline archive.",
+        "details": {
+          "versions": "Installed Versions:",
+          "path": "Installation Path:"
+        },
+        "complete": "Complete Installation"
+      },
+      "log": {
+        "title": "Installation Log",
+        "entries": "({count} entries)"
+      }
+    },
+    "messages": {
+      "errors": {
+        "selectArchives": "Failed to select archives",
+        "selectPath": "Failed to select path",
+        "installation": "Offline installation failed"
+      }
+    }
+  },
+  "simpleSetup": {
+    "title": "Easy Installation",
+    "back": "Back",
+    "preparation": {
+      "title": "Preparing Installation",
+      "checking": "Checking system requirements and prerequisites..."
+    },
+    "ready": {
+      "title": "Ready to Install",
+      "summary": {
+        "version": "Version:",
+        "path": "Installation Path:",
+        "size": "Estimated Size:",
+        "time": "Estimated Time:",
+        "sizeValue": "~3.5 GB",
+        "timeValue": "10-45 minutes"
+      },
+      "info": "This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.",
+      "startButton": "Start Installation"
+    },
+    "installation": {
+      "defaultTitle": "Installing ESP-IDF",
+      "preparing": "Preparing installation...",
+      "steps": {
+        "check": {
+          "title": "Check",
+          "description": "System requirements"
+        },
+        "prerequisites": {
+          "title": "Prerequisites",
+          "description": "Installing dependencies"
+        },
+        "download": {
+          "title": "Download",
+          "description": "Downloading ESP-IDF"
+        },
+        "extract": {
+          "title": "Extract",
+          "description": "Extracting files"
+        },
+        "tools": {
+          "title": "Tools",
+          "description": "Installing tools"
+        },
+        "python": {
+          "title": "Python",
+          "description": "Setting up Python"
+        },
+        "configure": {
+          "title": "Configure",
+          "description": "Configuring environment"
+        },
+        "complete": {
+          "title": "Complete",
+          "description": "Finalizing installation"
+        }
+      },
+      "log": "Installation Log"
+    },
+    "complete": {
+      "title": "Installation Complete!",
+      "description": "ESP-IDF has been successfully installed on your system.",
+      "buttons": {
+        "documentation": "View Documentation",
+        "ide": "Open VS Code",
+        "dashboard": "Go to Dashboard"
+      },
+      "nextSteps": {
+        "title": "Next Steps:",
+        "steps": [
+          "Open a new IDF terminal using the icon on your desktop.",
+          "Navigate to your project directory",
+          "Run 'idf.py create-project my_project' to create a new project",
+          "Run 'idf.py build' to build your project"
+        ]
+      }
+    },
+    "error": {
+      "title": "Installation Failed",
+      "wizard": "Use Custom Installation",
+      "viewLogs": "View Logs",
+      "retry": "Try Again",
+      "prerequisites": {
+        "title": "Prerequisites Missing",
+        "message": "Some required dependencies are not installed."
+      },
+      "path": {
+        "title": "Installation Path Not Empty",
+        "message": "The default installation path ({path}) is not empty.",
+        "details": "Please use custom installation to select a different path."
+      },
+      "system": {
+        "title": "System Check Failed",
+        "message": "Failed to verify system requirements."
+      },
+      "start": {
+        "title": "Failed to Start Installation"
+      },
+      "buttons": {
+        "logs": "View Logs",
+        "retry": "Try Again",
+        "custom": "Use Custom Installation"
+      }
+    },
+    "messages": {
+      "errors": {
+        "logs": "Failed to open logs folder",
+        "docs": "Failed to open documentation",
+        "ide": "Please install VS Code with ESP-IDF extension"
+      }
+    }
   }
 }
