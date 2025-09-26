@@ -7,6 +7,23 @@ edition = "2021"
 copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
 default-run = "eim"
 
+[package.metadata.deb]
+name = "eim-cli"  # Package name for APT (for separate package management)
+section = "devel"
+maintainer = "Espressif Systems"
+copyright = "2025, Espressif Systems"
+extended-description = """\
+The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies
+the setup process for ESP-IDF and integrated development environments (IDEs)
+across multiple platforms. This package contains the command-line interface."""
+license-file = ["../LICENSE"]
+assets = [
+    ["target/release/eim", "usr/bin/", "755"],
+    ["../README.md", "usr/share/doc/eim-cli/", "644"],
+    ["../LICENSE", "usr/share/doc/eim-cli/", "644"],
+    ["../man/eim.1", "usr/share/man/man1/", "644"],
+]
+
 [features]
 default = ["gui", "cli", "vendored-openssl"]
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log", "dep:num_cpus", "dep:tauri-plugin-store", "dep:tauri-plugin-opener"]
