@@ -1,7 +1,7 @@
 <template>
   <div class="complete-screen" data-id="complete-screen">
-    <n-result class="complete-result" status="success" title="Installation Complete!"
-      description="ESP-IDF has been successfully installed on your system" data-id="completion-result">
+    <n-result class="complete-result" status="success" :title="t('complete.title')"
+      :description="t('complete.description')" data-id="completion-result">
       <template #footer>
         <div class="actions" data-id="completion-actions">
           <div class="info-section" data-id="info-section">
@@ -13,7 +13,7 @@
                       d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </template>
-                An IDF PowerShell shortcut has been created on your desktop
+                {{ t('complete.messages.powershellShortcut') }}
               </n-alert>
             </div>
 
@@ -22,13 +22,13 @@
 
           <div class="buttons" data-id="action-buttons">
             <n-button @click="save_config" type="info" class="save-button" dashed data-id="save-config-button">
-              Save Configuration
+              {{ t('complete.buttons.saveConfiguration') }}
             </n-button>
             <n-button @click="goHome" class="save-button" type="info" dashed data-id="home-button">
-              Home
+              {{ t('complete.buttons.home') }}
             </n-button>
             <n-button @click="quit" class="save-button" type="info" dashed data-id="exit-button">
-              Exit Installer
+              {{ t('complete.buttons.exitInstaller') }}
             </n-button>
           </div>
           <div class="config-save" data-id="config-save-section">
@@ -39,7 +39,7 @@
                     d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
                 </svg>
               </template>
-              Save your configuration to reproduce this installation on other machines
+              {{ t('complete.messages.saveConfigInfo') }}
             </n-alert>
           </div>
         </div>
@@ -51,6 +51,7 @@
 
 <script>
 import { ref } from "vue";
+import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NResult, NAlert } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog';
@@ -65,6 +66,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NResult, NAlert },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     os: undefined,
     router: useRouter()
@@ -82,13 +87,13 @@ export default {
       this.wizStore.resetWizard();
       this.router.push('/');
     },
-    save_config: async () => {
+    async save_config() {
       const selected = await save({
-        title: 'Save installation config file',
+        title: this.t('complete.dialog.saveConfigTitle'),
         defaultPath: '/tmp/eim_config.toml',
         filters: [
           {
-            name: 'eim_config.toml',
+            name: this.t('complete.dialog.configFileName'),
             extensions: ['toml'],
 
           },
@@ -218,3 +223,4 @@ export default {
   border-color: #5AC8FA;
 } */
 </style>
+

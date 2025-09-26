@@ -1,17 +1,16 @@
 <template>
   <div class="welcome-container">
-    <!-- Main Welcome Screen -->
     <main class="main-content">
       <!-- CPU Check for Windows -->
       <div class="welcome-card" v-if="os === 'windows' && cpuCount == 1">
-        <h1>System Requirements</h1>
+        <h1>{{ $t('welcome.systemRequirements') }}</h1>
         <div class="content">
           <n-alert type="error" :bordered="false">
-            This tool requires a system with at least 2 CPU cores when using Windows OS.
+            {{ $t('welcome.cpuError') }}
           </n-alert>
-          <p>Sorry for the inconvenience</p>
+          <p>{{ $t('welcome.sorry') }}</p>
           <n-button @click="quit" type="error" size="large">
-            Exit Installer
+            {{ $t('welcome.exitInstaller') }}
           </n-button>
         </div>
       </div>
@@ -19,10 +18,7 @@
       <!-- Normal Welcome Flow -->
       <div class="welcome-card" v-else>
         <div class="welcome-header">
-          <h1>Welcome to <span>ESP-IDF</span> Installation Manager</h1>
-          <!-- <n-tag v-if="!isFirstRun" type="info">
-            {{ installedVersionsCount }} version(s) installed
-          </n-tag> -->
+          <h1>{{$t('welcome.welcome')}}<span>ESP-IDF</span> {{$t('welcome.title')}}</h1>
         </div>
 
         <div class="content">
@@ -31,12 +27,12 @@
           <!-- Quick Status -->
           <div v-if="checkingStatus" class="status-check">
             <n-spin size="small" />
-            <span>Checking installation status...</span>
+            <span>{{ $t('welcome.checkingStatus') }}</span>
           </div>
 
           <!-- Decision Cards -->
           <div v-else class="decision-cards">
-            <!-- Version Management (if versions exist) -->
+            <!-- Version Management -->
             <n-card
               v-if="hasInstalledVersions"
               class="decision-card primary-action"
@@ -47,13 +43,13 @@
                 <n-icon :size="48" color="#E8362D">
                   <DashboardOutlined />
                 </n-icon>
-                <h3>Manage Installations</h3>
-                <p>View and manage your {{ installedVersionsCount }} installed ESP-IDF version(s)</p>
-                <n-button type="primary" block>Open Dashboard</n-button>
+                <h3>{{ $t('welcome.cards.manage.title') }}</h3>
+                <p>{{ $t('welcome.cards.manage.description', { count: installedVersionsCount }) }}</p>
+                <n-button type="primary" block>{{ $t('welcome.cards.manage.button') }}</n-button>
               </div>
             </n-card>
 
-            <!-- Offline Installation (if archives detected) -->
+            <!-- Offline Installation -->
             <n-card
               v-if="hasOfflineArchives"
               class="decision-card offline-action"
@@ -64,25 +60,21 @@
                 <n-icon :size="48" color="#52c41a">
                   <FileZipOutlined />
                 </n-icon>
-                <h3>Offline Installation</h3>
-                <p>{{ offlineArchives.length }} archive(s) detected in current directory</p>
-                <n-button type="success" block>Install from Archive</n-button>
+                <h3>{{ $t('welcome.cards.offline.title') }}</h3>
+                <p>{{ $t('welcome.cards.offline.description', { count: offlineArchives.length }) }}</p>
+                <n-button type="success" block>{{ $t('welcome.cards.offline.button') }}</n-button>
               </div>
             </n-card>
 
             <!-- New Installation -->
-            <n-card
-              class="decision-card new-action"
-              @click="goToBasicInstaller"
-              hoverable
-            >
+            <n-card class="decision-card new-action" @click="goToBasicInstaller" hoverable>
               <div class="card-content">
                 <n-icon :size="48" color="#1290d8">
                   <PlusCircleOutlined />
                 </n-icon>
-                <h3>New Installation</h3>
-                <p>Install ESP-IDF development environment</p>
-                <n-button type="info" block>Start Installation</n-button>
+                <h3>{{ $t('welcome.cards.new.title') }}</h3>
+                <p>{{ $t('welcome.cards.new.description') }}</p>
+                <n-button type="info" block>{{ $t('welcome.cards.new.button') }}</n-button>
               </div>
             </n-card>
           </div>
@@ -90,16 +82,15 @@
           <!-- Don't Show Again -->
           <div v-if="isFirstRun" class="preferences">
             <n-checkbox v-model:checked="dontShowAgain">
-              Don't show this welcome screen again
+              {{ $t('welcome.preferences.dontShow') }}
             </n-checkbox><br></br>
             <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange">
-              Allow sending usage statistics
+              {{ $t('welcome.preferences.allowTracking') }}
             </n-checkbox>
           </div>
         </div>
       </div>
     </main>
-
   </div>
 </template>
 
@@ -107,6 +98,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18n } from 'vue-i18n'
 import {
   NButton, NCard, NIcon, NTag, NSpin, NCheckbox, NAlert, useMessage
 } from 'naive-ui'
@@ -123,6 +115,7 @@ export default {
     DashboardOutlined, FileZipOutlined, PlusCircleOutlined
   },
   setup() {
+    const { t } = useI18n()
     const router = useRouter()
     const message = useMessage()
 
@@ -144,13 +137,13 @@ export default {
 
     const getWelcomeMessage = computed(() => {
       if (hasInstalledVersions.value && hasOfflineArchives.value) {
-        return 'Choose how you want to proceed:'
+        return t('welcome.messages.withBoth')
       } else if (hasInstalledVersions.value) {
-        return 'Manage your existing installations or install a new version:'
+        return t('welcome.messages.withInstalled')
       } else if (hasOfflineArchives.value) {
-        return 'Offline archives detected. You can install from local files or download online:'
+        return t('welcome.messages.withArchives')
       } else {
-        return 'Get started with ESP-IDF development environment:'
+        return t('welcome.messages.fresh')
       }
     })
 
@@ -212,7 +205,7 @@ export default {
     }
     const handleUsageTrackingChange = async (checked) => {
       if (checked) {
-        message.success('Thank you for allowing usage tracking!')
+        message.success(t('welcome.messages.trackingEnabled'))
         try {
           await invoke('save_app_settings', {
             firstRun: false,
@@ -232,8 +225,7 @@ export default {
         } catch (error) {
           console.error('Failed to change usage tracking settings:', error)
         }
-        message.info('You have disabled usage tracking.')
-
+        message.info(t('welcome.messages.trackingDisabled'))
       }
     }
 

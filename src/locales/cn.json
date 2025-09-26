@@ -1,0 +1,708 @@
+{
+  "app": {
+    "title": "ESP-IDF 安装管理器",
+    "settingUp": "正在设置您的开发环境...",
+    "home": "主页"
+  },
+  "routes": {
+    "welcome": "欢迎",
+    "versionManagement": "版本管理",
+    "installationOptions": "安装选项",
+    "offlineInstallation": "离线安装",
+    "easyInstallation": "简易安装",
+    "installationProgress": "安装进度",
+    "configurationWizard": "配置向导",
+    "step": "步骤 {n}",
+    "fallbackRedirect": "正在重定向到欢迎页面..."
+  },
+  "store": {
+    "installation": {
+      "status": {
+        "idle": "空闲",
+        "downloading": "下载中",
+        "installing": "安装中",
+        "complete": "完成",
+        "error": "错误"
+      }
+    },
+    "wizard": {
+      "steps": {
+        "prerequisites": "先决条件",
+        "installPath": "安装路径",
+        "versionSelection": "版本选择",
+        "toolsSelection": "工具选择",
+        "pythonConfig": "Python 配置",
+        "mirrorSelection": "镜像选择",
+        "additionalOptions": "附加选项",
+        "review": "审查与确认"
+      },
+      "options": {
+        "createShortcuts": "创建快捷方式",
+        "addToPath": "添加到 PATH",
+        "installExamples": "安装示例",
+        "enableTelemetry": "启用遥测"
+      }
+    }
+  },
+  "welcome": {
+    "title": "欢迎使用 <span>ESP-IDF</span> 安装管理器",
+    "systemRequirements": "系统要求",
+    "cpuError": "在 Windows 操作系统上，此工具需要系统至少有 2 个 CPU 核心。",
+    "sorry": "给您带来不便，我们深表歉意",
+    "exitInstaller": "退出安装程序",
+    "versionsInstalled": "已安装 {count} 个版本",
+    "checkingStatus": "正在检查安装状态...",
+    "messages": {
+      "withBoth": "请选择如何继续：",
+      "withInstalled": "管理您现有的安装或安装新版本：",
+      "withArchives": "检测到离线存档。您可以从本地文件安装或在线下载：",
+      "fresh": "开始使用 ESP-IDF 开发环境：",
+      "trackingEnabled": "感谢您允许使用情况跟踪！",
+      "trackingDisabled": "您已禁用使用情况跟踪。"
+    },
+    "cards": {
+      "manage": {
+        "title": "管理安装",
+        "description": "查看和管理您已安装的 {count} 个 ESP-IDF 版本",
+        "button": "打开仪表板"
+      },
+      "offline": {
+        "title": "离线安装",
+        "description": "在当前目录中检测到 {count} 个存档",
+        "button": "从存档安装"
+      },
+      "new": {
+        "title": "新安装",
+        "description": "安装 ESP-IDF 开发环境",
+        "button": "开始安装"
+      }
+    },
+    "preferences": {
+      "dontShow": "不再显示此欢迎屏幕",
+      "allowTracking": "允许发送使用统计信息"
+    }
+  },
+  "footer": {
+    "app": {
+      "version": "ESP-IDF 安装管理器 v{version}"
+    },
+    "buttons": {
+      "documentation": "文档",
+      "logs": "日志",
+      "reportIssue": "报告问题",
+      "about": "关于"
+    },
+    "copyright": "© {year} 乐鑫信息科技",
+    "modal": {
+      "about": {
+        "title": "关于 ESP-IDF 安装管理器",
+        "version": "版本 {version}",
+        "description": {
+          "line1": "一个用于安装和管理 ESP-IDF 开发环境的跨平台工具。",
+          "line2": "支持 Windows、macOS 和 Linux 平台，提供在线和离线两种安装模式。"
+        },
+        "viewOnGithub": "在 GitHub 上查看"
+      },
+      "report": {
+        "title": "报告问题",
+        "info": "这将创建一个日志包并打开问题报告页面。",
+        "systemInfo": "系统信息",
+        "labels": {
+          "os": "操作系统：",
+          "arch": "架构：",
+          "appVersion": "应用版本："
+        },
+        "description": "请在接下来打开的 GitHub 问题页面中描述您遇到的问题。并附上日志文件夹中的所有日志（可通过应用页脚的按钮访问）。",
+        "buttons": {
+          "cancel": "取消",
+          "generate": "生成报告并打开问题页面"
+        }
+      }
+    },
+    "messages": {
+      "success": {
+        "logsOpened": "日志文件夹已打开"
+      },
+      "error": {
+        "documentation": "打开文档失败",
+        "logs": "打开日志文件夹失败",
+        "github": "打开 GitHub 页面失败",
+        "report": "生成报告失败：{error}"
+      }
+    }
+  },
+  "basicInstaller": {
+    "title": "安装 ESP-IDF",
+    "back": "返回",
+    "loading": {
+      "title": "正在检查系统要求",
+      "checkingPrerequisites": "正在检查先决条件...",
+      "detectingOS": "正在检测操作系统...",
+      "scanningArchives": "正在扫描离线存档...",
+      "verifyingPaths": "正在验证安装路径..."
+    },
+    "prerequisites": {
+      "header": "缺少先决条件",
+      "message": "缺少以下先决条件：",
+      "installButton": "自动安装先决条件",
+      "manualInstall": "请在继续前安装缺少的先决条件。",
+      "warning": "请先安装先决条件"
+    },
+    "cards": {
+      "easy": {
+        "title": "简易安装",
+        "description": "使用推荐的默认设置进行快速设置。非常适合初学者。",
+        "feature1": "最新的稳定版 ESP-IDF",
+        "feature2": "默认安装路径",
+        "feature3": "自动配置",
+        "button": "开始简易安装"
+      },
+      "custom": {
+        "title": "自定义安装",
+        "description": "完全控制安装设置。适用于高级用户。",
+        "feature1": "选择 ESP-IDF 版本",
+        "feature2": "自定义安装路径",
+        "feature3": "高级选项",
+        "button": "启动配置向导"
+      },
+      "offline": {
+        "title": "离线安装",
+        "description": "从本地存档文件 (.zst) 安装。无需网络连接。",
+        "button": "浏览存档文件"
+      },
+      "config": {
+        "title": "加载配置",
+        "description": "导入现有的安装配置文件。",
+        "button": "浏览配置文件"
+      }
+    },
+    "messages": {
+      "startingPrerequisites": "正在开始安装先决条件...",
+      "configLoaded": "配置已加载",
+      "errors": {
+        "systemRequirements": "检查系统要求失败",
+        "prerequisites": "安装先决条件失败",
+        "loadConfig": "加载配置失败",
+        "selectArchive": "选择存档文件失败"
+      }
+    }
+  },
+  "progress": {
+    "defaultMessage": "处理中...",
+    "status": {
+      "inProgress": "进行中",
+      "completed": "已完成",
+      "failed": "失败",
+      "warning": "警告"
+    },
+    "estimatedTime": "预计剩余时间：{time}",
+    "stages": {
+      "checking": "检查中...",
+      "prerequisites": "正在安装先决条件...",
+      "download": "下载中...",
+      "extract": "提取中...",
+      "tools": "正在安装工具...",
+      "python": "正在配置 Python...",
+      "configure": "配置中...",
+      "complete": "安装完成",
+      "error": "安装失败"
+    }
+  },
+  "offlineInstaller": {
+    "title": "离线安装",
+    "back": "返回",
+    "cancel": "取消",
+    "config": {
+      "title": "安装配置",
+      "archive": {
+        "title": "已选存档",
+        "addButton": "添加存档",
+        "browse": "浏览"
+      },
+      "path": {
+        "title": "安装路径",
+        "placeholder": "选择安装目录",
+        "useDefault": "使用默认安装路径",
+        "warning": "所选路径非空。如果文件已存在，安装可能会失败。"
+      },
+      "startButton": "开始安装"
+    },
+    "installation": {
+      "title": "正在从离线存档安装 ESP-IDF",
+      "currentActivity": "当前活动：",
+      "overallProgress": "总体进度",
+      "steps": {
+        "check": {
+          "title": "检查",
+          "description": "验证存档"
+        },
+        "extract": {
+          "title": "提取",
+          "description": "提取存档内容"
+        },
+        "prerequisites": {
+          "title": "先决条件",
+          "description": "安装依赖项"
+        },
+        "install": {
+          "title": "安装",
+          "description": "安装 ESP-IDF"
+        },
+        "tools": {
+          "title": "工具",
+          "description": "设置开发工具"
+        },
+        "python": {
+          "title": "Python",
+          "description": "配置 Python 环境"
+        },
+        "configure": {
+          "title": "配置",
+          "description": "完成配置"
+        },
+        "complete": {
+          "title": "完成",
+          "description": "安装完成"
+        }
+      },
+      "error": {
+        "title": "离线安装期间出错：",
+        "description": "更多信息请查阅日志文件。",
+        "retry": "重试安装",
+        "back": "返回"
+      },
+      "success": {
+        "title": "离线安装完成",
+        "description": "已成功从离线存档安装 ESP-IDF 及所有必需工具。",
+        "details": {
+          "versions": "已安装版本：",
+          "path": "安装路径："
+        },
+        "complete": "完成安装"
+      },
+      "log": {
+        "title": "安装日志",
+        "entries": "({count} 条记录)"
+      }
+    },
+    "messages": {
+      "errors": {
+        "selectArchives": "选择存档失败",
+        "selectPath": "选择路径失败",
+        "installation": "离线安装失败"
+      }
+    }
+  },
+  "versionManagement": {
+    "title": "ESP-IDF 版本管理",
+    "checkForUpdates": "检查更新",
+    "prerequisites": {
+      "missing": "缺少先决条件",
+      "windowsMessage": "部分 Windows 先决条件未安装。",
+      "installButton": "安装先决条件"
+    },
+    "sections": {
+      "installedVersions": "已安装版本",
+      "noVersions": "未安装任何 ESP-IDF 版本"
+    },
+    "version": {
+      "path": "路径",
+      "installed": "已安装",
+      "size": "大小",
+      "actions": {
+        "rename": "重命名",
+        "fix": "修复/重新安装",
+        "openFolder": "打开文件夹",
+        "remove": "移除"
+      }
+    },
+    "quickActions": {
+      "installNew": "安装新版本",
+      "installDrivers": "安装驱动程序",
+      "purgeAll": "清除所有"
+    },
+    "modals": {
+      "rename": {
+        "title": "重命名安装",
+        "placeholder": "输入新名称",
+        "confirmButton": "重命名",
+        "cancelButton": "取消"
+      },
+      "remove": {
+        "title": "移除安装",
+        "message": "您确定要移除 <strong>{name}</strong> 吗？",
+        "pathMessage": "这将永久删除以下位置的安装：",
+        "confirmButton": "移除",
+        "cancelButton": "取消"
+      },
+      "fix": {
+        "title": "重新安装",
+        "message": "您确定要重新安装 <strong>{name}</strong> 吗？",
+        "warning": "这将永久删除所有更改。如果您的项目正在使用此安装，它们可能会停止工作。此过程可能需要一些时间，请耐心等待。",
+        "confirmButton": "重新安装",
+        "cancelButton": "取消"
+      },
+      "purge": {
+        "title": "清除所有安装",
+        "warning": "这将移除所有 ESP-IDF 安装！",
+        "listMessage": "以下安装将被删除：",
+        "confirmation": "我明白此操作无法撤销",
+        "confirmButton": "全部清除",
+        "cancelButton": "取消"
+      }
+    },
+    "messages": {
+      "success": {
+        "renamed": "安装重命名成功",
+        "removed": "安装移除成功",
+        "repairStarted": "修复过程已开始",
+        "purged": "所有安装已移除",
+        "prerequisitesStarted": "先决条件安装已开始",
+        "driversInstalled": "驱动程序安装成功。",
+        "latestVersion": "您拥有的是最新版本",
+        "updateAvailable": "有新版本可用！"
+      },
+      "error": {
+        "loadVersions": "加载已安装版本失败",
+        "rename": "重命名安装失败",
+        "remove": "移除安装失败",
+        "repair": "启动修复失败：{error}",
+        "openFolder": "打开文件夹失败",
+        "purge": "清除安装失败：{error}",
+        "prerequisites": "安装先决条件失败：{error}",
+        "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。",
+        "drivers": "安装驱动程序失败：{error}",
+        "checkUpdates": "检查更新失败"
+      },
+      "warning": {
+        "confirmAction": "请确认操作"
+      }
+    }
+  },
+  "wizardStep": {
+    "title": "专家安装步骤",
+    "stepIndicator": "步骤 {step}",
+    "steps": {
+      "prerequisitesCheck": "先决条件检查",
+      "pythonSanityCheck": "Python 健全性检查",
+      "selectTarget": "选择目标",
+      "selectVersion": "选择 IDF 版本",
+      "selectMirror": "选择镜像",
+      "selectPath": "选择安装路径",
+      "installationProgress": "安装进度",
+      "installationComplete": "安装完成"
+    }
+  },
+  "versionSelect": {
+    "title": "选择 ESP-IDF 版本",
+    "description": "选择要安装的 ESP-IDF SDK 版本：",
+    "tags": {
+      "latest": "最新",
+      "lts": "长期支持版"
+    },
+    "selectedVersions": "已选版本：",
+    "continueInstallation": "继续安装"
+  },
+  "targetSelect": {
+    "title": "选择目标芯片",
+    "description": "选择您将要为其开发的 ESP 芯片：",
+    "productSelectorMessage": "如果您不确定，可以查阅我们的 ",
+    "productSelector": "产品选型工具",
+    "targetChips": "目标芯片：",
+    "all": "全部",
+    "continueButton": "使用所选目标继续"
+  },
+  "pythonSanitycheck": {
+    "status": {
+      "ready": {
+        "title": "Python 环境已就绪",
+        "description": "您的 Python 安装满足所有要求"
+      },
+      "setupRequired": {
+        "title": "需要设置 Python",
+        "description": "需要 Python 3.10+，并支持 pip、virtualenv 和 SSL"
+      }
+    },
+    "actions": {
+      "installPython": "安装 Python",
+      "installingPython": "正在安装 Python...",
+      "continueNext": "继续下一步",
+      "recheckInstallation": "重新检查 Python 安装"
+    },
+    "installNote": "这将安装 Python 及所有必需组件",
+    "manualInstall": {
+      "title": "需要手动安装",
+      "intro": "请安装：",
+      "requirements": {
+        "python": "Python 3.10 或更高版本",
+        "pip": "pip 包管理器",
+        "virtualenv": "virtualenv 模块",
+        "ssl": "SSL 支持"
+      }
+    }
+  },
+  "prerequisitiesCheck": {
+    "title": "先决条件检查",
+    "description": "安装程序现在将验证 ESP-IDF 所需的组件...",
+    "status": {
+      "checking": "正在检查先决条件...",
+      "checkingButton": "检查中..."
+    },
+    "actions": {
+      "continue": "继续下一步",
+      "checkPrerequisites": "检查先决条件",
+      "installMissing": "安装缺失的先决条件"
+    },
+    "messages": {
+      "windowsInstall": "点击下方自动安装缺失的组件",
+      "manualInstall": "请手动安装以下组件",
+      "manualHint": "请安装先决条件后再次运行检查。"
+    }
+  },
+  "mirrorSelect": {
+    "title": "选择下载镜像",
+    "description": "为下载 ESP-IDF 和工具选择镜像。建议中国大陆以外的用户使用默认镜像。",
+    "sections": {
+      "idfMirror": "ESP-IDF 仓库镜像",
+      "toolsMirror": "ESP-IDF 工具镜像"
+    },
+    "tags": {
+      "default": "默认"
+    },
+    "continueButton": "使用所选镜像继续"
+  },
+  "installationPathSelect": {
+    "title": "选择安装位置",
+    "info": {
+      "title": "ESP-IDF 安装目录",
+      "description": "选择安装 ESP-IDF 及其工具的位置。请确保有足够的磁盘空间。"
+    },
+    "input": {
+      "placeholder": "选择安装目录",
+      "browseButton": "浏览"
+    },
+    "messages": {
+      "pathInvalid": "路径 {path} 无效，因为它包含冲突的文件或目录。请选择一个空的或不存在的目录。",
+      "pathValid": "路径 {path} 有效。",
+      "pathUpdated": "安装路径更新成功！",
+      "invalidPath": "无效路径。请选择一个有效的目录。"
+    },
+    "continueButton": "继续"
+  },
+  "complete": {
+    "title": "安装完成！",
+    "description": "ESP-IDF 已成功安装在您的系统上",
+    "messages": {
+      "powershellShortcut": "已在您的桌面上创建 IDF PowerShell 快捷方式",
+      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装"
+    },
+    "buttons": {
+      "saveConfiguration": "保存配置",
+      "home": "主页",
+      "exitInstaller": "退出安装程序"
+    },
+    "dialog": {
+      "saveConfigTitle": "保存安装配置文件",
+      "configFileName": "eim_config.toml"
+    }
+  },
+  "simpleSetup": {
+    "title": "简易安装",
+    "back": "返回",
+    "preparation": {
+      "title": "准备安装",
+      "checking": "正在检查系统要求和先决条件..."
+    },
+    "ready": {
+      "title": "准备安装",
+      "summary": {
+        "version": "版本：",
+        "path": "安装路径：",
+        "size": "预计大小：",
+        "time": "预计时间：",
+        "sizeValue": "~3.5 GB",
+        "timeValue": "10-45 分钟"
+      },
+      "alert": "这将使用默认设置安装 ESP-IDF。安装将包括所有必要的工具和依赖项。",
+      "startButton": "开始安装"
+    },
+    "installation": {
+      "defaultTitle": "正在安装 ESP-IDF",
+      "preparing": "正在准备安装...",
+      "steps": {
+        "check": {
+          "title": "检查",
+          "description": "系统要求"
+        },
+        "prerequisites": {
+          "title": "先决条件",
+          "description": "安装依赖项"
+        },
+        "download": {
+          "title": "下载",
+          "description": "下载 ESP-IDF"
+        },
+        "extract": {
+          "title": "提取",
+          "description": "提取文件"
+        },
+        "tools": {
+          "title": "工具",
+          "description": "安装工具"
+        },
+        "python": {
+          "title": "Python",
+          "description": "设置 Python"
+        },
+        "configure": {
+          "title": "配置",
+          "description": "配置环境"
+        },
+        "complete": {
+          "title": "完成",
+          "description": "完成安装"
+        }
+      },
+      "log": "安装日志"
+    },
+    "complete": {
+      "title": "安装完成！",
+      "description": "ESP-IDF 已成功安装在您的系统上。",
+      "buttons": {
+        "documentation": "查看文档",
+        "ide": "打开 VS Code",
+        "dashboard": "前往仪表板"
+      },
+      "nextSteps": {
+        "title": "后续步骤：",
+        "steps": [
+          "使用桌面上的图标打开一个新的 IDF 终端。",
+          "导航到您的项目目录",
+          "运行 'idf.py create-project my_project' 创建一个新项目",
+          "运行 'idf.py build' 构建您的项目"
+        ]
+      }
+    },
+    "error": {
+      "title": "安装失败",
+      "wizard": "使用自定义安装",
+      "viewLogs": "查看日志",
+      "retry": "重试",
+      "prerequisites": {
+        "title": "缺少先决条件",
+        "message": "一些必需的依赖项未安装。"
+      },
+      "path": {
+        "title": "安装路径非空",
+        "message": "默认安装路径 ({path}) 非空。",
+        "details": "请使用自定义安装选择不同的路径。"
+      },
+      "system": {
+        "title": "系统检查失败",
+        "message": "验证系统要求失败。"
+      },
+      "start": {
+        "title": "启动安装失败"
+      },
+      "buttons": {
+        "logs": "查看日志",
+        "retry": "重试",
+        "custom": "使用自定义安装"
+      }
+    },
+    "messages": {
+      "errors": {
+        "logs": "打开日志文件夹失败",
+        "docs": "打开文档失败",
+        "ide": "请安装带有 ESP-IDF 扩展的 VS Code"
+      }
+    }
+  },
+  "installationProgress": {
+    "title": {
+      "repair": "修复进度",
+      "installation": "安装进度"
+    },
+    "alert": {
+      "error": "安装错误"
+    },
+    "fixMode": {
+      "title": "正在修复 ESP-IDF 安装：",
+      "path": "路径：",
+      "description": "这将重新安装所选的 ESP-IDF 版本并修复任何损坏或缺失的组件。",
+      "unknownVersion": "未知版本",
+      "unknownPath": "未知路径"
+    },
+    "normalMode": {
+      "title": "正在安装 ESP-IDF 版本："
+    },
+    "buttons": {
+      "startInstallation": "开始安装",
+      "installing": "安装中...",
+      "goBack": "返回",
+      "completeRepair": "完成修复",
+      "completeInstallation": "完成安装"
+    },
+    "currentActivity": {
+      "title": "当前活动：",
+      "installingVersions": "正在安装 {count} 个版本："
+    },
+    "progress": {
+      "overall": "总体进度"
+    },
+    "steps": {
+      "check": {
+        "title": "检查",
+        "description": "系统要求"
+      },
+      "prerequisites": {
+        "title": "先决条件",
+        "description": "安装依赖项"
+      },
+      "download": {
+        "title": "下载",
+        "description": "克隆仓库"
+      },
+      "submodules": {
+        "title": "子模块",
+        "description": "下载子模块"
+      },
+      "tools": {
+        "title": "工具",
+        "description": "安装开发工具"
+      },
+      "python": {
+        "title": "Python",
+        "description": "设置 Python 环境"
+      },
+      "configure": {
+        "title": "配置",
+        "description": "完成配置"
+      },
+      "complete": {
+        "title": "完成",
+        "description": "安装完成"
+      }
+    },
+    "error": {
+      "title": "{mode} 期间出错：",
+      "seeLog": "更多信息请查阅日志文件。"
+    },
+    "summary": {
+      "repairComplete": "修复完成",
+      "installationComplete": "安装完成",
+      "repairDescription": "成功修复 ESP-IDF 安装及所有必需工具。",
+      "installationDescription": "成功安装 ESP-IDF 及所有必需工具。",
+      "repairedVersion": "已修复版本：",
+      "installedVersions": "已安装版本：",
+      "installationPath": "安装路径：",
+      "toolsRepaired": "已修复工具：",
+      "toolsInstalled": "已安装工具："
+    },
+    "log": {
+      "title": "安装日志",
+      "entries": "({count} 条记录)"
+    },
+    "preparing": "正在准备安装..."
+  }
+}

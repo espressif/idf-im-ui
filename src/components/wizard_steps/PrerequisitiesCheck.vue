@@ -1,14 +1,13 @@
 <template>
   <div class="prerequisites" data-id="prerequisites-check">
-    <h1 class="title" data-id="prerequisites-title">Prerequisites Check</h1>
-    <p class="description" data-id="prerequisites-description">The installer will now verify required components for
-      ESP-IDF...</p>
+    <h1 class="title" data-id="prerequisites-title">{{ t('prerequisitiesCheck.title') }}</h1>
+    <p class="description" data-id="prerequisites-description">{{ t('prerequisitiesCheck.description') }}</p>
 
     <div class="check-section" data-id="check-section">
       <n-card class="prerequisites-list" data-id="prerequisites-card">
 
         <div class="loading-overlay-wrapper">
-          <n-spin :show="loading" description="Checking prerequisites..." data-id="prerequisites-spinner">
+          <n-spin :show="loading" :description="t('prerequisitiesCheck.status.checking')" data-id="prerequisites-spinner">
             <ul class="items-list" :class="{ 'overlay-active': loading }" data-id="prerequisites-items-list">
               <li v-for="p in display_prerequisities" :key="p.name"
                 :class="{ 'item': true, 'missing': p.icon === '❌', 'installed': p.icon === '✔' }"
@@ -25,28 +24,26 @@
       <div v-if="did_the_check_run">
         <div v-if="missing_prerequisities.length === 0">
           <n-button @click="nextstep" type="error" data-id="continue-button">
-            Continue to Next Step
+            {{ t('prerequisitiesCheck.actions.continue') }}
           </n-button>
         </div>
 
         <div v-else>
-          <p>{{ os === 'windows' ? 'Click below to automatically install missing components' :
-            'Please install the following components manually' }}</p>
+          <p>{{ os === 'windows' ? t('prerequisitiesCheck.messages.windowsInstall') : t('prerequisitiesCheck.messages.manualInstall') }}</p>
           <div v-if="os === 'windows'" class="windows-install" data-id="windows-install-section">
             <n-button @click="install_prerequisites" type="warning" :loading="installing_prerequisities"
               data-id="install-prerequisites-button">
-              Install Missing Prerequisites
+              {{ t('prerequisitiesCheck.actions.installMissing') }}
             </n-button>
           </div>
           <div v-else class="manual-install" data-id="manual-install-section">
-            <p class="hint" data-id="manual-install-hint">Please install the prerequisites and run the check again.
-            </p>
+            <p class="hint" data-id="manual-install-hint">{{ t('prerequisitiesCheck.messages.manualHint') }}</p>
           </div>
         </div>
       </div>
       <div v-if="missing_prerequisities.length > 0 || !did_the_check_run">
         <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
-          {{ loading ? 'Checking...' : 'Check Prerequisites' }}
+          {{ loading ? t('prerequisitiesCheck.status.checkingButton') : t('prerequisitiesCheck.actions.checkPrerequisites') }}
         </n-button>
       </div>
 
@@ -56,6 +53,7 @@
 
 <script>
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from 'vue-i18n';
 import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
 
 export default {
@@ -64,6 +62,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin, NProgress, NCard }, // Added NCard here
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     loading: false,
     installing_prerequisities: false,
@@ -287,3 +289,4 @@ export default {
   pointer-events: none;
 }
 </style>
+

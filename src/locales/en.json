@@ -1,0 +1,707 @@
+{
+  "app": {
+    "title": "ESP-IDF Installation Manager",
+    "settingUp": "Setting up your development environment...",
+    "home": "Home"
+  },
+  "routes": {
+    "welcome": "Welcome",
+    "versionManagement": "Version Management",
+    "installationOptions": "Installation Options",
+    "offlineInstallation": "Offline Installation",
+    "easyInstallation": "Easy Installation",
+    "installationProgress": "Installation Progress",
+    "configurationWizard": "Configuration Wizard",
+    "step": "Step {n}",
+    "fallbackRedirect": "Redirecting to welcome page..."
+  },
+  "store": {
+    "installation": {
+      "status": {
+        "idle": "idle",
+        "downloading": "downloading",
+        "installing": "installing",
+        "complete": "complete",
+        "error": "error"
+      }
+    },
+    "wizard": {
+      "steps": {
+        "prerequisites": "Prerequisites",
+        "installPath": "Installation Path",
+        "versionSelection": "Version Selection",
+        "toolsSelection": "Tools Selection",
+        "pythonConfig": "Python Configuration",
+        "mirrorSelection": "Mirror Selection",
+        "additionalOptions": "Additional Options",
+        "review": "Review & Confirm"
+      },
+      "options": {
+        "createShortcuts": "Create shortcuts",
+        "addToPath": "Add to PATH",
+        "installExamples": "Install examples",
+        "enableTelemetry": "Enable telemetry"
+      }
+    }
+  },
+  "welcome": {
+    "welcome": "Welcome to",
+    "title": "Installation Manager",
+    "systemRequirements": "System Requirements",
+    "cpuError": "This tool requires a system with at least 2 CPU cores when using Windows OS.",
+    "sorry": "Sorry for the inconvenience",
+    "exitInstaller": "Exit Installer",
+    "versionsInstalled": "{count} version(s) installed",
+    "checkingStatus": "Checking installation status...",
+    "messages": {
+      "withBoth": "Choose how you want to proceed:",
+      "withInstalled": "Manage your existing installations or install a new version:",
+      "withArchives": "Offline archives detected. You can install from local files or download online:",
+      "fresh": "Get started with ESP-IDF development environment:",
+      "trackingEnabled": "Thank you for allowing usage tracking!",
+      "trackingDisabled": "You have disabled usage tracking."
+    },
+    "cards": {
+      "manage": {
+        "title": "Manage Installations",
+        "description": "View and manage your {count} installed ESP-IDF version(s)",
+        "button": "Open Dashboard"
+      },
+      "offline": {
+        "title": "Offline Installation",
+        "description": "{count} archive(s) detected in current directory",
+        "button": "Install from Archive"
+      },
+      "new": {
+        "title": "New Installation",
+        "description": "Install ESP-IDF development environment",
+        "button": "Start Installation"
+      }
+    },
+    "preferences": {
+      "dontShow": "Don't show this welcome screen again",
+      "allowTracking": "Allow sending usage statistics"
+    }
+  },
+  "footer": {
+    "app": {
+      "version": "ESP-IDF Installation Manager v{version}"
+    },
+    "buttons": {
+      "documentation": "Documentation",
+      "logs": "Logs",
+      "reportIssue": "Report Issue",
+      "about": "About"
+    },
+    "copyright": "© {year} Espressif Systems",
+    "modal": {
+      "about": {
+        "title": "About ESP-IDF Installation Manager",
+        "version": "Version {version}",
+        "description": {
+          "line1": "A cross-platform tool for installing and managing ESP-IDF development environment.",
+          "line2": "Supports Windows, macOS, and Linux platforms with both online and offline installation modes."
+        },
+        "viewOnGithub": "View on GitHub"
+      },
+      "report": {
+        "title": "Report an Issue",
+        "info": "This will create a log bundle and open the issue reporting page.",
+        "systemInfo": "System Information",
+        "labels": {
+          "os": "OS:",
+          "arch": "Architecture:",
+          "appVersion": "App Version:"
+        },
+        "description": "Please describe the issue you encountered in the GitHub issue page that opens next. And attach all logs from the logs folder (accessible through button in app footer).",
+        "buttons": {
+          "cancel": "Cancel",
+          "generate": "Generate Report & Open Issue"
+        }
+      }
+    },
+    "messages": {
+      "success": {
+        "logsOpened": "Logs folder opened"
+      },
+      "error": {
+        "documentation": "Failed to open documentation",
+        "logs": "Failed to open logs folder",
+        "github": "Failed to open GitHub page",
+        "report": "Failed to generate report: {error}"
+      }
+    }
+  },
+  "basicInstaller": {
+    "title": "Install ESP-IDF",
+    "back": "Back",
+    "loading": {
+      "title": "Checking System Requirements",
+      "checkingPrerequisites": "Checking prerequisites...",
+      "detectingOS": "Detecting operating system...",
+      "scanningArchives": "Scanning for offline archives...",
+      "verifyingPaths": "Verifying installation paths..."
+    },
+    "prerequisites": {
+      "header": "Prerequisites Missing",
+      "message": "The following prerequisites are missing:",
+      "installButton": "Install Prerequisites Automatically",
+      "manualInstall": "Please install the missing prerequisites before continuing.",
+      "warning": "Please install prerequisites first"
+    },
+    "cards": {
+      "easy": {
+        "title": "Easy Installation",
+        "description": "Quick setup with recommended defaults. Perfect for beginners.",
+        "feature1": "Latest stable ESP-IDF version",
+        "feature2": "Default installation path",
+        "feature3": "Automatic configuration",
+        "button": "Start Easy Installation"
+      },
+      "custom": {
+        "title": "Custom Installation",
+        "description": "Full control over installation settings. For advanced users.",
+        "feature1": "Choose ESP-IDF version",
+        "feature2": "Custom installation path",
+        "feature3": "Advanced options",
+        "button": "Start Configuration Wizard"
+      },
+      "offline": {
+        "title": "Offline Installation",
+        "description": "Install from local archive files (.zst). No internet required.",
+        "button": "Browse Archive File"
+      },
+      "config": {
+        "title": "Load Configuration",
+        "description": "Import existing installation configuration file.",
+        "button": "Browse Configuration File"
+      }
+    },
+    "messages": {
+      "startingPrerequisites": "Starting prerequisites installation...",
+      "configLoaded": "Configuration loaded",
+      "errors": {
+        "systemRequirements": "Failed to check system requirements",
+        "prerequisites": "Failed to install prerequisites",
+        "loadConfig": "Failed to load configuration",
+        "selectArchive": "Failed to select archive file"
+      }
+    }
+  },
+  "progress": {
+    "defaultMessage": "Processing...",
+    "status": {
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "failed": "Failed",
+      "warning": "Warning"
+    },
+    "estimatedTime": "Est. time remaining: {time}",
+    "stages": {
+      "checking": "Checking...",
+      "prerequisites": "Installing prerequisites...",
+      "download": "Downloading...",
+      "extract": "Extracting...",
+      "tools": "Installing tools...",
+      "python": "Configuring Python...",
+      "configure": "Configuring...",
+      "complete": "Installation complete",
+      "error": "Installation failed"
+    }
+  },
+  "offlineInstaller": {
+    "title": "Offline Installation",
+    "back": "Back",
+    "cancel": "Cancel",
+    "config": {
+      "title": "Installation Configuration",
+      "archive": {
+        "title": "Selected Archive",
+        "addButton": "Add Archive",
+        "browse": "Browse"
+      },
+      "path": {
+        "title": "Installation Path",
+        "placeholder": "Select installation directory",
+        "useDefault": "Use default installation path",
+        "warning": "The selected path is not empty. Installation may fail if files already exist."
+      },
+      "startButton": "Start Installation"
+    },
+    "installation": {
+      "title": "Installing ESP-IDF from Offline Archive",
+      "currentActivity": "Current Activity:",
+      "overallProgress": "Overall Progress",
+      "steps": {
+        "check": {
+          "title": "Check",
+          "description": "Validating archives"
+        },
+        "extract": {
+          "title": "Extract",
+          "description": "Extracting archive contents"
+        },
+        "prerequisites": {
+          "title": "Prerequisites",
+          "description": "Installing dependencies"
+        },
+        "install": {
+          "title": "Install",
+          "description": "Installing ESP-IDF"
+        },
+        "tools": {
+          "title": "Tools",
+          "description": "Setting up development tools"
+        },
+        "python": {
+          "title": "Python",
+          "description": "Configuring Python environment"
+        },
+        "configure": {
+          "title": "Configure",
+          "description": "Finalizing configuration"
+        },
+        "complete": {
+          "title": "Complete",
+          "description": "Installation complete"
+        }
+      },
+      "error": {
+        "title": "Error during offline installation:",
+        "description": "For more information consult the log file.",
+        "retry": "Retry Installation",
+        "back": "Go Back"
+      },
+      "success": {
+        "title": "Offline Installation Complete",
+        "description": "Successfully installed ESP-IDF and all required tools from offline archive.",
+        "details": {
+          "versions": "Installed Versions:",
+          "path": "Installation Path:"
+        },
+        "complete": "Complete Installation"
+      },
+      "log": {
+        "title": "Installation Log",
+        "entries": "({count} entries)"
+      }
+    },
+    "messages": {
+      "errors": {
+        "selectArchives": "Failed to select archives",
+        "selectPath": "Failed to select path",
+        "installation": "Offline installation failed"
+      }
+    }
+  },
+  "versionManagement": {
+    "title": "ESP-IDF Version Management",
+    "checkForUpdates": "Check for Updates",
+    "prerequisites": {
+      "missing": "Prerequisites Missing",
+      "windowsMessage": "Some Windows prerequisites are not installed.",
+      "installButton": "Install Prerequisites"
+    },
+    "sections": {
+      "installedVersions": "Installed Versions",
+      "noVersions": "No ESP-IDF versions installed"
+    },
+    "version": {
+      "path": "Path",
+      "installed": "Installed",
+      "size": "Size",
+      "actions": {
+        "rename": "Rename",
+        "fix": "Fix/Reinstall",
+        "openFolder": "Open Folder",
+        "remove": "Remove"
+      }
+    },
+    "quickActions": {
+      "installNew": "Install New Version",
+      "installDrivers": "Install Drivers",
+      "purgeAll": "Purge All"
+    },
+    "modals": {
+      "rename": {
+        "title": "Rename Installation",
+        "placeholder": "Enter new name",
+        "confirmButton": "Rename",
+        "cancelButton": "Cancel"
+      },
+      "remove": {
+        "title": "Remove Installation",
+        "message": "Are you sure you want to remove <strong>{name}</strong>?",
+        "pathMessage": "This will permanently delete the installation at:",
+        "confirmButton": "Remove",
+        "cancelButton": "Cancel"
+      },
+      "fix": {
+        "title": "Reinstall Installation",
+        "message": "Are you sure you want to reinstall <strong>{name}</strong>?",
+        "warning": "This will permanently delete all changes. If your projects are using this installation, they might stop working. Please be patient as this may take some time.",
+        "confirmButton": "Reinstall",
+        "cancelButton": "Cancel"
+      },
+      "purge": {
+        "title": "Purge All Installations",
+        "warning": "This will remove ALL ESP-IDF installations!",
+        "listMessage": "The following installations will be deleted:",
+        "confirmation": "I understand this action cannot be undone",
+        "confirmButton": "Purge All",
+        "cancelButton": "Cancel"
+      }
+    },
+    "messages": {
+      "success": {
+        "renamed": "Installation renamed successfully",
+        "removed": "Installation removed successfully",
+        "repairStarted": "Repair process started",
+        "purged": "All installations removed",
+        "prerequisitesStarted": "Prerequisites installation started",
+        "driversInstalled": "Driver installation successful.",
+        "latestVersion": "You have the latest version",
+        "updateAvailable": "New version available!"
+      },
+      "error": {
+        "loadVersions": "Failed to load installed versions",
+        "rename": "Failed to rename installation",
+        "remove": "Failed to remove installation",
+        "repair": "Failed to start repair: {error}",
+        "openFolder": "Failed to open folder",
+        "purge": "Failed to purge installations: {error}",
+        "prerequisites": "Failed to install prerequisites: {error}",
+        "driversPermission": "Insufficient permissions to install drivers. Please run the application as an administrator.",
+        "drivers": "Failed to install drivers: {error}",
+        "checkUpdates": "Failed to check for updates"
+      },
+      "warning": {
+        "confirmAction": "Please confirm the action"
+      }
+    }
+  },
+  "wizardStep": {
+    "title": "Expert Installation Step",
+    "stepIndicator": "Step {step}",
+    "steps": {
+      "prerequisitesCheck": "Prerequisites Check",
+      "pythonSanityCheck": "Python Sanity Check",
+      "selectTarget": "Select Target",
+      "selectVersion": "Select IDF Version",
+      "selectMirror": "Select Mirror",
+      "selectPath": "Select Installation Path",
+      "installationProgress": "Installation Progress",
+      "installationComplete": "Installation Complete"
+    }
+  },
+  "versionSelect": {
+    "title": "Select ESP-IDF Versions",
+    "description": "Choose which ESP-IDF SDK versions to install:",
+    "tags": {
+      "latest": "Latest",
+      "lts": "LTS"
+    },
+    "selectedVersions": "Selected versions:",
+    "continueInstallation": "Continue Installation"
+  },
+  "targetSelect": {
+    "title": "Select Target Chips",
+    "description": "Choose the ESP chips you'll be developing for:",
+    "productSelectorMessage": "If you are not sure, you can consult our ",
+    "productSelector": "Product Selector",
+    "targetChips": "Target Chips:",
+    "all": "All",
+    "continueButton": "Continue with Selected Targets"
+  },
+  "pythonSanitycheck": {
+    "status": {
+      "ready": {
+        "title": "Python Environment Ready",
+        "description": "Your Python installation meets all requirements"
+      },
+      "setupRequired": {
+        "title": "Python Setup Required",
+        "description": "Python 3.10+ with pip, virtualenv, and SSL support is required"
+      }
+    },
+    "actions": {
+      "installPython": "Install Python",
+      "installingPython": "Installing Python...",
+      "continueNext": "Continue to Next Step",
+      "recheckInstallation": "Recheck Python Installation"
+    },
+    "installNote": "This will install Python with all required components",
+    "manualInstall": {
+      "title": "Manual Installation Required",
+      "intro": "Please install:",
+      "requirements": {
+        "python": "Python 3.10 or later",
+        "pip": "pip package manager",
+        "virtualenv": "virtualenv module",
+        "ssl": "SSL support"
+      }
+    }
+  },
+  "prerequisitiesCheck": {
+    "title": "Prerequisites Check",
+    "description": "The installer will now verify required components for ESP-IDF...",
+    "status": {
+      "checking": "Checking prerequisites...",
+      "checkingButton": "Checking..."
+    },
+    "actions": {
+      "continue": "Continue to Next Step",
+      "checkPrerequisites": "Check Prerequisites",
+      "installMissing": "Install Missing Prerequisites"
+    },
+    "messages": {
+      "windowsInstall": "Click below to automatically install missing components",
+      "manualInstall": "Please install the following components manually",
+      "manualHint": "Please install the prerequisites and run the check again."
+    }
+  },
+  "mirrorSelect": {
+    "title": "Select Download Mirrors",
+    "description": "Choose mirrors for downloading ESP-IDF and tools. Default mirrors are recommended for users outside mainland China.",
+    "sections": {
+      "idfMirror": "ESP-IDF Repository Mirror",
+      "toolsMirror": "ESP-IDF Tools Mirror"
+    },
+    "tags": {
+      "default": "Default"
+    },
+    "continueButton": "Continue with Selected Mirrors"
+  },
+  "installationPathSelect": {
+    "title": "Select Installation Location",
+    "info": {
+      "title": "ESP-IDF Installation Directory",
+      "description": "Choose where to install ESP-IDF and its tools. Ensure you have sufficient disk space."
+    },
+    "input": {
+      "placeholder": "Choose installation directory",
+      "browseButton": "Browse"
+    },
+    "messages": {
+      "pathInvalid": "Path {path} is not valid because it contains conflicting files or directories. Please choose a empty or non-existent directory.",
+      "pathValid": "Path {path} is valid.",
+      "pathUpdated": "Installation path updated successfully!",
+      "invalidPath": "Invalid path. Please choose a valid directory."
+    },
+    "continueButton": "Continue"
+  },
+  "complete": {
+    "title": "Installation Complete!",
+    "description": "ESP-IDF has been successfully installed on your system",
+    "messages": {
+      "powershellShortcut": "An IDF PowerShell shortcut has been created on your desktop",
+      "saveConfigInfo": "Save your configuration to reproduce this installation on other machines"
+    },
+    "buttons": {
+      "saveConfiguration": "Save Configuration",
+      "home": "Home",
+      "exitInstaller": "Exit Installer"
+    },
+    "dialog": {
+      "saveConfigTitle": "Save installation config file",
+      "configFileName": "eim_config.toml"
+    }
+  },
+  "simpleSetup": {
+    "title": "Easy Installation",
+    "back": "Back",
+    "preparation": {
+      "title": "Preparing Installation",
+      "checking": "Checking system requirements and prerequisites..."
+    },
+    "ready": {
+      "title": "Ready to Install",
+      "summary": {
+        "version": "Version:",
+        "path": "Installation Path:",
+        "size": "Estimated Size:",
+        "time": "Estimated Time:",
+        "sizeValue": "~3.5 GB",
+        "timeValue": "10-45 minutes"
+      },
+      "alert": "This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.",
+      "startButton": "Start Installation"
+    },
+    "installation": {
+      "defaultTitle": "Installing ESP-IDF",
+      "preparing": "Preparing installation...",
+      "steps": {
+        "check": {
+          "title": "Check",
+          "description": "System requirements"
+        },
+        "prerequisites": {
+          "title": "Prerequisites",
+          "description": "Installing dependencies"
+        },
+        "download": {
+          "title": "Download",
+          "description": "Downloading ESP-IDF"
+        },
+        "extract": {
+          "title": "Extract",
+          "description": "Extracting files"
+        },
+        "tools": {
+          "title": "Tools",
+          "description": "Installing tools"
+        },
+        "python": {
+          "title": "Python",
+          "description": "Setting up Python"
+        },
+        "configure": {
+          "title": "Configure",
+          "description": "Configuring environment"
+        },
+        "complete": {
+          "title": "Complete",
+          "description": "Finalizing installation"
+        }
+      },
+      "log": "Installation Log"
+    },
+    "complete": {
+      "title": "Installation Complete!",
+      "description": "ESP-IDF has been successfully installed on your system.",
+      "buttons": {
+        "documentation": "View Documentation",
+        "ide": "Open VS Code",
+        "dashboard": "Go to Dashboard"
+      },
+      "nextSteps": {
+        "title": "Next Steps:",
+        "step1": "Open a new IDF terminal using the icon on your desktop.",
+        "step2": "Navigate to your project directory",
+        "step3": "Run '{command}' to create a new project",
+        "step4": "Run '{command}' to build your project"
+      }
+    },
+    "error": {
+      "title": "Installation Failed",
+      "wizard": "Use Custom Installation",
+      "viewLogs": "View Logs",
+      "retry": "Try Again",
+      "prerequisites": {
+        "title": "Prerequisites Missing",
+        "message": "Some required dependencies are not installed."
+      },
+      "path": {
+        "title": "Installation Path Not Empty",
+        "message": "The default installation path ({path}) is not empty.",
+        "details": "Please use custom installation to select a different path."
+      },
+      "system": {
+        "title": "System Check Failed",
+        "message": "Failed to verify system requirements."
+      },
+      "start": {
+        "title": "Failed to Start Installation"
+      },
+      "buttons": {
+        "logs": "View Logs",
+        "retry": "Try Again",
+        "custom": "Use Custom Installation"
+      }
+    },
+    "messages": {
+      "errors": {
+        "logs": "Failed to open logs folder",
+        "docs": "Failed to open documentation",
+        "ide": "Please install VS Code with ESP-IDF extension"
+      }
+    }
+  },
+  "installationProgress": {
+    "title": {
+      "repair": "Repair Progress",
+      "installation": "Installation Progress"
+    },
+    "alert": {
+      "error": "Installation Error"
+    },
+    "fixMode": {
+      "title": "Repairing ESP-IDF Installation:",
+      "path": "Path:",
+      "description": "This will reinstall the selected ESP-IDF version and repair any corrupted or missing components.",
+      "unknownVersion": "Unknown Version",
+      "unknownPath": "Unknown Path"
+    },
+    "normalMode": {
+      "title": "Installing ESP-IDF Versions:"
+    },
+    "buttons": {
+      "startInstallation": "Start Installation",
+      "installing": "Installing...",
+      "goBack": "Go Back",
+      "completeRepair": "Complete Repair",
+      "completeInstallation": "Complete Installation"
+    },
+    "currentActivity": {
+      "title": "Current Activity:",
+      "installingVersions": "Installing {count} versions:"
+    },
+    "progress": {
+      "overall": "Overall Progress"
+    },
+    "steps": {
+      "check": {
+        "title": "Check",
+        "description": "System requirements"
+      },
+      "prerequisites": {
+        "title": "Prerequisites",
+        "description": "Installing dependencies"
+      },
+      "download": {
+        "title": "Download",
+        "description": "Cloning repository"
+      },
+      "submodules": {
+        "title": "Submodules",
+        "description": "Downloading submodules"
+      },
+      "tools": {
+        "title": "Tools",
+        "description": "Installing development tools"
+      },
+      "python": {
+        "title": "Python",
+        "description": "Setting up Python environment"
+      },
+      "configure": {
+        "title": "Configure",
+        "description": "Finalizing configuration"
+      },
+      "complete": {
+        "title": "Complete",
+        "description": "Installation complete"
+      }
+    },
+    "error": {
+      "title": "Error during {mode}:",
+      "seeLog": "For more information consult the log file."
+    },
+    "summary": {
+      "repairComplete": "Repair Complete",
+      "installationComplete": "Installation Complete",
+      "repairDescription": "Successfully repaired ESP-IDF installation and all required tools.",
+      "installationDescription": "Successfully installed ESP-IDF and all required tools.",
+      "repairedVersion": "Repaired Version:",
+      "installedVersions": "Installed Versions:",
+      "installationPath": "Installation Path:",
+      "toolsRepaired": "Tools Repaired:",
+      "toolsInstalled": "Tools Installed:"
+    },
+    "log": {
+      "title": "Installation Log",
+      "entries": "({count} entries)"
+    },
+    "preparing": "Preparing installation..."
+  }
+}

@@ -1,13 +1,13 @@
 <template>
   <div class="version-management">
     <div class="management-header">
-      <h1 class="title">ESP-IDF Version Management</h1>
+      <h1 class="title">{{ t('versionManagement.title') }}</h1>
       <div class="header-actions">
         <!-- <n-button @click="checkForUpdates" :loading="checkingUpdates" type="info" secondary class="check-updates">
           <template #icon>
             <n-icon><ReloadOutlined /></n-icon>
           </template>
-          Check for Updates
+          {{ t('versionManagement.checkForUpdates') }}
         </n-button> -->
       </div>
     </div>
@@ -19,16 +19,16 @@
       closable
       class="prerequisites-alert"
     >
-      <template #header>Prerequisites Missing</template>
-      Some Windows prerequisites are not installed.
+      <template #header>{{ t('versionManagement.prerequisites.missing') }}</template>
+      {{ t('versionManagement.prerequisites.windowsMessage') }}
       <n-button @click="installPrerequisites" size="small" type="warning" style="margin-left: 10px;">
-        Install Prerequisites
+        {{ t('versionManagement.prerequisites.installButton') }}
       </n-button>
     </n-alert>
 
     <!-- Installed Versions -->
     <div v-if="installedVersions.length > 0" class="versions-section">
-      <h2>Installed Versions</h2>
+      <h2>{{ t('versionManagement.sections.installedVersions') }}</h2>
       <div class="version-cards">
         <n-card
           v-for="version in installedVersions"
@@ -61,7 +61,7 @@
                   </template>
                 </n-button>
               </template>
-              Rename
+              {{ t('versionManagement.version.actions.rename') }}
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
@@ -71,7 +71,7 @@
                   </template>
                 </n-button>
               </template>
-              Fix/Reinstall
+              {{ t('versionManagement.version.actions.fix') }}
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
@@ -81,7 +81,7 @@
                   </template>
                 </n-button>
               </template>
-              Open Folder
+              {{ t('versionManagement.version.actions.openFolder') }}
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
@@ -91,7 +91,7 @@
                   </template>
                 </n-button>
               </template>
-              Remove
+              {{ t('versionManagement.version.actions.remove') }}
             </n-tooltip>
           </div>
         </n-card>
@@ -100,7 +100,7 @@
 
     <!-- No Versions Installed -->
     <div v-else class="empty-state">
-      <n-empty description="No ESP-IDF versions installed">
+      <n-empty :description="t('versionManagement.sections.noVersions')">
         <template #icon>
           <n-icon :size="64" :depth="3">
             <FolderOpenOutlined />
@@ -115,7 +115,7 @@
         <template #icon>
           <n-icon><PlusCircleOutlined /></n-icon>
         </template>
-        Install New Version
+        {{ t('versionManagement.quickActions.installNew') }}
       </n-button>
 
       <n-button
@@ -127,7 +127,7 @@
         <template #icon>
           <n-icon><UsbOutlined /></n-icon>
         </template>
-        Install Drivers
+        {{ t('versionManagement.quickActions.installDrivers') }}
       </n-button>
 
       <n-button
@@ -141,7 +141,7 @@
         <template #icon>
           <n-icon><ClearOutlined /></n-icon>
         </template>
-        Purge All
+        {{ t('versionManagement.quickActions.purgeAll') }}
       </n-button>
     </div>
 
@@ -149,15 +149,15 @@
     <n-modal
       v-model:show="showRenameModal"
       preset="dialog"
-      title="Rename Installation"
-      positive-text="Rename"
-      negative-text="Cancel"
+      :title="t('versionManagement.modals.rename.title')"
+      :positive-text="t('versionManagement.modals.rename.confirmButton')"
+      :negative-text="t('versionManagement.modals.rename.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRename"
     >
       <n-input
         v-model:value="newVersionName"
-        placeholder="Enter new name"
+        :placeholder="t('versionManagement.modals.rename.placeholder')"
         @keyup.enter="confirmRename"
       />
     </n-modal>
@@ -166,15 +166,15 @@
       v-model:show="showRemoveModal"
       preset="dialog"
       type="error"
-      title="Remove Installation"
-      positive-text="Remove"
-      negative-text="Cancel"
+      :title="t('versionManagement.modals.remove.title')"
+      :positive-text="t('versionManagement.modals.remove.confirmButton')"
+      :negative-text="t('versionManagement.modals.remove.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRemove"
     >
-      Are you sure you want to remove <strong>{{ selectedVersion?.name }}</strong>?
+      <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })"></span>
       <br><br>
-      This will permanently delete the installation at:
+      {{ t('versionManagement.modals.remove.pathMessage') }}
       <br>
       <code>{{ selectedVersion?.path }}</code>
     </n-modal>
@@ -183,15 +183,15 @@
       v-model:show="showFixModal"
       preset="dialog"
       type="error"
-      title="Reinstall Installation"
-      positive-text="Reinstall"
-      negative-text="Cancel"
+      :title="t('versionManagement.modals.fix.title')"
+      :positive-text="t('versionManagement.modals.fix.confirmButton')"
+      :negative-text="t('versionManagement.modals.fix.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmFix"
     >
-      Are you sure you want to reinstall <strong>{{ selectedVersion?.name }}</strong>?
+      <span v-html="t('versionManagement.modals.fix.message', { name: selectedVersion?.name })"></span>
       <br><br>
-      This will permanently delete all changes. If your projects are using this installation, they might stop working. Please be patient as this may take some time.
+      {{ t('versionManagement.modals.fix.warning') }}
       <br>
       <code>{{ selectedVersion?.path }}</code>
     </n-modal>
@@ -200,17 +200,17 @@
       v-model:show="showPurgeModal"
       preset="dialog"
       type="error"
-      title="Purge All Installations"
-      positive-text="Purge All"
-      negative-text="Cancel"
+      :title="t('versionManagement.modals.purge.title')"
+      :positive-text="t('versionManagement.modals.purge.confirmButton')"
+      :negative-text="t('versionManagement.modals.purge.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmPurge"
     >
       <n-alert type="error" :bordered="false">
-        This will remove ALL ESP-IDF installations!
+        {{ t('versionManagement.modals.purge.warning') }}
       </n-alert>
       <br>
-      The following installations will be deleted:
+      {{ t('versionManagement.modals.purge.listMessage') }}
       <ul>
         <li v-for="version in installedVersions" :key="version.id">
           {{ version.name }} ({{ version.path }})
@@ -218,7 +218,7 @@
       </ul>
       <br>
       <n-checkbox v-model:checked="purgeConfirmed">
-        I understand this action cannot be undone
+        {{ t('versionManagement.modals.purge.confirmation') }}
       </n-checkbox>
     </n-modal>
   </div>
@@ -227,6 +227,7 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import {
   NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
@@ -256,6 +257,7 @@ export default {
   setup() {
     const router = useRouter()
     const message = useMessage()
+    const { t } = useI18n()
 
     const installedVersions = ref([])
     const os = ref('unknown')
@@ -277,7 +279,7 @@ export default {
         installedVersions.value = versions || []
       } catch (error) {
         console.error('Failed to load versions:', error)
-        message.error('Failed to load installed versions')
+        message.error(t('versionManagement.messages.error.loadVersions'))
       }
     }
 
@@ -304,12 +306,12 @@ export default {
       try {
         const hasUpdate = await invoke('check_for_updates')
         if (hasUpdate) {
-          message.info('New version available!')
+          message.info(t('versionManagement.messages.success.updateAvailable'))
         } else {
-          message.success('You have the latest version')
+          message.success(t('versionManagement.messages.success.latestVersion'))
         }
       } catch (error) {
-        message.error('Failed to check for updates')
+        message.error(t('versionManagement.messages.error.checkUpdates'))
       } finally {
         checkingUpdates.value = false
       }
@@ -329,14 +331,14 @@ export default {
           newName: newVersionName.value
         })
         if (!res) {
-          message.error('Failed to rename installation')
+          message.error(t('versionManagement.messages.error.rename'))
           return
         }
         console.log('Installation renamed successfully')
-        message.success('Installation renamed successfully')
+        message.success(t('versionManagement.messages.success.renamed'))
         await loadInstalledVersions()
       } catch (error) {
-        message.error('Failed to rename installation')
+        message.error(t('versionManagement.messages.error.rename'))
       }
     }
 
@@ -351,13 +353,13 @@ export default {
           id: selectedVersion.value.id
         })
         if (res) {
-          message.success('Installation removed successfully')
+          message.success(t('versionManagement.messages.success.removed'))
           await loadInstalledVersions()
         } else {
-          message.error('Failed to remove installation')
+          message.error(t('versionManagement.messages.error.remove'))
         }
       } catch (error) {
-        message.error('Failed to remove installation')
+        message.error(t('versionManagement.messages.error.remove'))
       }
     }
 
@@ -372,7 +374,7 @@ export default {
         // Start the fix process
         invoke('fix_installation', { id: selectedVersion.value.id })
 
-        message.success('Repair process started')
+        message.success(t('versionManagement.messages.success.repairStarted'))
 
         // Navigate to installation progress with fix mode parameters
         router.push({
@@ -388,7 +390,7 @@ export default {
         })
       } catch (error) {
         console.error('Fix installation error:', error)
-        message.error(`Failed to start repair: ${error}`)
+        message.error(t('versionManagement.messages.error.repair', { error }))
       }
     }
 
@@ -397,7 +399,7 @@ export default {
       try {
         await invoke('show_in_folder', { path: version.path })
       } catch (error) {
-        message.error('Failed to open folder')
+        message.error(t('versionManagement.messages.error.openFolder'))
       }
     }
 
@@ -408,24 +410,24 @@ export default {
 
     const confirmPurge = async () => {
       if (!purgeConfirmed.value) {
-        message.warning('Please confirm the action')
+        message.warning(t('versionManagement.messages.warning.confirmAction'))
         return
       }
       try {
         await invoke('purge_all_installations')
-        message.success('All installations removed')
+        message.success(t('versionManagement.messages.success.purged'))
         await loadInstalledVersions()
       } catch (error) {
-        message.error(`Failed to purge installations: ${error}`)
+        message.error(t('versionManagement.messages.error.purge', { error }))
       }
     }
 
     const installPrerequisites = async () => {
       try {
         await invoke('install_prerequisites')
-        message.success('Prerequisites installation started')
+        message.success(t('versionManagement.messages.success.prerequisitesStarted'))
       } catch (error) {
-        message.error(`Failed to install prerequisites: ${error}`)
+        message.error(t('versionManagement.messages.error.prerequisites', { error }))
       }
     }
 
@@ -433,16 +435,16 @@ export default {
       try {
         let res = await invoke('check_elevation')
         if (!res) {
-          message.error('Insufficient permissions to install drivers. Please run the application as an administrator.')
+          message.error(t('versionManagement.messages.error.driversPermission'))
           return
         }
         await invoke('install_drivers').then(() => {
-          message.success('Driver installation successful.')
+          message.success(t('versionManagement.messages.success.driversInstalled'))
         }).catch((error) => {
-          message.error(`Failed to install drivers: ${error}`)
+          message.error(t('versionManagement.messages.error.drivers', { error }))
         })
       } catch (error) {
-        message.error(`Failed to install drivers: ${error}`)
+        message.error(t('versionManagement.messages.error.drivers', { error }))
       }
     }
 
@@ -481,7 +483,8 @@ export default {
       confirmPurge,
       installPrerequisites,
       installDrivers,
-      goToBasicInstaller
+      goToBasicInstaller,
+      t
     }
   }
 }

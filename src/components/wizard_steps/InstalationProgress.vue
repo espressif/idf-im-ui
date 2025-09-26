@@ -1,10 +1,10 @@
 <template>
   <div class="installation-progress" data-id="installation-progress">
     <h1 class="title" data-id="installation-title">
-      {{ is_fix_mode ? 'Repair Progress' : 'Installation Progress' }}
+      {{ is_fix_mode ? t('installationProgress.title.repair') : t('installationProgress.title.installation') }}
     </h1>
 
-    <n-alert title="Installation Error" type="error" v-if="error_message">
+    <n-alert :title="t('installationProgress.alert.error')" type="error" v-if="error_message">
       {{ error_message }}
     </n-alert>
 
@@ -14,23 +14,23 @@
 
         <!-- Fix Mode Summary -->
         <div v-if="is_fix_mode" class="fix-info" data-id="fix-info">
-          <h3 data-id="fix-title">Repairing ESP-IDF Installation:</h3>
+          <h3 data-id="fix-title">{{ t('installationProgress.fixMode.title') }}</h3>
           <div class="fix-version-info">
             <div class="idf-version" v-if="fixing_version">
-              {{ fixing_version.name || 'Unknown Version' }}
+              {{ fixing_version.name || t('installationProgress.fixMode.unknownVersion') }}
             </div>
             <div class="fix-path" v-if="fixing_version">
-              <strong>Path:</strong> {{ fixing_version.path || 'Unknown Path' }}
+              <strong>{{ t('installationProgress.fixMode.path') }}</strong> {{ fixing_version.path || t('installationProgress.fixMode.unknownPath') }}
             </div>
           </div>
           <div class="fix-description">
-            <p>This will reinstall the selected ESP-IDF version and repair any corrupted or missing components.</p>
+            <p>{{ t('installationProgress.fixMode.description') }}</p>
           </div>
         </div>
 
         <!-- Normal Install Mode Summary -->
         <div v-else class="versions-info" v-if="all_settings" data-id="versions-info">
-          <h3 data-id="versions-title">Installing ESP-IDF Versions:</h3>
+          <h3 data-id="versions-title">{{ t('installationProgress.normalMode.title') }}</h3>
           <div class="version-chips" data-id="version-chips">
             <div v-for="version in idf_versions" :key="version" type="info" :data-id="`version-tag-${version}`"
               class="idf-version">
@@ -43,7 +43,7 @@
         <div data-id="start-button-container" v-if="shouldShowStartButton()">
           <n-button @click="startInstallation()" type="error" size="large" :loading="installation_running"
             :disabled="installation_running" data-id="start-installation-button">
-            {{ installation_running ? 'Installing...' : 'Start Installation' }}
+            {{ installation_running ? t('installationProgress.buttons.installing') : t('installationProgress.buttons.startInstallation') }}
           </n-button>
         </div>
       </div>
@@ -51,12 +51,12 @@
       <!-- Current Activity Display -->
       <div v-if="installation_running" class="current-activity" data-id="current-activity">
         <div class="current-step">
-          <h3>Current Activity:</h3>
+          <h3>{{ t('installationProgress.currentActivity.title') }}</h3>
           <div class="activity-status">{{ currentActivity }}</div>
           <div v-if="currentDetail" class="activity-detail">{{ currentDetail }}</div>
           <div v-if="installationPlan && installationPlan.total_versions > 1" class="multi-version-progress">
             <div class="version-overview">
-              Installing {{ installationPlan.total_versions }} versions:
+              {{ t('installationProgress.currentActivity.installingVersions', { count: installationPlan.total_versions }) }}
               <span v-for="(version, index) in installationPlan.versions" :key="version"
                     class="version-indicator"
                     :class="{
@@ -71,7 +71,7 @@
         </div>
 
         <div class="progress-section">
-          <div class="progress-label">Overall Progress</div>
+          <div class="progress-label">{{ t('installationProgress.progress.overall') }}</div>
           <n-progress
             type="line"
             :percentage="currentProgress"
@@ -106,49 +106,41 @@
 
       <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
-        <h3 data-id="error-title">Error during {{ is_fix_mode ? 'repair' : 'installation' }}:</h3>
-        <p data-id="error-message-text">{{ error_message }} <br> For more information consult the log file.</p>
-        <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">Go Back</n-button>
+        <h3 data-id="error-title">{{ t('installationProgress.error.title', { mode: is_fix_mode ? t('installationProgress.title.repair').toLowerCase() : t('installationProgress.title.installation').toLowerCase() }) }}</h3>
+        <p data-id="error-message-text">{{ error_message }} <br> {{ t('installationProgress.error.seeLog') }}</p>
+        <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">{{ t('installationProgress.buttons.goBack') }}</n-button>
       </div>
 
       <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
         <n-button @click="handleCompletion()" type="error" size="large" data-id="complete-installation-button-footer">
-          {{ is_fix_mode ? 'Complete Repair' : 'Complete Installation' }}
+          {{ is_fix_mode ? t('installationProgress.buttons.completeRepair') : t('installationProgress.buttons.completeInstallation') }}
         </n-button>
       </div>
 
       <!-- Installation/Repair Summary -->
       <div v-if="installation_finished && !installation_failed" class="installation-summary"
         data-id="installation-summary">
-        <h3>{{ is_fix_mode ? 'Repair Complete' : 'Installation Complete' }}</h3>
-        <p>{{ is_fix_mode ? 'Successfully repaired ESP-IDF installation and all required tools.' : 'Successfully installed ESP-IDF and all required tools.' }}</p>
+        <h3>{{ is_fix_mode ? t('installationProgress.summary.repairComplete') : t('installationProgress.summary.installationComplete') }}</h3>
+        <p>{{ is_fix_mode ? t('installationProgress.summary.repairDescription') : t('installationProgress.summary.installationDescription') }}</p>
         <div class="summary-details">
           <div v-if="installed_versions.length > 0">
-            <strong>{{ is_fix_mode ? 'Repaired Version:' : 'Installed Versions:' }}</strong> {{ installed_versions.join(', ') }}
+            <strong>{{ is_fix_mode ? t('installationProgress.summary.repairedVersion') : t('installationProgress.summary.installedVersions') }}</strong> {{ installed_versions.join(', ') }}
           </div>
           <div v-if="installationPath">
-            <strong>Installation Path:</strong> {{ installationPath }}
+            <strong>{{ t('installationProgress.summary.installationPath') }}</strong> {{ installationPath }}
           </div>
           <div v-if="completedToolsCount > 0">
-            <strong>Tools {{ is_fix_mode ? 'Repaired' : 'Installed' }}:</strong> {{ completedToolsCount }}
+            <strong>{{ is_fix_mode ? t('installationProgress.summary.toolsRepaired') : t('installationProgress.summary.toolsInstalled') }}</strong> {{ completedToolsCount }}
           </div>
         </div>
       </div>
 
       <!-- Installation Log -->
       <n-collapse arrow-placement="right" v-if="totalLogCount > 0">
-        <n-collapse-item title="Installation Log" name="1">
+        <n-collapse-item :title="t('installationProgress.log.title')" name="1">
           <template #header-extra>
-            <span class="log-count">({{ totalLogCount }} entries)</span>
-            <!-- <n-button
-              size="small"
-              type="tertiary"
-              @click.stop="clearLogs()"
-              style="margin-left: 8px;"
-            >
-              Clear
-            </n-button> -->
+            <span class="log-count">{{ t('installationProgress.log.entries', { count: totalLogCount }) }}</span>
           </template>
 
           <div class="log-container">
@@ -198,6 +190,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem, NAlert, NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 import { useWizardStore } from '../../store'
+import { useI18n } from 'vue-i18n'
 
 export default {
   name: 'InstallationProgress',
@@ -217,81 +210,87 @@ export default {
     NCollapseItem, NAlert, NProgress
   },
 
-  data: () => ({
-    os: undefined,
-    all_settings: undefined,
-    loading: true,
-    tools: {},
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
 
-    // Event listeners
-    unlistenProgress: undefined,
-    unlistenLog: undefined,
-    unlistenPlan: undefined,
+  data() {
+    return {
+      os: undefined,
+      all_settings: undefined,
+      loading: true,
+      tools: {},
 
-    // Installation state
-    installation_running: false,
-    installation_finished: false,
-    installation_failed: false,
-    error_message: "",
+      // Event listeners
+      unlistenProgress: undefined,
+      unlistenLog: undefined,
+      unlistenPlan: undefined,
 
-    // Progress tracking
-    currentStep: 0,
-    currentStage: 'checking',
-    installationPlan: null,
-    currentVersionIndex: 0,
-    completedVersions: [],
-    timeStarted: null,
+      // Installation state
+      installation_running: false,
+      installation_finished: false,
+      installation_failed: false,
+      error_message: "",
 
-    // Version tracking
-    current_version: null,
-    installed_versions: [],
-    failed_versions: [],
+      // Progress tracking
+      currentStep: 0,
+      currentStage: 'checking',
+      installationPlan: null,
+      currentVersionIndex: 0,
+      completedVersions: [],
+      timeStarted: null,
 
-    // Installation steps
-    installationSteps: [
-      { title: 'Check', description: 'System requirements' },
-      { title: 'Prerequisites', description: 'Installing dependencies' },
-      { title: 'Download', description: 'Cloning repository' },
-      { title: 'Submodules', description: 'Downloading submodules' },
-      { title: 'Tools', description: 'Installing development tools' },
-      { title: 'Python', description: 'Setting up Python environment' },
-      { title: 'Configure', description: 'Finalizing configuration' },
-      { title: 'Complete', description: 'Installation complete' }
-    ],
+      // Version tracking
+      current_version: null,
+      installed_versions: [],
+      failed_versions: [],
 
-    // Logging with Virtual scrolling
-    visibleLogs: [],
-    totalLogCount: 0,
-    scrollTop: 0,
-    containerHeight: 300, // Height of the scroll container
-    itemHeight: 24, // Height of each log item in pixels
-    visibleCount: 15, // Number of items to render
-    startIndex: 0, // Starting index of visible items
+      // Logging with Virtual scrolling
+      visibleLogs: [],
+      totalLogCount: 0,
+      scrollTop: 0,
+      containerHeight: 300,
+      itemHeight: 24,
+      visibleCount: 15,
+      startIndex: 0,
 
-    // UI state
-    installationPath: "",
-    completedToolsCount: 0,
-    totalToolsCount: 0,
-    showToolsTable: false,
+      // UI state
+      installationPath: "",
+      completedToolsCount: 0,
+      totalToolsCount: 0,
+      showToolsTable: false,
 
-    // progress tracking
-    progressUpdateTrigger: 0,
-    lastProgressUpdate: 0
-  }),
+      // progress tracking
+      progressUpdateTrigger: 0,
+      lastProgressUpdate: 0
+    }
+  },
 
   created() {
     this._allLogs = [];
-    this.BUFFER_SIZE = 2; // Extra items to render for smooth scrolling
+    this.BUFFER_SIZE = 2;
 
     this._progressData = {
       currentProgress: 0,
-      currentActivity: "Preparing installation...",
+      currentActivity: this.t('installationProgress.preparing'),
       currentDetail: "",
       lastUpdate: Date.now()
     };
 
-    // Throttle UI updates to prevent memory explosion
     this._progressThrottle = null;
+
+    // Installation steps - initialized with translations
+    this.installationSteps = [
+      { title: this.t('installationProgress.steps.check.title'), description: this.t('installationProgress.steps.check.description') },
+      { title: this.t('installationProgress.steps.prerequisites.title'), description: this.t('installationProgress.steps.prerequisites.description') },
+      { title: this.t('installationProgress.steps.download.title'), description: this.t('installationProgress.steps.download.description') },
+      { title: this.t('installationProgress.steps.submodules.title'), description: this.t('installationProgress.steps.submodules.description') },
+      { title: this.t('installationProgress.steps.tools.title'), description: this.t('installationProgress.steps.tools.description') },
+      { title: this.t('installationProgress.steps.python.title'), description: this.t('installationProgress.steps.python.description') },
+      { title: this.t('installationProgress.steps.configure.title'), description: this.t('installationProgress.steps.configure.description') },
+      { title: this.t('installationProgress.steps.complete.title'), description: this.t('installationProgress.steps.complete.description') }
+    ];
   },
 
   methods: {
@@ -306,10 +305,21 @@ export default {
       this.installation_failed = false;
       this.error_message = "";
       this.log_messages = [];
-      this.currentProgress = 0;
-      this.timeStarted = new Date(); // Add this line
 
-      // Add this tracking block
+      this.clearLogs();
+
+      this._progressData = {
+        currentProgress: 0,
+        currentActivity: this.t('installationProgress.preparing'),
+        currentDetail: "",
+        lastUpdate: Date.now()
+      };
+
+      this.currentStep = 0;
+      this.currentStage = 'checking';
+      this.forceProgressUpdate();
+      this.timeStarted = new Date();
+
       try {
         const eventName = this.is_fix_mode ? "GUI fix installation started" : "GUI wizard installation started";
         await invoke("track_event_command", { name: eventName });
@@ -319,14 +329,11 @@ export default {
 
       try {
         if (this.is_fix_mode) {
-          // For fix mode, the installation should already be started by the confirmFix call
-          // Just ensure we're tracking the right version
           if (this.fixing_version) {
             this.current_version = this.fixing_version.name;
-            this.currentActivity = `Repairing ${this.fixing_version.name}...`;
+            this._progressData.currentActivity = `${this.t('installationProgress.fixMode.title')} ${this.fixing_version.name}...`;
           }
         } else {
-          // Normal installation
           await invoke("start_installation", {});
         }
       } catch (e) {
@@ -338,16 +345,15 @@ export default {
     },
 
     startListening: async function () {
-      // Listen for installation progress events
       this.unlistenProgress = await listen('installation-progress', (event) => {
         this.handleProgressEvent(event.payload);
       });
 
-      // Listen for log messages
       this.unlistenLog = await listen('log-message', (event) => {
         console.log('Log message received:', event.payload);
         this.handleLogMessage(event.payload);
       });
+
       this.unlistenPlan = await listen('installation-plan', (event) => {
         this.handleInstallationPlan(event.payload);
       });
@@ -362,32 +368,23 @@ export default {
       console.log('Installation plan received:', plan);
     },
 
-
     handleProgressEvent: function (payload) {
       const { stage, percentage, message, detail, version } = payload;
       const now = Date.now();
 
-      // Update basic progress info
-      // this.currentProgress = percentage || 0;
-      // this.currentActivity = message || this.currentActivity;
-      // this.currentDetail = detail || "";
-      // this.currentStage = stage;
-
-      // Store in non-reactive object (no memory leak)
       this._progressData.currentProgress = percentage || 0;
       this._progressData.currentActivity = message || this._progressData.currentActivity;
       this._progressData.currentDetail = detail || "";
       this._progressData.lastUpdate = now;
 
-      // Update current version if provided
       if (version && version !== this.current_version) {
         this.current_version = version;
       }
 
-      // Update stage (reactive, but changes rarely)
       if (stage !== this.currentStage) {
         this.currentStage = stage;
       }
+
       let newStep = this.currentStep;
 
       switch (stage) {
@@ -395,7 +392,6 @@ export default {
         case 'prerequisites': newStep = 1; break;
         case 'download':
           newStep = 2;
-          // Show submodules step when progress > 10%
           if (percentage > 10) newStep = 3;
           break;
         case 'extract': newStep = 3; break;
@@ -409,9 +405,7 @@ export default {
           if (version && !this.completedVersions.includes(version)) {
             this.completedVersions.push(version);
           }
-
           newStep = 7;
-          // The backend already decided this is a completion event, so handle it
           this.handleInstallationComplete(version);
           break;
         case 'error':
@@ -419,12 +413,10 @@ export default {
           break;
       }
 
-      // Only update reactive step if it actually changed
       if (newStep !== this.currentStep) {
         this.currentStep = newStep;
       }
 
-      // Throttle UI updates to max 2 per second to prevent memory explosion
       this.throttledProgressUpdate();
     },
 
@@ -435,7 +427,6 @@ export default {
 
       this._progressThrottle = setTimeout(() => {
         const now = Date.now();
-        // Only update if enough time has passed (100ms = 10fps)
         if (now - this.lastProgressUpdate > 100) {
           this.progressUpdateTrigger++;
           this.lastProgressUpdate = now;
@@ -452,7 +443,6 @@ export default {
     handleLogMessage: function (payload) {
       const { level, message } = payload;
 
-      // Create log entry (non-reactive)
       const logEntry = {
         level,
         text: message,
@@ -460,27 +450,20 @@ export default {
         id: this._allLogs.length
       };
 
-      // Add to non-reactive array
       this._allLogs.unshift(logEntry);
 
-      // Keep reasonable limit
       const MAX_LOG_ENTRIES = 1000;
       if (this._allLogs.length > MAX_LOG_ENTRIES) {
         this._allLogs = this._allLogs.slice(0, MAX_LOG_ENTRIES);
       }
 
-      // Update reactive counter
       this.totalLogCount = this._allLogs.length;
-
-      // Update visible logs
       this.updateVisibleLogs();
 
-      // Auto-scroll to top for new messages
       if (this.scrollTop < this.itemHeight) {
         this.scrollToTop();
       }
 
-      // Extract installation path from logs if available
       if (message.includes('installed at:') || message.includes('Location:')) {
         const pathMatch = message.match(/(?:installed at:|Location:)\s*(.+)/i);
         if (pathMatch && pathMatch[1]) {
@@ -498,7 +481,6 @@ export default {
 
       this.startIndex = startIndex;
 
-      // Only update reactive array with visible subset
       this.visibleLogs = this._allLogs.slice(startIndex, endIndex).map(log => ({
         ...log
       }));
@@ -507,7 +489,6 @@ export default {
     onLogScroll(event) {
       const newScrollTop = event.target.scrollTop;
 
-      // Throttle updates for performance
       if (Math.abs(newScrollTop - this.scrollTop) > this.itemHeight / 2) {
         this.scrollTop = newScrollTop;
         this.updateVisibleLogs();
@@ -532,7 +513,6 @@ export default {
       this.scrollTop = 0;
       this.startIndex = 0;
 
-      // Force update
       this.$forceUpdate();
     },
 
@@ -556,16 +536,13 @@ export default {
       return 'log-message';
     },
 
-
     handleToolsProgress: function (message, detail, percentage) {
       if (!this.current_version) return;
 
-      // Initialize tools tracking for current version if needed
       if (!this.tools[this.current_version]) {
         this.tools[this.current_version] = {};
       }
 
-      // Extract tool name from message
       let toolName = null;
       if (message.includes('Installing:') || message.includes('Downloading:') || message.includes('Extracting:')) {
         const match = message.match(/(?:Installing:|Downloading:|Extracting:|Installed:)\s*(.+)/);
@@ -575,7 +552,6 @@ export default {
       }
 
       if (toolName) {
-        // Initialize tool if not exists
         if (!this.tools[this.current_version][toolName]) {
           this.tools[this.current_version][toolName] = {
             displayName: toolName,
@@ -587,7 +563,6 @@ export default {
 
         const tool = this.tools[this.current_version][toolName];
 
-        // Update tool status based on message
         if (message.includes('Downloading:') || message.includes('Preparing:')) {
           tool.status = 'downloading';
         } else if (message.includes('Verifying:')) {
@@ -600,7 +575,6 @@ export default {
           this.completedToolsCount++;
         }
 
-        // Extract progress from detail if available
         if (detail) {
           const progressMatch = detail.match(/(\d+)%/);
           if (progressMatch) {
@@ -619,10 +593,10 @@ export default {
         this.installed_versions.push(version);
       }
 
-      // If current_version is set but not in installed_versions, add it
       if (this.current_version && !this.installed_versions.includes(this.current_version)) {
         this.installed_versions.push(this.current_version);
       }
+
       try {
         const eventName = this.is_fix_mode ? "GUI fix installation succeeded" : "GUI wizard installation succeeded";
         invoke("track_event_command", {
@@ -646,7 +620,6 @@ export default {
         this.failed_versions.push(this.current_version);
       }
 
-      // Add this tracking block
       try {
         const eventName = this.is_fix_mode ? "GUI fix installation failed" : "GUI wizard installation failed";
         invoke("track_event_command", {
@@ -687,24 +660,6 @@ export default {
       return classMap[status] || '';
     },
 
-    getLogMessageClass: function (message) {
-      // Cache class combinations to avoid repeated string concatenation
-      if (message.level === 'error') {
-        return 'log-message log-error';
-      } else if (message.level === 'warning') {
-        return 'log-message log-warning';
-      } else if (message.level === 'success') {
-        return 'log-message log-success';
-      }
-
-      // Check for highlights only if needed
-      if (message.text.includes('WARN') || message.text.includes('ERR')) {
-        return 'log-message highlight';
-      }
-
-      return 'log-message';
-    },
-
     get_settings: async function () {
       this.all_settings = await invoke("get_settings", {});
       if (this.all_settings && this.all_settings.path) {
@@ -715,20 +670,17 @@ export default {
     get_os: async function () {
       this.os = await invoke("get_operating_system", {});
     },
-    // Enhanced navigation handler
+
     handleCompletion() {
       if (this.nextstep && typeof this.nextstep === 'function') {
-        // Called from wizard flow - use provided nextstep function
         this.nextstep();
       } else {
-        // Called directly via router - handle navigation here
         this.handleDirectNavigation();
       }
     },
 
     handleDirectNavigation() {
       if (this.is_fix_mode) {
-        // For fix mode, return to version management
         this.$router.push({
           path: '/version-management',
           query: {
@@ -737,7 +689,6 @@ export default {
           }
         });
       } else {
-        // For direct installation, go to welcome with success message
         this.$router.push({
           path: '/welcome',
           query: {
@@ -749,71 +700,7 @@ export default {
       }
     },
 
-    goHome() {
-      // Handle home navigation consistently
-      if (this.store && this.store.setStep) {
-        // If we have wizard store, reset it
-        this.store.setStep(1);
-      }
-
-      if (this.is_fix_mode) {
-        // For fix mode, return to version management
-        this.$router.push('/version-management');
-      } else {
-        // For normal installation, go to welcome
-        this.$router.push('/welcome');
-      }
-    },
-
-    // Enhanced start installation to handle both modes
-    startInstallation: async function () {
-      this.installation_running = true;
-      this.installation_finished = false;
-      this.installation_failed = false;
-      this.error_message = "";
-      this.log_messages = [];
-      // this.currentProgress = 0;
-
-      this.clearLogs();
-
-      // Reset progress data
-      this._progressData = {
-        currentProgress: 0,
-        currentActivity: "Preparing installation...",
-        currentDetail: "",
-        lastUpdate: Date.now()
-      };
-
-      this.currentStep = 0;
-      this.currentStage = 'checking';
-      this.forceProgressUpdate();
-
-      try {
-        if (this.is_fix_mode) {
-          // For fix mode, the installation should already be started by the confirmFix call
-          if (this.fixing_version) {
-            this.current_version = this.fixing_version.name;
-            // this.currentActivity = `Repairing ${this.fixing_version.name}...`;
-            this._progressData.currentActivity = `Repairing ${this.fixing_version.name}...`;
-          }
-        } else {
-          // Normal installation
-          await invoke("start_installation", {});
-        }
-      } catch (e) {
-        console.error('Error during installation:', e);
-        this.error_message = e.toString();
-        this.installation_failed = true;
-        this.installation_running = false;
-      }
-    },
-
-    // Add method to determine if we should show start button
     shouldShowStartButton() {
-      // Show start button only if:
-      // 1. Not in fix mode (fix starts automatically)
-      // 2. Installation not running and not failed
-      // 3. Not already finished
       return !this.is_fix_mode &&
             !this.installation_running &&
             !this.installation_failed &&
@@ -829,11 +716,9 @@ export default {
     },
 
     cleanup: function() {
-      // Enhanced cleanup
       this.clearLogs();
       this.cleanupProgressData();
 
-      // Remove event listeners
       window.removeEventListener('resize', this.measureContainer);
 
       if (this.unlistenProgress) {
@@ -849,12 +734,9 @@ export default {
         this.unlistenPlan = null;
       }
 
-      // Clean up non-reactive reference
       this._allLogs = null;
     },
   },
-
-
 
   computed: {
     store() {
@@ -872,23 +754,22 @@ export default {
         ...(this.current_version ? [this.current_version] : [])
       ])];
     },
-    // Fix the fix mode detection
+
     is_fix_mode() {
       return this.mode === 'fix' || this.$route.query.mode === 'fix';
     },
 
-    // Get the version being fixed from route params
     fixing_version() {
       if (this.is_fix_mode) {
         return {
           id: this.$route.query.id || this.fixVersionId,
-          name: this.$route.query.name || 'Unknown Version',
-          path: this.$route.query.path || 'Unknown Path'
+          name: this.$route.query.name || this.t('installationProgress.fixMode.unknownVersion'),
+          path: this.$route.query.path || this.t('installationProgress.fixMode.unknownPath')
         };
       }
       return null;
     },
-    // Calculate spacer heights for virtual scrolling
+
     topSpacerHeight() {
       return this.startIndex * this.itemHeight;
     },
@@ -898,19 +779,18 @@ export default {
       return remainingItems * this.itemHeight;
     },
 
-    // Calculate how many items can fit in the container
     maxVisibleItems() {
       return Math.ceil(this.containerHeight / this.itemHeight) + (this.BUFFER_SIZE * 2);
     },
+
     currentProgress() {
-      // Depend on the trigger to know when to update
       this.progressUpdateTrigger;
       return this._progressData ? this._progressData.currentProgress : 0;
     },
 
     currentActivity() {
       this.progressUpdateTrigger;
-      return this._progressData ? this._progressData.currentActivity : "Preparing installation...";
+      return this._progressData ? this._progressData.currentActivity : this.t('installationProgress.preparing');
     },
 
     currentDetail() {
@@ -926,29 +806,25 @@ export default {
     this.measureContainer();
     window.addEventListener('resize', this.measureContainer);
 
-    // Handle different entry modes
     if (this.is_fix_mode && this.$route.query.mode === 'fix') {
-        // Fix mode - installation should already be started
-        this.installation_running = true;
-        if (this.fixing_version) {
-          this.current_version = this.fixing_version.name;
-          this.currentActivity = `Preparing to repair ${this.fixing_version.name}...`;
-        }
-      } else if (this.$route.query.autostart === 'true') {
-        // Auto-start installation (e.g., from simple setup)
-        this.startInstallation();
+      this.installation_running = true;
+      if (this.fixing_version) {
+        this.current_version = this.fixing_version.name;
+        this.currentActivity = `${this.t('installationProgress.fixMode.title')} ${this.fixing_version.name}...`;
       }
+    } else if (this.$route.query.autostart === 'true') {
+      this.startInstallation();
+    }
 
-      // Handle any success/error messages passed via route
-      if (this.$route.query.message) {
-        // You could show a toast notification here
-        console.log('Route message:', this.$route.query.message);
+    if (this.$route.query.message) {
+      console.log('Route message:', this.$route.query.message);
     }
   },
 
   beforeDestroy() {
     this.cleanup();
   },
+
   beforeUnmount() {
     this.cleanup();
   },
@@ -1165,42 +1041,35 @@ export default {
   gap: 0.5rem;
 }
 
-/* Virtual Scrolling Styles */
 .log-container {
   text-align: left;
   background-color: white;
 }
 
 .log-virtual-container {
-  height: 300px; /* Fixed height for virtual scrolling */
+  height: 300px;
   overflow-y: auto;
   overflow-x: hidden;
-  /* Hardware acceleration for smooth scrolling */
   will-change: scroll-position;
   -webkit-overflow-scrolling: touch;
-  /* Improve scrolling performance */
   scroll-behavior: smooth;
 }
 
 .virtual-spacer-top,
 .virtual-spacer-bottom {
-  /* Spacers to maintain scroll height */
   width: 100%;
   pointer-events: none;
 }
 
 .log-scroll-container {
-  /* Container for visible items */
   contain: layout style;
 }
 
 .log-entry {
-  /* Fixed height for consistent virtual scrolling */
-  height: 24px; /* Must match itemHeight in data */
+  height: 24px;
   display: flex;
   align-items: flex-start;
   contain: layout;
-  /* Prevent layout thrashing */
   box-sizing: border-box;
 }
 
@@ -1209,19 +1078,15 @@ export default {
   padding: 2px 4px;
   font-family: monospace;
   font-size: 0.85rem;
-  line-height: 20px; /* Ensure consistent height */
-  /* Optimize text rendering */
+  line-height: 20px;
   text-rendering: optimizeSpeed;
-  /* Prevent text wrapping to maintain height */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* Full width */
   width: 100%;
   flex: 1;
 }
 
-/* Log level styling */
 .log-message.log-error {
   background-color: #fee2e2;
   color: #b91c1c;
@@ -1251,7 +1116,6 @@ export default {
   font-weight: normal;
 }
 
-/* Scrollbar styling */
 .log-virtual-container::-webkit-scrollbar {
   width: 8px;
 }
@@ -1270,20 +1134,17 @@ export default {
   background: #a1a1a1;
 }
 
-/* Performance optimizations */
 .log-virtual-container * {
-  /* Reduce repaints */
   backface-visibility: hidden;
 }
 
-/* Responsive adjustments */
 @media (max-width: 768px) {
   .log-virtual-container {
     height: 250px;
   }
 
   .log-entry {
-    height: 28px; /* Slightly taller on mobile */
+    height: 28px;
   }
 
   .log-message {
@@ -1291,7 +1152,6 @@ export default {
   }
 }
 
-/* Fix mode specific styles */
 .fix-info {
   text-align: center;
 }
@@ -1361,6 +1221,7 @@ tr > td:first-child {
   max-height: 300px;
   overflow-y: auto;
 }
+
 .multi-version-progress {
   margin-top: 1rem;
   padding: 0.75rem;

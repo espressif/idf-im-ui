@@ -232,7 +232,7 @@ pub struct InstallArgs {
 
     #[arg(
         long,
-        help = "Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.",
+        help = "Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk."
     )]
     pub skip_prerequisites_check: Option<bool>,
 
@@ -323,10 +323,7 @@ impl IntoIterator for InstallArgs {
                 self.idf_features
                     .map(|s| s.split(',').collect::<Vec<&str>>().into()),
             ),
-            (
-                "repo_stub".to_string(),
-                self.repo_stub.map(Into::into),
-            ),
+            ("repo_stub".to_string(), self.repo_stub.map(Into::into)),
             (
                 "skip_prerequisites_check".to_string(),
                 self.skip_prerequisites_check.map(Into::into),

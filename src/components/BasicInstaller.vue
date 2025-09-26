@@ -1,12 +1,12 @@
 <template>
   <div class="basic-installer">
     <div class="installer-header">
-      <h1 class="title">Install ESP-IDF</h1>
+      <h1 class="title">{{ $t('basicInstaller.title') }}</h1>
       <n-button @click="goBack" quaternary :disabled="isLoading">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
-        Back
+        {{ $t('basicInstaller.back') }}
       </n-button>
     </div>
 
@@ -15,7 +15,7 @@
       <n-card class="loading-card">
         <div class="loading-content">
           <n-spin size="large" />
-          <h2>Checking System Requirements</h2>
+          <h2>{{ $t('basicInstaller.loading.title') }}</h2>
           <p>{{ loadingMessage }}</p>
           <n-progress
             type="line"
@@ -34,9 +34,9 @@
       :type="os === 'windows' ? 'warning' : 'error'"
       class="prerequisites-alert"
     >
-      <template #header>Prerequisites Missing</template>
+      <template #header>{{ $t('basicInstaller.prerequisites.header') }}</template>
       <div v-if="missingPrerequisites.length > 0">
-        <p>The following prerequisites are missing:</p>
+        <p>{{ $t('basicInstaller.prerequisites.message') }}</p>
         <ul>
           <li v-for="prereq in missingPrerequisites" :key="prereq">{{ prereq }}</li>
         </ul>
@@ -48,119 +48,98 @@
         type="warning"
         style="margin-top: 10px;"
       >
-        Install Prerequisites Automatically
+        {{ $t('basicInstaller.prerequisites.installButton') }}
       </n-button>
       <p v-else style="margin-top: 10px;">
-        Please install the missing prerequisites before continuing.
+        {{ $t('basicInstaller.prerequisites.manualInstall') }}
       </p>
     </n-alert>
 
     <!-- Installation Options -->
     <transition name="fade-in" mode="out-in">
       <div v-if="!isLoading" class="installation-options">
-      <!-- Easy Mode -->
-      <n-card
-        class="option-card easy-mode-card"
-        hoverable
-        @click="startEasyMode"
-      >
-        <div class="option-content">
-          <div class="option-icon easy">
-            <n-icon :size="48"><RocketOutlined /></n-icon>
+        <!-- Easy Mode -->
+        <n-card class="option-card easy-mode-card" hoverable @click="startEasyMode">
+          <div class="option-content">
+            <div class="option-icon easy">
+              <n-icon :size="48"><RocketOutlined /></n-icon>
+            </div>
+            <h2>{{ $t('basicInstaller.cards.easy.title') }}</h2>
+            <p class="option-description">
+              {{ $t('basicInstaller.cards.easy.description') }}
+            </p>
+            <ul class="feature-list">
+              <li v-for="(feature, index) in easyFeatures" :key="index">{{ feature }}</li>
+            </ul>
+            <n-button type="primary" size="large" block>
+              {{ $t('basicInstaller.cards.easy.button') }}
+            </n-button>
           </div>
-          <h2>Easy Installation</h2>
-          <p class="option-description">
-            Quick setup with recommended defaults. Perfect for beginners.
-          </p>
-          <ul class="feature-list">
-            <li>Latest stable ESP-IDF version</li>
-            <li>Default installation path</li>
-            <li>Automatic configuration</li>
-          </ul>
-          <n-button type="primary" size="large" block>
-            Start Easy Installation
-          </n-button>
-        </div>
+        </n-card>
+
+        <!-- Custom Installation -->
+        <n-card class="option-card custom-mode-card" hoverable @click="startWizard">
+          <div class="option-content">
+            <div class="option-icon custom">
+              <n-icon :size="48"><SettingOutlined /></n-icon>
+            </div>
+            <h2>{{ $t('basicInstaller.cards.custom.title') }}</h2>
+            <p class="option-description">
+              {{ $t('basicInstaller.cards.custom.description') }}
+            </p>
+            <ul class="feature-list">
+              <li v-for="(feature, index) in customFeatures" :key="index">{{ feature }}</li>
+            </ul>
+            <n-button type="primary" size="large" block>
+              {{ $t('basicInstaller.cards.custom.button') }}
+            </n-button>
+          </div>
+        </n-card>
+
+        <!-- Offline Installation -->
+        <n-card class="option-card offline-mode-card" hoverable @click="selectOfflineArchive">
+          <div class="option-content">
+            <div class="option-icon offline">
+              <n-icon :size="48"><CloudDownloadOutlined /></n-icon>
+            </div>
+            <h2>{{ $t('basicInstaller.cards.offline.title') }}</h2>
+            <p class="option-description">
+              {{ $t('basicInstaller.cards.offline.description') }}
+            </p>
+            <n-button type="primary" size="large" block>
+              {{ $t('basicInstaller.cards.offline.button') }}
+            </n-button>
+            <!-- Hidden input for CI tests control -->
+            <input id="eim_offline_installation_input" type="hidden" ref="offlineInputCITests" />
+          </div>
       </n-card>
 
-      <!-- Custom Installation -->
-      <n-card
-        class="option-card custom-mode-card"
-        hoverable
-        @click="startWizard"
-      >
-        <div class="option-content">
-          <div class="option-icon custom">
-            <n-icon :size="48"><SettingOutlined /></n-icon>
+        <!-- Load Configuration -->
+        <n-card class="option-card config-mode-card" hoverable @click="loadConfig">
+          <div class="option-content">
+            <div class="option-icon config">
+              <n-icon :size="48"><FileTextOutlined /></n-icon>
+            </div>
+            <h2>{{ $t('basicInstaller.cards.config.title') }}</h2>
+            <p class="option-description">
+              {{ $t('basicInstaller.cards.config.description') }}
+            </p>
+            <n-button type="primary" size="large" block>
+              {{ $t('basicInstaller.cards.config.button') }}
+            </n-button>
+            <!-- Hidden input for CI tests control -->
+           <input id="eim_load_config_input" type="hidden" ref="configInputCITests" />
           </div>
-          <h2>Custom Installation</h2>
-          <p class="option-description">
-            Full control over installation settings. For advanced users.
-          </p>
-          <ul class="feature-list">
-            <li>Choose ESP-IDF version</li>
-            <li>Custom installation path</li>
-            <li>Advanced options</li>
-          </ul>
-          <n-button type="primary" size="large" block>
-            Start Configuration Wizard
-          </n-button>
-        </div>
-      </n-card>
-
-      <!-- Offline Installation -->
-      <n-card
-        class="option-card offline-mode-card"
-        hoverable
-        @click="selectOfflineArchive"
-      >
-        <div class="option-content">
-          <div class="option-icon offline">
-            <n-icon :size="48"><CloudDownloadOutlined /></n-icon>
-          </div>
-          <h2>Offline Installation</h2>
-          <p class="option-description">
-            Install from local archive files (.zst). No internet required.
-          </p>
-          <n-button type="primary" size="large" block>
-            Browse Archive File
-          </n-button>
-          <!-- Hidden input for CI tests control -->
-          <input id="eim_offline_installation_input" type="hidden" ref="offlineInputCITests" />
-        </div>
-      </n-card>
-
-      <!-- Load Configuration -->
-      <n-card
-        class="option-card config-mode-card"
-        hoverable
-        @click="loadConfig"
-      >
-        <div class="option-content">
-          <div class="option-icon config">
-            <n-icon :size="48"><FileTextOutlined /></n-icon>
-          </div>
-          <h2>Load Configuration</h2>
-          <p class="option-description">
-            Import existing installation configuration file.
-          </p>
-          <n-button type="primary" size="large" block>
-            Browse Configuration File
-          </n-button>
-          <!-- Hidden input for CI tests control -->
-          <input id="eim_load_config_input" type="hidden" ref="configInputCITests" />
-        </div>
-      </n-card>
-    </div>
+        </n-card>
+      </div>
     </transition>
-
-
   </div>
 </template>
 
 <script>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
@@ -189,6 +168,7 @@ export default {
   setup() {
     const router = useRouter()
     const message = useMessage()
+    const { t } = useI18n()
 
     // Loading state
     const isLoading = ref(false)
@@ -209,54 +189,49 @@ export default {
         isLoading.value = false
         loadingProgress.value = 20
 
-        // Check OS
-        loadingMessage.value = 'Detecting operating system...'
+        loadingMessage.value = t('basicInstaller.loading.detectingOS')
         os.value = await invoke('get_operating_system')
         loadingProgress.value = 40
 
-        // Check prerequisites
-        loadingMessage.value = 'Checking prerequisites...'
+        loadingMessage.value = t('basicInstaller.loading.checkingPrerequisites')
         invoke('check_prerequisites_detailed').then(res => {
           prerequisitesOk.value = res.all_ok
           missingPrerequisites.value = res.missing || []
         })
         loadingProgress.value = 60
 
-        // Check for offline archives
-        loadingMessage.value = 'Scanning for offline archives...'
-        await new Promise(resolve => setTimeout(resolve, 300)) // Small delay for smoother UX
+        loadingMessage.value = t('basicInstaller.loading.scanningArchives')
+        await new Promise(resolve => setTimeout(resolve, 300))
         loadingProgress.value = 80
 
-        // Check installation paths
-        loadingMessage.value = 'Verifying installation paths...'
+        loadingMessage.value = t('basicInstaller.loading.verifyingPaths')
         await new Promise(resolve => setTimeout(resolve, 200))
         loadingProgress.value = 100
 
-        // Add small delay before hiding loading state for smoother transition
         setTimeout(() => {
           isLoading.value = false
         }, 300)
 
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
-        message.error('Failed to check system requirements')
+        message.error(t('basicInstaller.messages.errors.systemRequirements'))
         isLoading.value = false
       }
     }
 
     const installPrerequisites = async () => {
       try {
-        message.info('Starting prerequisites installation...')
+        message.info(t('basicInstaller.messages.startingPrerequisites'))
         await invoke('install_prerequisites')
         setTimeout(() => checkPrerequisites(), 3000)
       } catch (error) {
-        message.error('Failed to install prerequisites')
+        message.error(t('basicInstaller.messages.errors.prerequisites'))
       }
     }
 
     const startEasyMode = async () => {
       if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning('Please install prerequisites first')
+        message.warning(t('basicInstaller.prerequisites.warning'))
         return
       }
       router.push('/simple-setup')
@@ -264,7 +239,7 @@ export default {
 
     const startWizard = () => {
       if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning('Please install prerequisites first')
+        message.warning(t('basicInstaller.prerequisites.warning'))
         return
       }
       router.push('/wizard/1')
@@ -333,6 +308,18 @@ export default {
       // });
     })
 
+    const easyFeatures = [
+      t('basicInstaller.cards.easy.feature1'),
+      t('basicInstaller.cards.easy.feature2'),
+      t('basicInstaller.cards.easy.feature3')
+    ]
+
+    const customFeatures = [
+      t('basicInstaller.cards.custom.feature1'),
+      t('basicInstaller.cards.custom.feature2'),
+      t('basicInstaller.cards.custom.feature3')
+    ]
+
     return {
       isLoading,
       loadingMessage,
@@ -349,6 +336,8 @@ export default {
       goBack,
       offlineInputCITests,
       configInputCITests,
+      easyFeatures,
+      customFeatures
     }
   }
 }

@@ -55,10 +55,7 @@ fn prepare_installation_directories(
   ensure_path(version_path.to_str().unwrap())?;
   send_message(
       &app_handle,
-      format!(
-          "IDF installation folder created at: {}",
-          version_path.display()
-      ),
+      rust_i18n::t!("gui.installation.folder_created", path = version_path.display().to_string()).to_string(),
       "info".to_string(),
   );
 
@@ -108,8 +105,8 @@ app_handle: &AppHandle,
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Download,
         percentage: 0,
-        message: format!("Starting ESP-IDF {} download...", version),
-        detail: Some("Preparing to clone repository".to_string()),
+        message: rust_i18n::t!("gui.installation.download_starting", version = version).to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.download_preparing").to_string()),
         version: Some(version.to_string()),
     });
 
@@ -133,8 +130,8 @@ app_handle: &AppHandle,
                         emit_installation_event(&app_handle_clone, InstallationProgress {
                             stage: InstallationStage::Download,
                             percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
-                            message: format!("Cloning ESP-IDF {} repository", version_clone),
-                            detail: Some(format!("Repository: {}%", value)),
+                            message: rust_i18n::t!("gui.installation.cloning_repository", version = version_clone.clone()).to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.repository_progress", percentage = value).to_string()),
                             version: Some(version_clone.clone()),
                         });
                     }
@@ -158,10 +155,11 @@ app_handle: &AppHandle,
                     emit_installation_event(&app_handle_clone, InstallationProgress {
                         stage: InstallationStage::Download,
                         percentage: total_progress.min(65),
-                        message: format!("Downloading submodule: {}",
-                            name),
-                        detail: Some(format!("Submodule {}/{} (est.) - {}%",
-                            completed_submodules + 1, total_estimated_submodules, value)),
+                        message: rust_i18n::t!("gui.installation.downloading_submodule", name = name.clone()).to_string(),
+                        detail: Some(rust_i18n::t!("gui.installation.submodule_detail",
+                            current = completed_submodules + 1,
+                            total = total_estimated_submodules,
+                            percentage = value).to_string()),
                         version: Some(version_clone.clone()),
                     });
                 }
@@ -176,18 +174,22 @@ app_handle: &AppHandle,
                     let submodule_progress = 10 + (completed_submodules * 55 / effective_total);
                     // let submodule_progress = 10 + (completed_submodules * 55 / total_estimated_submodules.max(completed_submodules));
 
+                    let name_display = name.split('/').last().unwrap_or(&name).replace("_", " ");
                     emit_installation_event(&app_handle_clone, InstallationProgress {
                         stage: InstallationStage::Download,
                         percentage: submodule_progress.min(65) as u32,
-                        message: format!("Completed submodule: {}",
-                            name.split('/').last().unwrap_or(&name).replace("_", " ")),
-                        detail: Some(format!("Progress: {}/{} submodules", completed_submodules, total_estimated_submodules)),
+                        message: rust_i18n::t!("gui.installation.completed_submodule", name = name_display).to_string(),
+                        detail: Some(rust_i18n::t!("gui.installation.submodule_progress",
+                            completed = completed_submodules,
+                            total = total_estimated_submodules).to_string()),
                         version: Some(version_clone.clone()),
                     });
 
                     emit_log_message(&app_handle_clone, MessageLevel::Info,
-                        format!("Submodule '{}' completed ({}/{})",
-                            name, completed_submodules, total_estimated_submodules));
+                        rust_i18n::t!("gui.installation.submodule_completed_log",
+                            name = name,
+                            completed = completed_submodules,
+                            total = total_estimated_submodules).to_string());
                 }
 
                 Ok(ProgressMessage::Finish) => {
@@ -198,8 +200,8 @@ app_handle: &AppHandle,
                         emit_installation_event(&app_handle_clone, InstallationProgress {
                             stage: InstallationStage::Extract,
                             percentage: 65,
-                            message: "ESP-IDF download completed (no submodules)".to_string(),
-                            detail: Some("Repository cloned successfully".to_string()),
+                            message: rust_i18n::t!("gui.installation.download_completed_no_submodules").to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.repository_cloned").to_string()),
                             version: Some(version_clone.clone()),
                         });
                         break;
@@ -210,8 +212,8 @@ app_handle: &AppHandle,
                         emit_installation_event(&app_handle_clone, InstallationProgress {
                             stage: InstallationStage::Extract,
                             percentage: 65,
-                            message: "ESP-IDF download completed".to_string(),
-                            detail: Some(format!("Repository and {} submodules ready", completed_submodules)),
+                            message: rust_i18n::t!("gui.installation.download_completed").to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.repository_and_submodules", count = completed_submodules).to_string()),
                             version: Some(version_clone.clone()),
                         });
                         break;
@@ -221,8 +223,8 @@ app_handle: &AppHandle,
                         emit_installation_event(&app_handle_clone, InstallationProgress {
                             stage: InstallationStage::Download,
                             percentage: 10,
-                            message: "Main repository cloned, preparing submodules...".to_string(),
-                            detail: Some("Waiting for submodule updates".to_string()),
+                            message: rust_i18n::t!("gui.installation.main_cloned_waiting").to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.waiting_submodules").to_string()),
                             version: Some(version_clone.clone()),
                         });
                         // Don't break - keep waiting for submodules
@@ -236,11 +238,11 @@ app_handle: &AppHandle,
                         emit_installation_event(&app_handle_clone, InstallationProgress {
                             stage: InstallationStage::Extract,
                             percentage: final_percentage,
-                            message: "ESP-IDF download completed".to_string(),
+                            message: rust_i18n::t!("gui.installation.download_completed").to_string(),
                             detail: Some(if has_submodules {
-                                format!("Repository and {} submodules processed", completed_submodules)
+                                rust_i18n::t!("gui.installation.submodules_processed", count = completed_submodules).to_string()
                             } else {
-                                "Repository cloned successfully".to_string()
+                                rust_i18n::t!("gui.installation.repository_cloned").to_string()
                             }),
                             version: Some(version_clone.clone()),
                         });
@@ -251,13 +253,14 @@ app_handle: &AppHandle,
         }
     });
 
+    let default_mirror = rust_i18n::t!("gui.installation.default_mirror").to_string();
+    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror);
     emit_log_message(
         app_handle,
         MessageLevel::Info,
-        format!("Cloning ESP-IDF {} repository from {}",
-            version,
-            settings.idf_mirror.as_deref().unwrap_or("default mirror")
-        ),
+        rust_i18n::t!("gui.installation.cloning_from_mirror",
+            version = version,
+            mirror = mirror).to_string(),
     );
 
     let result = idf_im_lib::get_esp_idf(
@@ -276,15 +279,17 @@ app_handle: &AppHandle,
             emit_installation_event(app_handle, InstallationProgress {
                 stage: InstallationStage::Extract,
                 percentage: 70,
-                message: format!("ESP-IDF {} ready for tools installation", version),
-                detail: Some(format!("Location: {}", idf_path.display())),
+                message: rust_i18n::t!("gui.installation.ready_for_tools", version = version).to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.location", path = idf_path.display().to_string()).to_string()),
                 version: Some(version.to_string()),
             });
 
             emit_log_message(
                 app_handle,
                 MessageLevel::Success,
-                format!("ESP-IDF {} downloaded successfully: {}", version, idf_path.display()),
+                rust_i18n::t!("gui.installation.downloaded_successfully",
+                    version = version,
+                    path = idf_path.display().to_string()).to_string(),
             );
             Ok(())
         }
@@ -292,7 +297,7 @@ app_handle: &AppHandle,
             emit_installation_event(app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: format!("Failed to download ESP-IDF {}", version),
+                message: rust_i18n::t!("gui.installation.download_failed", version = version).to_string(),
                 detail: Some(e.to_string()),
                 version: Some(version.to_string()),
             });
@@ -319,7 +324,7 @@ pub async fn install_single_version(
     info!("Using existing IDF directory: {}", paths.idf_path.display());
     send_message(
         &app_handle,
-        format!("Using existing IDF directory: {}", paths.idf_path.display()),
+        rust_i18n::t!("gui.installation.using_existing", path = paths.idf_path.display().to_string()).to_string(),
         "info".to_string(),
     );
 
@@ -372,12 +377,12 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "Installation path not available".to_string(),
-            detail: Some(format!("Path: {:?}", settings_clone.path.clone().unwrap())),
+            message: rust_i18n::t!("gui.installation.path_not_available").to_string(),
+            detail: Some(rust_i18n::t!("gui.installation.path_detail", path = format!("{:?}", settings_clone.path.clone().unwrap())).to_string()),
             version: None,
         });
 
-        return Err(format!("Installation path not available: {:?}", settings_clone.path.clone().unwrap()));
+        return Err(rust_i18n::t!("gui.installation.path_not_available").to_string());
     }
 
     // Save settings to temp file
@@ -387,12 +392,12 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "Failed to save temporary configuration".to_string(),
+            message: rust_i18n::t!("gui.installation.config_save_failed").to_string(),
             detail: Some(e.to_string()),
             version: None,
         });
 
-        return Err(format!("Failed to save temporary config: {}", e));
+        return Err(rust_i18n::t!("gui.installation.config_save_failed").to_string());
     }
 
     log::info!("Saved temporary config to {}", config_path.display());
@@ -405,13 +410,13 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 0,
-        message: "Starting installation process...".to_string(),
-        detail: Some("Launching installer subprocess".to_string()),
+        message: rust_i18n::t!("gui.installation.starting_process").to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.launching_subprocess").to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Info,
-        "Starting installation in separate process...".to_string());
+        rust_i18n::t!("gui.installation.starting_separate_process").to_string());
 
     // Start the process with piped stdout and stderr
     let mut child = Command::new(current_exe)
@@ -426,7 +431,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to start installer process".to_string(),
+                message: rust_i18n::t!("gui.installation.installer_process_failed").to_string(),
                 detail: Some(e.to_string()),
                 version: None,
             });
@@ -490,8 +495,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         emit_installation_event(handle, InstallationProgress {
                             stage: InstallationStage::Download,
                             percentage: 10,
-                            message: format!("Starting ESP-IDF {} installation", version),
-                            detail: Some("Preparing to download ESP-IDF".to_string()),
+                            message: rust_i18n::t!("gui.installation.starting_version", version = version.clone()).to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.preparing_download").to_string()),
                             version: Some(version),
                         });
 
@@ -507,8 +512,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Prerequisites,
                     percentage: 8,
-                    message: "Checking prerequisites...".to_string(),
-                    detail: Some("Verifying system requirements".to_string()),
+                    message: rust_i18n::t!("gui.installation.checking_prerequisites").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.verifying_requirements").to_string()),
                     version: current_ver.clone(),
                 });
                 *stage = InstallationStage::Prerequisites;
@@ -518,8 +523,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Prerequisites,
                     percentage: 12,
-                    message: "Verifying Python installation...".to_string(),
-                    detail: Some("Checking Python environment".to_string()),
+                    message: rust_i18n::t!("gui.installation.verifying_python").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.checking_python").to_string()),
                     version: current_ver.clone(),
                 });
                 *percentage = 12;
@@ -528,8 +533,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Download,
                     percentage: 15,
-                    message: "Downloading ESP-IDF repository...".to_string(),
-                    detail: Some("Cloning main repository".to_string()),
+                    message: rust_i18n::t!("gui.installation.downloading_repository").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.cloning_main").to_string()),
                     version: current_ver.clone(),
                 });
                 *stage = InstallationStage::Download;
@@ -541,8 +546,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Download,
                     percentage: submodule_progress,
-                    message: "Downloading submodules...".to_string(),
-                    detail: Some("Processing ESP-IDF submodules".to_string()),
+                    message: rust_i18n::t!("gui.installation.downloading_submodules").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.processing_submodules").to_string()),
                     version: current_ver.clone(),
                 });
                 *percentage = submodule_progress;
@@ -558,8 +563,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         emit_installation_event(handle, InstallationProgress {
                             stage: InstallationStage::Tools,
                             percentage: 65,
-                            message: format!("Installing {} development tools...", total),
-                            detail: Some("Preparing tools installation".to_string()),
+                            message: rust_i18n::t!("gui.installation.installing_tools", count = *total).to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.preparing_tools").to_string()),
                             version: current_ver.clone(),
                         });
 
@@ -577,9 +582,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                     emit_installation_event(handle, InstallationProgress {
                         stage: InstallationStage::Tools,
                         percentage: tool_progress,
-                        message: format!("Downloading: {}", tool_name),
-                        // detail: Some(format!("Tool {} of {}", *completed + 1, *total)), on windows the total information may be not available and then the of 0 looks weird
-                        detail: Some(format!("Tool {}", *completed + 1)),
+                        message: rust_i18n::t!("gui.installation.downloading_tool", name = tool_name).to_string(),
+                        detail: Some(rust_i18n::t!("gui.installation.tool_number", number = *completed + 1).to_string()),
                         version: current_ver.clone(),
                     });
                     *percentage = tool_progress;
@@ -592,9 +596,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: tool_progress.min(85),
-                    // message: format!("Installed tool ({}/{})", *completed, *total), on windows the total information may be not avalible and then the /0 looks weird
-                    message: format!("Installed tool ({})", *completed),
-                    detail: Some("Tool installation completed".to_string()),
+                    message: rust_i18n::t!("gui.installation.installed_tool", number = *completed).to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.tool_completed").to_string()),
                     version: current_ver.clone(),
                 });
                 *percentage = tool_progress.min(85);
@@ -603,8 +606,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Python,
                     percentage: 90,
-                    message: "Setting up Python environment...".to_string(),
-                    detail: Some("Configuring Python dependencies".to_string()),
+                    message: rust_i18n::t!("gui.installation.python_environment").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.configuring_python").to_string()),
                     version: current_ver.clone(),
                 });
                 *stage = InstallationStage::Python;
@@ -614,8 +617,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(handle, InstallationProgress {
                     stage: InstallationStage::Complete,
                     percentage: 100,
-                    message: "ESP-IDF installation completed successfully!".to_string(),
-                    detail: Some("Installation finished".to_string()),
+                    message: rust_i18n::t!("gui.installation.completed_successfully").to_string(),
+                    detail: Some(rust_i18n::t!("gui.installation.finished").to_string()),
                     version: current_ver.clone(),
                 });
                 *stage = InstallationStage::Complete;
@@ -691,7 +694,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(&monitor_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "Installation process failed".to_string(),
+                    message: rust_i18n::t!("gui.installation.process_failed").to_string(),
                     detail: Some(e.to_string()),
                     version: current_version.clone(),
                 });
@@ -718,20 +721,20 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             emit_installation_event(&monitor_handle, InstallationProgress {
                 stage: InstallationStage::Complete,
                 percentage: 100,
-                message: "Installation completed successfully!".to_string(),
-                detail: Some(format!("All ESP-IDF versions installed: {}", versions.join(", "))),
+                message: rust_i18n::t!("gui.installation.all_completed").to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.all_versions", versions = versions.join(", ")).to_string()),
                 version: None,
             });
 
             emit_log_message(&monitor_handle, MessageLevel::Success,
-                "Installation process completed successfully".to_string());
+                rust_i18n::t!("gui.installation.success_message").to_string());
         } else {
-            let error_msg = format!("Installation failed with exit code: {}", status.code().unwrap_or(-1));
+            let error_msg = rust_i18n::t!("gui.installation.failed_exit_code", code = status.code().unwrap_or(-1)).to_string();
 
             emit_installation_event(&monitor_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Installation process failed".to_string(),
+                message: rust_i18n::t!("gui.installation.process_failed_detail").to_string(),
                 detail: Some(error_msg.clone()),
                 version: current_version,
             });
@@ -786,16 +789,16 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "No ESP-IDF versions selected".to_string(),
-                detail: Some("Please select at least one version to install".to_string()),
+                message: rust_i18n::t!("gui.installation.no_versions_selected").to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.select_version").to_string()),
                 version: None,
             });
 
             emit_log_message(&app_handle, MessageLevel::Warning,
-                "No IDF versions were selected".to_string());
+                rust_i18n::t!("gui.installation.no_versions_warning").to_string());
 
             set_installation_status(&app_handle, false)?;
-            return Err("No IDF versions were selected".to_string());
+            return Err(rust_i18n::t!("gui.installation.no_versions_warning").to_string());
         }
     };
 
@@ -806,18 +809,21 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     });
 
     let total_versions = versions.len();
+    let plural = if total_versions == 1 { "" } else { "s" };
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 0,
-        message: format!("Starting installation of {} ESP-IDF version{}",
-            total_versions, if total_versions == 1 { "" } else { "s" }),
-        detail: Some(format!("Versions: {}", versions.join(", "))),
+        message: rust_i18n::t!("gui.installation.starting_batch",
+            count = total_versions,
+            plural = plural).to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.versions_list", versions = versions.join(", ")).to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Info,
-        format!("Starting batch installation of {} version(s): {}",
-            total_versions, versions.join(", ")));
+        rust_i18n::t!("gui.installation.batch_log",
+            count = total_versions,
+            versions = versions.join(", ")).to_string());
 
     // Install each version with progress tracking
     for (index, version) in versions.iter().enumerate() {
@@ -833,14 +839,19 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Download,
             percentage: version_start_percentage as u32,
-            message: format!("Starting ESP-IDF {} installation", version),
-            detail: Some(format!("Version {} of {} - {}", index + 1, total_versions, version)),
+            message: rust_i18n::t!("gui.installation.starting_version", version = version).to_string(),
+            detail: Some(rust_i18n::t!("gui.installation.version_detail",
+                current = index + 1,
+                total = total_versions,
+                version = version).to_string()),
             version: Some(version.clone()),
         });
 
         emit_log_message(&app_handle, MessageLevel::Info,
-            format!("Starting installation of ESP-IDF version {} ({}/{})",
-                version, index + 1, total_versions));
+            rust_i18n::t!("gui.installation.starting_version_log",
+                version = version,
+                current = index + 1,
+                total = total_versions).to_string());
 
         // Install single version
         match install_single_version(app_handle.clone(), &settings, version.clone()).await {
@@ -848,15 +859,18 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(&app_handle, InstallationProgress {
                   stage: if index < versions.len() - 1 { InstallationStage::Configure } else { InstallationStage::Complete },
                   percentage: version_end_percentage as u32,
-                  message: format!("ESP-IDF {} installed successfully", version),
-                  detail: Some(format!("Completed {} of {} versions, continuing...", index + 1, total_versions)),
+                  message: rust_i18n::t!("gui.installation.version_success", version = version).to_string(),
+                  detail: Some(rust_i18n::t!("gui.installation.completed_versions",
+                      current = index + 1,
+                      total = total_versions).to_string()),
                   version: Some(version.clone()),
                 });
 
-
                 emit_log_message(&app_handle, MessageLevel::Success,
-                    format!("ESP-IDF version {} installed successfully ({}/{})",
-                        version, index + 1, total_versions));
+                    rust_i18n::t!("gui.installation.version_success_log",
+                        version = version,
+                        current = index + 1,
+                        total = total_versions).to_string());
             }
             Err(e) => {
                 error!("Failed to install version {}: {}", version, e);
@@ -864,27 +878,30 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: format!("Failed to install ESP-IDF {}", version),
+                    message: rust_i18n::t!("gui.installation.version_failed", version = version).to_string(),
                     detail: Some(e.to_string()),
                     version: Some(version.clone()),
                 });
 
                 emit_log_message(&app_handle, MessageLevel::Error,
-                    format!("Failed to install version {}: {}", version, e));
+                    rust_i18n::t!("gui.installation.version_failed_log",
+                        version = version,
+                        error = e.to_string()).to_string());
 
                 set_installation_status(&app_handle, false)?;
-                return Err(format!("Installation failed for version {}: {}", version, e));
+                return Err(rust_i18n::t!("gui.installation.failed_for_version",
+                    version = version,
+                    error = e.to_string()).to_string());
             }
         }
-
     }
 
     // Configuration phase - saving IDE JSON (90-95%)
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Configure,
         percentage: 90,
-        message: "Configuring development environment...".to_string(),
-        detail: Some("Saving IDE configuration".to_string()),
+        message: rust_i18n::t!("gui.installation.configuring_environment").to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.saving_config").to_string()),
         version: None,
     });
 
@@ -897,26 +914,26 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Configure,
                 percentage: 93,
-                message: "IDE configuration saved successfully".to_string(),
-                detail: Some(format!("Configuration saved to: {}", ide_json_path)),
+                message: rust_i18n::t!("gui.installation.config_saved").to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
                 version: None,
             });
 
             emit_log_message(&app_handle, MessageLevel::Success,
-                format!("IDE JSON file saved to: {}", ide_json_path));
+                rust_i18n::t!("gui.installation.ide_json_saved", path = ide_json_path).to_string());
         }
         Err(e) => {
             // Don't fail the entire installation for IDE config save failure
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Configure,
                 percentage: 93,
-                message: "Warning: IDE configuration save failed".to_string(),
+                message: rust_i18n::t!("gui.installation.config_save_warning").to_string(),
                 detail: Some(e.to_string()),
                 version: None,
             });
 
             emit_log_message(&app_handle, MessageLevel::Warning,
-                format!("Failed to save IDE JSON file: {}", e));
+                rust_i18n::t!("gui.installation.ide_json_failed", error = e.to_string()).to_string());
         }
     }
 
@@ -924,8 +941,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Configure,
         percentage: 97,
-        message: "Finalizing installation...".to_string(),
-        detail: Some("Completing setup process".to_string()),
+        message: rust_i18n::t!("gui.installation.finalizing").to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.completing_setup").to_string()),
         version: None,
     });
 
@@ -933,17 +950,19 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     // Complete!
+    let plural = if total_versions == 1 { "" } else { "s" };
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Complete,
         percentage: 100,
-        message: format!("All {} ESP-IDF version{} installed successfully!",
-            total_versions, if total_versions == 1 { "" } else { "s" }),
-        detail: Some(format!("Completed installation of: {}", versions.join(", "))),
+        message: rust_i18n::t!("gui.installation.all_versions_success",
+            count = total_versions,
+            plural = plural).to_string(),
+        detail: Some(rust_i18n::t!("gui.installation.completed_list", versions = versions.join(", ")).to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Success,
-        format!("Batch installation completed successfully - {} version(s) installed", total_versions));
+        rust_i18n::t!("gui.installation.batch_completed", count = total_versions).to_string());
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
@@ -966,7 +985,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 0,
-        message: "Starting installation...".to_string(),
+        message: rust_i18n::t!("gui.simple_setup.starting").to_string(),
         detail: None,
         version: None,
     });
@@ -980,8 +999,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Prerequisites,
             percentage: 5,
-            message: "Installing prerequisites...".to_string(),
-            detail: Some(format!("Missing: {}", prerequisites.join(", "))),
+            message: rust_i18n::t!("gui.simple_setup.installing_prerequisites").to_string(),
+            detail: Some(rust_i18n::t!("gui.simple_setup.missing", items = prerequisites.join(", ")).to_string()),
             version: None,
         });
 
@@ -990,11 +1009,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to install prerequisites".to_string(),
-                detail: Some(format!("Missing: {}", prerequisites.join(", "))),
+                message: rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string(),
+                detail: Some(rust_i18n::t!("gui.simple_setup.missing", items = prerequisites.join(", ")).to_string()),
                 version: None,
             });
-            return Err("Failed to install prerequisites".to_string());
+            return Err(rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string());
         }
 
         prerequisites = check_prequisites(app_handle.clone());
@@ -1005,17 +1024,17 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "Prerequisites missing".to_string(),
-            detail: Some(format!("Please install: {}", prerequisites.join(", "))),
+            message: rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string(),
+            detail: Some(rust_i18n::t!("gui.simple_setup.please_install", items = prerequisites.join(", ")).to_string()),
             version: None,
         });
-        return Err("Prerequisites missing".to_string());
+        return Err(rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string());
     }
 
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Prerequisites,
         percentage: 10,
-        message: "Prerequisites verified".to_string(),
+        message: rust_i18n::t!("gui.simple_setup.prerequisites_verified").to_string(),
         detail: None,
         version: None,
     });
@@ -1028,7 +1047,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Python,
             percentage: 15,
-            message: "Installing Python...".to_string(),
+            message: rust_i18n::t!("gui.simple_setup.installing_python").to_string(),
             detail: None,
             version: None,
         });
@@ -1037,11 +1056,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to install Python".to_string(),
-                detail: Some("Python installation failed".to_string()),
+                message: rust_i18n::t!("gui.simple_setup.python_failed").to_string(),
+                detail: Some(rust_i18n::t!("gui.simple_setup.python_install_failed").to_string()),
                 version: None,
             });
-            return Err("Failed to install Python".to_string());
+            return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
         }
 
         python_found = python_sanity_check(app_handle.clone(), None);
@@ -1052,17 +1071,17 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "Python not found".to_string(),
-            detail: Some("Please install Python 3.11 manually".to_string()),
+            message: rust_i18n::t!("gui.simple_setup.python_not_found").to_string(),
+            detail: Some(rust_i18n::t!("gui.simple_setup.install_python_manually").to_string()),
             version: None,
         });
-        return Err("Python not found".to_string());
+        return Err(rust_i18n::t!("gui.simple_setup.python_not_found").to_string());
     }
 
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Python,
         percentage: 20,
-        message: "Python environment ready".to_string(),
+        message: rust_i18n::t!("gui.simple_setup.python_ready").to_string(),
         detail: None,
         version: None,
     });
@@ -1072,7 +1091,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Configure,
             percentage: 25,
-            message: "Fetching available ESP-IDF versions...".to_string(),
+            message: rust_i18n::t!("gui.simple_setup.fetching_versions").to_string(),
             detail: None,
             version: None,
         });
@@ -1083,11 +1102,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to fetch ESP-IDF versions".to_string(),
-                detail: Some("Could not retrieve version list from server".to_string()),
+                message: rust_i18n::t!("gui.simple_setup.fetch_failed").to_string(),
+                detail: Some(rust_i18n::t!("gui.simple_setup.retrieve_failed").to_string()),
                 version: None,
             });
-            return Err("Failed to fetch ESP-IDF versions".to_string());
+            return Err(rust_i18n::t!("gui.simple_setup.fetch_failed").to_string());
         }
 
         let version = versions[0]["name"]
@@ -1101,12 +1120,12 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         }) {
             Ok(_) => {
                 emit_log_message(&app_handle, MessageLevel::Info,
-                    format!("Selected ESP-IDF version: {}", version));
+                    rust_i18n::t!("gui.simple_setup.version_selected", version = version.clone()).to_string());
 
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Configure,
                     percentage: 30,
-                    message: format!("ESP-IDF {} selected", version),
+                    message: rust_i18n::t!("gui.simple_setup.version_selected_event", version = version.clone()).to_string(),
                     detail: None,
                     version: Some(version.clone()),
                 });
@@ -1115,7 +1134,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "Failed to configure ESP-IDF version".to_string(),
+                    message: rust_i18n::t!("gui.simple_setup.config_failed").to_string(),
                     detail: Some(e.to_string()),
                     version: None,
                 });
@@ -1128,7 +1147,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Download,
         percentage: 35,
-        message: "Starting ESP-IDF installation...".to_string(),
+        message: rust_i18n::t!("gui.simple_setup.starting_installation").to_string(),
         detail: None,
         version: settings.idf_versions.as_ref().and_then(|v| v.first().cloned()),
     });
@@ -1147,13 +1166,13 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 0,
-        message: "Checking installation to repair...".to_string(),
-        detail: Some(format!("Looking up installation ID: {}", id)),
+        message: rust_i18n::t!("gui.fix.checking_installation").to_string(),
+        detail: Some(rust_i18n::t!("gui.fix.looking_up", id = id.clone()).to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Info,
-        format!("Starting repair process for installation: {}", id));
+        rust_i18n::t!("gui.fix.starting_repair", id = id.clone()).to_string());
 
     let versions = get_installed_versions();
     let installation = match versions.iter().find(|v| v.id == id) {
@@ -1161,24 +1180,24 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Checking,
                 percentage: 10,
-                message: format!("Found installation: ESP-IDF {}", inst.name),
-                detail: Some(format!("Path: {}", inst.path)),
+                message: rust_i18n::t!("gui.fix.found_installation", name = inst.name.clone()).to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.path_detail", path = inst.path.clone()).to_string()),
                 version: Some(inst.name.clone()),
             });
 
             emit_log_message(&app_handle, MessageLevel::Info,
-                format!("Found installation {} at: {}", inst.name, inst.path));
+                rust_i18n::t!("gui.fix.found_at", name = inst.name.clone(), path = inst.path.clone()).to_string());
 
             inst
         }
         None => {
-            let error_msg = format!("Installation with ID {} not found", id);
+            let error_msg = rust_i18n::t!("gui.fix.not_found_detail", id = id.clone()).to_string();
             error!("{}", error_msg);
 
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Installation not found".to_string(),
+                message: rust_i18n::t!("gui.fix.not_found").to_string(),
                 detail: Some(error_msg.clone()),
                 version: None,
             });
@@ -1193,8 +1212,8 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 20,
-        message: "Preparing repair configuration...".to_string(),
-        detail: Some("Setting up installation parameters".to_string()),
+        message: rust_i18n::t!("gui.fix.preparing_config").to_string(),
+        detail: Some(rust_i18n::t!("gui.fix.setting_up").to_string()),
         version: Some(installation.name.clone()),
     });
 
@@ -1203,24 +1222,24 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: 30,
-                message: "Configuration prepared successfully".to_string(),
-                detail: Some("Ready to begin repair process".to_string()),
+                message: rust_i18n::t!("gui.fix.config_prepared").to_string(),
+                detail: Some(rust_i18n::t!("gui.fix.ready_to_repair").to_string()),
                 version: Some(installation.name.clone()),
             });
 
             emit_log_message(&app_handle, MessageLevel::Success,
-                "Repair configuration prepared successfully".to_string());
+                rust_i18n::t!("gui.fix.config_prepared_log").to_string());
 
             settings
         }
         Err(e) => {
-            let error_msg = format!("Failed to prepare settings for repair: {}", e);
+            let error_msg = rust_i18n::t!("gui.fix.prepare_failed_detail", error = e.to_string()).to_string();
             error!("{}", error_msg);
 
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to prepare repair configuration".to_string(),
+                message: rust_i18n::t!("gui.fix.prepare_failed").to_string(),
                 detail: Some(e.to_string()),
                 version: Some(installation.name.clone()),
             });
@@ -1238,30 +1257,30 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Download,
         percentage: 35,
-        message: format!("Starting ESP-IDF {} repair...", installation.name),
-        detail: Some("Beginning reinstallation process".to_string()),
+        message: rust_i18n::t!("gui.fix.starting_repair_version", version = installation.name.clone()).to_string(),
+        detail: Some(rust_i18n::t!("gui.fix.beginning_reinstall").to_string()),
         version: Some(installation.name.clone()),
     });
 
     emit_log_message(&app_handle, MessageLevel::Info,
-        format!("Starting repair installation for ESP-IDF {}", installation.name));
+        rust_i18n::t!("gui.fix.starting_repair_log", version = installation.name.clone()).to_string());
 
     // The actual repair process - this will generate detailed progress events
     match install_single_version(app_handle.clone(), &settings, installation.name.clone()).await {
         Ok(_) => {
             emit_log_message(&app_handle, MessageLevel::Success,
-                format!("Successfully repaired ESP-IDF {} installation", installation.name));
+                rust_i18n::t!("gui.fix.repair_success", version = installation.name.clone()).to_string());
 
             info!("Successfully fixed installation {}", id);
         }
         Err(e) => {
-            let error_msg = format!("Failed to repair installation: {}", e);
+            let error_msg = rust_i18n::t!("gui.fix.repair_failed_detail", error = e.to_string()).to_string();
             error!("{}", error_msg);
 
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: format!("ESP-IDF {} repair failed", installation.name),
+                message: rust_i18n::t!("gui.fix.repair_failed", version = installation.name.clone()).to_string(),
                 detail: Some(e.to_string()),
                 version: Some(installation.name.clone()),
             });
@@ -1276,8 +1295,8 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Configure,
         percentage: 90,
-        message: "Updating IDE configuration...".to_string(),
-        detail: Some("Saving installation information".to_string()),
+        message: rust_i18n::t!("gui.fix.updating_config").to_string(),
+        detail: Some(rust_i18n::t!("gui.fix.saving_info").to_string()),
         version: Some(installation.name.clone()),
     });
 
@@ -1340,8 +1359,8 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Configure,
                     percentage: 95,
-                    message: "IDE configuration already updated".to_string(),
-                    detail: Some("Installation found in configuration".to_string()),
+                    message: rust_i18n::t!("gui.fix.config_updated").to_string(),
+                    detail: Some(rust_i18n::t!("gui.fix.found_in_config").to_string()),
                     version: Some(installation.name.clone()),
                 });
             } else {
@@ -1352,24 +1371,24 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
                         emit_installation_event(&app_handle, InstallationProgress {
                             stage: InstallationStage::Configure,
                             percentage: 95,
-                            message: "IDE configuration saved successfully".to_string(),
-                            detail: Some(format!("Configuration saved to: {}", ide_json_path)),
+                            message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
+                            detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
                             version: Some(installation.name.clone()),
                         });
 
                         emit_log_message(&app_handle, MessageLevel::Success,
-                            format!("IDE JSON file updated at: {}", ide_json_path));
+                            rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string());
 
                         info!("IDE JSON saved to {}", ide_json_path);
                     }
                     Err(e) => {
-                        let error_msg = format!("Failed to save IDE configuration: {}", e);
+                        let error_msg = rust_i18n::t!("gui.installation.ide_config_save_failed_detail", error = e.to_string()).to_string();
                         warn!("{}", error_msg);
 
                         emit_installation_event(&app_handle, InstallationProgress {
                             stage: InstallationStage::Configure,
                             percentage: 95,
-                            message: "Warning: IDE configuration save failed".to_string(),
+                            message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
                             detail: Some(e.to_string()),
                             version: Some(installation.name.clone()),
                         });
@@ -1387,24 +1406,24 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Configure,
                         percentage: 95,
-                        message: "IDE configuration saved successfully".to_string(),
-                        detail: Some(format!("Configuration saved to: {}", ide_json_path)),
+                        message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
+                        detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
                         version: Some(installation.name.clone()),
                     });
 
                     emit_log_message(&app_handle, MessageLevel::Success,
-                        format!("IDE JSON file updated at: {}", ide_json_path));
+                        rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string());
 
                     info!("IDE JSON saved to {}", ide_json_path);
                 }
                 Err(e) => {
-                    let error_msg = format!("Failed to save IDE configuration: {}", e);
+                    let error_msg = rust_i18n::t!("gui.installation.ide_config_save_failed_detail", error = e.to_string()).to_string();
                     warn!("{}", error_msg);
 
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Configure,
                         percentage: 95,
-                        message: "Warning: IDE configuration save failed".to_string(),
+                        message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
                         detail: Some(e.to_string()),
                         version: Some(installation.name.clone()),
                     });
@@ -1419,13 +1438,13 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Complete,
         percentage: 100,
-        message: format!("ESP-IDF {} repair completed successfully!", installation.name),
-        detail: Some(format!("Installation repaired at: {}", installation.path)),
+        message: rust_i18n::t!("gui.fix.repair_completed", version = installation.name.clone()).to_string(),
+        detail: Some(rust_i18n::t!("gui.fix.repaired_at", path = installation.path.clone()).to_string()),
         version: Some(installation.name.clone()),
     });
 
     emit_log_message(&app_handle, MessageLevel::Success,
-        format!("Repair process completed successfully for ESP-IDF {}", installation.name));
+        rust_i18n::t!("gui.fix.completed_log", version = installation.name.clone()).to_string());
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
@@ -1445,25 +1464,25 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "No archives provided for offline installation".to_string(),
-            detail: Some("Please select at least one archive file".to_string()),
+            message: rust_i18n::t!("gui.offline.no_archives").to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.select_archive").to_string()),
             version: None,
         });
         set_installation_status(&app_handle, false)?;
-        return Err("No archives provided for offline installation".to_string());
+        return Err(rust_i18n::t!("gui.offline.no_archives").to_string());
     }
 
     // Initial progress event
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Checking,
         percentage: 0,
-        message: "Starting offline installation...".to_string(),
-        detail: Some(format!("Processing {} archive(s)", archives.len())),
+        message: rust_i18n::t!("gui.offline.starting").to_string(),
+        detail: Some(rust_i18n::t!("gui.offline.processing_archives", count = archives.len()).to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Info,
-        format!("Starting offline installation with {} archive(s)", archives.len()));
+        rust_i18n::t!("gui.offline.starting_log", count = archives.len()).to_string());
 
     let total_archives = archives.len();
 
@@ -1474,17 +1493,17 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Checking,
             percentage: (archive_index * 10 / total_archives) as u32,
-            message: format!("Validating archive: {}", getFileName(archive)),
-            detail: Some(format!("Archive {} of {}", archive_index + 1, total_archives)),
+            message: rust_i18n::t!("gui.offline.validating_archive", name = get_file_name(archive)).to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.archive_number", current = archive_index + 1, total = total_archives).to_string()),
             version: None,
         });
 
         if !archive_path.try_exists().unwrap_or(false) {
-            let error_msg = format!("Archive file does not exist: {}", archive);
+            let error_msg = rust_i18n::t!("gui.offline.archive_not_exist", path = archive).to_string();
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Archive not found".to_string(),
+                message: rust_i18n::t!("gui.offline.archive_not_found").to_string(),
                 detail: Some(error_msg.clone()),
                 version: None,
             });
@@ -1493,23 +1512,23 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         }
 
         emit_log_message(&app_handle, MessageLevel::Info,
-            format!("Validated archive: {}", archive));
+            rust_i18n::t!("gui.offline.validated", path = archive).to_string());
 
         // Create temporary directory for extraction
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Extract,
             percentage: ((archive_index * 90 + 10) / total_archives) as u32,
-            message: "Creating temporary workspace...".to_string(),
-            detail: Some("Preparing for archive extraction".to_string()),
+            message: rust_i18n::t!("gui.offline.creating_workspace").to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.preparing_extraction").to_string()),
             version: None,
         });
 
         let offline_archive_dir = TempDir::new().map_err(|e| {
-            let error_msg = format!("Failed to create temporary directory: {}", e);
+            let error_msg = rust_i18n::t!("gui.offline.temp_dir_failed", error = e.to_string()).to_string();
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Failed to create workspace".to_string(),
+                message: rust_i18n::t!("gui.offline.workspace_failed").to_string(),
                 detail: Some(error_msg.clone()),
                 version: None,
             });
@@ -1517,14 +1536,14 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         })?;
 
         emit_log_message(&app_handle, MessageLevel::Info,
-            format!("Created temporary directory: {}", offline_archive_dir.path().display()));
+            rust_i18n::t!("gui.offline.temp_dir_created", path = offline_archive_dir.path().display().to_string()).to_string());
 
         // Get and configure settings
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Extract,
             percentage: ((archive_index * 90 + 15) / total_archives) as u32,
-            message: "Configuring installation settings...".to_string(),
-            detail: Some("Preparing installation configuration".to_string()),
+            message: rust_i18n::t!("gui.offline.configuring_settings").to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.preparing_config").to_string()),
             version: None,
         });
 
@@ -1532,7 +1551,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         if !install_path.is_empty() && is_path_empty_or_nonexistent(&install_path, &[]) {
             settings.path = Some(PathBuf::from(install_path.clone()));
             emit_log_message(&app_handle, MessageLevel::Info,
-                format!("Using custom installation path: {}", install_path));
+                rust_i18n::t!("gui.offline.custom_path", path = install_path.clone()).to_string());
         }
         settings.use_local_archive = Some(archive_path);
 
@@ -1540,24 +1559,24 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Extract,
             percentage: ((archive_index * 90 + 20) / total_archives) as u32,
-            message: format!("Extracting archive: {}", getFileName(archive)),
-            detail: Some("Processing offline archive contents".to_string()),
+            message: rust_i18n::t!("gui.offline.extracting_archive", name = get_file_name(archive)).to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.processing_contents").to_string()),
             version: None,
         });
 
         settings = match use_offline_archive(settings, &offline_archive_dir) {
             Ok(updated_config) => {
                 emit_log_message(&app_handle, MessageLevel::Success,
-                    "Archive extracted and configured successfully".to_string());
+                    rust_i18n::t!("gui.offline.extraction_success").to_string());
                 updated_config
             }
             Err(err) => {
-                let error_msg = format!("Failed to use offline archive: {}", err);
+                let error_msg = rust_i18n::t!("gui.offline.extraction_failed_detail", error = err.to_string()).to_string();
                 error!("{}", error_msg);
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "Archive extraction failed".to_string(),
+                    message: rust_i18n::t!("gui.offline.extraction_failed").to_string(),
                     detail: Some(error_msg.clone()),
                     version: None,
                 });
@@ -1571,23 +1590,23 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: ((archive_index * 90 + 25) / total_archives) as u32,
-                message: "Installing prerequisites...".to_string(),
-                detail: Some("Installing required Windows components".to_string()),
+                message: rust_i18n::t!("gui.offline.installing_prerequisites").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.installing_windows_components").to_string()),
                 version: None,
             });
 
             match install_prerequisites_offline(&offline_archive_dir) {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
-                        "Prerequisites installed successfully from offline archive".to_string());
+                        rust_i18n::t!("gui.offline.prerequisites_success").to_string());
                     settings.skip_prerequisites_check = Some(true);
                 }
                 Err(err) => {
-                    let error_msg = format!("Failed to install prerequisites from offline archive: {}", err);
+                    let error_msg = rust_i18n::t!("gui.offline.prerequisites_failed_detail", error = err.to_string()).to_string();
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Error,
                         percentage: 0,
-                        message: "Prerequisites installation failed".to_string(),
+                        message: rust_i18n::t!("gui.offline.prerequisites_failed").to_string(),
                         detail: Some(error_msg.clone()),
                         version: None,
                     });
@@ -1600,18 +1619,18 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: ((archive_index * 90 + 25) / total_archives) as u32,
-                message: "Checking system prerequisites...".to_string(),
-                detail: Some("Verifying required system components".to_string()),
+                message: rust_i18n::t!("gui.offline.checking_prerequisites").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.verifying_components").to_string()),
                 version: None,
             });
 
             let prereq = check_prequisites(app_handle.clone());
             if !prereq.is_empty() {
-                let error_msg = format!("Missing prerequisites: {}", prereq.join(", "));
+                let error_msg = rust_i18n::t!("gui.offline.missing_prerequisites", items = prereq.join(", ")).to_string();
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "Prerequisites missing".to_string(),
+                    message: rust_i18n::t!("gui.offline.prerequisites_missing").to_string(),
                     detail: Some(error_msg.clone()),
                     version: None,
                 });
@@ -1627,18 +1646,18 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                     Err(err) => {
                         python_sane = false;
                         emit_log_message(&app_handle, MessageLevel::Warning,
-                            format!("Python sanity check failed: {}", err));
+                            rust_i18n::t!("gui.offline.python_check_warning", error = err.to_string()).to_string());
                         warn!("{:?}", err);
                     }
                 }
             }
             if !python_sane {
-                let error_msg = "Python sanity check failed".to_string();
+                let error_msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
                     message: error_msg.clone(),
-                    detail: Some("Python environment is not properly configured".to_string()),
+                    detail: Some(rust_i18n::t!("gui.offline.python_not_configured").to_string()),
                     version: None,
                 });
                 set_installation_status(&app_handle, false)?;
@@ -1646,30 +1665,30 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             }
 
             emit_log_message(&app_handle, MessageLevel::Success,
-                "All prerequisites verified successfully".to_string());
+                rust_i18n::t!("gui.offline.prerequisites_verified").to_string());
         }
 
         // Copy ESP-IDF from archive
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Download,
             percentage: ((archive_index * 90 + 35) / total_archives) as u32,
-            message: "Installing ESP-IDF from archive...".to_string(),
-            detail: Some("Copying ESP-IDF files to installation directory".to_string()),
+            message: rust_i18n::t!("gui.offline.installing_idf").to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.copying_files").to_string()),
             version: None,
         });
 
         match copy_idf_from_offline_archive(&offline_archive_dir, &settings) {
             Ok(_) => {
                 emit_log_message(&app_handle, MessageLevel::Success,
-                    "ESP-IDF copied successfully from offline archive".to_string());
+                    rust_i18n::t!("gui.offline.idf_copy_success").to_string());
             }
             Err(err) => {
-                let error_msg = format!("Failed to copy ESP-IDF from offline archive: {}", err);
+                let error_msg = rust_i18n::t!("gui.offline.idf_copy_failed", error = err.to_string()).to_string();
                 error!("{}", error_msg);
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "ESP-IDF installation failed".to_string(),
+                    message: rust_i18n::t!("gui.offline.idf_install_failed").to_string(),
                     detail: Some(error_msg.clone()),
                     version: None,
                 });
@@ -1688,24 +1707,24 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Tools,
                 percentage: version_progress_start + (version_index as u32 * version_progress_range / versions.len() as u32),
-                message: format!("Processing ESP-IDF version: {}", idf_version),
-                detail: Some(format!("Setting up version {} of {}", version_index + 1, versions.len())),
+                message: rust_i18n::t!("gui.offline.processing_version", version = idf_version).to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.setting_up_version", current = version_index + 1, total = versions.len()).to_string()),
                 version: Some(idf_version.clone()),
             });
 
             let paths = match settings.get_version_paths(idf_version) {
                 Ok(paths) => {
                     emit_log_message(&app_handle, MessageLevel::Info,
-                        format!("Version paths configured for {}: {}", idf_version, paths.idf_path.display()));
+                        rust_i18n::t!("gui.offline.version_paths_configured", version = idf_version, path = paths.idf_path.display().to_string()).to_string());
                     paths
                 }
                 Err(err) => {
-                    let error_msg = format!("Failed to get version paths: {}", err);
+                    let error_msg = rust_i18n::t!("gui.offline.path_config_failed_detail", error = err.to_string()).to_string();
                     error!("{}", error_msg);
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Error,
                         percentage: 0,
-                        message: "Path configuration failed".to_string(),
+                        message: rust_i18n::t!("gui.offline.path_config_failed").to_string(),
                         detail: Some(error_msg.clone()),
                         version: Some(idf_version.clone()),
                     });
@@ -1721,8 +1740,8 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Tools,
                 percentage: version_progress_start + ((version_index + 1) as u32 * version_progress_range / (versions.len() as u32 * 3)),
-                message: "Installing development tools...".to_string(),
-                detail: Some("Copying tools from offline archive".to_string()),
+                message: rust_i18n::t!("gui.offline.installing_tools").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.copying_tools").to_string()),
                 version: Some(idf_version.clone()),
             });
 
@@ -1732,15 +1751,15 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             ) {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
-                        "Development tools copied successfully".to_string());
+                        rust_i18n::t!("gui.offline.tools_copy_success").to_string());
                 }
                 Err(err) => {
-                    let error_msg = format!("Failed to copy tool directory: {}", err);
+                    let error_msg = rust_i18n::t!("gui.offline.tools_copy_failed", error = err.to_string()).to_string();
                     error!("{}", error_msg);
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Error,
                         percentage: 0,
-                        message: "Tools installation failed".to_string(),
+                        message: rust_i18n::t!("gui.offline.tools_install_failed").to_string(),
                         detail: Some(error_msg.clone()),
                         version: Some(idf_version.clone()),
                     });
@@ -1755,24 +1774,24 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Tools,
                 percentage: version_progress_start + ((version_index + 1) as u32 * version_progress_range * 2 / (versions.len() as u32 * 3)),
-                message: "Configuring development tools...".to_string(),
-                detail: Some("Setting up tool environment".to_string()),
+                message: rust_i18n::t!("gui.offline.configuring_tools").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.setting_up_environment").to_string()),
                 version: Some(idf_version.clone()),
             });
 
             let export_vars = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version).await {
                 Ok(vars) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
-                        "Development tools configured successfully".to_string());
+                        rust_i18n::t!("gui.offline.tools_configured").to_string());
                     vars
                 }
                 Err(err) => {
-                    let error_msg = format!("Failed to setup tools: {}", err);
+                    let error_msg = rust_i18n::t!("gui.offline.tools_setup_failed", error = err.to_string()).to_string();
                     error!("{}", error_msg);
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Error,
                         percentage: 0,
-                        message: "Tools configuration failed".to_string(),
+                        message: rust_i18n::t!("gui.offline.tools_config_failed").to_string(),
                         detail: Some(error_msg.clone()),
                         version: Some(idf_version.clone()),
                     });
@@ -1785,8 +1804,8 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Python,
                 percentage: version_progress_start + ((version_index + 1) as u32 * version_progress_range * 3 / (versions.len() as u32 * 3)) - 5,
-                message: "Setting up Python environment...".to_string(),
-                detail: Some("Installing Python dependencies".to_string()),
+                message: rust_i18n::t!("gui.offline.setting_up_python").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.installing_python_deps").to_string()),
                 version: Some(idf_version.clone()),
             });
 
@@ -1800,15 +1819,15 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             ).await {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
-                        "Python environment installed successfully".to_string());
+                        rust_i18n::t!("gui.offline.python_install_success").to_string());
                 }
                 Err(err) => {
-                    let error_msg = format!("Failed to install Python environment: {}", err);
+                    let error_msg = rust_i18n::t!("gui.offline.python_install_failed_detail", error = err.to_string()).to_string();
                     error!("{}", error_msg);
                     emit_installation_event(&app_handle, InstallationProgress {
                         stage: InstallationStage::Error,
                         percentage: 0,
-                        message: "Python environment installation failed".to_string(),
+                        message: rust_i18n::t!("gui.offline.python_install_failed").to_string(),
                         detail: Some(error_msg.clone()),
                         version: Some(idf_version.clone()),
                     });
@@ -1821,8 +1840,8 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Configure,
                 percentage: version_progress_end - 5,
-                message: "Finalizing installation...".to_string(),
-                detail: Some("Completing setup and configuration".to_string()),
+                message: rust_i18n::t!("gui.offline.finalizing").to_string(),
+                detail: Some(rust_i18n::t!("gui.offline.completing_setup").to_string()),
                 version: Some(idf_version.clone()),
             });
 
@@ -1837,15 +1856,15 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             );
 
             emit_log_message(&app_handle, MessageLevel::Success,
-                format!("ESP-IDF version {} configured successfully", idf_version));
+                rust_i18n::t!("gui.offline.version_configured", version = idf_version).to_string());
         }
 
         // Save IDE configuration
         emit_installation_event(&app_handle, InstallationProgress {
             stage: InstallationStage::Configure,
             percentage: ((archive_index * 90 + 88) / total_archives) as u32,
-            message: "Saving IDE configuration...".to_string(),
-            detail: Some("Updating development environment settings".to_string()),
+            message: rust_i18n::t!("gui.offline.saving_ide_config").to_string(),
+            detail: Some(rust_i18n::t!("gui.offline.updating_settings").to_string()),
             version: None,
         });
 
@@ -1855,15 +1874,15 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         match ensure_path(ide_conf_path_tmp.to_str().unwrap()) {
             Ok(_) => {
                 emit_log_message(&app_handle, MessageLevel::Info,
-                    "IDE configuration directory created".to_string());
+                    rust_i18n::t!("gui.offline.ide_dir_created").to_string());
             }
             Err(err) => {
-                let error_msg = format!("Failed to create IDE configuration directory: {}", err);
+                let error_msg = rust_i18n::t!("gui.offline.ide_dir_failed", error = err.to_string()).to_string();
                 error!("{}", error_msg);
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "IDE configuration failed".to_string(),
+                    message: rust_i18n::t!("gui.offline.ide_config_failed").to_string(),
                     detail: Some(error_msg.clone()),
                     version: None,
                 });
@@ -1875,16 +1894,16 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         match settings.save_esp_ide_json() {
             Ok(_) => {
                 emit_log_message(&app_handle, MessageLevel::Success,
-                    "IDE configuration saved successfully".to_string());
+                    rust_i18n::t!("gui.offline.ide_config_saved").to_string());
                 debug!("IDE configuration saved.");
             }
             Err(err) => {
-                let error_msg = format!("Failed to save IDE configuration: {}", err);
+                let error_msg = rust_i18n::t!("gui.offline.ide_config_save_failed_detail", error = err.to_string()).to_string();
                 error!("{}", error_msg);
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: "IDE configuration save failed".to_string(),
+                    message: rust_i18n::t!("gui.offline.ide_config_save_failed").to_string(),
                     detail: Some(error_msg.clone()),
                     version: None,
                 });
@@ -1894,20 +1913,23 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
         }
 
         emit_log_message(&app_handle, MessageLevel::Success,
-            format!("Archive {} processed successfully ({}/{})", getFileName(archive), archive_index + 1, total_archives));
+            rust_i18n::t!("gui.offline.archive_processed",
+                name = get_file_name(archive),
+                current = archive_index + 1,
+                total = total_archives).to_string());
     }
 
     // Final completion
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Complete,
         percentage: 100,
-        message: "Offline installation completed successfully!".to_string(),
-        detail: Some(format!("Processed {} archive(s)", total_archives)),
+        message: rust_i18n::t!("gui.offline.completed").to_string(),
+        detail: Some(rust_i18n::t!("gui.offline.processed_archives", count = total_archives).to_string()),
         version: None,
     });
 
     emit_log_message(&app_handle, MessageLevel::Success,
-        "All offline installations completed successfully".to_string());
+        rust_i18n::t!("gui.offline.all_completed").to_string());
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
@@ -1916,6 +1938,6 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
 }
 
 // Helper function to extract filename from path
-fn getFileName(path: &str) -> &str {
+fn get_file_name(path: &str) -> &str {
     path.split(&['/', '\\'][..]).last().unwrap_or(path)
 }

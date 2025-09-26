@@ -12,6 +12,7 @@ use std::{
   path::{Path, PathBuf}, sync::{Arc, Mutex},
 };
 use tauri::AppHandle;
+use rust_i18n::t;
 
 
 /// Represents the tool setup configuration
@@ -54,7 +55,7 @@ impl ToolSetup {
       ensure_path(&self.download_dir).map_err(|e| {
           send_message(
               app_handle,
-              format!("Failed to create download directory: {}", e),
+              t!("gui.setup_tools.dir_create_failed", error = e.to_string()).to_string(),
               "error".to_string(),
           );
           e.to_string()
@@ -64,7 +65,7 @@ impl ToolSetup {
       ensure_path(&self.install_dir).map_err(|e| {
           send_message(
               app_handle,
-              format!("Failed to create installation directory: {}", e),
+              t!("gui.setup_tools.install_dir_create_failed", error = e.to_string()).to_string(),
               "error".to_string(),
           );
           e.to_string()
@@ -79,10 +80,7 @@ impl ToolSetup {
   /// Validates that the tools.json file exists
   fn validate_tools_json(&self) -> Result<(), String> {
       if std::fs::metadata(&self.tools_json_path).is_err() {
-          return Err(format!(
-              "tools.json file not found at: {}",
-              self.tools_json_path
-          ));
+          return Err(t!("gui.setup_tools.tools_json_not_found", path = self.tools_json_path.clone()).to_string());
       }
       Ok(())
   }
@@ -121,17 +119,17 @@ pub async fn setup_tools(
             emit_log_message(
                 app_handle,
                 MessageLevel::Error,
-                format!("Failed to parse tools.json: {}", e),
+                t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string(),
             );
-            anyhow!("Failed to parse tools.json: {}", e)
+            anyhow!(t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string())
         })?;
 
     // Start tools installation phase (65% of total progress)
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Tools,
         percentage: 65,
-        message: "Starting development tools installation...".to_string(),
-        detail: Some(format!("Preparing to install {} tools", tools.tools.len())),
+        message: t!("gui.setup_tools.installation_starting").to_string(),
+        detail: Some(t!("gui.setup_tools.preparing_tools", count = tools.tools.len()).to_string()),
         version: Some(idf_version.to_string()),
     });
 
@@ -163,13 +161,16 @@ pub async fn setup_tools(
                     emit_installation_event(&app_handle_clone, InstallationProgress {
                         stage: InstallationStage::Tools,
                         percentage: overall_percentage.min(89), // Cap at 89% to leave room for completion
-                        message: format!("Downloading: {}",
-                            tool_name.split('/').last()
+                        message: t!("gui.setup_tools.downloading",
+                            tool_name = tool_name.split('/').last()
                                 .unwrap_or(&tool_name)
                                 .replace("-", " ")
-                        ),
-                        detail: Some(format!("Tool {}/{} - {}%",
-                            completed + 1, total_tools as u32, tool_progress)),
+                        ).to_string(),
+                        detail: Some(t!("gui.setup_tools.tool_progress",
+                            current = completed + 1,
+                            total = total_tools as u32,
+                            percentage = tool_progress
+                        ).to_string()),
                         version: Some(idf_version_clone.clone()),
                     });
                 }
@@ -188,7 +189,7 @@ pub async fn setup_tools(
                         .replace(".zip", "");
                     clean_name
                 } else {
-                    "Unknown tool".to_string()
+                    t!("gui.setup_tools.unknown_tool").to_string()
                 };
 
                 *current_tool_name_clone.lock().unwrap() = tool_name.clone();
@@ -198,16 +199,18 @@ pub async fn setup_tools(
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: overall_percentage.min(89),
-                    message: format!("Preparing: {}",
-                        tool_name.replace("-", " ")
-                    ),
-                    detail: Some(format!("Starting tool {}/{}",
-                        completed + 1, total_tools as u32)),
+                    message: t!("gui.setup_tools.preparing",
+                        tool_name = tool_name.replace("-", " ")
+                    ).to_string(),
+                    detail: Some(t!("gui.setup_tools.starting_tool",
+                        current = completed + 1,
+                        total = total_tools as u32
+                    ).to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
 
                 emit_log_message(&app_handle_clone, MessageLevel::Info,
-                    format!("Starting download: {}", tool_name));
+                    t!("gui.setup_tools.starting_download", tool_name = tool_name).to_string());
             }
 
             DownloadProgress::Downloaded(url) => {
@@ -217,16 +220,18 @@ pub async fn setup_tools(
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 1).min(89),
-                    message: format!("Verifying: {}",
-                        tool_name.replace("-", " ")
-                    ),
-                    detail: Some(format!("Downloaded tool {}/{}",
-                        completed + 1, total_tools as u32)),
+                    message: t!("gui.setup_tools.verifying",
+                        tool_name = tool_name.replace("-", " ")
+                    ).to_string(),
+                    detail: Some(t!("gui.setup_tools.downloaded_tool",
+                        current = completed + 1,
+                        total = total_tools as u32
+                    ).to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
 
                 emit_log_message(&app_handle_clone, MessageLevel::Info,
-                    format!("Downloaded: {}", tool_name));
+                    t!("gui.setup_tools.downloaded", tool_name = tool_name).to_string());
             }
 
             DownloadProgress::Verified(url) => {
@@ -236,16 +241,18 @@ pub async fn setup_tools(
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 2).min(89),
-                    message: format!("Extracting: {}",
-                        tool_name.replace("-", " ")
-                    ),
-                    detail: Some(format!("Verified tool {}/{}",
-                        completed + 1, total_tools as u32)),
+                    message: t!("gui.setup_tools.extracting",
+                        tool_name = tool_name.replace("-", " ")
+                    ).to_string(),
+                    detail: Some(t!("gui.setup_tools.verified_tool",
+                        current = completed + 1,
+                        total = total_tools as u32
+                    ).to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
 
                 emit_log_message(&app_handle_clone, MessageLevel::Success,
-                    format!("Verified: {}", tool_name));
+                    t!("gui.setup_tools.verified", tool_name = tool_name).to_string());
             }
 
             DownloadProgress::Extracted(url, _dest) => {
@@ -259,24 +266,30 @@ pub async fn setup_tools(
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: overall_percentage.min(89),
-                    message: format!("Installed: {}",
-                        tool_name.replace("-", " ")
-                    ),
-                    detail: Some(format!("Completed {} of {} tools",
-                        completed_count, total_tools as u32)),
+                    message: t!("gui.setup_tools.installed",
+                        tool_name = tool_name.replace("-", " ")
+                    ).to_string(),
+                    detail: Some(t!("gui.setup_tools.completed_tools",
+                        current = completed_count,
+                        total = total_tools as u32
+                    ).to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
 
                 emit_log_message(&app_handle_clone, MessageLevel::Success,
-                    format!("Installed tool: {} ({}/{})", tool_name, completed_count, total_tools as u32));
+                    t!("gui.setup_tools.installed_tool",
+                        tool_name = tool_name,
+                        current = completed_count,
+                        total = total_tools as u32
+                    ).to_string());
             }
 
             DownloadProgress::Complete => {
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Tools,
                     percentage: 89,
-                    message: "All development tools downloaded".to_string(),
-                    detail: Some(format!("Completed {} tools installation", total_tools as u32)),
+                    message: t!("gui.setup_tools.all_downloaded").to_string(),
+                    detail: Some(t!("gui.setup_tools.completed_installation", count = total_tools as u32).to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
             }
@@ -287,13 +300,13 @@ pub async fn setup_tools(
                 emit_installation_event(&app_handle_clone, InstallationProgress {
                     stage: InstallationStage::Error,
                     percentage: 0,
-                    message: format!("Tool installation failed: {}", tool_name),
+                    message: t!("gui.setup_tools.tool_failed", tool_name = tool_name).to_string(),
                     detail: Some(err.to_string()),
                     version: Some(idf_version_clone.clone()),
                 });
 
                 emit_log_message(&app_handle_clone, MessageLevel::Error,
-                    format!("Tool installation error: {}", err));
+                    t!("gui.setup_tools.tool_error", error = err.to_string()).to_string());
             }
         }
     };
@@ -312,7 +325,7 @@ pub async fn setup_tools(
         emit_installation_event(app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "Failed to setup development tools".to_string(),
+            message: t!("gui.setup_tools.setup_failed").to_string(),
             detail: Some(e.to_string()),
             version: Some(idf_version.to_string()),
         });
@@ -332,8 +345,8 @@ pub async fn setup_tools(
         emit_installation_event(app_handle, InstallationProgress {
             stage: InstallationStage::Error,
             percentage: 0,
-            message: "IDF tools path validation failed".to_string(),
-            detail: Some("IDF tools path does not exist".to_string()),
+            message: t!("gui.setup_tools.idf_path_validation_failed").to_string(),
+            detail: Some(t!("gui.setup_tools.idf_path_not_exist").to_string()),
             version: Some(idf_version.to_string()),
         });
         return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
@@ -343,8 +356,8 @@ pub async fn setup_tools(
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Python,
         percentage: 90,
-        message: "Setting up Python environment...".to_string(),
-        detail: Some("Installing Python dependencies for ESP-IDF".to_string()),
+        message: t!("gui.setup_tools.python_setup_starting").to_string(),
+        detail: Some(t!("gui.setup_tools.python_installing").to_string()),
         version: Some(idf_version.to_string()),
     });
 
@@ -362,20 +375,20 @@ pub async fn setup_tools(
             emit_installation_event(app_handle, InstallationProgress {
                 stage: InstallationStage::Python,
                 percentage: 93,
-                message: "Python environment configured successfully".to_string(),
-                detail: Some("ESP-IDF Python dependencies installed".to_string()),
+                message: t!("gui.setup_tools.python_configured").to_string(),
+                detail: Some(t!("gui.setup_tools.python_deps_installed").to_string()),
                 version: Some(idf_version.to_string()),
             });
 
             emit_log_message(app_handle, MessageLevel::Success,
-                "Python environment installed successfully".to_string());
+                t!("gui.setup_tools.python_installed").to_string());
         }
         Err(err) => {
             error!("Failed to install Python environment: {}", err);
             emit_installation_event(app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
-                message: "Python environment setup failed".to_string(),
+                message: t!("gui.setup_tools.python_setup_failed").to_string(),
                 detail: Some(err.to_string()),
                 version: Some(idf_version.to_string()),
             });
@@ -403,13 +416,13 @@ pub async fn setup_tools(
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Configure,
         percentage: 95,
-        message: "Configuring environment variables...".to_string(),
-        detail: Some("Setting up ESP-IDF development environment".to_string()),
+        message: t!("gui.setup_tools.configuring_env").to_string(),
+        detail: Some(t!("gui.setup_tools.configuring_dev_env").to_string()),
         version: Some(idf_version.to_string()),
     });
 
     emit_log_message(app_handle, MessageLevel::Success,
-        "Tools setup completed successfully".to_string());
+        t!("gui.setup_tools.setup_completed").to_string());
 
     Ok(export_paths)
 }

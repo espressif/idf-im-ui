@@ -1,12 +1,12 @@
 <template>
   <div class="simple-setup">
     <div class="setup-header">
-      <h1 class="title">Easy Installation</h1>
-            <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'" text-color="white">
+      <h1 class="title">{{ $t('simpleSetup.title') }}</h1>
+      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'" text-color="white">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
-        Back
+        {{ $t('simpleSetup.back') }}
       </n-button>
     </div>
 
@@ -14,8 +14,8 @@
     <n-card v-if="currentState === 'checking'" class="status-card">
       <div class="checking-status">
         <n-spin size="large" />
-        <h2>Preparing Installation</h2>
-        <p>Checking system requirements and prerequisites...</p>
+        <h2>{{ $t('simpleSetup.preparation.title') }}</h2>
+        <p>{{ $t('simpleSetup.preparation.checking') }}</p>
       </div>
     </n-card>
 
@@ -25,27 +25,27 @@
         <n-icon :size="64" color="#52c41a">
           <CheckCircleOutlined />
         </n-icon>
-        <h2>Ready to Install</h2>
+        <h2>{{ $t('simpleSetup.ready.title') }}</h2>
         <div class="installation-summary">
           <div class="summary-item">
-            <span class="summary-label">Version:</span>
+            <span class="summary-label">{{ $t('simpleSetup.ready.summary.version') }}:</span>
             <span class="summary-value">{{ selectedVersion }}</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">Installation Path:</span>
+            <span class="summary-label">{{ $t('simpleSetup.ready.summary.path') }}:</span>
             <span class="summary-value">{{ installPath }}</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">Estimated Size:</span>
+            <span class="summary-label">{{ $t('simpleSetup.ready.summary.size') }}:</span>
             <span class="summary-value">~3.5 GB</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">Estimated Time:</span>
+            <span class="summary-label">{{ $t('simpleSetup.ready.summary.time') }}:</span>
             <span class="summary-value">10-45 minutes</span>
           </div>
         </div>
         <n-alert type="info" :bordered="false" style="margin: 1.5rem 0;">
-          This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.
+          {{ $t('simpleSetup.ready.alert') }}
         </n-alert>
         <n-button
           @click="startInstallation"
@@ -53,7 +53,7 @@
           size="large"
           block
         >
-          Start Installation
+          {{ $t('simpleSetup.ready.startButton') }}
         </n-button>
       </div>
     </n-card>
@@ -97,8 +97,8 @@
       <div class="complete-status">
         <n-result
           status="success"
-          title="Installation Complete!"
-          description="ESP-IDF has been successfully installed on your system."
+          title="{{ $t('simpleSetup.complete.title') }}"
+          description="{{ $t('simpleSetup.complete.description') }}"
         >
           <template #icon>
             <n-icon :size="72" color="#52c41a">
@@ -108,25 +108,25 @@
           <template #footer>
             <div class="completion-actions">
               <n-button @click="viewDocumentation" size="large">
-                View Documentation
+                {{ $t('simpleSetup.complete.documentation') }}
               </n-button>
               <!-- <n-button @click="openIDE" type="info" size="large">
                 Open VS Code
               </n-button> -->
               <n-button @click="goToManagement" type="primary" size="large">
-                Go to Dashboard
+                {{ $t('simpleSetup.complete.dashboard') }}
               </n-button>
             </div>
           </template>
         </n-result>
 
         <div class="post-install-info">
-          <h3>Next Steps:</h3>
+          <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
-            <li>Open a new IDF terminal using the icon on your desktop.</li>
-            <li>Navigate to your project directory</li>
-            <li>Run <code>idf.py create-project my_project</code> to create a new project</li>
-            <li>Run <code>idf.py build</code> to build your project</li>
+            <li>{{ $t('simpleSetup.complete.step1') }}</li>
+            <li>{{ $t('simpleSetup.complete.step2') }}</li>
+            <li>{{ $t('simpleSetup.complete.step3', { command: 'idf.py create-project my_project' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.step4', { command: 'idf.py build' }) }}</li>
           </ol>
         </div>
       </div>
@@ -148,13 +148,13 @@
           <template #footer>
             <div class="error-actions">
               <n-button @click="viewLogs" type="info" size="large">
-                View Logs
+                {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
               <n-button @click="retry" type="warning" size="large">
-                Try Again
+                {{ $t('simpleSetup.error.retry') }}
               </n-button>
               <n-button @click="useWizard" type="info" size="large">
-                Use Custom Installation
+                {{ $t('simpleSetup.error.wizard') }}
               </n-button>
             </div>
           </template>
@@ -165,7 +165,7 @@
           type="error"
           style="margin-top: 2rem;"
         >
-          <template #header>Error Details</template>
+          <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
       </div>
@@ -176,6 +176,7 @@
 <script>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import {
@@ -207,6 +208,7 @@ export default {
     const router = useRouter()
     const message = useMessage()
     const appStore = useAppStore()
+    const { t } = useI18n()
 
     // State management
     const currentState = ref('checking') // checking, ready, installing, complete, error
@@ -222,8 +224,14 @@ export default {
     const installationProgress = ref(0)
     const installMessages = ref([])
     const installationSteps = ref([
-      { title: 'Check', description: 'System requirements' },
-      { title: 'Prerequisites', description: 'Installing dependencies' },
+      {
+        title: t('simpleSetup.installation.steps.check.title'),
+        description: t('simpleSetup.installation.steps.check.description')
+      },
+      {
+        title: t('simpleSetup.installation.steps.prerequisites.title'),
+        description: t('simpleSetup.installation.steps.prerequisites.description')
+      },
       { title: 'Download', description: 'Downloading ESP-IDF' },
       { title: 'Extract', description: 'Extracting files' },
       { title: 'Tools', description: 'Installing tools' },
@@ -266,8 +274,8 @@ export default {
         // Check prerequisites
         const prereqResult = invoke('check_prerequisites_detailed').then(prereqResult => {
           if (!prereqResult.all_ok && appStore.os !== 'windows') {
-            errorTitle.value = 'Prerequisites Missing'
-            errorMessage.value = 'Some required dependencies are not installed.'
+            errorTitle.value = t('simpleSetup.error.prerequisites.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.message')
             errorDetails.value = prereqResult.missing.join('\n')
             currentState.value = 'error'
             return false
@@ -302,8 +310,8 @@ export default {
 
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
-        errorTitle.value = 'System Check Failed'
-        errorMessage.value = 'Failed to verify system requirements.'
+        errorTitle.value = t('simpleSetup.error.system.title')
+        errorMessage.value = t('simpleSetup.error.system.message')
         errorDetails.value = error.toString()
         currentState.value = 'error'
         return false
@@ -456,7 +464,7 @@ export default {
         let logPath = await invoke("get_logs_folder", {});
         invoke("show_in_folder", { path: logPath });
       } catch (error) {
-        message.error('Failed to open logs folder')
+        message.error(t('simpleSetup.messages.errors.logs'))
       }
     }
 
@@ -732,5 +740,4 @@ export default {
 .setup-header .n-button {
   color: white !important;
 }
-
 </style>

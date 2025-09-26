@@ -4,6 +4,7 @@ use log::{error, warn};
 use log4rs::encode::json;
 use tauri::AppHandle;
 use serde_json::{json, Value};
+use rust_i18n::t;
 
 
 /// Gets the list of prerequisites for ESP-IDF
@@ -27,16 +28,18 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
             }
         }
         Err(err) => {
+            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
-                format!("Error checking prerequisites: {}", err),
+                error_msg.clone(),
                 "error".to_string(),
             );
-            error!("Error checking prerequisites: {}", err);
+            error!("{}", error_msg);
             vec![]
         }
     }
 }
+
 #[tauri::command]
 pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value {
   match idf_im_lib::system_dependencies::check_prerequisites() {
@@ -54,12 +57,13 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
             }
         }
         Err(err) => {
+            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
-                format!("Error checking prerequisites: {}", err),
+                error_msg.clone(),
                 "error".to_string(),
             );
-            error!("Error checking prerequisites: {}", err);
+            error!("{}", error_msg);
             json!({
                 "all_ok": false,
                 "missing": []
@@ -75,12 +79,13 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     let unsatisfied_prerequisites = match idf_im_lib::system_dependencies::check_prerequisites() {
         Ok(prereqs) => prereqs.into_iter().map(|p| p.to_string()).collect(),
         Err(err) => {
+            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
-                format!("Error checking prerequisites: {}", err),
+                error_msg.clone(),
                 "error".to_string(),
             );
-            error!("Error checking prerequisites: {}", err);
+            error!("{}", error_msg);
             return false;
         }
     };
@@ -88,12 +93,13 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
         Ok(_) => true,
         Err(err) => {
+            let error_msg = t!("gui.system_dependencies.error_installing_prerequisites", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
-                format!("Error installing prerequisites: {}", err),
+                error_msg.clone(),
                 "error".to_string(),
             );
-            error!("Error installing prerequisites: {}", err);
+            error!("{}", error_msg);
             false
         }
     }
@@ -110,12 +116,13 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool 
             Ok(_) => {}
             Err(err) => {
                 all_ok = false;
+                let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = err.to_string()).to_string();
                 send_message(
                     &app_handle,
-                    format!("Python sanity check failed: {}", err),
+                    warning_msg.clone(),
                     "warning".to_string(),
                 );
-                warn!("{:?}", err)
+                warn!("{}", warning_msg);
             }
         }
     }
@@ -128,12 +135,13 @@ pub fn python_install(app_handle: AppHandle) -> bool {
     match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
         Ok(_) => true,
         Err(err) => {
+            let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
-                format!("Error installing python: {}", err),
+                error_msg.clone(),
                 "error".to_string(),
             );
-            error!("Error installing python: {}", err);
+            error!("{}", error_msg);
             false
         }
     }

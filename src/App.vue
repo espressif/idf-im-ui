@@ -9,8 +9,8 @@
               <div v-if="showSplash" class="splash-screen">
                 <div class="splash-content">
                   <img src="./assets/espressif_logo.svg" alt="Espressif" class="logo" />
-                  <h1>ESP-IDF Installation Manager</h1>
-                  <p>Setting up your development environment...</p>
+                  <h1>{{ $t('app.title') }}</h1>
+                  <p>{{ $t('app.settingUp') }}</p>
                   <n-spin size="large" />
                 </div>
               </div>
@@ -21,20 +21,26 @@
               <div class="header-content">
                 <div class="header-brand" @click="$router.push('/')" style="cursor: pointer">
                   <img src="./assets/espressif_logo_white.svg" alt="Espressif" class="logo" />
-                  <span class="header-title">ESP-IDF Installation Manager</span>
+                  <span class="header-title">{{ $t('app.title') }}</span>
                 </div>
                 <div class="header-actions">
-                  <!-- Navigation breadcrumbs or status could go here -->
-                  <!-- <n-breadcrumb v-if="showBreadcrumb">
-                    <n-breadcrumb-item
-                      v-for="crumb in breadcrumbs"
-                      :key="crumb.path"
-                      @click="goTo(crumb.path)"
-                      style="cursor: pointer; color: rgb(230, 204, 204) !important"
-                    >
-                      <span style="color: rgb(230, 204, 204)">{{ crumb.label }}</span>
-                    </n-breadcrumb-item>
-                  </n-breadcrumb> -->
+                  <!-- Language Switcher -->
+                  <n-dropdown
+                    :options="languageOptions"
+                    @select="handleLanguageChange"
+                    trigger="click"
+                  >
+                    <n-button text style="color: white; font-size: 16px;">
+                      <template #icon>
+                        <n-icon>
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+                          </svg>
+                        </n-icon>
+                      </template>
+                      {{ currentLanguageLabel }}
+                    </n-button>
+                  </n-dropdown>
                 </div>
               </div>
             </header>
@@ -60,6 +66,7 @@
 <script>
 import { ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   NConfigProvider,
   NMessageProvider,
@@ -68,10 +75,14 @@ import {
   NBreadcrumb,
   NBreadcrumbItem,
   NSpin,
+  NButton,
+  NDropdown,
+  NIcon,
   darkTheme
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
 import { useRouter } from 'vue-router'
+import { invoke } from '@tauri-apps/api/core'
 
 export default {
   name: 'App',
@@ -83,28 +94,60 @@ export default {
     NBreadcrumb,
     NBreadcrumbItem,
     NSpin,
+    NButton,
+    NDropdown,
+    NIcon,
     AppFooter
   },
   setup() {
     const route = useRoute()
-    const theme = ref(null) // null for light theme, darkTheme for dark
-    const showSplash = ref(true)
     const router = useRouter()
+    const { locale, t } = useI18n()
+    const theme = ref(null)
+    const showSplash = ref(true)
 
     // Hide splash screen after delay
     setTimeout(() => {
       showSplash.value = false
     }, 1500)
 
+    // Language configuration
+    const languages = [
+      { key: 'en', label: 'English', flag: '🇺🇸' },
+      { key: 'cn', label: '中文', flag: '🇨🇳' }
+    ]
+
+    // Load saved language preference or default to 'en'
+    const savedLanguage = localStorage.getItem('app-language') || 'en'
+    locale.value = savedLanguage
+
+    const languageOptions = computed(() => {
+      return languages.map(lang => ({
+        label: `${lang.flag} ${lang.label}`,
+        key: lang.key
+      }))
+    })
+
+    const currentLanguageLabel = computed(() => {
+      const current = languages.find(lang => lang.key === locale.value)
+      return current ? `${current.flag} ${current.label}` : '🇺🇸 English'
+    })
+
+    const handleLanguageChange = async (key) => {
+      locale.value = key
+      localStorage.setItem('app-language', key)
+      await invoke('set_locale', { locale: key }) // Notify backend of language change
+    }
+
     // Breadcrumb configuration
     const routeToBreadcrumb = {
-      '/welcome': { label: 'Welcome', show: false },
-      '/version-management': { label: 'Version Management', show: true },
-      '/basic-installer': { label: 'Installation Options', show: true },
-      '/offline-installer': { label: 'Offline Installation', show: true },
-      '/simple-setup': { label: 'Easy Installation', show: true },
-      '/installation-progress': { label: 'Installation Progress', show: true },
-      '/wizard': { label: 'Configuration Wizard', show: true }
+      '/welcome': { label: 'routes.welcome', show: false },
+      '/version-management': { label: 'routes.versionManagement', show: true },
+      '/basic-installer': { label: 'routes.installationOptions', show: true },
+      '/offline-installer': { label: 'routes.offlineInstallation', show: true },
+      '/simple-setup': { label: 'routes.easyInstallation', show: true },
+      '/installation-progress': { label: 'routes.installationProgress', show: true },
+      '/wizard': { label: 'routes.configurationWizard', show: true }
     }
 
     const showBreadcrumb = computed(() => {
@@ -123,7 +166,7 @@ export default {
 
     const breadcrumbs = computed(() => {
       const path = route.path
-      const crumbs = [{ path: '/', label: 'Home' }]
+      const crumbs = [{ path: '/', label: 'app.home' }]
 
       for (const [key, value] of Object.entries(routeToBreadcrumb)) {
         if (path.startsWith(key)) {
@@ -132,24 +175,25 @@ export default {
         }
       }
 
-      // Add wizard step if applicable
       if (path.startsWith('/wizard/')) {
         const step = route.params.step
-        crumbs.push({ path: path, label: `Step ${step}` })
+        crumbs.push({
+          path: path,
+          label: 'routes.step',
+          params: { n: step }
+        })
       }
 
       return crumbs
     })
 
-    // Theme toggle (you can expose this through a settings menu)
     const toggleTheme = () => {
       theme.value = theme.value === null ? darkTheme : null
     }
 
-    // Watch for system theme preference
     const checkSystemTheme = () => {
       if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // theme.value = darkTheme // Uncomment to respect system theme
+        // theme.value = darkTheme
       }
     }
 
@@ -162,7 +206,10 @@ export default {
       breadcrumbs,
       goTo,
       toggleTheme,
-      showSplash
+      showSplash,
+      languageOptions,
+      currentLanguageLabel,
+      handleLanguageChange
     }
   }
 }
@@ -250,6 +297,7 @@ html, body {
   display: flex;
   align-items: center;
 }
+
 /* Breadcrumb in header */
 .app-header .n-breadcrumb {
   color: rgba(255, 255, 255, 0.8);
@@ -263,7 +311,7 @@ html, body {
 .app-main {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 60px; /* Space for footer */
+  padding-bottom: 60px;
   position: relative;
 }
 
@@ -395,5 +443,4 @@ html, body {
 .p-2 { padding: 0.5rem; }
 .p-3 { padding: 0.75rem; }
 .p-4 { padding: 1rem; }
-
 </style>

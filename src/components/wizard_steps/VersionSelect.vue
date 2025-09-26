@@ -1,7 +1,7 @@
 <template>
   <div class="version-select" data-id="version-select">
-    <h1 class="title" data-id="version-select-title">Select ESP-IDF Versions</h1>
-    <p class="description" data-id="version-select-description">Choose which ESP-IDF SDK versions to install:</p>
+    <h1 class="title" data-id="version-select-title">{{ t('versionSelect.title') }}</h1>
+    <p class="description" data-id="version-select-description">{{ t('versionSelect.description') }}</p>
 
     <n-card class="selection-card" data-id="version-selection-card">
       <n-spin :show="loading" data-id="version-loading-spinner">
@@ -13,9 +13,9 @@
               <div class="version-header" :data-id="`version-header-${version.name}`">
                 <span class="version-name" :data-id="`version-name-${version.name}`">{{ version.name }}</span>
                 <n-tag v-if="version.latest" type="error" size="small"
-                  :data-id="`version-latest-tag-${version.name}`">Latest</n-tag>
+                  :data-id="`version-latest-tag-${version.name}`">{{ t('versionSelect.tags.latest') }}</n-tag>
                 <n-tag v-if="version.lts" type="success" size="small"
-                  :data-id="`version-lts-tag-${version.name}`">LTS</n-tag>
+                  :data-id="`version-lts-tag-${version.name}`">{{ t('versionSelect.tags.lts') }}</n-tag>
               </div>
               <span v-if="version.description" class="version-description"
                 :data-id="`version-description-${version.name}`">
@@ -25,7 +25,7 @@
           </div>
         </div>
         <div class="selected-versions-summary" v-if="selected_versions.length > 0">
-          Selected versions:
+          {{ t('versionSelect.selectedVersions') }}
           <div class="selected-tags" data-id="selected-tags">
             <n-tag v-for="version in selected_versions" :key="version" closable round size="medium"
               :data-id="`selected-tag-${version}`" @close="deselectVersion(version)">
@@ -37,7 +37,7 @@
         <div class="action-footer" data-id="version-action-footer">
           <n-button @click="processVersions" type="error" size="large" :disabled="!hasSelectedVersions"
             data-id="continue-installation-button">
-            Continue Installation
+            {{ t('versionSelect.continueInstallation') }}
           </n-button>
         </div>
       </n-spin>
@@ -47,6 +47,7 @@
 
 <script>
 import { ref, version } from "vue";
+import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NCheckbox, NTag } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
@@ -57,6 +58,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin, NCard, NCheckbox, NTag },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     loading: true,
     versions: [],
@@ -245,3 +250,4 @@ export default {
 
 }
 </style>
+
