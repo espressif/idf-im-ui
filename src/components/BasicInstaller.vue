@@ -262,15 +262,20 @@ export default {
       router.push('/wizard/1')
     }
 
-    const loadConfig = async () => {
+    const loadConfig = async ({file_path=null} = {}) => {
       try {
-        const selected = await open({
-          multiple: false,
-          filters: [{
-            name: 'Configuration',
-            extensions: ['json', 'toml']
-          }]
-        })
+        let selected = null
+        if(file_path){
+          selected = file_path
+        } else {
+          selected = await open({
+            multiple: false,
+            filters: [{
+              name: 'Configuration',
+              extensions: ['json', 'toml']
+            }]
+          })
+        }
 
         if (selected) {
           const _ = await invoke("load_settings", { path: selected });
@@ -282,16 +287,20 @@ export default {
       }
     }
 
-    const selectOfflineArchive = async () => {
+    const selectOfflineArchive = async ({file_path=null} = {}) => {
       try {
-        const selected = await open({
-          multiple: false,
-          filters: [{
-            name: 'ESP-IDF Archive',
-            extensions: ['zst']
-          }]
-        })
-
+        let selected = null
+        if(file_path){
+          selected = file_path
+        } else {
+          selected = await open({
+            multiple: false,
+            filters: [{
+              name: 'ESP-IDF Archive',
+              extensions: ['zst']
+            }]
+          })
+        }
         if (selected) {
           router.push({
             path: '/offline-installer',
