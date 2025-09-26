@@ -1,0 +1,134 @@
+{
+  "app": {
+    "title": "ESP-IDF Installation Manager",
+    "settingUp": "Setting up your development environment...",
+    "home": "Home"
+  },
+  "routes": {
+    "welcome": "Welcome",
+    "versionManagement": "Version Management",
+    "installationOptions": "Installation Options",
+    "offlineInstallation": "Offline Installation",
+    "easyInstallation": "Easy Installation",
+    "installationProgress": "Installation Progress",
+    "configurationWizard": "Configuration Wizard",
+    "step": "Step {n}",
+    "fallbackRedirect": "Redirecting to welcome page..."
+  },
+  "store": {
+    "installation": {
+      "status": {
+        "idle": "idle",
+        "downloading": "downloading",
+        "installing": "installing",
+        "complete": "complete",
+        "error": "error"
+      }
+    },
+    "wizard": {
+      "steps": {
+        "prerequisites": "Prerequisites",
+        "installPath": "Installation Path",
+        "versionSelection": "Version Selection",
+        "toolsSelection": "Tools Selection",
+        "pythonConfig": "Python Configuration",
+        "mirrorSelection": "Mirror Selection",
+        "additionalOptions": "Additional Options",
+        "review": "Review & Confirm"
+      },
+      "options": {
+        "createShortcuts": "Create shortcuts",
+        "addToPath": "Add to PATH",
+        "installExamples": "Install examples",
+        "enableTelemetry": "Enable telemetry"
+      }
+    }
+  },
+  "welcome": {
+    "title": "Welcome to <span>ESP-IDF</span> Installation Manager",
+    "systemRequirements": "System Requirements",
+    "cpuError": "This tool requires a system with at least 2 CPU cores when using Windows OS.",
+    "sorry": "Sorry for the inconvenience",
+    "exitInstaller": "Exit Installer",
+    "versionsInstalled": "{count} version(s) installed",
+    "checkingStatus": "Checking installation status...",
+    "messages": {
+      "withBoth": "Choose how you want to proceed:",
+      "withInstalled": "Manage your existing installations or install a new version:",
+      "withArchives": "Offline archives detected. You can install from local files or download online:",
+      "fresh": "Get started with ESP-IDF development environment:",
+      "trackingEnabled": "Thank you for allowing usage tracking!",
+      "trackingDisabled": "You have disabled usage tracking."
+    },
+    "cards": {
+      "manage": {
+        "title": "Manage Installations",
+        "description": "View and manage your {count} installed ESP-IDF version(s)",
+        "button": "Open Dashboard"
+      },
+      "offline": {
+        "title": "Offline Installation",
+        "description": "{count} archive(s) detected in current directory",
+        "button": "Install from Archive"
+      },
+      "new": {
+        "title": "New Installation",
+        "description": "Install ESP-IDF development environment",
+        "button": "Start Installation"
+      }
+    },
+    "preferences": {
+      "dontShow": "Don't show this welcome screen again",
+      "allowTracking": "Allow sending usage statistics"
+    }
+  },
+  "footer": {
+    "app": {
+      "version": "ESP-IDF Installation Manager v{version}"
+    },
+    "buttons": {
+      "documentation": "Documentation",
+      "logs": "Logs",
+      "reportIssue": "Report Issue",
+      "about": "About"
+    },
+    "copyright": "© {year} Espressif Systems",
+    "modal": {
+      "about": {
+        "title": "About ESP-IDF Installation Manager",
+        "version": "Version {version}",
+        "description": {
+          "line1": "A cross-platform tool for installing and managing ESP-IDF development environment.",
+          "line2": "Supports Windows, macOS, and Linux platforms with both online and offline installation modes."
+        },
+        "viewOnGithub": "View on GitHub"
+      },
+      "report": {
+        "title": "Report an Issue",
+        "info": "This will create a log bundle and open the issue reporting page.",
+        "systemInfo": "System Information",
+        "labels": {
+          "os": "OS:",
+          "arch": "Architecture:",
+          "appVersion": "App Version:"
+        },
+        "description": "Please describe the issue you encountered in the GitHub issue page that opens next. And attach all logs from the logs folder ( accessible through button in app footer)",
+        "buttons": {
+          "cancel": "Cancel",
+          "generate": "Generate Report & Open Issue"
+        }
+      }
+    },
+    "messages": {
+      "success": {
+        "logsOpened": "Logs folder opened"
+      },
+      "error": {
+        "documentation": "Failed to open documentation",
+        "logs": "Failed to open logs folder",
+        "github": "Failed to open GitHub page",
+        "report": "Failed to generate report: {error}"
+      }
+    }
+  }
+}

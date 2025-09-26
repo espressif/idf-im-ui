@@ -1,0 +1,7 @@
+{
+  "app": {
+    "title": "ESP-IDF Installation Manager",
+    "settingUp": "Setting up your development environment...",
+    "home": "Home"
+  }
+}
