@@ -338,7 +338,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     let offline_mode = config.use_local_archive.is_some();
     let offline_archive_dir = if offline_mode {
-        Some(TempDir::new().expect("Failed to create temporary directory"))
+        Some(TempDir::new().expect(&t!("wizard.error.create_temp_dir")))
     } else {
         None
     };

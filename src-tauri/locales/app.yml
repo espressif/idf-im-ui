@@ -293,3 +293,24 @@ wizard.error.copy_dist_directory:
 wizard.error.create_python_env:
   en: "Failed to create Python environment directory: %{error}"
   cn: "无法创建 Python 环境目录: %{error}"
+wizard.error.create_temp_dir:
+  en: "Failed to create temporary directory"
+  cn: "无法创建临时目录"
+debug.python_sanity_check:
+  en: Python sanity check passed.
+  cn: Python 健全性检查通过。
+debug.using_python:
+  en: "Using Python: %{path}"
+  cn: "使用 Python：%{path}"
+error.path_to_string:
+  en: Unable to convert path to string
+  cn: 无法将路径转换为字符串
+debug.non_interactive_save:
+  en: Saving config in non-interactive mode.
+  cn: 在非交互模式下保存配置。
+debug.skip_save:
+  en: Skipping config save in non-interactive mode.
+  cn: 在非交互模式下跳过保存配置。
+noninteractive.default:
+  en: Non-interactive mode, selecting first available IDF version.
+  cn: 非交互模式，选择第一个可用 IDF 版本。
