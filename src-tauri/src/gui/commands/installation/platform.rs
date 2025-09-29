@@ -8,6 +8,7 @@ use crate::gui::ui::{
     emit_installation_event, emit_log_message, InstallationProgress, InstallationStage,
     MessageLevel,
 };
+use crate::gui::utils::is_path_empty_or_nonexistent;
 use idf_im_lib::ensure_path;
 use tauri::AppHandle;
 
