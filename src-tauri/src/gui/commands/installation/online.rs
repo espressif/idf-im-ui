@@ -1,14 +1,17 @@
-use std::{path::PathBuf, sync::mpsc, thread};
 use anyhow::Result;
+use std::{path::PathBuf, sync::mpsc, thread};
 use tauri::AppHandle;
 
-use idf_im_lib::{ProgressMessage};
 use idf_im_lib::settings::Settings;
+use idf_im_lib::ProgressMessage;
 
-use crate::gui::ui::{
-    emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar,
-};
 use crate::gui::commands::idf_tools::setup_tools;
+use crate::gui::ui::send_message;
+use crate::gui::ui::{
+    emit_installation_event, emit_log_message, InstallationProgress, InstallationStage,
+    MessageLevel, ProgressBar,
+};
+use log::{debug, error, info, warn};
 
 pub fn spawn_progress_monitor(
     app_handle: AppHandle,
@@ -45,9 +48,6 @@ pub async fn download_idf(
     version: &str,
     idf_path: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::sync::mpsc;
-    use std::thread;
-
     let (tx, rx) = mpsc::channel();
 
     emit_installation_event(
@@ -291,9 +291,6 @@ pub async fn install_single_version(
     settings: &Settings,
     version: String,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use log::{info, error};
-    use crate::gui::ui::send_message;
-
     info!("Installing IDF version: {}", version);
 
     let paths = settings.get_version_paths(&version).map_err(|err| {

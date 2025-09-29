@@ -1,5 +1,4 @@
 use super::online::install_single_version;
-use crate::gui::__cmd__get_installed_versions;
 use crate::gui::app_state::set_installation_status;
 use crate::gui::get_installed_versions;
 use crate::gui::ui::{

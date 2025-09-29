@@ -14,7 +14,6 @@ use crate::gui::app_state;
 use crate::gui::app_state::get_locked_settings;
 use crate::gui::app_state::update_settings;
 use crate::gui::check_prequisites;
-use crate::gui::commands::installation::platform::start_installation as platform_start_installation;
 use crate::gui::commands::prequisites::{
     install_prerequisites, python_install, python_sanity_check,
 };
