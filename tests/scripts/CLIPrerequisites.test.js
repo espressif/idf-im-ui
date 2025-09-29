@@ -16,7 +16,7 @@ import path from "path";
  *
  */
 
-export function runCLIPrerequisitesTest({ id, pathToEim }) {
+export function runCLIPrerequisitesTest({ id = 0, pathToEim }) {
   // let pathToEim;
 
   // if (process.env.EIM_FILE_PATH) {

@@ -4,7 +4,7 @@ import logger from "../classes/logger.class.js";
 import fs from "fs";
 
 export function runCleanUp({
-  id,
+  id = 0,
   installFolder,
   toolsFolder,
   deleteAfterTest,

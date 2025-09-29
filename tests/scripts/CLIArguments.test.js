@@ -3,7 +3,7 @@ import { describe, it, before, after, beforeEach, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runCLIArgumentsTest({ id, pathToEim, eimVersion }) {
+export function runCLIArgumentsTest({ id = 0, pathToEim, eimVersion }) {
   describe(`${id}- Basic Arguments |`, function () {
     let testRunner = null;
 

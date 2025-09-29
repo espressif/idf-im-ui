@@ -8,7 +8,7 @@ import fs from "fs";
 import os from "os";
 
 export function runInstallVerification({
-  id,
+  id = 0,
   installFolder,
   idfList,
   targetList = ["esp32"],

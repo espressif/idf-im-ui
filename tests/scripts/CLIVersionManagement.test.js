@@ -6,7 +6,7 @@ import path from "path";
 import fs from "fs";
 
 export function runVersionManagementTest({
-  id,
+  id = 0,
   pathToEim,
   idfList,
   installFolder,

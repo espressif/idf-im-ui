@@ -7,7 +7,7 @@ import { downloadOfflineArchive } from "../helper.js";
 import fs from "fs";
 
 export function runCLICustomInstallTest({
-  id,
+  id = 0,
   pathToEim,
   args = [],
   offlineIDFVersion = null,

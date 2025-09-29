@@ -13,7 +13,7 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 
 export function runCLIWizardInstallTest({
-  id,
+  id = 0,
   pathToEim,
   testProxyMode = false,
 }) {
