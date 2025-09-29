@@ -1,10 +1,7 @@
 use anyhow::Result;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
-use idf_im_lib::{
-    add_path_to_path, ensure_path,
-    settings::Settings,
-};
+use idf_im_lib::{add_path_to_path, ensure_path, settings::Settings};
 use log::{debug, error, info};
 use std::process::Command;
 use std::{
@@ -15,13 +12,18 @@ use std::{
 };
 use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
 mod app_state;
-mod ui;
 pub mod commands;
+mod ui;
 pub mod utils;
 
-use app_state::{AppState};
+use app_state::AppState;
+
+use commands::{
+    idf_tools::*, installation::offline::*, installation::online::*, installation::platform::*,
+    installation::repair::*, installation::*, prequisites::*, settings::*, utils_commands::*,
+    version_management::*,
+};
 use ui::{send_message, ProgressBar};
-use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*, utils_commands::*, version_management::*};
 
 fn prepare_installation_directories(
     app_handle: AppHandle,
@@ -55,33 +57,33 @@ async fn download_idf(
     let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
 
     match idf_im_lib::get_esp_idf(
-      idf_path.to_str().unwrap(),
-      settings.repo_stub.as_deref(),
-      version,
-      settings.idf_mirror.as_deref(),
-      settings.recurse_submodules.unwrap_or_default(),
-      tx,
+        idf_path.to_str().unwrap(),
+        settings.repo_stub.as_deref(),
+        version,
+        settings.idf_mirror.as_deref(),
+        settings.recurse_submodules.unwrap_or_default(),
+        tx,
     ) {
         Ok(_) => {
-          send_message(
-            app_handle,
-            format!(
-                "IDF {} installed successfully at: {}",
-                version,
-                idf_path.display()
-            ),
-            "info".to_string(),
-          );
-          progress.finish();
+            send_message(
+                app_handle,
+                format!(
+                    "IDF {} installed successfully at: {}",
+                    version,
+                    idf_path.display()
+                ),
+                "info".to_string(),
+            );
+            progress.finish();
         }
         Err(e) => {
-          send_message(
-            app_handle,
-            format!("Failed to install IDF {}. Reason: {}", version, e),
-            "error".to_string(),
-        );
-        progress.finish();
-        return Err(e.into());
+            send_message(
+                app_handle,
+                format!("Failed to install IDF {}. Reason: {}", version, e),
+                "error".to_string(),
+            );
+            progress.finish();
+            return Err(e.into());
         }
     }
 
@@ -174,8 +176,8 @@ fn is_process_running(pid: u32) -> bool {
         Ok(output) => {
             let output_str = String::from_utf8_lossy(&output.stdout);
             output_str.contains(&pid.to_string())
-        },
-        Err(_) => false
+        }
+        Err(_) => false,
     }
 }
 

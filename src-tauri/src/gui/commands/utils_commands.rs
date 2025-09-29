@@ -1,33 +1,30 @@
+use anyhow::Result;
 use gui::ui::send_message;
-use idf_im_lib::{self, ensure_path};
 use idf_im_lib::telemetry::track_event;
+use idf_im_lib::{self, ensure_path};
 use log::{error, info};
-use serde_json::{json,Value};
-use tauri_plugin_store::StoreExt;
-use std::fs;
-use std::{
-    path::PathBuf,
-    process::Command,
-};
-use tauri::AppHandle;
 use num_cpus;
-use anyhow::{Result};
+use serde_json::{json, Value};
+use std::fs;
+use std::{path::PathBuf, process::Command};
+use tauri::AppHandle;
+use tauri_plugin_store::StoreExt;
 
 use crate::gui;
 use crate::gui::utils::is_path_empty_or_nonexistent;
 
+#[cfg(windows)]
+use std::mem;
+#[cfg(windows)]
+use winapi::shared::minwindef::{DWORD, FALSE};
+#[cfg(windows)]
+use winapi::um::handleapi::CloseHandle;
 #[cfg(windows)]
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
 #[cfg(windows)]
 use winapi::um::securitybaseapi::GetTokenInformation;
 #[cfg(windows)]
 use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
-#[cfg(windows)]
-use winapi::um::handleapi::CloseHandle;
-#[cfg(windows)]
-use winapi::shared::minwindef::{DWORD, FALSE};
-#[cfg(windows)]
-use std::mem;
 
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -63,7 +60,8 @@ pub fn get_operating_system() -> String {
 #[tauri::command]
 pub fn get_system_info() -> String {
     let info = os_info::get();
-    format!("OS: {} {} | Architecture: {} | Kernel: {}",
+    format!(
+        "OS: {} {} | Architecture: {} | Kernel: {}",
         info.os_type(),
         info.version(),
         info.architecture().unwrap_or("unknown"),
@@ -175,9 +173,7 @@ pub fn scan_for_archives() -> Result<Vec<String>, String> {
             return Err("Failed to get current executable path".to_string());
         }
     };
-    let scan_dir = binary
-        .parent()
-        .ok_or("Could not get parent directory")?;
+    let scan_dir = binary.parent().ok_or("Could not get parent directory")?;
 
     let mut archives = Vec::new();
 
@@ -194,23 +190,25 @@ pub fn scan_for_archives() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
-  let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory").unwrap()
+pub fn get_app_settings(app_handle: AppHandle) -> Value {
+    // TODO: persist
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")
+        .unwrap()
         .join("eim");
 
-  let config_file = config_dir.join("eim.json");
-  ensure_path(config_dir.to_str().unwrap()).unwrap();
-  match app_handle.store_builder(config_file).build() {
+    let config_file = config_dir.join("eim.json");
+    ensure_path(config_dir.to_str().unwrap()).unwrap();
+    match app_handle.store_builder(config_file).build() {
         Ok(store) => {
-            let first_run = store.get("first_run")
-                .unwrap_or(Value::Bool(true))
-                .clone();
-            let skip_welcome = store.get("skip_welcome")
+            let first_run = store.get("first_run").unwrap_or(Value::Bool(true)).clone();
+            let skip_welcome = store
+                .get("skip_welcome")
                 .unwrap_or(Value::Bool(false))
                 .clone();
 
-            let usage_statistics = store.get("usage_statistics")
+            let usage_statistics = store
+                .get("usage_statistics")
                 .unwrap_or(Value::Bool(false))
                 .clone();
 
@@ -231,15 +229,21 @@ pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
 }
 
 #[tauri::command]
-pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool, usageStatistics: bool) {
-  let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory").unwrap()
+pub async fn save_app_settings(
+    app_handle: AppHandle,
+    firstRun: bool,
+    skipWelcome: bool,
+    usageStatistics: bool,
+) {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")
+        .unwrap()
         .join("eim");
 
-  let config_file = config_dir.join("eim.json");
-  ensure_path(config_dir.to_str().unwrap()).unwrap();
+    let config_file = config_dir.join("eim.json");
+    ensure_path(config_dir.to_str().unwrap()).unwrap();
 
-  match app_handle.store_builder(config_file).build() {
+    match app_handle.store_builder(config_file).build() {
         Ok(store) => {
             store.set("first_run".to_string(), Value::Bool(firstRun));
 
@@ -248,12 +252,17 @@ pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcom
             store.set("usage_statistics".to_string(), Value::Bool(usageStatistics));
 
             match store.save() {
-              Ok(_) => {
-                  log::info!("App settings saved: first_run={}, skip_welcome={}, usage_statistics={}", firstRun, skipWelcome, usageStatistics);
-              }
-              Err(e) => {
-                  error!("Failed to save store: {}", e);
-              }
+                Ok(_) => {
+                    log::info!(
+                        "App settings saved: first_run={}, skip_welcome={}, usage_statistics={}",
+                        firstRun,
+                        skipWelcome,
+                        usageStatistics
+                    );
+                }
+                Err(e) => {
+                    error!("Failed to save store: {}", e);
+                }
             }
         }
         Err(e) => {
@@ -304,67 +313,78 @@ fn is_elevated() -> Result<bool, Box<dyn std::error::Error>> {
 #[tauri::command]
 pub fn check_elevation() -> Result<bool, String> {
     match std::env::consts::OS {
-      "windows" => {
-        match is_elevated() {
-          Ok(elevated) => Ok(elevated),
-          Err(err) => {
-            error!("Failed to check elevation: {}", err);
-            Err(format!("Failed to check elevation: {}", err))
-          }
+        "windows" => match is_elevated() {
+            Ok(elevated) => Ok(elevated),
+            Err(err) => {
+                error!("Failed to check elevation: {}", err);
+                Err(format!("Failed to check elevation: {}", err))
+            }
+        },
+        _ => {
+            // On non-Windows systems, assume no elevation is needed
+            Ok(false)
         }
-      }
-      _ => {
-        // On non-Windows systems, assume no elevation is needed
-        Ok(false)
-      }
     }
 }
-
 
 #[tauri::command]
 pub async fn install_drivers() -> Result<(), String> {
     match std::env::consts::OS {
-      "windows" => {
-        info!("Installing drivers...");
-        match idf_im_lib::install_drivers().await {
-          Ok(_) => {
-            info!("Drivers installed successfully.");
-          }
-          Err(err) => {
-            error!("Failed to install drivers: {}", err);
-            return Err(format!("Failed to install drivers: {}", err));
-          }
+        "windows" => {
+            info!("Installing drivers...");
+            match idf_im_lib::install_drivers().await {
+                Ok(_) => {
+                    info!("Drivers installed successfully.");
+                }
+                Err(err) => {
+                    error!("Failed to install drivers: {}", err);
+                    return Err(format!("Failed to install drivers: {}", err));
+                }
+            }
+            Ok(())
         }
-        Ok(())
-      }
-      _ => {
-        return Err(format!("Driver installation is only supported on Windows."));
-      }
+        _ => {
+            return Err(format!("Driver installation is only supported on Windows."));
+        }
     }
 }
 
 #[tauri::command]
-pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_data: Option<serde_json::Value>) -> Result<(), String> {
-  let app_settings = get_app_settings(app_handle);
-  let usage_statistics = match app_settings.get("usage_statistics"){
-    Some(val) => val,
-    None => {
-      log::debug!("Usage statistics setting not found, skipping event tracking.");
-      return Ok(()) // If the setting is not found, do not track
+pub async fn track_event_command(
+    app_handle: AppHandle,
+    name: &str,
+    additional_data: Option<serde_json::Value>,
+) -> Result<(), String> {
+    let app_settings = get_app_settings(app_handle);
+    let usage_statistics = match app_settings.get("usage_statistics") {
+        Some(val) => val,
+        None => {
+            log::debug!("Usage statistics setting not found, skipping event tracking.");
+            return Ok(()); // If the setting is not found, do not track
+        }
+    };
+    if usage_statistics != &Value::Bool(true) {
+        log::debug!("Usage statistics not allowed, skipping event tracking.");
+        return Ok(());
     }
-  };
-  if usage_statistics != &Value::Bool(true) {
-    log::debug!("Usage statistics not allowed, skipping event tracking.");
-    return Ok(());
-  }
-  let system_info = get_system_info();
-  log::debug!("System info: {}", system_info);
-  log::debug!("Track event called with name: {}", name);
-  track_event("GUI event", serde_json::json!({
-    "event_name": name,
-    "system_info": system_info,
-    "eim_version": EIM_VERSION,
-    "additional_data": additional_data
-  })).await;
-  Ok(())
+    let system_info = get_system_info();
+    log::debug!("System info: {}", system_info);
+    log::debug!("Track event called with name: {}", name);
+    track_event(
+        "GUI event",
+        serde_json::json!({
+          "event_name": name,
+          "system_info": system_info,
+          "eim_version": EIM_VERSION,
+          "additional_data": additional_data
+        }),
+    )
+    .await;
+    Ok(())
+}
+
+// Helper function to extract filename from path
+#[tauri::command]
+pub fn get_file_name(path: &str) -> &str {
+    path.split(&['/', '\\'][..]).last().unwrap_or(path)
 }
