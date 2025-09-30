@@ -209,32 +209,61 @@ jobs:
       - name: Purge existing archives for this version (if requested) - Unix
         if: needs.get-versions.outputs.should_purge == 'true' && runner.os != 'Windows'
         shell: bash
+        continue-on-error: true
         run: |
           echo "Purging existing archives for version ${{ matrix.idf_version }} from S3..."
 
           # Only purge archives for THIS specific version and platform
-          aws s3 ls s3://espdldata/dl/eim/ | grep "archive_v${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" | awk '{print $4}' | while read filename; do
+          set +e  # Don't exit on error
+          aws s3 ls s3://espdldata/dl/eim/ | grep "archive_${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" | awk '{print $4}' | while read filename; do
             if [ -n "$filename" ]; then
               echo "Deleting s3://espdldata/dl/eim/$filename"
-              aws s3 rm "s3://espdldata/dl/eim/$filename" || echo "Failed to delete $filename, continuing..."
+              if ! aws s3 rm "s3://espdldata/dl/eim/$filename"; then
+                echo "::warning::Failed to delete $filename, continuing..."
+              fi
             fi
           done
+
+          # Check if grep found anything (if pipe failed, there were no matches)
+          if [ ${PIPESTATUS[1]} -ne 0 ]; then
+            echo "::warning::No existing archives found for ${{ matrix.idf_version }}_${{ matrix.package_name }}, or grep failed"
+          fi
+
+          echo "Purge step completed (errors ignored)"
+          exit 0  # Always exit successfully
 
       - name: Purge existing archives for this version (if requested) - Windows
         if: needs.get-versions.outputs.should_purge == 'true' && runner.os == 'Windows'
         shell: pwsh
+        continue-on-error: true
         run: |
           Write-Host "Purging existing archives for version ${{ matrix.idf_version }} from S3..."
 
-          # Only purge archives for THIS specific version and platform
-          $archives = aws s3 ls s3://espdldata/dl/eim/ | Where-Object { $_.Split()[-1] -match "archive_v${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" }
-          foreach ($archive in $archives) {
-            $filename = $archive.Split()[-1]
-            if ($filename) {
-              Write-Host "Deleting s3://espdldata/dl/eim/$filename"
-              aws s3 rm "s3://espdldata/dl/eim/$filename"
+          try {
+            # Only purge archives for THIS specific version and platform
+            $archives = aws s3 ls s3://espdldata/dl/eim/ | Where-Object { $_.Split()[-1] -match "archive_${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" }
+
+            if (-not $archives) {
+              Write-Host "::warning::No existing archives found for ${{ matrix.idf_version }}_${{ matrix.package_name }}"
             }
+
+            foreach ($archive in $archives) {
+              $filename = $archive.Split()[-1]
+              if ($filename) {
+                Write-Host "Deleting s3://espdldata/dl/eim/$filename"
+                try {
+                  aws s3 rm "s3://espdldata/dl/eim/$filename"
+                } catch {
+                  Write-Host "::warning::Failed to delete $filename, continuing..."
+                }
+              }
+            }
+          } catch {
+            Write-Host "::warning::Purge step encountered an error: $_"
           }
+
+          Write-Host "Purge step completed (errors ignored)"
+          exit 0  # Always exit successfully
 
       - name: Build archive for specific version
         id: build

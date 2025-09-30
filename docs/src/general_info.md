@@ -2,6 +2,12 @@
 
 The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the setup process for ESP-IDF and integrated development environments (IDEs) across multiple platforms. This cross-platform installer facilitates the installation of prerequisites, ESP-IDF itself, and essential tools, offering a consistent and user-friendly experience on macOS, Linux, and Windows.
 
+> **💡 Quick Install:**
+> You can install EIM using:
+> - **[Windows Installer](#windows-installation)**
+> - **[Homebrew (macOS)](#macos-installation-via-homebrew)**
+> - **[APT (Debian-based Linux)](#debian-based-linux-installation-via-apt-repository)**
+
 ## Features
 
 ### Cross-Platform Support
@@ -39,19 +45,73 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 
 ## Getting Started
 
-1.  Download the appropriate version for your platform from the [GitHub](https://github.com/espressif/idf-im-ui/releases) or from [dl.espressif.com](https://dl.espressif.com/dl/eim/) mirror.
-2.  Launch the GUI for a visual installation experience or use the command line for automation.
-3.  The **welcome page** will adapt based on your environment:
-      * **No previous installation or offline archive**: The installer will present options for a **New Installation**.
-      * **Offline archive detected**: The installer will offer to **Install from Archive** or proceed with a **New Installation** from online sources.
-      * **Previous installation detected**: The installer will offer to **Manage Installations** from the dashboard or start a **New Installation**.
-4.  Follow the installation steps for your chosen method.
+1.  Download or install the appropriate version for your platform.
+
+### Windows Installation
+<a id="windows-installation"></a>
+
+On **Windows**, the recommended way to get EIM is to download the latest installer directly:
+
+- From [GitHub Releases](https://github.com/espressif/idf-im-ui/releases)
+- Or from the official [Espressif download mirror](https://dl.espressif.com/dl/eim/)
+
+After downloading, simply run the `.exe` installer.
+It will automatically detect and install any missing prerequisites and guide you through the setup process.
+
+You can also launch the GUI or use the CLI directly after installation:
+```bash
+eim install
+````
+
+### macOS Installation (via Homebrew)
+
+<a id="macos-installation-via-homebrew"></a>
+
+If you're using **macOS**, you can install EIM directly from the Espressif Homebrew tap:
+
+```bash
+brew tap espressif/eim
+brew install eim
+eim install
+```
+
+### Debian-Based Linux Installation (via APT Repository)
+
+<a id="debian-based-linux-installation-via-apt-repository"></a>
+
+If you're using a **Debian-based Linux** distribution (e.g. Ubuntu), you can install EIM from the official Espressif APT repository:
+
+```bash
+# Add repository
+echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
+
+sudo apt update
+
+# Install CLI only
+sudo apt install eim-cli
+
+# Install GUI (includes CLI)
+sudo apt install eim
+```
+
+> **Note:**
+> The *GUI application* includes full *CLI capabilities* and can be invoked directly from the command line (`eim <command>`).
+> The *standalone CLI* (`eim-cli`) is *statically linked* and works on most Linux systems without additional dependencies.
+
+2. Launch the GUI for a visual installation experience or use the command line for automation.
+3. The **welcome page** will adapt based on your environment:
+
+   * **No previous installation or offline archive**: The installer will present options for a **New Installation**.
+   * **Offline archive detected**: The installer will offer to **Install from Archive** or proceed with a **New Installation** from online sources.
+   * **Previous installation detected**: The installer will offer to **Manage Installations** from the dashboard or start a **New Installation**.
+4. Follow the installation steps for your chosen method.
 
 For detailed instructions, see:
-- [Simplified Installation](./simple_installation.md) for GUI-based quick setup
-- [Expert Installation](./expert_installation.md) for advanced GUI configuration
-- [Command Line Installation](./cli_installation.md) for CLI usage
-- [Headless Usage](./headless_usage.md) for automated installations
+
+* [Simplified Installation](./simple_installation.md) for GUI-based quick setup
+* [Expert Installation](./expert_installation.md) for advanced GUI configuration
+* [Command Line Installation](./cli_installation.md) for CLI usage
+* [Headless Usage](./headless_usage.md) for automated installations
 
 ## Architecture
 
@@ -77,17 +137,19 @@ EIM is built with a modular architecture that separates the core functionality f
 ## Contributing
 
 EIM is an open-source project, and contributions are welcome. Visit our [GitHub repository](https://github.com/espressif/idf-im-ui) for:
-- Source code
-- Issue tracking
-- Feature requests
-- Pull requests
+
+* Source code
+* Issue tracking
+* Feature requests
+* Pull requests
 
 ## Support
 
 If you need help with EIM:
-- Check the [FAQ](./faq.md) for common questions
-- Visit the [ESP32 forum](https://esp32.com/) for community support
-- Open an issue on [GitHub](https://github.com/espressif/idf-im-ui/issues) for bug reports
+
+* Check the [FAQ](./faq.md) for common questions
+* Visit the [ESP32 forum](https://esp32.com/) for community support
+* Open an issue on [GitHub](https://github.com/espressif/idf-im-ui/issues) for bug reports
 
 ## Privacy and Data Collection
 
