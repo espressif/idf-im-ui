@@ -125,6 +125,8 @@
           <n-button type="primary" size="large" block>
             Browse Archive File
           </n-button>
+          <!-- Hidden input for CI tests control -->
+          <input id="eim_offline_installation_input" type="hidden" ref="offlineInputCITests" />
         </div>
       </n-card>
 
@@ -145,6 +147,8 @@
           <n-button type="primary" size="large" block>
             Browse Configuration File
           </n-button>
+          <!-- Hidden input for CI tests control -->
+          <input id="eim_load_config_input" type="hidden" ref="configInputCITests" />
         </div>
       </n-card>
     </div>
@@ -194,6 +198,10 @@ export default {
     const os = ref('unknown')
     const prerequisitesOk = ref(true)
     const missingPrerequisites = ref([])
+
+    // Input elements for external tests
+    const offlineInputCITests = ref(null);
+    const configInputCITests = ref(null);
 
 
     const checkPrerequisites = async () => {
@@ -264,13 +272,19 @@ export default {
 
     const loadConfig = async () => {
       try {
-        const selected = await open({
-          multiple: false,
-          filters: [{
-            name: 'Configuration',
-            extensions: ['json', 'toml']
-          }]
-        })
+        let selected = null
+        if((configInputCITests.value?.value ?? '').trim().length > 0){
+          selected = configInputCITests.value.value;
+          configInputCITests.value = null
+        } else {
+          selected = await open({
+            multiple: false,
+            filters: [{
+              name: 'Configuration',
+              extensions: ['json', 'toml']
+            }]
+          })
+        }
 
         if (selected) {
           const _ = await invoke("load_settings", { path: selected });
@@ -284,14 +298,19 @@ export default {
 
     const selectOfflineArchive = async () => {
       try {
-        const selected = await open({
-          multiple: false,
-          filters: [{
-            name: 'ESP-IDF Archive',
-            extensions: ['zst']
-          }]
-        })
-
+        let selected = null
+        if((offlineInputCITests.value?.value ?? '').trim().length > 0){
+          selected = offlineInputCITests.value.value;
+          offlineInputCITests.value = null
+        } else {
+          selected = await open({
+            multiple: false,
+            filters: [{
+              name: 'ESP-IDF Archive',
+              extensions: ['zst']
+            }]
+          })
+        }
         if (selected) {
           router.push({
             path: '/offline-installer',
@@ -302,7 +321,6 @@ export default {
         message.error('Failed to select archive file')
       }
     }
-
     const goBack = () => {
       router.push('/version-management')
     }
@@ -328,7 +346,9 @@ export default {
       startEasyMode,
       startWizard,
       loadConfig,
-      goBack
+      goBack,
+      offlineInputCITests,
+      configInputCITests,
     }
   }
 }
