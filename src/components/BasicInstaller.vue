@@ -125,7 +125,8 @@
           <n-button type="primary" size="large" block>
             Browse Archive File
           </n-button>
-          <input id="eim_offline_installation_input" type="hidden" ref="offlineInput" />
+          <!-- Hidden input for CI tests control -->
+          <input id="eim_offline_installation_input" type="hidden" ref="offlineInputCITests" />
         </div>
       </n-card>
 
@@ -146,7 +147,8 @@
           <n-button type="primary" size="large" block>
             Browse Configuration File
           </n-button>
-          <input id="eim_load_config_input" type="hidden" ref="configInput" />
+          <!-- Hidden input for CI tests control -->
+          <input id="eim_load_config_input" type="hidden" ref="configInputCITests" />
         </div>
       </n-card>
     </div>
@@ -198,8 +200,8 @@ export default {
     const missingPrerequisites = ref([])
 
     // Input elements for external tests
-    const offlineInput = ref(null);
-    const configInput = ref(null);
+    const offlineInputCITests = ref(null);
+    const configInputCITests = ref(null);
 
 
     const checkPrerequisites = async () => {
@@ -271,9 +273,9 @@ export default {
     const loadConfig = async () => {
       try {
         let selected = null
-        if((configInput.value?.value ?? '').trim().length > 0){
-          selected = configInput.value;
-          configInput.value = ''
+        if((configInputCITests.value?.value ?? '').trim().length > 0){
+          selected = configInputCITests.value.value;
+          configInputCITests.value = null
         } else {
           selected = await open({
             multiple: false,
@@ -297,9 +299,9 @@ export default {
     const selectOfflineArchive = async () => {
       try {
         let selected = null
-        if((offlineInput.value?.value ?? '').trim().length > 0){
-          selected = offlineInput.value.value;
-          offlineInput.value.value = ''
+        if((offlineInputCITests.value?.value ?? '').trim().length > 0){
+          selected = offlineInputCITests.value.value;
+          offlineInputCITests.value = null
         } else {
           selected = await open({
             multiple: false,
@@ -345,8 +347,8 @@ export default {
       startWizard,
       loadConfig,
       goBack,
-      offlineInput,
-      configInput,
+      offlineInputCITests,
+      configInputCITests,
     }
   }
 }
