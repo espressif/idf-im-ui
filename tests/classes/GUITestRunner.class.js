@@ -13,7 +13,6 @@ class GUITestRunner {
 
     this.capabilities.set("tauri:options", {
       application,
-      webviewOptions: {},
     });
     this.capabilities.setBrowserName("wry");
   }
@@ -32,7 +31,7 @@ class GUITestRunner {
     }
 
     // Wait for tauri-driver to start
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     try {
       this.driver = await new Builder()

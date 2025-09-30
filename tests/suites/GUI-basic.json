@@ -2,12 +2,14 @@
   {
     "id": 1,
     "type": "startup",
-    "name": "Startup & version check"
+    "name": "Startup & version check",
+    "data": {}
   },
   {
     "id": 2,
     "type": "default",
-    "name": "GUI Simplified Default"
+    "name": "GUI Simplified Default",
+    "data": {}
   },
   {
     "id": 3,
@@ -35,7 +37,8 @@
     "id": 5,
     "type": "offline",
     "name": "GUI Offline Installation",
+    "data": {},
     "deleteAfterTest": true,
-    "testProxyMode": "block"
+    "testProxyMode": false
   }
 ]

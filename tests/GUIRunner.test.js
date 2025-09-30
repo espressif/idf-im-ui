@@ -3,7 +3,7 @@
  * Entries should follow this format:
  *     {
         "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "startup", "default" or "custom"
+        "type": "custom",               // test type is either "startup", "default", "custom" or "offline"
         "name": "<name>",               // A name for the test to correlate to logs and report
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
@@ -27,6 +27,7 @@ import { runGUISimplifiedInstallTest } from "./scripts/GUISimplifiedInstall.test
 import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import { runGUIAfterInstallTest } from "./scripts/GUIAfterInstall.test.js";
+import { runGUIOfflineInstallTest } from "./scripts/GUIOfflineInstall.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import {
   IDFDefaultVersion,
@@ -34,8 +35,8 @@ import {
   EIMGUIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
+  pkgName,
 } from "./config.js";
-
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
 
@@ -53,11 +54,11 @@ function testRun(script) {
   script.forEach((test) => {
     if (test.type === "startup") {
       //routine for startup test script
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
         runGUIStartupTest({
-          id: test.id,
+          id: `${test.id}1`,
           pathToEIM: pathToEIMGUI,
           eimVersion: EIMGUIVersion,
         });
@@ -67,21 +68,27 @@ function testRun(script) {
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
-        runGUISimplifiedInstallTest(test.id, pathToEIMGUI);
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        runGUISimplifiedInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMGUI,
+        });
+
+        runGUIAfterInstallTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMGUI,
+          idfList: [IDFDefaultVersion],
+        });
+
         runInstallVerification({
+          id: `${test.id}3`,
           installFolder: INSTALLFOLDER,
           idfList: [IDFDefaultVersion],
           toolsFolder: TOOLSFOLDER,
         });
 
-        runGUIAfterInstallTest({
-          id: test.id,
-          pathToEIM: pathToEIMGUI,
-          idfList: [IDFDefaultVersion],
-        });
-
         runCleanUp({
+          id: `${test.id}4`,
           installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
@@ -108,40 +115,83 @@ function testRun(script) {
 
       const toolsMirror = test.data.toolsMirror || "github";
 
-      const IDFMirror = test.data.idfMirror || "github";
+      const idfMirror = test.data.idfMirror || "github";
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
-        runGUICustomInstallTest(
-          test.id,
-          pathToEIMGUI,
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        runGUICustomInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMGUI,
           installFolder,
           targetList,
-          idfUpdatedList,
+          idfVersionList: idfUpdatedList,
           toolsMirror,
-          IDFMirror
-        );
+          idfMirror,
+        });
+
+        runGUIAfterInstallTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMGUI,
+          idfList: idfUpdatedList,
+        });
 
         runInstallVerification({
+          id: `${test.id}3`,
           installFolder,
           idfList: idfUpdatedList,
           targetList,
           toolsFolder: TOOLSFOLDER,
         });
 
-        runGUIAfterInstallTest({
-          id: test.id,
-          pathToEIM: pathToEIMGUI,
-          idfList: idfUpdatedList,
-        });
-
         runCleanUp({
+          id: `${test.id}4`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
         });
       });
+    } else if (test.type === "offline") {
+      //routine for offline installation test
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runGUIOfflineInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMGUI,
+          offlineIDFVersion: IDFDefaultVersion,
+          offlinePkgName: pkgName,
+        });
+
+        runGUIAfterInstallTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMGUI,
+          idfList: [IDFDefaultVersion],
+        });
+
+        runInstallVerification({
+          id: `${test.id}3`,
+          installFolder,
+          idfList: [IDFDefaultVersion],
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          id: `${test.id}4`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else {
+      logger.error(`Unknown test type: ${test.type}`);
     }
   });
 }

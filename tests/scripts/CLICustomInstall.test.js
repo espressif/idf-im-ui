@@ -77,8 +77,15 @@ export function runCLICustomInstallTest({
         logger.info("Error stopping proxy server");
         logger.debug(`Error: ${error}`);
       }
-      //remove offline archive to save space in the runner
-      fs.rmSync(pathToOfflineArchive, { force: true });
+      // Remove offline archive to save space in the runner
+      if (pathToOfflineArchive) {
+        try {
+          fs.rmSync(pathToOfflineArchive, { force: true });
+          logger.info(`Successfully deleted offline archive`);
+        } catch (err) {
+          logger.info(`Error deleting offline archive`);
+        }
+      }
     });
 
     /** Run installation with full parameters, no need to ask questions
