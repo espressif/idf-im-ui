@@ -12,7 +12,6 @@ use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
-use tempfile::TempDir;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
@@ -22,6 +21,7 @@ use std::{
     fs::{self, OpenOptions},
     path::{Path, PathBuf},
 };
+use tempfile::TempDir;
 
 // maybe move the default values to the config too?
 const DEFAULT_TOOLS_DOWNLOAD_FOLDER: &str = "dist";
@@ -43,7 +43,7 @@ fn add_to_shell_rc(content: &str) -> Result<(), String> {
         "/bin/bash" => home.join(".bashrc"),
         "/bin/zsh" => home.join(".zshrc"),
         "/bin/fish" => home.join(".config/fish/config.fish"),
-        _ => return Err("Unsupported shell".to_string()),
+        _ => return Err(t!("wizard.shell.unsupported").to_string()),
     };
 
     let mut file = OpenOptions::new()
@@ -72,7 +72,10 @@ async fn select_targets_and_versions(mut config: Settings) -> Result<Settings, S
         config.target = Some(select_target().await?);
     }
     let target = config.target.clone().unwrap_or_default();
-    debug!("Selected target: {:?}", target);
+    debug!(
+        "{}",
+        t!("wizard.debug.target.selected", target = target.join(", "))
+    );
 
     // here the non-interactive flag is passed to the inner function
     if config.wizard_all_questions.unwrap_or_default()
@@ -84,7 +87,13 @@ async fn select_targets_and_versions(mut config: Settings) -> Result<Settings, S
         // TODO: handle multiple targets
     }
     let idf_versions = config.idf_versions.clone().unwrap_or_default();
-    debug!("Selected idf version: {:?}", idf_versions);
+    debug!(
+        "{}",
+        t!(
+            "wizard.debug.idf_version.selected",
+            version = idf_versions.join(", ")
+        )
+    );
 
     Ok(config)
 }
@@ -136,7 +145,11 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                     update_progress_bar_number(&progress_bar, value);
                 }
                 Ok(ProgressMessage::SubmoduleUpdate((name, value))) => {
-                    let message = format!("{}: {}", name, value);
+                    let message = t!(
+                        "wizard.debug.submodule.progress",
+                        name = name,
+                        progress = value
+                    );
                     progress_bar.set_message(message);
                     progress_bar.set_position(value);
                 }
@@ -154,7 +167,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
         }
     });
 
-    info!("Cloning ESP-IDF");
+    info!("{}", t!("wizard.idf.cloning"));
 
     match idf_im_lib::get_esp_idf(
         &config.idf_path,
@@ -260,9 +273,9 @@ async fn download_and_extract_tools(
     install_dir: &PathBuf,
 ) -> anyhow::Result<HashMap<String, (String, idf_im_lib::idf_tools::Download)>> {
     info!(
-      "{}: {:?}",
-      t!("wizard.tools_download.progress"),
-      download_dir.display()
+        "{}: {:?}",
+        t!("wizard.tools_download.progress"),
+        download_dir.display()
     );
     let progress_bar = ProgressBar::new(0);
     progress_bar.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})").unwrap()
@@ -285,17 +298,20 @@ async fn download_and_extract_tools(
         }
         DownloadProgress::Downloaded(url) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                info!("{} sucessfully downloaded", filename.to_string());
+                info!("{}", t!("wizard.tool.download.success", filename = filename));
             }
         }
         DownloadProgress::Verified(url) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                info!("{} checksum verified", filename.to_string());
+                info!("{}", t!("wizard.tool.verified", filename = filename));
             }
         }
         DownloadProgress::Extracted(url, dest) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                info!("Successfully extracted {} to {}", filename.to_string(), dest);
+                info!(
+                    "{}",
+                    t!("wizard.tool.extract.success", filename = filename, dest = dest)
+                );
             }
         }
     };
@@ -312,47 +328,57 @@ async fn download_and_extract_tools(
 }
 
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
-    debug!("Config entering wizard: {:?}", config);
+    debug!(
+        "{}",
+        t!(
+            "wizard.debug.config_entering",
+            config = format!("{:?}", config)
+        )
+    );
 
     let offline_mode = config.use_local_archive.is_some();
     let offline_archive_dir = if offline_mode {
-        Some(TempDir::new().expect("Failed to create temporary directory"))
+        Some(TempDir::new().expect(&t!("wizard.error.create_temp_dir")))
     } else {
         None
     };
 
-    if offline_mode { // only setting up temp directory if offline mode is enabled
-      let archive_dir = offline_archive_dir.as_ref().unwrap();
-      config = match use_offline_archive(config, archive_dir){
-        Ok(updated_config) => updated_config,
-        Err(err) => {
-          error!("Failed to use offline archive: {}", err);
-          return Err(err);
+    if offline_mode {
+        // only setting up temp directory if offline mode is enabled
+        let archive_dir = offline_archive_dir.as_ref().unwrap();
+        config = match use_offline_archive(config, archive_dir) {
+            Ok(updated_config) => updated_config,
+            Err(err) => {
+                error!("Failed to use offline archive: {}", err);
+                return Err(err);
+            }
+        };
+        // install prerequisites offline
+        if std::env::consts::OS == "windows" {
+            match install_prerequisites_offline(&archive_dir) {
+                Ok(_) => {
+                    info!("{}", t!("wizard.prerequisites.offline_install.success"));
+                }
+                Err(err) => {
+                    return Err(t!(
+                        "wizard.error.prerequisites_offline_install",
+                        error = err.to_string()
+                    )
+                    .to_string());
+                }
+            }
         }
-      };
-      // install prerequisites offline
-      if std::env::consts::OS == "windows" {
-        match install_prerequisites_offline(&archive_dir){
-          Ok(_) => {
-              info!("Successfully installed prerequisites from offline archive.");
-          }
-          Err(err) => {
-              return Err(format!("Failed to install prerequisites from offline archive: {}", err));
-          }
-        }
-      }
     }
 
     if config.skip_prerequisites_check.unwrap_or(false) {
-        info!("Skipping prerequisites check as per user request.");
+        info!("{}", t!("wizard.prerequisites.skip_check"));
     } else {
-       // Check prerequisites
-      check_and_install_prerequisites(
-          config.non_interactive.unwrap_or_default(),
-          config.install_all_prerequisites.unwrap_or_default(),
-      )?;
+        // Check prerequisites
+        check_and_install_prerequisites(
+            config.non_interactive.unwrap_or_default(),
+            config.install_all_prerequisites.unwrap_or_default(),
+        )?;
     }
-
 
     // Python sanity check
     check_and_install_python(
@@ -361,9 +387,9 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     )?;
 
     if offline_mode {
-      let archive_dir = offline_archive_dir.as_ref().unwrap();
-      // copy IDFs
-      copy_idf_from_offline_archive(archive_dir, &config)?;
+        let archive_dir = offline_archive_dir.as_ref().unwrap();
+        // copy IDFs
+        copy_idf_from_offline_archive(archive_dir, &config)?;
     }
 
     // select target & idf version
@@ -377,46 +403,44 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     // Multiple version starts here
     let mut using_existing_idf = false;
     for idf_version in config.idf_versions.clone().unwrap() {
-      let paths = config.get_version_paths(&idf_version).map_err(|err| {
-          error!("Failed to get version paths: {}", err);
-          err.to_string()
-      })?;
-      using_existing_idf = paths.using_existing_idf;
+        let paths = config.get_version_paths(&idf_version).map_err(|err| {
+            error!("Failed to get version paths: {}", err);
+            err.to_string()
+        })?;
+        using_existing_idf = paths.using_existing_idf;
 
+        config.idf_path = Some(paths.idf_path.clone());
+        idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
-      config.idf_path = Some(paths.idf_path.clone());
-      idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
+        if !using_existing_idf {
+            // download idf
+            let download_config = DownloadConfig {
+                idf_path: paths.idf_path.to_str().unwrap().to_string(),
+                repo_stub: config.repo_stub.clone(),
+                idf_version: idf_version.to_string(),
+                idf_mirror: config.idf_mirror.clone(),
+                recurse_submodules: config.recurse_submodules,
+                non_interactive: config.non_interactive,
+            };
 
-      if !using_existing_idf {
-
-        // download idf
-        let download_config = DownloadConfig {
-            idf_path: paths.idf_path.to_str().unwrap().to_string(),
-            repo_stub: config.repo_stub.clone(),
-            idf_version: idf_version.to_string(),
-            idf_mirror: config.idf_mirror.clone(),
-            recurse_submodules: config.recurse_submodules,
-            non_interactive: config.non_interactive,
-        };
-
-        match download_idf(download_config) {
-            Ok(_) => {
-                debug!("{}", t!("wizard.idf.sucess"));
-            }
-            Err(DownloadError::PathCreationFailed(err)) => {
-                error!("{} {:?}", t!("wizard.idf.path_creation_failure"), err);
-                return Err(err);
-            }
-            Err(DownloadError::DownloadFailed(err)) => {
-                error!("{} {:?}", t!("wizard.idf.failure"), err);
-                return Err(err);
-            }
-            Err(DownloadError::UserCancelled) => {
-                error!("{}", t!("wizard.idf.user_cancelled"));
-                return Err("User cancelled the operation".to_string());
+            match download_idf(download_config) {
+                Ok(_) => {
+                    debug!("{}", t!("wizard.idf.sucess"));
+                }
+                Err(DownloadError::PathCreationFailed(err)) => {
+                    error!("{} {:?}", t!("wizard.idf.path_creation_failure"), err);
+                    return Err(err);
+                }
+                Err(DownloadError::DownloadFailed(err)) => {
+                    error!("{} {:?}", t!("wizard.idf.failure"), err);
+                    return Err(err);
+                }
+                Err(DownloadError::UserCancelled) => {
+                    error!("{}", t!("wizard.idf.user_cancelled"));
+                    return Err("User cancelled the operation".to_string());
+                }
             }
         }
-      }
         // setup tool directories
 
         let tool_download_directory = setup_directory(
@@ -428,12 +452,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         )?;
 
         if offline_mode {
-          // copy content dist from offline_archive_dir
-          copy_dir_contents(
-            &offline_archive_dir.as_ref().unwrap().path().join("dist"),
-            &tool_download_directory,
-          )
-          .map_err(|err| format!("Failed to copy dist directory from offline archive: {}", err))?;
+            // copy content dist from offline_archive_dir
+            copy_dir_contents(
+                &offline_archive_dir.as_ref().unwrap().path().join("dist"),
+                &tool_download_directory,
+            )
+            .map_err(|err| t!("wizard.error.copy_dist_directory", error = err.to_string()))?;
         }
 
         // Setup install directory
@@ -452,7 +476,13 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let tools_json_file = get_tools_json_path(&mut config, &paths.idf_path);
         let validated_file = validate_tools_json_file(&tools_json_file, &mut config);
 
-        debug!("Tools json file: {}", tools_json_file.display());
+        debug!(
+            "{}",
+            t!(
+                "wizard.debug.tools_json_file",
+                path = tools_json_file.display()
+            )
+        );
 
         let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
@@ -494,7 +524,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         .await
         {
             Ok(_) => {
-                info!("Python environment installed");
+                info!("{}", t!("wizard.python.env_installed"));
             }
             Err(err) => {
                 error!("Failed to install Python environment: {}", err);
@@ -503,7 +533,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         };
 
         ensure_path(paths.python_venv_path.to_str().unwrap())
-            .map_err(|err| format!("Failed to create Python environment directory: {}", err))?;
+            .map_err(|err| t!("wizard.error.create_python_env", error = err.to_string()))?;
 
         let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
             tools,
@@ -531,7 +561,13 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     }
     save_config_if_desired(&config)?;
     let ide_conf_path_tmp = PathBuf::from(&config.esp_idf_json_path.clone().unwrap_or_default());
-    debug!("IDE configuration path: {}", ide_conf_path_tmp.display());
+    debug!(
+        "{}",
+        t!(
+            "wizard.debug.ide_config_path",
+            path = ide_conf_path_tmp.display()
+        )
+    );
     match ensure_path(ide_conf_path_tmp.to_str().unwrap()) {
         Ok(_) => (),
         Err(err) => {
@@ -540,7 +576,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         }
     }
     match config.save_esp_ide_json() {
-        Ok(_) => debug!("IDE configuration saved."),
+        Ok(_) => debug!("{}", t!("wizard.debug.ide_config_saved")),
         Err(err) => {
             error!("Failed to save IDE configuration: {}", err);
             return Err(err.to_string());
@@ -559,15 +595,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             println!("============================================");
             println!("{}:", t!("wizard.posix.finish_steps.line_4"));
             for idf_version in config.idf_versions.clone().unwrap() {
-              let paths = config.get_version_paths(&idf_version).map_err(|err| {
-                error!("Failed to get version paths: {}", err);
-                err.to_string()
-              })?;
-              println!(
-                  "       {} \"{}\"",
-                  t!("wizard.posix.finish_steps.line_5"),
-                  paths.activation_script.display()
-              );
+                let paths = config.get_version_paths(&idf_version).map_err(|err| {
+                    error!("Failed to get version paths: {}", err);
+                    err.to_string()
+                })?;
+                println!(
+                    "       {} \"{}\"",
+                    t!("wizard.posix.finish_steps.line_5"),
+                    paths.activation_script.display()
+                );
             }
             println!("============================================");
         }

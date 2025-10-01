@@ -32,6 +32,12 @@ use std::mem;
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tauri::command]
+pub fn set_locale(locale: String) {
+    rust_i18n::set_locale(&locale);
+    info!("Set locale to: {}", locale);
+}
+
+#[tauri::command]
 pub fn get_app_info() -> Value {
     json!({
       "version": EIM_VERSION

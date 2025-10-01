@@ -10,55 +10,63 @@ import WizardStep from "./components/WizardStep.vue";
 const routes = [
   {
     path: "/",
-    redirect: "/welcome"
+    redirect: "/welcome",
+    meta: { title: "routes.welcome" },
   },
   {
     path: "/welcome",
     name: "Welcome",
     component: Welcome,
-    props: true
+    props: true,
+    meta: { title: "routes.welcome" },
   },
   {
     path: "/version-management",
     name: "VersionManagement",
     component: VersionManagement,
-    props: true
+    props: true,
+    meta: { title: "routes.versionManagement" },
   },
   {
     path: "/basic-installer",
     name: "BasicInstaller",
     component: BasicInstaller,
-    props: true
+    props: true,
+    meta: { title: "routes.installationOptions" },
   },
   {
     path: "/offline-installer",
     name: "OfflineInstaller",
     component: OfflineInstaller,
-    props: true
+    props: true,
+    meta: { title: "routes.offlineInstallation" },
   },
   {
     path: "/simple-setup",
     name: "SimpleSetup",
     component: SimpleSetup,
-    props: true
+    props: true,
+    meta: { title: "routes.easyInstallation" },
   },
   {
     path: "/installation-progress",
     name: "InstallationProgress",
     component: InstallationProgress,
-    props: true
+    props: true,
+    meta: { title: "routes.installationProgress" },
   },
   {
     path: "/wizard/:step",
     name: "Wizard",
     component: WizardStep,
-    props: true
+    props: true,
+    meta: { title: "routes.configurationWizard" },
   },
-  // Fallback route
   {
     path: "/:pathMatch(.*)*",
-    redirect: "/welcome"
-  }
+    redirect: "/welcome",
+    meta: { title: "routes.fallbackRedirect" },
+  },
 ];
 
 const router = createRouter({

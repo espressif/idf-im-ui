@@ -13,6 +13,7 @@ use std::{
   io::Read,
   path::{Path, PathBuf},
 };
+use rust_i18n::t;
 
 /// Gets the current settings
 #[tauri::command]
@@ -30,7 +31,7 @@ pub fn load_settings(app_handle: AppHandle, path: &str) {
           .map_err(|_| {
               send_message(
                   &app_handle,
-                  format!("Failed to load settings from file: {}", path),
+                  t!("gui.settings.failed_to_load", path = path).to_string(),
                   "warning".to_string(),
               )
           })
@@ -39,7 +40,7 @@ pub fn load_settings(app_handle: AppHandle, path: &str) {
   });
   send_message(
       &app_handle,
-      format!("Settings loaded from {}", path),
+      t!("gui.settings.loaded_successfully", path = path).to_string(),
       "info".to_string(),
   );
 }
@@ -52,7 +53,7 @@ pub fn save_config(app_handle: tauri::AppHandle, path: String) {
       Err(_) => {
           return send_message(
               &app_handle,
-              "Installation config can not be saved. Please try again later.".to_string(),
+              t!("gui.settings.save_config_error").to_string(),
               "error".to_string(),
           )
       }
@@ -91,7 +92,7 @@ pub fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), 
         Err(e) => {
             send_message(
                 &app_handle,
-                format!("Failed to set installation path: {}", e),
+                t!("gui.settings.failed_to_set_installation_path", error = e.to_string()).to_string(),
                 "error".to_string(),
             );
             return;
@@ -102,7 +103,7 @@ pub fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), 
 
   send_message(
       &app_handle,
-      "Installation path updated successfully".to_string(),
+      t!("gui.settings.installation_path_updated").to_string(),
       "info".to_string(),
   );
   Ok(())
@@ -145,7 +146,7 @@ pub fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), St
   })?;
   send_message(
       &app_handle,
-      "Targets updated successfully".to_string(),
+      t!("gui.settings.targets_updated").to_string(),
       "info".to_string(),
   );
   Ok(())
@@ -198,7 +199,7 @@ pub fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), 
 
   send_message(
       &app_handle,
-      "IDF versions updated successfully".to_string(),
+      t!("gui.settings.idf_versions_updated").to_string(),
       "info".to_string(),
   );
   Ok(())
@@ -243,7 +244,7 @@ pub fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Strin
 
   send_message(
       &app_handle,
-      "IDF mirror updated successfully".to_string(),
+      t!("gui.settings.idf_mirror_updated").to_string(),
       "info".to_string(),
   );
   Ok(())
@@ -288,7 +289,7 @@ pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Str
 
   send_message(
       &app_handle,
-      "Tools mirror updated successfully".to_string(),
+      t!("gui.settings.tools_mirror_updated").to_string(),
       "info".to_string(),
   );
   Ok(())
@@ -306,8 +307,7 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
         None => {
             send_message(
                 &app_handle,
-                "No IDF versions selected. Please select at least one version to continue."
-                    .to_string(),
+                t!("gui.settings.no_idf_versions_selected").to_string(),
                 "error".to_string(),
             );
             // return false;

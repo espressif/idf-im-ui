@@ -1,15 +1,14 @@
 <template>
   <div class="mirror-select" data-id="mirror-select">
-    <h1 class="title" data-id="mirror-select-title">Select Download Mirrors</h1>
-    <p class="description" data-id="mirror-select-description">Choose mirrors for downloading ESP-IDF and tools. Default
-      mirrors are recommended for users outside mainland China.</p>
+    <h1 class="title" data-id="mirror-select-title">{{ t('mirrorSelect.title') }}</h1>
+    <p class="description" data-id="mirror-select-description">{{ t('mirrorSelect.description') }}</p>
 
     <n-card class="mirrors-card" data-id="mirrors-card">
       <n-spin :show="loading_idfs || loading_tools" data-id="mirrors-loading-spinner">
         <div class="mirrors-grid" data-id="mirrors-grid">
           <!-- IDF Mirror Selection -->
           <div class="mirror-section" data-id="idf-mirror-section">
-            <h3 class="section-title" data-id="idf-section-title">ESP-IDF Repository Mirror</h3>
+            <h3 class="section-title" data-id="idf-section-title">{{ t('mirrorSelect.sections.idfMirror') }}</h3>
             <n-radio-group v-model:value="selected_idf_mirror" class="mirror-options" data-id="idf-mirror-radio-group">
               <div v-for="mirror in idf_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_idf_mirror === mirror.value }"
@@ -19,7 +18,7 @@
                   <div class="mirror-content" :data-id="`idf-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`idf-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
                     <span v-if="isDefaultMirror(mirror.value, 'idf')" class="mirror-tag"
-                      :data-id="`idf-mirror-default-tag-${mirror.value}`">Default</span>
+                      :data-id="`idf-mirror-default-tag-${mirror.value}`">{{ t('mirrorSelect.tags.default') }}</span>
                   </div>
                 </n-radio>
               </div>
@@ -28,7 +27,7 @@
 
           <!-- Tools Mirror Selection -->
           <div class="mirror-section" data-id="tools-mirror-section">
-            <h3 class="section-title" data-id="tools-section-title">ESP-IDF Tools Mirror</h3>
+            <h3 class="section-title" data-id="tools-section-title">{{ t('mirrorSelect.sections.toolsMirror') }}</h3>
             <n-radio-group v-model:value="selected_tools_mirror" class="mirror-options"
               data-id="tools-mirror-radio-group">
               <div v-for="mirror in tools_mirrors" :key="mirror.value" class="mirror-option"
@@ -39,7 +38,7 @@
                   <div class="mirror-content" :data-id="`tools-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`tools-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
                     <span v-if="isDefaultMirror(mirror.value, 'tools')" class="mirror-tag"
-                      :data-id="`tools-mirror-default-tag-${mirror.value}`">Default</span>
+                      :data-id="`tools-mirror-default-tag-${mirror.value}`">{{ t('mirrorSelect.tags.default') }}</span>
                   </div>
                 </n-radio>
               </div>
@@ -50,7 +49,7 @@
         <div class="action-footer" data-id="mirror-action-footer">
           <n-button @click="processChoices" type="error" size="large" :disabled="!canProceed"
             data-id="continue-mirrors-button">
-            Continue with Selected Mirrors
+            {{ t('mirrorSelect.continueButton') }}
           </n-button>
         </div>
       </n-spin>
@@ -60,6 +59,7 @@
 
 <script>
 import { ref } from "vue";
+import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NRadio, NRadioGroup } from 'naive-ui'
 
@@ -71,6 +71,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin, NCard, NRadio, NRadioGroup },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     loading_idfs: true,
     loading_tools: true,
@@ -248,3 +252,4 @@ export default {
   display: none;
 }
 </style>
+

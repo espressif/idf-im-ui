@@ -5,23 +5,22 @@
       <n-spin :show="loading" data-id="python-check-spinner">
         <div v-if="!loading" class="status-content" data-id="python-status-content">
           <n-result :status="python_sane ? 'success' : 'warning'"
-            :title="python_sane ? 'Python Environment Ready' : 'Python Setup Required'"
-            :description="python_sane ? 'Your Python installation meets all requirements' : 'Python 3.10+ with pip, virtualenv, and SSL support is required'"
+            :title="python_sane ? t('pythonSanitycheck.status.ready.title') : t('pythonSanitycheck.status.setupRequired.title')"
+            :description="python_sane ? t('pythonSanitycheck.status.ready.description') : t('pythonSanitycheck.status.setupRequired.description')"
             data-id="python-check-result">
             <template #footer>
               <div class="action-buttons" data-id="python-action-buttons">
                 <div v-if="!python_sane && os === 'windows'" class="install-section" data-id="python-install-section">
                   <n-button @click="install_python" type="warning" :loading="installing_python" :disabled="loading"
                     data-id="install-python-button">
-                    {{ installing_python ? 'Installing Python...' : 'Install Python' }}
+                    {{ installing_python ? t('pythonSanitycheck.actions.installingPython') : t('pythonSanitycheck.actions.installPython') }}
                   </n-button>
-                  <p class="install-note" data-id="install-python-note">This will install Python with all required
-                    components</p>
+                  <p class="install-note" data-id="install-python-note">{{ t('pythonSanitycheck.installNote') }}</p>
                 </div>
 
                 <n-button v-if="python_sane" @click="nextstep" type="error" :disabled="loading"
                   data-id="continue-button">
-                  Continue to Next Step
+                  {{ t('pythonSanitycheck.actions.continueNext') }}
                 </n-button>
               </div>
             </template>
@@ -29,16 +28,16 @@
 
           <div v-if="!python_sane && os !== 'windows'" class="manual-instructions"
             data-id="manual-install-instructions">
-            <h3 data-id="manual-install-title">Manual Installation Required</h3>
-            <p data-id="manual-install-intro">Please install:</p>
+            <h3 data-id="manual-install-title">{{ t('pythonSanitycheck.manualInstall.title') }}</h3>
+            <p data-id="manual-install-intro">{{ t('pythonSanitycheck.manualInstall.intro') }}</p>
             <ul data-id="manual-install-requirements">
-              <li data-id="python-requirement">Python 3.10 or later</li>
-              <li data-id="pip-requirement">pip package manager</li>
-              <li data-id="virtualenv-requirement">virtualenv module</li>
-              <li data-id="ssl-requirement">SSL support</li>
+              <li data-id="python-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.python') }}</li>
+              <li data-id="pip-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.pip') }}</li>
+              <li data-id="virtualenv-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.virtualenv') }}</li>
+              <li data-id="ssl-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.ssl') }}</li>
             </ul>
             <n-button @click="check_python_sanity" type="error" data-id="recheck-python-button">
-              Recheck Python Installation
+              {{ t('pythonSanitycheck.actions.recheckInstallation') }}
             </n-button>
           </div>
         </div>
@@ -49,6 +48,7 @@
 
 <script>
 import { ref } from "vue";
+import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
@@ -59,6 +59,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     os: undefined,
     loading: true,
@@ -165,3 +169,4 @@ export default {
   background-color: #E8362D;
 }
 </style>
+

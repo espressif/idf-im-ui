@@ -15,10 +15,8 @@ use log::{debug, info};
 #[cfg(feature = "cli")]
 pub mod cli;
 
-#[cfg(feature = "cli")]
 rust_i18n::i18n!("locales", fallback = "en");
 
-#[cfg(feature = "cli")]
 fn set_locale(locale: &Option<String>) {
     match locale {
         Some(l) => {
@@ -138,6 +136,7 @@ async fn main() {
     }
     #[cfg(not(feature = "cli"))]
     {
+        set_locale(&None);
         gui::run();
     }
     // both GUI and CLI features are enabled

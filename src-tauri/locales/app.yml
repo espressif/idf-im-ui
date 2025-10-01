@@ -35,7 +35,7 @@ python.sanitycheck.ok:
 python.sanitycheck.fail:
   en: Python is missing, or it does not meet the requirements. Please install python3 with pip, venv and ssl support and try again
   cn: Python 缺失或不符合要求。请安装 python3, pip 和 ssl 支持并重试
-pythhon.install.prompt:
+python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 python?
 python.install.success:
@@ -63,8 +63,14 @@ wizard.idf.failure:
   en: Download esp-idf failed
   cn: 下载 esp-idf 失败
 wizard.idf.user_cancelled:
-  en: Canceling the instalation
+  en: Canceling the installation
   cn: 取消安装 ESP-IDF
+wizard.idf.cloning:
+  en: Cloning ESP-IDF
+  cn: 正在克隆 ESP-IDF
+wizard.idf_version.selected:
+  en: "Selected IDF version: %{version}"
+  cn: "已选择 IDF 版本: %{version}"
 wizard.tools.donwload.prompt:
   en: Choose the folder where the tools will be downloaded
   cn: 请选择要下载的工具所在目录
@@ -131,6 +137,9 @@ wizard.select_target.prompt:
 wizard.select_target.prompt.failure:
   en: We were unable to fetch available targets
   cn: 无法获取可用的目标平台
+wizard.target.selected:
+  en: "Selected target: %{target}"
+  cn: "已选择目标: %{target}"
 wizard.select_idf_version.prompt:
   en: Please select the desired ESP-IDF version
   cn: 请选择要使用的 ESP-IDF 版本
@@ -152,9 +161,6 @@ wizard.tool_file.present:
 wizard.tool_file.missing:
   en: The checksum does not match or the file was not available.
   cn: 校验不通过或文件不可用
-wizard.tool.downloaded:
-  en: Downloaded
-  cn: 已下载
 wizard.tool.download_failed:
   en: Download failed
   cn: 下载失败
@@ -167,12 +173,18 @@ wizard.tool.removed:
 wizard.tool.remove_failed:
   en: Failed to remove the corupted file.
   cn: 无法移除文件
-wizard.tool.extracted:
-  en: extracted tool
-  cn: 已解压工具
 wizard.tool.extract_failed:
   en: Failed to extract the tool
   cn: 解压工具失败
+wizard.tool.download.success:
+  en: "%{filename} successfully downloaded"
+  cn: "%{filename} 下载成功"
+wizard.tool.checksum.success:
+  en: "%{filename} checksum verified"
+  cn: "%{filename} 校验和验证成功"
+wizard.tool.extract.success:
+  en: "Successfully extracted %{filename} to %{dest}"
+  cn: "成功解压 %{filename} 到 %{dest}"
 wizard.after_install.add_to_path.prompt:
   en: Do you want to add ESP-IDF to your PATH permanently?
   cn: 是否要永久加入 ESP-IDF 到 PATH 中?
@@ -197,6 +209,9 @@ wizard.after_install.desktop_shortcut.created:
 wizard.after_install.desktop_shortcut.failed:
   en: Failed to create desktop shortcut
   cn: 创建 desktop 快捷方式失败
+wizard.generic.error:
+  en: "Error: %{error}"
+  cn: "错误: %{error}"
 wizard.posix.finish_steps.line_1:
   en: You have successfully installed ESP-IDF
   cn: 已成功安装 ESP-IDF
@@ -212,9 +227,1014 @@ wizard.posix.finish_steps.line_4:
 wizard.posix.finish_steps.line_5:
   en: source
   cn: source
+wizard.separator.line:
+  en: "==========================================="
+  cn: "==========================================="
 wizard.windows.finish_steps.line_1:
   en: You have successfully installed ESP-IDF
   cn: 已成功安装 ESP-IDF
 wizard.windows.finish_steps.line_2:
   en: the installer placed shortcuts for PowerShell terminal with activated ESP-IDF environment to your desktop
   cn: 安装器将在桌面上放置带有激活 ESP-IDF 环境的 PowerShell 终端快捷方式
+wizard.debug.target.selected:
+  en: "Selected target: %{target}"
+  cn: "已选择目标: %{target}"
+wizard.debug.idf_version.selected:
+  en: "Selected IDF version: %{version}"
+  cn: "已选择 IDF 版本: %{version}"
+wizard.debug.submodule.progress:
+  en: "%{name}: %{progress}"
+  cn: "%{name}: %{progress}"
+wizard.shell.unsupported:
+  en: Unsupported shell
+  cn: 不支持的 shell
+wizard.tool.downloaded:
+  en: "%{filename} downloaded"
+  cn: "%{filename} 已下载"
+wizard.tool.verified:
+  en: "%{filename} verified"
+  cn: "%{filename} 已验证"
+wizard.tool.extracted:
+  en: "%{filename} extracted to %{dest}"
+  cn: "%{filename} 已解压到 %{dest}"
+wizard.prerequisites.offline_install.success:
+  en: Successfully installed prerequisites from offline archive
+  cn: 已成功从离线存档安装依赖项
+wizard.prerequisites.skip_check:
+  en: Skipping prerequisites check as per user request
+  cn: 根据用户请求跳过依赖项检查
+wizard.python.env_installed:
+  en: Python environment installed
+  cn: Python 环境已安装
+wizard.debug.config_entering:
+  en: "Config entering wizard: %{config}"
+  cn: "配置进入向导: %{config}"
+wizard.debug.tools_json_file:
+  en: "Tools json file: %{path}"
+  cn: "工具 JSON 文件: %{path}"
+wizard.debug.ide_config_path:
+  en: "IDE configuration path: %{path}"
+  cn: "IDE 配置路径: %{path}"
+wizard.debug.ide_config_saved:
+  en: IDE configuration saved
+  cn: IDE 配置已保存
+wizard.error.prerequisites_offline_install:
+  en: "Failed to install prerequisites from offline archive: %{error}"
+  cn: "无法从离线存档安装依赖项: %{error}"
+wizard.error.copy_dist_directory:
+  en: "Failed to copy dist directory from offline archive: %{error}"
+  cn: "无法从离线存档复制 dist 目录: %{error}"
+wizard.error.create_python_env:
+  en: "Failed to create Python environment directory: %{error}"
+  cn: "无法创建 Python 环境目录: %{error}"
+wizard.error.create_temp_dir:
+  en: "Failed to create temporary directory"
+  cn: "无法创建临时目录"
+debug.python_sanity_check:
+  en: Python sanity check passed.
+  cn: Python 健全性检查通过。
+debug.using_python:
+  en: "Using Python: %{path}"
+  cn: "使用 Python：%{path}"
+error.path_to_string:
+  en: Unable to convert path to string
+  cn: 无法将路径转换为字符串
+debug.non_interactive_save:
+  en: Saving config in non-interactive mode.
+  cn: 在非交互模式下保存配置。
+debug.skip_save:
+  en: Skipping config save in non-interactive mode.
+  cn: 在非交互模式下跳过保存配置。
+noninteractive.default:
+  en: Non-interactive mode, selecting first available IDF version.
+  cn: 非交互模式，选择第一个可用 IDF 版本。
+gui.running:
+  en: Running GUI...
+  cn: 运行 GUI...
+install.wizard_result:
+  en: "Wizard result: %{r}"
+  cn: "向导结果: %{r}"
+install.success:
+  en: Successfully installed IDF
+  cn: 成功安装了 IDF
+install.ready:
+  en: Now you can start using IDF tools
+  cn: 现在您可以开始使用 IDF 工具了
+list.title:
+  en: Listing installed versions...
+  cn: 正在列出已安装的版本...
+list.no_versions:
+  en: No versions found. Use eim install to install a new ESP-IDF version.
+  cn: 未找到版本。请使用 eim install 安装新的 ESP-IDF 版本。
+list.installed_title:
+  en: "Installed versions:"
+  cn: "已安装的版本:"
+list.version_selected:
+  en: "- %{name} (selected) [%{path}]"
+  cn: "- %{name} (已选) [%{path}]"
+list.version:
+  en: "- %{name} [%{path}]"
+  cn: "- %{name} [%{path}]"
+select.no_versions:
+  en: No versions installed
+  cn: 未安装版本
+select.available_title:
+  en: "Available versions:"
+  cn: "可用版本:"
+select.prompt:
+  en: Which version do you want to select?
+  cn: 您想选择哪个版本?
+select.success:
+  en: "Selected version: %{version}"
+  cn: "已选择版本: %{version}"
+rename.no_versions:
+  en: No versions installed
+  cn: 未安装版本
+rename.prompt:
+  en: Which version do you want to rename?
+  cn: 您想重命名哪个版本?
+rename.new_name_prompt:
+  en: "Enter new name:"
+  cn: "输入新名称:"
+rename.new_name_required:
+  en: you need to enter a new name
+  cn: 您需要输入一个新名称
+rename.using_default:
+  en: No name provided, using default!
+  cn: 未提供名称, 正在使用默认值!
+rename.success:
+  en: Version renamed.
+  cn: 版本已重命名。
+discover.title:
+  en: Discovering available versions... (This can take couple of minutes)
+  cn: 正在发现可用版本... (这可能需要几分钟)
+discover.found:
+  en: "Found IDF directory: %{dir}"
+  cn: "找到 IDF 目录: %{dir}"
+import.using_config:
+  en: "Importing using config file: %{config}"
+  cn: "正在使用配置文件导入: %{config}"
+import.success:
+  en: Config file parsed. eim_idf.json updated.
+  cn: 配置文件已解析。eim_idf.json 已更新。
+import.no_config:
+  en: No config file specified, nothing to import.
+  cn: 未指定配置文件, 没有可导入的内容。
+remove.no_versions:
+  en: No versions installed
+  cn: 未安装版本
+remove.available_title:
+  en: "Available versions:"
+  cn: "可用版本:"
+remove.prompt:
+  en: Which version do you want to remove?
+  cn: 您想删除哪个版本?
+remove.success:
+  en: "Removed version: %{version}"
+  cn: "已删除版本: %{version}"
+purge.title:
+  en: Purging all known IDF installations...
+  cn: 正在清除所有已知的 IDF 安装...
+purge.no_versions:
+  en: No versions installed
+  cn: 未安装版本
+purge.removing:
+  en: "Removing version: %{version}"
+  cn: "正在移除版本: %{version}"
+purge.removed:
+  en: "Removed version: %{version}"
+  cn: "已移除版本: %{version}"
+purge.failed:
+  en: "Failed to remove version %{version}: %{error}"
+  cn: "移除版本 %{version} 失败: %{error}"
+purge.some_failed:
+  en: Some versions failed to remove. Check logs for details.
+  cn: 某些版本移除失败。请查看日志获取详细信息。
+purge.all_success:
+  en: All versions removed successfully.
+  cn: 所有版本已成功移除。
+wizard.title:
+  en: Running IDF Installer Wizard...
+  cn: 正在运行 IDF 安装程序向导...
+fix.invalid_directory:
+  en: "Invalid IDF directory: %{path}"
+  cn: "无效的 IDF 目录: %{path}"
+fix.no_versions:
+  en: No versions installed
+  cn: 未安装版本
+fix.prompt:
+  en: Which version do you want to fix?
+  cn: 您想修复哪个版本?
+fix.no_versions_found:
+  en: No versions found. Use eim install to install a new ESP-IDF version.
+  cn: 未找到版本。请使用 eim install 安装新的 ESP-IDF 版本。
+fix.fixing:
+  en: "Fixing IDF installation at path: %{path}"
+  cn: "正在修复路径为: %{path} 的 IDF 安装"
+fix.result:
+  en: "Fix result: %{r}"
+  cn: "修复结果: %{r}"
+fix.success:
+  en: "Successfully fixed IDF installation at %{path}"
+  cn: "已成功修复路径为 %{path} 的 IDF 安装"
+fix.failed:
+  en: "Failed to fix IDF installation: %{error}"
+  cn: "修复 IDF 安装失败: %{error}"
+fix.ready:
+  en: Now you can start using IDF tools
+  cn: 现在您可以开始使用 IDF 工具了
+drivers.installing:
+  en: Installing drivers...
+  cn: 正在安装驱动程序...
+drivers.failed:
+  en: "Failed to install drivers: %{error}"
+  cn: "安装驱动程序失败: %{error}"
+drivers.success:
+  en: Drivers installed successfully.
+  cn: 驱动程序安装成功。
+drivers.windows_only:
+  en: Driver installation is only supported on Windows.
+  cn: 驱动程序安装仅支持 Windows。
+cli.no_command:
+  en: No command specified, use --help to see available commands
+  cn: 未指定命令, 请使用 --help 查看可用命令
+gui.setup_tools.dir_create_failed:
+  en: "Failed to create download directory: %{error}"
+  cn: "创建下载目录失败: %{error}"
+gui.setup_tools.install_dir_create_failed:
+  en: "Failed to create installation directory: %{error}"
+  cn: "创建安装目录失败: %{error}"
+gui.setup_tools.tools_json_not_found:
+  en: "tools.json file not found at: %{path}"
+  cn: "tools.json 文件未找到，路径: %{path}"
+gui.setup_tools.tools_json_parse_failed:
+  en: "Failed to parse tools.json: %{error}"
+  cn: "解析 tools.json 失败: %{error}"
+gui.setup_tools.installation_starting:
+  en: "Starting development tools installation..."
+  cn: "开始安装开发工具..."
+gui.setup_tools.preparing_tools:
+  en: "Preparing to install %{count} tools"
+  cn: "准备安装 %{count} 个工具"
+gui.setup_tools.downloading:
+  en: "Downloading: %{tool_name}"
+  cn: "正在下载: %{tool_name}"
+gui.setup_tools.tool_progress:
+  en: "Tool %{current}/%{total} - %{percentage}%"
+  cn: "工具 %{current}/%{total} - %{percentage}%"
+gui.setup_tools.preparing:
+  en: "Preparing: %{tool_name}"
+  cn: "正在准备: %{tool_name}"
+gui.setup_tools.starting_tool:
+  en: "Starting tool %{current}/%{total}"
+  cn: "开始工具 %{current}/%{total}"
+gui.setup_tools.starting_download:
+  en: "Starting download: %{tool_name}"
+  cn: "开始下载: %{tool_name}"
+gui.setup_tools.verifying:
+  en: "Verifying: %{tool_name}"
+  cn: "正在验证: %{tool_name}"
+gui.setup_tools.downloaded_tool:
+  en: "Downloaded tool %{current}/%{total}"
+  cn: "已下载工具 %{current}/%{total}"
+gui.setup_tools.downloaded:
+  en: "Downloaded: %{tool_name}"
+  cn: "已下载: %{tool_name}"
+gui.setup_tools.extracting:
+  en: "Extracting: %{tool_name}"
+  cn: "正在解压: %{tool_name}"
+gui.setup_tools.verified_tool:
+  en: "Verified tool %{current}/%{total}"
+  cn: "已验证工具 %{current}/%{total}"
+gui.setup_tools.verified:
+  en: "Verified: %{tool_name}"
+  cn: "已验证: %{tool_name}"
+gui.setup_tools.installed:
+  en: "Installed: %{tool_name}"
+  cn: "已安装: %{tool_name}"
+gui.setup_tools.completed_tools:
+  en: "Completed %{current} of %{total} tools"
+  cn: "已完成 %{current} / %{total} 个工具"
+gui.setup_tools.installed_tool:
+  en: "Installed tool: %{tool_name} (%{current}/%{total})"
+  cn: "已安装工具: %{tool_name} (%{current}/%{total})"
+gui.setup_tools.all_downloaded:
+  en: "All development tools downloaded"
+  cn: "所有开发工具已下载"
+gui.setup_tools.completed_installation:
+  en: "Completed %{count} tools installation"
+  cn: "已完成 %{count} 个工具的安装"
+gui.setup_tools.tool_failed:
+  en: "Tool installation failed: %{tool_name}"
+  cn: "工具安装失败: %{tool_name}"
+gui.setup_tools.tool_error:
+  en: "Tool installation error: %{error}"
+  cn: "工具安装错误: %{error}"
+gui.setup_tools.setup_failed:
+  en: "Failed to setup development tools"
+  cn: "开发工具设置失败"
+gui.setup_tools.idf_path_validation_failed:
+  en: "IDF tools path validation failed"
+  cn: "IDF 工具路径验证失败"
+gui.setup_tools.idf_path_not_exist:
+  en: "IDF tools path does not exist"
+  cn: "IDF 工具路径不存在"
+gui.setup_tools.python_setup_starting:
+  en: "Setting up Python environment..."
+  cn: "正在设置 Python 环境..."
+gui.setup_tools.python_installing:
+  en: "Installing Python dependencies for ESP-IDF"
+  cn: "正在安装 ESP-IDF 的 Python 依赖"
+gui.setup_tools.python_configured:
+  en: "Python environment configured successfully"
+  cn: "Python 环境配置成功"
+gui.setup_tools.python_deps_installed:
+  en: "ESP-IDF Python dependencies installed"
+  cn: "ESP-IDF Python 依赖已安装"
+gui.setup_tools.python_installed:
+  en: "Python environment installed successfully"
+  cn: "Python 环境安装成功"
+gui.setup_tools.python_setup_failed:
+  en: "Python environment setup failed"
+  cn: "Python 环境设置失败"
+gui.setup_tools.configuring_env:
+  en: "Configuring environment variables..."
+  cn: "正在配置环境变量..."
+gui.setup_tools.configuring_dev_env:
+  en: "Setting up ESP-IDF development environment"
+  cn: "正在设置 ESP-IDF 开发环境"
+gui.setup_tools.setup_completed:
+  en: "Tools setup completed successfully"
+  cn: "工具设置成功完成"
+gui.setup_tools.unknown_tool:
+  en: "Unknown tool"
+  cn: "未知工具"
+gui.system_dependencies.error_checking_prerequisites:
+  en: "Error checking prerequisites: %{error}"
+  cn: "检查前置条件时出错: %{error}"
+gui.system_dependencies.error_installing_prerequisites:
+  en: "Error installing prerequisites: %{error}"
+  cn: "安装前置条件时出错: %{error}"
+gui.system_dependencies.python_sanity_check_failed:
+  en: "Python sanity check failed: %{error}"
+  cn: "Python 健全性检查失败: %{error}"
+gui.system_dependencies.error_installing_python:
+  en: "Error installing python: %{error}"
+  cn: "安装 Python 时出错: %{error}"
+gui.settings.failed_to_load:
+  en: "Failed to load settings from file: %{path}"
+  cn: "从文件加载设置失败: %{path}"
+gui.settings.loaded_successfully:
+  en: "Settings loaded from %{path}"
+  cn: "设置已从 %{path} 加载"
+gui.settings.save_config_error:
+  en: "Installation config can not be saved. Please try again later."
+  cn: "无法保存安装配置。请稍后再试。"
+gui.settings.failed_to_set_installation_path:
+  en: "Failed to set installation path: %{error}"
+  cn: "设置安装路径失败: %{error}"
+gui.settings.installation_path_updated:
+  en: "Installation path updated successfully"
+  cn: "安装路径更新成功"
+gui.settings.targets_updated:
+  en: "Targets updated successfully"
+  cn: "目标更新成功"
+gui.settings.idf_versions_updated:
+  en: "IDF versions updated successfully"
+  cn: "IDF 版本更新成功"
+gui.settings.idf_mirror_updated:
+  en: "IDF mirror updated successfully"
+  cn: "IDF 镜像更新成功"
+gui.settings.tools_mirror_updated:
+  en: "Tools mirror updated successfully"
+  cn: "工具镜像更新成功"
+gui.settings.no_idf_versions_selected:
+  en: "No IDF versions selected. Please select at least one version to continue."
+  cn: "未选择 IDF 版本。请至少选择一个版本以继续。"
+gui.installation.folder_created:
+  en: "IDF installation folder created at: %{path}"
+  cn: "IDF 安装文件夹已创建于: %{path}"
+gui.installation.download_starting:
+  en: "Starting ESP-IDF %{version} download..."
+  cn: "开始下载 ESP-IDF %{version}..."
+gui.installation.download_preparing:
+  en: "Preparing to clone repository"
+  cn: "准备克隆仓库"
+gui.installation.cloning_repository:
+  en: "Cloning ESP-IDF %{version} repository"
+  cn: "正在克隆 ESP-IDF %{version} 仓库"
+gui.installation.repository_progress:
+  en: "Repository: %{percentage}%"
+  cn: "仓库: %{percentage}%"
+gui.installation.downloading_submodule:
+  en: "Downloading submodule: %{name}"
+  cn: "正在下载子模块: %{name}"
+gui.installation.submodule_detail:
+  en: "Submodule %{current}/%{total} (est.) - %{percentage}%"
+  cn: "子模块 %{current}/%{total} (预计) - %{percentage}%"
+gui.installation.completed_submodule:
+  en: "Completed submodule: %{name}"
+  cn: "已完成子模块: %{name}"
+gui.installation.submodule_progress:
+  en: "Progress: %{completed}/%{total} submodules"
+  cn: "进度: %{completed}/%{total} 个子模块"
+gui.installation.submodule_completed_log:
+  en: "Submodule '%{name}' completed (%{completed}/%{total})"
+  cn: "子模块 '%{name}' 已完成 (%{completed}/%{total})"
+gui.installation.download_completed_no_submodules:
+  en: "ESP-IDF download completed (no submodules)"
+  cn: "ESP-IDF 下载完成 (无子模块)"
+gui.installation.repository_cloned:
+  en: "Repository cloned successfully"
+  cn: "仓库克隆成功"
+gui.installation.download_completed:
+  en: "ESP-IDF download completed"
+  cn: "ESP-IDF 下载完成"
+gui.installation.repository_and_submodules:
+  en: "Repository and %{count} submodules ready"
+  cn: "仓库和 %{count} 个子模块已就绪"
+gui.installation.main_cloned_waiting:
+  en: "Main repository cloned, preparing submodules..."
+  cn: "主仓库已克隆，正在准备子模块..."
+gui.installation.waiting_submodules:
+  en: "Waiting for submodule updates"
+  cn: "等待子模块更新"
+gui.installation.submodules_processed:
+  en: "Repository and %{count} submodules processed"
+  cn: "仓库和 %{count} 个子模块已处理"
+gui.installation.ready_for_tools:
+  en: "ESP-IDF %{version} ready for tools installation"
+  cn: "ESP-IDF %{version} 已准备好安装工具"
+gui.installation.location:
+  en: "Location: %{path}"
+  cn: "位置: %{path}"
+gui.installation.downloaded_successfully:
+  en: "ESP-IDF %{version} downloaded successfully: %{path}"
+  cn: "ESP-IDF %{version} 下载成功: %{path}"
+gui.installation.download_failed:
+  en: "Failed to download ESP-IDF %{version}"
+  cn: "下载 ESP-IDF %{version} 失败"
+gui.installation.using_existing:
+  en: "Using existing IDF directory: %{path}"
+  cn: "使用现有的 IDF 目录: %{path}"
+gui.installation.cloning_from_mirror:
+  en: "Cloning ESP-IDF %{version} repository from %{mirror}"
+  cn: "从 %{mirror} 克隆 ESP-IDF %{version} 仓库"
+gui.installation.default_mirror:
+  en: "default mirror"
+  cn: "默认镜像"
+gui.installation.path_not_available:
+  en: "Installation path not available"
+  cn: "安装路径不可用"
+gui.installation.path_detail:
+  en: "Path: %{path}"
+  cn: "路径: %{path}"
+gui.installation.config_save_failed:
+  en: "Failed to save temporary configuration"
+  cn: "保存临时配置失败"
+gui.installation.starting_process:
+  en: "Starting installation process..."
+  cn: "启动安装进程..."
+gui.installation.launching_subprocess:
+  en: "Launching installer subprocess"
+  cn: "启动安装子进程"
+gui.installation.starting_separate_process:
+  en: "Starting installation in separate process..."
+  cn: "在单独进程中启动安装..."
+gui.installation.installer_process_failed:
+  en: "Failed to start installer process"
+  cn: "启动安装程序进程失败"
+gui.installation.starting_version:
+  en: "Starting ESP-IDF %{version} installation"
+  cn: "开始安装 ESP-IDF %{version}"
+gui.installation.preparing_download:
+  en: "Preparing to download ESP-IDF"
+  cn: "准备下载 ESP-IDF"
+gui.installation.checking_prerequisites:
+  en: "Checking prerequisites..."
+  cn: "检查先决条件..."
+gui.installation.verifying_requirements:
+  en: "Verifying system requirements"
+  cn: "验证系统要求"
+gui.installation.verifying_python:
+  en: "Verifying Python installation..."
+  cn: "验证 Python 安装..."
+gui.installation.checking_python:
+  en: "Checking Python environment"
+  cn: "检查 Python 环境"
+gui.installation.downloading_repository:
+  en: "Downloading ESP-IDF repository..."
+  cn: "正在下载 ESP-IDF 仓库..."
+gui.installation.cloning_main:
+  en: "Cloning main repository"
+  cn: "正在克隆主仓库"
+gui.installation.downloading_submodules:
+  en: "Downloading submodules..."
+  cn: "正在下载子模块..."
+gui.installation.processing_submodules:
+  en: "Processing ESP-IDF submodules"
+  cn: "正在处理 ESP-IDF 子模块"
+gui.installation.installing_tools:
+  en: "Installing %{count} development tools..."
+  cn: "正在安装 %{count} 个开发工具..."
+gui.installation.preparing_tools:
+  en: "Preparing tools installation"
+  cn: "准备工具安装"
+gui.installation.downloading_tool:
+  en: "Downloading: %{name}"
+  cn: "正在下载: %{name}"
+gui.installation.tool_number:
+  en: "Tool %{number}"
+  cn: "工具 %{number}"
+gui.installation.installed_tool:
+  en: "Installed tool (%{number})"
+  cn: "已安装工具 (%{number})"
+gui.installation.tool_completed:
+  en: "Tool installation completed"
+  cn: "工具安装完成"
+gui.installation.python_environment:
+  en: "Setting up Python environment..."
+  cn: "正在设置 Python 环境..."
+gui.installation.configuring_python:
+  en: "Configuring Python dependencies"
+  cn: "配置 Python 依赖"
+gui.installation.completed_successfully:
+  en: "ESP-IDF installation completed successfully!"
+  cn: "ESP-IDF 安装成功完成!"
+gui.installation.finished:
+  en: "Installation finished"
+  cn: "安装完成"
+gui.installation.process_failed:
+  en: "Installation process failed"
+  cn: "安装进程失败"
+gui.installation.all_completed:
+  en: "Installation completed successfully!"
+  cn: "安装成功完成!"
+gui.installation.all_versions:
+  en: "All ESP-IDF versions installed: %{versions}"
+  cn: "所有 ESP-IDF 版本已安装: %{versions}"
+gui.installation.success_message:
+  en: "Installation process completed successfully"
+  cn: "安装进程成功完成"
+gui.installation.failed_exit_code:
+  en: "Installation failed with exit code: %{code}"
+  cn: "安装失败，退出代码: %{code}"
+gui.installation.process_failed_detail:
+  en: "Installation process failed"
+  cn: "安装进程失败"
+gui.installation.no_versions_selected:
+  en: "No ESP-IDF versions selected"
+  cn: "未选择 ESP-IDF 版本"
+gui.installation.select_version:
+  en: "Please select at least one version to install"
+  cn: "请至少选择一个要安装的版本"
+gui.installation.no_versions_warning:
+  en: "No IDF versions were selected"
+  cn: "未选择 IDF 版本"
+gui.installation.starting_batch:
+  en: "Starting installation of %{count} ESP-IDF version%{plural}"
+  cn: "开始安装 %{count} 个 ESP-IDF 版本"
+gui.installation.versions_list:
+  en: "Versions: %{versions}"
+  cn: "版本: %{versions}"
+gui.installation.batch_log:
+  en: "Starting batch installation of %{count} version(s): %{versions}"
+  cn: "开始批量安装 %{count} 个版本: %{versions}"
+gui.installation.version_detail:
+  en: "Version %{current} of %{total} - %{version}"
+  cn: "版本 %{current}/%{total} - %{version}"
+gui.installation.starting_version_log:
+  en: "Starting installation of ESP-IDF version %{version} (%{current}/%{total})"
+  cn: "开始安装 ESP-IDF 版本 %{version} (%{current}/%{total})"
+gui.installation.version_success:
+  en: "ESP-IDF %{version} installed successfully"
+  cn: "ESP-IDF %{version} 安装成功"
+gui.installation.completed_versions:
+  en: "Completed %{current} of %{total} versions, continuing..."
+  cn: "已完成 %{total} 个版本中的 %{current} 个，继续..."
+gui.installation.version_success_log:
+  en: "ESP-IDF version %{version} installed successfully (%{current}/%{total})"
+  cn: "ESP-IDF 版本 %{version} 安装成功 (%{current}/%{total})"
+gui.installation.version_failed:
+  en: "Failed to install ESP-IDF %{version}"
+  cn: "安装 ESP-IDF %{version} 失败"
+gui.installation.version_failed_log:
+  en: "Failed to install version %{version}: %{error}"
+  cn: "安装版本 %{version} 失败: %{error}"
+gui.installation.failed_for_version:
+  en: "Installation failed for version %{version}: %{error}"
+  cn: "版本 %{version} 安装失败: %{error}"
+gui.installation.configuring_environment:
+  en: "Configuring development environment..."
+  cn: "正在配置开发环境..."
+gui.installation.saving_config:
+  en: "Saving IDE configuration"
+  cn: "保存 IDE 配置"
+gui.installation.config_saved:
+  en: "IDE configuration saved successfully"
+  cn: "IDE 配置保存成功"
+gui.installation.config_saved_to:
+  en: "Configuration saved to: %{path}"
+  cn: "配置已保存到: %{path}"
+gui.installation.ide_json_saved:
+  en: "IDE JSON file saved to: %{path}"
+  cn: "IDE JSON 文件已保存到: %{path}"
+gui.installation.config_save_warning:
+  en: "Warning: IDE configuration save failed"
+  cn: "警告: IDE 配置保存失败"
+gui.installation.ide_json_failed:
+  en: "Failed to save IDE JSON file: %{error}"
+  cn: "保存 IDE JSON 文件失败: %{error}"
+gui.installation.finalizing:
+  en: "Finalizing installation..."
+  cn: "正在完成安装..."
+gui.installation.completing_setup:
+  en: "Completing setup process"
+  cn: "完成设置进程"
+gui.installation.all_versions_success:
+  en: "All %{count} ESP-IDF version%{plural} installed successfully!"
+  cn: "所有 %{count} 个 ESP-IDF 版本安装成功!"
+gui.installation.completed_list:
+  en: "Completed installation of: %{versions}"
+  cn: "完成安装: %{versions}"
+gui.installation.batch_completed:
+  en: "Batch installation completed successfully - %{count} version(s) installed"
+  cn: "批量安装成功完成 - 已安装 %{count} 个版本"
+gui.simple_setup.starting:
+  en: "Starting installation..."
+  cn: "启动安装..."
+gui.simple_setup.installing_prerequisites:
+  en: "Installing prerequisites..."
+  cn: "正在安装先决条件..."
+gui.simple_setup.missing:
+  en: "Missing: %{items}"
+  cn: "缺少: %{items}"
+gui.simple_setup.prerequisites_failed:
+  en: "Failed to install prerequisites"
+  cn: "安装先决条件失败"
+gui.simple_setup.prerequisites_missing:
+  en: "Prerequisites missing"
+  cn: "缺少先决条件"
+gui.simple_setup.please_install:
+  en: "Please install: %{items}"
+  cn: "请安装: %{items}"
+gui.simple_setup.prerequisites_verified:
+  en: "Prerequisites verified"
+  cn: "先决条件已验证"
+gui.simple_setup.installing_python:
+  en: "Installing Python..."
+  cn: "正在安装 Python..."
+gui.simple_setup.python_failed:
+  en: "Failed to install Python"
+  cn: "安装 Python 失败"
+gui.simple_setup.python_install_failed:
+  en: "Python installation failed"
+  cn: "Python 安装失败"
+gui.simple_setup.python_not_found:
+  en: "Python not found"
+  cn: "未找到 Python"
+gui.simple_setup.install_python_manually:
+  en: "Please install Python 3.11 manually"
+  cn: "请手动安装 Python 3.11"
+gui.simple_setup.python_ready:
+  en: "Python environment ready"
+  cn: "Python 环境已就绪"
+gui.simple_setup.fetching_versions:
+  en: "Fetching available ESP-IDF versions..."
+  cn: "正在获取可用的 ESP-IDF 版本..."
+gui.simple_setup.fetch_failed:
+  en: "Failed to fetch ESP-IDF versions"
+  cn: "获取 ESP-IDF 版本失败"
+gui.simple_setup.retrieve_failed:
+  en: "Could not retrieve version list from server"
+  cn: "无法从服务器检索版本列表"
+gui.simple_setup.version_selected:
+  en: "Selected ESP-IDF version: %{version}"
+  cn: "已选择 ESP-IDF 版本: %{version}"
+gui.simple_setup.version_selected_event:
+  en: "ESP-IDF %{version} selected"
+  cn: "已选择 ESP-IDF %{version}"
+gui.simple_setup.config_failed:
+  en: "Failed to configure ESP-IDF version"
+  cn: "配置 ESP-IDF 版本失败"
+gui.simple_setup.starting_installation:
+  en: "Starting ESP-IDF installation..."
+  cn: "开始 ESP-IDF 安装..."
+gui.fix.checking_installation:
+  en: "Checking installation to repair..."
+  cn: "检查要修复的安装..."
+gui.fix.looking_up:
+  en: "Looking up installation ID: %{id}"
+  cn: "查找安装 ID: %{id}"
+gui.fix.starting_repair:
+  en: "Starting repair process for installation: %{id}"
+  cn: "开始修复安装的进程: %{id}"
+gui.fix.found_installation:
+  en: "Found installation: ESP-IDF %{name}"
+  cn: "找到安装: ESP-IDF %{name}"
+gui.fix.found_at:
+  en: "Found installation %{name} at: %{path}"
+  cn: "找到安装 %{name} 于: %{path}"
+gui.fix.not_found:
+  en: "Installation not found"
+  cn: "未找到安装"
+gui.fix.not_found_detail:
+  en: "Installation with ID %{id} not found"
+  cn: "未找到 ID 为 %{id} 的安装"
+gui.fix.preparing_config:
+  en: "Preparing repair configuration..."
+  cn: "正在准备修复配置..."
+gui.fix.setting_up:
+  en: "Setting up installation parameters"
+  cn: "设置安装参数"
+gui.fix.config_prepared:
+  en: "Configuration prepared successfully"
+  cn: "配置准备成功"
+gui.fix.ready_to_repair:
+  en: "Ready to begin repair process"
+  cn: "准备开始修复进程"
+gui.fix.config_prepared_log:
+  en: "Repair configuration prepared successfully"
+  cn: "修复配置准备成功"
+gui.fix.prepare_failed:
+  en: "Failed to prepare repair configuration"
+  cn: "准备修复配置失败"
+gui.fix.prepare_failed_detail:
+  en: "Failed to prepare settings for repair: %{error}"
+  cn: "准备修复设置失败: %{error}"
+gui.fix.starting_repair_version:
+  en: "Starting ESP-IDF %{version} repair..."
+  cn: "开始修复 ESP-IDF %{version}..."
+gui.fix.beginning_reinstall:
+  en: "Beginning reinstallation process"
+  cn: "开始重新安装进程"
+gui.fix.starting_repair_log:
+  en: "Starting repair installation for ESP-IDF %{version}"
+  cn: "开始修复安装 ESP-IDF %{version}"
+gui.fix.repair_success:
+  en: "Successfully repaired ESP-IDF %{version} installation"
+  cn: "成功修复 ESP-IDF %{version} 安装"
+gui.fix.repair_failed:
+  en: "ESP-IDF %{version} repair failed"
+  cn: "ESP-IDF %{version} 修复失败"
+gui.fix.repair_failed_detail:
+  en: "Failed to repair installation: %{error}"
+  cn: "修复安装失败: %{error}"
+gui.fix.updating_config:
+  en: "Updating IDE configuration..."
+  cn: "正在更新 IDE 配置..."
+gui.fix.saving_info:
+  en: "Saving installation information"
+  cn: "保存安装信息"
+gui.fix.config_updated:
+  en: "IDE configuration already updated"
+  cn: "IDE 配置已更新"
+gui.fix.found_in_config:
+  en: "Installation found in configuration"
+  cn: "在配置中找到安装"
+gui.fix.config_saved_success:
+  en: "IDE configuration saved successfully"
+  cn: "IDE 配置保存成功"
+gui.fix.ide_json_updated:
+  en: "IDE JSON file updated at: %{path}"
+  cn: "IDE JSON 文件已更新于: %{path}"
+gui.fix.config_save_warning:
+  en: "Warning: IDE configuration save failed"
+  cn: "警告: IDE 配置保存失败"
+gui.fix.repair_completed:
+  en: "ESP-IDF %{version} repair completed successfully!"
+  cn: "ESP-IDF %{version} 修复成功完成!"
+gui.fix.repaired_at:
+  en: "Installation repaired at: %{path}"
+  cn: "安装已修复于: %{path}"
+gui.fix.completed_log:
+  en: "Repair process completed successfully for ESP-IDF %{version}"
+  cn: "ESP-IDF %{version} 修复进程成功完成"
+gui.offline.no_archives:
+  en: "No archives provided for offline installation"
+  cn: "未提供离线安装的存档"
+gui.offline.select_archive:
+  en: "Please select at least one archive file"
+  cn: "请至少选择一个存档文件"
+gui.offline.starting:
+  en: "Starting offline installation..."
+  cn: "开始离线安装..."
+gui.offline.processing_archives:
+  en: "Processing %{count} archive(s)"
+  cn: "正在处理 %{count} 个存档"
+gui.offline.starting_log:
+  en: "Starting offline installation with %{count} archive(s)"
+  cn: "使用 %{count} 个存档开始离线安装"
+gui.offline.validating_archive:
+  en: "Validating archive: %{name}"
+  cn: "正在验证存档: %{name}"
+gui.offline.archive_number:
+  en: "Archive %{current} of %{total}"
+  cn: "存档 %{current}/%{total}"
+gui.offline.archive_not_found:
+  en: "Archive not found"
+  cn: "未找到存档"
+gui.offline.archive_not_exist:
+  en: "Archive file does not exist: %{path}"
+  cn: "存档文件不存在: %{path}"
+gui.offline.validated:
+  en: "Validated archive: %{path}"
+  cn: "已验证存档: %{path}"
+gui.offline.creating_workspace:
+  en: "Creating temporary workspace..."
+  cn: "正在创建临时工作区..."
+gui.offline.preparing_extraction:
+  en: "Preparing for archive extraction"
+  cn: "准备提取存档"
+gui.offline.workspace_failed:
+  en: "Failed to create workspace"
+  cn: "创建工作区失败"
+gui.offline.temp_dir_failed:
+  en: "Failed to create temporary directory: %{error}"
+  cn: "创建临时目录失败: %{error}"
+gui.offline.temp_dir_created:
+  en: "Created temporary directory: %{path}"
+  cn: "已创建临时目录: %{path}"
+gui.offline.configuring_settings:
+  en: "Configuring installation settings..."
+  cn: "正在配置安装设置..."
+gui.offline.preparing_config:
+  en: "Preparing installation configuration"
+  cn: "准备安装配置"
+gui.offline.custom_path:
+  en: "Using custom installation path: %{path}"
+  cn: "使用自定义安装路径: %{path}"
+gui.offline.extracting_archive:
+  en: "Extracting archive: %{name}"
+  cn: "正在提取存档: %{name}"
+gui.offline.processing_contents:
+  en: "Processing offline archive contents"
+  cn: "正在处理离线存档内容"
+gui.offline.extraction_success:
+  en: "Archive extracted and configured successfully"
+  cn: "存档提取和配置成功"
+gui.offline.extraction_failed:
+  en: "Archive extraction failed"
+  cn: "存档提取失败"
+gui.offline.extraction_failed_detail:
+  en: "Failed to use offline archive: %{error}"
+  cn: "使用离线存档失败: %{error}"
+gui.offline.installing_prerequisites:
+  en: "Installing prerequisites..."
+  cn: "正在安装先决条件..."
+gui.offline.installing_windows_components:
+  en: "Installing required Windows components"
+  cn: "正在安装所需的 Windows 组件"
+gui.offline.prerequisites_success:
+  en: "Prerequisites installed successfully from offline archive"
+  cn: "从离线存档成功安装先决条件"
+gui.offline.prerequisites_failed:
+  en: "Prerequisites installation failed"
+  cn: "先决条件安装失败"
+gui.offline.prerequisites_failed_detail:
+  en: "Failed to install prerequisites from offline archive: %{error}"
+  cn: "从离线存档安装先决条件失败: %{error}"
+gui.offline.checking_prerequisites:
+  en: "Checking system prerequisites..."
+  cn: "正在检查系统先决条件..."
+gui.offline.verifying_components:
+  en: "Verifying required system components"
+  cn: "验证所需的系统组件"
+gui.offline.prerequisites_missing:
+  en: "Prerequisites missing"
+  cn: "缺少先决条件"
+gui.offline.missing_prerequisites:
+  en: "Missing prerequisites: %{items}"
+  cn: "缺少先决条件: %{items}"
+gui.offline.python_check_warning:
+  en: "Python sanity check failed: %{error}"
+  cn: "Python 完整性检查失败: %{error}"
+gui.offline.python_check_failed:
+  en: "Python sanity check failed"
+  cn: "Python 完整性检查失败"
+gui.offline.python_not_configured:
+  en: "Python environment is not properly configured"
+  cn: "Python 环境配置不正确"
+gui.offline.prerequisites_verified:
+  en: "All prerequisites verified successfully"
+  cn: "所有先决条件验证成功"
+gui.offline.installing_idf:
+  en: "Installing ESP-IDF from archive..."
+  cn: "从存档安装 ESP-IDF..."
+gui.offline.copying_files:
+  en: "Copying ESP-IDF files to installation directory"
+  cn: "将 ESP-IDF 文件复制到安装目录"
+gui.offline.idf_copy_success:
+  en: "ESP-IDF copied successfully from offline archive"
+  cn: "从离线存档成功复制 ESP-IDF"
+gui.offline.idf_install_failed:
+  en: "ESP-IDF installation failed"
+  cn: "ESP-IDF 安装失败"
+gui.offline.idf_copy_failed:
+  en: "Failed to copy ESP-IDF from offline archive: %{error}"
+  cn: "从离线存档复制 ESP-IDF 失败: %{error}"
+gui.offline.processing_version:
+  en: "Processing ESP-IDF version: %{version}"
+  cn: "正在处理 ESP-IDF 版本: %{version}"
+gui.offline.setting_up_version:
+  en: "Setting up version %{current} of %{total}"
+  cn: "正在设置版本 %{current}/%{total}"
+gui.offline.version_paths_configured:
+  en: "Version paths configured for %{version}: %{path}"
+  cn: "版本 %{version} 的路径已配置: %{path}"
+gui.offline.path_config_failed:
+  en: "Path configuration failed"
+  cn: "路径配置失败"
+gui.offline.path_config_failed_detail:
+  en: "Failed to get version paths: %{error}"
+  cn: "获取版本路径失败: %{error}"
+gui.offline.installing_tools:
+  en: "Installing development tools..."
+  cn: "正在安装开发工具..."
+gui.offline.copying_tools:
+  en: "Copying tools from offline archive"
+  cn: "从离线存档复制工具"
+gui.offline.tools_copy_success:
+  en: "Development tools copied successfully"
+  cn: "开发工具复制成功"
+gui.offline.tools_install_failed:
+  en: "Tools installation failed"
+  cn: "工具安装失败"
+gui.offline.tools_copy_failed:
+  en: "Failed to copy tool directory: %{error}"
+  cn: "复制工具目录失败: %{error}"
+gui.offline.configuring_tools:
+  en: "Configuring development tools..."
+  cn: "正在配置开发工具..."
+gui.offline.setting_up_environment:
+  en: "Setting up tool environment"
+  cn: "设置工具环境"
+gui.offline.tools_configured:
+  en: "Development tools configured successfully"
+  cn: "开发工具配置成功"
+gui.offline.tools_config_failed:
+  en: "Tools configuration failed"
+  cn: "工具配置失败"
+gui.offline.tools_setup_failed:
+  en: "Failed to setup tools: %{error}"
+  cn: "设置工具失败: %{error}"
+gui.offline.setting_up_python:
+  en: "Setting up Python environment..."
+  cn: "正在设置 Python 环境..."
+gui.offline.installing_python_deps:
+  en: "Installing Python dependencies"
+  cn: "正在安装 Python 依赖"
+gui.offline.python_install_success:
+  en: "Python environment installed successfully"
+  cn: "Python 环境安装成功"
+gui.offline.python_install_failed:
+  en: "Python environment installation failed"
+  cn: "Python 环境安装失败"
+gui.offline.python_install_failed_detail:
+  en: "Failed to install Python environment: %{error}"
+  cn: "安装 Python 环境失败: %{error}"
+gui.offline.finalizing:
+  en: "Finalizing installation..."
+  cn: "正在完成安装..."
+gui.offline.completing_setup:
+  en: "Completing setup and configuration"
+  cn: "完成设置和配置"
+gui.offline.version_configured:
+  en: "ESP-IDF version %{version} configured successfully"
+  cn: "ESP-IDF 版本 %{version} 配置成功"
+gui.offline.saving_ide_config:
+  en: "Saving IDE configuration..."
+  cn: "正在保存 IDE 配置..."
+gui.offline.updating_settings:
+  en: "Updating development environment settings"
+  cn: "更新开发环境设置"
+gui.offline.ide_dir_created:
+  en: "IDE configuration directory created"
+  cn: "IDE 配置目录已创建"
+gui.offline.ide_config_failed:
+  en: "IDE configuration failed"
+  cn: "IDE 配置失败"
+gui.offline.ide_dir_failed:
+  en: "Failed to create IDE configuration directory: %{error}"
+  cn: "创建 IDE 配置目录失败: %{error}"
+gui.offline.ide_config_saved:
+  en: "IDE configuration saved successfully"
+  cn: "IDE 配置保存成功"
+gui.offline.ide_config_save_failed:
+  en: "IDE configuration save failed"
+  cn: "IDE 配置保存失败"
+gui.offline.ide_config_save_failed_detail:
+  en: "Failed to save IDE configuration: %{error}"
+  cn: "保存 IDE 配置失败: %{error}"
+gui.offline.archive_processed:
+  en: "Archive %{name} processed successfully (%{current}/%{total})"
+  cn: "存档 %{name} 处理成功 (%{current}/%{total})"
+gui.offline.completed:
+  en: "Offline installation completed successfully!"
+  cn: "离线安装成功完成!"
+gui.offline.processed_archives:
+  en: "Processed %{count} archive(s)"
+  cn: "已处理 %{count} 个存档"
+gui.offline.all_completed:
+  en: "All offline installations completed successfully"
+  cn: "所有离线安装成功完成"

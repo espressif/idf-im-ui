@@ -24,7 +24,7 @@
         <div class="progress-details" v-if="showDetails">
           <span class="progress-status">{{ statusText }}</span>
           <span class="progress-time" v-if="estimatedTime">
-            Est. time remaining: {{ estimatedTime }}
+            {{ $t('progress.estimatedTime', { time: estimatedTime }) }}
           </span>
         </div>
       </div>
@@ -46,6 +46,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { NSpin, NProgress, NSteps, NStep } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 
@@ -90,7 +91,7 @@ export default {
     // Data props
     initialMessage: {
       type: String,
-      default: 'Processing...'
+      default: 'progress.defaultMessage'
     },
     initialProgress: {
       type: Number,
@@ -113,11 +114,12 @@ export default {
     }
   },
   setup(props) {
+    const { t } = useI18n()
     const currentMessage = ref(props.initialMessage)
     const progressPercentage = ref(props.initialProgress)
     const processing = ref(true)
     const currentStep = ref(0)
-    const statusText = ref('In progress')
+    const statusText = ref(t('progress.status.inProgress'))
     const estimatedTime = ref('')
     const startTime = ref(Date.now())
 
@@ -170,101 +172,86 @@ export default {
     }
 
     const startListening = async () => {
-  unlisten = await listen(props.eventChannel, (event) => {
-    // Handle new InstallationProgress structure
-    if (props.eventChannel === 'installation-progress') {
-      const { stage, percentage, message, detail, version } = event.payload
+      unlisten = await listen(props.eventChannel, (event) => {
+        if (props.eventChannel === 'installation-progress') {
+          const { stage, percentage, message, detail, version } = event.payload
 
-      // Update message
-      if (message) {
-        currentMessage.value = message
-        if (detail) {
-          currentMessage.value += ` - ${detail}`
+          if (message) {
+            currentMessage.value = message
+            if (detail) {
+              currentMessage.value += ` - ${detail}`
+            }
+          } else if (stage) {
+            currentMessage.value = t(`progress.stages.${stage}`)
+          }
+
+          if (percentage !== undefined) {
+            progressPercentage.value = Math.min(100, Math.max(0, percentage))
+            updateEstimatedTime()
+          }
+
+          const stageMapping = {
+            'checking': { status: 'inProgress', step: 0 },
+            'prerequisites': { status: 'inProgress', step: 1 },
+            'download': { status: 'inProgress', step: 2 },
+            'extract': { status: 'inProgress', step: 3 },
+            'tools': { status: 'inProgress', step: 4 },
+            'python': { status: 'inProgress', step: 5 },
+            'configure': { status: 'inProgress', step: 6 },
+            'complete': { status: 'completed', step: 7 },
+            'error': { status: 'failed', step: currentStep.value }
+          }
+
+          if (stageMapping[stage]) {
+            const { status, step } = stageMapping[stage]
+
+            // Update status using translations
+            statusText.value = t(`progress.status.${status}`)
+            processing.value = status === 'inProgress'
+
+            // Update step
+            if (step !== undefined && props.steps.length > 0) {
+              currentStep.value = Math.min(step, props.steps.length - 1)
+            }
+          }
+        } else {
+          // Legacy format handling
+          const { message, percentage, status, step } = event.payload
+
+          if (message !== undefined) {
+            currentMessage.value = message
+          }
+
+          if (percentage !== undefined) {
+            progressPercentage.value = Math.min(100, Math.max(0, percentage))
+            updateEstimatedTime()
+          }
+
+          if (status !== undefined) {
+            switch (status) {
+              case 'success':
+                statusText.value = t('progress.status.completed')
+                processing.value = false
+                progressPercentage.value = 100
+                break
+              case 'error':
+                statusText.value = t('progress.status.failed')
+                processing.value = false
+                break
+              case 'warning':
+                statusText.value = t('progress.status.warning')
+                break
+              default:
+                statusText.value = status
+            }
+          }
+
+          if (step !== undefined && props.steps.length > 0) {
+            currentStep.value = Math.min(step, props.steps.length - 1)
+          }
         }
-      }
-
-      // Update percentage
-      if (percentage !== undefined) {
-        progressPercentage.value = Math.min(100, Math.max(0, percentage))
-        updateEstimatedTime()
-      }
-
-      // Map stage to status and step
-      const stageMapping = {
-        'checking': { status: 'processing', step: 0 },
-        'prerequisites': { status: 'processing', step: 1 },
-        'download': { status: 'processing', step: 2 },
-        'extract': { status: 'processing', step: 3 },
-        'tools': { status: 'processing', step: 4 },
-        'python': { status: 'processing', step: 5 },
-        'configure': { status: 'processing', step: 6 },
-        'complete': { status: 'success', step: 7 },
-        'error': { status: 'error', step: currentStep.value }
-      }
-
-      if (stageMapping[stage]) {
-        const { status, step } = stageMapping[stage]
-
-        // Update status
-        switch (status) {
-          case 'success':
-            statusText.value = 'Completed'
-            processing.value = false
-            break
-          case 'error':
-            statusText.value = 'Failed'
-            processing.value = false
-            break
-          case 'processing':
-            statusText.value = 'In progress'
-            processing.value = true
-            break
-        }
-
-        // Update step
-        if (step !== undefined && props.steps.length > 0) {
-          currentStep.value = Math.min(step, props.steps.length - 1)
-        }
-      }
+      })
     }
-    // Handle legacy format (for backwards compatibility)
-    else {
-      const { message, percentage, status, step } = event.payload
-
-      if (message !== undefined) {
-        currentMessage.value = message
-      }
-
-      if (percentage !== undefined) {
-        progressPercentage.value = Math.min(100, Math.max(0, percentage))
-        updateEstimatedTime()
-      }
-
-      if (status !== undefined) {
-        switch (status) {
-          case 'success':
-            statusText.value = 'Completed'
-            processing.value = false
-            progressPercentage.value = 100
-            break
-          case 'error':
-            statusText.value = 'Failed'
-            processing.value = false
-            break
-          case 'warning':
-            statusText.value = 'Warning'
-            break
-          default:
-            statusText.value = status
-        }
-      }
-
-      if (step !== undefined && props.steps.length > 0) {
-        currentStep.value = Math.min(step, props.steps.length - 1)
-      }
-    }
-  })
-}
 
     onMounted(() => {
       startListening()

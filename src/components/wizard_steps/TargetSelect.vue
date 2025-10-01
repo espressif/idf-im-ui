@@ -1,14 +1,14 @@
 <template>
   <div class="target-select" data-id="target-select">
-    <h1 class="title" data-id="target-select-title">Select Target Chips</h1>
-    <p class="description" data-id="target-select-description">Choose the ESP chips you'll be developing for:</p>
-    <p class="description" data-id="target-select-description-second-line">If you are not sure, you can consult our <a
+    <h1 class="title" data-id="target-select-title">{{ t('targetSelect.title') }}</h1>
+    <p class="description" data-id="target-select-description">{{ t('targetSelect.description') }}</p>
+    <p class="description" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
         href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
-        target="_blank">Product Selector</a></p>
+        target="_blank">{{ t('targetSelect.productSelector') }}Product Selector</a></p>
     <div class="selection_header">
-      Target Chips:
+      {{ t('targetSelect.targetChips') }}
       <span @click="clickOnAll">
-        All
+        {{ t('targetSelect.all') }}
         <n-checkbox :checked="all" id="select_all_targets" size="large"></n-checkbox>
       </span>
     </div>
@@ -32,7 +32,7 @@
         <div class="action-footer" data-id="target-action-footer">
           <n-button @click="processTargets" type="error" size="large" :disabled="!hasSelectedTargets"
             data-id="continue-targets-button">
-            Continue with Selected Targets
+            {{ t('targetSelect.continueButton') }}
           </n-button>
         </div>
       </n-spin>
@@ -42,6 +42,7 @@
 
 <script>
 import { ref } from "vue";
+import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NCheckbox } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
@@ -52,6 +53,10 @@ export default {
     nextstep: Function
   },
   components: { NButton, NSpin, NCard, NCheckbox },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data: () => ({
     loading: true,
     targets: [],

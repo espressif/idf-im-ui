@@ -28,7 +28,7 @@ pub async fn select_idf_version(
     };
     avalible_versions.push("master".to_string());
     if non_interactive {
-        debug!("Non-interactive mode, selecting first available IDF version.");
+        debug!("{}", t!("noninteractive.default"));
         Ok(vec![avalible_versions.first().unwrap().clone()])
     } else {
         first_defaulted_multiselect("wizard.select_idf_version.prompt", &avalible_versions)
@@ -116,7 +116,7 @@ fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
         }
     }
     if all_ok {
-        debug!("Python sanity check passed.");
+        debug!("{}", t!("debug.python_sanity_check"));
         Ok(())
     } else {
         Err(t!("python.sanitycheck.fail").to_string())
@@ -154,11 +154,11 @@ pub fn check_and_install_python(
                         python_path
                             .to_str()
                             .map(|s| s.to_string())
-                            .ok_or_else(|| "Unable to convert path to string".to_string())?
+                            .ok_or_else(|| t!("error.path_to_string").to_string())?
                     }
                     None => "python3.exe".to_string(),
                 };
-                debug!("Using Python: {}", usable_python);
+                debug!("{}", t!("debug.using_python", path = usable_python));
                 match run_with_spinner(|| python_sanity_check(Some(&usable_python))) {
                     Ok(_) => info!("{}", t!("python.install.success")),
                     Err(err) => return Err(format!("{} {:?}", t!("python.install.failure"), err)),
@@ -233,10 +233,10 @@ pub fn select_installation_path(mut config: Settings) -> Result<Settings, String
 pub fn save_config_if_desired(config: &Settings) -> Result<(), String> {
     let res =
         if config.non_interactive.unwrap_or_default() && config.config_file_save_path.is_some() {
-            debug!("Saving config in non-interactive mode.");
+            debug!("{}", t!("debug.non_interactive_save"));
             Ok(true)
         } else if config.non_interactive.unwrap_or_default() {
-            debug!("Skipping config save in non-interactive mode.");
+            debug!("{}", t!("debug.skip_save"));
             Ok(false)
         } else {
             generic_confirm_with_default("wizard.after_install.save_config.prompt", true)

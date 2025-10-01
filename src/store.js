@@ -22,10 +22,10 @@ export const useAppStore = defineStore("app", {
     currentInstallation: {
       version: null,
       path: null,
-      status: "idle", // idle, downloading, installing, complete, error
+      status: "store.installation.status.idle",
       progress: 0,
       message: "",
-      tools: []
+      tools: [],
     },
 
     // Configuration
@@ -33,8 +33,8 @@ export const useAppStore = defineStore("app", {
       path: null,
       versions: [],
       tools: [],
-      options: {}
-    }
+      options: {},
+    },
   }),
 
   getters: {
@@ -44,9 +44,12 @@ export const useAppStore = defineStore("app", {
     isMac: (state) => state.os === "macos",
     isLinux: (state) => state.os === "linux",
     installationInProgress: (state) =>
-      ["downloading", "installing"].includes(state.currentInstallation.status),
+      [
+        "store.installation.status.downloading",
+        "store.installation.status.installing",
+      ].includes(state.currentInstallation.status),
     canInstall: (state) =>
-      state.prerequisitesInstalled || state.os === "windows"
+      state.prerequisitesInstalled || state.os === "windows",
   },
 
   actions: {
@@ -65,15 +68,17 @@ export const useAppStore = defineStore("app", {
     },
 
     removeInstalledVersion(versionId) {
-      this.installedVersions = this.installedVersions.filter(v => v.id !== versionId);
+      this.installedVersions = this.installedVersions.filter(
+        (v) => v.id !== versionId
+      );
     },
 
     updateInstalledVersion(versionId, updates) {
-      const index = this.installedVersions.findIndex(v => v.id === versionId);
+      const index = this.installedVersions.findIndex((v) => v.id === versionId);
       if (index !== -1) {
         this.installedVersions[index] = {
           ...this.installedVersions[index],
-          ...updates
+          ...updates,
         };
       }
     },
@@ -90,7 +95,7 @@ export const useAppStore = defineStore("app", {
     updateInstallationStatus(status) {
       this.currentInstallation = {
         ...this.currentInstallation,
-        ...status
+        ...status,
       };
     },
 
@@ -98,22 +103,23 @@ export const useAppStore = defineStore("app", {
       this.currentInstallation = {
         version: null,
         path: null,
-        status: "idle",
+        status: "store.installation.status.idle",
         progress: 0,
         message: "",
-        tools: []
+        tools: [],
       };
     },
 
     setAppSettings(settings) {
       if (settings.firstRun !== undefined) this.firstRun = settings.firstRun;
-      if (settings.skipWelcome !== undefined) this.skipWelcome = settings.skipWelcome;
+      if (settings.skipWelcome !== undefined)
+        this.skipWelcome = settings.skipWelcome;
       if (settings.theme !== undefined) this.theme = settings.theme;
     },
 
     setDefaultConfig(config) {
       this.defaultConfig = config;
-    }
+    },
   },
 
   persist: {
@@ -122,10 +128,10 @@ export const useAppStore = defineStore("app", {
       {
         key: "esp-idf-installer-settings",
         storage: localStorage,
-        paths: ["firstRun", "skipWelcome", "theme"]
-      }
-    ]
-  }
+        paths: ["firstRun", "skipWelcome", "theme"],
+      },
+    ],
+  },
 });
 
 export const useWizardStore = defineStore("wizard", {
@@ -137,7 +143,7 @@ export const useWizardStore = defineStore("wizard", {
       prerequisites: {
         checked: false,
         allInstalled: false,
-        missing: []
+        missing: [],
       },
 
       // Step 2: Installation Path
@@ -166,12 +172,9 @@ export const useWizardStore = defineStore("wizard", {
         createShortcuts: true,
         addToPath: true,
         installExamples: true,
-        enableTelemetry: false
+        enableTelemetry: false,
       },
-
-      // Step 8: Review & Confirm
-      configSummary: null
-    }
+    },
   }),
 
   getters: {
@@ -182,8 +185,10 @@ export const useWizardStore = defineStore("wizard", {
       // Add validation logic for each step
       switch (state.currentStep) {
         case 1:
-          return state.wizardData.prerequisites.allInstalled ||
-                 state.wizardData.prerequisites.checked;
+          return (
+            state.wizardData.prerequisites.allInstalled ||
+            state.wizardData.prerequisites.checked
+          );
         case 2:
           return state.wizardData.installPath !== "";
         case 3:
@@ -191,8 +196,10 @@ export const useWizardStore = defineStore("wizard", {
         case 4:
           return true; // Tools are optional
         case 5:
-          return state.wizardData.useBundledPython ||
-                 state.wizardData.pythonPath !== "";
+          return (
+            state.wizardData.useBundledPython ||
+            state.wizardData.pythonPath !== ""
+          );
         case 6:
           return true; // Mirror is optional
         case 7:
@@ -202,7 +209,7 @@ export const useWizardStore = defineStore("wizard", {
         default:
           return true;
       }
-    }
+    },
   },
 
   actions: {
@@ -229,7 +236,7 @@ export const useWizardStore = defineStore("wizard", {
         case 1:
           this.wizardData.prerequisites = {
             ...this.wizardData.prerequisites,
-            ...data
+            ...data,
           };
           break;
         case 2:
@@ -267,7 +274,7 @@ export const useWizardStore = defineStore("wizard", {
         case 7:
           this.wizardData.options = {
             ...this.wizardData.options,
-            ...data
+            ...data,
           };
           break;
         case 8:
@@ -282,7 +289,7 @@ export const useWizardStore = defineStore("wizard", {
         prerequisites: {
           checked: false,
           allInstalled: false,
-          missing: []
+          missing: [],
         },
         installPath: "",
         useDefaultPath: true,
@@ -299,9 +306,9 @@ export const useWizardStore = defineStore("wizard", {
           createShortcuts: true,
           addToPath: true,
           installExamples: true,
-          enableTelemetry: false
+          enableTelemetry: false,
         },
-        configSummary: null
+        configSummary: null,
       };
     },
 
@@ -313,14 +320,14 @@ export const useWizardStore = defineStore("wizard", {
         python: {
           path: this.wizardData.pythonPath,
           version: this.wizardData.pythonVersion,
-          useBundled: this.wizardData.useBundledPython
+          useBundled: this.wizardData.useBundledPython,
         },
         mirror: {
           url: this.wizardData.mirrorUrl,
-          useDefault: this.wizardData.useDefaultMirror
+          useDefault: this.wizardData.useDefaultMirror,
         },
-        options: this.wizardData.options
+        options: this.wizardData.options,
       };
-    }
-  }
+    },
+  },
 });

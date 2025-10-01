@@ -3,95 +3,61 @@
     <div class="footer-content">
       <div class="footer-section">
         <span class="version-info">
-          ESP-IDF Installation Manager v{{ appVersion }}
+          {{ $t('footer.app.version', { version: appVersion }) }}
         </span>
       </div>
 
       <div class="footer-section center">
-        <n-button
-          @click="openDocumentation"
-          text
-          tag="a"
-          size="small"
-        >
-          <template #icon>
-            <n-icon><BookOutlined /></n-icon>
-          </template>
-          Documentation
+        <n-button @click="openDocumentation" text tag="a" size="small">
+          <template #icon><n-icon><BookOutlined /></n-icon></template>
+          {{ $t('footer.buttons.documentation') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="openLogsFolder"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><FolderOpenOutlined /></n-icon>
-          </template>
-          Logs
+        <n-button @click="openLogsFolder" text size="small">
+          <template #icon><n-icon><FolderOpenOutlined /></n-icon></template>
+          {{ $t('footer.buttons.logs') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="reportIssue"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><BugOutlined /></n-icon>
-          </template>
-          Report Issue
+        <n-button @click="reportIssue" text size="small">
+          <template #icon><n-icon><BugOutlined /></n-icon></template>
+          {{ $t('footer.buttons.reportIssue') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button
-          @click="showAbout"
-          text
-          size="small"
-        >
-          <template #icon>
-            <n-icon><InfoCircleOutlined /></n-icon>
-          </template>
-          About
+        <n-button @click="showAbout" text size="small">
+          <template #icon><n-icon><InfoCircleOutlined /></n-icon></template>
+          {{ $t('footer.buttons.about') }}
         </n-button>
       </div>
 
       <div class="footer-section">
         <span class="copyright">
-          © 2024 Espressif Systems
+          {{ $t('footer.copyright', { year: new Date().getFullYear() }) }}
         </span>
       </div>
     </div>
 
     <!-- About Modal -->
-    <n-modal
-      v-model:show="showAboutModal"
-      preset="card"
-      title="About ESP-IDF Installation Manager"
-      style="width: 500px"
-    >
+    <n-modal v-model:show="showAboutModal" preset="card"
+             :title="$t('footer.modal.about.title')" style="width: 500px">
       <div class="about-content">
         <div class="about-logo">
           <img src="../assets/espressif_logo.svg" alt="Espressif" />
         </div>
 
         <div class="about-info">
-          <h3>ESP-IDF Installation Manager</h3>
-          <p>Version {{ appVersion }}</p>
-          <!-- <p class="build-info">Build: {{ buildInfo }}</p> -->
+          <h3>{{ $t('footer.modal.about.title') }}</h3>
+          <p>{{ $t('footer.modal.about.version', { version: appVersion }) }}</p>
         </div>
 
         <div class="about-description">
-          <p>
-            A cross-platform tool for installing and managing ESP-IDF development environment.
-          </p>
-          <p>
-            Supports Windows, macOS, and Linux platforms with both online and offline installation modes.
-          </p>
+          <p>{{ $t('footer.modal.about.description.line1') }}</p>
+          <p>{{ $t('footer.modal.about.description.line2') }}</p>
         </div>
 
         <div class="about-links">
@@ -99,59 +65,52 @@
             <template #icon>
               <n-icon><GithubOutlined /></n-icon>
             </template>
-            View on GitHub
+            {{ $t('footer.modal.about.viewOnGithub') }}
           </n-button>
         </div>
       </div>
     </n-modal>
 
     <!-- Report Issue Modal -->
-    <n-modal
-      v-model:show="showReportModal"
-      preset="card"
-      title="Report an Issue"
-      style="width: 600px"
-    >
+    <n-modal v-model:show="showReportModal" preset="card"
+             :title="$t('footer.modal.report.title')" style="width: 600px">
       <div class="report-content">
         <n-alert type="info" :bordered="false" style="margin-bottom: 1rem;">
-          This will create a log bundle and open the issue reporting page.
+          {{ $t('footer.modal.report.info') }}
         </n-alert>
 
         <div class="report-info">
-          <h4>System Information</h4>
+          <h4>{{ $t('footer.modal.report.systemInfo') }}</h4>
           <div class="system-info">
             <div class="info-row">
-              <span class="info-label">OS:</span>
+              <span class="info-label">{{ $t('footer.modal.report.labels.os') }}</span>
               <span>{{ systemInfo.os }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">Architecture:</span>
+              <span class="info-label">{{ $t('footer.modal.report.labels.arch') }}</span>
               <span>{{ systemInfo.arch }}</span>
             </div>
             <div class="info-row">
-              <span class="info-label">App Version:</span>
+              <span class="info-label">{{ $t('footer.modal.report.labels.appVersion') }}</span>
               <span>{{ appVersion }}</span>
             </div>
           </div>
         </div>
 
-        <!-- <n-checkbox v-model:checked="includeLogs" style="margin: 1rem 0;">
-          Include installation logs in report
-        </n-checkbox> -->
         <div>
-          Please describe the issue you encountered in the GitHub issue page that opens next. And attach all logs from the logs folder ( accessible through button in app footer)
+          {{ $t('footer.modal.report.description') }}
         </div>
 
         <div class="modal-actions">
           <n-button @click="showReportModal = false" class="cancel-button">
-            Cancel
+            {{ $t('footer.modal.report.buttons.cancel') }}
           </n-button>
           <n-button
             @click="generateReport"
             type="primary"
             :loading="generatingReport"
           >
-            Generate Report & Open Issue
+            {{ $t('footer.modal.report.buttons.generate') }}
           </n-button>
         </div>
       </div>
@@ -162,7 +121,8 @@
 <script>
 import { ref, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { openUrl } from '@tauri-apps/plugin-opener';
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { useI18n } from 'vue-i18n'
 
 import {
   NButton, NIcon, NDivider, NModal, NAlert, NCheckbox, useMessage
@@ -184,6 +144,7 @@ export default {
     InfoCircleOutlined, GithubOutlined
   },
   setup() {
+    const { t } = useI18n()
     const message = useMessage()
 
     const appVersion = ref('0.3.0')
@@ -228,7 +189,7 @@ export default {
       try {
         await openUrl('https://docs.espressif.com/projects/idf-im-ui/en/latest/')
       } catch (error) {
-        message.error('Failed to open documentation')
+        message.error(t('footer.messages.error.documentation'))
         console.log(error)
       }
     }
@@ -237,9 +198,9 @@ export default {
       try {
         let logPath = await invoke("get_logs_folder", {});
         invoke("show_in_folder", { path: logPath });
-        message.success('Logs folder opened')
+        message.success(t('footer.messages.success.logsOpened'))
       } catch (error) {
-        message.error('Failed to open logs folder')
+        message.error(t('footer.messages.error.logs'))
       }
     }
 
@@ -251,7 +212,6 @@ export default {
       generatingReport.value = true
 
       try {
-
         // Open GitHub issue page with template
         const issueTitle = encodeURIComponent('[Bug Report] Issue with ESP-IDF Installation')
         const issueBody = encodeURIComponent(`
@@ -281,7 +241,7 @@ Please attach logs from the app logs folder.
 
         showReportModal.value = false
       } catch (error) {
-        message.error('Failed to generate report: ' + error)
+        message.error(t('footer.messages.error.report', { error: error.toString() }))
       } finally {
         generatingReport.value = false
       }
@@ -295,7 +255,7 @@ Please attach logs from the app logs folder.
       try {
         await openUrl('https://github.com/espressif/idf-im-ui')
       } catch (error) {
-        message.error('Failed to open GitHub page')
+        message.error(t('footer.messages.error.github'))
       }
     }
 

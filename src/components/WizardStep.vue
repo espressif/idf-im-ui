@@ -2,8 +2,8 @@
   <div class="wizard-layout" data-id="wizard-layout">
     <!-- Expert Installation Step Header -->
     <div class="wizard-header">
-      <h1 class="header-title">Expert Installation Step</h1>
-      <div class="step-indicator">Step {{ currentStep }}</div>
+      <h1 class="header-title">{{ t('wizardStep.title') }}</h1>
+      <div class="step-indicator">{{ t('wizardStep.stepIndicator', { step: currentStep }) }}</div>
     </div>
 
     <div class="wizard-content">
@@ -26,7 +26,7 @@
                 {{ index + 1 }}
               </template>
             </div>
-            <div class="step-title" :data-id="`step-title-${index + 1}`">{{ step.title }}</div>
+            <div class="step-title" :data-id="`step-title-${index + 1}`">{{ t(step.titleKey) }}</div>
           </div>
         </div>
       </div>
@@ -51,6 +51,7 @@
 
 <script>
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useWizardStore } from '../store'
 import { NButton, NCheckbox } from 'naive-ui'
 import PrerequisitiesCheck from './wizard_steps/PrerequisitiesCheck.vue';
@@ -77,17 +78,21 @@ export default {
     InstallationPathSelect,
     InstalationProgress,
   },
+  setup() {
+    const { t } = useI18n()
+    return { t }
+  },
   data() {
     return {
       steps: [
-        { title: "Prerequisities Check" },
-        { title: "Python Sanity check" },
-        { title: "Select Target" },
-        { title: "Select IDF Version" },
-        { title: "Select mirror" },
-        { title: "Select Installation Path" },
-        { title: "Installation progress" },
-        { title: "Installation Complete" }
+        { titleKey: "wizardStep.steps.prerequisitesCheck" },
+        { titleKey: "wizardStep.steps.pythonSanityCheck" },
+        { titleKey: "wizardStep.steps.selectTarget" },
+        { titleKey: "wizardStep.steps.selectVersion" },
+        { titleKey: "wizardStep.steps.selectMirror" },
+        { titleKey: "wizardStep.steps.selectPath" },
+        { titleKey: "wizardStep.steps.installationProgress" },
+        { titleKey: "wizardStep.steps.installationComplete" }
       ]
     }
   },
@@ -102,20 +107,20 @@ export default {
       return this.store.totalSteps
     },
     stepTitle() {
-      return this.steps[this.store.currentStep - 1].title
+      return this.t(this.steps[this.store.currentStep - 1].titleKey)
     }
   },
   methods: {
     initializeSteps() {
       this.steps = [
-        { title: "Prerequisities Check" },
-        { title: "Python Sanity check" },
-        { title: "Select Target" },
-        { title: "Select IDF Version" },
-        { title: "Select mirror" },
-        { title: "Select Installation Path" },
-        { title: "Installation progress" },
-        { title: "Instalation Complete" }
+        { titleKey: "wizardStep.steps.prerequisitesCheck" },
+        { titleKey: "wizardStep.steps.pythonSanityCheck" },
+        { titleKey: "wizardStep.steps.selectTarget" },
+        { titleKey: "wizardStep.steps.selectVersion" },
+        { titleKey: "wizardStep.steps.selectMirror" },
+        { titleKey: "wizardStep.steps.selectPath" },
+        { titleKey: "wizardStep.steps.installationProgress" },
+        { titleKey: "wizardStep.steps.installationComplete" }
       ];
     },
     handleStepClick(stepNumber) {
@@ -307,3 +312,4 @@ export default {
   transition: all 0.3s ease;
 }
 </style>
+
