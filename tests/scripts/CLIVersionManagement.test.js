@@ -6,11 +6,12 @@ import path from "path";
 import fs from "fs";
 
 export function runVersionManagementTest({
+  id = 0,
   pathToEim,
   idfList,
   installFolder,
 }) {
-  describe("3- EIM Version Management test ->", function () {
+  describe(`${id}- EIM Version Management test |`, function () {
     this.timeout(120000);
     let testRunner = null;
     let testStepFailed = false;
@@ -51,7 +52,7 @@ export function runVersionManagementTest({
       logger.info("Version Management test Completed");
     });
 
-    it("1 - EIM list should show available IDF versions", async function () {
+    it("1- EIM list should show available IDF versions", async function () {
       /**
        * This test executes eim list command and checks if the expected IDF versions
        * are present in the output, with the correct path
@@ -74,7 +75,7 @@ export function runVersionManagementTest({
       }
     });
 
-    it("2 - Select active IDF installation", async function () {
+    it("2- Select active IDF installation", async function () {
       /**
        * This test executes eim select command and checks if the IDF version is set as
        * active correctly
@@ -143,7 +144,7 @@ export function runVersionManagementTest({
       ).to.be.true;
     });
 
-    it("3 - EIM rename should rename existing installation", async function () {
+    it("3- EIM rename should rename existing installation", async function () {
       /**
        * This test executes eim rename command and checks if the IDF version is renamed correctly
        *
@@ -199,7 +200,7 @@ export function runVersionManagementTest({
         .true;
     });
 
-    it("4 - EIM remove should delete existing installation", async function () {
+    it("4- EIM remove should delete existing installation", async function () {
       /**
        * This test executes eim remove command and checks if the IDF version is removed correctly
        *
@@ -277,7 +278,7 @@ export function runVersionManagementTest({
       ).to.be.true;
     });
 
-    it("5 - EIM purge should remove all IDF installations", async function () {
+    it("5- EIM purge should remove all IDF installations", async function () {
       /**
        * This test executes eim purge command and checks if all IDF versions and tools are removed correctly
        *

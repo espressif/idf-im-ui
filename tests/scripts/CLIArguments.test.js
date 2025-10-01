@@ -3,8 +3,8 @@ import { describe, it, before, after, beforeEach, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runCLIArgumentsTest(pathToEim, eimVersion) {
-  describe("Basic Arguments ->", function () {
+export function runCLIArgumentsTest({ id = 0, pathToEim, eimVersion }) {
+  describe(`${id}- Basic Arguments |`, function () {
     let testRunner = null;
 
     beforeEach(function () {
@@ -26,7 +26,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
       testRunner = null;
     });
 
-    it("should show correct version number", async function () {
+    it("1- should show correct version number", async function () {
       logger.info(`Starting test - show correct version`);
       await testRunner.start();
       testRunner.sendInput(`${pathToEim} -V`);
@@ -34,7 +34,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
       expect(meetVersion, "EIM showing incorrect version number").to.be.true;
     });
 
-    it("should show help with --help argument", async function () {
+    it("2- should show help with --help argument", async function () {
       logger.info(`Starting test - show help`);
       await testRunner.start();
       testRunner.sendInput(`${pathToEim} --help`);
@@ -45,7 +45,7 @@ export function runCLIArgumentsTest(pathToEim, eimVersion) {
       );
     });
 
-    it("should handle invalid arguments", async function () {
+    it("3- should handle invalid arguments", async function () {
       logger.info(`Starting test - invalid argument`);
       await testRunner.start();
       testRunner.sendInput(`${pathToEim} --KK`);

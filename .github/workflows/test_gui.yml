@@ -67,7 +67,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           git fetch --tags
-          LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
+          LATEST_TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           STRIPPED_TAG=${LATEST_TAG#v}
           echo "CLI_TAG=$STRIPPED_TAG" >> $GITHUB_ENV
 
@@ -89,6 +89,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
@@ -113,6 +114,7 @@ jobs:
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
         run: |
           export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim.app/Contents/MacOS/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
@@ -126,7 +128,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           git fetch --tags
-          $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
+          $LATEST_TAG = (git tag --sort=-creatordate | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } | Select-Object -First 1)
           $STRIPPED_TAG = $LATEST_TAG -replace '^v', ''
           echo "CLI_TAG=$STRIPPED_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
 
@@ -145,6 +147,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           $env:LOG_TO_FILE="true"
+          $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
@@ -248,7 +251,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           git fetch --tags
-          LATEST_TAG=$(git tag --sort=-creatordate | head -n 1)
+          LATEST_TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
           GUI_TAG=${LATEST_TAG#v}
           echo "GUI_TAG=$GUI_TAG" >> $GITHUB_ENV
           echo "Latest GUI tag to validate: $GUI_TAG"
@@ -275,6 +278,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="../artifacts/eim"
           export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
           cd tests
@@ -286,6 +290,7 @@ jobs:
         if: matrix.os != 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="../artifacts/eim"
           export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
           cd tests
@@ -298,7 +303,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           git fetch --tags
-          $LATEST_TAG = (git tag --sort=-creatordate | Select-Object -First 1)
+          $LATEST_TAG = (git tag --sort=-creatordate | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } | Select-Object -First 1)
           $GUI_TAG = $LATEST_TAG -replace '^v', ''
           echo "GUI_TAG=$GUI_TAG" | Out-File -FilePath $env:GITHUB_ENV -Append
           echo "Latest GUI tag to validate: $GUI_TAG"
@@ -324,6 +329,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: |
           $env:LOG_TO_FILE="true"
+          $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
@@ -335,6 +341,7 @@ jobs:
         if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
           $env:LOG_TO_FILE="true"
+          $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"

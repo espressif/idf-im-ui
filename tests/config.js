@@ -4,12 +4,13 @@
  *
  */
 
+import { log } from "console";
 import logger from "./classes/logger.class.js";
 import os from "os";
 import path from "path";
 
 // Define default values for offline tests
-let IDFDefaultVersion = "v5.5";
+let IDFDefaultVersion = "v5.5.1";
 let IDFAvailableVersions = ["master"];
 let availableTargets = [
   "esp32",
@@ -73,8 +74,19 @@ const TOOLSMIRRORS = {
 };
 
 // Default versions for EIM CLI and GUI for offline testing
-const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.3.0";
-const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.3.0";
+const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.5.0";
+const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.5.0";
+logger.info(
+  `EIM CLI version set to: ${EIMCLIVersion} and GUI to: ${EIMGUIVersion}`
+);
+
+// Get platform name from environmental variables
+const pkgName = process.env.PACKAGE_NAME
+  ? process.env.PACKAGE_NAME
+  : os.platform() === "win32"
+  ? "windows-x64"
+  : "linux-x64";
+logger.info(`Package name set to: ${pkgName}`);
 
 // Default path to EIM CLI and GUI executables for offline testing
 //Should use path provided by environment variables or default to home directory
@@ -89,28 +101,29 @@ const getEIMPath = (pathFromCI, defaultFolder) =>
 
 const pathToEIMCLI = getEIMPath(process.env.EIM_CLI_PATH, "eim-cli");
 const pathToEIMGUI = getEIMPath(process.env.EIM_GUI_PATH, "eim-gui");
+logger.info(
+  `Path to EIM CLI set to: ${pathToEIMCLI} and GUI to: ${pathToEIMGUI}`
+);
 
-// Default path for the offline archive file
-const pathToOfflineArchive =
-  process.env.EIM_OFFLINE_ARCHIVE ||
-  path.join(os.homedir(), "eim-offline", "archive.zst");
-
-// IDF version for the offline archive
-const offlineIDFVersion =
-  process.env.EIM_OFFLINE_IDF_VERSION || IDFDefaultVersion;
+// Get path for build info file
+const pathToBuildInfo = process.env.BUILD_INFO_PATH || "~/build_info";
+logger.info(`Path to build info set to: ${pathToBuildInfo}`);
 
 // Default installation folder
 const INSTALLFOLDER =
   os.platform() !== "win32" ? path.join(os.homedir(), `.espressif`) : `C:\\esp`;
+logger.info(`Installation folder set to: ${INSTALLFOLDER}`);
 
 // Default tools folder
 const TOOLSFOLDER =
   os.platform() !== "win32"
     ? path.join(os.homedir(), `.espressif`)
     : `C:\\Espressif`;
+logger.info(`Tools folder set to: ${TOOLSFOLDER}`);
 
 // Enable running EIM in debug mode
 const runInDebug = (process.env.DEBUG || "false") === "true";
+logger.info(`Run in debug mode: ${runInDebug}`);
 
 export {
   IDFMIRRORS,
@@ -120,11 +133,11 @@ export {
   availableTargets,
   pathToEIMCLI,
   pathToEIMGUI,
+  pathToBuildInfo,
   EIMGUIVersion,
   EIMCLIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pathToOfflineArchive,
-  offlineIDFVersion,
+  pkgName,
   runInDebug,
 };

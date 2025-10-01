@@ -8,7 +8,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
   let eimRunner = "";
   let totalInstallations = 0;
 
-  describe("1- EIM GUI After Install", () => {
+  describe(`${id}- EIM GUI After Install |`, () => {
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);

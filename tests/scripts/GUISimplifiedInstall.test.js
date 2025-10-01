@@ -3,7 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runGUISimplifiedInstallTest(id, pathToEIM) {
+export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
   let eimRunner = "";
 
   describe("1- Run simplified mode", () => {

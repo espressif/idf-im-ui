@@ -7,7 +7,7 @@ import { getOSName, getArchitecture } from "../helper.js";
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
   let eimRunner = "";
 
-  describe("1- EIM startup", () => {
+  describe(`${id}- EIM startup |`, () => {
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);

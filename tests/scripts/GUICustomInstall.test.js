@@ -11,18 +11,18 @@ import {
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-export function runGUICustomInstallTest(
-  id,
+export function runGUICustomInstallTest({
+  id = 0,
   pathToEIM,
   installFolder,
   targetList,
   idfVersionList,
   toolsMirror,
-  idfMirror
-) {
+  idfMirror,
+}) {
   let eimRunner = "";
 
-  describe("1- Run expert mode", () => {
+  describe(`${id}- Run expert mode |`, () => {
     let customInstallFailed = false;
 
     before(async function () {

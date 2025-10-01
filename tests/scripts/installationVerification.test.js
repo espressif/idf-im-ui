@@ -8,12 +8,13 @@ import fs from "fs";
 import os from "os";
 
 export function runInstallVerification({
+  id = 0,
   installFolder,
   idfList,
   targetList = ["esp32"],
   toolsFolder,
 }) {
-  describe("3- Installation verification test ->", function () {
+  describe(`${id}- Installation verification test |`, function () {
     this.timeout(600000);
     let testRunner = null;
     let verificationStepFailed = false;
@@ -52,7 +53,7 @@ export function runInstallVerification({
       }
     });
 
-    it("1 - EIM json file should have expected contents", async function () {
+    it("1- EIM json file should have expected contents", async function () {
       /**
        * This test checks the eim_idf.json file in the tools folder.
        * It verifies that the file exists and contains the expected structure.
@@ -151,7 +152,7 @@ export function runInstallVerification({
       }
     });
 
-    it("2 - IDF activation script should exist", async function () {
+    it("2- IDF activation script should exist", async function () {
       /**
        * This test checks if there is an entry in the eim_idf.json file for each IDF version installed.
        * It also verifies that an activation script is present and if the scripts are named correctly.
@@ -201,7 +202,7 @@ export function runInstallVerification({
       }
     });
 
-    it("3 - Check python environment requirements", async function () {
+    it("3- Check python environment requirements", async function () {
       /**
        * This test checks if the Python environment is set up correctly.
        */
@@ -277,7 +278,7 @@ export function runInstallVerification({
       }
     });
 
-    it("4 - Should have correct tools version installed on path", async function () {
+    it("4- Should have correct tools version installed on path", async function () {
       /**
        * This test checks if the tools folder contains the expected tools versions.
        * The tools are activated by the activation script.
@@ -442,7 +443,7 @@ export function runInstallVerification({
       }
     });
 
-    it("5 - Should create a new project based on a template", async function () {
+    it("5- Should create a new project based on a template", async function () {
       /**
        * This test should attempt to create a copy of the Hello World Project into the ~/esp folder
        * The commands might differ for each operating system.
@@ -521,7 +522,7 @@ export function runInstallVerification({
       }
     });
 
-    it("6 - Should set the target", async function () {
+    it("6- Should set the target", async function () {
       /**
        * This test attempts to set a target MCU for the project created in the previous test.
        */
@@ -610,7 +611,7 @@ export function runInstallVerification({
       }
     });
 
-    it("7 - Should build project for the selected target", async function () {
+    it("7- Should build project for the selected target", async function () {
       /**
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.

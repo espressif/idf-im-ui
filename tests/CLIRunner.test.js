@@ -37,9 +37,8 @@ import {
   pathToEIMCLI,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pathToOfflineArchive,
-  offlineIDFVersion,
   runInDebug,
+  pkgName,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -61,18 +60,22 @@ function testRun(jsonScript) {
     if (test.type === "prerequisites") {
       //route for prerequisites tests
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(20000);
 
-        runCLIPrerequisitesTest(pathToEIMCLI);
+        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEim: pathToEIMCLI });
       });
     } else if (test.type === "arguments") {
       //routine for arguments tests
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(20000);
 
-        runCLIArgumentsTest(pathToEIMCLI, EIMCLIVersion);
+        runCLIArgumentsTest({
+          id: `${test.id}1`,
+          pathToEim: pathToEIMCLI,
+          eimVersion: EIMCLIVersion,
+        });
       });
     } else if (test.type === "default") {
       //routine for default installation tests
@@ -80,21 +83,24 @@ function testRun(jsonScript) {
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
 
         runCLIWizardInstallTest({
+          id: `${test.id}1`,
           pathToEim: pathToEIMCLI,
           testProxyMode,
         });
 
         runInstallVerification({
+          id: `${test.id}2`,
           installFolder: INSTALLFOLDER,
           idfList: [IDFDefaultVersion],
           toolsFolder: TOOLSFOLDER,
         });
 
         runCleanUp({
+          id: `${test.id}3`,
           installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
@@ -142,16 +148,18 @@ function testRun(jsonScript) {
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
 
         runCLICustomInstallTest({
+          id: `${test.id}1`,
           pathToEim: pathToEIMCLI,
           args: installArgs,
           testProxyMode,
         });
 
         runInstallVerification({
+          id: `${test.id}2`,
           installFolder,
           idfList: idfUpdatedList,
           targetList,
@@ -159,6 +167,7 @@ function testRun(jsonScript) {
         });
 
         runCleanUp({
+          id: `${test.id}3`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
@@ -178,10 +187,11 @@ function testRun(jsonScript) {
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
         runVersionManagementTest({
+          id: `${test.id}1`,
           pathToEim: pathToEIMCLI,
           idfList: idfUpdatedList,
           installFolder,
@@ -189,32 +199,29 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "offline") {
       //routine for offline installation test
-
-      const offlineArg = [
-        `${
-          runInDebug ? "-vvv " : ""
-        }--use-local-archive "${pathToOfflineArchive}"`,
-      ];
-
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? "block";
 
-      describe(`Test${test.id} - ${test.name} ->`, function () {
+      describe(`Test${test.id}- ${test.name} |`, async function () {
         this.timeout(6000000);
 
         runCLICustomInstallTest({
+          id: `${test.id}1`,
           pathToEim: pathToEIMCLI,
-          args: offlineArg,
+          offlineIDFVersion: IDFDefaultVersion,
+          offlinePkgName: pkgName,
           testProxyMode,
         });
 
         runInstallVerification({
+          id: `${test.id}2`,
           installFolder: INSTALLFOLDER,
-          idfList: [offlineIDFVersion],
+          idfList: [IDFDefaultVersion],
           toolsFolder: TOOLSFOLDER,
         });
 
         runCleanUp({
+          id: `${test.id}3`,
           installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,

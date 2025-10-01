@@ -13,7 +13,6 @@ class GUITestRunner {
 
     this.capabilities.set("tauri:options", {
       application,
-      webviewOptions: {},
     });
     this.capabilities.setBrowserName("wry");
   }
@@ -32,7 +31,7 @@ class GUITestRunner {
     }
 
     // Wait for tauri-driver to start
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 3000));
 
     try {
       this.driver = await new Builder()
@@ -94,13 +93,13 @@ class GUITestRunner {
 
   async findMultipleByClass(className, timeout = 5000) {
     try {
-      const element = await this.driver.wait(
+      const elements = await this.driver.wait(
         until.elementsLocated(By.className(className)),
         timeout,
         `Elements with class ${className} not found`
       );
       logger.debug(`Selected html elements matching class ${className}`);
-      return element;
+      return elements;
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
