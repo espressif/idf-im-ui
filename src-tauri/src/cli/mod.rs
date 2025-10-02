@@ -145,7 +145,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Completions { shell } => {
             let mut cmd = Cli::command();
             let bin_name = env!("CARGO_PKG_NAME");
-            let shell = shell;
             generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
             return Ok(());
         }
