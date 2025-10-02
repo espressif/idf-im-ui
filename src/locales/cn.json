@@ -45,7 +45,8 @@
     }
   },
   "welcome": {
-    "title": "欢迎使用 <span>ESP-IDF</span> 安装管理器",
+    "welcome": "欢迎使用",
+    "title": "安装管理器",
     "systemRequirements": "系统要求",
     "cpuError": "在 Windows 操作系统上，此工具需要系统至少有 2 个 CPU 核心。",
     "sorry": "给您带来不便，我们深表歉意",
