@@ -167,12 +167,38 @@ pub async fn get_idf_name_by_target(target: &String) -> Vec<String> {
 ///
 /// * If there is an error fetching the IDF versions or processing them, an error message is logged.
 pub async fn get_idf_names() -> Vec<String> {
+    get_idf_names_by_flag(true).await
+}
+
+/// Retrieves the names of stable IDF versions.
+///
+/// This function fetches the IDF versions from the official website, filters out unstable versions,
+/// and returns a vector of stable IDF version names.
+/// # Returns
+/// * A vector of strings containing the names of stable IDF versions.
+///   If there is an error fetching the IDF versions or processing them, an empty vector is returned.
+/// # Errors
+/// * If there is an error fetching the IDF versions or processing them, an error message is logged.
+pub async fn get_stable_idf_names() -> Vec<String> {
+    get_idf_names_by_flag(false).await
+}
+
+/// Helper function to retrieve IDF version names based on stability flag.
+/// # Arguments
+/// * `include_unstable` - A boolean flag indicating whether to include unstable versions.
+/// # Returns
+/// * A vector of strings containing the names of IDF versions based on the stability flag.
+///   If there is an error fetching the IDF versions or processing them, an empty vector is returned.
+/// # Errors
+/// * If there is an error fetching the IDF versions or processing them, an error message is logged.
+async fn get_idf_names_by_flag(include_unstable: bool) -> Vec<String> {
     let versions = get_idf_versions().await;
     match versions {
         Ok(releases) => {
             let mut names = vec![];
             for version in &releases.VERSIONS {
                 if version.end_of_life
+                    || (!include_unstable && version.pre_release)
                     || version.old
                     || version.name == "latest"
                 {

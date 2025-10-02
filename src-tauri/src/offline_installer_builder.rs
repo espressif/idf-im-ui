@@ -379,7 +379,7 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     if args.list_versions {
-        let versions = idf_im_lib::idf_versions::get_idf_names().await;
+        let versions = idf_im_lib::idf_versions::get_stable_idf_names().await;
         for version in versions {
             println!("{}", version);
         }
