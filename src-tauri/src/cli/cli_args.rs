@@ -117,7 +117,7 @@ pub enum Commands {
 
     /// Generate shell completion script to stdout
     Completions {
-        #[arg(value_parser = value_parser!(Shell))]
+        #[arg(help = "Shell for which to generate completion. Current supported shells are listed here https://docs.rs/clap_complete/latest/clap_complete/aot/enum.Shell.html", value_parser = value_parser!(Shell))]
         shell: Shell,
     },
 }
