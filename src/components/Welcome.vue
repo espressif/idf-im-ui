@@ -18,7 +18,7 @@
       <!-- Normal Welcome Flow -->
       <div class="welcome-card" v-else>
         <div class="welcome-header">
-          <h1>{{$t('welcome.welcome')}}<span>ESP-IDF</span> {{$t('welcome.title')}}</h1>
+          <h1>{{$t('welcome.welcome')}} <span>ESP-IDF</span> {{$t('welcome.title')}}</h1>
         </div>
 
         <div class="content">
