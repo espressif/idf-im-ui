@@ -4,6 +4,7 @@ use anyhow::Context;
 use cli_args::Cli;
 use cli_args::Commands;
 use clap::CommandFactory;
+use clap_complete::generate;
 use cli_args::InstallArgs;
 use config::ConfigError;
 use helpers::generic_input;
@@ -145,6 +146,13 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }))).await;
     }
     match command {
+        Commands::Completions { shell } => {
+            let mut cmd = Cli::command();
+            let bin_name = env!("CARGO_PKG_NAME");
+            let shell = shell;
+            generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
+            return Ok(());
+        }
         Commands::Install(install_args) => {
             let settings = Settings::new(
                 install_args.config.clone(),
