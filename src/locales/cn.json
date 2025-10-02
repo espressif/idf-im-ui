@@ -270,7 +270,8 @@
         "title": "离线安装期间出错：",
         "description": "更多信息请查阅日志文件。",
         "retry": "重试安装",
-        "back": "返回"
+        "back": "返回",
+        "info": "更多信息请查阅日志文件。"
       },
       "success": {
         "title": "离线安装完成",
@@ -280,6 +281,12 @@
           "path": "安装路径："
         },
         "complete": "完成安装"
+      },
+      "summary": {
+        "title": "离线安装完成",
+        "success": "已成功从离线存档安装 ESP-IDF 及所有必需工具。",
+        "installedVersions": "已安装版本：",
+        "path": "安装路径："
       },
       "log": {
         "title": "安装日志",
@@ -585,6 +592,7 @@
       }
     },
     "error": {
+      "details": "错误详情",
       "title": "安装失败",
       "wizard": "使用自定义安装",
       "viewLogs": "查看日志",

@@ -270,7 +270,8 @@
         "title": "Error during offline installation:",
         "description": "For more information consult the log file.",
         "retry": "Retry Installation",
-        "back": "Go Back"
+        "back": "Go Back",
+        "info": "For more information consult the log file."
       },
       "success": {
         "title": "Offline Installation Complete",
@@ -280,6 +281,12 @@
           "path": "Installation Path:"
         },
         "complete": "Complete Installation"
+      },
+      "summary": {
+        "title": "Offline Installation Complete",
+        "success": "Successfully installed ESP-IDF and all required tools from offline archive.",
+        "installedVersions": "Installed Versions:",
+        "path": "Installation Path:"
       },
       "log": {
         "title": "Installation Log",
@@ -583,6 +590,7 @@
       }
     },
     "error": {
+      "details": "Error Details:",
       "title": "Installation Failed",
       "wizard": "Use Custom Installation",
       "viewLogs": "View Logs",
