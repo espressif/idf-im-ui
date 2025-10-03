@@ -582,13 +582,11 @@
         "dashboard": "前往仪表板"
       },
       "nextSteps": {
-        "title": "后续步骤：",
-        "steps": [
-          "使用桌面上的图标打开一个新的 IDF 终端。",
-          "导航到您的项目目录",
-          "运行 'idf.py create-project my_project' 创建一个新项目",
-          "运行 'idf.py build' 构建您的项目"
-        ]
+        "title": "后续步骤",
+        "step1": "使用桌面上的图标打开一个新的 IDF 终端。",
+        "step2": "导航到您的项目目录",
+        "step3": "运行 '{command}' 创建一个新项目",
+        "step4": "运行 '{command}' 构建您的项目"
       }
     },
     "error": {
