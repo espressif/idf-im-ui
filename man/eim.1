@@ -188,6 +188,51 @@ Fix the ESP-IDF installation by reinstalling the tools and dependencies
 
 If no PATH is provided, the user will be presented with selection of all known IDF installation to select from.
 
+.SS completions
+Generate a shell completion script to standard output.
+
+.B eim completions
+[\fISHELL\fR]
+
+\fBSHELL\fR: \fBbash\fR | \fBelvish\fR | \fBfish\fR | \fBpowershell\fR | \fBzsh\fR
+
+This command prints the completion script for the specified shell. You can source it for the current session or install it to a standard location for persistent use.
+
+.TP
+.B Quick usage (session only)
+.B bash:
+source <(eim completions bash)
+.br
+.B zsh:
+autoload -Uz compinit; compinit
+.br
+source <(eim completions zsh)
+.br
+.B fish:
+eim completions fish | source
+.br
+.B PowerShell:
+eim completions powershell | Out-String | Invoke-Expression
+
+.TP
+.B Persistent install (examples)
+.B bash (per-user):
+eim completions bash > \fI~/.local/share/bash-completion/completions/eim\fR
+.br
+Ensure bash-completion is enabled in \fI~/.bashrc\fR.
+.br
+.B zsh (per-user):
+eim completions zsh > \fI~/.zsh/completions/_eim\fR
+.br
+Add \fIfpath+=(~/.zsh/completions)\fR and \fIautoload -Uz compinit; compinit\fR to \fI~/.zshrc\fR.
+.br
+.B fish (per-user):
+eim completions fish > \fI~/.config/fish/completions/eim.fish\fR
+.br
+.B Note:
+Ubuntu’s \fB/bin/sh\fR is \fIdash\fR and does not support programmable completion; use \fBbash\fR, \fBzsh\fR, \fBfish\fR, \fBelvish\fR, or \fBPowershell\fR.
+
+
 .SS discover
 Discover available ESP-IDF versions (not implemented yet).
 
