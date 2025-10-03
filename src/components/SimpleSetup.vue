@@ -2,9 +2,12 @@
   <div class="simple-setup">
     <div class="setup-header">
       <h1 class="title">{{ $t('simpleSetup.title') }}</h1>
-      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'" text-color="white">
+      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'"
+        text-color="white">
         <template #icon>
-          <n-icon><ArrowLeftOutlined /></n-icon>
+          <n-icon>
+            <ArrowLeftOutlined />
+          </n-icon>
         </template>
         {{ $t('simpleSetup.back') }}
       </n-button>
@@ -47,12 +50,7 @@
         <n-alert type="info" :bordered="false" style="margin: 1.5rem 0;">
           {{ $t('simpleSetup.ready.alert') }}
         </n-alert>
-        <n-button
-          @click="startInstallation"
-          type="primary"
-          size="large"
-          block
-        >
+        <n-button @click="startInstallation" type="primary" size="large" block>
           {{ $t('simpleSetup.ready.startButton') }}
         </n-button>
       </div>
@@ -70,19 +68,11 @@
 
         <p class="status-description">{{ installationMessage }}</p>
 
-        <GlobalProgress
-          :initial-message="installationMessage"
-          :initial-progress="installationProgress"
-          :show-details="true"
-          :color-scheme="getProgressColorScheme"
-          :steps="installationSteps"
-          event-channel="installation-progress"
-        />
+        <GlobalProgress :initial-message="installationMessage" :initial-progress="installationProgress"
+          :show-details="true" :color-scheme="getProgressColorScheme" :steps="installationSteps"
+          event-channel="installation-progress" />
 
-        <n-collapse
-          v-if="installMessages.length > 0"
-          style="margin-top: 2rem;"
-        >
+        <n-collapse v-if="installMessages.length > 0" style="margin-top: 2rem;">
           <n-collapse-item title="Installation Log" name="1">
             <n-scrollbar style="max-height: 180px">
               <pre class="log-content">{{ installMessages.join('\n') }}</pre>
@@ -95,11 +85,8 @@
     <!-- Installation Complete -->
     <n-card v-else-if="currentState === 'complete'" class="status-card">
       <div class="complete-status">
-        <n-result
-          status="success"
-          title="{{ $t('simpleSetup.complete.title') }}"
-          description="{{ $t('simpleSetup.complete.description') }}"
-        >
+        <n-result status="success" :title="$t('simpleSetup.complete.title')"
+          :description="$t('simpleSetup.complete.description')">
           <template #icon>
             <n-icon :size="72" color="#52c41a">
               <CheckCircleOutlined />
@@ -108,13 +95,10 @@
           <template #footer>
             <div class="completion-actions">
               <n-button @click="viewDocumentation" size="large">
-                {{ $t('simpleSetup.complete.documentation') }}
+                {{ $t('simpleSetup.complete.buttons.documentation') }}
               </n-button>
-              <!-- <n-button @click="openIDE" type="info" size="large">
-                Open VS Code
-              </n-button> -->
               <n-button @click="goToManagement" type="primary" size="large">
-                {{ $t('simpleSetup.complete.dashboard') }}
+                {{ $t('simpleSetup.complete.buttons.dashboard') }}
               </n-button>
             </div>
           </template>
@@ -123,10 +107,10 @@
         <div class="post-install-info">
           <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
-            <li>{{ $t('simpleSetup.complete.step1') }}</li>
-            <li>{{ $t('simpleSetup.complete.step2') }}</li>
-            <li>{{ $t('simpleSetup.complete.step3', { command: 'idf.py create-project my_project' }) }}</li>
-            <li>{{ $t('simpleSetup.complete.step4', { command: 'idf.py build' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step1') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step2') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step3', { command: 'idf.py create-project my_project' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step4', { command: 'idf.py build' }) }}</li>
           </ol>
         </div>
       </div>
@@ -135,11 +119,7 @@
     <!-- Installation Failed -->
     <n-card v-else-if="currentState === 'error'" class="status-card">
       <div class="error-status">
-        <n-result
-          status="error"
-          :title="errorTitle"
-          :description="errorMessage"
-        >
+        <n-result status="error" :title="errorTitle" :description="errorMessage">
           <template #icon>
             <n-icon :size="72" color="#ff4d4f">
               <CloseCircleOutlined />
@@ -160,11 +140,7 @@
           </template>
         </n-result>
 
-        <n-alert
-          v-if="errorDetails"
-          type="error"
-          style="margin-top: 2rem;"
-        >
+        <n-alert v-if="errorDetails" type="error" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
@@ -232,12 +208,12 @@ export default {
         title: t('simpleSetup.installation.steps.prerequisites.title'),
         description: t('simpleSetup.installation.steps.prerequisites.description')
       },
-      { title: 'Download', description: 'Downloading ESP-IDF' },
-      { title: 'Extract', description: 'Extracting files' },
-      { title: 'Tools', description: 'Installing tools' },
-      { title: 'Python', description: 'Setting up Python' },
-      { title: 'Configure', description: 'Configuring environment' },
-      { title: 'Complete', description: 'Finalizing installation' }
+      { title: t('simpleSetup.installation.steps.download.title'), description: t('simpleSetup.installation.steps.download.description') },
+      { title: t('simpleSetup.installation.steps.extract.title'), description: t('simpleSetup.installation.steps.extract.description') },
+      { title: t('simpleSetup.installation.steps.tools.title'), description: t('simpleSetup.installation.steps.tools.description') },
+      { title: t('simpleSetup.installation.steps.python.title'), description: t('simpleSetup.installation.steps.python.description') },
+      { title: t('simpleSetup.installation.steps.configure.title'), description: t('simpleSetup.installation.steps.configure.description') },
+      { title: t('simpleSetup.installation.steps.complete.title'), description: t('simpleSetup.installation.steps.complete.description') }
     ])
 
     // Error handling
@@ -295,13 +271,13 @@ export default {
               currentState.value = 'error'
               return false
             }
-          // Get latest ESP-IDF version
-          invoke('get_idf_versions').then(versions => {
-            selectedVersion.value = versions?.[0].name || 'v5.5';
-            currentState.value = 'ready';
+            // Get latest ESP-IDF version
+            invoke('get_idf_versions').then(versions => {
+              selectedVersion.value = versions?.[0].name || 'v5.5';
+              currentState.value = 'ready';
 
+            });
           });
-        });
 
           return true
         })
@@ -333,86 +309,86 @@ export default {
       }
 
       try {
-      // Set up event listeners
-      unlistenProgress = await listen('installation-progress', async (event) => {
-        const { stage, percentage, message, detail, version } = event.payload;
+        // Set up event listeners
+        unlistenProgress = await listen('installation-progress', async (event) => {
+          const { stage, percentage, message, detail, version } = event.payload;
 
-        installationProgress.value = percentage;
-        installationMessage.value = message;
+          installationProgress.value = percentage;
+          installationMessage.value = message;
 
-        // Update progress with smooth transitions
-        if (percentage !== undefined) {
-          // Ensure progress only moves forward (avoid jumping backwards)
-          if (percentage >= installationProgress.value) {
-            installationProgress.value = percentage
-          }
-        }
-
-        if (message) {
-          installationMessage.value = message
-        }
-
-        // Map stage to step for UI
-        const stageToStep = {
-          'checking': 0,
-          'prerequisites': 1,
-          'download': 2,
-          'extract': 3,
-          'tools': 4,
-          'python': 5,
-          'configure': 6,
-          'complete': 7
-        };
-
-        // For download stage, show submodules step when progress > 10%
-        if (stage === 'download' && percentage > 10) {
-          currentStep.value = 3 // Show submodules step
-          if (stageToStep[stage] !== undefined) {
-            updateInstallationStep(stage)
-          }
-        } else if (stageToStep[stage] !== undefined) {
-          // Only update step if we're moving forward
-          if (stageToStep[stage] >= currentStep.value) {
-            currentStep.value = stageToStep[stage]
-            updateInstallationStep(stage) // Update title based on stage
-          }
-        }
-
-        if (stage === 'error') {
-          currentState.value = 'error'
-          errorMessage.value = message || 'Installation failed'
-          errorDetails.value = detail || ''
-          try { // tracking should never fail installation
-            await invoke("track_event_command", { name: "GUI simple installation failed", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version, errorMessage: message, errorDetails: detail } });
-          } catch (error) {
-            console.warn('Failed to track event:', error);
-          }
-        } else if (stage === 'complete' || percentage === 100) {
-          currentState.value = 'complete'
-          installationProgress.value = 100 // Ensure we show 100%
-          try { // tracking should never fail installation
-            await invoke("track_event_command", { name: "GUI simple installation succeeded", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version } });
-          } catch (error) {
-            console.warn('Failed to track event:', error);
-          }
-        }
-
-        // Auto-advance to complete state when we reach 100%
-        if (percentage >= 100 && stage !== 'error') {
-          setTimeout(() => {
-            if (currentState.value === 'installing') {
-              currentState.value = 'complete'
+          // Update progress with smooth transitions
+          if (percentage !== undefined) {
+            // Ensure progress only moves forward (avoid jumping backwards)
+            if (percentage >= installationProgress.value) {
+              installationProgress.value = percentage
             }
-          }, 1000) // Give a moment to show 100% before completing
-        }
-      });
+          }
 
-      unlistenLog = await listen('log-message', (event) => {
-        const { level, message } = event.payload;
-        installMessages.value.push(`[${level}] ${message}`);
-      });
+          if (message) {
+            installationMessage.value = message
+          }
 
-      // Start installation
+          // Map stage to step for UI
+          const stageToStep = {
+            'checking': 0,
+            'prerequisites': 1,
+            'download': 2,
+            'extract': 3,
+            'tools': 4,
+            'python': 5,
+            'configure': 6,
+            'complete': 7
+          };
+
+          // For download stage, show submodules step when progress > 10%
+          if (stage === 'download' && percentage > 10) {
+            currentStep.value = 3 // Show submodules step
+            if (stageToStep[stage] !== undefined) {
+              updateInstallationStep(stage)
+            }
+          } else if (stageToStep[stage] !== undefined) {
+            // Only update step if we're moving forward
+            if (stageToStep[stage] >= currentStep.value) {
+              currentStep.value = stageToStep[stage]
+              updateInstallationStep(stage) // Update title based on stage
+            }
+          }
+
+          if (stage === 'error') {
+            currentState.value = 'error'
+            errorMessage.value = message || 'Installation failed'
+            errorDetails.value = detail || ''
+            try { // tracking should never fail installation
+              await invoke("track_event_command", { name: "GUI simple installation failed", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version, errorMessage: message, errorDetails: detail } });
+            } catch (error) {
+              console.warn('Failed to track event:', error);
+            }
+          } else if (stage === 'complete' || percentage === 100) {
+            currentState.value = 'complete'
+            installationProgress.value = 100 // Ensure we show 100%
+            try { // tracking should never fail installation
+              await invoke("track_event_command", { name: "GUI simple installation succeeded", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version } });
+            } catch (error) {
+              console.warn('Failed to track event:', error);
+            }
+          }
+
+          // Auto-advance to complete state when we reach 100%
+          if (percentage >= 100 && stage !== 'error') {
+            setTimeout(() => {
+              if (currentState.value === 'installing') {
+                currentState.value = 'complete'
+              }
+            }, 1000) // Give a moment to show 100% before completing
+          }
+        });
+
+        unlistenLog = await listen('log-message', (event) => {
+          const { level, message } = event.payload;
+          installMessages.value.push(`[${level}] ${message}`);
+        });
+
+        // Start installation
 
         await invoke('start_simple_setup', {
           version: selectedVersion.value,
@@ -668,6 +644,7 @@ export default {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }

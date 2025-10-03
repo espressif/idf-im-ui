@@ -166,7 +166,7 @@
       <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
         <n-button @click="finish" type="error" size="large" data-id="complete-installation-button-footer">
-          {{ $t('offlineInstaller.installation.complete') }}
+          {{ $t('offlineInstaller.installation.success.complete') }}
         </n-button>
       </div>
 
