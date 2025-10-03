@@ -97,8 +97,8 @@
       <div class="complete-status">
         <n-result
           status="success"
-          title="{{ $t('simpleSetup.complete.title') }}"
-          description="{{ $t('simpleSetup.complete.description') }}"
+          title="$t('simpleSetup.complete.title')"
+          description="$t('simpleSetup.complete.description')"
         >
           <template #icon>
             <n-icon :size="72" color="#52c41a">
@@ -123,10 +123,10 @@
         <div class="post-install-info">
           <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
-            <li>{{ $t('simpleSetup.complete.step1') }}</li>
-            <li>{{ $t('simpleSetup.complete.step2') }}</li>
-            <li>{{ $t('simpleSetup.complete.step3', { command: 'idf.py create-project my_project' }) }}</li>
-            <li>{{ $t('simpleSetup.complete.step4', { command: 'idf.py build' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step1') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step2') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step3', { command: 'idf.py create-project my_project' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps.step4', { command: 'idf.py build' }) }}</li>
           </ol>
         </div>
       </div>
