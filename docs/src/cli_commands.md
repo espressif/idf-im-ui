@@ -32,6 +32,7 @@ These options can be used with any command:
 | `purge` | Purge all ESP-IDF installations |
 | `import` | Import existing ESP-IDF installation using tools_set_config.json |
 | `discover` | Discover available ESP-IDF versions (not implemented yet) |
+| `completions` | Generate shell completion script to stdout |
 
 ## Command Details
 
@@ -155,6 +156,16 @@ eim fix [PATH]
 ```
 
 If no `PATH` is provided, the user will be presented with selection of all known IDF installation to select from.
+
+### Completions Command
+
+Generate shell completion script to stdout.
+```bash
+eim completions <SHELL>
+```
+
+`SHELL`  Shell for which to generate completion. <br>
+**Possible values:** `bash`, `elvish`, `fish`, `powershell`, `zsh`
 
 ## Examples
 
