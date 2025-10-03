@@ -514,6 +514,10 @@
       "configFileName": "eim_config.toml"
     }
   },
+  "configSetup": {
+    "title": "安装",
+    "back": "返回"
+  },
   "simpleSetup": {
     "title": "简易安装",
     "back": "返回",

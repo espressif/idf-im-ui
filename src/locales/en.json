@@ -514,6 +514,10 @@
       "configFileName": "eim_config.toml"
     }
   },
+  "configSetup": {
+    "title": "Installation",
+    "back": "Back"
+  },
   "simpleSetup": {
     "title": "Easy Installation",
     "back": "Back",
