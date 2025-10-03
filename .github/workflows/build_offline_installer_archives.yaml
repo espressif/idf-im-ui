@@ -32,7 +32,7 @@ on:
         required: false
         type: string
       purge_all:
-        description: "Purge all existing archives from S3 before upload (DANGEROUS)"
+        description: "Purge all existing archives from currently built IDF version from S3 before upload (DANGEROUS)"
         required: false
         type: boolean
         default: false
@@ -393,7 +393,7 @@ jobs:
           retention-days: 7
 
   update-json:
-    needs: build-and-upload
+    needs: [get-versions, build-and-upload]
     runs-on: ubuntu-latest
     steps:
       - name: Set up AWS CLI
@@ -409,6 +409,48 @@ jobs:
           if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
             echo "[]" > ./offline_archives.json
           fi
+
+      - name: Purge old archives (if release)
+        if: needs.get-versions.outputs.should_purge == 'true'
+        run: |
+          echo "=== Purging archives older than 24 hours ==="
+
+          # Get current timestamp (24 hours ago in epoch seconds)
+          CUTOFF_TIME=$(date -d '24 hours ago' +%s)
+          echo "Cutoff time: $(date -d @$CUTOFF_TIME)"
+
+          # List all archive files in S3 with their modification times
+          echo "Scanning S3 for old archive files..."
+          OLD_FILES=()
+
+          aws s3api list-objects-v2 \
+            --bucket espdldata \
+            --prefix dl/eim/archive_ \
+            --query 'Contents[?ends_with(Key, `.zst`)].[Key,LastModified]' \
+            --output text | while read -r key last_modified; do
+
+            # Convert S3 timestamp to epoch
+            FILE_TIME=$(date -d "$last_modified" +%s)
+
+            if [ $FILE_TIME -lt $CUTOFF_TIME ]; then
+              echo "Marking for deletion: $key (modified: $last_modified)"
+              # Extract just the filename for JSON filtering
+              FILENAME=$(basename "$key")
+              echo "$FILENAME" >> old_files.txt
+
+              # Delete from S3
+              echo "Deleting s3://espdldata/$key"
+              aws s3 rm "s3://espdldata/$key"
+            else
+              echo "Keeping: $key (modified: $last_modified)"
+            fi
+          done
+
+          # Create empty file if none found
+          touch old_files.txt
+
+          echo "=== Files marked for JSON removal ==="
+          cat old_files.txt || echo "No files to remove"
 
       - name: Download all build infos
         uses: actions/download-artifact@v4
@@ -465,17 +507,32 @@ jobs:
           CURRENT=$(cat offline_archives.json)
           echo "Current entries count: $(echo "$CURRENT" | jq length)"
 
+          # Remove old files from JSON if they were purged
+          if [ -f old_files.txt ] && [ -s old_files.txt ]; then
+            echo "=== Removing purged files from JSON ==="
+            # Read old files into a JSON array
+            OLD_FILENAMES=$(jq -R -s -c 'split("\n") | map(select(length > 0))' old_files.txt)
+            echo "Files to remove from JSON:"
+            echo "$OLD_FILENAMES" | jq .
+
+            # Filter out entries with filenames in the old_filenames list
+            CURRENT=$(echo "$CURRENT" | jq --argjson old "$OLD_FILENAMES" '
+              map(select(.filename as $f | ($old | index($f)) | not))
+            ')
+            echo "After purge filter, entries count: $(echo "$CURRENT" | jq length)"
+          fi
+
           # Remove existing entries that are being replaced (same platform + version)
           # Keep entries for platforms/versions NOT rebuilt
           echo "=== Merging entries ==="
-          UPDATED=$(jq --argjson new "$NEW_ENTRIES" '
+          UPDATED=$(echo "$CURRENT" | jq --argjson new "$NEW_ENTRIES" '
             . as $current |
             ($new | map({version, platform})) as $to_replace |
             ($current | map(select(
               (.version + "-" + .platform) as $key |
               ($to_replace | map(.version + "-" + .platform) | index($key)) | not
             ))) + $new
-          ' offline_archives.json)
+          ')
 
           echo "=== Final result ==="
           echo "Final entries count: $(echo "$UPDATED" | jq length)"
