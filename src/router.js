@@ -5,6 +5,7 @@ import BasicInstaller from "./components/BasicInstaller.vue";
 import OfflineInstaller from "./components/OfflineInstaller.vue";
 import SimpleSetup from "./components/SimpleSetup.vue";
 import InstallationProgress from "./components/wizard_steps/InstalationProgress.vue";
+import SimpleInstallatioProgressWrapper from "./components/SimpleInstallatioProgressWrapper.vue";
 import WizardStep from "./components/WizardStep.vue";
 
 const routes = [
@@ -51,7 +52,7 @@ const routes = [
   {
     path: "/installation-progress",
     name: "InstallationProgress",
-    component: InstallationProgress,
+    component: SimpleInstallatioProgressWrapper,
     props: true,
     meta: { title: "routes.installationProgress" },
   },
