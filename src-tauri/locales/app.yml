@@ -626,6 +626,15 @@ gui.installation.cloning_repository:
 gui.installation.repository_progress:
   en: "Repository: %{percentage}%"
   cn: "仓库: %{percentage}%"
+gui.installation.progress.submodules:
+  en: "Downloading submodule "
+  cn: "正在下载子模块 "
+gui.installation.progress.downloading_idf:
+  en: "Downloading IDF "
+  cn: "正在下载 IDF "
+gui.installation.progress.installing_idf:
+  en: "Installing IDF "
+  cn: "正在安装 IDF "
 gui.installation.downloading_submodule:
   en: "Downloading submodule: %{name}"
   cn: "正在下载子模块: %{name}"
