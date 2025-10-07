@@ -3,10 +3,14 @@ use anyhow::Result;
 use log::debug;
 use log::error;
 use log::info;
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 
 use log::warn;
+use lnk::ShellLink;
+use lnk::encoding::WINDOWS_1252;
+
 
 use crate::utils::remove_directory_all;
 use crate::{
@@ -159,6 +163,55 @@ pub fn rename_idf_version(identifier: &str, new_name: String) -> Result<String> 
     }
 }
 
+/// Searches the user's desktop for a shortcut whose arguments contain the specified custom profile filename.
+///
+/// # Arguments
+///
+/// * `custom_profile_filename` - A string slice that holds the name of the custom profile script to search for.
+///
+/// # Returns
+///
+/// * `Ok(Some(String))` - The name of the shortcut (without the .lnk extension) if found.
+/// * `Ok(None)` - If no matching shortcut is found.
+/// * `Err(String)` - If an error occurs during the search process.
+pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result<Option<String>> {
+    let desktop_path = dirs::desktop_dir().ok_or(anyhow!("Failed to get desktop directory"))?;
+
+    // Read all entries in the desktop directory
+    let entries = fs::read_dir(&desktop_path)
+        .map_err(|e| anyhow!("Failed to read desktop directory: {}", e))?;
+
+    // Iterate over each entry in the desktop directory
+    for entry in entries {
+        let entry = entry.map_err(|e| anyhow!("Failed to read directory entry: {}", e))?;
+        let path = entry.path();
+
+        // Check if the entry is a .lnk file
+        if path.extension().map_or(false, |ext| ext == "lnk") {
+            // Open and parse the .lnk file
+            let link = ShellLink::open(&path, WINDOWS_1252)
+                .map_err(|e| anyhow!("Failed to open or parse shortcut file '{}': {}", path.display(), e))?;
+
+            // The arguments are stored in the `string_data` field.
+            // We access it via the `string_data()` method on the ShellLink struct.
+            if let Some(arguments) = link.string_data().command_line_arguments() {
+                // Check if the arguments contain the custom profile filename
+                if arguments.contains(custom_profile_filename) {
+                    // Extract just the filename without the .lnk extension
+                    if let Some(name) = path.file_name() {
+                        return Ok(Some(name.to_string_lossy().into_owned()));
+                    }
+                }
+            }
+        }
+    }
+
+    // If no matching shortcut was found
+    Ok(None)
+}
+
+
+
 /// Removes a single ESP-IDF version from the configuration file and its associated directories.
 ///
 /// This function reads the ESP-IDF configuration from the default location, removes the installation
@@ -182,7 +235,7 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
     if let Some(installation) = ide_config
         .idf_installed
         .iter()
-        .find(|install| install.id == identifier || install.name == identifier)
+        .find(|install| install.id == identifier || install.name == identifier).cloned()
     {
         let installation_folder_path = PathBuf::from(installation.path.clone());
         let installation_folder = installation_folder_path.parent().ok_or_else(|| {
@@ -199,6 +252,7 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
                 }
             }
         }
+
         match remove_directory_all(installation.clone().activation_script) {
             Ok(_) => {}
             Err(e) => {
@@ -211,6 +265,37 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
             return Err(anyhow!("Failed to remove installation from config file"));
         }
         ide_config.to_file(config_path, true, false)?;
+        if std::env::consts::OS == "windows" {
+            // On Windows, also remove the desktop icon associated with the installation
+            match find_shortcut_by_profile(&installation.activation_script) {
+                Ok(Some(shortcut_name)) => {
+                    let desktop_path = match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
+                        Ok(path) => path,
+                        Err(e) => {
+                            error!("{}", e);
+                            return Ok(format!("Version {} removed, but failed to remove desktop shortcut", identifier));
+                        }
+                    };
+                    let shortcut_path = desktop_path.join(shortcut_name);
+                    if shortcut_path.exists() {
+                        match fs::remove_file(&shortcut_path) {
+                            Ok(_) => {
+                                info!("Removed desktop shortcut: {}", shortcut_path.display());
+                            }
+                            Err(e) => {
+                                error!("Failed to remove desktop shortcut {}: {}", shortcut_path.display(), e);
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    info!("No desktop shortcut found for profile: {}", installation.activation_script);
+                }
+                Err(e) => {
+                    error!("Error searching for desktop shortcut: {}", e);
+                }
+            }
+        }
         Ok(format!("Version {} removed", identifier))
     } else {
         Err(anyhow!("Version {} not installed", identifier))
