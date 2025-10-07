@@ -83,6 +83,10 @@ fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<(
                 )))
                 .build("stdout", Box::new(stdout)),
         )
+        .logger(
+            log4rs::config::Logger::builder()
+                .build("lnk", LevelFilter::Off)
+        )
         .build(
             Root::builder()
                 .appender("stdout")
