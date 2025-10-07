@@ -139,6 +139,24 @@ pub fn create_activation_shell_script(
     ensure_path(file_path).map_err(|e| e.to_string())?;
     let mut filename = PathBuf::from(file_path);
     filename.push(format!("activate_idf_{}.sh", idf_version));
+    filename = match filename.try_exists() {
+        Ok(true) => {
+
+            let mut new_filename = filename.clone();
+            new_filename.set_file_name(format!("activate_idf_{}_{}.sh", idf_version, uuid::Uuid::new_v4()));
+            info!(
+                "Activation script already exists at {}, changing name to {}.",
+                filename.display(),
+                new_filename.display()
+            );
+            new_filename
+        }
+        Ok(false) => { filename}
+        Err(e) => {
+            error!("Failed to check if file exists: {}", e);
+            filename
+        }
+    };
     let template = include_str!("../../bash_scripts/activate_idf_template.sh");
     let mut tera = Tera::default();
     if let Err(e) = tera.add_raw_template("activate_idf_template", template) {
@@ -335,6 +353,24 @@ fn create_powershell_profile(
     }
     let mut filename = PathBuf::from(profile_path);
     filename.push(format!("Microsoft.{}.PowerShell_profile.ps1", idf_version));
+    filename = match filename.try_exists() {
+        Ok(true) => {
+
+            let mut new_filename = filename.clone();
+            new_filename.set_file_name(format!("Microsoft.{}.PowerShell_profile_{}.ps1", idf_version, uuid::Uuid::new_v4()));
+            info!(
+                "Profile already exists at {}, changing name to {}.",
+                filename.display(),
+                new_filename.display()
+            );
+            new_filename
+        }
+        Ok(false) => { filename}
+        Err(e) => {
+            error!("Failed to check if file exists: {}", e);
+            filename
+        }
+    };
     fs::write(&filename, rendered).expect("Unable to write file");
     Ok(filename.display().to_string())
 }
