@@ -73,7 +73,7 @@
           event-channel="installation-progress" />
 
         <n-collapse v-if="installMessages.length > 0" style="margin-top: 2rem;">
-          <n-collapse-item title="Installation Log" name="1">
+          <n-collapse-item :title="$t('simpleSetup.installation.log')" name="1">
             <n-scrollbar style="max-height: 180px">
               <pre class="log-content">{{ installMessages.join('\n') }}</pre>
             </n-scrollbar>
@@ -396,7 +396,7 @@ export default {
         })
       } catch (error) {
         currentState.value = 'error'
-        errorTitle.value = 'Failed to Start Installation'
+        errorTitle.value = t('simpleSetup.error.start.title')
         errorMessage.value = error.toString()
       }
     }
@@ -404,14 +404,14 @@ export default {
     const updateInstallationStep = (step) => {
       // Update installation title based on step
       const titles = {
-        'checking': 'Checking System',
-        'prerequisites': 'Installing Prerequisites',
-        'download': 'Downloading ESP-IDF',
-        'extract': 'Extracting Files',
-        'tools': 'Installing Tools',
-        'python': 'Setting up Python',
-        'configure': 'Configuring Environment',
-        'complete': 'Finalizing Installation'
+        'checking': t('simpleSetup.installation.steps.check.title'),
+        'prerequisites': t('simpleSetup.installation.steps.prerequisites.title'),
+        'download': t('simpleSetup.installation.steps.download.title'),
+        'extract': t('simpleSetup.installation.steps.extract.title'),
+        'tools': t('simpleSetup.installation.steps.tools.title'),
+        'python': t('simpleSetup.installation.steps.python.title'),
+        'configure': t('simpleSetup.installation.steps.configure.title'),
+        'complete': t('simpleSetup.installation.steps.complete.title')
       }
 
       if (titles[step]) {

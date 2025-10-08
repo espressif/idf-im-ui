@@ -69,7 +69,7 @@ pub fn spawn_progress_monitor(
   rx: mpsc::Receiver<ProgressMessage>,
 ) -> thread::JoinHandle<()> {
   thread::spawn(move || {
-      let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
+      let progress = ProgressBar::new(app_handle.clone(), &format!("{} {}", rust_i18n::t!("gui.installation.progress.installing_idf"), version));
 
       while let Ok(message) = rx.recv() {
           match message {
@@ -77,12 +77,12 @@ pub fn spawn_progress_monitor(
                   progress.update(100, None);
               }
               ProgressMessage::Update(value) => {
-                  progress.update(value, Some(&format!("Downloading IDF {}...", version)));
+                  progress.update(value, Some(&format!("{} {}...", rust_i18n::t!("gui.installation.progress.downloading_idf"), version)));
               }
               ProgressMessage::SubmoduleUpdate((name, value)) => {
                   progress.update(
                       value,
-                      Some(&format!("Downloading submodule {}... {}%", name, value))
+                      Some(&format!("{} {}... {}%", rust_i18n::t!("gui.installation.progress.submodules"), name, value))
                   );
               }
               ProgressMessage::SubmoduleFinish(_name) => {
