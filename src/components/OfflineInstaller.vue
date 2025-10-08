@@ -186,7 +186,7 @@
 
       <!-- Installation Log with Virtual Scrolling -->
       <n-collapse arrow-placement="right" v-if="totalLogCount > 0">
-        <n-collapse-item title="Installation Log" name="1">
+        <n-collapse-item :title="$t('offlineInstaller.installation.log.title')" name="1">
           <template #header-extra>
             <span class="log-count">({{ totalLogCount }} entries)</span>
           </template>
