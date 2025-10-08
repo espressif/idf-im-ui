@@ -107,8 +107,9 @@ export default {
     const showSplash = ref(true)
 
     // Hide splash screen after delay
-    setTimeout(() => {
+    setTimeout(async () => {
       showSplash.value = false
+      await invoke('set_locale', { locale: locale.value })
     }, 1500)
 
     // Language configuration
