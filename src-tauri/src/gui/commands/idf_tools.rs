@@ -336,22 +336,6 @@ pub async fn setup_tools(
 
     info!("Setting up tools... to directory: {}", tools_install_folder.display());
 
-    // Get and validate IDF tools path
-    let mut idf_tools_path = idf_path.clone();
-    idf_tools_path.push(settings.idf_tools_py_path.clone().unwrap_or_default());
-
-    if std::fs::metadata(&idf_tools_path).is_err() {
-        error!("IDF tools path does not exist");
-        emit_installation_event(app_handle, InstallationProgress {
-            stage: InstallationStage::Error,
-            percentage: 0,
-            message: t!("gui.setup_tools.idf_path_validation_failed").to_string(),
-            detail: Some(t!("gui.setup_tools.idf_path_not_exist").to_string()),
-            version: Some(idf_version.to_string()),
-        });
-        return Err(anyhow!("Failed to setup environment variables: IDF tools path does not exist"));
-    }
-
     // Transition to Python setup phase (90%)
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Python,

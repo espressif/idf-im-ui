@@ -51,7 +51,6 @@ Options:
 - `-i, --idf-versions <IDF_VERSIONS>`: ESP-IDF versions to install (comma-separated)
 - `--tool-download-folder-name <TOOL_DOWNLOAD_FOLDER_NAME>`: Name of the folder for tool downloads
 - `--tool-install-folder-name <TOOL_INSTALL_FOLDER_NAME>`: Name of the folder for tool installations
-- `--idf-tools-py-path <IDF_TOOLS_PY_PATH>`: Path to idf_tools.py file relative from ESP-IDF installation folder
 - `--tools-json-file <TOOLS_JSON_FILE>`: Path to tools.json file relative from ESP-IDF installation folder
 - `-n, --non-interactive <NON_INTERACTIVE>`: Run in interactive mode if set to false (default is true for non-interactive mode)
 - `-m, --mirror <MIRROR>`: URL for tools download mirror to be used instead of github.com
