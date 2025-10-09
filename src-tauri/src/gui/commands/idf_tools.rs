@@ -338,7 +338,7 @@ pub async fn setup_tools(
 
     // Get and validate IDF tools path
     let mut idf_tools_path = idf_path.clone();
-    idf_tools_path.push(settings.idf_tools_path.clone().unwrap_or_default());
+    idf_tools_path.push(settings.idf_tools_py_path.clone().unwrap_or_default());
 
     if std::fs::metadata(&idf_tools_path).is_err() {
         error!("IDF tools path does not exist");
