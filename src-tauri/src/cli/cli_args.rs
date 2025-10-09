@@ -160,12 +160,6 @@ pub struct InstallArgs {
         long,
         help = "Path to tools.json file relative from ESP-IDF installation folder"
     )]
-    pub idf_tools_path: Option<String>,
-
-    #[arg(
-        long,
-        help = "Path to idf_tools.py file relative from ESP-IDF installation folder"
-    )]
     pub tools_json_file: Option<String>,
 
     #[arg(short, long)]
@@ -299,10 +293,6 @@ impl IntoIterator for InstallArgs {
             (
                 "tools_json_file".to_string(),
                 self.tools_json_file.map(Into::into),
-            ),
-            (
-                "idf_tools_path".to_string(),
-                self.idf_tools_path.map(Into::into),
             ),
             ("mirror".to_string(), self.mirror.map(Into::into)),
             ("idf_mirror".to_string(), self.idf_mirror.map(Into::into)),

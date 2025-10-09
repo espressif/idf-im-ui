@@ -31,7 +31,6 @@ pub struct Settings {
     pub target: Option<Vec<String>>,
     pub idf_versions: Option<Vec<String>>,
     pub tools_json_file: Option<String>,
-    pub idf_tools_path: Option<String>,
     pub config_file: Option<PathBuf>,
     pub config_file_save_path: Option<PathBuf>,
     pub non_interactive: Option<bool>,
@@ -95,7 +94,6 @@ impl Default for Settings {
             target: Some(vec!["all".to_string()]),
             idf_versions: None,
             tools_json_file: Some("tools/tools.json".to_string()),
-            idf_tools_path: Some("tools/idf_tools.py".to_string()),
             config_file: None,
             config_file_save_path: Some(PathBuf::from("eim_config.toml")),
             non_interactive: Some(true),
@@ -189,11 +187,6 @@ impl Settings {
                 && !cli_settings_struct.is_default("tools_json_file")
             {
                 settings.tools_json_file = cli_settings_struct.tools_json_file.clone();
-            }
-            if cli_settings_struct.idf_tools_path.is_some()
-                && !cli_settings_struct.is_default("idf_tools_path")
-            {
-                settings.idf_tools_path = cli_settings_struct.idf_tools_path.clone();
             }
             if cli_settings_struct.config_file_save_path.is_some()
                 && !cli_settings_struct.is_default("config_file_save_path")
@@ -312,7 +305,6 @@ impl Settings {
             target,
             idf_versions,
             tools_json_file,
-            idf_tools_path,
             config_file,
             config_file_save_path,
             non_interactive,

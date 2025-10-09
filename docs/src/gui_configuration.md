@@ -78,7 +78,6 @@ tool_install_folder_name = "/Users/testusername/.espressif/tools"
 target = ["all"]
 idf_versions = ["v5.5"]
 tools_json_file = "tools/tools.json"
-idf_tools_path = "tools/idf_tools.py"
 config_file_save_path = "eim_config.toml"
 non_interactive = true
 wizard_all_questions = false
