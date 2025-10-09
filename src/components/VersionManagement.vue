@@ -55,6 +55,16 @@
           <div class="version-actions">
             <n-tooltip trigger="hover">
               <template #trigger>
+                <n-button @click="openIDFTerminl(version)" quaternary circle>
+                  <template #icon>
+                    <n-icon><LaptopOutlined /></n-icon>
+                  </template>
+                </n-button>
+              </template>
+              {{ t('versionManagement.version.actions.openTerminal') }}
+            </n-tooltip>
+            <n-tooltip trigger="hover">
+              <template #trigger>
                 <n-button @click="renameVersion(version)" quaternary circle>
                   <template #icon>
                     <n-icon><EditOutlined /></n-icon>
@@ -225,7 +235,7 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, version } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
@@ -242,7 +252,8 @@ import {
   PlusCircleOutlined,
   ClearOutlined,
   ReloadOutlined,
-  UsbOutlined
+  UsbOutlined,
+  LaptopOutlined
 } from '@vicons/antd'
 
 export default {
@@ -252,7 +263,7 @@ export default {
     NCheckbox, NAlert, NTooltip,
     FolderOutlined, FolderOpenOutlined, EditOutlined,
     DeleteOutlined, ToolOutlined, PlusCircleOutlined,
-    ClearOutlined, ReloadOutlined, UsbOutlined
+    ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined
   },
   setup() {
     const router = useRouter()
@@ -321,6 +332,24 @@ export default {
       selectedVersion.value = version
       newVersionName.value = version.name
       showRenameModal.value = true
+    }
+
+    const openIDFTerminl = async (version) => {
+      try {
+        let activationScript = version.activationScript;
+        let res = await invoke('open_terminal_with_script', {
+          scriptPath: activationScript,
+        })
+        if (!res) {
+          message.error(t('versionManagement.messages.error.openTerminal'))
+          return
+        }
+        console.log('IDF terminal opened successfully')
+        message.success(t('versionManagement.messages.success.openTerminal'))
+      } catch (error) {
+        console.error("Terminal failed to open,", error)
+        message.error(t('versionManagement.messages.error.openTerminal'))
+      }
     }
 
     const confirmRename = async () => {
@@ -473,6 +502,7 @@ export default {
       formatSize,
       checkForUpdates,
       renameVersion,
+      openIDFTerminl,
       confirmRename,
       removeVersion,
       confirmRemove,

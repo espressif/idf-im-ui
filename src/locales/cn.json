@@ -321,6 +321,7 @@
         "rename": "重命名",
         "fix": "修复/重新安装",
         "openFolder": "打开文件夹",
+        "openTerminal": "打开 IDF 终端",
         "remove": "移除"
       }
     },
@@ -368,7 +369,8 @@
         "prerequisitesStarted": "先决条件安装已开始",
         "driversInstalled": "驱动程序安装成功。",
         "latestVersion": "您拥有的是最新版本",
-        "updateAvailable": "有新版本可用！"
+        "updateAvailable": "有新版本可用！",
+        "openTerminal": "IDF航站楼启用"
       },
       "error": {
         "loadVersions": "加载已安装版本失败",
@@ -380,7 +382,8 @@
         "prerequisites": "安装先决条件失败：{error}",
         "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。",
         "drivers": "安装驱动程序失败：{error}",
-        "checkUpdates": "检查更新失败"
+        "checkUpdates": "检查更新失败",
+        "openTerminal": "IDF 终端无法打开"
       },
       "warning": {
         "confirmAction": "请确认操作"

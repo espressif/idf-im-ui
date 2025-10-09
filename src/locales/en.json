@@ -321,6 +321,7 @@
         "rename": "Rename",
         "fix": "Fix/Reinstall",
         "openFolder": "Open Folder",
+        "openTerminal": "Open IDF Terminal",
         "remove": "Remove"
       }
     },
@@ -368,7 +369,8 @@
         "prerequisitesStarted": "Prerequisites installation started",
         "driversInstalled": "Driver installation successful.",
         "latestVersion": "You have the latest version",
-        "updateAvailable": "New version available!"
+        "updateAvailable": "New version available!",
+        "openTerminal": "IDF terminal opened"
       },
       "error": {
         "loadVersions": "Failed to load installed versions",
@@ -380,7 +382,8 @@
         "prerequisites": "Failed to install prerequisites: {error}",
         "driversPermission": "Insufficient permissions to install drivers. Please run the application as an administrator.",
         "drivers": "Failed to install drivers: {error}",
-        "checkUpdates": "Failed to check for updates"
+        "checkUpdates": "Failed to check for updates",
+        "openTerminal": "IDF terminal could not be opened"
       },
       "warning": {
         "confirmAction": "Please confirm the action"
