@@ -267,6 +267,7 @@ pub fn run() {
             cpu_count,
             track_event_command,
             set_locale,
+            open_terminal_with_script,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
