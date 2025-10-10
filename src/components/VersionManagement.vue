@@ -55,7 +55,7 @@
           <div class="version-actions">
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="openIDFTerminl(version)" quaternary circle>
+                <n-button @click="openIDFTerminl(version)" quaternary circle data-id="openIDFTerminl">
                   <template #icon>
                     <n-icon><LaptopOutlined /></n-icon>
                   </template>
@@ -65,7 +65,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="renameVersion(version)" quaternary circle>
+                <n-button @click="renameVersion(version)" quaternary circle data-id="renameVersion">
                   <template #icon>
                     <n-icon><EditOutlined /></n-icon>
                   </template>
@@ -75,7 +75,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="fixVersion(version)" quaternary circle>
+                <n-button @click="fixVersion(version)" quaternary circle data-id="fixVersion">
                   <template #icon>
                     <n-icon><ToolOutlined /></n-icon>
                   </template>
@@ -85,7 +85,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="openInExplorer(version)" quaternary circle>
+                <n-button @click="openInExplorer(version)" quaternary circle data-id="openInExplorer">
                   <template #icon>
                     <n-icon><FolderOpenOutlined /></n-icon>
                   </template>
@@ -95,7 +95,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="removeVersion(version)" quaternary circle type="error">
+                <n-button @click="removeVersion(version)" quaternary circle data-id="removeVersion" type="error">
                   <template #icon>
                     <n-icon><DeleteOutlined /></n-icon>
                   </template>
