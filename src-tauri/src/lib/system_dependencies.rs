@@ -51,9 +51,10 @@ pub fn get_prequisites() -> Vec<&'static str> {
             "gperf",
             "ccache",
             "dfu-util",
+            "cmake",
         ],
         "windows" => vec!["git"],
-        "macos" => vec!["dfu-util"],
+        "macos" => vec!["dfu-util","cmake"],
         _ => vec![],
     }
 }
