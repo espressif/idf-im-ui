@@ -591,6 +591,13 @@
         "step2": "导航到您的项目目录",
         "step3": "运行 '{command}' 创建一个新项目",
         "step4": "运行 '{command}' 构建您的项目"
+      },
+      "nextSteps_posix": {
+        "title": "后续步骤:",
+        "step1": "使用版本管理器屏幕上的图标或任何打开的终端中的源激活脚本打开一个新的 IDF 终端。",
+        "step2": "激活脚本可以在 `~/.espressif/tools/` 文件夹中找到",
+        "step3": "运行 '{command}' 以激活 IDF 环境",
+        "step4": "运行 '{command}' 来构建你的项目"
       }
     },
     "error": {
