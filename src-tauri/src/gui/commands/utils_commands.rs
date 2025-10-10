@@ -380,7 +380,7 @@ pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_da
 
 
 #[tauri::command]
-pub fn open_terminal_with_script(script_path: String) -> Result<(), String> {
+pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
     #[cfg(target_os = "windows")]
     {
         // Windows: Open PowerShell and dot-source the script
@@ -471,5 +471,5 @@ pub fn open_terminal_with_script(script_path: String) -> Result<(), String> {
         }
     }
 
-    Ok(())
+    Ok(true)
 }
