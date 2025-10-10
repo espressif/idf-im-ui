@@ -17,7 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
+    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -489,15 +489,15 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 /// - Failure to install any of the required Python packages from the `requirements.txt`
 ///   files using pip.
 pub async fn install_python_env(
+    paths: &VersionPaths,
     idf_version: &str,
     idf_tools_path: &Path,
     reinstall: bool,
-    idf_path: &Path,
     features: &[String],
     offline_archive_dir: Option<&Path>,
 ) -> Result<(), String> {
     let mut offline_mode = false;
-    let venv_path = idf_tools_path.join("python").join(idf_version).join("venv");
+    let venv_path = paths.python_venv_path.clone();
 
     // if reinstall is true, remove the existing venv
     if venv_path.exists() && reinstall {
@@ -559,7 +559,8 @@ pub async fn install_python_env(
 
     // install the requirements
     let mut requirements_file_list = vec![];
-    let base_requirements_path = idf_path.join("tools").join("requirements");
+
+    let base_requirements_path = paths.idf_path.join("tools").join("requirements");
     requirements_file_list.push(base_requirements_path.join("requirements.core.txt"));
     // prepare list of requirements files
     for feature in features {
@@ -574,7 +575,7 @@ pub async fn install_python_env(
             );
         }
     }
-    let constrains_idf_version = match parse_cmake_version(idf_path.to_str().unwrap()) {
+    let constrains_idf_version = match parse_cmake_version(paths.idf_path.to_str().unwrap()) {
         Ok((maj,min)) => format!("v{}.{}", maj, min),
         Err(e) => {
             warn!("Failed to parse CMake version: {}", e);

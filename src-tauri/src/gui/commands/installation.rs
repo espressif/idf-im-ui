@@ -1810,10 +1810,10 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             });
 
             match idf_im_lib::python_utils::install_python_env(
+                &paths,
                 &paths.actual_version,
                 &paths.tool_install_directory,
                 true,
-                &paths.idf_path,
                 &settings.idf_features.clone().unwrap_or_default(),
                 Some(offline_archive_dir.path())
             ).await {
