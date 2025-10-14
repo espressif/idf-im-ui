@@ -467,7 +467,9 @@
     "messages": {
       "windowsInstall": "Click below to automatically install missing components",
       "manualInstall": "Please install the following components manually",
-      "manualHint": "Please install the prerequisites and run the check again."
+      "manualHint": "Please install the prerequisites and run the check again.",
+      "macosHint" : "You can install missing prerequisites using Homebrew like `brew install {list}`",
+      "linuxHint" : "You can install missing prerequisites using your package manager like `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "mirrorSelect": {
@@ -629,7 +631,10 @@
         "logs": "Failed to open logs folder",
         "docs": "Failed to open documentation",
         "ide": "Please install VS Code with ESP-IDF extension"
-      }
+      },
+      "manualHint":"Please install the prerequisites and run the check again.",
+      "macosHint" : "You can install missing prerequisites using Homebrew like `brew install {list}`",
+      "linuxHint" : "You can install missing prerequisites using your package manager like `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "installationProgress": {
