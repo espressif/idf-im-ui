@@ -118,7 +118,7 @@
           <ol>
             <li>{{ $t('simpleSetup.complete.nextSteps_posix.step1') }}</li>
             <li>{{ $t('simpleSetup.complete.nextSteps_posix.step2') }}</li>
-            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step3', { command: 'source ~/.espressif/tools/activate_idf_*.sh' }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step3', { command: `source ~/.espressif/tools/activate_idf_${selectedVersion}.sh` }) }}</li>
             <li>{{ $t('simpleSetup.complete.nextSteps_posix.step4', { command: 'idf.py build' }) }}</li>
           </ol>
         </div>

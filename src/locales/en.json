@@ -502,7 +502,9 @@
     "description": "ESP-IDF has been successfully installed on your system",
     "messages": {
       "powershellShortcut": "An IDF PowerShell shortcut has been created on your desktop",
-      "saveConfigInfo": "Save your configuration to reproduce this installation on other machines"
+      "saveConfigInfo": "Save your configuration to reproduce this installation on other machines",
+      "postInstallInstruction": "You can open a new IDF PowerShell terminal using the icon on your desktop or icon on version manager screen of the installer.",
+      "postInstallInstructionPosix": "You can source the activation script in any open terminal. The activation script can be found in `~/.espressif/tools/` folder or use the icon on version manager screen of the installer."
     },
     "buttons": {
       "saveConfiguration": "Save Configuration",

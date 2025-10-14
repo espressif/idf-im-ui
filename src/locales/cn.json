@@ -502,7 +502,9 @@
     "description": "ESP-IDF 已成功安装在您的系统上",
     "messages": {
       "powershellShortcut": "已在您的桌面上创建 IDF PowerShell 快捷方式",
-      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装"
+      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装",
+      "postInstallInstruction": "您可以使用桌面上的图标或安装程序的版本管理屏幕上的图标打开一个新的 IDF PowerShell 终端。",
+      "postInstallInstructionPosix": "您可以在任何打开的终端中 source 激活脚本。激活脚本可以在 `~/.espressif/tools/` 文件夹中找到，或者使用安装程序的版本管理屏幕上的图标。"
     },
     "buttons": {
       "saveConfiguration": "保存配置",
