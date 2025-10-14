@@ -345,12 +345,19 @@ pub async fn setup_tools(
         version: Some(idf_version.to_string()),
     });
 
+    let paths = match settings.get_version_paths(&idf_version) {
+      Ok(paths) => paths,
+      Err(err) => {
+        return Err(anyhow!("Failed to setup environment paths for idf versions"));
+      }
+    };
+
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
-        &idf_version,
-        &tools_install_folder,
+        &paths,
+        &paths.actual_version,
+        &paths.tool_install_directory,
         true, //TODO: actually read from config
-        &idf_path,
         &settings.idf_features.clone().unwrap_or_default(),
         None, // Offline archive directory
     ).await {

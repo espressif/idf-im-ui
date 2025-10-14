@@ -43,6 +43,7 @@ pub struct Settings {
     pub repo_stub: Option<String>,
     pub skip_prerequisites_check: Option<bool>,
     pub version_name: Option<String>,
+    pub python_env_folder_name: Option<String>,
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
 }
 
@@ -111,6 +112,7 @@ impl Default for Settings {
             repo_stub: None,
             skip_prerequisites_check: Some(false),
             version_name: None,
+            python_env_folder_name: Some("python".to_string()),
             use_local_archive: None,
         }
     }
@@ -240,6 +242,11 @@ impl Settings {
             {
                 settings.version_name = cli_settings_struct.version_name.clone();
             }
+            if cli_settings_struct.python_env_folder_name.is_some()
+               && !cli_settings_struct.is_default("python_env_folder_name")
+            {
+              settings.python_env_folder_name = cli_settings_struct.python_env_folder_name.clone()
+            }
             if cli_settings_struct.use_local_archive.is_some()
                 && !cli_settings_struct.is_default("use_local_archive")
             {
@@ -317,6 +324,7 @@ impl Settings {
             repo_stub,
             skip_prerequisites_check,
             version_name,
+            python_env_folder_name,
             use_local_archive
         );
     }
@@ -458,7 +466,7 @@ impl Settings {
       let tool_download_directory = version_installation_path.join(tool_download_folder);
       let tool_install_directory = version_installation_path.join(tool_install_folder);
 
-      let python_venv_path = tool_install_directory.join("python").join(&actual_version).join("venv");
+      let python_venv_path = tool_install_directory.join(self.python_env_folder_name.clone().unwrap_or_default()).join(&actual_version).join("venv");
 
       let python_path = match std::env::consts::OS {
         "windows" => python_venv_path.join("Scripts").join("python.exe"),
