@@ -28,6 +28,8 @@ use winapi::um::handleapi::CloseHandle;
 use winapi::shared::minwindef::{DWORD, FALSE};
 #[cfg(windows)]
 use std::mem;
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -373,4 +375,101 @@ pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_da
     "additional_data": additional_data
   })).await;
   Ok(())
+}
+
+
+
+#[tauri::command]
+pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows: Open PowerShell and dot-source the script
+        let ps_command = format!(
+            "$scriptPath = '{}'; if (Test-Path $scriptPath) {{ . $scriptPath }} else {{ Write-Host \"Script not found: $scriptPath\" }}",
+            script_path.replace("\\", "\\\\").replace("'", "''")
+        );
+
+        let mut cmd = Command::new("powershell");
+        cmd.args(&[
+            "-NoExit",
+            "-Command",
+            &ps_command
+        ]);
+
+        #[cfg(windows)]
+        unsafe {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x00000010); // CREATE_NEW_CONSOLE
+        }
+
+        cmd.spawn()
+            .map_err(|e| format!("Failed to open PowerShell: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let escaped_script_path = script_path.replace("'", "'\"'\"'");
+
+        // Create a temporary initialization script that sources your script in bash
+        let shell_cmd = format!(
+            "bash --rcfile <(cat ~/.bashrc 2>/dev/null; echo 'source \"{}\"' 2>/dev/null || echo 'echo Script not found: {}')",
+            escaped_script_path, escaped_script_path
+        );
+
+        let applescript_escaped = shell_cmd
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"");
+
+        let applescript = format!(
+            "tell application \"Terminal\"\n\
+             do script \"{}\"\n\
+             activate\n\
+             end tell",
+            applescript_escaped
+        );
+
+        Command::new("osascript")
+            .arg("-e")
+            .arg(applescript)
+            .spawn()
+            .map_err(|e| format!("Failed to open Terminal: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        let escaped_script_path = script_path.replace("'", "'\"'\"'");
+
+        // Use bash --rcfile to source the script as part of the interactive shell initialization
+        let shell_cmd = format!(
+            "bash --rcfile <(cat ~/.bashrc 2>/dev/null; echo 'source \"{}\"' 2>/dev/null || echo 'echo Script not found: {}')",
+            escaped_script_path, escaped_script_path
+        );
+
+        let terminals = [
+            ("gnome-terminal", vec!["--", "bash", "-c", &shell_cmd]),
+            ("konsole", vec!["-e", "bash", "-c", &shell_cmd]),
+            ("xfce4-terminal", vec!["-e", "bash", "-c", &shell_cmd]),
+            ("xterm", vec!["-e", "bash", "-c", &shell_cmd]),
+            ("alacritty", vec!["-e", "bash", "-c", &shell_cmd]),
+            ("kitty", vec!["bash", "-c", &shell_cmd]),
+        ];
+
+        let mut success = false;
+        for (terminal, args) in terminals.iter() {
+            if Command::new(terminal)
+                .args(args)
+                .spawn()
+                .is_ok()
+            {
+                success = true;
+                break;
+            }
+        }
+
+        if !success {
+            return Err("No supported terminal found".to_string());
+        }
+    }
+
+    Ok(true)
 }
