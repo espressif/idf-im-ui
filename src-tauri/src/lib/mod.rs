@@ -9,6 +9,7 @@ use log::{error, info, trace, warn};
 use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use system_dependencies::copy_openocd_rules;
 use tempfile::TempDir;
@@ -261,6 +262,327 @@ pub fn run_powershell_script(script: &str) -> Result<String, std::io::Error> {
     }
 }
 
+/// Gets the Windows Terminal settings file path.
+///
+/// # Returns
+///
+/// * `Result<PathBuf, std::io::Error>` - Path to settings.json
+fn get_windows_terminal_settings_path() -> Result<PathBuf, std::io::Error> {
+    let local_app_data = std::env::var("LOCALAPPDATA")
+        .map_err(|_| std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "LOCALAPPDATA environment variable not found"
+        ))?;
+
+    let settings_path = PathBuf::from(local_app_data)
+        .join("Packages")
+        .join("Microsoft.WindowsTerminal_8wekyb3d8bbwe")
+        .join("LocalState")
+        .join("settings.json");
+
+    Ok(settings_path)
+}
+
+/// Generates a deterministic GUID from a string (for ESP-IDF version).
+///
+/// # Parameters
+///
+/// * `input` - String to generate GUID from (e.g., "esp-idf-5.4.2")
+///
+/// # Returns
+///
+/// * `String` - A valid GUID string
+fn generate_guid_from_string(input: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    input.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // Create a deterministic GUID-like string from the hash
+    // Format: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    format!(
+        "{:08x}-{:04x}-4{:03x}-{:04x}-{:012x}",
+        (hash & 0xFFFFFFFF) as u32,
+        ((hash >> 32) & 0xFFFF) as u16,
+        ((hash >> 48) & 0xFFF) as u16,
+        ((hash >> 16) & 0xFFFF) as u16 | 0x8000, // Set variant bits
+        hash & 0xFFFFFFFFFFFF
+    )
+}
+
+/// Creates a Windows Terminal profile entry for ESP-IDF.
+///
+/// # Parameters
+///
+/// * `profile_script_path` - Path to the PowerShell profile script to source
+/// * `idf_version` - ESP-IDF version string
+/// * `icon_path` - Optional path to icon file
+///
+/// # Returns
+///
+/// * `Value` - JSON object representing the Windows Terminal profile
+fn create_terminal_profile(
+    profile_script_path: &str,
+    idf_version: &str,
+    icon_path: Option<&str>,
+) -> Value {
+    // Generate a valid GUID based on the version string
+    let guid = format!("{{{}}}", generate_guid_from_string(&format!("esp-idf-{}", idf_version)));
+    let name = format!("ESP-IDF {}", idf_version);
+
+    let mut profile = json!({
+        "guid": guid,
+        "name": name,
+        "commandline": format!(
+            "powershell.exe -NoExit -ExecutionPolicy Bypass -NoProfile -Command \"& {{. '{}' }}\"",
+            profile_script_path.replace("\\", "\\\\")
+        ),
+        "hidden": false,
+        "startingDirectory": "%USERPROFILE%\\Desktop"
+    });
+
+    if let Some(icon) = icon_path {
+        profile["icon"] = json!(icon);
+    }
+
+    profile
+}
+
+/// Adds or updates an ESP-IDF profile in Windows Terminal settings.
+///
+/// # Parameters
+///
+/// * `profile_script_path` - Path to the PowerShell profile script
+/// * `idf_version` - ESP-IDF version string
+/// * `icon_path` - Optional path to icon file
+///
+/// # Returns
+///
+/// * `Result<String, std::io::Error>` - Success message
+pub fn add_windows_terminal_profile(
+    profile_script_path: &str,
+    idf_version: &str,
+    icon_path: Option<&str>,
+) -> Result<String, std::io::Error> {
+    let settings_path = get_windows_terminal_settings_path()?;
+
+    if !settings_path.exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Windows Terminal settings.json not found. Is Windows Terminal installed?"
+        ));
+    }
+
+    // Read existing settings
+    let settings_content = fs::read_to_string(&settings_path)?;
+    let mut settings: Value = serde_json::from_str(&settings_content)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse settings.json: {}", e)
+        ))?;
+
+    // Get or create profiles list
+    if settings.get("profiles").is_none() {
+        settings["profiles"] = json!({ "list": [] });
+    }
+
+    let profiles_list = settings["profiles"]["list"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "profiles.list is not an array"
+        ))?;
+
+    // Create new profile
+    let new_profile = create_terminal_profile(profile_script_path, idf_version, icon_path);
+    let profile_guid = new_profile["guid"].as_str().unwrap();
+
+    // Check if profile already exists and remove it
+    profiles_list.retain(|p| {
+        p.get("guid")
+            .and_then(|g| g.as_str())
+            .map(|g| g != profile_guid)
+            .unwrap_or(true)
+    });
+
+    // Add new profile
+    profiles_list.push(new_profile);
+
+    // Write back to file with pretty formatting
+    let formatted = serde_json::to_string_pretty(&settings)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to serialize settings: {}", e)
+        ))?;
+
+    fs::write(&settings_path, formatted)?;
+
+    Ok(format!(
+        "Windows Terminal profile 'ESP-IDF {}' added successfully.\nRestart Windows Terminal to see the new profile in the dropdown.",
+        idf_version
+    ))
+}
+
+
+/// Removes an ESP-IDF profile from Windows Terminal settings.
+///
+/// # Parameters
+///
+/// * `idf_version` - ESP-IDF version string
+///
+/// # Returns
+///
+/// * `Result<String, std::io::Error>` - Success message
+pub fn remove_windows_terminal_profile(idf_version: &str) -> Result<String, std::io::Error> {
+    let settings_path = get_windows_terminal_settings_path()?;
+
+    if !settings_path.exists() {
+        return Ok("Windows Terminal settings.json not found.".to_string());
+    }
+
+    // Read existing settings
+    let settings_content = fs::read_to_string(&settings_path)?;
+    let mut settings: Value = serde_json::from_str(&settings_content)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse settings.json: {}", e)
+        ))?;
+
+    let profile_guid = format!("{{{}}}", generate_guid_from_string(&format!("esp-idf-{}", idf_version)));
+
+    // Get profiles list
+    let profiles_list = settings["profiles"]["list"]
+        .as_array_mut()
+        .ok_or_else(|| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "profiles.list is not an array"
+        ))?;
+
+    let initial_count = profiles_list.len();
+
+    // Remove profile with matching GUID
+    profiles_list.retain(|p| {
+        p.get("guid")
+            .and_then(|g| g.as_str())
+            .map(|g| g != profile_guid)
+            .unwrap_or(true)
+    });
+
+    if profiles_list.len() == initial_count {
+        return Ok(format!(
+            "Windows Terminal profile 'ESP-IDF {}' not found.",
+            idf_version
+        ));
+    }
+
+    // Write back to file
+    let formatted = serde_json::to_string_pretty(&settings)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to serialize settings: {}", e)
+        ))?;
+
+    fs::write(&settings_path, formatted)?;
+
+    Ok(format!(
+        "Windows Terminal profile 'ESP-IDF {}' removed successfully.",
+        idf_version
+    ))
+}
+
+/// Checks if an ESP-IDF profile exists in Windows Terminal settings.
+///
+/// # Parameters
+///
+/// * `idf_version` - ESP-IDF version string
+///
+/// # Returns
+///
+/// * `Result<bool, std::io::Error>` - True if profile exists
+pub fn is_windows_terminal_profile_installed(idf_version: &str) -> Result<bool, std::io::Error> {
+    let settings_path = get_windows_terminal_settings_path()?;
+
+    if !settings_path.exists() {
+        return Ok(false);
+    }
+
+    let settings_content = fs::read_to_string(&settings_path)?;
+    let settings: Value = serde_json::from_str(&settings_content)
+        .map_err(|e| std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse settings.json: {}", e)
+        ))?;
+
+    let profile_guid = format!("{{{}}}", generate_guid_from_string(&format!("esp-idf-{}", idf_version)));
+
+    if let Some(profiles) = settings["profiles"]["list"].as_array() {
+        for profile in profiles {
+            if let Some(guid) = profile.get("guid").and_then(|g| g.as_str()) {
+                if guid == profile_guid {
+                    return Ok(true);
+                }
+            }
+        }
+    }
+
+    Ok(false)
+}
+
+/// Creates a PowerShell profile script and adds it to Windows Terminal.
+/// This combines profile creation with Windows Terminal integration.
+///
+/// # Parameters
+///
+/// * `profile_path` - Directory where to create the profile script
+/// * `idf_path` - Path to ESP-IDF
+/// * `idf_version` - ESP-IDF version
+/// * `idf_tools_path` - Path to ESP-IDF tools
+/// * `idf_python_env_path` - Optional Python environment path
+/// * `export_paths` - Paths to add to PATH
+/// * `env_var_pairs` - Environment variables to set
+/// * `icon_path` - Optional icon path for Windows Terminal
+///
+/// # Returns
+///
+/// * `Result<String, std::io::Error>` - Success message
+pub fn create_windows_terminal_idf_profile(
+    profile_path: &str,
+    idf_path: &str,
+    idf_version: &str,
+    idf_tools_path: &str,
+    idf_python_env_path: Option<&str>,
+    export_paths: Vec<String>,
+    env_var_pairs: Vec<(String, String)>,
+    icon_path: Option<&str>,
+) -> Result<String, std::io::Error> {
+    // First create the PowerShell profile script
+    // (reuse your existing create_powershell_profile function)
+    let profile_script_path = create_powershell_profile(
+        profile_path,
+        idf_path,
+        idf_tools_path,
+        idf_python_env_path,
+        idf_version,
+        export_paths,
+        env_var_pairs,
+    )?;
+
+    // Then add it to Windows Terminal
+    let result = add_windows_terminal_profile(
+        &profile_script_path,
+        idf_version,
+        icon_path,
+    )?;
+
+    Ok(format!(
+        "Profile script created: {}\n{}",
+        profile_script_path,
+        result
+    ))
+}
+
 /// Creates a PowerShell profile script for the ESP-IDF tools.
 ///
 /// # Parameters
@@ -425,6 +747,46 @@ pub fn create_desktop_shortcut(
             Ok("Unimplemented on this platform.".to_string())
         }
     }
+}
+
+pub fn create_desktop_shortcut_and_terminal_profile(
+    profile_path: &str,
+    idf_path: &str,
+    idf_version: &str,
+    idf_tools_path: &str,
+    idf_python_env_path: Option<&str>,
+    export_paths: Vec<String>,
+    env_var_pairs: Vec<(String, String)>,
+) -> Result<String, std::io::Error> {
+    // Create desktop shortcut (your existing code)
+    let shortcut_result = create_desktop_shortcut(
+        profile_path,
+        idf_path,
+        idf_version,
+        idf_tools_path,
+        idf_python_env_path.clone(),
+        export_paths.clone(),
+        env_var_pairs.clone(),
+    )?;
+
+    // Get icon path
+    let mut icon_path = dirs::home_dir().unwrap();
+    icon_path.push("Icons");
+    icon_path.push("eim.ico");
+
+    // Add to Windows Terminal
+    let terminal_result = create_windows_terminal_idf_profile(
+        profile_path,
+        idf_path,
+        idf_version,
+        idf_tools_path,
+        idf_python_env_path,
+        export_paths,
+        env_var_pairs,
+        Some(icon_path.to_str().unwrap()),
+    )?;
+
+    Ok(format!("{}\n\n{}", shortcut_result, terminal_result))
 }
 
 /// Retrieves the path to the local data directory for storing logs.
@@ -1624,7 +1986,7 @@ pub fn single_version_post_install(
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut
-            if let Err(err) = create_desktop_shortcut(
+            if let Err(err) = create_desktop_shortcut_and_terminal_profile(
                 activation_script_path,
                 idf_path,
                 idf_version,
