@@ -38,6 +38,8 @@
           </div>
           <div v-else class="manual-install" data-id="manual-install-section">
             <p class="hint" data-id="manual-install-hint">{{ t('prerequisitiesCheck.messages.manualHint') }}</p>
+            <p v-if="os === 'macos'" class="hint" data-id="macos-hint">{{ t('prerequisitiesCheck.messages.macosHint', {list: missing_prerequisities.join(' ')}) }}</p>
+            <p v-if="os === 'linux'" class="hint" data-id="linux-hint">{{ t('prerequisitiesCheck.messages.linuxHint', {list: missing_prerequisities.join(' ')}) }}</p>
           </div>
         </div>
       </div>

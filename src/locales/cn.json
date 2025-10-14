@@ -464,7 +464,9 @@
     "messages": {
       "windowsInstall": "点击下方自动安装缺失的组件",
       "manualInstall": "请手动安装以下组件",
-      "manualHint": "请安装先决条件后再次运行检查。"
+      "manualHint": "请安装先决条件后再次运行检查。",
+      "macosHint" : "您可以使用 Homebrew 安装缺失的先决条件，例如 `brew install {list}`",
+      "linuxHint" : "您可以使用您的包管理器安装缺失的先决条件，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "mirrorSelect": {
@@ -626,7 +628,10 @@
         "logs": "打开日志文件夹失败",
         "docs": "打开文档失败",
         "ide": "请安装带有 ESP-IDF 扩展的 VS Code"
-      }
+      },
+      "manualHint":" 请安装先决条件后再次运行检查。",
+      "macosHint" : "您可以使用 Homebrew 安装缺失的先决条件，例如 `brew install {list}`",
+      "linuxHint" : "您可以使用您的包管理器安装缺失的先决条件，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "installationProgress": {

@@ -252,7 +252,13 @@ export default {
           if (!prereqResult.all_ok && appStore.os !== 'windows') {
             errorTitle.value = t('simpleSetup.error.prerequisites.title')
             errorMessage.value = t('simpleSetup.error.prerequisites.message')
-            errorDetails.value = prereqResult.missing.join('\n')
+            if (appStore.os === 'macos') {
+              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.macosHint', { list: prereqResult.missing.join(' ') })
+            } else if (appStore.os === 'linux') {
+              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.linuxHint', { list: prereqResult.missing.join(' ') })
+            } else {
+              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + prereqResult.missing.join(', ')
+            }
             currentState.value = 'error'
             return false
           } // TODO: maybe on windows inform user which prerequisities will be installed
