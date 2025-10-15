@@ -436,6 +436,33 @@ fn install_scoop_package_manager() -> Result<(), String> {
                     trace!("output: {}", o);
                     debug!("Successfully installed Scoop package manager. Adding to PATH");
                     add_to_path(&path_with_scoop).unwrap();
+                    let output = command_executor::execute_command(
+                        "powershell",
+                        &[
+                          "-ExecutionPolicy",
+                          "Bypass",
+                          "-Command",
+                          "scoop",
+                          "bucket",
+                          "add",
+                          "versions"
+                        ],
+                    );
+                    match output {
+                        Ok(o) => {
+                            if o.status.success() {
+                                debug!("Successfully added versions bucket to scoop");
+                            } else {
+                                let output = String::from_utf8(o.stdout).unwrap();
+                                let error_message = String::from_utf8(o.stderr).unwrap();
+                                debug!("Failed to add versions bucket to scoop: {}", error_message);
+                                debug!("Output: {}", output);
+                            }
+                        }
+                        Err(e) => {
+                            debug!("Failed to add versions bucket to scoop: {}", e);
+                        }
+                    }
                     Ok(())
                 }
                 Err(e) => Err(e.to_string()),
