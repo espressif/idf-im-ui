@@ -507,7 +507,9 @@
     "description": "ESP-IDF 已成功安装在您的系统上",
     "messages": {
       "powershellShortcut": "已在您的桌面上创建 IDF PowerShell 快捷方式",
-      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装"
+      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装",
+      "postInstallInstruction": "您可以使用桌面上的图标或安装程序的版本管理屏幕上的图标打开一个新的 IDF PowerShell 终端。",
+      "postInstallInstructionPosix": "您可以在任何打开的终端中 source 激活脚本。激活脚本可以在 `~/.espressif/tools/` 文件夹中找到，或者使用安装程序的版本管理屏幕上的图标。"
     },
     "buttons": {
       "saveConfiguration": "保存配置",
@@ -596,6 +598,13 @@
         "step2": "导航到您的项目目录",
         "step3": "运行 '{command}' 创建一个新项目",
         "step4": "运行 '{command}' 构建您的项目"
+      },
+      "nextSteps_posix": {
+        "title": "后续步骤:",
+        "step1": "使用版本管理器屏幕上的图标或任何打开的终端中的源激活脚本打开一个新的 IDF 终端。",
+        "step2": "激活脚本可以在 `~/.espressif/tools/` 文件夹中找到",
+        "step3": "运行 '{command}' 以激活 IDF 环境",
+        "step4": "运行 '{command}' 来构建你的项目"
       }
     },
     "error": {

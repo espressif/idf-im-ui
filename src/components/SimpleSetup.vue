@@ -104,13 +104,22 @@
           </template>
         </n-result>
 
-        <div class="post-install-info">
+        <div class="post-install-info" v-if="appStore.os == 'windows'">
           <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
             <li>{{ $t('simpleSetup.complete.nextSteps.step1') }}</li>
             <li>{{ $t('simpleSetup.complete.nextSteps.step2') }}</li>
             <li>{{ $t('simpleSetup.complete.nextSteps.step3', { command: 'idf.py create-project my_project' }) }}</li>
             <li>{{ $t('simpleSetup.complete.nextSteps.step4', { command: 'idf.py build' }) }}</li>
+          </ol>
+        </div>
+        <div class="post-install-info" v-else>
+          <h3>{{ $t('simpleSetup.complete.nextSteps_posix.title') }}</h3>
+          <ol>
+            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step1') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step2') }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step3', { command: `source ~/.espressif/tools/activate_idf_${selectedVersion}.sh` }) }}</li>
+            <li>{{ $t('simpleSetup.complete.nextSteps_posix.step4', { command: 'idf.py build' }) }}</li>
           </ol>
         </div>
       </div>
@@ -516,7 +525,8 @@ export default {
       openIDE,
       useWizard,
       goToManagement,
-      goBack
+      goBack,
+      appStore
     }
   }
 }

@@ -507,7 +507,9 @@
     "description": "ESP-IDF has been successfully installed on your system",
     "messages": {
       "powershellShortcut": "An IDF PowerShell shortcut has been created on your desktop",
-      "saveConfigInfo": "Save your configuration to reproduce this installation on other machines"
+      "saveConfigInfo": "Save your configuration to reproduce this installation on other machines",
+      "postInstallInstruction": "You can open a new IDF PowerShell terminal using the icon on your desktop or icon on version manager screen of the installer.",
+      "postInstallInstructionPosix": "You can source the activation script in any open terminal. The activation script can be found in `~/.espressif/tools/` folder or use the icon on version manager screen of the installer."
     },
     "buttons": {
       "saveConfiguration": "Save Configuration",
@@ -592,9 +594,16 @@
       },
       "nextSteps": {
         "title": "Next Steps:",
-        "step1": "Open a new IDF terminal using the icon on your desktop.",
+        "step1": "Open a new IDF terminal using the icon on your desktop or icon on version manager screen of the installer.",
         "step2": "Navigate to your project directory",
         "step3": "Run '{command}' to create a new project",
+        "step4": "Run '{command}' to build your project"
+      },
+      "nextSteps_posix": {
+        "title": "Next Steps:",
+        "step1": "Open a new IDF terminal using the icon on version manager screen or source activation script in any open terminal.",
+        "step2": "The activation script can be found in `~/.espressif/tools/` folder",
+        "step3": "Run '{command}' to activate the IDF environment",
         "step4": "Run '{command}' to build your project"
       }
     },
