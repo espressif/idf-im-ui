@@ -615,7 +615,12 @@
       "retry": "重试",
       "prerequisites": {
         "title": "缺少先决条件",
-        "message": "一些必需的依赖项未安装。"
+        "message": "一些必需的依赖项未安装。",
+        "python": {
+          "title": "Python 检查失败",
+          "message": "Python 3.10+ 未安装或配置不正确。",
+          "details": "请安装 Python 3.10 或更高版本，并确保 pip、virtualenv 和 SSL 可用。"
+        }
       },
       "path": {
         "title": "安装路径非空",
