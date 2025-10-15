@@ -615,7 +615,12 @@
       "retry": "Try Again",
       "prerequisites": {
         "title": "Prerequisites Missing",
-        "message": "Some required dependencies are not installed."
+        "message": "Some required dependencies are not installed.",
+        "python": {
+          "title": "Python Not Configured",
+          "message": "Python 3.10+ with pip, virtualenv, and SSL support is required.",
+          "details": "Please install Python or use custom installation to configure it."
+        }
       },
       "path": {
         "title": "Installation Path Not Empty",

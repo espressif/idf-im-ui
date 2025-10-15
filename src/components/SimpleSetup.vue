@@ -257,7 +257,7 @@ export default {
       try {
         currentState.value = 'checking'
         // Check prerequisites
-        const prereqResult = invoke('check_prerequisites_detailed').then(prereqResult => {
+        const prereqResult = invoke('check_prerequisites_detailed').then(async (prereqResult) => {
           if (!prereqResult.all_ok && appStore.os !== 'windows') {
             errorTitle.value = t('simpleSetup.error.prerequisites.title')
             errorMessage.value = t('simpleSetup.error.prerequisites.message')
@@ -271,6 +271,17 @@ export default {
             currentState.value = 'error'
             return false
           } // TODO: maybe on windows inform user which prerequisities will be installed
+          let python_sane = await invoke("python_sanity_check", {});
+          if (!python_sane) {
+            console.log("Python sanity check failed");
+            errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
+            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
+            currentState.value = 'error'
+            return false
+          } else {
+            console.log("Python sanity check passed");
+          }
           // Get default installation path
           invoke('get_settings').then(settings => {
             installPath.value = settings?.path

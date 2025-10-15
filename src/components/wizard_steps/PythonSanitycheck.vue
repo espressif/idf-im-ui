@@ -72,7 +72,7 @@ export default {
   methods: {
     check_python_sanity: async function () {
       this.loading = true;
-      this.python_sane = await invoke("python_sanity_check", {});;
+      this.python_sane = await invoke("python_sanity_check", {});
       this.loading = false;
       return false;
     },
