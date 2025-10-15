@@ -136,7 +136,7 @@ pub fn check_and_install_python(
         if std::env::consts::OS == "windows" {
             info!("{}", t!("python.sanitycheck.fail"));
             let res = if !install_all_prerequisites && !non_interactive {
-                generic_confirm("pythhon.install.prompt")
+                generic_confirm("python.install.prompt")
             } else if install_all_prerequisites {
                 Ok(true)
             } else {
@@ -144,7 +144,7 @@ pub fn check_and_install_python(
             };
 
             if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(vec!["python@3.10".to_string()])
+                system_dependencies::install_prerequisites(vec!["python313".to_string()])
                     .map_err(|e| e.to_string())?;
                 let scp = system_dependencies::get_scoop_path();
                 let usable_python = match scp {
