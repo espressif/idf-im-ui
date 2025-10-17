@@ -273,12 +273,23 @@ export default {
           } // TODO: maybe on windows inform user which prerequisities will be installed
           let python_sane = await invoke("python_sanity_check", {});
           if (!python_sane) {
-            console.log("Python sanity check failed");
-            errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
-            errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
-            currentState.value = 'error'
-            return false
+            if (appStore.os == 'windows') {
+              console.log("Python sanity check failed - attempting automatic installation");
+              try {
+                await invoke("python_install", {});
+                python_sane = await invoke("python_sanity_check", {});
+              } catch (error) {
+                console.error('Automatic Python installation failed:', error);
+                python_sane = false;
+              }
+            } else {
+              console.log("Python sanity check failed");
+              errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
+              errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
+              errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
+              currentState.value = 'error'
+              return false
+            }
           } else {
             console.log("Python sanity check passed");
           }
