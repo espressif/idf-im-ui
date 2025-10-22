@@ -37,6 +37,7 @@ pub struct Settings {
     pub wizard_all_questions: Option<bool>,
     pub mirror: Option<String>,
     pub idf_mirror: Option<String>,
+    pub pypi_mirror: Option<String>,
     pub recurse_submodules: Option<bool>,
     pub install_all_prerequisites: Option<bool>,
     pub idf_features: Option<Vec<String>>,
@@ -106,6 +107,7 @@ impl Default for Settings {
                     .to_string(),
             ),
             idf_mirror: Some(crate::get_idf_mirrors_list().first().unwrap().to_string()),
+            pypi_mirror: Some(crate::get_pypi_mirrors_list().first().unwrap().to_string()),
             recurse_submodules: Some(true),
             install_all_prerequisites: Some(false),
             idf_features: None,
@@ -213,6 +215,11 @@ impl Settings {
             {
                 settings.idf_mirror = cli_settings_struct.idf_mirror.clone();
             }
+            if cli_settings_struct.pypi_mirror.is_some()
+                && !cli_settings_struct.is_default("pypi_mirror")
+            {
+                settings.pypi_mirror = cli_settings_struct.pypi_mirror.clone();
+            }
             if cli_settings_struct.recurse_submodules.is_some()
                 && !cli_settings_struct.is_default("recurse_submodules")
             {
@@ -318,6 +325,7 @@ impl Settings {
             wizard_all_questions,
             mirror,
             idf_mirror,
+            pypi_mirror,
             recurse_submodules,
             install_all_prerequisites,
             idf_features,

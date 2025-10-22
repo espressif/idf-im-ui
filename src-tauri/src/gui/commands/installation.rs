@@ -1815,7 +1815,8 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 &paths.tool_install_directory,
                 true,
                 &settings.idf_features.clone().unwrap_or_default(),
-                Some(offline_archive_dir.path())
+                Some(offline_archive_dir.path()),
+                &settings.pypi_mirror,
             ).await {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,

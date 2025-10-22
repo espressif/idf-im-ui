@@ -242,6 +242,10 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
 ///   containing the list of Python packages to install.
 /// * `constraint_file` - An `Option<PathBuf>` that, if present, specifies the path to a
 ///   pip constraints file (`.txt`). This file can be used to pin package versions.
+/// * `wheel_dir` - An `Option<PathBuf>` that, if present, enables offline installation mode
+///   by specifying a directory containing wheel files.
+/// * `pypi_mirror` - An `Option<String>` that, if present, specifies a custom PyPI mirror URL
+///   to use as the package index (e.g., "https://pypi.tuna.tsinghua.edu.cn/simple").
 ///
 /// # Returns
 ///
@@ -265,6 +269,7 @@ pub fn pip_install_requirements(
     requirements_file: &Path,
     constraint_file: &Option<PathBuf>,
     wheel_dir: &Option<PathBuf>,
+    pypi_mirror: &Option<String>,
 ) -> Result<(), std::io::Error> {
     let python_location = match std::env::consts::OS {
         "windows" => venv_path.join("Scripts").join("python.exe"),
@@ -283,26 +288,35 @@ pub fn pip_install_requirements(
     match std::env::consts::OS {
         "windows" => {
             match if let Some(wheel_dir) = wheel_dir { // offline mode
+                let mut args = vec![
+                    "-m", "pip", "install", "-r",
+                    requirements_file.to_str().unwrap(),
+                    "--upgrade", "--constraint", constrain_path,
+                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
+                ];
                 command_executor::execute_command_with_env(
                     python_location.to_str().unwrap(),
-                    &vec![
-                        "-m", "pip", "install", "-r",
-                        requirements_file.to_str().unwrap(),
-                        "--upgrade", "--constraint", constrain_path,
-                        "--no-index", "--find-links", wheel_dir.to_str().unwrap()
-                    ],
+                    &args,
                     vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
                 )
             } else {
+                let mut args = vec![
+                    "-m", "pip", "install", "-r",
+                    requirements_file.to_str().unwrap(),
+                    "--upgrade", "--constraint", constrain_path
+                ];
+
+                // Add PyPI mirror if specified
+                if let Some(mirror_url) = pypi_mirror {
+                    args.push("--index-url");
+                    args.push(mirror_url.as_str());
+                }
+
                 command_executor::execute_command_with_env(
                     python_location.to_str().unwrap(),
-                    &vec![
-                        "-m", "pip", "install", "-r",
-                        requirements_file.to_str().unwrap(),
-                        "--upgrade", "--constraint", constrain_path
-                ],
-                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-              )
+                    &args,
+                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+                )
             } {
                 Ok(out) => {
                     if out.status.success() {
@@ -334,19 +348,23 @@ pub fn pip_install_requirements(
                   vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
                 )
             } else {
-               command_executor::execute_command_with_env(
-                "bash",
-                &vec![
-                    "-c",
-                    &format!(
-                        "{} -m pip install -r {} --upgrade --constraint {}",
-                        shlex::quote(python_location.to_str().unwrap()),
-                        shlex::quote(requirements_file.to_str().unwrap()),
-                        shlex::quote(constrain_path)
-                    ),
-                ],
-                vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-              )
+                let mut cmd = format!(
+                    "{} -m pip install -r {} --upgrade --constraint {}",
+                    shlex::quote(python_location.to_str().unwrap()),
+                    shlex::quote(requirements_file.to_str().unwrap()),
+                    shlex::quote(constrain_path)
+                );
+
+                // Add PyPI mirror if specified
+                if let Some(mirror_url) = pypi_mirror {
+                    cmd.push_str(&format!(" --index-url {}", shlex::quote(mirror_url)));
+                }
+
+                command_executor::execute_command_with_env(
+                    "bash",
+                    &vec!["-c", &cmd],
+                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+                )
             } {
                 Ok(out) => {
                     if out.status.success() {
@@ -495,6 +513,7 @@ pub async fn install_python_env(
     reinstall: bool,
     features: &[String],
     offline_archive_dir: Option<&Path>,
+    pypi_mirror: &Option<String>
 ) -> Result<(), String> {
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
@@ -634,7 +653,7 @@ pub async fn install_python_env(
 
     // install the requirements from files
     for requirements_file in requirements_file_list {
-        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir) {
+        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir, pypi_mirror) {
             Ok(_) => {
                 debug!("requirements installed: {}", requirements_file.display());
             }
