@@ -204,6 +204,20 @@ pub fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
         )?)
     }
 
+    if (config.wizard_all_questions.unwrap_or_default()
+        || config.pypi_mirror.is_none()
+        || config.is_default("pypi_mirror"))
+        && config.non_interactive == Some(false)
+    {
+        config.pypi_mirror = Some(generic_select(
+            "wizard.pypi.mirror",
+            &idf_im_lib::get_pypi_mirrors_list()
+                .iter()
+                .map(|&s| s.to_string())
+                .collect(),
+        )?)
+    }
+
     Ok(config)
 }
 

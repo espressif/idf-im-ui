@@ -2071,9 +2071,9 @@ pub fn get_idf_tools_mirrors_list() -> &'static [&'static str] {
 pub fn get_pypi_mirrors_list() -> &'static [&'static str] {
     &[
         "https://pypi.org/simple",
-        "https://mirrors.aliyun.com/pypi/simple/",
+        "https://mirrors.aliyun.com/pypi/simple",
         "https://pypi.tuna.tsinghua.edu.cn/simple",
-        "https://pypi.mirrors.ustc.edu.cn/simple/",
+        "https://pypi.mirrors.ustc.edu.cn/simple",
     ]
 }
 

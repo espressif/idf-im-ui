@@ -58,7 +58,7 @@ wizard.idf.mirror:
   cn: 请选择下载 ESP-IDF 的来源
 wizard.idf.sucess:
   en: Download ESP-IDF successfully
-  cn: 成功下载 ESP-IDF 
+  cn: 成功下载 ESP-IDF
 wizard.idf.failure:
   en: Download ESP-IDF failed
   cn: 下载 ESP-IDF 失败
@@ -104,6 +104,9 @@ wizard.tools_json.unparsable:
 wizard.tools.mirror:
   en: Select a source from which to download tools
   cn: 请选择下载工具的来源
+wizard.pypi.mirror:
+  en: Select a PyPI mirror to download Python packages
+  cn: 请选择 PyPI 镜像来下载 Python 包
 wizard.idf_tools.prompt:
   en: specify the relative (from installation path) path to idf_tools.py file
   cn: 指定 idf_tools.py 文件的相对路径（相对于安装路径）
@@ -190,7 +193,7 @@ wizard.after_install.add_to_path.prompt:
   cn: 是否要永久加入 ESP-IDF 到 PATH 中?
 wizard.shellrc.update.success:
   en: ESP-IDF shellrc updated successfully
-  cn: 已成功更新 ESP-IDF shellrc 
+  cn: 已成功更新 ESP-IDF shellrc
 wizard.shellrc.update.error:
   en: ESP-IDF shellrc update failed
   cn: ESP-IDF shellrc 更新失败
