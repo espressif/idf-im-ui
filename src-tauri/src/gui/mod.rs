@@ -268,6 +268,8 @@ pub fn run() {
             track_event_command,
             set_locale,
             open_terminal_with_script,
+            get_pypi_mirror_list,
+            set_pypi_mirror,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

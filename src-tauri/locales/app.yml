@@ -611,6 +611,9 @@ gui.settings.idf_mirror_updated:
 gui.settings.tools_mirror_updated:
   en: "Tools mirror updated successfully"
   cn: "工具镜像更新成功"
+gui.settings.pypi_mirror_updated:
+  en: "PyPI mirror updated successfully"
+  cn: "PyPI 镜像更新成功"
 gui.settings.no_idf_versions_selected:
   en: "No IDF versions selected. Please select at least one version to continue."
   cn: "未选择 IDF 版本，请至少选择一个版本以继续。"

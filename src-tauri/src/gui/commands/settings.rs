@@ -295,6 +295,51 @@ pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Str
   Ok(())
 }
 
+/// Gets the list of available tools mirrors
+#[tauri::command]
+pub fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
+  let settings = match get_settings_non_blocking(&app_handle) {
+      Ok(s) => s,
+      Err(e) => {
+          send_message(&app_handle, e, "error".to_string());
+          return json!({
+              "mirrors": Vec::<String>::new(),
+              "selected": "",
+          });
+      }
+  };
+
+  let mirror = settings.pypi_mirror.clone().unwrap_or_default();
+  let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
+
+  if !available_mirrors.contains(&mirror.as_str()) {
+      let mut new_mirrors = vec![mirror.as_str()];
+      new_mirrors.extend(available_mirrors);
+      available_mirrors = new_mirrors;
+  }
+
+  json!({
+    "mirrors": available_mirrors,
+    "selected": mirror,
+  })
+}
+
+/// Sets the selected PyPI mirror
+#[tauri::command]
+pub fn set_pypi_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
+  info!("Setting pypi mirror: {}", mirror);
+  update_settings(&app_handle, |settings| {
+      settings.pypi_mirror = Some(mirror);
+  })?;
+
+  send_message(
+      &app_handle,
+      t!("gui.settings.pypi_mirror_updated").to_string(),
+      "info".to_string(),
+  );
+  Ok(())
+}
+
 /// Checks if a path is empty or doesn't exist
 #[tauri::command]
 pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: String) -> bool {
