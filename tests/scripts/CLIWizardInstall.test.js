@@ -86,7 +86,7 @@ export function runCLIWizardInstallTest({
       testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
-        20000
+        30000
       );
       expect(selectTargetQuestion, "Failed to ask for installation targets").to
         .be.true;

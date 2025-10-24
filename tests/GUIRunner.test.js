@@ -28,6 +28,7 @@ import { runGUICustomInstallTest } from "./scripts/GUICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import { runGUIAfterInstallTest } from "./scripts/GUIAfterInstall.test.js";
 import { runGUIOfflineInstallTest } from "./scripts/GUIOfflineInstall.test.js";
+import { runGUIVersionManagementTest } from "./scripts/GUIVersionManagement.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import {
   IDFDefaultVersion,
@@ -149,6 +150,31 @@ function testRun(script) {
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
+        });
+      });
+    } else if (test.type === "version-management") {
+      //routine for version management tests
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(60000);
+
+        runGUIVersionManagementTest({
+          id: `${test.id}1`,
+          pathToEim: pathToEIMGUI,
+          idfList: idfUpdatedList,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
         });
       });
     } else if (test.type === "offline") {
