@@ -5,10 +5,11 @@ import logger from "../classes/logger.class.js";
 import { By } from "selenium-webdriver";
 
 export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
-  let eimRunner = "";
-  let totalInstallations = 0;
-
+  
   describe(`${id}- EIM GUI After Install |`, () => {
+    let eimRunner = null;
+    let totalInstallations = 0;
+    
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -30,6 +31,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
       this.timeout(5000);
       try {
         await eimRunner.stop();
+        eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
       }

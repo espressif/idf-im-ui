@@ -4,13 +4,13 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
-  let eimRunner = "";
-
+  
   describe("1- Run simplified mode", () => {
+    let eimRunner = null;
     let simplifiedInstallFailed = false;
 
     before(async function () {
-      this.timeout(30000);
+      this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
       try {
         await eimRunner.start();

@@ -165,16 +165,24 @@ function testRun(script) {
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
-
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
         runGUIVersionManagementTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMGUI,
+          pathToEIM: pathToEIMGUI,
           idfList: idfUpdatedList,
           installFolder,
           toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          id: `${test.id}4`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     } else if (test.type === "offline") {

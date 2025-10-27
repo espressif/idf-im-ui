@@ -7,7 +7,7 @@ import fs from "fs";
 
 export function runVersionManagementTest({
   id = 0,
-  pathToEim,
+  pathToEIM,
   idfList,
   installFolder,
 }) {
@@ -61,7 +61,7 @@ export function runVersionManagementTest({
       logger.info(`Validating EIM List`);
       testRunner = new CLITestRunner();
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const installedList = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -83,7 +83,7 @@ export function runVersionManagementTest({
       logger.info(`Validating EIM Select`);
       testRunner = new CLITestRunner();
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} select`);
+      testRunner.sendInput(`${pathToEIM} select`);
       const selectQuery = await testRunner.waitForOutput(
         "Which version do you want to select?",
         5000
@@ -100,7 +100,7 @@ export function runVersionManagementTest({
         .true;
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const idfListOutput = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -112,7 +112,7 @@ export function runVersionManagementTest({
         idfToSelect = idfList[0];
       }
       logger.info(`IDF version to run select: ${idfToSelect}`);
-      testRunner.sendInput(`${pathToEim} select ${idfToSelect}`);
+      testRunner.sendInput(`${pathToEIM} select ${idfToSelect}`);
       const selectOutput = await testRunner.waitForOutput(
         `Selected version: ${idfToSelect}`,
         5000
@@ -120,7 +120,7 @@ export function runVersionManagementTest({
       expect(selectOutput, "EIM failed to select IDF version").to.be.true;
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const selectedList = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -133,7 +133,7 @@ export function runVersionManagementTest({
 
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} select random`);
+      testRunner.sendInput(`${pathToEIM} select random`);
       const errorOutput = await testRunner.waitForOutput(
         `Version random not installed`,
         5000
@@ -152,7 +152,7 @@ export function runVersionManagementTest({
       logger.info(`Validating EIM Rename`);
       testRunner = new CLITestRunner();
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} rename`);
+      testRunner.sendInput(`${pathToEIM} rename`);
       const renameQuery = await testRunner.waitForOutput(
         "Which version do you want to rename?",
         5000
@@ -175,7 +175,7 @@ export function runVersionManagementTest({
         .be.true;
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const installedList = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -186,7 +186,7 @@ export function runVersionManagementTest({
         `EIM not showing newly renamed IDF version`
       ).to.include("newName");
 
-      testRunner.sendInput(`${pathToEim} rename newName renamedIDF`);
+      testRunner.sendInput(`${pathToEIM} rename newName renamedIDF`);
       const renameOutput = await testRunner.waitForOutput(
         `Version renamed`,
         5000
@@ -194,7 +194,7 @@ export function runVersionManagementTest({
       expect(renameOutput, "EIM failed to rename IDF version").to.be.true;
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const updatedList = await testRunner.waitForOutput("renamedIDF", 5000);
       expect(updatedList, "EIM not showing renamed IDF installation").to.be
         .true;
@@ -209,7 +209,7 @@ export function runVersionManagementTest({
       testRunner = new CLITestRunner();
       await testRunner.start();
 
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const idfListOutput = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -218,7 +218,7 @@ export function runVersionManagementTest({
         ? idfList[0]
         : idfList[1];
 
-      testRunner.sendInput(`${pathToEim} remove ${versionToRemove}`);
+      testRunner.sendInput(`${pathToEIM} remove ${versionToRemove}`);
       const removeOutput = await testRunner.waitForOutput(
         `Removed version: ${versionToRemove}`,
         30000
@@ -227,7 +227,7 @@ export function runVersionManagementTest({
 
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} list`);
+      testRunner.sendInput(`${pathToEIM} list`);
       const installedList = await testRunner.waitForOutput(
         "Installed versions",
         5000
@@ -253,7 +253,7 @@ export function runVersionManagementTest({
       testRunner.output = "";
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      testRunner.sendInput(`${pathToEim} remove`);
+      testRunner.sendInput(`${pathToEIM} remove`);
 
       const removeQuery = await testRunner.waitForOutput(
         "Which version do you want to remove?",
@@ -267,7 +267,7 @@ export function runVersionManagementTest({
       testRunner = new CLITestRunner();
       await testRunner.start();
 
-      testRunner.sendInput(`${pathToEim} remove random`);
+      testRunner.sendInput(`${pathToEIM} remove random`);
       const errorOutput = await testRunner.waitForOutput(
         `Version random not installed`,
         5000
@@ -286,7 +286,7 @@ export function runVersionManagementTest({
       logger.info(`Validating EIM Purge`);
       testRunner = new CLITestRunner();
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim} purge`);
+      testRunner.sendInput(`${pathToEIM} purge`);
       const purgeOutput = await testRunner.waitForOutput(
         `All versions removed successfully`,
         30000

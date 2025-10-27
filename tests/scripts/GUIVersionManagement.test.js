@@ -8,15 +8,16 @@ import path from "path";
 import { Key, until } from "selenium-webdriver";
 
 export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, installFolder, toolsFolder }) {
-  let eimRunner = "";
-  let totalInstallations = 0;
-  let testStepFailed = false;
-
+  
   describe(`${id}- EIM GUI Version Management |`, () => {
+    let eimRunner = null;
+    let totalInstallations = 0;
+    let testStepFailed = false;
     before(async function () {
-      this.timeout(20000);
+      this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
       try {
+        logger.info("Starting EIM application");
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
@@ -43,6 +44,7 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       this.timeout(5000);
       try {
         await eimRunner.stop();
+        eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
       }

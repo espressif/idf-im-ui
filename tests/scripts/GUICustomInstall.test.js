@@ -20,13 +20,13 @@ export function runGUICustomInstallTest({
   toolsMirror,
   idfMirror,
 }) {
-  let eimRunner = "";
-
+  
   describe(`${id}- Run expert mode |`, () => {
+    let eimRunner = null;
     let customInstallFailed = false;
 
     before(async function () {
-      this.timeout(30000);
+      this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
       try {
         await eimRunner.start();
@@ -54,6 +54,7 @@ export function runGUICustomInstallTest({
       this.timeout(5000);
       try {
         await eimRunner.stop();
+        eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
       }

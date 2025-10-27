@@ -65,7 +65,7 @@ function testRun(archiveInfo) {
 
       runCLICustomInstallTest({
         id: `11`,
-        pathToEim: pathToEIMCLI,
+        pathToEIM: pathToEIMCLI,
         offlineIDFVersion: info.version,
         offlinePkgName: info.platform,
         testProxyMode: "block",

@@ -15,12 +15,12 @@ import path from "path";
  *
  */
 
-let pathToEim;
+let pathToEIM;
 
 if (process.env.EIM_FILE_PATH) {
-  pathToEim = process.env.EIM_FILE_PATH;
+  pathToEIM = process.env.EIM_FILE_PATH;
 } else {
-  pathToEim = path.join(os.homedir(), "eim-cli/eim");
+  pathToEIM = path.join(os.homedir(), "eim-cli/eim");
 }
 
 describe("Check Pre-requisites installation on Windows ->", function () {
@@ -32,7 +32,7 @@ describe("Check Pre-requisites installation on Windows ->", function () {
     testRunner = new InteractiveCLITestRunner();
     try {
       await testRunner.start();
-      testRunner.sendInput(`${pathToEim}`);
+      testRunner.sendInput(`${pathToEIM}`);
     } catch (error) {
       logger.info(`Error starting process: ${error}`);
       logger.info(` Error: ${error}`);

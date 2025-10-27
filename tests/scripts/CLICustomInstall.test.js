@@ -8,7 +8,7 @@ import fs from "fs";
 
 export function runCLICustomInstallTest({
   id = 0,
-  pathToEim,
+  pathToEIM,
   args = [],
   offlineIDFVersion = null,
   offlinePkgName = null,
@@ -96,7 +96,7 @@ export function runCLICustomInstallTest({
 
     it("1- Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
-      testRunner.sendInput(`${pathToEim} install ${args.join(" ")}`);
+      testRunner.sendInput(`${pathToEIM} install ${args.join(" ")}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (args.includes("-n false")) {
         const startTime = Date.now();

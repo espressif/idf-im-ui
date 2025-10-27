@@ -5,9 +5,9 @@ import logger from "../classes/logger.class.js";
 import { getOSName, getArchitecture } from "../helper.js";
 
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
-  let eimRunner = "";
-
+  
   describe(`${id}- EIM startup |`, () => {
+    let eimRunner = null;
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -29,6 +29,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       this.timeout(5000);
       try {
         await eimRunner.stop();
+        eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
       }

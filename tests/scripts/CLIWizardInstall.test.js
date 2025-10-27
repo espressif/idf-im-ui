@@ -14,7 +14,7 @@ import os from "os";
 
 export function runCLIWizardInstallTest({
   id = 0,
-  pathToEim,
+  pathToEIM,
   testProxyMode = false,
 }) {
   describe(`${id}- Run wizard |`, function () {
@@ -83,7 +83,7 @@ export function runCLIWizardInstallTest({
     it("1- Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard`);
+      testRunner.sendInput(`${pathToEIM} ${runInDebug ? "-vvv " : ""}wizard`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         30000

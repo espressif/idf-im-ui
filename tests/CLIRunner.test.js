@@ -63,7 +63,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(20000);
 
-        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEim: pathToEIMCLI });
+        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI });
       });
     } else if (test.type === "arguments") {
       //routine for arguments tests
@@ -73,7 +73,7 @@ function testRun(jsonScript) {
 
         runCLIArgumentsTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMCLI,
+          pathToEIM: pathToEIMCLI,
           eimVersion: EIMCLIVersion,
         });
       });
@@ -88,7 +88,7 @@ function testRun(jsonScript) {
 
         runCLIWizardInstallTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMCLI,
+          pathToEIM: pathToEIMCLI,
           testProxyMode,
         });
 
@@ -153,7 +153,7 @@ function testRun(jsonScript) {
 
         runCLICustomInstallTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMCLI,
+          pathToEIM: pathToEIMCLI,
           args: installArgs,
           testProxyMode,
         });
@@ -187,14 +187,23 @@ function testRun(jsonScript) {
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
 
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+              
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
         runVersionManagementTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMCLI,
+          pathToEIM: pathToEIMCLI,
           idfList: idfUpdatedList,
           installFolder,
+        });
+
+        runCleanUp({
+          id: `${test.id}3`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     } else if (test.type === "offline") {
@@ -207,7 +216,7 @@ function testRun(jsonScript) {
 
         runCLICustomInstallTest({
           id: `${test.id}1`,
-          pathToEim: pathToEIMCLI,
+          pathToEIM: pathToEIMCLI,
           offlineIDFVersion: IDFDefaultVersion,
           offlinePkgName: pkgName,
           testProxyMode,
