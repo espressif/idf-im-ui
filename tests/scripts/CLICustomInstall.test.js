@@ -71,11 +71,13 @@ export function runCLICustomInstallTest({
       } finally {
         testRunner = null;
       }
-      try {
-        await proxy.stop();
-      } catch (error) {
-        logger.info("Error stopping proxy server");
-        logger.debug(`Error: ${error}`);
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.debug(`Error: ${error}`);
+        }
       }
       // Remove offline archive to save space in the runner
       if (pathToOfflineArchive) {

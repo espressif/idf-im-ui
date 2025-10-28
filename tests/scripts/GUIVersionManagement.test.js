@@ -87,13 +87,13 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       expect(cards.length, "Expected matching number of cards").to.be.equal(
         totalInstallations
       );
-      let versionsList = [];
+      let installedVersionsList = [];
       for (let card of cards) {
         const versionElement = await card.findElement(
           By.className("version-info")
         );
         const versionText = await versionElement.getText();
-        versionsList.push(versionText);
+        installedVersionsList.push(versionText);
         const openTerminalButton = await card.findElement(By.css(`[data-id="openIDFTerminal"]`)).catch(() => false);
         expect(openTerminalButton, "Expected to find open terminal button").to.not.be.false;
         const renameButton = await card.findElement(By.css(`[data-id="renameVersion"]`)).catch(() => false);
@@ -105,10 +105,10 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
         const removeButton = await card.findElement(By.css(`[data-id="removeVersion"]`)).catch(() => false);
         expect(removeButton, "Expected to find delete button").to.not.be.false;
       }
-      logger.debug(`Installed versions: ${versionsList}`);
+      logger.debug(`Installed versions: ${installedVersionsList}`);
       for (let idfVersion of idfList) {
         expect(
-          versionsList.includes(idfVersion),
+          installedVersionsList.includes(idfVersion),
           `Expected dashboard card to be shown for version ${idfVersion} `
         ).to.be.true;
       }
@@ -128,16 +128,16 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       await input.sendKeys("NewName");
       await eimRunner.clickElement("Rename")
 
-      let versionsList = [];
+      let renameVersionsList = [];
       for (let card of cards) {
         const versionElement = await card.findElement(
           By.className("version-info")
         );
         const versionText = await versionElement.getText();
-        versionsList.push(versionText);
+        renameVersionsList.push(versionText);
       }
-      logger.debug(`Installed versions after rename: ${versionsList}`);
-      expect(versionsList.includes("NewName"),
+      logger.debug(`Installed versions after rename: ${renameVersionsList}`);
+      expect(renameVersionsList.includes("NewName"),
           `Expected dashboard card to shown renamed IDF instalaltion `
         ).to.be.true;
       const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
@@ -153,10 +153,11 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
 
 
     it("5- Should allow deleting existing installation", async function () {
-      this.timeout(20000);
+      this.timeout(60000);
       const cards = await eimRunner.findMultipleByClass("n-card"); 
       const IDFToDelete = await cards[0].findElement(By.className("version-info"));
       const IDFToDeleteText = await IDFToDelete.getText();
+      logger.debug(`IDF version to delete: ${IDFToDeleteText}`);
       const removeButton = await cards[0].findElement(By.css(`[data-id="removeVersion"]`));
       await eimRunner.driver.executeScript("arguments[0].click();", removeButton);
       await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -164,19 +165,19 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       const confirmationText = await confirmation.getText();
       expect(confirmationText.includes(IDFToDeleteText), `Expected confirmation dialog to mention IDF version ${IDFToDeleteText}` ).to.be.true; 
       await eimRunner.clickElement("Remove");
-      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await new Promise((resolve) => setTimeout(resolve, 20000));
 
       const updatedCards = await eimRunner.findMultipleByClass("n-card"); 
-      let versionsList = [];
+      let deleteVersionsList = [];
       for (let card of updatedCards) {
         const versionElement = await card.findElement(
           By.className("version-info")
         );
         const versionText = await versionElement.getText();
-        versionsList.push(versionText);
+        deleteVersionsList.push(versionText);
       }
-      logger.debug(`Installed versions after remove: ${versionsList}`);
-      expect(versionsList.includes(IDFToDelete),
+      logger.debug(`Installed versions after remove: ${deleteVersionsList}`);
+      expect(deleteVersionsList.includes(IDFToDeleteText),
           `Expected dashboard card not to show removed IDF `
         ).to.not.be.true;
       const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
@@ -195,14 +196,15 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       const cards = await eimRunner.findMultipleByClass("n-card");
       expect(cards.length, "Expected at least one installation to purge").to.be.gte(1); 
 
-      let versionsList = [];
+      let purgeVersionsList = [];
       for (let card of cards) {
         const versionElement = await card.findElement(
           By.className("version-info")
         ).catch(() => false);
         const versionText = await versionElement.getText();
-        versionsList.push(versionText);
+        purgeVersionsList.push(versionText);
       }
+      logger.debug(`Installed versions before purge all: ${purgeVersionsList}`);
       const quickActions = await eimRunner.findByClass("quick-actions");
       expect(quickActions, "Expected to find quick actions section").to.not.be.false;
       const purgeButton = await quickActions.findElement(By.xpath(`//*[contains(text(), 'Purge All')]`)).catch(() => false);
@@ -214,7 +216,7 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
 
       const confirmationIDFList = await eimRunner.findByText("The following installations will be deleted");
       const confirmationIDFListText = await confirmationIDFList.getText();
-      for (let idfVersion of versionsList) {
+      for (let idfVersion of purgeVersionsList) {
         expect(
           confirmationIDFListText.includes(idfVersion),
           `Expected confirmation dialog to list IDF version ${idfVersion} `

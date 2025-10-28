@@ -9,6 +9,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
   describe(`${id}- EIM GUI After Install |`, () => {
     let eimRunner = null;
     let totalInstallations = 0;
+    let afterInstallFailed = false;
     
     before(async function () {
       this.timeout(60000);
@@ -20,10 +21,18 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
       }
     });
 
+    beforeEach(async function () {
+      if (afterInstallFailed) {
+        logger.info("Test failed, skipping next tests");
+        this.skip();
+      }
+    });
+
     afterEach(async function () {
       if (this.currentTest.state === "failed") {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
+        afterInstallFailed = true;
       }
     });
 

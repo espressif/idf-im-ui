@@ -65,11 +65,13 @@ export function runCLIWizardInstallTest({
       } finally {
         testRunner = null;
       }
-      try {
-        await proxy.stop();
-      } catch (error) {
-        logger.info("Error stopping proxy server");
-        logger.info(`${error}`);
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
     });
 
@@ -106,6 +108,7 @@ export function runCLIWizardInstallTest({
       logger.info("Select Target Passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFVersion = await testRunner.waitForOutput(
         "Please select the desired ESP-IDF version"
@@ -122,6 +125,7 @@ export function runCLIWizardInstallTest({
       logger.info("Select IDF Version passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFMirror = await testRunner.waitForOutput(
         "Select the source from which to download esp-idf"
@@ -139,6 +143,7 @@ export function runCLIWizardInstallTest({
       logger.info("Select IDF mirror passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectToolsMirror = await testRunner.waitForOutput(
         "Select a source from which to download tools"
@@ -156,6 +161,7 @@ export function runCLIWizardInstallTest({
       logger.info("Select tools mirror passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectInstallPath = await testRunner.waitForOutput(
         "Please select the ESP-IDF installation location"
@@ -176,6 +182,7 @@ export function runCLIWizardInstallTest({
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
+      
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
         if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
