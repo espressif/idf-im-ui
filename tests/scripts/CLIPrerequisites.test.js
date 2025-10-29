@@ -17,13 +17,6 @@ import path from "path";
  */
 
 export function runCLIPrerequisitesTest({ id = 0, pathToEIM }) {
-  // let pathToEIM;
-
-  // if (process.env.EIM_FILE_PATH) {
-  //     pathToEIM = process.env.EIM_FILE_PATH;
-  // } else {
-  //     pathToEIM = path.join(os.homedir(), "eim-cli/eim");
-  // }
 
   describe(`${id}- Check for prerequisites |`, function () {
     this.timeout(600000);

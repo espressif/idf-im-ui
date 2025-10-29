@@ -188,7 +188,7 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       for (let idf of eimJsonContent.idfInstalled) {
         installedIDFName.push(idf.name);
       }
-      expect(installedIDFName.includes(IDFToDelete), "Expected json file to not contain removed IDF installation").to.not.be.true;
+      expect(installedIDFName.includes(IDFToDeleteText), "Expected json file to not contain removed IDF installation").to.not.be.true;
     });
 
     it("6- Should allow purging all installation", async function () {

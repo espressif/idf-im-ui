@@ -37,7 +37,7 @@
     {
     "id": 5,
     "type": "version-management",
-    "name": "CLI Version Management",
+    "name": "GUI Version Management",
     "data": {
       "idfList": "default|v5.4.3"
     }
