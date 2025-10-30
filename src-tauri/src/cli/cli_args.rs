@@ -247,6 +247,12 @@ pub struct InstallArgs {
         help = "Path to a local archive for offline installation. This is useful if you have already downloaded the ESP-IDF zst archive and want to use it for installation without downloading it again."
     )]
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
+
+    #[arg(
+        long,
+        help = "Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one."
+    )]
+    pub activation_script_path_override: Option<String>, // Optional override for activation script path
 }
 
 impl IntoIterator for InstallArgs {
@@ -335,6 +341,10 @@ impl IntoIterator for InstallArgs {
             (
                 "use_local_archive".to_string(),
                 self.use_local_archive.map(|p| p.to_str().unwrap().into()),
+            ),
+            (
+                "activation_script_path_override".to_string(),
+                self.activation_script_path_override.map(Into::into),
             ),
         ]
         .into_iter()

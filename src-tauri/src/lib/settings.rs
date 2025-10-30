@@ -45,6 +45,7 @@ pub struct Settings {
     pub version_name: Option<String>,
     pub python_env_folder_name: Option<String>,
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
+    pub activation_script_path_override: Option<String>, // Optional override for activation script path
 }
 
 #[derive(Debug, Clone)]
@@ -78,6 +79,7 @@ impl Default for Settings {
           };
 
         let default_esp_idf_json_path_value = tool_install_folder_name_value.clone();
+        let default_activation_script_path_override = tool_install_folder_name_value.clone();
         let default_path_value = if std::env::consts::OS == "windows" {
             PathBuf::from(r"C:\esp")
         } else {
@@ -114,6 +116,7 @@ impl Default for Settings {
             version_name: None,
             python_env_folder_name: Some("python".to_string()),
             use_local_archive: None,
+            activation_script_path_override: Some(default_activation_script_path_override),
         }
     }
 }
@@ -252,6 +255,11 @@ impl Settings {
             {
                 settings.use_local_archive = cli_settings_struct.use_local_archive.clone();
             }
+            if cli_settings_struct.activation_script_path_override.is_some()
+                && !cli_settings_struct.is_default("activation_script_path_override")
+            {
+                settings.activation_script_path_override = cli_settings_struct.activation_script_path_override.clone();
+            }
         }
 
         // Set the config file field
@@ -325,7 +333,8 @@ impl Settings {
             skip_prerequisites_check,
             version_name,
             python_env_folder_name,
-            use_local_archive
+            use_local_archive,
+            activation_script_path_override
         );
     }
 
@@ -474,7 +483,7 @@ impl Settings {
       };
 
       let activation_script_path = PathBuf::from(self
-        .esp_idf_json_path
+        .activation_script_path_override
         .clone()
         .unwrap_or_default());
 
