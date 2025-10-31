@@ -4,7 +4,7 @@
     <p class="description" data-id="target-select-description">{{ t('targetSelect.description') }}</p>
     <p class="description" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
         href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
-        target="_blank">{{ t('targetSelect.productSelector') }}Product Selector</a></p>
+        target="_blank">{{ t('targetSelect.productSelector') }}</a></p>
     <div class="selection_header">
       {{ t('targetSelect.targetChips') }}
       <span @click="clickOnAll">
