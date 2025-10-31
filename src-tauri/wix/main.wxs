@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <Component Id="Path" Guid="A6734AA2-8C86-49D5-8501-2DD147D7C816" Directory="INSTALLDIR">
+      <Environment
+        Id="PATH"
+        Name="PATH"
+        Value="[INSTALLDIR]"
+        Permanent="no"
+        Part="last"
+        Action="set"
+        System="yes" />
+    </Component>
+  </Fragment>
+</Wix>

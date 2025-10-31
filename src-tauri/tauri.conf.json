@@ -33,6 +33,11 @@
       "icons/icon.ico"
     ],
     "copyright": "Copyright © 2025 Espressif Systems. All rights reserved.",
+    "windows": {
+      "wix": {
+        "template": "./wix/main.wxs"
+      }
+    },
     "macOS": {
       "entitlements": "../eim.entitlement",
       "exceptionDomain": "",
