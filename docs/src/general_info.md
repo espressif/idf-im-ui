@@ -3,10 +3,14 @@
 The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the setup process for ESP-IDF and integrated development environments (IDEs) across multiple platforms. This cross-platform installer facilitates the installation of prerequisites, ESP-IDF itself, and essential tools, offering a consistent and user-friendly experience on macOS, Linux, and Windows.
 
 > **💡 Quick Install:**
-> You can install EIM using:
-> - **[Windows Installer](#windows-installation)**
-> - **[Homebrew (macOS)](#macos-installation-via-homebrew)**
-> - **[APT (Debian-based Linux)](#debian-based-linux-installation-via-apt-repository)**
+> For most users, we recommend installing EIM using one of the package managers below — they make updates and maintenance easier:
+>
+> * **[Windows Installer](#windows-installation)** (recommended for Windows)
+> * **[Homebrew (macOS)](#macos-installation-via-homebrew)** 🧭 *recommended*
+> * **[APT (Debian-based Linux)](#debian-based-linux-installation-via-apt-repository)** 🧭 *recommended*
+>
+> If you prefer a manual installation, you can download standalone installers for **all platforms** and **ESP-IDF versions** directly from the
+> 👉 [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
 
 ## Features
 
@@ -45,15 +49,15 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 
 ## Getting Started
 
-1.  Download or install the appropriate version for your platform.
+1. Choose your installation method based on your operating system.
 
 ### Windows Installation
 <a id="windows-installation"></a>
 
 On **Windows**, the recommended way to get EIM is to download the latest installer directly:
 
-- From [GitHub Releases](https://github.com/espressif/idf-im-ui/releases)
-- Or from the official [Espressif download mirror](https://dl.espressif.com/dl/eim/)
+- From [Espressif download page](https://dl.espressif.com/dl/eim/)
+- or from github releases [GitHub Releases](https://github.com/espressif/idf-im-ui/releases)
 
 After downloading, simply run the `.exe` installer.
 It will automatically detect and install any missing prerequisites and guide you through the setup process.
@@ -67,19 +71,26 @@ eim install
 
 <a id="macos-installation-via-homebrew"></a>
 
-If you're using **macOS**, you can install EIM directly from the Espressif Homebrew tap:
+If you're using **macOS**, the **recommended** method is via Homebrew — this ensures EIM stays up to date automatically and integrates seamlessly with your system.
 
 ```bash
 brew tap espressif/eim
+
+# for GUI app runnable from apps
+brew install --cask eim-gui
+
+# for CLI app runnable from terminal
 brew install eim
-eim install
 ```
+> 🧩 **Alternative:**
+> You can also download macOS `.dmg` or `.tar.gz` installers from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
+> This page contains versions for **Windows, macOS, and Linux**, as well as **all supported ESP-IDF releases** — useful if you prefer manual setup or offline installation.
 
 ### Debian-Based Linux Installation (via APT Repository)
 
 <a id="debian-based-linux-installation-via-apt-repository"></a>
 
-If you're using a **Debian-based Linux** distribution (e.g. Ubuntu), you can install EIM from the official Espressif APT repository:
+If you're using a **Debian-based Linux** distribution (e.g. Ubuntu), the **recommended** installation method is through the official Espressif APT repository:
 
 ```bash
 # Add repository
@@ -93,6 +104,10 @@ sudo apt install eim-cli
 # Install GUI (includes CLI)
 sudo apt install eim
 ```
+
+> 🧩 **Alternative:**
+> You can also download `.deb` or `.tar.gz` packages for Linux from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
+> The download page includes packages for **all platforms** and **ESP-IDF versions** — ideal for offline or custom deployments.
 
 > **Note:**
 > The *GUI application* includes full *CLI capabilities* and can be invoked directly from the command line (`eim <command>`).
