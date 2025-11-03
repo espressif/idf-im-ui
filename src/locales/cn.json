@@ -1,7 +1,7 @@
 {
   "app": {
     "title": "ESP-IDF 安装管理器",
-    "settingUp": "正在设置您的开发环境...",
+    "settingUp": "正在设置开发环境...",
     "home": "主页"
   },
   "routes": {
@@ -27,14 +27,14 @@
     },
     "wizard": {
       "steps": {
-        "prerequisites": "先决条件",
+        "prerequisites": "依赖项",
         "installPath": "安装路径",
-        "versionSelection": "版本选择",
-        "toolsSelection": "工具选择",
+        "versionSelection": "选择版本",
+        "toolsSelection": "选择工具",
         "pythonConfig": "Python 配置",
-        "mirrorSelection": "镜像选择",
+        "mirrorSelection": "选择镜像",
         "additionalOptions": "附加选项",
-        "review": "审查与确认"
+        "review": "核查与确认"
       },
       "options": {
         "createShortcuts": "创建快捷方式",
@@ -48,24 +48,24 @@
     "welcome": "欢迎使用",
     "title": "安装管理器",
     "systemRequirements": "系统要求",
-    "cpuError": "在 Windows 操作系统上，此工具需要系统至少有 2 个 CPU 核心。",
-    "sorry": "给您带来不便，我们深表歉意",
+    "cpuError": "在 Windows 操作系统中，本工具要求系统至少具有两个 CPU 内核。",
+    "sorry": "抱歉造成不便",
     "exitInstaller": "退出安装程序",
     "versionsInstalled": "已安装 {count} 个版本",
     "checkingStatus": "正在检查安装状态...",
     "messages": {
       "withBoth": "请选择如何继续：",
-      "withInstalled": "管理您现有的安装或安装新版本：",
-      "withArchives": "检测到离线存档。您可以从本地文件安装或在线下载：",
+      "withInstalled": "管理现有的版本或安装新版本：",
+      "withArchives": "检测到离线存档。你可以从本地文件安装或在线下载：",
       "fresh": "开始使用 ESP-IDF 开发环境：",
-      "trackingEnabled": "感谢您允许使用情况跟踪！",
-      "trackingDisabled": "您已禁用使用情况跟踪。"
+      "trackingEnabled": "感谢你允许跟踪使用情况！",
+      "trackingDisabled": "你已禁用使用情况跟踪。"
     },
     "cards": {
       "manage": {
         "title": "管理安装",
-        "description": "查看和管理您已安装的 {count} 个 ESP-IDF 版本",
-        "button": "打开仪表板"
+        "description": "查看和管理你已安装的 {count} 个 ESP-IDF 版本",
+        "button": "打开管理面板"
       },
       "offline": {
         "title": "离线安装",
@@ -79,8 +79,8 @@
       }
     },
     "preferences": {
-      "dontShow": "不再显示此欢迎屏幕",
-      "allowTracking": "允许发送使用统计信息"
+      "dontShow": "不再显示此欢迎界面",
+      "allowTracking": "允许发送使用情况统计信息"
     }
   },
   "footer": {
@@ -99,7 +99,7 @@
         "title": "关于 ESP-IDF 安装管理器",
         "version": "版本 {version}",
         "description": {
-          "line1": "一个用于安装和管理 ESP-IDF 开发环境的跨平台工具。",
+          "line1": "用于安装和管理 ESP-IDF 开发环境的跨平台工具。",
           "line2": "支持 Windows、macOS 和 Linux 平台，提供在线和离线两种安装模式。"
         },
         "viewOnGithub": "在 GitHub 上查看"
@@ -113,7 +113,7 @@
           "arch": "架构：",
           "appVersion": "应用版本："
         },
-        "description": "请在接下来打开的 GitHub 问题页面中描述您遇到的问题。并附上日志文件夹中的所有日志（可通过应用页脚的按钮访问）。",
+        "description": "请在接下来打开的 GitHub 问题页面中描述你所遇到的问题，并附上日志文件夹中的所有日志（可点击应用程序页脚的按钮访问日志）。",
         "buttons": {
           "cancel": "取消",
           "generate": "生成报告并打开问题页面"
@@ -137,22 +137,22 @@
     "back": "返回",
     "loading": {
       "title": "正在检查系统要求",
-      "checkingPrerequisites": "正在检查先决条件...",
+      "checkingPrerequisites": "正在检查安装依赖项...",
       "detectingOS": "正在检测操作系统...",
       "scanningArchives": "正在扫描离线存档...",
       "verifyingPaths": "正在验证安装路径..."
     },
     "prerequisites": {
-      "header": "缺少先决条件",
-      "message": "缺少以下先决条件：",
-      "installButton": "自动安装先决条件",
-      "manualInstall": "请在继续前安装缺少的先决条件。",
-      "warning": "请先安装先决条件"
+      "header": "缺少安装依赖项",
+      "message": "缺少以下依赖项：",
+      "installButton": "自动安装依赖项",
+      "manualInstall": "请在继续前安装缺少的依赖项。",
+      "warning": "请先安装依赖项"
     },
     "cards": {
       "easy": {
         "title": "简易安装",
-        "description": "使用推荐的默认设置进行快速设置。非常适合初学者。",
+        "description": "若你初次使用本工具，推荐使用默认设置进行快速设置",
         "feature1": "最新的稳定版 ESP-IDF",
         "feature2": "默认安装路径",
         "feature3": "自动配置",
@@ -160,7 +160,7 @@
       },
       "custom": {
         "title": "自定义安装",
-        "description": "完全控制安装设置。适用于高级用户。",
+        "description": "完全控制安装设置，适用于高级用户。",
         "feature1": "选择 ESP-IDF 版本",
         "feature2": "自定义安装路径",
         "feature3": "高级选项",
@@ -178,11 +178,11 @@
       }
     },
     "messages": {
-      "startingPrerequisites": "正在开始安装先决条件...",
+      "startingPrerequisites": "正在安装依赖项...",
       "configLoaded": "配置已加载",
       "errors": {
         "systemRequirements": "检查系统要求失败",
-        "prerequisites": "安装先决条件失败",
+        "prerequisites": "安装依赖项失败",
         "loadConfig": "加载配置失败",
         "selectArchive": "选择存档文件失败"
       }
@@ -199,7 +199,7 @@
     "estimatedTime": "预计剩余时间：{time}",
     "stages": {
       "checking": "检查中...",
-      "prerequisites": "正在安装先决条件...",
+      "prerequisites": "正在安装依赖项...",
       "download": "下载中...",
       "extract": "提取中...",
       "tools": "正在安装工具...",
@@ -242,7 +242,7 @@
           "description": "提取存档内容"
         },
         "prerequisites": {
-          "title": "先决条件",
+          "title": "依赖项",
           "description": "安装依赖项"
         },
         "install": {
@@ -275,7 +275,7 @@
       },
       "success": {
         "title": "离线安装完成",
-        "description": "已成功从离线存档安装 ESP-IDF 及所有必需工具。",
+        "description": "已成功从离线存档安装 ESP-IDF 及所有必要工具。",
         "details": {
           "versions": "已安装版本：",
           "path": "安装路径："
@@ -305,9 +305,9 @@
     "title": "ESP-IDF 版本管理",
     "checkForUpdates": "检查更新",
     "prerequisites": {
-      "missing": "缺少先决条件",
-      "windowsMessage": "部分 Windows 先决条件未安装。",
-      "installButton": "安装先决条件"
+      "missing": "缺少依赖项",
+      "windowsMessage": "部分 Windows 依赖项未安装。",
+      "installButton": "安装依赖项"
     },
     "sections": {
       "installedVersions": "已安装版本",
@@ -339,15 +339,15 @@
       },
       "remove": {
         "title": "移除安装",
-        "message": "您确定要移除 <strong>{name}</strong> 吗？",
+        "message": "你确定要移除 <strong>{name}</strong> 吗？",
         "pathMessage": "这将永久删除以下位置的安装：",
         "confirmButton": "移除",
         "cancelButton": "取消"
       },
       "fix": {
         "title": "重新安装",
-        "message": "您确定要重新安装 <strong>{name}</strong> 吗？",
-        "warning": "这将永久删除所有更改。如果您的项目正在使用此安装，它们可能会停止工作。此过程可能需要一些时间，请耐心等待。",
+        "message": "你确定要重新安装 <strong>{name}</strong> 吗？",
+        "warning": "这将永久删除所有更改。如果你的项目正在使用此安装，则其可能会停止工作。此过程需要一些时间，请耐心等待。",
         "confirmButton": "重新安装",
         "cancelButton": "取消"
       },
@@ -362,15 +362,15 @@
     },
     "messages": {
       "success": {
-        "renamed": "安装重命名成功",
-        "removed": "安装移除成功",
+        "renamed": "成功重命名安装",
+        "removed": "成功移除安装",
         "repairStarted": "修复过程已开始",
         "purged": "所有安装已移除",
-        "prerequisitesStarted": "先决条件安装已开始",
-        "driversInstalled": "驱动程序安装成功。",
-        "latestVersion": "您拥有的是最新版本",
+        "prerequisitesStarted": "已开始安装依赖项",
+        "driversInstalled": "成功安装驱动程序。",
+        "latestVersion": "当前已经是最新版本",
         "updateAvailable": "有新版本可用！",
-        "openTerminal": "IDF航站楼启用"
+        "openTerminal": "启用 IDF 终端"
       },
       "error": {
         "loadVersions": "加载已安装版本失败",
@@ -379,11 +379,11 @@
         "repair": "启动修复失败：{error}",
         "openFolder": "打开文件夹失败",
         "purge": "清除安装失败：{error}",
-        "prerequisites": "安装先决条件失败：{error}",
+        "prerequisites": "安装依赖项失败：{error}",
         "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。",
         "drivers": "安装驱动程序失败：{error}",
         "checkUpdates": "检查更新失败",
-        "openTerminal": "IDF 终端无法打开"
+        "openTerminal": "无法打开 IDF 终端"
       },
       "warning": {
         "confirmAction": "请确认操作"
@@ -391,12 +391,12 @@
     }
   },
   "wizardStep": {
-    "title": "专家安装步骤",
+    "title": "高级用户安装步骤",
     "stepIndicator": "步骤 {step}",
     "steps": {
-      "prerequisitesCheck": "先决条件检查",
-      "pythonSanityCheck": "Python 健全性检查",
-      "selectTarget": "选择目标",
+      "prerequisitesCheck": "检查依赖项",
+      "pythonSanityCheck": "检查 Python 环境",
+      "selectTarget": "选择目标设备",
       "selectVersion": "选择 IDF 版本",
       "selectMirror": "选择镜像",
       "selectPath": "选择安装路径",
@@ -409,15 +409,15 @@
     "description": "选择要安装的 ESP-IDF SDK 版本：",
     "tags": {
       "latest": "最新",
-      "lts": "长期支持版"
+      "lts": "长期支持版本"
     },
     "selectedVersions": "已选版本：",
     "continueInstallation": "继续安装"
   },
   "targetSelect": {
     "title": "选择目标芯片",
-    "description": "选择您将要为其开发的 ESP 芯片：",
-    "productSelectorMessage": "如果您不确定，可以查阅我们的 ",
+    "description": "选择你要开发的乐鑫芯片：",
+    "productSelectorMessage": "如有问题，可以查阅我们的 ",
     "productSelector": "产品选型工具",
     "targetChips": "目标芯片：",
     "all": "全部",
@@ -427,7 +427,7 @@
     "status": {
       "ready": {
         "title": "Python 环境已就绪",
-        "description": "您的 Python 安装满足所有要求"
+        "description": "你的 Python 安装满足所有要求"
       },
       "setupRequired": {
         "title": "需要设置 Python",
@@ -437,10 +437,10 @@
     "actions": {
       "installPython": "安装 Python",
       "installingPython": "正在安装 Python...",
-      "continueNext": "继续下一步",
+      "continueNext": "下一步",
       "recheckInstallation": "重新检查 Python 安装"
     },
-    "installNote": "这将安装 Python 及所有必需组件",
+    "installNote": "这将安装 Python 及所有必要组件",
     "manualInstall": {
       "title": "需要手动安装",
       "intro": "请安装：",
@@ -453,23 +453,23 @@
     }
   },
   "prerequisitiesCheck": {
-    "title": "先决条件检查",
+    "title": "检查依赖项",
     "description": "安装程序现在将验证 ESP-IDF 所需的组件...",
     "status": {
-      "checking": "正在检查先决条件...",
+      "checking": "正在检查依赖项...",
       "checkingButton": "检查中..."
     },
     "actions": {
-      "continue": "继续下一步",
-      "checkPrerequisites": "检查先决条件",
-      "installMissing": "安装缺失的先决条件"
+      "continue": "下一步",
+      "checkPrerequisites": "检查依赖项",
+      "installMissing": "安装缺失的依赖项"
     },
     "messages": {
       "windowsInstall": "点击下方自动安装缺失的组件",
       "manualInstall": "请手动安装以下组件",
-      "manualHint": "请安装先决条件后再次运行检查。",
-      "macosHint" : "您可以使用 Homebrew 安装缺失的先决条件，例如 `brew install {list}`",
-      "linuxHint" : "您可以使用您的包管理器安装缺失的先决条件，例如 `sudo apt update && sudo apt install -y {list}`"
+      "manualHint": "请安装依赖项后再次运行检查。",
+      "macosHint" : "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
+      "linuxHint" : "你可以使用你的安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "mirrorSelect": {
@@ -495,21 +495,21 @@
       "browseButton": "浏览"
     },
     "messages": {
-      "pathInvalid": "路径 {path} 无效，因为它包含冲突的文件或目录。请选择一个空的或不存在的目录。",
+      "pathInvalid": "路径 {path} 无效，因其包含冲突的文件或目录。请选择一个空的或不存在的目录。",
       "pathValid": "路径 {path} 有效。",
       "pathUpdated": "安装路径更新成功！",
-      "invalidPath": "无效路径。请选择一个有效的目录。"
+      "invalidPath": "无效路径，请选择有效的目录。"
     },
     "continueButton": "继续"
   },
   "complete": {
     "title": "安装完成！",
-    "description": "ESP-IDF 已成功安装在您的系统上",
+    "description": "已成功安装 ESP-IDF ",
     "messages": {
-      "powershellShortcut": "已在您的桌面上创建 IDF PowerShell 快捷方式",
-      "saveConfigInfo": "保存您的配置以便在其他机器上复现此安装",
-      "postInstallInstruction": "您可以使用桌面上的图标或安装程序的版本管理屏幕上的图标打开一个新的 IDF PowerShell 终端。",
-      "postInstallInstructionPosix": "您可以在任何打开的终端中 source 激活脚本。激活脚本可以在 `~/.espressif/tools/` 文件夹中找到，或者使用安装程序的版本管理屏幕上的图标。"
+      "powershellShortcut": "已为你在桌面创建 IDF PowerShell 快捷方式",
+      "saveConfigInfo": "保存你的配置以便在其他设备上复现此安装",
+      "postInstallInstruction": "你可以使用桌面上的图标或安装程序的版本管理界面上的图标新建 IDF PowerShell 终端。",
+      "postInstallInstructionPosix": "你可以在任意已打开的终端中 source 激活脚本。激活脚本可以在 `~/.espressif/tools/` 文件夹中找到，或者使用安装程序的版本管理界面上的图标。"
     },
     "buttons": {
       "saveConfiguration": "保存配置",
@@ -530,7 +530,7 @@
     "back": "返回",
     "preparation": {
       "title": "准备安装",
-      "checking": "正在检查系统要求和先决条件..."
+      "checking": "正在检查系统要求和依赖项..."
     },
     "ready": {
       "title": "准备安装",
@@ -539,10 +539,10 @@
         "path": "安装路径：",
         "size": "预计大小：",
         "time": "预计时间：",
-        "sizeValue": "~3.5 GB",
+        "sizeValue": "大约 3.5 GB",
         "timeValue": "10-45 分钟"
       },
-      "alert": "这将使用默认设置安装 ESP-IDF。安装将包括所有必要的工具和依赖项。",
+      "alert": "使用默认设置安装 ESP-IDF。安装将包括所有必要的工具和依赖项。",
       "startButton": "开始安装"
     },
     "installation": {
@@ -554,7 +554,7 @@
           "description": "系统要求"
         },
         "prerequisites": {
-          "title": "先决条件",
+          "title": "依赖项",
           "description": "安装依赖项"
         },
         "download": {
@@ -586,25 +586,25 @@
     },
     "complete": {
       "title": "安装完成！",
-      "description": "ESP-IDF 已成功安装在您的系统上。",
+      "description": "已成功安装 ESP-IDF。",
       "buttons": {
         "documentation": "查看文档",
         "ide": "打开 VS Code",
-        "dashboard": "前往仪表板"
+        "dashboard": "前往管理面板"
       },
       "nextSteps": {
         "title": "后续步骤",
-        "step1": "使用桌面上的图标打开一个新的 IDF 终端。",
-        "step2": "导航到您的项目目录",
-        "step3": "运行 '{command}' 创建一个新项目",
-        "step4": "运行 '{command}' 构建您的项目"
+        "step1": "使用桌面上的图标或安装程序的版本管理界面上的图标新建 IDF 终端。",
+        "step2": "前往项目目录",
+        "step3": "运行 '{command}' 创建新项目",
+        "step4": "运行 '{command}' 构建项目"
       },
       "nextSteps_posix": {
-        "title": "后续步骤:",
-        "step1": "使用版本管理器屏幕上的图标或任何打开的终端中的源激活脚本打开一个新的 IDF 终端。",
+        "title": "后续步骤：",
+        "step1": "使用版本管理器界面上的图标，或在任意已打开的终端中 source 激活脚本来新建 IDF 终端。",
         "step2": "激活脚本可以在 `~/.espressif/tools/` 文件夹中找到",
-        "step3": "运行 '{command}' 以激活 IDF 环境",
-        "step4": "运行 '{command}' 来构建你的项目"
+        "step3": "运行 '{command}' 激活 IDF 环境",
+        "step4": "运行 '{command}' 构建项目"
       }
     },
     "error": {
@@ -614,12 +614,12 @@
       "viewLogs": "查看日志",
       "retry": "重试",
       "prerequisites": {
-        "title": "缺少先决条件",
-        "message": "一些必需的依赖项未安装。",
+        "title": "缺少依赖项",
+        "message": "未安装部分必要的依赖项。",
         "python": {
-          "title": "Python 检查失败",
-          "message": "Python 3.10+ 未安装或配置不正确。",
-          "details": "请安装 Python 3.10 或更高版本，并确保 pip、virtualenv 和 SSL 可用。"
+          "title": "Python 配置不正确",
+          "message": "缺少可用的 Python 3.10 或更高版本，以及 pip、virtualenv 和 SSL。",
+          "details": "请安装 Python 或使用自定义安装进行配置。"
         }
       },
       "path": {
@@ -646,9 +646,9 @@
         "docs": "打开文档失败",
         "ide": "请安装带有 ESP-IDF 扩展的 VS Code"
       },
-      "manualHint":" 请安装先决条件后再次运行检查。",
-      "macosHint" : "您可以使用 Homebrew 安装缺失的先决条件，例如 `brew install {list}`",
-      "linuxHint" : "您可以使用您的包管理器安装缺失的先决条件，例如 `sudo apt update && sudo apt install -y {list}`"
+      "manualHint":" 请安装依赖项后再次运行检查。",
+      "macosHint" : "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
+      "linuxHint" : "你可以使用安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "installationProgress": {
@@ -662,7 +662,7 @@
     "fixMode": {
       "title": "正在修复 ESP-IDF 安装：",
       "path": "路径：",
-      "description": "这将重新安装所选的 ESP-IDF 版本并修复任何损坏或缺失的组件。",
+      "description": "重新安装所选的 ESP-IDF 版本并修复损坏或缺失的组件。",
       "unknownVersion": "未知版本",
       "unknownPath": "未知路径"
     },
@@ -689,7 +689,7 @@
         "description": "系统要求"
       },
       "prerequisites": {
-        "title": "先决条件",
+        "title": "依赖项",
         "description": "安装依赖项"
       },
       "download": {
@@ -724,8 +724,8 @@
     "summary": {
       "repairComplete": "修复完成",
       "installationComplete": "安装完成",
-      "repairDescription": "成功修复 ESP-IDF 安装及所有必需工具。",
-      "installationDescription": "成功安装 ESP-IDF 及所有必需工具。",
+      "repairDescription": "成功修复 ESP-IDF 安装及所有必要工具。",
+      "installationDescription": "成功安装 ESP-IDF 及所有必要工具。",
       "repairedVersion": "已修复版本：",
       "installedVersions": "已安装版本：",
       "installationPath": "安装路径：",
