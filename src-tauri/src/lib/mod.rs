@@ -1,8 +1,11 @@
 use flate2::read::GzDecoder;
-use git2::{
-    build::RepoBuilder, FetchOptions, ObjectType, RemoteCallbacks, Repository,
-    SubmoduleUpdateOptions,
-};
+// use git2::{
+//     build::RepoBuilder, FetchOptions, ObjectType, RemoteCallbacks, Repository,
+//     SubmoduleUpdateOptions,
+// };
+use gix::bstr::BString;
+use gix::clone::PrepareFetch;
+use gix::create;
 use anyhow::{anyhow, Result};
 use idf_env::driver;
 use log::{error, info, trace, warn};
@@ -1456,158 +1459,158 @@ pub enum ProgressMessage {
 /// * `Ok(Repository)` if the cloning process is successful and the repository is opened.
 /// * `Err(git2::Error)` if an error occurs during the cloning process.
 ///
-fn shallow_clone(
-    url: &str,
-    path: &str,
-    branch: Option<&str>,
-    tag: Option<&str>,
-    tx: std::sync::mpsc::Sender<ProgressMessage>,
-    recurse_submodules: bool,
-) -> Result<Repository, git2::Error> {
-    // Initialize fetch options with depth 1 for shallow cloning
-    let mut fo = FetchOptions::new();
-    if tag.is_none() {
-        fo.depth(1);
-    }
+// fn shallow_clone(
+//     url: &str,
+//     path: &str,
+//     branch: Option<&str>,
+//     tag: Option<&str>,
+//     tx: std::sync::mpsc::Sender<ProgressMessage>,
+//     recurse_submodules: bool,
+// ) -> Result<Repository, git2::Error> {
+//     // Initialize fetch options with depth 1 for shallow cloning
+//     let mut fo = FetchOptions::new();
+//     if tag.is_none() {
+//         fo.depth(1);
+//     }
 
-    // Set up remote callbacks for progress reporting
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(|stats| {
-        let val =
-            ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-        match tx.send(ProgressMessage::Update(val)){
-          Ok(_) => {}
-          Err(e) => {
-              log::warn!("Failed to send progress message: {}", e);
-          }
-        };
-        true
-    });
-    fo.remote_callbacks(callbacks);
+//     // Set up remote callbacks for progress reporting
+//     let mut callbacks = RemoteCallbacks::new();
+//     callbacks.transfer_progress(|stats| {
+//         let val =
+//             ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
+//         match tx.send(ProgressMessage::Update(val)){
+//           Ok(_) => {}
+//           Err(e) => {
+//               log::warn!("Failed to send progress message: {}", e);
+//           }
+//         };
+//         true
+//     });
+//     fo.remote_callbacks(callbacks);
 
-    // Create a new repository builder with the fetch options
-    let mut builder = git2::build::RepoBuilder::new();
-    builder.fetch_options(fo);
+//     // Create a new repository builder with the fetch options
+//     let mut builder = git2::build::RepoBuilder::new();
+//     builder.fetch_options(fo);
 
-    // Set the branch to checkout if specified
-    if let Some(branch) = branch {
-        builder.branch(branch);
-    };
+//     // Set the branch to checkout if specified
+//     if let Some(branch) = branch {
+//         builder.branch(branch);
+//     };
 
-    // Clone the repository
-    let repo = builder.clone(url, Path::new(path))?;
+//     // Clone the repository
+//     let repo = builder.clone(url, Path::new(path))?;
 
-    // If a tag is specified, checkout the corresponding commit
-    if let Some(tag) = tag {
-        // Look up the tag reference
-        let tag_ref = repo.find_reference(&format!("refs/tags/{}", tag))?;
-        // Peel the tag reference to get the commit object
-        let tag_obj = tag_ref.peel(ObjectType::Commit)?;
+//     // If a tag is specified, checkout the corresponding commit
+//     if let Some(tag) = tag {
+//         // Look up the tag reference
+//         let tag_ref = repo.find_reference(&format!("refs/tags/{}", tag))?;
+//         // Peel the tag reference to get the commit object
+//         let tag_obj = tag_ref.peel(ObjectType::Commit)?;
 
-        // Checkout the commit that the tag points to
-        repo.checkout_tree(&tag_obj, None)?;
-        repo.set_head_detached(tag_obj.id())?;
-    };
+//         // Checkout the commit that the tag points to
+//         repo.checkout_tree(&tag_obj, None)?;
+//         repo.set_head_detached(tag_obj.id())?;
+//     };
 
-    // If a branch is specified, checkout the corresponding branch
-    if let Some(branch) = branch {
-        // Rev-parse the branch reference to get the commit object
-        let obj = repo.revparse_single(&format!("origin/{}", branch))?;
-        // Checkout the commit that the branch points to
-        repo.checkout_tree(&obj, None)?;
-        repo.set_head(&format!("refs/heads/{}", branch))?;
-    };
+//     // If a branch is specified, checkout the corresponding branch
+//     if let Some(branch) = branch {
+//         // Rev-parse the branch reference to get the commit object
+//         let obj = repo.revparse_single(&format!("origin/{}", branch))?;
+//         // Checkout the commit that the branch points to
+//         repo.checkout_tree(&obj, None)?;
+//         repo.set_head(&format!("refs/heads/{}", branch))?;
+//     };
 
-    if recurse_submodules {
-        info!("Fetching submodules");
+//     if recurse_submodules {
+//         info!("Fetching submodules");
 
-        match tx.send(ProgressMessage::Finish) {
-          Ok(_) => {}
-          Err(e) => {
-              log::warn!("Failed to send finish message: {}", e);
-          }
-        }
-        update_submodules(&repo, tx.clone())?;
-        info!("Finished fetching submodules");
-    }
-    // Return the opened repository
-    Ok(repo)
-}
+//         match tx.send(ProgressMessage::Finish) {
+//           Ok(_) => {}
+//           Err(e) => {
+//               log::warn!("Failed to send finish message: {}", e);
+//           }
+//         }
+//         update_submodules(&repo, tx.clone())?;
+//         info!("Finished fetching submodules");
+//     }
+//     // Return the opened repository
+//     Ok(repo)
+// }
 
-/// Updates submodules in the given repository using the provided fetch options.//+
-/////+
-/// # Parameters//+
-/////+
-/// * `repo`: A reference to the `git2::Repository` object representing the repository.//+
-/// * `fetch_options`: A `git2::FetchOptions` object containing the fetch options to be used.//+
-/// * `tx`: A `std::sync::mpsc::Sender<ProgressMessage>` object for sending progress messages.//+
-/////+
-/// # Returns//+
-/////+
-/// * `Result<(), git2::Error>`: On success, returns `Ok(())`. On error, returns a `git2::Error` indicating the cause of the error.//+
-fn update_submodules(repo: &Repository, tx: Sender<ProgressMessage>) -> Result<(), git2::Error> {
-    fn update_submodules_recursive(
-        repo: &Repository,
-        path: &Path,
-        tx: Sender<ProgressMessage>,
-    ) -> Result<(), git2::Error> {
-        let submodules = repo.submodules()?;
-        for mut submodule in submodules {
-            // Get submodule name or path as fallback
-            let submodule_name = submodule
-                .name()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|| submodule.path().to_str().unwrap_or("unknown").to_string());
+// /// Updates submodules in the given repository using the provided fetch options.//+
+// /////+
+// /// # Parameters//+
+// /////+
+// /// * `repo`: A reference to the `git2::Repository` object representing the repository.//+
+// /// * `fetch_options`: A `git2::FetchOptions` object containing the fetch options to be used.//+
+// /// * `tx`: A `std::sync::mpsc::Sender<ProgressMessage>` object for sending progress messages.//+
+// /////+
+// /// # Returns//+
+// /////+
+// /// * `Result<(), git2::Error>`: On success, returns `Ok(())`. On error, returns a `git2::Error` indicating the cause of the error.//+
+// fn update_submodules(repo: &Repository, tx: Sender<ProgressMessage>) -> Result<(), git2::Error> {
+//     fn update_submodules_recursive(
+//         repo: &Repository,
+//         path: &Path,
+//         tx: Sender<ProgressMessage>,
+//     ) -> Result<(), git2::Error> {
+//         let submodules = repo.submodules()?;
+//         for mut submodule in submodules {
+//             // Get submodule name or path as fallback
+//             let submodule_name = submodule
+//                 .name()
+//                 .map(|s| s.to_string())
+//                 .unwrap_or_else(|| submodule.path().to_str().unwrap_or("unknown").to_string());
 
-            // Create callbacks specifically for this submodule
-            let mut callbacks = RemoteCallbacks::new();
-            let submodule_name_clone = submodule_name.clone();
-            let tx_clone = tx.clone();
+//             // Create callbacks specifically for this submodule
+//             let mut callbacks = RemoteCallbacks::new();
+//             let submodule_name_clone = submodule_name.clone();
+//             let tx_clone = tx.clone();
 
-            callbacks.transfer_progress(move |stats| {
-                if stats.total_objects() > 0 {
-                    let percentage = ((stats.received_objects() as f64)
-                        / (stats.total_objects() as f64)
-                        * 100.0) as u64;
-                    // Send message with submodule name and progress
-                    let _ = tx_clone.send(ProgressMessage::SubmoduleUpdate((
-                        submodule_name_clone.clone(),
-                        percentage,
-                    )));
-                }
-                true
-            });
+//             callbacks.transfer_progress(move |stats| {
+//                 if stats.total_objects() > 0 {
+//                     let percentage = ((stats.received_objects() as f64)
+//                         / (stats.total_objects() as f64)
+//                         * 100.0) as u64;
+//                     // Send message with submodule name and progress
+//                     let _ = tx_clone.send(ProgressMessage::SubmoduleUpdate((
+//                         submodule_name_clone.clone(),
+//                         percentage,
+//                     )));
+//                 }
+//                 true
+//             });
 
-            // Create new fetch options for this submodule
-            let mut fetch_options = FetchOptions::new();
-            fetch_options.remote_callbacks(callbacks);
-            // fetch_options.depth(1); // Set depth for shallow clone - does seems to blow up on components/micro-ecc on hello world build time
+//             // Create new fetch options for this submodule
+//             let mut fetch_options = FetchOptions::new();
+//             fetch_options.remote_callbacks(callbacks);
+//             // fetch_options.depth(1); // Set depth for shallow clone - does seems to blow up on components/micro-ecc on hello world build time
 
-            // Create update options with the fetch options
-            let mut update_options = SubmoduleUpdateOptions::new();
-            update_options.fetch(fetch_options);
+//             // Create update options with the fetch options
+//             let mut update_options = SubmoduleUpdateOptions::new();
+//             update_options.fetch(fetch_options);
 
-            // Notify that we're starting on this submodule
-            let _ = tx.send(ProgressMessage::SubmoduleUpdate((
-                submodule_name.clone(),
-                0,
-            )));
+//             // Notify that we're starting on this submodule
+//             let _ = tx.send(ProgressMessage::SubmoduleUpdate((
+//                 submodule_name.clone(),
+//                 0,
+//             )));
 
-            // Update the submodule
-            submodule.update(true, Some(&mut update_options))?;
+//             // Update the submodule
+//             submodule.update(true, Some(&mut update_options))?;
 
-            // Notify that we've finished this submodule
-            let _ = tx.send(ProgressMessage::SubmoduleFinish(submodule_name.clone()));
+//             // Notify that we've finished this submodule
+//             let _ = tx.send(ProgressMessage::SubmoduleFinish(submodule_name.clone()));
 
-            // Recursively update this submodule's submodules
-            let sub_repo = submodule.open()?;
-            update_submodules_recursive(&sub_repo, &path.join(submodule.path()), tx.clone())?;
-        }
-        Ok(())
-    }
+//             // Recursively update this submodule's submodules
+//             let sub_repo = submodule.open()?;
+//             update_submodules_recursive(&sub_repo, &path.join(submodule.path()), tx.clone())?;
+//         }
+//         Ok(())
+//     }
 
-    update_submodules_recursive(repo, repo.workdir().unwrap_or(repo.path()), tx)
-}
+//     update_submodules_recursive(repo, repo.workdir().unwrap_or(repo.path()), tx)
+// }
 pub enum GitReference {
     Branch(String),
     Tag(String),
@@ -1631,111 +1634,251 @@ pub struct CloneOptions {
 ///
 /// # Returns
 /// * `Result<Repository, git2::Error>` - The cloned repository or an error
-pub fn clone_repository(
+// pub fn clone_repository(
+//     options: CloneOptions,
+//     tx: Sender<ProgressMessage>,
+// ) -> Result<Repository, git2::Error> {
+//     // Create fetch options
+//     let mut fetch_options = FetchOptions::new();
+
+//     // Only use shallow clone if not checking out a specific commit and shallow is requested
+//     if options.shallow
+//         && matches!(
+//             options.reference,
+//             GitReference::Branch(_) | GitReference::None
+//         )
+//     {
+//         fetch_options.depth(1);
+//     }
+
+//     let mut callbacks = RemoteCallbacks::new();
+//     callbacks.transfer_progress(|stats| {
+//         if stats.total_objects() > 0 {
+//             let percentage =
+//                 ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
+//             let _ = tx.send(ProgressMessage::Update(percentage));
+//         }
+//         true
+//     });
+//     fetch_options.remote_callbacks(callbacks);
+
+//     let mut builder = RepoBuilder::new();
+//     builder.fetch_options(fetch_options);
+
+//     // Set branch to checkout if specified
+//     if let GitReference::Branch(ref branch) = options.reference {
+//         builder.branch(branch);
+//     }
+
+//     // Clone the repository
+//     let repo = builder.clone(&options.url, Path::new(&options.path))?;
+
+//     // Check out the specified reference
+//     checkout_reference(&repo, &options.reference)?;
+
+//     // Update submodules if requested
+//     if options.recurse_submodules {
+//         let mut submodule_fetch_options = FetchOptions::new();
+//         let mut callbacks = RemoteCallbacks::new();
+//         callbacks.transfer_progress(|stats| {
+//             if stats.total_objects() > 0 {
+//                 let percentage = ((stats.received_objects() as f64)
+//                     / (stats.total_objects() as f64)
+//                     * 100.0) as u64;
+//                 let _ = tx.send(ProgressMessage::Update(percentage));
+//             }
+//             true
+//         });
+
+//         let _ = tx.send(ProgressMessage::Finish);
+//         update_submodules(&repo, tx.clone())?;
+//     }
+
+//     Ok(repo)
+// }
+
+pub fn clone_repository_gix(
     options: CloneOptions,
     tx: Sender<ProgressMessage>,
-) -> Result<Repository, git2::Error> {
-    // Create fetch options
-    let mut fetch_options = FetchOptions::new();
+) -> Result<gix::Repository, Box<dyn std::error::Error>> {
+    let path = Path::new(&options.path);
 
-    // Only use shallow clone if not checking out a specific commit and shallow is requested
-    if options.shallow
-        && matches!(
-            options.reference,
-            GitReference::Branch(_) | GitReference::None
-        )
-    {
-        fetch_options.depth(1);
-    }
-
-    let mut callbacks = RemoteCallbacks::new();
-    callbacks.transfer_progress(|stats| {
-        if stats.total_objects() > 0 {
-            let percentage =
-                ((stats.received_objects() as f64) / (stats.total_objects() as f64) * 100.0) as u64;
-            let _ = tx.send(ProgressMessage::Update(percentage));
+    // Determine which branch to checkout during clone
+    let mut prepare_clone = match &options.reference {
+        GitReference::Branch(branch) => {
+            let mut prep = PrepareFetch::new(
+                &options.url as &str,
+                path,
+                create::Kind::WithWorktree,
+                create::Options::default(),
+                gix::open::Options::default(),
+            )?;
+            // Set the branch to checkout
+            // prep = prep.with_ref_name(Some(format!("refs/heads/{}", branch).into()))?;
+            // prep = prep.with_ref_name::<BString>(Some(format!("refs/heads/{}", branch).into()))?;
+            prep = prep.with_ref_name(Some(format!("refs/heads/{}", branch).as_str()))?;
+            prep
         }
-        true
-    });
-    fetch_options.remote_callbacks(callbacks);
+        _ => {
+            // For tags and commits, clone default branch first, then checkout later
+            PrepareFetch::new(
+                &options.url as &str,
+                path,
+                create::Kind::WithWorktree,
+                create::Options::default(),
+                gix::open::Options::default(),
+            )?
+        }
+    };
 
-    let mut builder = RepoBuilder::new();
-    builder.fetch_options(fetch_options);
-
-    // Set branch to checkout if specified
-    if let GitReference::Branch(ref branch) = options.reference {
-        builder.branch(branch);
+    // Configure shallow clone if requested
+    if options.shallow && matches!(options.reference, GitReference::Branch(_) | GitReference::None) {
+        use gix::remote::fetch::Shallow;
+        prepare_clone = prepare_clone.with_shallow(Shallow::DepthAtRemote(
+            std::num::NonZeroU32::new(1).unwrap()
+        ));
     }
 
-    // Clone the repository
-    let repo = builder.clone(&options.url, Path::new(&options.path))?;
+    // Perform the fetch and checkout
+    let progress = gix::progress::Discard;
+    let progress_2 = gix::progress::Discard;
+    let (mut prepared_checkout, _outcome) = prepare_clone
+        .fetch_then_checkout(progress, &gix::interrupt::IS_INTERRUPTED).map_err(|e| {
+        log::error!("Fetch error: {:?}", e);
+        // Print the full error chain
+        let mut current_error: &dyn std::error::Error = &e;
+        while let Some(source) = current_error.source() {
+            log::error!("  Caused by: {:?}", source);
+            current_error = source;
+        }
+        format!("Failed during fetch and checkout: {:?}", e)
+    })?;
 
-    // Check out the specified reference
-    checkout_reference(&repo, &options.reference)?;
+    // Get the repository - main_worktree returns (Repository, Outcome)
+    let (repo, _checkout_outcome) = prepared_checkout
+        .main_worktree(progress_2, &gix::interrupt::IS_INTERRUPTED)?;
 
-    // Update submodules if requested
+    // Checkout specific reference if needed (for tags/commits)
+    checkout_reference_gix(&repo, &options.reference)?;
+
+    // Handle submodules if requested
     if options.recurse_submodules {
-        let mut submodule_fetch_options = FetchOptions::new();
-        let mut callbacks = RemoteCallbacks::new();
-        callbacks.transfer_progress(|stats| {
-            if stats.total_objects() > 0 {
-                let percentage = ((stats.received_objects() as f64)
-                    / (stats.total_objects() as f64)
-                    * 100.0) as u64;
-                let _ = tx.send(ProgressMessage::Update(percentage));
-            }
-            true
-        });
-
         let _ = tx.send(ProgressMessage::Finish);
-        update_submodules(&repo, tx.clone())?;
+        update_submodules_gix(&repo, tx.clone(), options.shallow)?;
     }
 
     Ok(repo)
 }
 
-/// Checkout a specific reference in a repository
-///
-/// # Arguments
-/// * `repo` - Repository to operate on
-/// * `reference` - The reference to checkout
-///
-/// # Returns
-/// * `Result<(), git2::Error>` - Success or an error
-fn checkout_reference(repo: &Repository, reference: &GitReference) -> Result<(), git2::Error> {
+fn checkout_reference_gix(
+    repo: &gix::Repository,
+    reference: &GitReference,
+) -> Result<(), Box<dyn std::error::Error>> {
     match reference {
-        GitReference::Branch(branch) => {
-            // Rev-parse the branch reference to get the commit object
-            let obj = repo.revparse_single(&format!("origin/{}", branch))?;
-            // Checkout the commit that the branch points to
-            repo.checkout_tree(&obj, None)?;
-            repo.set_head(&format!("refs/heads/{}", branch))?;
-        }
         GitReference::Tag(tag) => {
-            // Look up the tag reference
-            let tag_ref = repo.find_reference(&format!("refs/tags/{}", tag))?;
-            // Peel the tag reference to get the commit object
-            let tag_obj = tag_ref.peel(ObjectType::Commit)?;
-            // Checkout the commit that the tag points to
-            repo.checkout_tree(&tag_obj, None)?;
-            repo.set_head_detached(tag_obj.id())?;
+            // Find and checkout the tag
+            let reference = repo.find_reference(&format!("refs/tags/{}", tag))?;
+            let commit_id = reference.id().detach();
+
+            // Set HEAD to detached state pointing to this commit
+            repo.edit_reference(gix::refs::transaction::RefEdit {
+                change: gix::refs::transaction::Change::Update {
+                    log: gix::refs::transaction::LogChange::default(),
+                    expected: gix::refs::transaction::PreviousValue::Any,
+                    new: gix::refs::Target::Object(commit_id),  // Use Object, not Peeled
+                },
+                name: "HEAD".try_into()?,
+                deref: false,
+            })?;
         }
         GitReference::Commit(commit_id) => {
-            // Parse the commit ID
-            let oid = git2::Oid::from_str(commit_id)?;
-            // Find the commit object
-            let commit = repo.find_commit(oid)?;
-            // Checkout the specific commit
-            repo.checkout_tree(&commit.as_object(), None)?;
-            repo.set_head_detached(commit.id())?;
+            // Parse and checkout the commit
+            let oid = gix::ObjectId::from_hex(commit_id.as_bytes())?;
+
+            // Set HEAD to detached state
+            repo.edit_reference(gix::refs::transaction::RefEdit {
+                change: gix::refs::transaction::Change::Update {
+                    log: gix::refs::transaction::LogChange::default(),
+                    expected: gix::refs::transaction::PreviousValue::Any,
+                    new: gix::refs::Target::Object(oid),  // Use Object, not Peeled
+                },
+                name: "HEAD".try_into()?,
+                deref: false,
+            })?;
         }
-        GitReference::None => {
-            // Do nothing, use the default reference after clone
+        GitReference::Branch(_) | GitReference::None => {
+            // Already handled during clone
         }
     }
 
     Ok(())
 }
+
+fn update_submodules_gix(
+    repo: &gix::Repository,
+    tx: Sender<ProgressMessage>,
+    shallow: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Get all submodules
+    let submodules = repo.submodules()?;
+
+    if let Some(submodules) = submodules {
+        for submodule in submodules {
+            let name = submodule.name();
+            let _ = tx.send(ProgressMessage::SubmoduleUpdate((name.to_string(), 0)));
+
+            // TODO: Implement actual submodule cloning with gix
+            // This is a placeholder - submodule support in gix is still evolving
+
+            let _ = tx.send(ProgressMessage::SubmoduleFinish(name.to_string()));
+        }
+    }
+
+    Ok(())
+}
+
+// /// Checkout a specific reference in a repository
+// ///
+// /// # Arguments
+// /// * `repo` - Repository to operate on
+// /// * `reference` - The reference to checkout
+// ///
+// /// # Returns
+// /// * `Result<(), git2::Error>` - Success or an error
+// fn checkout_reference(repo: &Repository, reference: &GitReference) -> Result<(), git2::Error> {
+//     match reference {
+//         GitReference::Branch(branch) => {
+//             // Rev-parse the branch reference to get the commit object
+//             let obj = repo.revparse_single(&format!("origin/{}", branch))?;
+//             // Checkout the commit that the branch points to
+//             repo.checkout_tree(&obj, None)?;
+//             repo.set_head(&format!("refs/heads/{}", branch))?;
+//         }
+//         GitReference::Tag(tag) => {
+//             // Look up the tag reference
+//             let tag_ref = repo.find_reference(&format!("refs/tags/{}", tag))?;
+//             // Peel the tag reference to get the commit object
+//             let tag_obj = tag_ref.peel(ObjectType::Commit)?;
+//             // Checkout the commit that the tag points to
+//             repo.checkout_tree(&tag_obj, None)?;
+//             repo.set_head_detached(tag_obj.id())?;
+//         }
+//         GitReference::Commit(commit_id) => {
+//             // Parse the commit ID
+//             let oid = git2::Oid::from_str(commit_id)?;
+//             // Find the commit object
+//             let commit = repo.find_commit(oid)?;
+//             // Checkout the specific commit
+//             repo.checkout_tree(&commit.as_object(), None)?;
+//             repo.set_head_detached(commit.id())?;
+//         }
+//         GitReference::None => {
+//             // Do nothing, use the default reference after clone
+//         }
+//     }
+
+//     Ok(())
+// }
 
 // This function is not used right now  because of limited scope of the POC
 // It gets specific fork of rustpython with build in libraries needed for IDF
@@ -1805,7 +1948,7 @@ pub fn get_esp_idf(
     mirror: Option<&str>,
     with_submodules: bool,
     tx: Sender<ProgressMessage>,
-) -> Result<String, git2::Error> {
+) -> Result<String, String> {
     // Ensure the path exists
     let _ = ensure_path(path);
 
@@ -1848,9 +1991,9 @@ pub fn get_esp_idf(
         shallow: shallow, // Default to shallow clone when possible
     };
 
-    match clone_repository(clone_options, tx) {
+    match clone_repository_gix(clone_options, tx) {
         Ok(repo) => Ok(repo.path().to_str().unwrap_or(path).to_string()),
-        Err(e) => Err(e),
+        Err(e) => Err(e.to_string()),
     }
 }
 

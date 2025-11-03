@@ -113,16 +113,16 @@ pub enum DownloadError {
     UserCancelled,
 }
 
-fn handle_download_error(err: git2::Error) -> Result<(), DownloadError> {
-    match err.code() {
-        git2::ErrorCode::Exists => match generic_confirm("wizard.idf_path_exists.prompt") {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(DownloadError::UserCancelled),
-            Err(e) => Err(DownloadError::DownloadFailed(e.to_string())),
-        },
-        _ => Err(DownloadError::DownloadFailed(err.to_string())),
-    }
-}
+// fn handle_download_error(err: git2::Error) -> Result<(), DownloadError> {
+//     match err.code() {
+//         git2::ErrorCode::Exists => match generic_confirm("wizard.idf_path_exists.prompt") {
+//             Ok(true) => Ok(()),
+//             Ok(false) => Err(DownloadError::UserCancelled),
+//             Err(e) => Err(DownloadError::DownloadFailed(e.to_string())),
+//         },
+//         _ => Err(DownloadError::DownloadFailed(err.to_string())),
+//     }
+// }
 
 pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
     idf_im_lib::ensure_path(&config.idf_path)
@@ -193,7 +193,9 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
             if config.non_interactive == Some(true) {
                 Ok(())
             } else {
-                handle_download_error(err)
+                // handle_download_error(err)
+                println!("Error: {}", err);
+                Err(DownloadError::DownloadFailed(err.to_string()))
             }
         }
     }

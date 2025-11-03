@@ -54,7 +54,14 @@ reqwest = "0.12.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-git2 = { version = "0.19.0", features = ["vendored-libgit2"] }
+gix = { version = "0.74", features = [
+    "blocking-network-client",
+    "blocking-http-transport-reqwest-rust-tls",
+    "parallel",           # For performance
+    "worktree-mutation",  # For checkout
+    "index",              # For index operations
+] }
+gix-pack = { version = "0.61", features = ["pack-cache-lru-dynamic"] }
 sha2 = "0.10.8"
 log = "0.4.21"
 dirs = "6.0.0"
