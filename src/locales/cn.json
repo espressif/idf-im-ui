@@ -80,7 +80,8 @@
     },
     "preferences": {
       "dontShow": "不再显示此欢迎界面",
-      "allowTracking": "允许发送使用情况统计信息"
+      "allowTracking": "允许发送使用情况统计信息",
+      "trackingDocs": "了解有关使用情况跟踪的更多信息"
     }
   },
   "footer": {

@@ -80,13 +80,18 @@
           </div>
 
           <!-- Don't Show Again -->
-          <div v-if="isFirstRun" class="preferences">
+          <div class="preferences">
             <n-checkbox v-model:checked="dontShowAgain">
               {{ $t('welcome.preferences.dontShow') }}
             </n-checkbox><br></br>
             <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange">
               {{ $t('welcome.preferences.allowTracking') }}
-            </n-checkbox>
+            </n-checkbox><br></br>
+            <a
+              href="https://docs.espressif.com/projects/idf-im-ui/en/latest/#privacy-and-data-collection"
+              target="_blank"
+              rel="noopener noreferrer"
+            >{{ $t('welcome.preferences.trackingDocs') }}</a>
           </div>
         </div>
       </div>
