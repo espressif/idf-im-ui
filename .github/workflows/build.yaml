@@ -324,24 +324,24 @@ jobs:
           zip -r eim.zip eim
         shell: bash
 
-      - name: Sign Windows Binary
-        if: runner.os == 'Windows'
-        env:
-          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: |
-          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-          certutil -decode cert.b64 cert.pfx
-          Remove-Item cert.b64
-          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-                      Sort-Object FullName -Descending |
-                      Select-Object -First 1
+      # - name: Sign Windows Binary
+      #   if: runner.os == 'Windows'
+      #   env:
+      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+      #   run: |
+      #     echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+      #     certutil -decode cert.b64 cert.pfx
+      #     Remove-Item cert.b64
+      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+      #                 Sort-Object FullName -Descending |
+      #                 Select-Object -First 1
 
-          if (-not $signtool) {
-            Write-Error "signtool.exe not found on the runner"
-            exit 1
-          }
-          & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
+      #     if (-not $signtool) {
+      #       Write-Error "signtool.exe not found on the runner"
+      #       exit 1
+      #     }
+      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
 
       - name: Codesign macOS Binary
         if: startsWith(matrix.os, 'macos')
@@ -441,21 +441,21 @@ jobs:
           zip -r offline_installer_builder.zip offline_installer_builder
         shell: bash
 
-      - name: Sign Windows offline_installer_builder Binary
-        if: runner.os == 'Windows'
-        env:
-          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: |
-          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-                      Sort-Object FullName -Descending |
-                      Select-Object -First 1
+      # - name: Sign Windows offline_installer_builder Binary
+      #   if: runner.os == 'Windows'
+      #   env:
+      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+      #   run: |
+      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+      #                 Sort-Object FullName -Descending |
+      #                 Select-Object -First 1
 
-          if (-not $signtool) {
-            Write-Error "signtool.exe not found on the runner"
-            exit 1
-          }
-          & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
+      #     if (-not $signtool) {
+      #       Write-Error "signtool.exe not found on the runner"
+      #       exit 1
+      #     }
+      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
 
       - name: Codesign macOS offline_installer_builder Binary
         if: startsWith(matrix.os, 'macos')
@@ -620,25 +620,25 @@ jobs:
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: yarn tauri build
 
-      - name: Sign Windows Binary
-        if: runner.os == 'Windows'
-        env:
-          WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-        run: |
-          echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-          certutil -decode cert.b64 cert.pfx
-          Remove-Item cert.b64
-          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-                      Sort-Object FullName -Descending |
-                      Select-Object -First 1
+      # - name: Sign Windows Binary
+      #   if: runner.os == 'Windows'
+      #   env:
+      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
+      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
+      #   run: |
+      #     echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
+      #     certutil -decode cert.b64 cert.pfx
+      #     Remove-Item cert.b64
+      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+      #                 Sort-Object FullName -Descending |
+      #                 Select-Object -First 1
 
-          if (-not $signtool) {
-            Write-Error "signtool.exe not found on the runner"
-            exit 1
-          }
+      #     if (-not $signtool) {
+      #       Write-Error "signtool.exe not found on the runner"
+      #       exit 1
+      #     }
 
-          & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
+      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
 
       - name: Handle Linux artifacts
         if: startsWith(matrix.os, 'ubuntu')
