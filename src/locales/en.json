@@ -48,7 +48,7 @@
     "welcome": "Welcome to",
     "title": "Installation Manager",
     "systemRequirements": "System Requirements",
-    "cpuError": "This tool requires a system with at least 2 CPU cores when using Windows OS.",
+    "cpuError": "This tool requires a system with at least two CPU cores when using Windows OS.",
     "sorry": "Sorry for the inconvenience",
     "exitInstaller": "Exit Installer",
     "versionsInstalled": "{count} version(s) installed",
@@ -474,7 +474,7 @@
   },
   "mirrorSelect": {
     "title": "Select Download Mirrors",
-    "description": "Choose mirrors for downloading ESP-IDF and tools. Default mirrors are recommended for users outside mainland China.",
+    "description": "Choose mirrors for downloading ESP-IDF and tools. Default mirrors are recommended for users outside Chinese Mainland.",
     "sections": {
       "idfMirror": "ESP-IDF Repository Mirror",
       "toolsMirror": "ESP-IDF Tools Mirror"
@@ -539,7 +539,7 @@
         "path": "Installation Path:",
         "size": "Estimated Size:",
         "time": "Estimated Time:",
-        "sizeValue": "~3.5 GB",
+        "sizeValue": "About 3.5 GB",
         "timeValue": "10-45 minutes"
       },
       "alert": "This will install ESP-IDF with default settings. The installation will include all necessary tools and dependencies.",
@@ -601,7 +601,7 @@
       },
       "nextSteps_posix": {
         "title": "Next Steps:",
-        "step1": "Open a new IDF terminal using the icon on version manager screen or source activation script in any open terminal.",
+        "step1": "Open a new IDF terminal using the icon on version manager screen or by sourcing activation script in any open terminal.",
         "step2": "The activation script can be found in `~/.espressif/tools/` folder",
         "step3": "Run '{command}' to activate the IDF environment",
         "step4": "Run '{command}' to build your project"
