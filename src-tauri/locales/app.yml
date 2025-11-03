@@ -1031,6 +1031,12 @@ gui.fix.completed_log:
 gui.offline.no_archives:
   en: "No archives provided for offline installation"
   cn: "未提供离线安装的存档"
+gui.offline.missing_prerequisites:
+  en: "Cannot proceed with offline installation due to missing prerequisites: %{items}"
+  cn: "由于缺少先决条件，无法继续离线安装: %{items}"
+gui.offline.install_prerequisites:
+  en: "Please install these required prerequisites before proceeding: %{items}"
+  cn: "请在继续之前安装这些所需的先决条件: %{items}"
 gui.offline.select_archive:
   en: "Please select at least one archive file"
   cn: "请至少选择一个存档文件"
@@ -1121,9 +1127,6 @@ gui.offline.verifying_components:
 gui.offline.prerequisites_missing:
   en: "Prerequisites missing"
   cn: "缺少依赖项"
-gui.offline.missing_prerequisites:
-  en: "Missing prerequisites: %{items}"
-  cn: "缺少依赖项：%{items}"
 gui.offline.python_check_warning:
   en: "Python sanity check failed: %{error}"
   cn: "Python 环境检查失败：%{error}"
