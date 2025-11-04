@@ -5,6 +5,8 @@ use log::{debug, trace, warn};
 
 use crate::{command_executor, utils::find_by_name_and_extension};
 
+pub const PYTHON_NAME_TO_INSTALL: &str = "python313";
+
 /// Determines the package manager installed on the system.
 ///
 /// This function attempts to identify the package manager by executing each

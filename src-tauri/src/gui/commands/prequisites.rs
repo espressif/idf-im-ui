@@ -132,7 +132,7 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool 
 /// Installs Python
 #[tauri::command]
 pub fn python_install(app_handle: AppHandle) -> bool {
-    match idf_im_lib::system_dependencies::install_prerequisites(vec!["python".to_string()]) {
+    match idf_im_lib::system_dependencies::install_prerequisites(vec![idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()]) {
         Ok(_) => true,
         Err(err) => {
             let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
