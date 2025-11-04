@@ -5,7 +5,8 @@ use flate2::read::GzDecoder;
 // };
 use gix::bstr::BString;
 use gix::clone::PrepareFetch;
-use gix::create;
+use gix::progress::{prodash, MessageLevel, Unit, Id};
+use gix::{create, Count, Progress};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
 use log::{error, info, trace, warn};
@@ -19,6 +20,7 @@ use tempfile::TempDir;
 use std::collections::{HashMap, HashSet};
 use std::fs::metadata;
 use std::io::BufReader;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tar::Archive;
 use tera::{Context, Tera};
 use thiserror::Error;
@@ -37,6 +39,7 @@ pub mod version_manager;
 pub mod offline_installer;
 pub mod telemetry;
 use std::fs::{set_permissions, File};
+use std::sync::{Arc, Mutex};
 use std::{
     env,
     fs::{self},
@@ -1697,6 +1700,105 @@ pub struct CloneOptions {
 //     Ok(repo)
 // }
 
+/// Custom progress handler that sends updates through the channel
+#[derive(Clone)]
+struct ChannelProgress {
+    tx: Sender<ProgressMessage>,
+    last_percentage: Arc<Mutex<u32>>,
+    stage_name: Arc<Mutex<String>>,
+    step: Arc<AtomicUsize>,
+    max: Arc<Mutex<Option<prodash::progress::Step>>>,
+}
+
+impl ChannelProgress {
+    fn new(tx: Sender<ProgressMessage>, stage_name: String) -> Self {
+        Self {
+            tx,
+            last_percentage: Arc::new(Mutex::new(0)),
+            stage_name: Arc::new(Mutex::new(stage_name)),
+            step: Arc::new(AtomicUsize::new(0)),
+            max: Arc::new(Mutex::new(None)),
+        }
+    }
+
+  fn update_percentage(&self) {
+        let step = self.step.load(Ordering::Relaxed);
+        if let Ok(max) = self.max.lock() {
+            if let Some(max_val) = *max {
+                if max_val > 0 {
+                    let percentage = ((step as f64 / max_val as f64) * 100.0) as u32;
+                    let mut last = self.last_percentage.lock().unwrap();
+
+                    // Only send updates when percentage changes significantly (every 5%)
+                    if percentage.saturating_sub(*last) >= 5 {
+                        *last = percentage;
+                        let _ = self.tx.send(ProgressMessage::Update(percentage as u64));
+                    }
+                }
+            }
+        }
+    }
+}
+
+impl Count for ChannelProgress {
+    fn set(&self, step: prodash::progress::Step) {
+        self.step.store(step, Ordering::Relaxed);
+        self.update_percentage();
+    }
+
+    fn step(&self) -> prodash::progress::Step {
+        self.step.load(Ordering::Relaxed)
+    }
+
+    fn inc_by(&self, delta: prodash::progress::Step) {
+        self.step.fetch_add(delta, Ordering::Relaxed);
+        self.update_percentage();
+    }
+
+    fn counter(&self) -> gix::progress::StepShared {
+        self.step.clone()
+    }
+}
+
+impl Progress for ChannelProgress {
+    fn init(&mut self, max: Option<prodash::progress::Step>, unit: Option<Unit>) {
+        if let Ok(mut m) = self.max.lock() {
+            *m = max;
+        }
+    }
+
+    fn set_name(&mut self, name: String) {
+        if let Ok(mut n) = self.stage_name.lock() {
+            *n = name;
+        }
+    }
+
+    fn name(&self) -> Option<String> {
+        self.stage_name.lock().ok().map(|n| n.clone())
+    }
+
+    fn id(&self) -> Id {
+        gix::progress::UNKNOWN
+    }
+
+    fn message(&self, _level: MessageLevel, _message: String) {
+        // Could send messages through channel if needed
+        // let _ = self.tx.send(ProgressMessage::Message(message));
+    }
+}
+
+impl gix::NestedProgress for ChannelProgress {
+    type SubProgress = ChannelProgress;
+
+    fn add_child(&mut self, name: impl Into<String>) -> Self::SubProgress {
+        ChannelProgress::new(self.tx.clone(), name.into())
+    }
+
+    fn add_child_with_id(&mut self, name: impl Into<String>, _id: Id) -> Self::SubProgress {
+        ChannelProgress::new(self.tx.clone(), name.into())
+    }
+}
+
 pub fn clone_repository_gix(
     options: CloneOptions,
     tx: Sender<ProgressMessage>,
@@ -1714,8 +1816,6 @@ pub fn clone_repository_gix(
                 gix::open::Options::default(),
             )?;
             // Set the branch to checkout
-            // prep = prep.with_ref_name(Some(format!("refs/heads/{}", branch).into()))?;
-            // prep = prep.with_ref_name::<BString>(Some(format!("refs/heads/{}", branch).into()))?;
             prep = prep.with_ref_name(Some(format!("refs/heads/{}", branch).as_str()))?;
             prep
         }
@@ -1740,8 +1840,13 @@ pub fn clone_repository_gix(
     }
 
     // Perform the fetch and checkout
-    let progress = gix::progress::Discard;
-    let progress_2 = gix::progress::Discard;
+
+    // let progress = gix::progress::Discard;
+    // let progress_2 = gix::progress::Discard;
+    // Create progress reporters
+    let progress = ChannelProgress::new(tx.clone(), "fetch".to_string());
+    let progress_2 = ChannelProgress::new(tx.clone(), "checkout".to_string());
+
     let (mut prepared_checkout, _outcome) = prepare_clone
         .fetch_then_checkout(progress, &gix::interrupt::IS_INTERRUPTED).map_err(|e| {
         log::error!("Fetch error: {:?}", e);
