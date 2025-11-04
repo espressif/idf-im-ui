@@ -145,7 +145,7 @@ pub fn check_and_install_python(
             };
 
             if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(vec!["python313".to_string()])
+                system_dependencies::install_prerequisites(vec![idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()])
                     .map_err(|e| e.to_string())?;
                 let scp = system_dependencies::get_scoop_path();
                 let usable_python = match scp {
