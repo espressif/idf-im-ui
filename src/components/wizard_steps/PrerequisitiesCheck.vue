@@ -77,6 +77,14 @@ export default {
     display_prerequisities: [],
     os: undefined,
   }),
+  watch: {
+    missing_prerequisities(newValue) {
+      // Auto-navigate when all prerequisites pass
+      if (this.did_the_check_run && newValue.length === 0 && !this.loading && this.nextstep) {
+        this.nextstep();
+      }
+    }
+  },
   methods: {
     get_prerequisities_list: async function () {
       this.all_prerequisities = await invoke("get_prequisites", {});
@@ -291,4 +299,3 @@ export default {
   pointer-events: none;
 }
 </style>
-

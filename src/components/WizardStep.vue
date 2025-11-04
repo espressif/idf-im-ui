@@ -33,16 +33,18 @@
 
       <!-- Main content area -->
       <div class="wizard-container" data-id="wizard-container">
-        <div class="wizard-step-container" data-id="wizard-step-content">
-          <PrerequisitiesCheck :nextstep=nextStep v-if="currentStep === 1" data-id="prerequisites-check" />
-          <PythonSanitycheck :nextstep=nextStep v-if="currentStep === 2" data-id="python-sanity-check" />
-          <TargetSelect :nextstep=nextStep v-if="currentStep === 3" data-id="target-select" />
-          <VersionSelect :nextstep=nextStep v-if="currentStep === 4" data-id="version-select" />
-          <MirrorSelect :nextstep=nextStep v-if="currentStep === 5" data-id="mirror-select" />
-          <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 6" data-id="installation-path-select" />
-          <InstalationProgress :nextstep=nextStep v-if="currentStep === 7" data-id="installation-progress" />
-          <Complete v-if="currentStep === 8" data-id="complete" />
-        </div>
+        <transition :name="transitionName" mode="out-in">
+          <div class="wizard-step-container" :key="currentStep" data-id="wizard-step-content">
+            <PrerequisitiesCheck :nextstep="nextStep" v-if="currentStep === 1" data-id="prerequisites-check" />
+            <PythonSanitycheck :nextstep="nextStep" v-if="currentStep === 2" data-id="python-sanity-check" />
+            <TargetSelect :nextstep="nextStep" v-if="currentStep === 3" data-id="target-select" />
+            <VersionSelect :nextstep="nextStep" v-if="currentStep === 4" data-id="version-select" />
+            <MirrorSelect :nextstep="nextStep" v-if="currentStep === 5" data-id="mirror-select" />
+            <InstallationPathSelect :nextstep="nextStep" v-if="currentStep === 6" data-id="installation-path-select" />
+            <InstalationProgress :nextstep="nextStep" v-if="currentStep === 7" data-id="installation-progress" />
+            <Complete v-if="currentStep === 8" data-id="complete" />
+          </div>
+        </transition>
       </div>
     </div>
   </div>
@@ -93,7 +95,9 @@ export default {
         { titleKey: "wizardStep.steps.selectPath" },
         { titleKey: "wizardStep.steps.installationProgress" },
         { titleKey: "wizardStep.steps.installationComplete" }
-      ]
+      ],
+      transitionName: 'slide-left',
+      previousStep: 1
     }
   },
   computed: {
@@ -108,6 +112,12 @@ export default {
     },
     stepTitle() {
       return this.t(this.steps[this.store.currentStep - 1].titleKey)
+    }
+  },
+  watch: {
+    currentStep(newStep, oldStep) {
+      // Determine transition direction based on step movement
+      this.transitionName = newStep > oldStep ? 'slide-left' : 'slide-right';
     }
   },
   methods: {
@@ -187,7 +197,6 @@ export default {
   display: flex;
   padding: 0px;
   padding-top: 0px;
-  ;
   gap: 32px;
   max-width: 1200px;
   margin: 0 auto;
@@ -298,6 +307,8 @@ export default {
 .wizard-container {
   flex: 1;
   padding: 24px;
+  overflow: hidden;
+  position: relative;
 }
 
 .wizard-step-container {
@@ -311,5 +322,36 @@ export default {
 .step-title {
   transition: all 0.3s ease;
 }
-</style>
 
+/* Slide left transition (moving forward) */
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: all 0.4s ease;
+}
+
+.slide-left-enter-from {
+  opacity: 0;
+  transform: translateX(100%);
+}
+
+.slide-left-leave-to {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+/* Slide right transition (moving backward) */
+.slide-right-enter-active,
+.slide-right-leave-active {
+  transition: all 0.4s ease;
+}
+
+.slide-right-enter-from {
+  opacity: 0;
+  transform: translateX(-100%);
+}
+
+.slide-right-leave-to {
+  opacity: 0;
+  transform: translateX(100%);
+}
+</style>

@@ -47,7 +47,7 @@
 </template>
 
 <script>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin } from 'naive-ui'
@@ -69,6 +69,16 @@ export default {
     python_sane: false,
     installing_python: false,
   }),
+  watch: {
+    python_sane(newValue) {
+      // Auto-navigate when Python check passes
+      if (newValue && !this.loading && this.nextstep) {
+        setTimeout(() => {
+          this.nextstep();
+        }, 250);
+      }
+    }
+  },
   methods: {
     check_python_sanity: async function () {
       this.loading = true;
@@ -169,4 +179,3 @@ export default {
   background-color: #E8362D;
 }
 </style>
-
