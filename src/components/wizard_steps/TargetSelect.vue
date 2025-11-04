@@ -2,9 +2,7 @@
   <div class="target-select" data-id="target-select">
     <h1 class="title" data-id="target-select-title">{{ t('targetSelect.title') }}</h1>
     <p class="description" data-id="target-select-description">{{ t('targetSelect.description') }}</p>
-    <p class="description" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
-        href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
-        target="_blank">{{ t('targetSelect.productSelector') }}</a></p>
+
     <div class="selection_header">
       {{ t('targetSelect.targetChips') }}
       <span @click="clickOnAll">
@@ -37,6 +35,10 @@
         </div>
       </n-spin>
     </n-card>
+    <hr></hr>
+    <p class="description" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
+        href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
+        target="_blank">{{ t('targetSelect.productSelector') }}</a></p>
   </div>
 </template>
 
