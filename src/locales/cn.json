@@ -227,6 +227,11 @@
         "useDefault": "使用默认安装路径",
         "warning": "所选路径非空。如果文件已存在，安装可能会失败。"
       },
+      "prerequisites": {
+        "checking": "正在检查系统依赖项...",
+        "missing":"缺少先决条件",
+        "installCommand": "安装命令"
+      },
       "startButton": "开始安装"
     },
     "installation": {

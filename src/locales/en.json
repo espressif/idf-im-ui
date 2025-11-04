@@ -228,7 +228,9 @@
         "warning": "The selected path is not empty. Installation may fail if files already exist."
       },
       "prerequisites":{
-        "missing":"The installation can not proceed without these prerequisites:"
+        "checking": "Checking system prerequisites...",
+        "missing":"The installation can not proceed without these prerequisites:",
+        "installCommand": "Installation command"
       },
       "startButton": "Start Installation"
     },
