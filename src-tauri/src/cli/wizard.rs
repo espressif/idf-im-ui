@@ -1,6 +1,8 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
+use idf_im_lib::idf_features::get_requirements_json_url;
+use idf_im_lib::idf_features::RequirementsMetadata;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
@@ -328,7 +330,7 @@ async fn download_and_extract_tools(
 }
 
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
-    debug!(
+    info!(
         "{}",
         t!(
             "wizard.debug.config_entering",
@@ -413,6 +415,37 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.idf_path = Some(paths.idf_path.clone());
         idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
+        let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
+
+        let requirements_files = match RequirementsMetadata::from_url(&req_url) {
+            Ok(files) => files,
+            Err(err) => {
+                warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
+                return Err(err.to_string());
+            }
+        };
+
+        let features = select_features(
+            &requirements_files,
+            config.non_interactive.unwrap_or_default(),
+            true,
+        )?;
+        debug!(
+            "{}: {}",
+            t!("wizard.features.selected"),
+            features
+                .iter()
+                .map(|f| f.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+        config.idf_features = Some(
+            features
+                .iter()
+                .map(|f| f.name.clone())
+                .collect::<Vec<String>>(),
+        );
+
         if !using_existing_idf {
             // download idf
             let download_config = DownloadConfig {
@@ -442,6 +475,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 }
             }
         }
+        // IDF features
+
+
+
         // setup tool directories
 
         let tool_download_directory = setup_directory(
