@@ -318,8 +318,7 @@ fn select_features_interactive(
         .iter()
         .map(|f| {
             format!(
-                "{} {} - {}",
-                if f.optional { "[ ]" } else { "[*]" },
+                "{} - {}",
                 f.name,
                 f.description.as_deref().unwrap_or("No description")
             )
