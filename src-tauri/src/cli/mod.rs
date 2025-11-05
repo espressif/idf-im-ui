@@ -152,14 +152,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 install_args.config.clone(),
                 install_args.clone().into_iter(),
             );
+            info!("Returned settings: {:?}", settings);
             match settings {
                 Ok(mut settings) => {
+                  info!("Settings before adjustments: {:?}", settings);
                   if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
                   }
-                  if install_args.idf_versions.is_none() { // if no version is specified, use the latest stable (skipping pre-releases)
-                    settings.idf_versions = Some(vec![idf_im_lib::idf_versions::get_idf_names(false).await.first().unwrap().to_string()]);
-                  }
+                  info!("Settings after adjustments: {:?}", settings);
                   let time = std::time::SystemTime::now();
                   if !do_not_track {
                       track_cli_event("CLI installation started", Some(json!({
@@ -169,7 +169,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
                         Ok(r) => {
-                            info!("{}", t!("install.wizard_result"));
+                            info!("{}", t!("install.wizard_result", r = "Ok".to_string()));
                             info!("{}", t!("install.success"));
                             info!("{}", t!("install.ready"));
                             if !do_not_track {

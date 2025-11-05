@@ -1,13 +1,10 @@
-use crate::gui::ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar};
+use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar}};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  add_path_to_path,ensure_path,
-  idf_tools::{self, get_tools_export_paths},
-  DownloadProgress,
-  settings::Settings,
+  add_path_to_path, ensure_path, idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata}, idf_tools::{self, get_tools_export_paths}, settings::Settings, DownloadProgress
 };
-use log::{ error, info};
+use log::{ error, info, warn};
 use std::{
   path::{Path, PathBuf}, sync::{Arc, Mutex},
 };
@@ -418,4 +415,56 @@ pub async fn setup_tools(
         t!("gui.setup_tools.setup_completed").to_string());
 
     Ok(export_paths)
+}
+
+#[tauri::command]
+pub async fn get_features_list(
+    app_handle: AppHandle,
+) -> Result<Vec<FeatureInfo>, String> {
+  let settings = get_settings_non_blocking(&app_handle)?;
+    let first_version = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.first().unwrap(),
+        _ => {
+            let msg = t!("wizard.requirements.no_idf_version_specified").to_string();
+            warn!("{}", msg);
+            return Err(msg);
+        }
+    };
+    let req_url = get_requirements_json_url(settings.repo_stub.clone().as_deref(), &first_version.to_string(), settings.idf_mirror.clone().as_deref());
+    println!("Requirements URL: {}", req_url);
+    let requirements_files = match RequirementsMetadata::from_url_async(&req_url).await {
+        Ok(files) => files,
+        Err(err) => {
+            warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
+            return Err(err.to_string());
+        }
+    };
+
+    Ok(requirements_files.features.clone())
+}
+
+/// Sets the selected ESP-IDF features
+#[tauri::command]
+pub fn set_selected_features(
+    app_handle: AppHandle,
+    features: Vec<String>,
+) -> Result<(), String> {
+    info!("Setting selected features: {:?}", features);
+    update_settings(&app_handle, |settings| {
+        settings.idf_features = Some(features);
+    })?;
+
+    send_message(
+        &app_handle,
+        t!("gui.settings.features_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}
+
+/// Gets the currently selected features from settings
+#[tauri::command]
+pub fn get_selected_features(app_handle: AppHandle) -> Result<Vec<String>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+    Ok(settings.idf_features.clone().unwrap_or_default())
 }

@@ -13,8 +13,8 @@
           <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
             'active': currentStep === index + 1,
             'completed': currentStep > index + 1,
-            'disabled': currentStep === 7 || currentStep === 8,
-            'clickable': currentStep > index + 1 && currentStep < 7
+            'disabled': currentStep === 8 || currentStep === 9,
+            'clickable': currentStep > index + 1 && currentStep < 8
           }" @click="handleStepClick(index + 1)" :data-id="`step-item-${index + 1}`">
             <div class="step-number" :data-id="`step-number-${index + 1}`">
               <template v-if="currentStep > index + 1">
@@ -40,9 +40,10 @@
             <TargetSelect :nextstep="nextStep" v-if="currentStep === 3" data-id="target-select" />
             <VersionSelect :nextstep="nextStep" v-if="currentStep === 4" data-id="version-select" />
             <MirrorSelect :nextstep="nextStep" v-if="currentStep === 5" data-id="mirror-select" />
-            <InstallationPathSelect :nextstep="nextStep" v-if="currentStep === 6" data-id="installation-path-select" />
-            <InstalationProgress :nextstep="nextStep" v-if="currentStep === 7" data-id="installation-progress" />
-            <Complete v-if="currentStep === 8" data-id="complete" />
+            <FeaturesSelect :nextstep=nextStep v-if="currentStep === 6" data-id="features-select" />
+            <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 7" data-id="installation-path-select" />
+            <InstalationProgress :nextstep=nextStep v-if="currentStep === 8" data-id="installation-progress" />
+            <Complete v-if="currentStep === 9" data-id="complete" />
           </div>
         </transition>
       </div>
@@ -61,6 +62,7 @@ import PythonSanitycheck from './wizard_steps/PythonSanitycheck.vue';
 import TargetSelect from './wizard_steps/TargetSelect.vue';
 import VersionSelect from './wizard_steps/VersionSelect.vue';
 import MirrorSelect from './wizard_steps/MirrorSelect.vue';
+import FeaturesSelect from './wizard_steps/FeaturesSelect.vue';
 import InstallationPathSelect from './wizard_steps/InstallationPathSelect.vue';
 import InstalationProgress from './wizard_steps/InstalationProgress.vue';
 import Complete from './wizard_steps/Complete.vue';
@@ -77,6 +79,7 @@ export default {
     TargetSelect,
     VersionSelect,
     MirrorSelect,
+    FeaturesSelect,
     InstallationPathSelect,
     InstalationProgress,
   },
@@ -92,6 +95,7 @@ export default {
         { titleKey: "wizardStep.steps.selectTarget" },
         { titleKey: "wizardStep.steps.selectVersion" },
         { titleKey: "wizardStep.steps.selectMirror" },
+        { titleKey: "wizardStep.steps.selectFeatures" },
         { titleKey: "wizardStep.steps.selectPath" },
         { titleKey: "wizardStep.steps.installationProgress" },
         { titleKey: "wizardStep.steps.installationComplete" }
@@ -127,6 +131,7 @@ export default {
         { titleKey: "wizardStep.steps.selectTarget" },
         { titleKey: "wizardStep.steps.selectVersion" },
         { titleKey: "wizardStep.steps.selectMirror" },
+        { titleKey: "wizardStep.steps.selectFeatures" },
         { titleKey: "wizardStep.steps.selectPath" },
         { titleKey: "wizardStep.steps.installationProgress" },
         { titleKey: "wizardStep.steps.installationComplete" }
@@ -135,9 +140,9 @@ export default {
     handleStepClick(stepNumber) {
       // Only allow navigation if:
       // 1. The step has been completed (currentStep > stepNumber)
-      // 2. We're not in the installation or completion steps (currentStep < 7)
+      // 2. We're not in the installation or completion steps (currentStep < 8)
       // 3. We're not trying to navigate to a step after our current position
-      if (this.currentStep > stepNumber && this.currentStep < 7) {
+      if (this.currentStep > stepNumber && this.currentStep < 8) {
         this.store.goToStep(stepNumber);
       }
     },

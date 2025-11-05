@@ -3,7 +3,10 @@ use std::path::PathBuf;
 use crate::cli::helpers::{
     first_defaulted_multiselect, generic_confirm, generic_input, generic_select, run_with_spinner,
 };
-use idf_im_lib::settings::Settings;
+use dialoguer::theme::ColorfulTheme;
+use dialoguer::MultiSelect;
+use idf_im_lib::idf_features::FeatureInfo;
+use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
@@ -264,4 +267,192 @@ pub fn save_config_if_desired(config: &Settings) -> Result<(), String> {
         println!("{}", t!("wizard.after_install.config.saved"));
     }
     Ok(())
+}
+
+/// Select features from requirements metadata with interactive or non-interactive mode
+///
+/// # Arguments
+/// * `metadata` - The requirements metadata containing available features
+/// * `non_interactive` - If true, returns all required features by default
+/// * `include_optional` - If true, allows selection of optional features (interactive mode only)
+///
+/// # Returns
+/// * `Ok(Vec<FeatureInfo>)` - Selected features
+/// * `Err(String)` - Error message
+pub fn select_features(
+    metadata: &RequirementsMetadata,
+    non_interactive: bool,
+    include_optional: bool,
+) -> Result<Vec<FeatureInfo>, String> {
+    if non_interactive {
+        // Non-interactive mode: return all required features
+        println!("Non-interactive mode: selecting all required features by default");
+        let required = metadata
+            .required_features()
+            .into_iter()
+            .cloned()
+            .collect();
+        Ok(required)
+    } else {
+        // Interactive mode: let user select features
+        select_features_interactive(metadata, include_optional)
+    }
+}
+
+/// Interactive feature selection with multi-select dialog
+fn select_features_interactive(
+    metadata: &RequirementsMetadata,
+    include_optional: bool,
+) -> Result<Vec<FeatureInfo>, String> {
+    let features_to_show: Vec<&FeatureInfo> = if include_optional {
+        metadata.features.iter().collect()
+    } else {
+        metadata.required_features()
+    };
+
+    if features_to_show.is_empty() {
+        return Err("No features available for selection".to_string());
+    }
+
+    // Create display strings for each feature
+    let items: Vec<String> = features_to_show
+        .iter()
+        .map(|f| {
+            format!(
+                "{} - {}",
+                f.name,
+                f.description.as_deref().unwrap_or("No description")
+            )
+        })
+        .collect();
+
+    // Pre-select all required features
+    let defaults: Vec<bool> = features_to_show
+        .iter()
+        .map(|f| !f.optional)
+        .collect();
+
+    // Show multi-select dialog
+    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select ESP-IDF features to install (Space to toggle, Enter to confirm)")
+        .items(&items)
+        .defaults(&defaults)
+        .interact()
+        .map_err(|e| format!("Selection failed: {}", e))?;
+
+    if selections.is_empty() {
+        return Err("No features selected. At least one feature must be selected.".to_string());
+    }
+
+    // Return selected features
+    let selected_features: Vec<FeatureInfo> = selections
+        .into_iter()
+        .map(|idx| features_to_show[idx].clone())
+        .collect();
+
+    Ok(selected_features)
+}
+
+/// Select features and return their names only
+pub fn select_feature_names(
+    metadata: &RequirementsMetadata,
+    non_interactive: bool,
+    include_optional: bool,
+) -> Result<Vec<String>, String> {
+    let features = select_features(metadata, non_interactive, include_optional)?;
+    Ok(features.into_iter().map(|f| f.name).collect())
+}
+
+/// Select features and return their requirement paths
+pub fn select_requirement_paths(
+    metadata: &RequirementsMetadata,
+    non_interactive: bool,
+    include_optional: bool,
+) -> Result<Vec<String>, String> {
+    let features = select_features(metadata, non_interactive, include_optional)?;
+    Ok(features.into_iter().map(|f| f.requirement_path).collect())
+}
+
+/// Advanced selection: filter by specific criteria
+pub struct FeatureSelectionOptions {
+    pub non_interactive: bool,
+    pub include_optional: bool,
+    pub show_only_optional: bool,
+    pub filter_by_name: Option<Vec<String>>,
+}
+
+impl Default for FeatureSelectionOptions {
+    fn default() -> Self {
+        Self {
+            non_interactive: false,
+            include_optional: true,
+            show_only_optional: false,
+            filter_by_name: None,
+        }
+    }
+}
+
+/// Advanced feature selection with filtering options
+pub fn select_features_advanced(
+    metadata: &RequirementsMetadata,
+    options: FeatureSelectionOptions,
+) -> Result<Vec<FeatureInfo>, String> {
+    // Apply filters
+    let mut filtered_features: Vec<&FeatureInfo> = metadata.features.iter().collect();
+
+    // Filter by optional/required
+    if options.show_only_optional {
+        filtered_features.retain(|f| f.optional);
+    } else if !options.include_optional {
+        filtered_features.retain(|f| !f.optional);
+    }
+
+    // Filter by name if specified
+    if let Some(ref names) = options.filter_by_name {
+        filtered_features.retain(|f| names.contains(&f.name));
+    }
+
+    if filtered_features.is_empty() {
+        return Err("No features match the specified criteria".to_string());
+    }
+
+    if options.non_interactive {
+        // Return all filtered features in non-interactive mode
+        println!(
+            "Non-interactive mode: selecting {} filtered feature(s)",
+            filtered_features.len()
+        );
+        Ok(filtered_features.into_iter().cloned().collect())
+    } else {
+        // Interactive selection from filtered features
+        let items: Vec<String> = filtered_features
+            .iter()
+            .map(|f| {
+                format!(
+                    "{} {} - {}",
+                    if f.optional { "[ ]" } else { "[*]" },
+                    f.name,
+                    f.description.as_deref().unwrap_or("No description")
+                )
+            })
+            .collect();
+
+        let defaults: Vec<bool> = filtered_features.iter().map(|f| !f.optional).collect();
+
+        let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+            .with_prompt("Select ESP-IDF features (Space to toggle, Enter to confirm)")
+            .items(&items)
+            .defaults(&defaults)
+            .interact()
+            .map_err(|e| format!("Selection failed: {}", e))?;
+
+        if selections.is_empty() {
+            return Err("No features selected".to_string());
+        }
+
+        Ok(selections
+            .into_iter()
+            .map(|idx| filtered_features[idx].clone())
+            .collect())
+    }
 }

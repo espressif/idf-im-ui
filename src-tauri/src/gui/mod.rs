@@ -270,7 +270,10 @@ pub fn run() {
             open_terminal_with_script,
             get_pypi_mirror_list,
             set_pypi_mirror,
-            fetch_json_from_url
+            fetch_json_from_url,
+            get_features_list,
+            set_selected_features,
+            get_selected_features,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

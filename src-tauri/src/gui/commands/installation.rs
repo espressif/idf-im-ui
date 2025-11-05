@@ -352,15 +352,13 @@ pub async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
-
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
     }
 
     // Get the settings and save to a temporary config file
-    let settings = get_settings_non_blocking(&app_handle)?;
+    let settings = get_locked_settings(&app_handle)?;
     let temp_dir = std::env::temp_dir();
     let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
 
