@@ -342,22 +342,25 @@ pub fn set_pypi_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Stri
 
 /// Checks if a path is empty or doesn't exist
 #[tauri::command]
-pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: String) -> bool {
+pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: String, versions: Option<Vec<String>>) -> bool {
     let settings = match get_settings_non_blocking(&app_handle) {
         Ok(s) => s,
         Err(_) => return false,
     };
-    let versions = match &settings.idf_versions {
-        Some(v) => v.clone(),
-        None => {
-            send_message(
-                &app_handle,
-                t!("gui.settings.no_idf_versions_selected").to_string(),
-                "error".to_string(),
-            );
-            // return false;
-            [].to_vec()
-        }
+    let versions = match versions {
+        Some(v) => v,
+        None => match &settings.idf_versions {
+            Some(v) => v.clone(),
+            None => {
+                send_message(
+                    &app_handle,
+                    t!("gui.settings.no_idf_versions_selected").to_string(),
+                    "error".to_string(),
+                );
+                // return false;
+                [].to_vec()
+            }
+        },
     };
 
     is_path_empty_or_nonexistent(&path, &versions)
