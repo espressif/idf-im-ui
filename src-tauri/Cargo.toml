@@ -8,7 +8,7 @@ copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
 default-run = "eim"
 
 [package.metadata.deb]
-name = "eim-cli"  # Package name for APT (for separate package management)
+name = "eim-cli"
 section = "devel"
 maintainer = "Espressif Systems"
 copyright = "2025, Espressif Systems"
@@ -17,6 +17,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies
 the setup process for ESP-IDF and integrated development environments (IDEs)
 across multiple platforms. This package contains the command-line interface."""
 license-file = ["../LICENSE"]
+depends = "git, wget, flex, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, libgcrypt20, libglib2.0-0, libpixman-1-0, libsdl2-2.0-0, libslirp0, python3 (>= 3.9), python3 (<< 3.14)"
 assets = [
     ["target/release/eim", "usr/bin/", "755"],
     ["../README.md", "usr/share/doc/eim-cli/", "644"],
