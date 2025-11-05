@@ -17,28 +17,24 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
 
     // If path exists, check if it's a directory and if it's empty
     if path.is_dir() {
-        match fs::read_dir(path) {
-            Ok(mut entries) => {
-                // If directory is empty
-                if entries.next().is_none() {
-                    return true;
-                }
-
-                // Check if any version directories exist
-                for v in versions {
-                    let new_path = path.join(v);
-                    if new_path.exists() {
-                        return false;
-                    }
-                }
-                true
-            }
-            Err(e) => {
+      match fs::read_dir(path) {
+          Ok(_entries) => {
+              // Check if any version directories exist
+              for v in versions {
+                  let new_path = path.join(v);
+                  if new_path.exists() {
+                      return false;
+                  }
+              }
+              // No version directories found, path is available
+              true
+          }
+          Err(e) => {
               log::error!("Failed to read directory {}: {}", path.display(), e);
               false
-            }
           }
-    } else {
+      }
+  } else {
         // Path is a file which is conflicting with the directory
         false
     }

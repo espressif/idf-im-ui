@@ -285,25 +285,34 @@ export default {
           // Get default installation path
           invoke('get_settings').then(settings => {
             installPath.value = settings?.path
-          });
-          // Check if path is valid
-          invoke('is_path_empty_or_nonexistent_command', {
-            path: installPath.value
-          }).then(pathValid => {
-            if (!pathValid) {
-              errorTitle.value = 'Installation Path Not Empty'
-              errorMessage.value = `The default installation path (${installPath.value}) is not empty.`
-              errorDetails.value = 'Please use custom installation to select a different path.'
-              currentState.value = 'error'
-              return false
-            }
+            console.log('Default installation path:', installPath.value);
             // Get latest ESP-IDF version
             invoke('get_idf_versions').then(versions => {
-              selectedVersion.value = versions?.[0].name || 'v5.5';
-              currentState.value = 'ready';
+              selectedVersion.value = versions?.[0].name || 'v5.5.1';
+              // Check if path is valid
+              let path_to_check = installPath.value;
+              console.log('Checking installation path:', path_to_check);
+              invoke('is_path_empty_or_nonexistent_command', {
+                path: path_to_check,
+                versions: [selectedVersion.value]
+              }).then(pathValid => {
+                console.log('Installation path check result:', pathValid);
+                if (!pathValid) {
+                  errorTitle.value = 'Installation Path Not Empty'
+                  errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
+                  errorDetails.value = 'Please use custom installation to select a different path.'
+                  currentState.value = 'error'
+                  return false
+                } else {
+                  console.log('Installation path is valid:', installPath.value);
+                  currentState.value = 'ready';
+                }
 
+              });
             });
           });
+
+
 
           return true
         })
