@@ -128,7 +128,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFMirror = await testRunner.waitForOutput(
-        "Select the source from which to download esp-idf"
+        "Select the source from which to download ESP-IDF"
       );
       expect(selectIDFMirror, "Failed to ask for IDF download mirrors").to.be
         .true;
