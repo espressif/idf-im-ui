@@ -46,7 +46,7 @@ jobs:
           - os: macos-latest
             package_name: macos-aarch64
             run_on: GitHub
-          - os: macos-13
+          - os: macos-15-intel
             package_name: macos-x64
             run_on: GitHub
 
@@ -107,7 +107,7 @@ jobs:
           npm ci
 
       - name: Install dependencies and node.js (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           brew install dfu-util libgcrypt glib pixman sdl2 libslirp python3
           python3 --version
@@ -160,7 +160,7 @@ jobs:
         continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
         continue-on-error: true
