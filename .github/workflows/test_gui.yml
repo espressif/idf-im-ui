@@ -37,7 +37,7 @@ jobs:
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
             run_on: ExtraRunner
-          - os: macos-13
+          - os: macos-15-intel
             package_name: macos-x64
             run_on: ExtraRunner
 
@@ -100,18 +100,18 @@ jobs:
       # MacOS
 
       - name: Check artifact and make it executable (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           ls -la ./artifacts/
           chmod +x artifacts/eim.app/Contents/MacOS/eim
 
       - name: Install dependencies (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           brew install dfu-util libgcrypt glib pixman sdl2 libslirp
 
       - name: Run IDF basic install test script (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
@@ -163,7 +163,7 @@ jobs:
         continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
-        if: matrix.os == 'macos-latest' || matrix.os == 'macos-13'
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
         continue-on-error: true

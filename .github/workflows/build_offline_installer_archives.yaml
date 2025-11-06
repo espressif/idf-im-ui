@@ -96,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-13]
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-15-intel]
         package_name: [linux-x64, linux-aarch64, windows-x64, macos-aarch64, macos-x64]
         idf_version: ${{ fromJson(needs.get-versions.outputs.versions) }}
         exclude:
@@ -133,13 +133,13 @@ jobs:
             package_name: windows-x64
           - os: macos-latest
             package_name: macos-x64
-          - os: macos-13
+          - os: macos-15-intel
             package_name: linux-x64
-          - os: macos-13
+          - os: macos-15-intel
             package_name: linux-aarch64
-          - os: macos-13
+          - os: macos-15-intel
             package_name: windows-x64
-          - os: macos-13
+          - os: macos-15-intel
             package_name: macos-aarch64
 
     steps:
