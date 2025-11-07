@@ -149,7 +149,7 @@ export default {
     // Fetch and parse the latest version from the website
     const fetchLatestVersion = async () => {
       try {
-        const response = await fetch('https://api.github.com/repos/espressif/idf-im-ui/releases/latest')
+        const response = await fetch('https://dl.espressif.com/dl/eim/eim_unified_release.json')
         const data = await response.json()
         const version = data.tag_name
 
