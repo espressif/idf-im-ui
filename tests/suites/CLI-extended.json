@@ -2,10 +2,10 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "CLI Non-Interactive v5.3.3 and v5.4.2",
+    "name": "CLI Non-Interactive v5.3.4 and v5.4.3",
     "data": {
       "targetList": "esp32s2|esp32h2",
-      "idfList": "v5.3.3|v5.4.2",
+      "idfList": "v5.3.4|v5.4.3",
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github",
@@ -18,9 +18,9 @@
   {
     "id": 2,
     "type": "custom",
-    "name": "CLI Non-Interactive v5.2.5",
+    "name": "CLI Non-Interactive v5.2.6",
     "data": {
-      "idfList": "v5.2.5",
+      "idfList": "v5.2.6",
       "targetList": "all",
       "installFolder": ".espext2",
       "idfMirror": "github",
@@ -38,21 +38,6 @@
     "data": {
       "idfList": "v5.1.6",
       "installFolder": ".esprext3",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": true,
-      "nonInteractive": true
-    },
-    "deleteAfterTest": true,
-    "testProxyMode": false
-  },
-  {
-    "id": 4,
-    "type": "custom",
-    "name": "CLI Non-Interactive master",
-    "data": {
-      "idfList": "master",
-      "installFolder": ".esprext4",
       "idfMirror": "github",
       "toolsMirror": "github",
       "recursive": true,

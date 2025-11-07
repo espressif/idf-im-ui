@@ -93,6 +93,8 @@ export function runCLIWizardInstallTest({
       expect(selectTargetQuestion, "Failed to ask for installation targets").to
         .be.true;
 
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       for (let target of availableTargets) {
         expect(
           testRunner.output,
@@ -115,6 +117,8 @@ export function runCLIWizardInstallTest({
       );
       expect(selectIDFVersion, "Failed to ask for IDF version").to.be.true;
 
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       for (let version of IDFAvailableVersions) {
         expect(
           testRunner.output,
@@ -133,6 +137,8 @@ export function runCLIWizardInstallTest({
       expect(selectIDFMirror, "Failed to ask for IDF download mirrors").to.be
         .true;
 
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       for (let mirror of Object.values(IDFMIRRORS)) {
         expect(
           testRunner.output,
@@ -141,6 +147,7 @@ export function runCLIWizardInstallTest({
       }
 
       logger.info("Select IDF mirror passed");
+
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -150,6 +157,8 @@ export function runCLIWizardInstallTest({
       );
       expect(selectToolsMirror, "Failed to ask for tools download mirror").to.be
         .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (let mirror of Object.values(TOOLSMIRRORS)) {
         expect(
@@ -168,6 +177,8 @@ export function runCLIWizardInstallTest({
       );
       expect(selectInstallPath, "Failed to ask for installation path").to.be
         .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const defaultPath =
         os.platform() === "win32"

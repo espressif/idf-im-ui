@@ -127,7 +127,7 @@ export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, instal
       await input.sendKeys(Key.BACK_SPACE);
       await input.sendKeys("NewName");
       await eimRunner.clickElement("Rename")
-
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       let renameVersionsList = [];
       for (let card of cards) {
         const versionElement = await card.findElement(
