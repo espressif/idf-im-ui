@@ -80,7 +80,8 @@
     },
     "preferences": {
       "dontShow": "Don't show this welcome screen again",
-      "allowTracking": "Allow sending usage statistics"
+      "allowTracking": "Allow sending usage statistics",
+      "trackingDocs": "Learn more about usage tracking in our documentation"
     }
   },
   "footer": {
