@@ -56,6 +56,7 @@
 
             <!-- Footer -->
             <AppFooter v-if="!showSplash" />
+            <UpdateNotification v-if="!showSplash" />
           </div>
         </n-notification-provider>
       </n-dialog-provider>
@@ -81,6 +82,7 @@ import {
   darkTheme
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
+import UpdateNotification from './components/UpdateNotification.vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -97,7 +99,8 @@ export default {
     NButton,
     NDropdown,
     NIcon,
-    AppFooter
+    AppFooter,
+    UpdateNotification
   },
   setup() {
     const route = useRoute()
