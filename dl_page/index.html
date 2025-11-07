@@ -74,6 +74,60 @@
       margin-top: 0.5rem;
     }
 
+    .installation-guide {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      border: 2px solid #e7352c20;
+    }
+
+    .installation-guide h3 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 1rem;
+      text-align: center;
+    }
+
+    .installation-guide-content {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .installation-method {
+      flex: 1;
+      min-width: 300px;
+      max-width: 500px;
+    }
+
+    .installation-method h4 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--secondary);
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .installation-method pre {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.875rem;
+      line-height: 1.6;
+      border: 1px solid #e5e7eb;
+    }
+
+    .installation-method code {
+      color: #1a1a1a;
+    }
+
     .tab-container {
       margin-bottom: 2rem;
     }
@@ -472,6 +526,44 @@
           <button @click="fetchRelease" class="retry-button">Retry</button>
         </div>
 
+        <!-- Installation Guide Box -->
+        <div v-if="releaseData && showInstallationGuide" class="installation-guide">
+          <h3>🚀 Easiest Installation Method</h3>
+          <div class="installation-guide-content">
+            <!-- macOS instructions -->
+            <div v-if="detectedOS === 'macos' || detectedOS === 'unknown'" class="installation-method">
+              <h4>macOS</h4>
+              <div style="margin-bottom: 1rem;">
+                <strong>CLI Tool</strong>
+                <pre><code>brew tap espressif/eim
+brew install eim</code></pre>
+              </div>
+              <div>
+                <strong>GUI Application</strong>
+                <pre><code>brew tap espressif/eim
+brew install --cask eim-gui</code></pre>
+              </div>
+            </div>
+
+            <!-- Linux instructions -->
+            <div v-if="detectedOS === 'linux' || detectedOS === 'unknown'" class="installation-method">
+              <h4>Linux</h4>
+              <div style="margin-bottom: 1rem;">
+                <pre><code># Add repository
+echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
+
+sudo apt update
+
+# Install CLI only
+sudo apt install eim-cli
+
+# Install GUI (includes CLI)
+sudo apt install eim</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <template v-if="releaseData">
           <div class="tab-container">
             <div class="tab-buttons">
@@ -813,6 +905,8 @@
         const activeTab = ref('online');
         const isDownloading = ref(false);
         const downloadProgress = ref('');
+        const detectedOS = ref('unknown');
+        const showInstallationGuide = ref(false);
 
         // Initialize tab from URL parameter
         const initializeTabFromUrl = () => {
@@ -878,14 +972,23 @@
           const userAgent = navigator.userAgent.toLowerCase();
           if (userAgent.includes('win')) {
             expandedSections.value.windows = true;
+            detectedOS.value = 'windows';
+            showInstallationGuide.value = false; // Don't show for Windows
           } else if (userAgent.includes('linux')) {
             if (userAgent.includes('arm') || userAgent.includes('aarch64')) {
               expandedSections.value.linuxARM = true;
             } else {
               expandedSections.value.linuxX64 = true;
             }
+            detectedOS.value = 'linux';
+            showInstallationGuide.value = true;
           } else if (userAgent.includes('mac')) {
             expandedSections.value.macosApple = true;
+            detectedOS.value = 'macos';
+            showInstallationGuide.value = true;
+          } else {
+            detectedOS.value = 'unknown';
+            showInstallationGuide.value = true; // Show all methods for unknown OS
           }
         };
 
@@ -1196,7 +1299,9 @@
           updateUrlOnTabChange,
           isDownloading,
           downloadProgress,
-          downloadOfflineInstaller
+          downloadOfflineInstaller,
+          detectedOS,
+          showInstallationGuide
         };
       }
     }).mount('#app');
