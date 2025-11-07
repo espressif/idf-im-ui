@@ -92,6 +92,7 @@ pub async fn setup_tools(
     settings: &Settings,
     idf_path: &PathBuf,
     idf_version: &str,
+    offline_archive_dir: Option<&Path>,
 ) -> Result<Vec<String>> {
     info!("Setting up tools...");
 
@@ -359,7 +360,7 @@ pub async fn setup_tools(
         &paths.tool_install_directory,
         true, //TODO: actually read from config
         &settings.idf_features.clone().unwrap_or_default(),
-        None, // Offline archive directory
+        offline_archive_dir, // Offline archive directory
         &settings.pypi_mirror, // PyPI mirror
     ).await {
         Ok(_) => {

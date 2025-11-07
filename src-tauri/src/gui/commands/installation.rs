@@ -334,7 +334,7 @@ pub async fn install_single_version(
   }
 
 
-  let export_vars = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version).await?;
+  let export_vars = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
 
   idf_im_lib::single_version_post_install(
       &paths.activation_script_path.to_str().unwrap(),
@@ -1779,7 +1779,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: Some(idf_version.clone()),
             });
 
-            let export_vars = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version).await {
+            let export_vars = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version, Some(offline_archive_dir.path())).await {
                 Ok(vars) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
                         rust_i18n::t!("gui.offline.tools_configured").to_string());
@@ -1799,43 +1799,6 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                     return Err(error_msg);
                 }
             };
-
-            // Install Python environment
-            emit_installation_event(&app_handle, InstallationProgress {
-                stage: InstallationStage::Python,
-                percentage: version_progress_start + ((version_index + 1) as u32 * version_progress_range * 3 / (versions.len() as u32 * 3)) - 5,
-                message: rust_i18n::t!("gui.offline.setting_up_python").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.installing_python_deps").to_string()),
-                version: Some(idf_version.clone()),
-            });
-
-            match idf_im_lib::python_utils::install_python_env(
-                &paths,
-                &paths.actual_version,
-                &paths.tool_install_directory,
-                true,
-                &settings.idf_features.clone().unwrap_or_default(),
-                Some(offline_archive_dir.path()),
-                &settings.pypi_mirror,
-            ).await {
-                Ok(_) => {
-                    emit_log_message(&app_handle, MessageLevel::Success,
-                        rust_i18n::t!("gui.offline.python_install_success").to_string());
-                }
-                Err(err) => {
-                    let error_msg = rust_i18n::t!("gui.offline.python_install_failed_detail", error = err.to_string()).to_string();
-                    error!("{}", error_msg);
-                    emit_installation_event(&app_handle, InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.python_install_failed").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: Some(idf_version.clone()),
-                    });
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            }
 
             // Post-install configuration
             emit_installation_event(&app_handle, InstallationProgress {
