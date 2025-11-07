@@ -477,7 +477,8 @@
     "description": "Choose mirrors for downloading ESP-IDF and tools. Default mirrors are recommended for users outside Chinese Mainland.",
     "sections": {
       "idfMirror": "ESP-IDF Repository Mirror",
-      "toolsMirror": "ESP-IDF Tools Mirror"
+      "toolsMirror": "ESP-IDF Tools Mirror",
+      "pypiMirror": "PyPI Mirror"
     },
     "tags": {
       "default": "Default"

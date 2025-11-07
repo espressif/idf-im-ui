@@ -477,7 +477,8 @@
     "description": "为下载 ESP-IDF 和工具选择镜像。建议中国大陆以外的用户使用默认镜像。",
     "sections": {
       "idfMirror": "ESP-IDF 仓库镜像",
-      "toolsMirror": "ESP-IDF 工具镜像"
+      "toolsMirror": "ESP-IDF 工具镜像",
+      "pypiMirror": "PyPI 镜像"
     },
     "tags": {
       "default": "默认"

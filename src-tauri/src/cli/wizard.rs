@@ -520,6 +520,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             } else {
                 None
             },
+            &config.pypi_mirror,
         )
         .await
         {

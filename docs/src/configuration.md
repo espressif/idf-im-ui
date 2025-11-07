@@ -41,6 +41,7 @@ non_interactive = true
 wizard_all_questions = false
 mirror = "[https://github.com](https://github.com)"
 idf_mirror = "[https://github.com](https://github.com)"
+pypi_mirror = "https://pypi.org/simple"
 recurse_submodules = true
 install_all_prerequisites = true
 skip_prerequisites_check = false

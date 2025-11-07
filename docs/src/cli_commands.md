@@ -56,6 +56,7 @@ Options:
 - `-n, --non-interactive <NON_INTERACTIVE>`: Run in interactive mode if set to false (default is true for non-interactive mode)
 - `-m, --mirror <MIRROR>`: URL for tools download mirror to be used instead of github.com
 - `--idf-mirror <IDF_MIRROR>`: URL for ESP-IDF download mirror to be used instead of github.com
+- `--pypi-mirror <PYPI_MIRROR>`: URL for PyPI mirror to be used instead of https://pypi.org/simple
 - `-r, --recurse-submodules <RECURSE_SUBMODULES>`: Should the installer recurse into submodules of the ESP-IDF repository (default true)
 - `-a, --install-all-prerequisites <INSTALL_ALL_PREREQUISITES>`: Should the installer attempt to install all missing prerequisites (Windows only)
 - `--config-file-save-path <CONFIG_FILE_SAVE_PATH>`: Path to save the configuration file

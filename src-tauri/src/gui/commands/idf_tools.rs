@@ -360,6 +360,7 @@ pub async fn setup_tools(
         true, //TODO: actually read from config
         &settings.idf_features.clone().unwrap_or_default(),
         None, // Offline archive directory
+        &settings.pypi_mirror, // PyPI mirror
     ).await {
         Ok(_) => {
             info!("Python environment installed");

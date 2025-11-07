@@ -179,6 +179,12 @@ pub struct InstallArgs {
     pub idf_mirror: Option<String>,
 
     #[arg(
+        long,
+        help = "URL for PyPI mirror to be used instead of https://pypi.org/simple"
+    )]
+    pub pypi_mirror: Option<String>,
+
+    #[arg(
         short,
         long,
         action = clap::ArgAction::Count,
@@ -302,6 +308,7 @@ impl IntoIterator for InstallArgs {
             ),
             ("mirror".to_string(), self.mirror.map(Into::into)),
             ("idf_mirror".to_string(), self.idf_mirror.map(Into::into)),
+            ("pypi_mirror".to_string(), self.pypi_mirror.map(Into::into)),
             (
                 "recurse_submodules".to_string(),
                 self.recurse_submodules.map(Into::into),
