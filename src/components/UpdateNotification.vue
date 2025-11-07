@@ -121,7 +121,6 @@ export default {
     const currentPlatform = ref('unknown')
 
     const DOWNLOAD_URL = 'https://dl.espressif.com/dl/eim/index.html'
-    const DISMISSED_KEY = 'eim_dismissed_update_version'
 
     // Parse version string to comparable numbers
     const parseVersion = (versionStr) => {
@@ -149,7 +148,7 @@ export default {
     // Fetch and parse the latest version from the website
     const fetchLatestVersion = async () => {
       try {
-        const response = await fetch('https://api.github.com/repos/espressif/idf-im-ui/releases/latest')
+        const response = await fetch('https://dl.espressif.com/dl/eim/eim_unified_release.json')
         const data = await response.json()
         const version = data.tag_name
 
@@ -165,15 +164,9 @@ export default {
       }
     }
 
-    // Check if update was dismissed
-    const isUpdateDismissed = (version) => {
-      const dismissed = localStorage.getItem(DISMISSED_KEY)
-      return dismissed === version
-    }
 
     // Dismiss update
     const dismissUpdate = () => {
-      // localStorage.setItem(DISMISSED_KEY, latestVersion.value)
       showUpdateRibbon.value = false
     }
 
@@ -258,9 +251,6 @@ export default {
     onMounted(() => {
       // Check for updates on mount
       checkForUpdates()
-
-      // Check periodically (every 24 hours)
-      setInterval(checkForUpdates, 24 * 60 * 60 * 1000)
     })
 
     return {
