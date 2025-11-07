@@ -33,8 +33,11 @@ python.sanitycheck.ok:
   en: Your Python meets the requirements
   cn: 你的 python 符合要求
 python.sanitycheck.fail:
-  en: Python is missing, or it does not meet the requirements. Please install Python3 with pip, venv and SSL support and try again
+  en: Python is missing, or it does not meet the requirements. Please install python3 with pip, venv and ssl support and try again
   cn: Python 缺失或不符合要求。请安装支持 pip、venv 和 SSL 的 Python3 并重试
+python.sanitycheck.fail_but_will_install:
+  en: Python is missing, or it does not meet the requirements. The installer will now install Python for you.
+  cn: Python 缺失或不符合要求。安装程序现在将为您安装 Python。
 python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 Python?

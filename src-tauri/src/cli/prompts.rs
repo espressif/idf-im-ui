@@ -134,12 +134,13 @@ pub fn check_and_install_python(
     };
     if let Err(err) = check_result {
         if std::env::consts::OS == "windows" {
-            info!("{}", t!("python.sanitycheck.fail"));
             let res = if !install_all_prerequisites && !non_interactive {
                 generic_confirm("python.install.prompt")
             } else if install_all_prerequisites {
+                info!("{}", t!("python.sanitycheck.fail_but_will_install"));
                 Ok(true)
             } else {
+                info!("{}", t!("python.sanitycheck.fail"));
                 Ok(false)
             };
 
