@@ -2,7 +2,20 @@
   "app": {
     "title": "ESP-IDF Installation Manager",
     "settingUp": "Setting up your development environment...",
-    "home": "Home"
+    "home": "Home",
+    "updateAvailable": {
+      "title": "New Version Available",
+      "modalTitle": "Update Available",
+      "currentVersion": "Current Version",
+      "latestVersion": "Latest Version",
+      "howToUpdate": "How to Update",
+      "orDownload": "Or download manually:",
+      "downloadButton": "Download Latest Version",
+      "dismissButton": "Dismiss",
+      "copyCommand": "Copy to clipboard",
+      "commandCopied": "Command copied to clipboard!",
+      "copyFailed": "Failed to copy command"
+    }
   },
   "routes": {
     "welcome": "Welcome",
@@ -405,6 +418,7 @@
       "selectTarget": "Select Target",
       "selectVersion": "Select IDF Version",
       "selectMirror": "Select Mirror",
+      "selectFeatures": "Select Features",
       "selectPath": "Select Installation Path",
       "installationProgress": "Installation Progress",
       "installationComplete": "Installation Complete"
