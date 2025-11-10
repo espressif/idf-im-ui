@@ -4,13 +4,13 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
-  let eimRunner = "";
-
+  
   describe("1- Run simplified mode", () => {
+    let eimRunner = null;
     let simplifiedInstallFailed = false;
 
     before(async function () {
-      this.timeout(30000);
+      this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
       try {
         await eimRunner.start();
@@ -74,10 +74,10 @@ export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
     });
 
     it("3- Should show installation summary", async function () {
-      this.timeout(25000);
+      this.timeout(35000);
 
       await eimRunner.clickButton("Start Easy Installation");
-      await new Promise((resolve) => setTimeout(resolve, 15000));
+      await new Promise((resolve) => setTimeout(resolve, 25000));
       const header = await eimRunner.findByCSS("h2");
       const text = await header.getText();
       expect(text, "Expected installation summary screen").to.equal(

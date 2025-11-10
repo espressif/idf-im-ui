@@ -15,7 +15,7 @@ export function runGUIOfflineInstallTest({
   offlinePkgName,
 }) {
   describe(`${id}- Run offline installation |`, () => {
-    let eimRunner = "";
+    let eimRunner = null;
     let offlineInstallFailed = false;
     let pathToOfflineArchive = null;
 

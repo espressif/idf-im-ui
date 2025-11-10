@@ -52,6 +52,11 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -83,11 +88,12 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip webkit2gtk-driver
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 webkit2gtk-driver
 
       - name: Run IDF basic install test script (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
+          python3 --version        
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
@@ -113,6 +119,7 @@ jobs:
       - name: Run IDF basic install test script (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
+          python3 --version        
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim.app/Contents/MacOS/eim"
@@ -146,6 +153,7 @@ jobs:
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
+          python3 --version        
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
@@ -232,6 +240,11 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
       - name: Install Tauri-Driver
         run: |
           cargo install tauri-driver
@@ -266,7 +279,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 python3 python3-venv python3-pip webkit2gtk-driver xvfb
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 webkit2gtk-driver xvfb
 
       - name: Start XVFB (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
@@ -277,6 +290,7 @@ jobs:
       - name: Run IDF basic install test script using GUI (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
+          python3 --version        
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="../artifacts/eim"
@@ -289,6 +303,7 @@ jobs:
       - name: Run IDF extended install test script using GUI (non-Windows)
         if: matrix.os != 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
+          python3 --version        
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="../artifacts/eim"
@@ -328,6 +343,7 @@ jobs:
       - name: Run IDF basic install test script using GUI (Windows)
         if: matrix.os == 'windows-latest'
         run: |
+          python3 --version        
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
@@ -340,6 +356,7 @@ jobs:
       - name: Run IDF extended install test script using GUI (Windows)
         if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
         run: |
+          python3 --version        
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "..\artifacts\eim.exe"

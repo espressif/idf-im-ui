@@ -8,7 +8,7 @@ import fs from "fs";
 
 export function runCLICustomInstallTest({
   id = 0,
-  pathToEim,
+  pathToEIM,
   args = [],
   offlineIDFVersion = null,
   offlinePkgName = null,
@@ -71,11 +71,13 @@ export function runCLICustomInstallTest({
       } finally {
         testRunner = null;
       }
-      try {
-        await proxy.stop();
-      } catch (error) {
-        logger.info("Error stopping proxy server");
-        logger.debug(`Error: ${error}`);
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.debug(`Error: ${error}`);
+        }
       }
       // Remove offline archive to save space in the runner
       if (pathToOfflineArchive) {
@@ -96,7 +98,7 @@ export function runCLICustomInstallTest({
 
     it("1- Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
-      testRunner.sendInput(`${pathToEim} install ${args.join(" ")}`);
+      testRunner.sendInput(`${pathToEIM} install ${args.join(" ")}`);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (args.includes("-n false")) {
         const startTime = Date.now();

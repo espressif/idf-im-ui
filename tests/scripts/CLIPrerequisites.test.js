@@ -16,14 +16,7 @@ import path from "path";
  *
  */
 
-export function runCLIPrerequisitesTest({ id = 0, pathToEim }) {
-  // let pathToEim;
-
-  // if (process.env.EIM_FILE_PATH) {
-  //     pathToEim = process.env.EIM_FILE_PATH;
-  // } else {
-  //     pathToEim = path.join(os.homedir(), "eim-cli/eim");
-  // }
+export function runCLIPrerequisitesTest({ id = 0, pathToEIM }) {
 
   describe(`${id}- Check for prerequisites |`, function () {
     this.timeout(600000);
@@ -34,7 +27,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEim }) {
       testRunner = new InteractiveCLITestRunner();
       try {
         await testRunner.start();
-        testRunner.sendInput(`${pathToEim}`);
+        testRunner.sendInput(`${pathToEIM}`);
       } catch (error) {
         logger.info(`Error starting process: ${error}`);
         logger.info(` Error: ${error}`);

@@ -2,9 +2,9 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com v5.4.2",
+    "name": "Mirrors jihulab and dl_com v5.4.3",
     "data": {
-      "idfList": "v5.4.2",
+      "idfList": "v5.4.3",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
       "recursive": true,
@@ -16,9 +16,9 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn v5.4.2",
+    "name": "Mirrors jihulab and dl_cn v5.4.3",
     "data": {
-      "idfList": "v5.4.2",
+      "idfList": "v5.4.3",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
       "recursive": true,
@@ -30,9 +30,9 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com v5.3.3",
+    "name": "Mirrors jihulab and dl_com v5.3.4",
     "data": {
-      "idfList": "v5.3.3",
+      "idfList": "v5.3.4",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
       "recursive": true,
@@ -44,9 +44,9 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn v5.3.3",
+    "name": "Mirrors jihulab and dl_cn v5.3.4",
     "data": {
-      "idfList": "v5.3.3",
+      "idfList": "v5.3.4",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
       "recursive": true,

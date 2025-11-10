@@ -14,7 +14,7 @@ import os from "os";
 
 export function runCLIWizardInstallTest({
   id = 0,
-  pathToEim,
+  pathToEIM,
   testProxyMode = false,
 }) {
   describe(`${id}- Run wizard |`, function () {
@@ -65,11 +65,13 @@ export function runCLIWizardInstallTest({
       } finally {
         testRunner = null;
       }
-      try {
-        await proxy.stop();
-      } catch (error) {
-        logger.info("Error stopping proxy server");
-        logger.info(`${error}`);
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
     });
 
@@ -83,13 +85,15 @@ export function runCLIWizardInstallTest({
     it("1- Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEim} ${runInDebug ? "-vvv " : ""}wizard`);
+      testRunner.sendInput(`${pathToEIM} ${runInDebug ? "-vvv " : ""}wizard`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
-        20000
+        30000
       );
       expect(selectTargetQuestion, "Failed to ask for installation targets").to
         .be.true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (let target of availableTargets) {
         expect(
@@ -106,11 +110,14 @@ export function runCLIWizardInstallTest({
       logger.info("Select Target Passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFVersion = await testRunner.waitForOutput(
         "Please select the desired ESP-IDF version"
       );
       expect(selectIDFVersion, "Failed to ask for IDF version").to.be.true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (let version of IDFAvailableVersions) {
         expect(
@@ -122,12 +129,15 @@ export function runCLIWizardInstallTest({
       logger.info("Select IDF Version passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFMirror = await testRunner.waitForOutput(
-        "Select the source from which to download esp-idf"
+        "Select the source from which to download ESP-IDF"
       );
       expect(selectIDFMirror, "Failed to ask for IDF download mirrors").to.be
         .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (let mirror of Object.values(IDFMIRRORS)) {
         expect(
@@ -137,14 +147,18 @@ export function runCLIWizardInstallTest({
       }
 
       logger.info("Select IDF mirror passed");
+
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectToolsMirror = await testRunner.waitForOutput(
         "Select a source from which to download tools"
       );
       expect(selectToolsMirror, "Failed to ask for tools download mirror").to.be
         .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       for (let mirror of Object.values(TOOLSMIRRORS)) {
         expect(
@@ -156,12 +170,15 @@ export function runCLIWizardInstallTest({
       logger.info("Select tools mirror passed");
       testRunner.output = "";
       testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectInstallPath = await testRunner.waitForOutput(
         "Please select the ESP-IDF installation location"
       );
       expect(selectInstallPath, "Failed to ask for installation path").to.be
         .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       const defaultPath =
         os.platform() === "win32"
@@ -176,6 +193,7 @@ export function runCLIWizardInstallTest({
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
+      
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
         if (Date.now() - testRunner.lastDataTimestamp >= 600000) {

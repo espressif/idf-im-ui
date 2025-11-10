@@ -9,32 +9,41 @@
     "id": 2,
     "type": "default",
     "name": "GUI Simplified Default",
-    "data": {}
+    "data": {},
+    "deleteAfterTest": true
   },
   {
     "id": 3,
     "type": "custom",
     "name": "GUI Expert Default",
     "data": {},
-    "deleteAfterTest": true,
+    "deleteAfterTest": false,
     "testProxyMode": false
   },
   {
     "id": 4,
     "type": "custom",
-    "name": "GUI Expert v5.4.2",
+    "name": "GUI Expert v5.4.3",
     "data": {
       "targetList": "All",
-      "idfList": "v5.4.2",
+      "idfList": "v5.4.3",
       "installFolder": ".espcustom",
       "idfMirror": "github",
       "toolsMirror": "github"
     },
-    "deleteAfterTest": true,
+    "deleteAfterTest": false,
     "testProxyMode": false
   },
-  {
+    {
     "id": 5,
+    "type": "version-management",
+    "name": "GUI Version Management",
+    "data": {
+      "idfList": "default|v5.4.3"
+    }
+  },
+  {
+    "id": 6,
     "type": "offline",
     "name": "GUI Offline Installation",
     "data": {},
