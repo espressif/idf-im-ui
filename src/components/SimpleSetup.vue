@@ -276,6 +276,7 @@ export default {
             if (appStore.os == 'windows') {
               console.log("Python sanity check failed - attempting automatic installation");
               try {
+                console.log("Installing Python...");
                 await invoke("python_install", {});
                 python_sane = await invoke("python_sanity_check", {});
               } catch (error) {

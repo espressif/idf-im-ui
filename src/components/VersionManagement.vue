@@ -1,7 +1,7 @@
 <template>
-  <div class="version-management">
+  <div class="version-management" data-id="version-management-container">
     <div class="management-header">
-      <h1 class="title">{{ t('versionManagement.title') }}</h1>
+      <h1 class="title" data-id="version-management-title">{{ t('versionManagement.title') }}</h1>
       <div class="header-actions">
         <!-- <n-button @click="checkForUpdates" :loading="checkingUpdates" type="info" secondary class="check-updates">
           <template #icon>
@@ -18,16 +18,17 @@
       type="warning"
       closable
       class="prerequisites-alert"
+      data-id="prerequisites-alert"
     >
       <template #header>{{ t('versionManagement.prerequisites.missing') }}</template>
       {{ t('versionManagement.prerequisites.windowsMessage') }}
-      <n-button @click="installPrerequisites" size="small" type="warning" style="margin-left: 10px;">
+      <n-button @click="installPrerequisites" size="small" type="warning" style="margin-left: 10px;" data-id="install-prerequisites-button">
         {{ t('versionManagement.prerequisites.installButton') }}
       </n-button>
     </n-alert>
 
     <!-- Installed Versions -->
-    <div v-if="installedVersions.length > 0" class="versions-section">
+    <div v-if="installedVersions.length > 0" class="versions-section" data-id="installed-versions-section">
       <h2>{{ t('versionManagement.sections.installedVersions') }}</h2>
       <div class="version-cards">
         <n-card
@@ -35,15 +36,16 @@
           :key="version.id"
           class="version-card"
           hoverable
+          :data-id="`version-card-${version.id}`"
         >
           <div class="version-card-content">
             <div class="version-info">
-              <h3>{{ version.name }}</h3>
+              <h3 :data-id="`version-name-${version.id}`">{{ version.name }}</h3>
               <!-- <n-tag :type="version.active ? 'success' : 'default'" size="small">
                 {{ version.version }}
               </n-tag> -->
             </div>
-            <div class="version-path">
+            <div class="version-path" :data-id="`version-path-${version.id}`">
               <n-icon><FolderOutlined /></n-icon>
               <span>{{ version.path }}</span>
             </div>
@@ -55,7 +57,7 @@
           <div class="version-actions">
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="openIDFTerminal(version)" quaternary circle data-id="openIDFTerminal">
+                <n-button @click="openIDFTerminal(version)" quaternary circle :data-id="`open-idf-terminal-button-${version.id}`">
                   <template #icon>
                     <n-icon><LaptopOutlined /></n-icon>
                   </template>
@@ -65,7 +67,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="renameVersion(version)" quaternary circle data-id="renameVersion">
+                <n-button @click="renameVersion(version)" quaternary circle :data-id="`rename-version-button-${version.id}`">
                   <template #icon>
                     <n-icon><EditOutlined /></n-icon>
                   </template>
@@ -75,7 +77,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="fixVersion(version)" quaternary circle data-id="fixVersion">
+                <n-button @click="fixVersion(version)" quaternary circle :data-id="`fix-version-button-${version.id}`">
                   <template #icon>
                     <n-icon><ToolOutlined /></n-icon>
                   </template>
@@ -85,7 +87,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="openInExplorer(version)" quaternary circle data-id="openInExplorer">
+                <n-button @click="openInExplorer(version)" quaternary circle :data-id="`open-in-explorer-button-${version.id}`">
                   <template #icon>
                     <n-icon><FolderOpenOutlined /></n-icon>
                   </template>
@@ -95,7 +97,7 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
-                <n-button @click="removeVersion(version)" quaternary circle data-id="removeVersion" type="error">
+                <n-button @click="removeVersion(version)" quaternary circle :data-id="`remove-version-button-${version.id}`" type="error">
                   <template #icon>
                     <n-icon><DeleteOutlined /></n-icon>
                   </template>
@@ -109,7 +111,7 @@
     </div>
 
     <!-- No Versions Installed -->
-    <div v-else class="empty-state">
+    <div v-else class="empty-state" data-id="no-versions-installed-empty-state">
       <n-empty :description="t('versionManagement.sections.noVersions')">
         <template #icon>
           <n-icon :size="64" :depth="3">
@@ -121,7 +123,7 @@
 
     <!-- Quick Actions -->
     <div class="quick-actions">
-      <n-button @click="goToBasicInstaller" type="primary" size="large">
+      <n-button @click="goToBasicInstaller" type="primary" size="large" data-id="install-new-version-button">
         <template #icon>
           <n-icon><PlusCircleOutlined /></n-icon>
         </template>
@@ -133,6 +135,7 @@
         @click="installDrivers"
         type="info"
         size="large"
+        data-id="install-drivers-button"
       >
         <template #icon>
           <n-icon><UsbOutlined /></n-icon>
@@ -147,6 +150,7 @@
         size="large"
         secondary
         class="purge-all"
+        data-id="purge-all-button"
       >
         <template #icon>
           <n-icon><ClearOutlined /></n-icon>
@@ -164,11 +168,13 @@
       :negative-text="t('versionManagement.modals.rename.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRename"
+      data-id="rename-version-modal"
     >
       <n-input
         v-model:value="newVersionName"
         :placeholder="t('versionManagement.modals.rename.placeholder')"
         @keyup.enter="confirmRename"
+        data-id="rename-version-input"
       />
     </n-modal>
 
@@ -181,6 +187,7 @@
       :negative-text="t('versionManagement.modals.remove.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmRemove"
+      data-id="remove-version-modal"
     >
       <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })"></span>
       <br><br>
@@ -198,6 +205,7 @@
       :negative-text="t('versionManagement.modals.fix.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmFix"
+      data-id="fix-version-modal"
     >
       <span v-html="t('versionManagement.modals.fix.message', { name: selectedVersion?.name })"></span>
       <br><br>
@@ -215,6 +223,7 @@
       :negative-text="t('versionManagement.modals.purge.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
       @positive-click="confirmPurge"
+      data-id="purge-all-modal"
     >
       <n-alert type="error" :bordered="false">
         {{ t('versionManagement.modals.purge.warning') }}
@@ -227,7 +236,7 @@
         </li>
       </ul>
       <br>
-      <n-checkbox v-model:checked="purgeConfirmed">
+      <n-checkbox v-model:checked="purgeConfirmed" data-id="purge-all-confirm-checkbox">
         {{ t('versionManagement.modals.purge.confirmation') }}
       </n-checkbox>
     </n-modal>

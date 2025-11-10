@@ -1,42 +1,42 @@
 <template>
-  <footer class="app-footer">
+  <footer class="app-footer" data-id="app-footer">
     <div class="footer-content">
       <div class="footer-section">
-        <span class="version-info">
+        <span class="version-info" data-id="app-version-info">
           {{ $t('footer.app.version', { version: appVersion }) }}
         </span>
       </div>
 
       <div class="footer-section center">
-        <n-button @click="openDocumentation" text tag="a" size="small">
+        <n-button @click="openDocumentation" text tag="a" size="small" data-id="documentation-button">
           <template #icon><n-icon><BookOutlined /></n-icon></template>
           {{ $t('footer.buttons.documentation') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button @click="openLogsFolder" text size="small">
+        <n-button @click="openLogsFolder" text size="small" data-id="logs-folder-button">
           <template #icon><n-icon><FolderOpenOutlined /></n-icon></template>
           {{ $t('footer.buttons.logs') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button @click="reportIssue" text size="small">
+        <n-button @click="reportIssue" text size="small" data-id="report-issue-button">
           <template #icon><n-icon><BugOutlined /></n-icon></template>
           {{ $t('footer.buttons.reportIssue') }}
         </n-button>
 
         <n-divider vertical />
 
-        <n-button @click="showAbout" text size="small">
+        <n-button @click="showAbout" text size="small" data-id="about-button">
           <template #icon><n-icon><InfoCircleOutlined /></n-icon></template>
           {{ $t('footer.buttons.about') }}
         </n-button>
       </div>
 
       <div class="footer-section">
-        <span class="copyright">
+        <span class="copyright" data-id="copyright-info">
           {{ $t('footer.copyright', { year: new Date().getFullYear() }) }}
         </span>
       </div>
@@ -44,7 +44,7 @@
 
     <!-- About Modal -->
     <n-modal v-model:show="showAboutModal" preset="card"
-             :title="$t('footer.modal.about.title')" style="width: 500px">
+             :title="$t('footer.modal.about.title')" style="width: 500px" data-id="about-modal">
       <div class="about-content">
         <div class="about-logo">
           <img src="../assets/espressif_logo.svg" alt="Espressif" />
@@ -61,7 +61,7 @@
         </div>
 
         <div class="about-links">
-          <n-button @click="openGitHub" type="primary" block>
+          <n-button @click="openGitHub" type="primary" block data-id="view-on-github-button">
             <template #icon>
               <n-icon><GithubOutlined /></n-icon>
             </template>
@@ -73,7 +73,7 @@
 
     <!-- Report Issue Modal -->
     <n-modal v-model:show="showReportModal" preset="card"
-             :title="$t('footer.modal.report.title')" style="width: 600px">
+             :title="$t('footer.modal.report.title')" style="width: 600px" data-id="report-issue-modal">
       <div class="report-content">
         <n-alert type="info" :bordered="false" style="margin-bottom: 1rem;">
           {{ $t('footer.modal.report.info') }}
@@ -82,15 +82,15 @@
         <div class="report-info">
           <h4>{{ $t('footer.modal.report.systemInfo') }}</h4>
           <div class="system-info">
-            <div class="info-row">
+            <div class="info-row" data-id="system-info-os">
               <span class="info-label">{{ $t('footer.modal.report.labels.os') }}</span>
               <span>{{ systemInfo.os }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-row" data-id="system-info-arch">
               <span class="info-label">{{ $t('footer.modal.report.labels.arch') }}</span>
               <span>{{ systemInfo.arch }}</span>
             </div>
-            <div class="info-row">
+            <div class="info-row" data-id="system-info-app-version">
               <span class="info-label">{{ $t('footer.modal.report.labels.appVersion') }}</span>
               <span>{{ appVersion }}</span>
             </div>
@@ -102,13 +102,14 @@
         </div>
 
         <div class="modal-actions">
-          <n-button @click="showReportModal = false" class="cancel-button">
+          <n-button @click="showReportModal = false" class="cancel-button" data-id="report-issue-cancel-button">
             {{ $t('footer.modal.report.buttons.cancel') }}
           </n-button>
           <n-button
             @click="generateReport"
             type="primary"
             :loading="generatingReport"
+            data-id="generate-report-button"
           >
             {{ $t('footer.modal.report.buttons.generate') }}
           </n-button>

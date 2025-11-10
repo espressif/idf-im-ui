@@ -1,8 +1,8 @@
 <template>
-  <div class="basic-installer">
+  <div class="basic-installer" data-id="basic-installer-container">
     <div class="installer-header">
-      <h1 class="title">{{ $t('basicInstaller.title') }}</h1>
-      <n-button @click="goBack" quaternary :disabled="isLoading">
+      <h1 class="title" data-id="basic-installer-title">{{ $t('basicInstaller.title') }}</h1>
+      <n-button @click="goBack" quaternary :disabled="isLoading" data-id="back-button">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -11,7 +11,7 @@
     </div>
 
     <!-- Loading State -->
-    <div v-if="isLoading" class="loading-container" ref="loadingDiv">
+    <div v-if="isLoading" class="loading-container" ref="loadingDiv" data-id="loading-container">
       <n-card class="loading-card">
         <div class="loading-content">
           <n-spin size="large" />
@@ -33,6 +33,7 @@
       v-if="!isLoading && !prerequisitesOk && os !== 'unknown'"
       :type="os === 'windows' ? 'warning' : 'error'"
       class="prerequisites-alert"
+      data-id="prerequisites-alert"
     >
       <template #header>{{ $t('basicInstaller.prerequisites.header') }}</template>
       <div v-if="missingPrerequisites.length > 0">
@@ -47,6 +48,7 @@
         size="small"
         type="warning"
         style="margin-top: 10px;"
+        data-id="install-prerequisites-button"
       >
         {{ $t('basicInstaller.prerequisites.installButton') }}
       </n-button>
@@ -57,9 +59,9 @@
 
     <!-- Installation Options -->
     <transition name="fade-in" mode="out-in">
-      <div v-if="!isLoading" class="installation-options">
+      <div v-if="!isLoading" class="installation-options" data-id="installation-options">
         <!-- Easy Mode -->
-        <n-card class="option-card easy-mode-card" hoverable @click="startEasyMode">
+        <n-card class="option-card easy-mode-card" hoverable @click="startEasyMode" data-id="easy-mode-card">
           <div class="option-content">
             <div class="option-icon easy">
               <n-icon :size="48"><RocketOutlined /></n-icon>
@@ -71,14 +73,14 @@
             <ul class="feature-list">
               <li v-for="(feature, index) in easyFeatures" :key="index">{{ feature }}</li>
             </ul>
-            <n-button type="primary" size="large" block>
+            <n-button type="primary" size="large" block data-id="easy-mode-button">
               {{ $t('basicInstaller.cards.easy.button') }}
             </n-button>
           </div>
         </n-card>
 
         <!-- Custom Installation -->
-        <n-card class="option-card custom-mode-card" hoverable @click="startWizard">
+        <n-card class="option-card custom-mode-card" hoverable @click="startWizard" data-id="custom-mode-card">
           <div class="option-content">
             <div class="option-icon custom">
               <n-icon :size="48"><SettingOutlined /></n-icon>
@@ -90,14 +92,14 @@
             <ul class="feature-list">
               <li v-for="(feature, index) in customFeatures" :key="index">{{ feature }}</li>
             </ul>
-            <n-button type="primary" size="large" block>
+            <n-button type="primary" size="large" block data-id="custom-mode-button">
               {{ $t('basicInstaller.cards.custom.button') }}
             </n-button>
           </div>
         </n-card>
 
         <!-- Offline Installation -->
-        <n-card class="option-card offline-mode-card" hoverable @click="selectOfflineArchive">
+        <n-card class="option-card offline-mode-card" hoverable @click="selectOfflineArchive" data-id="offline-mode-card">
           <div class="option-content">
             <div class="option-icon offline">
               <n-icon :size="48"><CloudDownloadOutlined /></n-icon>
@@ -106,7 +108,7 @@
             <p class="option-description">
               {{ $t('basicInstaller.cards.offline.description') }}
             </p>
-            <n-button type="primary" size="large" block>
+            <n-button type="primary" size="large" block data-id="offline-mode-button">
               {{ $t('basicInstaller.cards.offline.button') }}
             </n-button>
             <!-- Hidden input for CI tests control -->
@@ -115,7 +117,7 @@
       </n-card>
 
         <!-- Load Configuration -->
-        <n-card class="option-card config-mode-card" hoverable @click="loadConfig">
+        <n-card class="option-card config-mode-card" hoverable @click="loadConfig" data-id="load-config-card">
           <div class="option-content">
             <div class="option-icon config">
               <n-icon :size="48"><FileTextOutlined /></n-icon>
@@ -124,7 +126,7 @@
             <p class="option-description">
               {{ $t('basicInstaller.cards.config.description') }}
             </p>
-            <n-button type="primary" size="large" block>
+            <n-button type="primary" size="large" block data-id="load-config-button">
               {{ $t('basicInstaller.cards.config.button') }}
             </n-button>
             <!-- Hidden input for CI tests control -->
