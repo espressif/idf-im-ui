@@ -1,31 +1,31 @@
 <template>
-  <div class="welcome-container">
+  <div class="welcome-container" data-id="welcome-container">
     <main class="main-content">
       <!-- CPU Check for Windows -->
-      <div class="welcome-card" v-if="os === 'windows' && cpuCount == 1">
+      <div class="welcome-card" v-if="os === 'windows' && cpuCount == 1" data-id="cpu-check-error">
         <h1>{{ $t('welcome.systemRequirements') }}</h1>
         <div class="content">
           <n-alert type="error" :bordered="false">
             {{ $t('welcome.cpuError') }}
           </n-alert>
           <p>{{ $t('welcome.sorry') }}</p>
-          <n-button @click="quit" type="error" size="large">
+          <n-button @click="quit" type="error" size="large" data-id="exit-installer-button">
             {{ $t('welcome.exitInstaller') }}
           </n-button>
         </div>
       </div>
 
       <!-- Normal Welcome Flow -->
-      <div class="welcome-card" v-else>
+      <div class="welcome-card" v-else data-id="welcome-card">
         <div class="welcome-header">
-          <h1>{{$t('welcome.welcome')}} <span>ESP-IDF</span> {{$t('welcome.title')}}</h1>
+          <h1 data-id="welcome-header">{{$t('welcome.welcome')}} <span>ESP-IDF</span> {{$t('welcome.title')}}</h1>
         </div>
 
         <div class="content">
           <p class="subtitle">{{ getWelcomeMessage }}</p>
 
           <!-- Quick Status -->
-          <div v-if="checkingStatus" class="status-check">
+          <div v-if="checkingStatus" class="status-check" data-id="status-check">
             <n-spin size="small" />
             <span>{{ $t('welcome.checkingStatus') }}</span>
           </div>
@@ -38,6 +38,7 @@
               class="decision-card primary-action"
               @click="goToVersionManagement"
               hoverable
+              data-id="manage-versions-card"
             >
               <div class="card-content">
                 <n-icon :size="48" color="#E8362D">
@@ -45,7 +46,7 @@
                 </n-icon>
                 <h3>{{ $t('welcome.cards.manage.title') }}</h3>
                 <p>{{ $t('welcome.cards.manage.description', { count: installedVersionsCount }) }}</p>
-                <n-button type="primary" block>{{ $t('welcome.cards.manage.button') }}</n-button>
+                <n-button type="primary" block data-id="manage-versions-button">{{ $t('welcome.cards.manage.button') }}</n-button>
               </div>
             </n-card>
 
@@ -55,6 +56,7 @@
               class="decision-card offline-action"
               @click="goToOfflineInstaller"
               hoverable
+              data-id="offline-installer-card"
             >
               <div class="card-content">
                 <n-icon :size="48" color="#52c41a">
@@ -62,35 +64,36 @@
                 </n-icon>
                 <h3>{{ $t('welcome.cards.offline.title') }}</h3>
                 <p>{{ $t('welcome.cards.offline.description', { count: offlineArchives.length }) }}</p>
-                <n-button type="success" block>{{ $t('welcome.cards.offline.button') }}</n-button>
+                <n-button type="success" block data-id="offline-installer-button">{{ $t('welcome.cards.offline.button') }}</n-button>
               </div>
             </n-card>
 
             <!-- New Installation -->
-            <n-card class="decision-card new-action" @click="goToBasicInstaller" hoverable>
+            <n-card class="decision-card new-action" @click="goToBasicInstaller" hoverable data-id="new-installation-card">
               <div class="card-content">
                 <n-icon :size="48" color="#1290d8">
                   <PlusCircleOutlined />
                 </n-icon>
                 <h3>{{ $t('welcome.cards.new.title') }}</h3>
                 <p>{{ $t('welcome.cards.new.description') }}</p>
-                <n-button type="info" block>{{ $t('welcome.cards.new.button') }}</n-button>
+                <n-button type="info" block data-id="new-installation-button">{{ $t('welcome.cards.new.button') }}</n-button>
               </div>
             </n-card>
           </div>
 
           <!-- Don't Show Again -->
           <div class="preferences">
-            <n-checkbox v-model:checked="dontShowAgain">
+            <n-checkbox v-model:checked="dontShowAgain" data-id="dont-show-again-checkbox">
               {{ $t('welcome.preferences.dontShow') }}
             </n-checkbox><br></br>
-            <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange">
+            <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange" data-id="allow-usage-tracking-checkbox">
               {{ $t('welcome.preferences.allowTracking') }}
             </n-checkbox><br></br>
             <a
               href="https://docs.espressif.com/projects/idf-im-ui/en/latest/#privacy-and-data-collection"
               target="_blank"
               rel="noopener noreferrer"
+              data-id="tracking-docs-link"
             >{{ $t('welcome.preferences.trackingDocs') }}</a>
           </div>
         </div>
