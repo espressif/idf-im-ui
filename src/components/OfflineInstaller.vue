@@ -13,6 +13,46 @@
     <!-- Archive Selection -->
     <n-card v-if="!installationStarted" class="config-card">
       <h2>{{ $t('offlineInstaller.config.title') }}</h2>
+      <n-alert
+        v-if="checkingPrerequisites"
+        type="info"
+        show-icon
+        style="margin-bottom: 1rem;"
+      >
+        <template #icon>
+          <n-spin size="small" />
+        </template>
+        {{ $t('offlineInstaller.config.prerequisites.checking') }}
+      </n-alert>
+
+      <n-alert
+        v-if="missing_prerequisities.length > 0"
+        type="error"
+        show-icon
+        style="margin-bottom: 1rem;"
+      >
+        <div>
+          <div style="margin-bottom: 0.5rem;">
+            {{ $t('offlineInstaller.config.prerequisites.missing') }} {{ missing_prerequisities.join(', ') }}
+          </div>
+          <n-alert
+            v-if="operating_system === 'macos'"
+            type="info"
+            style="margin-top: 0.75rem;margin-bottom: 0.75rem;"
+          >
+            <strong>{{ $t('offlineInstaller.config.prerequisites.installCommand') }}:</strong>
+            <pre style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">brew install {{ missing_prerequisities.join(' ') }}</pre>
+          </n-alert>
+          <n-alert
+            v-if="operating_system === 'linux'"
+            type="info"
+            style="margin-top: 0.75rem;margin-bottom: 0.75rem;"
+          >
+            <strong>{{ $t('offlineInstaller.config.prerequisites.installCommand') }}:</strong>
+            <pre style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">sudo apt-get install -y {{ missing_prerequisities.join(' ') }}</pre>
+          </n-alert>
+        </div>
+      </n-alert>
 
       <!-- Selected Archives -->
       <div class="section">
@@ -94,7 +134,7 @@
           @click="startInstallation"
           type="primary"
           size="large"
-          :disabled="archives.length === 0 || !installPath"
+          :disabled="archives.length === 0 || !installPath || missing_prerequisities.length > 0"
         >
           {{ $t('offlineInstaller.config.startButton') }}
         </n-button>
@@ -263,6 +303,7 @@ export default {
       installPath: '',
       useDefaultPath: true,
       pathValid: true,
+      operating_system: '',
 
       // Installation state
       installationStarted: false,
@@ -308,7 +349,10 @@ export default {
       // Progress tracking
       progressUpdateTrigger: 0,
       lastProgressUpdate: 0,
-      timeStarted: null
+      timeStarted: null,
+
+      missing_prerequisities: [],
+      checkingPrerequisites: false,
     }
   },
 
@@ -624,7 +668,7 @@ export default {
       this.installation_failed = false;
       this.error_message = "";
       this.installed_versions = [];
-      this.timeStarted = new Date(); // Add this line
+      this.timeStarted = new Date();
 
       try { // tracking should never fail installation
         await invoke("track_event_command", { name: "GUI offline installation started" });
@@ -722,7 +766,32 @@ export default {
       }
 
       this._allLogs = null;
-    }
+    },
+
+    check_prerequisites: async function () {
+      const os = await invoke('get_operating_system')
+      this.operating_system = os;
+
+      if (os == 'windows') {
+        this.missing_prerequisities = [];
+        return false;
+      }
+      this.checkingPrerequisites = true;
+
+      this.$nextTick(() => {
+        setTimeout(() => {
+          invoke("check_prequisites", {}).then(missing_list => {
+            this.missing_prerequisities = missing_list;
+            console.log("missing prerequisities: ", missing_list);
+            this.checkingPrerequisites = false;
+          }).catch(error => {
+            console.error("Error checking prerequisites:", error);
+            this.checkingPrerequisites = false;
+          });
+        }, 300);
+      });
+      return false;
+    },
   },
 
   async mounted() {
@@ -733,6 +802,7 @@ export default {
     await this.startListening();
     this.measureContainer();
     window.addEventListener('resize', this.measureContainer);
+    this.check_prerequisites();
   },
 
   beforeUnmount() {
