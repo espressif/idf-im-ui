@@ -38,7 +38,14 @@ pub struct Releases {
 
 // TODO: handle the possibility of multiple downloads
 pub async fn get_idf_versions() -> Result<Releases, String> {
-    Ok(download_idf_versions().await.unwrap())
+  match download_idf_versions().await {
+      Ok(versions) => Ok(versions),
+      Err(e) => {
+          let err_msg = format!("Failed to download IDF versions.json file: {}", e);
+          error!("{}", err_msg);
+          Err(err_msg)
+      }
+    }
 }
 
 /// Retrieves the available IDF targets from the official website.
