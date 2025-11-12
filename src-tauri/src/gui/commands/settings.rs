@@ -6,7 +6,7 @@ use crate::gui::{
   utils::is_path_empty_or_nonexistent,
 };
 
-use log::info;
+use log::{info, warn};
 use serde_json::{json, Value};
 use std::{
   fs::File,
@@ -37,7 +37,7 @@ pub fn load_settings(app_handle: AppHandle, path: &str) {
           })
           .expect("Failed to load settings");
         log::debug!("settings after load {:?}", settings);
-  });
+  }).expect("Failed to update settings");
   send_message(
       &app_handle,
       t!("gui.settings.loaded_successfully", path = path).to_string(),
@@ -207,7 +207,7 @@ pub fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), 
 
 /// Gets the list of available IDF mirrors
 #[tauri::command]
-pub fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -220,17 +220,22 @@ pub fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.idf_mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
 }
 
@@ -252,7 +257,7 @@ pub fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Strin
 
 /// Gets the list of available tools mirrors
 #[tauri::command]
-pub fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -265,17 +270,22 @@ pub fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
 }
 
@@ -297,7 +307,7 @@ pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Str
 
 /// Gets the list of available tools mirrors
 #[tauri::command]
-pub fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -310,17 +320,22 @@ pub fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.pypi_mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
 }
 

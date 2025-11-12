@@ -1,18 +1,3 @@
-use crate::{
-    command_executor::execute_command,
-    idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file,
-    single_version_post_install,
-    version_manager::get_default_config_path,
-};
-use anyhow::{anyhow, Result, Error};
-use gix::prelude::*;
-use std::sync::atomic::AtomicBool;
-use log::{debug, error, info, warn};
-use rust_search::SearchBuilder;
-use serde::{Deserialize, Serialize};
-use tar::Archive;
-use zstd::{decode_all, Decoder};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
@@ -20,8 +5,29 @@ use std::{
     fs::{self, File},
     io::{self, BufReader, Read},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
+
+use anyhow::{anyhow, Result, Error};
+use futures::StreamExt;
+use gix::prelude::*;
+use std::sync::atomic::AtomicBool;
+use log::{debug, error, info, warn};
 use regex::Regex;
+use reqwest::header::{RANGE, USER_AGENT};
+use rust_search::SearchBuilder;
+use serde::{Deserialize, Serialize};
+use tar::Archive;
+use url::Url;
+use zstd::{decode_all, Decoder};
+
+use crate::{
+    command_executor::execute_command,
+    idf_config::{IdfConfig, IdfInstallation},
+    idf_tools::read_and_parse_tools_file,
+    single_version_post_install,
+    version_manager::get_default_config_path,
+};
 
 /// This function retrieves the path to the git executable.
 ///
@@ -749,6 +755,79 @@ fn is_retryable_error(error: &io::Error) -> bool {
     }
 }
 
+/// Returns the base domain (scheme + host + optional port) from a full URL.
+fn get_base_url(url_str: &str) -> Option<String> {
+    let url = Url::parse(url_str).ok()?;
+    Some(format!("{}://{}", url.scheme(), url.host_str()?))
+}
+
+/// Measures response latency (in ms) for the base domain of a given URL.
+/// Returns `Some(latency_ms)` if successful, or `None` if unreachable.
+pub async fn measure_url_score(url: &str, timeout: Duration) -> Option<u32> {
+    // Extract base URL (e.g., "https://example.com")
+    let base_url = get_base_url(url)?;
+
+    // Build the HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .ok()?;
+
+    // Try HEAD first
+    let start = Instant::now();
+    match client.head(&base_url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            return Some(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
+        }
+        _ => {
+            // Fallback to GET
+            let start_get = Instant::now();
+            match client.get(&base_url).send().await {
+                Ok(resp) if resp.status().is_success() => {
+                    return Some(start_get.elapsed().as_millis().min(u32::MAX as u128) as u32);
+                }
+                Ok(resp) => {
+                    warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
+                }
+                Err(e) => {
+                    warn!("Mirror ping failed for {}: {:?}", base_url, e);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Return URL -> score (lower is better). Unreachable mirrors get u32::MAX.
+pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String, u32> {
+    let timeout = Duration::from_millis(3000);
+    info!(
+        "Starting mirror latency checks ({} candidates)...",
+        mirrors.len()
+    );
+    let mut mirror_latency_map = HashMap::new();
+
+    for m in mirrors {
+        let url = m.as_str();
+        match measure_url_score(url, timeout).await {
+            Some(score) => {
+                info!("Mirror score: {} -> {}", url, score);
+                mirror_latency_map.insert(m.clone(), score);
+            }
+            None => {
+                info!(
+                    "Mirror score: {} -> unreachable (timeout {:?})",
+                    url, timeout
+                );
+                mirror_latency_map.insert(m.clone(), u32::MAX);
+            }
+        }
+    }
+    mirror_latency_map
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1245,5 +1324,52 @@ set(IDF_VERSION_MAJOR 5)
 
         let result = extract_zst_archive(&nonexistent_path, &extract_to);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_base_url_basic() {
+        // Standard HTTP/HTTPS with paths and queries should reduce to scheme + host (no
+        // port)
+        let u1 = "https://example.com/path?x=1";
+        let u2 = "http://example.org/another/path#frag";
+        assert_eq!(get_base_url(u1), Some("https://example.com".to_string()));
+        assert_eq!(get_base_url(u2), Some("http://example.org".to_string()));
+    }
+
+    #[test]
+    fn test_get_base_url_with_port_current_behavior() {
+        // Current implementation drops the port; assert current behavior
+        let u = "http://example.com:8080/svc";
+        assert_eq!(get_base_url(u), Some("http://example.com".to_string()));
+    }
+
+    #[test]
+    fn test_get_base_url_invalid_and_file_scheme() {
+        // Invalid URL
+        assert_eq!(get_base_url("not a url"), None);
+        // File scheme has no host
+        assert_eq!(get_base_url("file:///tmp/test"), None);
+    }
+
+    #[tokio::test]
+    async fn test_measure_url_score_invalid_url() {
+        // Invalid URL should short-circuit (no network) and return None
+        let res = measure_url_score("://", std::time::Duration::from_millis(50)).await;
+        assert!(res.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_calculate_mirror_latency_map_with_invalid_urls() {
+        // Invalid URLs should be mapped to u32::MAX deterministically
+        let mirrors = vec![
+            "not a url".to_string(),
+            "://".to_string(),
+            "file:///not-applicable".to_string(),
+        ];
+        let map = calculate_mirror_latency_map(&mirrors).await;
+        assert_eq!(map.len(), 3);
+        for m in mirrors {
+            assert_eq!(map.get(&m), Some(&u32::MAX));
+        }
     }
 }

@@ -10,6 +10,7 @@ use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
+// no runtime creation here; we run inside the app's existing Tokio runtime
 
 use crate::cli::helpers::generic_confirm_with_default;
 
@@ -182,47 +183,122 @@ pub fn check_and_install_python(
     Ok(())
 }
 
-pub fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
-    if (config.wizard_all_questions.unwrap_or_default()
-        || config.idf_mirror.is_none()
-        || config.is_default("idf_mirror"))
-        && config.non_interactive == Some(false)
-    {
-        config.idf_mirror = Some(generic_select(
-            "wizard.idf.mirror",
-            &idf_im_lib::get_idf_mirrors_list()
-                .iter()
-                .map(|&s| s.to_string())
-                .collect(),
-        )?)
+pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
+    // Sort mirrors by latency and produce entries (url, score).
+    async fn sorted_entries(mirrors: Vec<String>) -> Vec<(String, u32)> {
+        let latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&mirrors).await;
+        let mut entries: Vec<(String, u32)> = mirrors
+            .into_iter()
+            .map(|m| {
+                let score = *latency_map.get(&m).unwrap_or(&u32::MAX);
+                (m, score)
+            })
+            .collect();
+        entries.sort_by(|a, b| {
+            let ascore = if a.1 == u32::MAX { u32::MAX } else { a.1 };
+            let bscore = if b.1 == u32::MAX { u32::MAX } else { b.1 };
+            ascore.cmp(&bscore)
+        });
+        entries
+    }
+    fn entries_to_display(entries: &[(String, u32)]) -> Vec<String> {
+        entries
+            .iter()
+            .map(|(u, s)| {
+                if *s == u32::MAX {
+                    format!("{} (timeout)", u)
+                } else {
+                    format!("{} ({} ms)", u, s)
+                }
+            })
+            .collect()
     }
 
-    if (config.wizard_all_questions.unwrap_or_default()
-        || config.mirror.is_none()
-        || config.is_default("mirror"))
-        && config.non_interactive == Some(false)
+    // IDF mirror
+    if config.non_interactive == Some(false)
+        && (config.wizard_all_questions.unwrap_or_default()
+            || config.idf_mirror.is_none()
+            || config.is_default("idf_mirror"))
     {
-        config.mirror = Some(generic_select(
-            "wizard.tools.mirror",
-            &idf_im_lib::get_idf_tools_mirrors_list()
-                .iter()
-                .map(|&s| s.to_string())
-                .collect(),
-        )?)
+        let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(idf_candidates).await;
+        let display = entries_to_display(&entries);
+        let selected = generic_select("wizard.idf.mirror", &display)?;
+        let url = selected
+            .split(" (")
+            .next()
+            .unwrap_or(&selected)
+            .to_string();
+        config.idf_mirror = Some(url);
+    } else if config.idf_mirror.is_none() || config.is_default("idf_mirror") {
+        let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(idf_candidates).await;
+        if let Some((url, score)) = entries.first() {
+            if *score == u32::MAX {
+                info!("Selected IDF mirror: {} (timeout)", url);
+            } else {
+                info!("Selected IDF mirror: {} ({} ms)", url, score);
+            }
+            config.idf_mirror = Some(url.clone());
+        }
     }
 
-    if (config.wizard_all_questions.unwrap_or_default()
-        || config.pypi_mirror.is_none()
-        || config.is_default("pypi_mirror"))
-        && config.non_interactive == Some(false)
+    // Tools mirror
+    if config.non_interactive == Some(false)
+        && (config.wizard_all_questions.unwrap_or_default()
+            || config.mirror.is_none()
+            || config.is_default("mirror"))
     {
-        config.pypi_mirror = Some(generic_select(
-            "wizard.pypi.mirror",
-            &idf_im_lib::get_pypi_mirrors_list()
-                .iter()
-                .map(|&s| s.to_string())
-                .collect(),
-        )?)
+        let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(tools_candidates).await;
+        let display = entries_to_display(&entries);
+        let selected = generic_select("wizard.tools.mirror", &display)?;
+        let url = selected
+            .split(" (")
+            .next()
+            .unwrap_or(&selected)
+            .to_string();
+        config.mirror = Some(url);
+    } else if config.mirror.is_none() || config.is_default("mirror") {
+        let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(tools_candidates).await;
+        if let Some((url, score)) = entries.first() {
+            if *score == u32::MAX {
+                info!("Selected Tools mirror: {} (timeout)", url);
+            } else {
+                info!("Selected Tools mirror: {} ({} ms)", url, score);
+            }
+            config.mirror = Some(url.clone());
+        }
+    }
+
+    // PyPI mirror
+    if config.non_interactive == Some(false)
+        && (config.wizard_all_questions.unwrap_or_default()
+            || config.pypi_mirror.is_none()
+            || config.is_default("pypi_mirror"))
+    {
+        let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(pypi_candidates).await;
+        let display = entries_to_display(&entries);
+        let selected = generic_select("wizard.pypi.mirror", &display)?;
+        let url = selected
+            .split(" (")
+            .next()
+            .unwrap_or(&selected)
+            .to_string();
+        config.pypi_mirror = Some(url);
+    } else if config.pypi_mirror.is_none() || config.is_default("pypi_mirror") {
+        let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list().iter().map(|&s| s.to_string()).collect();
+        let entries = sorted_entries(pypi_candidates).await;
+        if let Some((url, score)) = entries.first() {
+            if *score == u32::MAX {
+                info!("Selected PyPI mirror: {} (timeout)", url);
+            } else {
+                info!("Selected PyPI mirror: {} ({} ms)", url, score);
+            }
+            config.pypi_mirror = Some(url.clone());
+        }
     }
 
     Ok(config)
