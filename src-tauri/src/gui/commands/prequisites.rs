@@ -1,4 +1,4 @@
-use crate::gui::ui::send_message;
+use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
 use idf_im_lib;
 use log::{error, warn};
 use log4rs::encode::json;
@@ -132,7 +132,20 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool 
 /// Installs Python
 #[tauri::command]
 pub fn python_install(app_handle: AppHandle) -> bool {
-    match idf_im_lib::system_dependencies::install_prerequisites(vec![idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()]) {
+  let settings = match get_settings_non_blocking(&app_handle) {
+      Ok(settings) => settings,
+      Err(err) => {
+          let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
+          send_message(
+              &app_handle,
+              error_msg.clone(),
+              "error".to_string(),
+          );
+          error!("{}", error_msg);
+          return false;
+      }
+  };
+    match idf_im_lib::system_dependencies::install_prerequisites(vec![settings.python_version_override.clone().unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())]) {
         Ok(_) => true,
         Err(err) => {
             let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
