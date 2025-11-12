@@ -384,6 +384,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     check_and_install_python(
         config.non_interactive.unwrap_or_default(),
         config.install_all_prerequisites.unwrap_or_default(),
+        config.python_version_override.clone(),
     )?;
 
     if offline_mode {

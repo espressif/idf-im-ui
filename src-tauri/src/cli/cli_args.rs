@@ -259,6 +259,13 @@ pub struct InstallArgs {
         help = "Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one."
     )]
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
+
+    #[arg(
+        long,
+        help = "Optional override for Python version to install when installing prerequisites. This allows specifying a custom Python version instead of the default one. the accepted format is without dots like 'python313' for Python 3.13",
+        value_parser = is_valid_python_version
+    )]
+    pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
 }
 
 impl IntoIterator for InstallArgs {
@@ -353,7 +360,22 @@ impl IntoIterator for InstallArgs {
                 "activation_script_path_override".to_string(),
                 self.activation_script_path_override.map(Into::into),
             ),
+            (
+                "python_version_override".to_string(),
+                self.python_version_override.map(Into::into),
+            ),
         ]
         .into_iter()
+    }
+}
+
+fn is_valid_python_version(s: &str) -> Result<String, String> {
+    if s.len() > 6 && s.starts_with("python") && s[6..].chars().all(char::is_numeric) {
+        Ok(s.to_string())
+    } else {
+        Err(format!(
+            "Invalid Python version format: '{}'. Expected format is like 'python313'.",
+            s
+        ))
     }
 }
