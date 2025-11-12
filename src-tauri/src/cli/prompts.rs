@@ -125,6 +125,7 @@ fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
 pub fn check_and_install_python(
     non_interactive: bool,
     install_all_prerequisites: bool,
+    python_version_override: Option<String>,
 ) -> Result<(), String> {
     info!("{}", t!("python.sanitycheck.info"));
     let check_result = if non_interactive {
@@ -145,7 +146,7 @@ pub fn check_and_install_python(
             };
 
             if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(vec![idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()])
+                system_dependencies::install_prerequisites(vec![python_version_override.unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())])
                     .map_err(|e| e.to_string())?;
                 let scp = system_dependencies::get_scoop_path();
                 let usable_python = match scp {
