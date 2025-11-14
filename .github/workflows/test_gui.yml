@@ -308,7 +308,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (non-Windows)
-        if: matrix.os != 'windows-latest' && inputs.run_extended == 'true'
+        if: matrix.os != 'windows-latest' && inputs.run_extended == true
         run: |
           python3 --version        
           export LOG_TO_FILE="true"
@@ -361,7 +361,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (Windows)
-        if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
+        if: matrix.os == 'windows-latest' && inputs.run_extended == true
         run: |
           python3 --version        
           $env:LOG_TO_FILE="true"
