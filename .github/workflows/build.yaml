@@ -14,7 +14,6 @@ jobs:
   pr-check:
     name: Check merged PRs (schedule only)
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule'
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
@@ -23,6 +22,10 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            if (context.event_name !== 'schedule') {
+              core.setOutput('should_run', 'true');
+              return;
+            }          
             const since = new Date(Date.now() - 24*60*60*1000);
             const params = { owner: context.repo.owner, repo: context.repo.repo, state: 'closed', per_page: 100 };
             const pulls = await github.paginate(github.rest.pulls.list, params);
@@ -32,15 +35,15 @@ jobs:
   setup:
     name: Define Build Matrix
     runs-on: ubuntu-latest
-    needs: pr-check
-    if: always() && (github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true')
+    if: github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true'
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Set up build matrix
         id: set-matrix
         run: |
-          echo "matrix={\"include\":[{\"os\":\"ubuntu-22.04\",\"package_name\":\"linux-x64\",\"target\":\"\",\"use_container\":true},{\"os\":\"ubuntu-22.04-arm\",\"package_name\":\"linux-aarch64\",\"target\":\"aarch64-unknown-linux-gnu\",\"use_container\":true},{\"os\":\"windows-latest\",\"package_name\":\"windows-x64\",\"target\":\"\",\"use_container\":false},{\"os\":\"macos-latest\",\"package_name\":\"macos-aarch64\",\"target\":\"aarch64-apple-darwin\",\"use_container\":false},{\"os\":\"macos-15-intel\",\"package_name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\",\"use_container\":false}]}" >> $GITHUB_OUTPUT
+          matrix='{"include":[{"os":"ubuntu-22.04","package_name":"linux-x64","target":"","use_container":true},{"os":"ubuntu-22.04-arm","package_name":"linux-aarch64","target":"aarch64-unknown-linux-gnu","use_container":true},{"os":"windows-latest","package_name":"windows-x64","target":"","use_container":false},{"os":"macos-latest","package_name":"macos-aarch64","target":"aarch64-apple-darwin","use_container":false},{"os":"macos-15-intel","package_name":"macos-x64","target":"x86_64-apple-darwin","use_container":false}]}'
+          echo "matrix=$matrix" >> $GITHUB_OUTPUT
 
   build-test-lib:
     name: Build and Test Library (${{ matrix.package_name }})
