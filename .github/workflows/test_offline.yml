@@ -28,7 +28,7 @@ on:
 
 jobs:
   test-offline:
-    name: Offline (${{ matrix.package_name }})
+    name: Offline Installation (${{ matrix.package_name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -54,7 +54,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4

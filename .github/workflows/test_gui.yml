@@ -9,6 +9,10 @@ on:
       ref:
         required: true
         type: string
+      run_extended:
+        required: true
+        type: boolean
+        default: false        
 
   workflow_dispatch:
     inputs:
@@ -16,6 +20,10 @@ on:
         description: "The run id from which to take binaries"
         required: true
         type: string
+      run_extended:
+        required: true
+        type: boolean
+        default: false
 
 jobs:
   test-cli-in-gui:
@@ -45,8 +53,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
-
+          ref: ${{ inputs.ref || github.ref }}
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -233,7 +240,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -301,7 +308,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (non-Windows)
-        if: matrix.os != 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.os != 'windows-latest' && inputs.run_extended == 'true'
         run: |
           python3 --version        
           export LOG_TO_FILE="true"
@@ -354,7 +361,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (Windows)
-        if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
         run: |
           python3 --version        
           $env:LOG_TO_FILE="true"

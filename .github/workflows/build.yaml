@@ -1,9 +1,7 @@
 name: Unified Build Workflow
 
 on:
-  push:
-    branches:
-      - master
+  schedule: [cron: "0 02 * * *"]
   pull_request:
     branches:
       - master
@@ -13,9 +11,29 @@ on:
   workflow_dispatch:
 
 jobs:
+  pr-check:
+    name: Check merged PRs (schedule only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check merged PRs in last 24 hours
+        id: check
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const since = new Date(Date.now() - 24*60*60*1000);
+            const params = { owner: context.repo.owner, repo: context.repo.repo, state: 'closed', per_page: 100 };
+            const pulls = await github.paginate(github.rest.pulls.list, params);
+            const merged = pulls.filter(p => p.merged_at && new Date(p.merged_at) >= since);
+            core.setOutput('should_run', merged.length > 0 ? 'true' : 'false');
+
   setup:
     name: Define Build Matrix
     runs-on: ubuntu-latest
+    needs: pr-check
+    if: github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true'
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -499,11 +517,12 @@ jobs:
           asset_name: offline_installer_builder-${{ matrix.package_name }}.exe
 
   build-offline-archives:
+    name: Build Offline Archives
     needs: [build-cli, build-cli-linux]
     if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && github.event_name == 'release'
     uses: ./.github/workflows/build_offline_installer_archives.yaml
     with:
-      ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      ref: ${{ github.ref }}
       run_id: ${{ github.run_id }}
     secrets:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -817,20 +836,27 @@ jobs:
           asset_name: eim-gui-${{ matrix.package_name }}.dmg
 
   Autotest-CLI:
+    name: Autotest CLI
     needs: [build-cli, build-cli-linux]
     if: needs.build-cli.result == 'success' && needs.build-cli-linux.result == 'success'
     uses: ./.github/workflows/test_cli.yml
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      run_extended: (github.event_name == 'release' && github.event.action == 'created') || 
+                  (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))
 
   Autotest-GUI:
+    name: Autotest GUI
     needs: [build-gui]
     if: needs.build-gui.result == 'success'
     uses: ./.github/workflows/test_gui.yml
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
+      run_extended: (github.event_name == 'release' && github.event.action == 'created') || 
+                  (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))
+
 
   update-release-info:
     name: Update Release Information

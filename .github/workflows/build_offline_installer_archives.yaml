@@ -40,6 +40,7 @@ on:
 jobs:
   # Get versions first
   get-versions:
+    name: Get IDF Versions to Build
     runs-on: ubuntu-latest
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
@@ -393,6 +394,7 @@ jobs:
           retention-days: 7
 
   update-json:
+    name: Update offline_archives.json
     needs: [get-versions, build-and-upload]
     runs-on: ubuntu-latest
     steps:
@@ -574,6 +576,7 @@ jobs:
           path: updated_offline_archives.json
 
   autotest:
+    name: Autotest Offline Archives Installation
     needs: [build-and-upload, update-json]
     if: always() && needs.build-and-upload.result == 'success'
     uses: ./.github/workflows/test_offline.yml
