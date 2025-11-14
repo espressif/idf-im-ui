@@ -33,7 +33,7 @@ jobs:
     name: Define Build Matrix
     runs-on: ubuntu-latest
     needs: pr-check
-    if: github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true'
+    if: always() && (github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true')
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -843,8 +843,8 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: (github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))
-      run_self_hosted: (github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER'))
+      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))}}
+      run_self_hosted: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER'))}}
 
   Autotest-GUI:
     name: Autotest GUI
@@ -854,7 +854,7 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: (github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))
+      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))}}
 
 
   update-release-info:
