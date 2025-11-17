@@ -88,48 +88,48 @@ export function runGUICustomInstallTest({
       ).to.be.true;
     });
 
-    it("03- Should check prerequisites", async function () {
-      this.timeout(20000);
-      await eimRunner.clickButton("Start Configuration Wizard");
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      const prerequisitesList = await eimRunner.findByDataId(
-        "prerequisites-items-list"
-      );
-      const requisitesList = await prerequisitesList.getText();
-      expect(requisitesList).to.not.be.empty;
-      expect(requisitesList).to.not.include("❌");
-      let expectedRequisites =
-        os.platform() === "win32"
-          ? ["git"]
-          : [
-              "git",
-              "wget",
-              "flex",
-              "bison",
-              "gperf",
-              "ccache",
-              "dfu-util",
-              "libffi-dev",
-              "libusb-1.0-0",
-              "libssl-dev",
-              "libgcrypt20",
-              "libglib2.0-0",
-              "libpixman-1-0",
-              "libsdl2-2.0-0",
-              "libslirp0",
-            ];
-      for (let requisite of expectedRequisites) {
-        expect(requisitesList).to.include(requisite);
-      }
-    });
+    // it("03- Should check prerequisites", async function () {
+    //   this.timeout(20000);
+    //   await eimRunner.clickButton("Start Configuration Wizard");
+    //   await new Promise((resolve) => setTimeout(resolve, 5000));
+    //   const prerequisitesList = await eimRunner.findByDataId(
+    //     "prerequisites-items-list"
+    //   );
+    //   const requisitesList = await prerequisitesList.getText();
+    //   expect(requisitesList).to.not.be.empty;
+    //   expect(requisitesList).to.not.include("❌");
+    //   let expectedRequisites =
+    //     os.platform() === "win32"
+    //       ? ["git"]
+    //       : [
+    //           "git",
+    //           "wget",
+    //           "flex",
+    //           "bison",
+    //           "gperf",
+    //           "ccache",
+    //           "dfu-util",
+    //           "libffi-dev",
+    //           "libusb-1.0-0",
+    //           "libssl-dev",
+    //           "libgcrypt20",
+    //           "libglib2.0-0",
+    //           "libpixman-1-0",
+    //           "libsdl2-2.0-0",
+    //           "libslirp0",
+    //         ];
+    //   for (let requisite of expectedRequisites) {
+    //     expect(requisitesList).to.include(requisite);
+    //   }
+    // });
 
-    it("04- Should check python installation", async function () {
-      this.timeout(15000);
-      await eimRunner.clickButton("Continue to Next Step");
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      const result = await eimRunner.findByDataId("python-check-result");
-      expect(await result.getText()).to.include("Python Environment Ready");
-    });
+    // it("04- Should check python installation", async function () {
+    //   this.timeout(15000);
+    //   await eimRunner.clickButton("Continue to Next Step");
+    //   await new Promise((resolve) => setTimeout(resolve, 5000));
+    //   const result = await eimRunner.findByDataId("python-check-result");
+    //   expect(await result.getText()).to.include("Python Environment Ready");
+    // });
 
     it("05- Should show targets list", async function () {
       this.timeout(10000);

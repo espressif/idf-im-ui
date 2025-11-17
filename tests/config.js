@@ -72,6 +72,12 @@ const TOOLSMIRRORS = {
   dl_com: "https://dl.espressif.com/github_assets",
   dl_cn: "https://dl.espressif.cn/github_assets",
 };
+const PYPIMIRRORS = {
+  pypi_org: "https://pypi.org/simple",
+  pypi_aliyun: "https://mirrors.aliyun.com/pypi/simple",
+  pypi_tsinghua: "https://pypi.tuna.tsinghua.edu.cn/simple",
+  pypi_ustc: "https://pypi.mirrors.ustc.edu.cn/simple"
+};
 
 // Default versions for EIM CLI and GUI for offline testing
 const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.5.0";
@@ -128,6 +134,7 @@ logger.info(`Run in debug mode: ${runInDebug}`);
 export {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFDefaultVersion,
   IDFAvailableVersions,
   availableTargets,
