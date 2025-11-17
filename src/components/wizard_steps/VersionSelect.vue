@@ -69,7 +69,7 @@ export default {
   }),
   methods: {
     get_available_versions: async function () {
-      const versions = await invoke("get_idf_versions", {});
+      const versions = await invoke("get_idf_versions", {includeUnstable: true});
       this.versions = versions;
       this.loading = false;
     },

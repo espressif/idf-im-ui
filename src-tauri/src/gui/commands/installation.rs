@@ -1096,7 +1096,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             version: None,
         });
 
-        let versions = settings::get_idf_versions(app_handle.clone()).await;
+        let versions = settings::get_idf_versions(app_handle.clone(),false).await;
 
         if versions.is_empty() {
             emit_installation_event(&app_handle, InstallationProgress {

@@ -22,7 +22,7 @@ pub async fn select_idf_version(
 ) -> Result<Vec<String>, String> {
     let mut avalible_versions = if target == "all" {
         //todo process vector of targets
-        idf_im_lib::idf_versions::get_idf_names().await
+        idf_im_lib::idf_versions::get_idf_names(true).await
     } else {
         idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
     };
