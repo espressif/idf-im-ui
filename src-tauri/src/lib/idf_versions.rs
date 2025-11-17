@@ -166,8 +166,8 @@ pub async fn get_idf_name_by_target(target: &String) -> Vec<String> {
 /// # Errors
 ///
 /// * If there is an error fetching the IDF versions or processing them, an error message is logged.
-pub async fn get_idf_names() -> Vec<String> {
-    get_idf_names_by_flag(true).await
+pub async fn get_idf_names(include_unstable: bool) -> Vec<String> {
+    get_idf_names_by_flag(include_unstable).await
 }
 
 /// Retrieves the names of stable IDF versions.

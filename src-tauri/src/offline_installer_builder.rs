@@ -441,7 +441,7 @@ async fn main() {
 
         info!("Will download wheels for Python versions: {:?}", wheel_python_versions);
 
-        let versions = idf_im_lib::idf_versions::get_idf_names().await;
+        let versions = idf_im_lib::idf_versions::get_idf_names(false).await;
         let version_list = if let Some(override_version) = args.idf_version_override {
             info!("Using IDF version override: {}", override_version);
             vec![override_version]

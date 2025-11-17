@@ -299,7 +299,7 @@ export default {
             installPath.value = settings?.path
             console.log('Default installation path:', installPath.value);
             // Get latest ESP-IDF version
-            invoke('get_idf_versions').then(versions => {
+            invoke('get_idf_versions',{includeUnstable: false}).then(versions => {
               selectedVersion.value = versions?.[0].name || 'v5.5.1';
               // Check if path is valid
               let path_to_check = installPath.value;

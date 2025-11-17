@@ -154,7 +154,7 @@ pub fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), St
 
 /// Gets the list of available IDF versions
 #[tauri::command]
-pub async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
+pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> Vec<Value> {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -168,7 +168,7 @@ pub async fn get_idf_versions(app_handle: AppHandle) -> Vec<Value> {
 
   let targets_vec: Vec<String> = targets.to_vec();
   let mut available_versions = if targets_vec.contains(&"all".to_string()) {
-      idf_im_lib::idf_versions::get_idf_names().await
+      idf_im_lib::idf_versions::get_idf_names(include_unstable).await
   } else if !targets.is_empty() {
       // todo: handle multiple targets
       idf_im_lib::idf_versions::get_idf_name_by_target(&targets[0].to_string().to_lowercase())
