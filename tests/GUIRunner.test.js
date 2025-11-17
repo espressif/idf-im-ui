@@ -2,18 +2,19 @@
  * Test runner to execute test scripts based on entries of given json file.
  * Entries should follow this format:
  *     {
-        "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "startup", "default", "custom" or "offline"
-        "name": "<name>",               // A name for the test to correlate to logs and report
-        "data": {                       // Only required for custom test type
-            "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
-            "idfList": "v5.3.2",        // Which IDF version to install "v5.4|v.5.3.2"
+        "id": <number>,                  // an ID to correlate with the test report
+        "type": "custom",                // test type is either "startup", "default", "custom" or "offline"
+        "name": "<name>",                // A name for the test to correlate to logs and report
+        "data": {                        // Only required for custom test type
+            "targetList": "esp32s2",     // Which targets to install "esp32|esp32c6"
+            "idfList": "v5.3.2",         // Which IDF version to install "v5.4|v.5.3.2"
             "installFolder": "<folder>", // Folder name to install idf (inside USER folder)
-            "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
-            "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
+            "idfMirror": "github",       // Mirror to download IDF "github" or "jihulab"
+            "toolsMirror": "github",     // Mirror to download tools "github", "dl_com" or "dl_cn"
+            "pypiMirror": "pypi_org",    // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"
         }
-        "deleteAfterTest": true        // Whether to remove IDF installation folder and IDF tools folder after test
-        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log", false
+        "deleteAfterTest": true          // Whether to remove IDF installation folder and IDF tools folder after test
+        "testProxyMode": "block"         // If the test run with local proxy to log or block internet access during test : "block", "log", false
 
  */
 
@@ -118,6 +119,8 @@ function testRun(script) {
 
       const idfMirror = test.data.idfMirror || "github";
 
+      const pypiMirror = test.data.pypiMirror || "pypi_org";
+
       const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id}- ${test.name} |`, function () {
@@ -129,6 +132,7 @@ function testRun(script) {
           idfVersionList: idfUpdatedList,
           toolsMirror,
           idfMirror,
+          pypiMirror,
         });
 
         runGUIAfterInstallTest({

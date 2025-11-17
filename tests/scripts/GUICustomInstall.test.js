@@ -5,6 +5,7 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFAvailableVersions,
   availableTargets,
 } from "../config.js";
@@ -19,6 +20,7 @@ export function runGUICustomInstallTest({
   idfVersionList,
   toolsMirror,
   idfMirror,
+  pypiMirror,
 }) {
   
   describe(`${id}- Run expert mode |`, () => {
@@ -326,7 +328,87 @@ export function runGUICustomInstallTest({
         ));
     });
 
-    it("09- Should show installation path", async function () {
+    it("09 - Should show PyPI download mirrors", async function () {
+      this.timeout(10000);
+      const pypiMirrorsList = await eimRunner.findByRelation(
+        "parent",
+        "div",
+        "PyPI Mirror"
+      );
+      let pypiMirrorsListText = await pypiMirrorsList.getText();
+      for (let mirror of Object.values(PYPIMIRRORS)) {
+        expect(pypiMirrorsListText).to.include(mirror);
+      }
+      let officialMirror = await eimRunner.findByDataId(
+        "pypi-mirror-option-https://pypi.org/simple"
+      );
+      let aliyunMirror = await eimRunner.findByDataId(
+        "pypi-mirror-option-https://mirrors.aliyun.com/pypi/simple"
+      );
+      let tsinghuaMirror = await eimRunner.findByDataId(
+        "pypi-mirror-option-https://pypi.tuna.tsinghua.edu.cn/simple"
+      );
+      let ustcMirror = await eimRunner.findByDataId(
+        "pypi-mirror-option-https://pypi.mirrors.ustc.edu.cn/simple"
+      );
+
+      expect(await officialMirror.getAttribute("class")).to.include("selected");
+      expect(await aliyunMirror.getAttribute("class")).to.not.include(
+        "selected"
+      );
+      expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
+        "selected"
+      );
+      expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
+
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        aliyunMirror
+      );
+      expect(await officialMirror.getAttribute("class")).to.not.include("selected");
+      expect(await aliyunMirror.getAttribute("class")).to.include(
+        "selected"
+      );
+      expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
+        "selected"
+      );
+      expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
+
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        tsinghuaMirror
+      );
+      expect(await officialMirror.getAttribute("class")).to.not.include("selected");
+      expect(await aliyunMirror.getAttribute("class")).to.not.include(
+        "selected"
+      );
+      expect(await tsinghuaMirror.getAttribute("class")).to.include(
+        "selected"
+      );
+      expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
+
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        ustcMirror
+      );
+      expect(await officialMirror.getAttribute("class")).to.not.include("selected");
+      expect(await aliyunMirror.getAttribute("class")).to.not.include(
+        "selected"
+      );
+      expect(await tsinghuaMirror.getAttribute("class")).to.notinclude(
+        "selected"
+      );
+      expect(await ustcMirror.getAttribute("class")).to.include("selected");
+
+
+      const pypiMirrorButton = await eimRunner.findByText(PYPIMIRRORS[pypiMirror]);
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        pypiMirrorButton
+      );
+    });
+
+    it("10- Should show installation path", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue with Selected Mirrors");
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -347,7 +429,7 @@ export function runGUICustomInstallTest({
       expect(await input.getAttribute("value")).to.equal(installFolder);
     });
 
-    it("10- Should show installation summary", async function () {
+    it("11- Should show installation summary", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue");
       const versionSummary = await eimRunner.findByDataId("versions-info");
@@ -361,7 +443,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("11- Should install IDF using expert setup", async function () {
+    it("12- Should install IDF using expert setup", async function () {
       this.timeout(2730000);
 
       try {
@@ -393,7 +475,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("12- Should offer to save installation configuration", async function () {
+    it("13- Should offer to save installation configuration", async function () {
       this.timeout(15000);
 
       try {
