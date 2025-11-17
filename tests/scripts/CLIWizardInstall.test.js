@@ -4,6 +4,7 @@ import CLITestRunner from "../classes/CLITestRunner.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFAvailableVersions,
   availableTargets,
   runInDebug,
@@ -168,6 +169,27 @@ export function runCLIWizardInstallTest({
       }
 
       logger.info("Select tools mirror passed");
+      testRunner.output = "";
+      testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const selectPyPIMirror = await testRunner.waitForOutput(
+        "Select a PyPI mirror for download Python packages"
+      );
+      expect(selectToolsMirror, "Failed to ask for PyPI download mirror").to.be
+        .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+
+      for (let mirror of Object.values(PYPIMIRRORS)) {
+        expect(
+          testRunner.output,
+          `Failed to offer ${mirror} as a PyPI mirror option`
+        ).to.include(mirror);
+      }
+
+      logger.info("Select pypi mirror passed");
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 500));

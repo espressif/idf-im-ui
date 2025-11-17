@@ -76,7 +76,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -118,6 +118,7 @@ jobs:
         if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner'
         run: |
           python3 --version
+          which python3
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
