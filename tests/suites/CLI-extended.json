@@ -9,6 +9,7 @@
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github",
+      "pypiMirror": "pypi_org",
       "recursive": true,
       "nonInteractive": false
     },
@@ -25,6 +26,7 @@
       "installFolder": ".espext2",
       "idfMirror": "github",
       "toolsMirror": "github",
+      "pypiMirror": "pypi_org",
       "recursive": true,
       "nonInteractive": true
     },

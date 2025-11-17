@@ -10,7 +10,8 @@
             "idfList": "v5.3.2",        // Which IDF version to install "v5.4|v.5.3.2"
             "installFolder": "<folder>" // Folder name to install idf (inside USER folder)
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
-            "toolsMirror": "github"     // Mirror to download tools "github", "dl_com" or "dl_cn"
+            "toolsMirror": "github",    // Mirror to download tools "github", "dl_com" or "dl_cn"
+            "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"            
             "recursive": false,         // Whether to prevent downloading submodules (set to true if omitted)
             "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
@@ -32,6 +33,7 @@ import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFDefaultVersion,
   EIMCLIVersion,
   pathToEIMCLI,
@@ -139,6 +141,9 @@ function testRun(jsonScript) {
 
       test.data.idfMirror &&
         installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror]}`);
+
+      test.data.pypiMirror &&
+        installArgs.push(`--pypi-mirror ${PYPIMIRRORS[test.data.idfMirror]}`);
 
       test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
 
