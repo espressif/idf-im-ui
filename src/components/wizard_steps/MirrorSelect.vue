@@ -130,13 +130,12 @@ export default {
     }
   }),
   methods: {
-    U32_MAX: 4294967295,
     get_available_idf_mirrors: async function () {
       const idf_mirrors = await invoke("get_idf_mirror_list", {});
       const entries = Object.entries(idf_mirrors.mirrors || {});
       const list = entries.map(([url, ping]) => {
         const numericPing = Number(ping);
-        const normalizedPing = numericPing === this.U32_MAX ? 0 : (numericPing || 0);
+        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
         return {
           value: url,
           label: url,
@@ -157,7 +156,7 @@ export default {
       const entries = Object.entries(tools_mirrors.mirrors || {});
       const list = entries.map(([url, ping]) => {
         const numericPing = Number(ping);
-        const normalizedPing = numericPing === this.U32_MAX ? 0 : (numericPing || 0);
+        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
         return {
           value: url,
           label: url,
@@ -177,7 +176,7 @@ export default {
       const entries = Object.entries(pypi_mirrors.mirrors || {});
       const list = entries.map(([url, ping]) => {
         const numericPing = Number(ping);
-        const normalizedPing = numericPing === this.U32_MAX ? 0 : (numericPing || 0);
+        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
         return {
           value: url,
           label: url,
