@@ -37,7 +37,7 @@ pub fn load_settings(app_handle: AppHandle, path: &str) {
           })
           .expect("Failed to load settings");
         log::debug!("settings after load {:?}", settings);
-  }).expect("Failed to update settings");
+  }).unwrap_or_else(|e| warn!("Failed to update settings: {}", e));
   send_message(
       &app_handle,
       t!("gui.settings.loaded_successfully", path = path).to_string(),
