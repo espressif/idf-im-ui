@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use idf_im_lib::utils::{mirror_entries_to_display, sorted_mirror_entries, url_from_display_line};
+
+// no runtime creation here; we run inside the app's existing Tokio runtime
+use crate::cli::helpers::generic_confirm_with_default;
 use crate::cli::helpers::{
     first_defaulted_multiselect, generic_confirm, generic_input, generic_select, run_with_spinner,
 };
@@ -183,123 +187,99 @@ pub fn check_and_install_python(
     Ok(())
 }
 
-pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
-    // Sort mirrors by latency and produce entries (url, score).
-    async fn sorted_entries(mirrors: Vec<String>) -> Vec<(String, u32)> {
-        let latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&mirrors).await;
-        let mut entries: Vec<(String, u32)> = mirrors
-            .into_iter()
-            .map(|m| {
-                let score = *latency_map.get(&m).unwrap_or(&u32::MAX);
-                (m, score)
-            })
-            .collect();
-        entries.sort_by(|a, b| {
-            let ascore = if a.1 == u32::MAX { u32::MAX } else { a.1 };
-            let bscore = if b.1 == u32::MAX { u32::MAX } else { b.1 };
-            ascore.cmp(&bscore)
-        });
-        entries
-    }
-    fn entries_to_display(entries: &[(String, u32)]) -> Vec<String> {
-        entries
-            .iter()
-            .map(|(u, s)| {
-                if *s == u32::MAX {
-                    format!("{} (timeout)", u)
-                } else {
-                    format!("{} ({} ms)", u, s)
-                }
-            })
-            .collect()
-    }
+async fn select_single_mirror<FGet, FSet>(
+    config: &mut Settings,
+    field_name: &str,        // e.g. "idf_mirror"
+    get_value: FGet,         // e.g. |c: &Settings| &c.idf_mirror
+    set_value: FSet,         // e.g. |c: &mut Settings, v| c.idf_mirror = Some(v)
+    candidates: Vec<String>, // list of mirror URLs
+    wizard_key: &str,        // e.g. "wizard.idf.mirror"
+    log_prefix: &str,        // e.g. "IDF", "Tools", "PyPI"
+) -> Result<(), String>
+where
+    FGet: Fn(&Settings) -> &Option<String>,
+    FSet: Fn(&mut Settings, String),
+{
+    let interactive = config.non_interactive == Some(false);
+    let wizard_all = config.wizard_all_questions.unwrap_or_default();
+    let current = get_value(config);
+    let needs_value = current.is_none() || config.is_default(field_name);
 
-    // IDF mirror
-    if config.non_interactive == Some(false)
-        && (config.wizard_all_questions.unwrap_or_default()
-            || config.idf_mirror.is_none()
-            || config.is_default("idf_mirror"))
-    {
-        let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(idf_candidates).await;
-        let display = entries_to_display(&entries);
-        let selected = generic_select("wizard.idf.mirror", &display)?;
-        let url = selected
-            .split(" (")
-            .next()
-            .unwrap_or(&selected)
-            .to_string();
-        config.idf_mirror = Some(url);
-    } else if config.idf_mirror.is_none() || config.is_default("idf_mirror") {
-        let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(idf_candidates).await;
+    // Measure and sort mirrors by latency
+    let entries = sorted_mirror_entries(candidates).await;
+
+    if interactive && (wizard_all || needs_value) {
+        // Interactive mode: show list and let user pick
+        let display = mirror_entries_to_display(&entries);
+        let selected = generic_select(wizard_key, &display)?;
+        let url = url_from_display_line(&selected);
+        set_value(config, url);
+    } else if needs_value {
+        // Non-interactive or wizard not requesting this: pick best automatically
         if let Some((url, score)) = entries.first() {
             if *score == u32::MAX {
-                info!("Selected IDF mirror: {} (timeout)", url);
+                info!("Selected {log_prefix} mirror: {url} (timeout)");
             } else {
-                info!("Selected IDF mirror: {} ({} ms)", url, score);
+                info!("Selected {log_prefix} mirror: {url} ({score} ms)");
             }
-            config.idf_mirror = Some(url.clone());
+            set_value(config, url.clone());
         }
     }
+
+    Ok(())
+}
+
+pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
+    // IDF mirror
+    let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list()
+        .iter()
+        .map(|&s| s.to_string())
+        .collect();
+
+    select_single_mirror(
+        &mut config,
+        "idf_mirror",
+        |c: &Settings| &c.idf_mirror,
+        |c: &mut Settings, v| c.idf_mirror = Some(v),
+        idf_candidates,
+        "wizard.idf.mirror",
+        "IDF",
+    )
+    .await?;
 
     // Tools mirror
-    if config.non_interactive == Some(false)
-        && (config.wizard_all_questions.unwrap_or_default()
-            || config.mirror.is_none()
-            || config.is_default("mirror"))
-    {
-        let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(tools_candidates).await;
-        let display = entries_to_display(&entries);
-        let selected = generic_select("wizard.tools.mirror", &display)?;
-        let url = selected
-            .split(" (")
-            .next()
-            .unwrap_or(&selected)
-            .to_string();
-        config.mirror = Some(url);
-    } else if config.mirror.is_none() || config.is_default("mirror") {
-        let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(tools_candidates).await;
-        if let Some((url, score)) = entries.first() {
-            if *score == u32::MAX {
-                info!("Selected Tools mirror: {} (timeout)", url);
-            } else {
-                info!("Selected Tools mirror: {} ({} ms)", url, score);
-            }
-            config.mirror = Some(url.clone());
-        }
-    }
+    let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
+        .iter()
+        .map(|&s| s.to_string())
+        .collect();
+
+    select_single_mirror(
+        &mut config,
+        "mirror",
+        |c: &Settings| &c.mirror,
+        |c: &mut Settings, v| c.mirror = Some(v),
+        tools_candidates,
+        "wizard.tools.mirror",
+        "Tools",
+    )
+    .await?;
 
     // PyPI mirror
-    if config.non_interactive == Some(false)
-        && (config.wizard_all_questions.unwrap_or_default()
-            || config.pypi_mirror.is_none()
-            || config.is_default("pypi_mirror"))
-    {
-        let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(pypi_candidates).await;
-        let display = entries_to_display(&entries);
-        let selected = generic_select("wizard.pypi.mirror", &display)?;
-        let url = selected
-            .split(" (")
-            .next()
-            .unwrap_or(&selected)
-            .to_string();
-        config.pypi_mirror = Some(url);
-    } else if config.pypi_mirror.is_none() || config.is_default("pypi_mirror") {
-        let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list().iter().map(|&s| s.to_string()).collect();
-        let entries = sorted_entries(pypi_candidates).await;
-        if let Some((url, score)) = entries.first() {
-            if *score == u32::MAX {
-                info!("Selected PyPI mirror: {} (timeout)", url);
-            } else {
-                info!("Selected PyPI mirror: {} ({} ms)", url, score);
-            }
-            config.pypi_mirror = Some(url.clone());
-        }
-    }
+    let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
+        .iter()
+        .map(|&s| s.to_string())
+        .collect();
+
+    select_single_mirror(
+        &mut config,
+        "pypi_mirror",
+        |c: &Settings| &c.pypi_mirror,
+        |c: &mut Settings, v| c.pypi_mirror = Some(v),
+        pypi_candidates,
+        "wizard.pypi.mirror",
+        "PyPI",
+    )
+    .await?;
 
     Ok(config)
 }

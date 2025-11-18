@@ -29,6 +29,9 @@ use crate::{
     version_manager::get_default_config_path,
 };
 
+/// A tuple containing a mirror URL and its measured latency.
+pub type MirrorEntry = (String, u32);
+
 /// This function retrieves the path to the git executable.
 ///
 /// # Purpose
@@ -828,6 +831,41 @@ pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String,
     mirror_latency_map
 }
 
+/// Sort mirrors by measured latency (ascending), using u32::MAX for timeouts.
+pub async fn sorted_mirror_entries(mirrors: Vec<String>) -> Vec<MirrorEntry> {
+    let latency_map = calculate_mirror_latency_map(&mirrors).await;
+    let mut entries: Vec<MirrorEntry> = mirrors
+        .into_iter()
+        .map(|m| {
+            let score = *latency_map.get(&m).unwrap_or(&u32::MAX);
+            (m, score)
+        })
+        .collect();
+
+    entries.sort_by_key(|e| e.1);
+    entries
+}
+
+/// Turn `(url, latency)` tuples into display strings like `https://... (123 ms)` or `(... timeout)`.
+pub fn mirror_entries_to_display(entries: &[MirrorEntry]) -> Vec<String> {
+    entries
+        .iter()
+        .map(|(u, s)| {
+            if *s == u32::MAX {
+                format!("{u} (timeout)")
+            } else {
+                format!("{u} ({s} ms)")
+            }
+        })
+        .collect()
+}
+
+/// Strip the latency suffix back to a plain URL.
+pub fn url_from_display_line(selected: &str) -> String {
+    selected.split(" (").next().unwrap_or(selected).to_string()
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1371,5 +1409,49 @@ set(IDF_VERSION_MAJOR 5)
         for m in mirrors {
             assert_eq!(map.get(&m), Some(&u32::MAX));
         }
+    }
+
+    #[tokio::test]
+    async fn test_sorted_mirror_entries_all_invalid_preserves_order() {
+        let mirrors = vec![
+            "not a url".to_string(),
+            "file:///not-applicable".to_string(),
+            "://".to_string(),
+        ];
+        let entries = sorted_mirror_entries(mirrors.clone()).await;
+        assert_eq!(entries.len(), 3);
+        // All invalid -> all scores should be u32::MAX
+        assert!(entries.iter().all(|(_, s)| *s == u32::MAX));
+        // Sort is stable for equal keys; order of URLs should match input
+        let ordered_urls: Vec<String> = entries.into_iter().map(|(u, _)| u).collect();
+        assert_eq!(ordered_urls, mirrors);
+    }
+
+    #[test]
+    fn test_mirror_entries_to_display_formats() {
+        let entries: Vec<MirrorEntry> = vec![
+            ("https://example.com".to_string(), 123),
+            ("https://bad.example".to_string(), u32::MAX),
+        ];
+        let display = mirror_entries_to_display(&entries);
+        assert_eq!(display[0], "https://example.com (123 ms)");
+        assert_eq!(display[1], "https://bad.example (timeout)");
+    }
+
+    #[test]
+    fn test_url_from_display_line_roundtrip() {
+        assert_eq!(
+            url_from_display_line("https://example.com (123 ms)"),
+            "https://example.com"
+        );
+        assert_eq!(
+            url_from_display_line("https://example.com (timeout)"),
+            "https://example.com"
+        );
+        // If there is no suffix, it should return the whole string unchanged
+        assert_eq!(
+            url_from_display_line("https://example.com"),
+            "https://example.com"
+        );
     }
 }
