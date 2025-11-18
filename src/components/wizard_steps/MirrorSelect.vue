@@ -9,7 +9,7 @@
           <!-- IDF Mirror Selection -->
           <div class="mirror-section" data-id="idf-mirror-section">
             <h3 class="section-title" data-id="idf-section-title">{{ t('mirrorSelect.sections.idfMirror') }}</h3>
-            <n-radio-group v-model:value="selected_idf_mirror" class="mirror-options" data-id="idf-mirror-radio-group">
+            <n-radio-group v-model:value="selected_idf_mirror" class="mirror-options" data-id="idf-mirror-radio-group" @update:value="onSelectChange('idf')">
               <div v-for="mirror in idf_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_idf_mirror === mirror.value }"
                 :data-id="`idf-mirror-option-${mirror.value}`"
@@ -18,12 +18,14 @@
                   <div class="mirror-content" :data-id="`idf-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`idf-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
                     <div class="mirror-subline" :data-id="`idf-mirror-subline-${mirror.value}`">
-                      <span v-if="mirror.ping && mirror.ping > 0" class="mirror-ping" :data-id="`idf-mirror-ping-${mirror.value}`">
-                        {{ mirror.ping + ' ms' }}
-                      </span>
-                      <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`idf-mirror-timeout-${mirror.value}`">
-                        {{ t('mirrorSelect.status.timeout') }}
-                      </span>
+                      <template v-if="mirror.ping !== null">
+                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`idf-mirror-ping-${mirror.value}`">
+                          {{ mirror.ping + ' ms' }}
+                        </span>
+                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`idf-mirror-timeout-${mirror.value}`">
+                          {{ t('mirrorSelect.status.timeout') }}
+                        </span>
+                      </template>
                     </div>
                   </div>
                 </n-radio>
@@ -35,7 +37,7 @@
           <div class="mirror-section" data-id="tools-mirror-section">
             <h3 class="section-title" data-id="tools-section-title">{{ t('mirrorSelect.sections.toolsMirror') }}</h3>
             <n-radio-group v-model:value="selected_tools_mirror" class="mirror-options"
-              data-id="tools-mirror-radio-group">
+              data-id="tools-mirror-radio-group" @update:value="onSelectChange('tools')">
               <div v-for="mirror in tools_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_tools_mirror === mirror.value }"
                 :data-id="`tools-mirror-option-${mirror.value}`"
@@ -44,12 +46,14 @@
                   <div class="mirror-content" :data-id="`tools-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`tools-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
                     <div class="mirror-subline" :data-id="`tools-mirror-subline-${mirror.value}`">
-                      <span v-if="mirror.ping && mirror.ping > 0" class="mirror-ping" :data-id="`tools-mirror-ping-${mirror.value}`">
-                        {{ mirror.ping + ' ms' }}
-                      </span>
-                      <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`tools-mirror-timeout-${mirror.value}`">
-                        {{ t('mirrorSelect.status.timeout') }}
-                      </span>
+                      <template v-if="mirror.ping !== null">
+                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`tools-mirror-ping-${mirror.value}`">
+                          {{ mirror.ping + ' ms' }}
+                        </span>
+                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`tools-mirror-timeout-${mirror.value}`">
+                          {{ t('mirrorSelect.status.timeout') }}
+                        </span>
+                      </template>
                     </div>
                   </div>
                 </n-radio>
@@ -61,7 +65,7 @@
           <div class="mirror-section" data-id="pypi-mirror-section">
             <h3 class="section-title" data-id="pypi-section-title">{{ t('mirrorSelect.sections.pypiMirror') }}</h3>
             <n-radio-group v-model:value="selected_pypi_mirror" class="mirror-options"
-              data-id="pypi-mirror-radio-group">
+              data-id="pypi-mirror-radio-group" @update:value="onSelectChange('pypi')">
               <div v-for="mirror in pypi_mirrors" :key="mirror.value" class="mirror-option"
                 :class="{ 'selected': selected_pypi_mirror === mirror.value }"
                 :data-id="`pypi-mirror-option-${mirror.value}`"
@@ -70,12 +74,14 @@
                   <div class="mirror-content" :data-id="`pypi-mirror-content-${mirror.value}`">
                     <span class="mirror-url" :data-id="`pypi-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
                     <div class="mirror-subline" :data-id="`pypi-mirror-subline-${mirror.value}`">
-                      <span v-if="mirror.ping && mirror.ping > 0" class="mirror-ping" :data-id="`pypi-mirror-ping-${mirror.value}`">
-                        {{ mirror.ping + ' ms' }}
-                      </span>
-                      <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`pypi-mirror-timeout-${mirror.value}`">
-                        {{ t('mirrorSelect.status.timeout') }}
-                      </span>
+                      <template v-if="mirror.ping !== null">
+                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`pypi-mirror-ping-${mirror.value}`">
+                          {{ mirror.ping + ' ms' }}
+                        </span>
+                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`pypi-mirror-timeout-${mirror.value}`">
+                          {{ t('mirrorSelect.status.timeout') }}
+                        </span>
+                      </template>
                     </div>
                   </div>
                 </n-radio>
@@ -99,6 +105,7 @@
 import { ref } from "vue";
 import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { NButton, NSpin, NCard, NRadio, NRadioGroup } from 'naive-ui'
 
 import loading from "naive-ui/es/_internal/loading";
@@ -127,69 +134,122 @@ export default {
       idf: '',
       tools: '',
       pypi: ''
+    },
+    listeners: [],
+    autoSelect: {
+      idf: true,
+      tools: true,
+      pypi: true
     }
   }),
   methods: {
-    get_available_idf_mirrors: async function () {
-      const idf_mirrors = await invoke("get_idf_mirror_list", {});
-      const entries = Object.entries(idf_mirrors.mirrors || {});
-      const list = entries.map(([url, ping]) => {
-        const numericPing = Number(ping);
-        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
-        return {
-          value: url,
-          label: url,
-          ping: normalizedPing
-        };
+    sortMirrorsByPing(list) {
+      list.sort((a, b) => {
+        const ap = (a.ping !== null && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY;
+        const bp = (b.ping !== null && b.ping > 0) ? b.ping : Number.POSITIVE_INFINITY;
+        return ap - bp;
       });
-      // sort by ping ascending; treat 0 as Infinity (unreachable/timeout)
-      list.sort((a, b) => ((a.ping && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY) - ((b.ping && b.ping > 0) ? b.ping : Number.POSITIVE_INFINITY));
+    },
+    onSelectChange(type) {
+      // User has manually chosen a mirror for this type; stop auto-selecting
+      if (this.autoSelect[type]) {
+        this.autoSelect[type] = false;
+      }
+    },
+    getBestMirror(list) {
+      // best = smallest positive ping; ignore null (unknown) and 0 (timeout)
+      const candidates = list.filter(m => m.ping !== null && m.ping > 0);
+      if (candidates.length === 0) return null;
+      let best = candidates[0];
+      for (let i = 1; i < candidates.length; i++) {
+        if (candidates[i].ping < best.ping) best = candidates[i];
+      }
+      return best;
+    },
+    maybeAutoSelectBest(type) {
+      if (!this.autoSelect[type]) return;
+      const list = type === 'idf' ? this.idf_mirrors : type === 'tools' ? this.tools_mirrors : this.pypi_mirrors;
+      const best = this.getBestMirror(list);
+      if (!best) return;
+      const selectedKey = type === 'idf' ? 'selected_idf_mirror' : type === 'tools' ? 'selected_tools_mirror' : 'selected_pypi_mirror';
+      const current = this[selectedKey];
+      // If nothing selected or current is slower (or unknown), switch to best
+      const currentEntry = list.find(m => m.value === current) || null;
+      const currentPing = currentEntry ? currentEntry.ping : null;
+      const currentScore = (currentPing !== null && currentPing > 0) ? currentPing : Number.POSITIVE_INFINITY;
+      if (best.ping < currentScore) {
+        this[selectedKey] = best.value;
+      }
+    },
+    async get_available_idf_mirrors() {
+      const res = await invoke("get_idf_mirror_urls", {});
+      const urls = res.mirrors || [];
+      const list = urls.map((url) => ({ value: url, label: url, ping: null }));
       this.idf_mirrors = list;
-      const best = list.find(m => m.ping > 0) || list[0] || null;
-      this.selected_idf_mirror = best ? best.value : null;
+      this.selected_idf_mirror = res.selected || (list[0] ? list[0].value : null);
       this.defaultMirrors.idf = this.selected_idf_mirror || '';
       this.loading_idfs = false;
-      return false;
+      // kick off streaming checks
+      invoke("start_idf_mirror_latency_checks", {}).catch(() => {});
     },
-    get_available_tools_mirrors: async function () {
-      const tools_mirrors = await invoke("get_tools_mirror_list", {});
-      const entries = Object.entries(tools_mirrors.mirrors || {});
-      const list = entries.map(([url, ping]) => {
-        const numericPing = Number(ping);
-        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
-        return {
-          value: url,
-          label: url,
-          ping: normalizedPing
-        };
-      });
-      list.sort((a, b) => ((a.ping && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY) - ((b.ping && b.ping > 0) ? b.ping : Number.POSITIVE_INFINITY));
+    async get_available_tools_mirrors() {
+      const res = await invoke("get_tools_mirror_urls", {});
+      const urls = res.mirrors || [];
+      const list = urls.map((url) => ({ value: url, label: url, ping: null }));
       this.tools_mirrors = list;
-      const best = list.find(m => m.ping > 0) || list[0] || null;
-      this.selected_tools_mirror = best ? best.value : null;
+      this.selected_tools_mirror = res.selected || (list[0] ? list[0].value : null);
       this.defaultMirrors.tools = this.selected_tools_mirror || '';
       this.loading_tools = false;
-      return false;
+      invoke("start_tools_mirror_latency_checks", {}).catch(() => {});
     },
-    get_available_pypi_mirrors: async function () {
-      const pypi_mirrors = await invoke("get_pypi_mirror_list", {});
-      const entries = Object.entries(pypi_mirrors.mirrors || {});
-      const list = entries.map(([url, ping]) => {
-        const numericPing = Number(ping);
-        const normalizedPing = numericPing === 4294967295 ? 0 : (numericPing || 0);
-        return {
-          value: url,
-          label: url,
-          ping: normalizedPing
-        };
-      });
-      list.sort((a, b) => ((a.ping && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY) - ((b.ping && b.ping > 0) ? b.ping : Number.POSITIVE_INFINITY));
+    async get_available_pypi_mirrors() {
+      const res = await invoke("get_pypi_mirror_urls", {});
+      const urls = res.mirrors || [];
+      const list = urls.map((url) => ({ value: url, label: url, ping: null }));
       this.pypi_mirrors = list;
-      const best = list.find(m => m.ping > 0) || list[0] || null;
-      this.selected_pypi_mirror = best ? best.value : null;
+      this.selected_pypi_mirror = res.selected || (list[0] ? list[0].value : null);
       this.defaultMirrors.pypi = this.selected_pypi_mirror || '';
       this.loading_pypi = false;
-      return false;
+      invoke("start_pypi_mirror_latency_checks", {}).catch(() => {});
+    },
+    async setupLatencyListeners() {
+      // IDF
+      const un1 = await listen("idf-mirror-latency", (event) => {
+        const { url, latency } = event.payload || {};
+        const normalized = Number(latency) === 4294967295 ? 0 : (Number(latency) || 0);
+        const idx = this.idf_mirrors.findIndex(m => m.value === url);
+        if (idx !== -1) {
+          this.idf_mirrors[idx].ping = normalized;
+          this.sortMirrorsByPing(this.idf_mirrors);
+          this.maybeAutoSelectBest('idf');
+        }
+      });
+      const un1d = await listen("idf-mirror-latency-done", () => {});
+      // Tools
+      const un2 = await listen("tools-mirror-latency", (event) => {
+        const { url, latency } = event.payload || {};
+        const normalized = Number(latency) === 4294967295 ? 0 : (Number(latency) || 0);
+        const idx = this.tools_mirrors.findIndex(m => m.value === url);
+        if (idx !== -1) {
+          this.tools_mirrors[idx].ping = normalized;
+          this.sortMirrorsByPing(this.tools_mirrors);
+          this.maybeAutoSelectBest('tools');
+        }
+      });
+      const un2d = await listen("tools-mirror-latency-done", () => {});
+      // PyPI
+      const un3 = await listen("pypi-mirror-latency", (event) => {
+        const { url, latency } = event.payload || {};
+        const normalized = Number(latency) === 4294967295 ? 0 : (Number(latency) || 0);
+        const idx = this.pypi_mirrors.findIndex(m => m.value === url);
+        if (idx !== -1) {
+          this.pypi_mirrors[idx].ping = normalized;
+          this.sortMirrorsByPing(this.pypi_mirrors);
+          this.maybeAutoSelectBest('pypi');
+        }
+      });
+      const un3d = await listen("pypi-mirror-latency-done", () => {});
+      this.listeners = [un1, un1d, un2, un2d, un3, un3d];
     },
     isDefaultMirror(mirror, type) {
       return mirror === this.defaultMirrors[type];
@@ -215,9 +275,19 @@ export default {
     }
   },
   mounted() {
+    this.setupLatencyListeners();
     this.get_available_idf_mirrors();
     this.get_available_tools_mirrors();
     this.get_available_pypi_mirrors();
+  },
+  beforeUnmount() {
+    // cleanup listeners
+    if (this.listeners && this.listeners.length) {
+      this.listeners.forEach(un => {
+        try { un(); } catch (_) {}
+      });
+      this.listeners = [];
+    }
   }
 }
 </script>
