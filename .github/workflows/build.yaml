@@ -5,6 +5,11 @@ on:
   pull_request:
     branches:
       - master
+    paths-ignore:
+      - "dl_page/**"
+      - "docs/**"
+      - ".github/workflows/dl_page.yml"
+      - ".github/workflows/docs_build.yml"
   release:
     types:
       - created
