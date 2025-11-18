@@ -9,6 +9,14 @@ on:
       ref:
         required: true
         type: string
+      run_extended:
+        required: true
+        type: string
+        default: 'false'
+      run_self_hosted:
+        required: true
+        type: string
+        default: 'false'
 
   workflow_dispatch:
     inputs:
@@ -16,10 +24,20 @@ on:
         description: "The run id from which to take binaries"
         required: true
         type: string
+      run_extended:
+        description: "Run extended tests, use 'true' to enable"
+        required: true
+        type: string
+        default: 'false'
+      run_self_hosted:
+        description: "Run tests on self-hosted runner in CN, use 'true' to enable"
+        required: true
+        type: string
+        default: 'false'
 
 jobs:
   test:
-    name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }})
+    name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -40,7 +58,7 @@ jobs:
           - os: macos-15-intel
             package_name: macos-x64
             run_on: ExtraRunner
-          - os: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && 'self-hosted' || 'ubuntu-latest' }}
+          - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
             package_name: linux-x64
             run_on: MirrorRunner
 
@@ -48,7 +66,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -110,7 +128,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script (non-Windows)
-        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && matrix.run_on !='ExtraRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && matrix.run_on !='ExtraRunner' && inputs.run_extended == 'true'
         run: |
           python3 --version
           export LOG_TO_FILE="true"
@@ -135,7 +153,7 @@ jobs:
         continue-on-error: true
 
       - name: Run mirrors extended test script (MirrorRunner)
-        if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.run_on == 'MirrorRunner' && inputs.run_extended == 'true'
         run: |
           python3 --version        
           export LOG_TO_FILE="true"
@@ -182,7 +200,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script (Windows)
-        if: matrix.os == 'windows-latest' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')
+        if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
         run: |
           python3 --version        
           $env:LOG_TO_FILE="true"
@@ -217,7 +235,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{inputs.run_self_hosted == 'true' && '-CN' || '' }}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -226,13 +244,13 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{contains(github.event.pull_request.labels.*.name, 'CNRUNNER') && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${inputs.run_self_hosted == 'true' && '-CN' || '' }}
           path: |
             ./tests/results-*.json
             ./tests/*.log
 
       - name: Clean Up runner (Self-hosted MirrorRunner)
-        if: matrix.run_on == 'MirrorRunner' && github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST') && contains(github.event.pull_request.labels.*.name, 'CNRUNNER')
+        if: matrix.run_on == 'MirrorRunner' && inputs.run_self_hosted == 'true'
         run: |
           rm -rf ~/.local/share/eim
           rm -rf ~/runner/_work/idf-im-ui
