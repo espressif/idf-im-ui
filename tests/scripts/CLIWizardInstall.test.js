@@ -6,6 +6,7 @@ import {
   TOOLSMIRRORS,
   PYPIMIRRORS,
   IDFAvailableVersions,
+  IDFDefaultVersionIndex,
   availableTargets,
   runInDebug,
 } from "../config.js";
@@ -126,6 +127,11 @@ export function runCLIWizardInstallTest({
           `Failed to offer installation for IDF version '${version}'`
         ).to.include(version);
       }
+      testRunner.process.write(" ");
+      for(let i=0; i<IDFDefaultVersionIndex; i++){
+        testRunner.process.write("\x1b[B");
+      };
+      testRunner.process.write(" ");
 
       logger.info("Select IDF Version passed");
       testRunner.output = "";

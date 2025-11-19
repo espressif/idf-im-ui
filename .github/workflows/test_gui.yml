@@ -63,7 +63,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -251,7 +251,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Install Tauri-Driver
         run: |
