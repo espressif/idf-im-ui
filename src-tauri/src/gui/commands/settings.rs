@@ -171,7 +171,7 @@ pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> 
       idf_im_lib::idf_versions::get_idf_names(include_unstable).await
   } else if !targets.is_empty() {
       // todo: handle multiple targets
-      idf_im_lib::idf_versions::get_idf_name_by_target(&targets[0].to_string().to_lowercase())
+      idf_im_lib::idf_versions::get_idf_name_by_target(&targets[0].to_string().to_lowercase(), true)
           .await
   } else {
       Vec::new()
