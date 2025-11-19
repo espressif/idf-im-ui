@@ -178,7 +178,6 @@ function testRun(script) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMGUI,
           idfList: idfUpdatedList,
-          installFolder,
           toolsFolder: TOOLSFOLDER,
         });
 
