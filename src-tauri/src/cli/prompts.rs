@@ -24,7 +24,7 @@ pub async fn select_idf_version(
         //todo process vector of targets
         idf_im_lib::idf_versions::get_idf_names(true).await
     } else {
-        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase()).await
+        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase(),true).await
     };
     avalible_versions.push("master".to_string());
     if non_interactive {

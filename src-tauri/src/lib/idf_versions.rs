@@ -138,13 +138,16 @@ pub fn get_idf_versions_by_target(versions: &Releases) -> HashMap<String, Vec<Ve
 ///
 /// * If there is an error fetching the IDF versions or processing them, an error message is returned as a string.
 ///
-pub async fn get_idf_name_by_target(target: &String) -> Vec<String> {
+pub async fn get_idf_name_by_target(target: &String, include_prerelease: bool) -> Vec<String> {
     let versions = get_idf_versions().await;
     let versions_by_target = get_idf_versions_by_target(&versions.unwrap());
     let mut selected_versions = vec![];
     if let Some(versions) = versions_by_target.get(target) {
         for v in versions {
-            if v.end_of_life || v.pre_release || v.old || v.name == "latest" {
+            if !include_prerelease && v.pre_release {
+                continue;
+            }
+            if v.end_of_life || v.old || v.name == "latest" {
                 continue;
             }
             selected_versions.push(v.name.clone());
