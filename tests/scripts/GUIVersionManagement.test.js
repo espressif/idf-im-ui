@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 import { Key, until } from "selenium-webdriver";
 
-export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, installFolder, toolsFolder }) {
+export function runGUIVersionManagementTest({ id = 0, pathToEIM, idfList, toolsFolder }) {
   
   describe(`${id}- EIM GUI Version Management |`, () => {
     let eimRunner = null;

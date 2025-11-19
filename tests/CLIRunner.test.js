@@ -137,13 +137,13 @@ function testRun(jsonScript) {
       test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
 
       test.data.toolsMirror &&
-        installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror]}`);
+        installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`);
 
       test.data.idfMirror &&
-        installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror]}`);
+        installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`);
 
       test.data.pypiMirror &&
-        installArgs.push(`--pypi-mirror ${PYPIMIRRORS[test.data.idfMirror]}`);
+        installArgs.push(`--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`);
 
       test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
 
