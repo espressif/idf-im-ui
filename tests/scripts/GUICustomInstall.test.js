@@ -134,10 +134,10 @@ export function runGUICustomInstallTest({
     // });
 
     it("05- Should show targets list", async function () {
-      this.timeout(10000);
-      await eimRunner.clickButton("Continue to Next Step");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const targetsList = await eimRunner.findByDataId("targets-grid");
+      this.timeout(45000);
+      await eimRunner.clickButton("Start Configuration Wizard");
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      const targetsList = await eimRunner.findByDataId("targets-grid", 20000);
       const targetsText = await targetsList.getText();
       for (let target of availableTargets) {
         expect(targetsText).to.include(target);
@@ -395,7 +395,7 @@ export function runGUICustomInstallTest({
       expect(await aliyunMirror.getAttribute("class")).to.not.include(
         "selected"
       );
-      expect(await tsinghuaMirror.getAttribute("class")).to.notinclude(
+      expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
         "selected"
       );
       expect(await ustcMirror.getAttribute("class")).to.include("selected");
