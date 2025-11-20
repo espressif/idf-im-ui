@@ -25,16 +25,32 @@ jobs:
             if (context.event_name !== 'schedule') {
               core.setOutput('should_run', 'true');
               return;
-            }          
-            const since = new Date(Date.now() - 24*60*60*1000);
-            const params = { owner: context.repo.owner, repo: context.repo.repo, state: 'closed', per_page: 100 };
-            const pulls = await github.paginate(github.rest.pulls.list, params);
-            const merged = pulls.filter(p => p.merged_at && new Date(p.merged_at) >= since);
-            core.setOutput('should_run', merged.length > 0 ? 'true' : 'false');
+            }
+            const since = new Date(Date.now() - 24*60*60*1000).toISOString();
+            const query = [
+              "repo:" + context.repo.owner + "/" + context.repo.repo,
+              "is:pr",
+              "is:merged",
+              `merged:>=${since}`
+            ].join(" ")
+
+            const results = await github.rest.search.issuesAndPullRequests({
+              q: query,
+              per_page: 1
+            })
+
+            const count = results.data.total_count
+            core.info(`Found ${count} merged PR(s) in last 24 hours`)
+
+            const shouldRun = count > 0 ? "true" : "false"
+            core.info(`should_run = ${shouldRun}`)
+            core.setOutput("should_run", shouldRun)
+
 
   setup:
     name: Define Build Matrix
     runs-on: ubuntu-latest
+    needs: pr-check
     if: github.event_name != 'schedule' || needs.pr-check.outputs.should_run == 'true'
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
