@@ -1,19 +1,21 @@
-use tauri::{AppHandle, Manager};
-use idf_im_lib::{settings,to_absolute_path, utils::is_valid_idf_directory};
-use crate::gui::{
-  app_state::{self, get_locked_settings, get_settings_non_blocking, update_settings, AppState},
-  ui::send_message,
-  utils::is_path_empty_or_nonexistent,
+use std::{
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    time::Duration,
 };
 
-use log::info;
-use serde_json::{json, Value};
-use std::{
-  fs::File,
-  io::Read,
-  path::{Path, PathBuf},
-};
+use idf_im_lib::{settings, to_absolute_path, utils::is_valid_idf_directory};
+use log::{info, warn};
 use rust_i18n::t;
+use serde_json::{json, Value};
+use tauri::{async_runtime, AppHandle, Manager};
+
+use crate::gui::{
+    app_state::{self, get_locked_settings, get_settings_non_blocking, update_settings, AppState},
+    ui::{emit_to_fe, send_message},
+    utils::is_path_empty_or_nonexistent,
+};
 
 /// Gets the current settings
 #[tauri::command]
@@ -37,7 +39,7 @@ pub fn load_settings(app_handle: AppHandle, path: &str) {
           })
           .expect("Failed to load settings");
         log::debug!("settings after load {:?}", settings);
-  });
+  }).unwrap_or_else(|e| warn!("Failed to update settings: {}", e));
   send_message(
       &app_handle,
       t!("gui.settings.loaded_successfully", path = path).to_string(),
@@ -207,7 +209,7 @@ pub fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), 
 
 /// Gets the list of available IDF mirrors
 #[tauri::command]
-pub fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -220,18 +222,54 @@ pub fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.idf_mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
+}
+
+/// Returns only the available IDF mirror URLs quickly (no latency calculation)
+#[tauri::command]
+pub fn get_idf_mirror_urls(app_handle: AppHandle) -> Value {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return json!({
+                "mirrors": Vec::<String>::new(),
+                "selected": "",
+            });
+        }
+    };
+
+    let selected = settings.idf_mirror.clone().unwrap_or_default();
+    let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_mirrors_list()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
+        let mut new_mirrors = vec![selected.clone()];
+        new_mirrors.extend(available_mirrors);
+        available_mirrors = new_mirrors;
+    }
+
+    json!({
+      "mirrors": available_mirrors,
+      "selected": selected,
+    })
 }
 
 /// Sets the selected IDF mirror
@@ -252,7 +290,7 @@ pub fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Strin
 
 /// Gets the list of available tools mirrors
 #[tauri::command]
-pub fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -265,18 +303,55 @@ pub fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
+}
+
+/// Returns only the available tools mirror URLs quickly (no latency
+/// calculation)
+#[tauri::command]
+pub fn get_tools_mirror_urls(app_handle: AppHandle) -> Value {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return json!({
+                "mirrors": Vec::<String>::new(),
+                "selected": "",
+            });
+        }
+    };
+
+    let selected = settings.mirror.clone().unwrap_or_default();
+    let mut available_mirrors: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
+        let mut new_mirrors = vec![selected.clone()];
+        new_mirrors.extend(available_mirrors);
+        available_mirrors = new_mirrors;
+    }
+
+    json!({
+      "mirrors": available_mirrors,
+      "selected": selected,
+    })
 }
 
 /// Sets the selected tools mirror
@@ -297,7 +372,7 @@ pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), Str
 
 /// Gets the list of available tools mirrors
 #[tauri::command]
-pub fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
+pub async fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
   let settings = match get_settings_non_blocking(&app_handle) {
       Ok(s) => s,
       Err(e) => {
@@ -310,18 +385,54 @@ pub fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
   };
 
   let mirror = settings.pypi_mirror.clone().unwrap_or_default();
-  let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
+  let mut available_mirrors: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
+      .iter()
+      .map(|s| s.to_string())
+      .collect();
 
-  if !available_mirrors.contains(&mirror.as_str()) {
-      let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.iter().any(|m| m == &mirror) {
+      let mut new_mirrors = vec![mirror.clone()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
+  // Pick the lowest-latency mirror to present as selected
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
+
   json!({
-    "mirrors": available_mirrors,
-    "selected": mirror,
+    "mirrors": mirror_latency_map
   })
+}
+
+/// Returns only the available PyPI mirror URLs quickly (no latency calculation)
+#[tauri::command]
+pub fn get_pypi_mirror_urls(app_handle: AppHandle) -> Value {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return json!({
+                "mirrors": Vec::<String>::new(),
+                "selected": "",
+            });
+        }
+    };
+
+    let selected = settings.pypi_mirror.clone().unwrap_or_default();
+    let mut available_mirrors: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
+        let mut new_mirrors = vec![selected.clone()];
+        new_mirrors.extend(available_mirrors);
+        available_mirrors = new_mirrors;
+    }
+
+    json!({
+      "mirrors": available_mirrors,
+      "selected": selected,
+    })
 }
 
 /// Sets the selected PyPI mirror
@@ -364,6 +475,96 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
     };
 
     is_path_empty_or_nonexistent(&path, &versions)
+}
+
+/// Start streaming latency measurements for IDF mirrors via events.
+/// Emits per-mirror updates as: event "idf-mirror-latency" with payload { url,
+/// latency } Emits completion as: event "idf-mirror-latency-done"
+#[tauri::command]
+pub fn start_idf_mirror_latency_checks(app_handle: AppHandle) {
+    async_runtime::spawn(async move {
+        let mirrors: Vec<String> = idf_im_lib::get_idf_mirrors_list()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let timeout = Duration::from_millis(3000);
+        for m in mirrors {
+            let score = match idf_im_lib::utils::measure_url_score(&m, timeout).await {
+                Some(s) => s,
+                None => u32::MAX,
+            };
+            emit_to_fe(
+                &app_handle,
+                "idf-mirror-latency",
+                json!({ "url": m, "latency": score }),
+            );
+        }
+        emit_to_fe(
+            &app_handle,
+            "idf-mirror-latency-done",
+            json!({ "done": true }),
+        );
+    });
+}
+
+/// Start streaming latency measurements for Tools mirrors via events.
+/// Emits per-mirror updates as: event "tools-mirror-latency" with payload {
+/// url, latency } Emits completion as: event "tools-mirror-latency-done"
+#[tauri::command]
+pub fn start_tools_mirror_latency_checks(app_handle: AppHandle) {
+    async_runtime::spawn(async move {
+        let mirrors: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let timeout = Duration::from_millis(3000);
+        for m in mirrors {
+            let score = match idf_im_lib::utils::measure_url_score(&m, timeout).await {
+                Some(s) => s,
+                None => u32::MAX,
+            };
+            emit_to_fe(
+                &app_handle,
+                "tools-mirror-latency",
+                json!({ "url": m, "latency": score }),
+            );
+        }
+        emit_to_fe(
+            &app_handle,
+            "tools-mirror-latency-done",
+            json!({ "done": true }),
+        );
+    });
+}
+
+/// Start streaming latency measurements for PyPI mirrors via events.
+/// Emits per-mirror updates as: event "pypi-mirror-latency" with payload { url,
+/// latency } Emits completion as: event "pypi-mirror-latency-done"
+#[tauri::command]
+pub fn start_pypi_mirror_latency_checks(app_handle: AppHandle) {
+    async_runtime::spawn(async move {
+        let mirrors: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let timeout = Duration::from_millis(3000);
+        for m in mirrors {
+            let score = match idf_im_lib::utils::measure_url_score(&m, timeout).await {
+                Some(s) => s,
+                None => u32::MAX,
+            };
+            emit_to_fe(
+                &app_handle,
+                "pypi-mirror-latency",
+                json!({ "url": m, "latency": score }),
+            );
+        }
+        emit_to_fe(
+            &app_handle,
+            "pypi-mirror-latency-done",
+            json!({ "done": true }),
+        );
+    });
 }
 
 #[tauri::command]

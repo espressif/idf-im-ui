@@ -489,6 +489,9 @@
     "tags": {
       "default": "Default"
     },
+    "status": {
+      "timeout": "Timeout"
+    },
     "continueButton": "Continue with Selected Mirrors"
   },
   "installationPathSelect": {
