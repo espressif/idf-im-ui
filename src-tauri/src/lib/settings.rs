@@ -9,6 +9,7 @@ use struct_iterable::Iterable;
 use uuid::Uuid;
 
 use crate::idf_config::{IdfConfig, IdfInstallation, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
+use crate::system_dependencies::PYTHON_NAME_TO_INSTALL;
 use crate::utils::{get_git_path, is_valid_idf_directory};
 
 macro_rules! merge_fields {
@@ -47,6 +48,7 @@ pub struct Settings {
     pub python_env_folder_name: Option<String>,
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
+    pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
 }
 
 #[derive(Debug, Clone)]
@@ -119,6 +121,7 @@ impl Default for Settings {
             python_env_folder_name: Some("python".to_string()),
             use_local_archive: None,
             activation_script_path_override: Some(default_activation_script_path_override),
+            python_version_override: Some(PYTHON_NAME_TO_INSTALL.to_string()),
         }
     }
 }
@@ -267,6 +270,11 @@ impl Settings {
             {
                 settings.activation_script_path_override = cli_settings_struct.activation_script_path_override.clone();
             }
+            if cli_settings_struct.python_version_override.is_some()
+                && !cli_settings_struct.is_default("python_version_override")
+            {
+                settings.python_version_override = cli_settings_struct.python_version_override.clone();
+            }
         }
 
         // Set the config file field
@@ -342,7 +350,8 @@ impl Settings {
             version_name,
             python_env_folder_name,
             use_local_archive,
-            activation_script_path_override
+            activation_script_path_override,
+            python_version_override
         );
     }
 
