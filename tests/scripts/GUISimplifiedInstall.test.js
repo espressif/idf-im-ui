@@ -3,15 +3,32 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
-export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
-  
+export function runGUISimplifiedInstallTest({
+  id = 0,
+  pathToEIM,
+  testProxyMode = false,
+  proxyBlockList = [],
+}) {
   describe("1- Run simplified mode", () => {
     let eimRunner = null;
     let simplifiedInstallFailed = false;
+    let proxy = null;
 
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
         await eimRunner.start();
       } catch (err) {
@@ -40,6 +57,14 @@ export function runGUISimplifiedInstallTest({ id = 0, pathToEIM }) {
         await eimRunner.stop();
       } catch (error) {
         logger.info("Error to close EIM application");
+      }
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
     });
 

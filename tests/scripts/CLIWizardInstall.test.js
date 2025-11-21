@@ -16,6 +16,7 @@ export function runCLIWizardInstallTest({
   id = 0,
   pathToEIM,
   testProxyMode = false,
+  proxyBlockList = [],
 }) {
   describe(`${id}- Run wizard |`, function () {
     let testRunner = null;
@@ -28,7 +29,10 @@ export function runCLIWizardInstallTest({
       testRunner = new CLITestRunner();
       if (testProxyMode) {
         try {
-          proxy = new TestProxy({ mode: testProxyMode });
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
           await proxy.start();
         } catch (error) {
           logger.info("Error to start proxy server");
@@ -36,9 +40,7 @@ export function runCLIWizardInstallTest({
         }
       }
       try {
-        await testRunner.start({
-          isolatedEnvironment: testProxyMode === false ? false : true,
-        });
+        await testRunner.start();
       } catch (error) {
         logger.info("Error to start terminal");
         logger.debug(`Error: ${error}`);
@@ -125,6 +127,11 @@ export function runCLIWizardInstallTest({
           `Failed to offer installation for IDF version '${version}'`
         ).to.include(version);
       }
+      testRunner.process.write(" ");
+      for (let i = 0; i < IDFDefaultVersionIndex; i++) {
+        testRunner.process.write("\x1b[B");
+      }
+      testRunner.process.write(" ");
 
       logger.info("Select IDF Version passed");
       testRunner.output = "";
@@ -193,7 +200,7 @@ export function runCLIWizardInstallTest({
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      
+
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
         if (Date.now() - testRunner.lastDataTimestamp >= 600000) {

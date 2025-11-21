@@ -19,15 +19,30 @@ export function runGUICustomInstallTest({
   idfVersionList,
   toolsMirror,
   idfMirror,
+  pypiMirror,
+  testProxyMode = false,
+  proxyBlockList = [],
 }) {
-  
   describe(`${id}- Run expert mode |`, () => {
     let eimRunner = null;
     let customInstallFailed = false;
+    let proxy = null;
 
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
         await eimRunner.start();
       } catch (err) {
@@ -57,6 +72,14 @@ export function runGUICustomInstallTest({
         eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
+      }
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
     });
 
@@ -350,6 +373,7 @@ export function runGUICustomInstallTest({
     it("10- Should show installation summary", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
       const versionSummary = await eimRunner.findByDataId("versions-info");
       expect(await versionSummary.getText()).to.include(
         "Installing ESP-IDF Versions"
@@ -366,6 +390,7 @@ export function runGUICustomInstallTest({
 
       try {
         await eimRunner.clickButton("Start Installation");
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         const installing = await eimRunner.findByText("Installation Progress");
         expect(await installing.isDisplayed()).to.be.true;
         const startTime = Date.now();
