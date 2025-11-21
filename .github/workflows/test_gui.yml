@@ -12,7 +12,7 @@ on:
       run_extended:
         required: true
         type: string
-        default: "false"        
+        default: "false"
 
   workflow_dispatch:
     inputs:
@@ -21,7 +21,7 @@ on:
         required: true
         type: string
       run_extended:
-        description: "Run extended tests, use 'true' to enable"      
+        description: "Run extended tests, use 'true' to enable"
         required: true
         type: string
         default: "false"
@@ -51,6 +51,18 @@ jobs:
             run_on: ExtraRunner
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -63,7 +75,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -238,6 +250,18 @@ jobs:
             run_on: ExtraRunner
 
     steps:
+      - name: Free Disk Space (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: true
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -251,7 +275,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Install Tauri-Driver
         run: |

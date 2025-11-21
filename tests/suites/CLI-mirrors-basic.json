@@ -7,6 +7,7 @@
       "idfList": "default",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
+      "pypiMirror": "pypi_aliyun",
       "recursive": true,
       "nonInteractive": true
     },
@@ -21,6 +22,7 @@
       "idfList": "default",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
+      "pypiMirror": "pypi_tsinghua",
       "recursive": true,
       "nonInteractive": true
     },
