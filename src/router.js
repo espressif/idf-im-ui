@@ -8,6 +8,13 @@ import InstallationProgress from "./components/wizard_steps/InstalationProgress.
 import SimpleInstallatioProgressWrapper from "./components/SimpleInstallatioProgressWrapper.vue";
 import WizardStep from "./components/WizardStep.vue";
 
+export const navigationState = {
+  installationRunning: false,
+  setInstallationRunning(value) {
+    this.installationRunning = value;
+  }
+};
+
 const routes = [
   {
     path: "/",
@@ -77,8 +84,11 @@ const router = createRouter({
 
 // Navigation guard to check prerequisites or handle navigation logic
 router.beforeEach(async (to, from, next) => {
-  // You can add logic here to check if the app should skip welcome screen
-  // based on saved preferences
+  // Prevent navigation if installation is running
+  if (navigationState.installationRunning) {
+    next(false); // Block navigation
+    return;
+  }
   next();
 });
 

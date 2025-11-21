@@ -190,6 +190,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem, NAlert, NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
 import { useWizardStore } from '../../store'
+import { navigationState } from '../../router';
 import { useI18n } from 'vue-i18n'
 
 export default {
@@ -213,6 +214,13 @@ export default {
   setup() {
     const { t } = useI18n()
     return { t }
+  },
+
+  watch: {
+    installation_running(newValue) {
+      // Update the shared navigation state
+      navigationState.setInstallationRunning(newValue);
+    }
   },
 
   data() {
@@ -805,6 +813,7 @@ export default {
     this.startListening();
     this.measureContainer();
     window.addEventListener('resize', this.measureContainer);
+    navigationState.setInstallationRunning(this.installation_running);
 
     if (this.is_fix_mode && this.$route.query.mode === 'fix') {
       this.installation_running = true;
@@ -826,6 +835,7 @@ export default {
   },
 
   beforeUnmount() {
+    navigationState.setInstallationRunning(false);
     this.cleanup();
   },
 }
