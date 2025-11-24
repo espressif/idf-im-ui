@@ -311,6 +311,19 @@ pub async fn setup_tools(
             }
         }
     };
+    let default_mirror = settings.tools_mirror.as_deref().unwrap();
+    let mirror_latency_map = settings.get_tools_mirror_latency_map().await.unwrap();
+    let best_mirror = mirror_latency_map
+        .iter()
+        .min_by_key(|(_, latency)| *latency)
+        .unwrap()
+        .0
+        .clone();
+    let mirror = match best_mirror.is_empty() {
+        true => default_mirror,
+        false => best_mirror.as_str(),
+    };
+
 
     // Use the library's setup_tools function
     let installed_tools_list = idf_tools::setup_tools(
@@ -318,7 +331,7 @@ pub async fn setup_tools(
         settings.target.clone().unwrap_or_default(),
         &PathBuf::from(&tool_setup.download_dir),
         &PathBuf::from(&tool_setup.install_dir),
-        settings.mirror.as_deref(),
+        Some(mirror),
         progress_callback,
     )
     .await
@@ -353,6 +366,19 @@ pub async fn setup_tools(
       }
     };
 
+    let default_pypi_mirror = settings.pypi_mirror.as_deref().unwrap();
+    let pypi_mirror_latency_map = settings.get_pypi_mirror_latency_map().await.unwrap();
+    let best_pypi_mirror = pypi_mirror_latency_map
+        .iter()
+        .min_by_key(|(_, latency)| *latency)
+        .unwrap()
+        .0
+        .clone();
+    let pypi_mirror = match best_pypi_mirror.is_empty() {
+        true => default_pypi_mirror,
+        false => best_pypi_mirror.as_str(),
+    };
+
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
@@ -361,7 +387,7 @@ pub async fn setup_tools(
         true, //TODO: actually read from config
         &settings.idf_features.clone().unwrap_or_default(),
         offline_archive_dir, // Offline archive directory
-        &settings.pypi_mirror, // PyPI mirror
+        &Some(pypi_mirror.to_string()), // PyPI mirror
     ).await {
         Ok(_) => {
             info!("Python environment installed");

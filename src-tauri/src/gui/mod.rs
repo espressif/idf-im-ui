@@ -235,11 +235,9 @@ pub fn run() {
             set_versions,
             get_idf_mirror_list,
             get_idf_mirror_urls,
-            start_idf_mirror_latency_checks,
             set_idf_mirror,
             get_tools_mirror_list,
             get_tools_mirror_urls,
-            start_tools_mirror_latency_checks,
             set_tools_mirror,
             load_settings,
             get_installation_path,
@@ -274,7 +272,6 @@ pub fn run() {
             open_terminal_with_script,
             get_pypi_mirror_list,
             get_pypi_mirror_urls,
-            start_pypi_mirror_latency_checks,
             set_pypi_mirror,
         ])
         .run(tauri::generate_context!())
