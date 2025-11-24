@@ -256,8 +256,8 @@ pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
     select_single_mirror(
         &mut config,
         "mirror",
-        |c: &Settings| &c.mirror,
-        |c: &mut Settings, v| c.mirror = Some(v),
+        |c: &Settings| &c.tools_mirror,
+        |c: &mut Settings, v| c.tools_mirror = Some(v),
         tools_candidates,
         "wizard.tools.mirror",
         "Tools",

@@ -6,6 +6,7 @@ import router from "./router";
 import naive from "naive-ui";
 import "./assets/main.css"; // Import the CSS file
 import { useAppStore } from './store'
+import { useMirrorsStore } from "./store";
 
 // Translation files
 import en from "./locales/en.json";
@@ -26,6 +27,14 @@ app.use(i18n);
 app.use(createPinia());
 app.use(router);
 app.use(naive);
+
+// Bootstrap background mirror latency on app launch
+try {
+  const mirrorsStore = useMirrorsStore();
+  mirrorsStore.bootstrapMirrors();
+} catch (_) {
+  // ignore bootstrap errors at startup; UI can still fetch lazily
+}
 app.mount("#app");
 
 // Initialize app store and trigger background checks

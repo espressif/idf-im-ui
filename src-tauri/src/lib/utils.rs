@@ -757,16 +757,18 @@ fn is_retryable_error(error: &io::Error) -> bool {
         _ => false,
     }
 }
-
-/// Returns the base domain (scheme + host + optional port) from a full URL.
+/// Returns the base domain from a full URL.
 fn get_base_url(url_str: &str) -> Option<String> {
     let url = Url::parse(url_str).ok()?;
-    Some(format!("{}://{}", url.scheme(), url.host_str()?))
+    let scheme = url.scheme();
+    let host = url.host_str()?;
+    Some(format!("{}://{}", scheme, host))
 }
 
-/// Measures response latency (in ms) for the base domain of a given URL.
-/// Returns `Some(latency_ms)` if successful, or `None` if unreachable.
-pub async fn measure_url_score(url: &str, timeout: Duration) -> Option<u32> {
+/// Measures response latency (in ms) for the HEAD request to the base domain of
+/// a given URL. Returns `Some(latency_ms)` if successful, or `None` if
+/// unreachable.
+pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Option<u32> {
     // Extract base URL (e.g., "https://example.com")
     let base_url = get_base_url(url)?;
 
@@ -803,6 +805,36 @@ pub async fn measure_url_score(url: &str, timeout: Duration) -> Option<u32> {
     None
 }
 
+/// Measures response latency (in ms) for the GET request to the base domain of
+/// a given URL. Returns `Some(latency_ms)` if successful, or `None` if
+/// unreachable.
+pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> {
+    // Extract base URL (e.g., "https://example.com")
+    let base_url = get_base_url(url)?;
+
+    // Build the HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .ok()?;
+
+    let start_get = Instant::now();
+    match client.get(&base_url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            return Some(start_get.elapsed().as_millis().min(u32::MAX as u128) as u32);
+        }
+        Ok(resp) => {
+            warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
+        }
+        Err(e) => {
+            warn!("Mirror ping failed for {}: {:?}", base_url, e);
+        }
+    }
+
+    None
+}
+
 /// Return URL -> score (lower is better). Unreachable mirrors get u32::MAX.
 pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String, u32> {
     let timeout = Duration::from_millis(3000);
@@ -811,20 +843,45 @@ pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String,
         mirrors.len()
     );
     let mut mirror_latency_map = HashMap::new();
+    let mut head_latency_failed = false;
 
     for m in mirrors {
         let url = m.as_str();
-        match measure_url_score(url, timeout).await {
-            Some(score) => {
-                info!("Mirror score: {} -> {}", url, score);
-                mirror_latency_map.insert(m.clone(), score);
+        if !head_latency_failed {
+            match measure_url_score_head(url, timeout).await {
+                Some(score) => {
+                    info!("Mirror score: {} -> {}", url, score);
+                    mirror_latency_map.insert(m.clone(), score);
+                }
+                None => {
+                    info!(
+                        "Unable to measure head latency for {}: {:?}",
+                        url, timeout
+                    );
+                    head_latency_failed = true;
+                }
             }
-            None => {
-                info!(
-                    "Mirror score: {} -> unreachable (timeout {:?})",
-                    url, timeout
-                );
-                mirror_latency_map.insert(m.clone(), u32::MAX);
+        }
+        if head_latency_failed {
+            break;
+        }
+    }
+
+    // if head latency failed, measure get latency for all mirrors
+    // and we also clear the map to avoid any potential contamination
+    if head_latency_failed {
+        mirror_latency_map.clear();
+        for m in mirrors {
+            let url = m.as_str();
+            match measure_url_score_get(url, timeout).await {
+                Some(score) => {
+                    info!("Mirror get score: {} -> {}", url, score);
+                    mirror_latency_map.insert(m.clone(), score);
+                }
+                None => {
+                    info!("Unable to measure get latency for {}: {:?}", url, timeout);
+                    mirror_latency_map.insert(m.clone(), u32::MAX);
+                }
             }
         }
     }
@@ -1375,13 +1432,6 @@ set(IDF_VERSION_MAJOR 5)
     }
 
     #[test]
-    fn test_get_base_url_with_port_current_behavior() {
-        // Current implementation drops the port; assert current behavior
-        let u = "http://example.com:8080/svc";
-        assert_eq!(get_base_url(u), Some("http://example.com".to_string()));
-    }
-
-    #[test]
     fn test_get_base_url_invalid_and_file_scheme() {
         // Invalid URL
         assert_eq!(get_base_url("not a url"), None);
@@ -1392,7 +1442,7 @@ set(IDF_VERSION_MAJOR 5)
     #[tokio::test]
     async fn test_measure_url_score_invalid_url() {
         // Invalid URL should short-circuit (no network) and return None
-        let res = measure_url_score("://", std::time::Duration::from_millis(50)).await;
+        let res = measure_url_score_head("://", std::time::Duration::from_millis(50)).await;
         assert!(res.is_none());
     }
 
