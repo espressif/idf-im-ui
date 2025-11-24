@@ -128,11 +128,11 @@ app_handle: &AppHandle,
                     if value != last_percentage && (value - last_percentage) >= 10 {
                         last_percentage = value;
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
+                                stage: InstallationStage::Download,
+                                percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
                             message: rust_i18n::t!("gui.installation.cloning_repository", version = version_clone.clone()).to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_progress", percentage = value).to_string()),
-                            version: Some(version_clone.clone()),
+                                version: Some(version_clone.clone()),
                         });
                     }
                 }
@@ -153,14 +153,14 @@ app_handle: &AppHandle,
                     let total_progress = submodule_base_progress + current_submodule_progress as u32 + individual_progress as u32;
 
                     emit_installation_event(&app_handle_clone, InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: total_progress.min(65),
+                            stage: InstallationStage::Download,
+                            percentage: total_progress.min(65),
                         message: rust_i18n::t!("gui.installation.downloading_submodule", name = name.clone()).to_string(),
                         detail: Some(rust_i18n::t!("gui.installation.submodule_detail",
-                            current = completed_submodules + 1,
-                            total = total_estimated_submodules,
+                                    current = completed_submodules + 1,
+                                    total = total_estimated_submodules,
                             percentage = value).to_string()),
-                        version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                     });
                 }
 
@@ -176,13 +176,13 @@ app_handle: &AppHandle,
 
                     let name_display = name.split('/').last().unwrap_or(&name).replace("_", " ");
                     emit_installation_event(&app_handle_clone, InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: submodule_progress.min(65) as u32,
+                            stage: InstallationStage::Download,
+                            percentage: submodule_progress.min(65) as u32,
                         message: rust_i18n::t!("gui.installation.completed_submodule", name = name_display).to_string(),
                         detail: Some(rust_i18n::t!("gui.installation.submodule_progress",
-                            completed = completed_submodules,
+                                    completed = completed_submodules,
                             total = total_estimated_submodules).to_string()),
-                        version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                     });
 
                     emit_log_message(&app_handle_clone, MessageLevel::Info,
@@ -198,11 +198,11 @@ app_handle: &AppHandle,
                     // If no submodules were processed, this means we're done with everything
                     if !has_submodules {
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: 65,
+                                stage: InstallationStage::Extract,
+                                percentage: 65,
                             message: rust_i18n::t!("gui.installation.download_completed_no_submodules").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_cloned").to_string()),
-                            version: Some(version_clone.clone()),
+                                version: Some(version_clone.clone()),
                         });
                         break;
                     }
@@ -210,22 +210,22 @@ app_handle: &AppHandle,
                     else if completed_submodules > 0 {
                         // We have processed some submodules, likely we're done
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: 65,
+                                stage: InstallationStage::Extract,
+                                percentage: 65,
                             message: rust_i18n::t!("gui.installation.download_completed").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_and_submodules", count = completed_submodules).to_string()),
-                            version: Some(version_clone.clone()),
+                                version: Some(version_clone.clone()),
                         });
                         break;
                     }
                     // If we got Finish but haven't seen submodules yet, just note main repo is done
                     else {
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: 10,
+                                stage: InstallationStage::Download,
+                                percentage: 10,
                             message: rust_i18n::t!("gui.installation.main_cloned_waiting").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.waiting_submodules").to_string()),
-                            version: Some(version_clone.clone()),
+                                version: Some(version_clone.clone()),
                         });
                         // Don't break - keep waiting for submodules
                     }
@@ -236,15 +236,15 @@ app_handle: &AppHandle,
                     if main_repo_finished {
                         let final_percentage = if has_submodules { 65 } else { 65 };
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: final_percentage,
+                                stage: InstallationStage::Extract,
+                                percentage: final_percentage,
                             message: rust_i18n::t!("gui.installation.download_completed").to_string(),
-                            detail: Some(if has_submodules {
+                                detail: Some(if has_submodules {
                                 rust_i18n::t!("gui.installation.submodules_processed", count = completed_submodules).to_string()
-                            } else {
-                                rust_i18n::t!("gui.installation.repository_cloned").to_string()
-                            }),
-                            version: Some(version_clone.clone()),
+                                } else {
+                                    rust_i18n::t!("gui.installation.repository_cloned").to_string()
+                                }),
+                                version: Some(version_clone.clone()),
                         });
                     }
                     break;
@@ -253,8 +253,23 @@ app_handle: &AppHandle,
         }
     });
 
-    let default_mirror = rust_i18n::t!("gui.installation.default_mirror").to_string();
-    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror);
+    let default_mirror_str = rust_i18n::t!("gui.installation.default_mirror").to_string();
+    let default_mirror = settings
+        .idf_mirror
+        .as_deref()
+        .unwrap_or(&default_mirror_str);
+    let mirror_latency_map = settings.get_idf_mirror_latency_map().await.unwrap();
+    let best_mirror = mirror_latency_map
+        .iter()
+        .min_by_key(|(_, latency)| *latency)
+        .unwrap()
+        .0
+        .clone();
+    let mirror = match best_mirror.is_empty() {
+        true => default_mirror,
+        false => best_mirror.as_str(),
+    };
+
     emit_log_message(
         app_handle,
         MessageLevel::Info,

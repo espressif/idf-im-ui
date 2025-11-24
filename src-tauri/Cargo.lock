@@ -1555,7 +1555,6 @@ dependencies = [
  "flate2",
  "fork",
  "fs_extra",
- "futures",
  "git2",
  "idf-env",
  "indicatif",

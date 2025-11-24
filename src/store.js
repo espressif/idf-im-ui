@@ -427,3 +427,153 @@ export const useWizardStore = defineStore("wizard", {
     },
   },
 });
+
+export const useMirrorsStore = defineStore("mirrors", {
+  state: () => ({
+    // URL lists
+    idf_urls: [],
+    tools_urls: [],
+    pypi_urls: [],
+
+    // Latency maps (url -> ms; 0 means timeout/unreachable; undefined means not yet measured)
+    idf_latency_map: {},
+    tools_latency_map: {},
+    pypi_latency_map: {},
+
+    // Selected (from backend quick URL endpoints)
+    selected_idf: "",
+    selected_tools: "",
+    selected_pypi: "",
+
+    // Loading flags
+    loading_idf_urls: false,
+    loading_tools_urls: false,
+    loading_pypi_urls: false,
+    loading_idf_latency: false,
+    loading_tools_latency: false,
+    loading_pypi_latency: false,
+
+    // Last updated timestamps (ms epoch)
+    idf_last_updated: 0,
+    tools_last_updated: 0,
+    pypi_last_updated: 0,
+
+    // TTL for latency cache (15 minutes)
+    latency_ttl_ms: 15 * 60 * 1000,
+  }),
+  getters: {
+    idfUrls: (state) => state.idf_urls,
+    toolsUrls: (state) => state.tools_urls,
+    pypiUrls: (state) => state.pypi_urls,
+    idfLatencyMap: (state) => state.idf_latency_map,
+    toolsLatencyMap: (state) => state.tools_latency_map,
+    pypiLatencyMap: (state) => state.pypi_latency_map,
+  },
+  actions: {
+    normalizeLatencyValue(value) {
+      // Backend uses u32::MAX (4294967295) for timeouts; normalize to 0 for UI
+      if (value === undefined || value === null) return undefined;
+      return Number(value) === 4294967295 ? 0 : Number(value);
+    },
+
+    ttlValid(lastUpdated) {
+      if (!lastUpdated) return false;
+      const now = Date.now();
+      return now - lastUpdated < this.latency_ttl_ms;
+    },
+
+    async bootstrapMirrors() {
+      // Fetch quick URL lists + defaults for all types in parallel
+      this.loading_idf_urls = true;
+      this.loading_tools_urls = true;
+      this.loading_pypi_urls = true;
+      try {
+        const pIdf = invoke("get_idf_mirror_urls", {});
+        const pTools = invoke("get_tools_mirror_urls", {});
+        const pPypi = invoke("get_pypi_mirror_urls", {});
+
+        const [idf, tools, pypi] = await Promise.allSettled([pIdf, pTools, pPypi]);
+
+        if (idf.status === "fulfilled") {
+          const res = idf.value || {};
+          this.idf_urls = Array.isArray(res.mirrors) ? res.mirrors : [];
+          this.selected_idf = typeof res.selected === "string" ? res.selected : "";
+        }
+        if (tools.status === "fulfilled") {
+          const res = tools.value || {};
+          this.tools_urls = Array.isArray(res.mirrors) ? res.mirrors : [];
+          this.selected_tools = typeof res.selected === "string" ? res.selected : "";
+        }
+        if (pypi.status === "fulfilled") {
+          const res = pypi.value || {};
+          this.pypi_urls = Array.isArray(res.mirrors) ? res.mirrors : [];
+          this.selected_pypi = typeof res.selected === "string" ? res.selected : "";
+        }
+      } finally {
+        this.loading_idf_urls = false;
+        this.loading_tools_urls = false;
+        this.loading_pypi_urls = false;
+      }
+
+      // Kick off progressive per-type background latency calculations
+      this.computeLatencyInBackground();
+    },
+
+    computeLatencyInBackground() {
+      const now = Date.now();
+      // IDF
+      if (!this.ttlValid(this.idf_last_updated) && !this.loading_idf_latency) {
+        this.loading_idf_latency = true;
+        invoke("get_idf_mirror_list", {})
+          .then((res) => {
+            const map = (res && res.mirrors) || {};
+            const normalizedMap = {};
+            Object.keys(map || {}).forEach((url) => {
+              normalizedMap[url] = this.normalizeLatencyValue(map[url]);
+            });
+            this.idf_latency_map = normalizedMap;
+            this.idf_last_updated = now;
+          })
+          .finally(() => {
+            this.loading_idf_latency = false;
+          });
+      }
+
+      // Tools
+      if (!this.ttlValid(this.tools_last_updated) && !this.loading_tools_latency) {
+        this.loading_tools_latency = true;
+        invoke("get_tools_mirror_list", {})
+          .then((res) => {
+            const map = (res && res.mirrors) || {};
+            const normalizedMap = {};
+            Object.keys(map || {}).forEach((url) => {
+              normalizedMap[url] = this.normalizeLatencyValue(map[url]);
+            });
+            this.tools_latency_map = normalizedMap;
+            this.tools_last_updated = now;
+          })
+          .finally(() => {
+            this.loading_tools_latency = false;
+          });
+      }
+
+      // PyPI
+      if (!this.ttlValid(this.pypi_last_updated) && !this.loading_pypi_latency) {
+        this.loading_pypi_latency = true;
+        invoke("get_pypi_mirror_list", {})
+          .then((res) => {
+            const map = (res && res.mirrors) || {};
+            const normalizedMap = {};
+            Object.keys(map || {}).forEach((url) => {
+              normalizedMap[url] = this.normalizeLatencyValue(map[url]);
+            });
+            this.pypi_latency_map = normalizedMap;
+            this.pypi_last_updated = now;
+          })
+          .finally(() => {
+            this.loading_pypi_latency = false;
+          });
+      }
+    },
+  },
+});
