@@ -90,50 +90,7 @@ export function runGUICustomInstallTest({
       ).to.be.true;
     });
 
-    // it("03- Should check prerequisites", async function () {
-    //   this.timeout(20000);
-    //   await eimRunner.clickButton("Start Configuration Wizard");
-    //   await new Promise((resolve) => setTimeout(resolve, 5000));
-    //   const prerequisitesList = await eimRunner.findByDataId(
-    //     "prerequisites-items-list"
-    //   );
-    //   const requisitesList = await prerequisitesList.getText();
-    //   expect(requisitesList).to.not.be.empty;
-    //   expect(requisitesList).to.not.include("❌");
-    //   let expectedRequisites =
-    //     os.platform() === "win32"
-    //       ? ["git"]
-    //       : [
-    //           "git",
-    //           "wget",
-    //           "flex",
-    //           "bison",
-    //           "gperf",
-    //           "ccache",
-    //           "dfu-util",
-    //           "libffi-dev",
-    //           "libusb-1.0-0",
-    //           "libssl-dev",
-    //           "libgcrypt20",
-    //           "libglib2.0-0",
-    //           "libpixman-1-0",
-    //           "libsdl2-2.0-0",
-    //           "libslirp0",
-    //         ];
-    //   for (let requisite of expectedRequisites) {
-    //     expect(requisitesList).to.include(requisite);
-    //   }
-    // });
-
-    // it("04- Should check python installation", async function () {
-    //   this.timeout(15000);
-    //   await eimRunner.clickButton("Continue to Next Step");
-    //   await new Promise((resolve) => setTimeout(resolve, 5000));
-    //   const result = await eimRunner.findByDataId("python-check-result");
-    //   expect(await result.getText()).to.include("Python Environment Ready");
-    // });
-
-    it("05- Should show targets list", async function () {
+    it("03- Should show targets list", async function () {
       this.timeout(45000);
       await eimRunner.clickButton("Start Configuration Wizard");
       await new Promise((resolve) => setTimeout(resolve, 15000));
@@ -178,7 +135,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("06- Should show IDF version list", async function () {
+    it("04- Should show IDF version list", async function () {
       this.timeout(15000);
       await eimRunner.clickButton("Continue with Selected Targets");
       await new Promise((resolve) => setTimeout(resolve, 4000));
@@ -212,7 +169,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("07- Should show IDF download mirrors", async function () {
+    it("05- Should show IDF download mirrors", async function () {
       this.timeout(15000);
       await eimRunner.clickButton("Continue Installation");
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -257,7 +214,7 @@ export function runGUICustomInstallTest({
         ));
     });
 
-    it("08- Should show tools download mirrors", async function () {
+    it("06- Should show tools download mirrors", async function () {
       this.timeout(10000);
       const toolsMirrorsList = await eimRunner.findByRelation(
         "parent",
@@ -328,7 +285,7 @@ export function runGUICustomInstallTest({
         ));
     });
 
-    it("09 - Should show PyPI download mirrors", async function () {
+    it("07- Should show PyPI download mirrors", async function () {
       this.timeout(10000);
       const pypiMirrorsList = await eimRunner.findByRelation(
         "parent",
@@ -408,7 +365,7 @@ export function runGUICustomInstallTest({
       );
     });
 
-    it("10- Should show installation path", async function () {
+    it("08- Should show installation path", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue with Selected Mirrors");
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -444,7 +401,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("12- Should install IDF using expert setup", async function () {
+    it("09- Should install IDF using expert setup", async function () {
       this.timeout(2730000);
 
       try {
@@ -477,7 +434,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("13- Should offer to save installation configuration", async function () {
+    it("10- Should offer to save installation configuration", async function () {
       this.timeout(15000);
 
       try {

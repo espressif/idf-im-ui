@@ -128,9 +128,9 @@ export function runCLIWizardInstallTest({
         ).to.include(version);
       }
       testRunner.process.write(" ");
-      for(let i=0; i<IDFDefaultVersionIndex; i++){
+      for (let i = 0; i < IDFDefaultVersionIndex; i++) {
         testRunner.process.write("\x1b[B");
-      };
+      }
       testRunner.process.write(" ");
 
       logger.info("Select IDF Version passed");
@@ -182,11 +182,10 @@ export function runCLIWizardInstallTest({
       const selectPyPIMirror = await testRunner.waitForOutput(
         "Select a PyPI mirror for download Python packages"
       );
-      expect(selectToolsMirror, "Failed to ask for PyPI download mirror").to.be
+      expect(selectPyPIMirror, "Failed to ask for PyPI download mirror").to.be
         .true;
 
       await new Promise((resolve) => setTimeout(resolve, 500));
-
 
       for (let mirror of Object.values(PYPIMIRRORS)) {
         expect(
@@ -221,7 +220,7 @@ export function runCLIWizardInstallTest({
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      
+
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
         if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
