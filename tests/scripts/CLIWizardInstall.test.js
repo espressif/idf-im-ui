@@ -4,7 +4,9 @@ import CLITestRunner from "../classes/CLITestRunner.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFAvailableVersions,
+  IDFDefaultVersionIndex,
   availableTargets,
   runInDebug,
 } from "../config.js";
@@ -125,6 +127,11 @@ export function runCLIWizardInstallTest({
           `Failed to offer installation for IDF version '${version}'`
         ).to.include(version);
       }
+      testRunner.process.write(" ");
+      for (let i = 0; i < IDFDefaultVersionIndex; i++) {
+        testRunner.process.write("\x1b[B");
+      }
+      testRunner.process.write(" ");
 
       logger.info("Select IDF Version passed");
       testRunner.output = "";
@@ -172,6 +179,26 @@ export function runCLIWizardInstallTest({
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 500));
 
+      const selectPyPIMirror = await testRunner.waitForOutput(
+        "Select a PyPI mirror for download Python packages"
+      );
+      expect(selectPyPIMirror, "Failed to ask for PyPI download mirror").to.be
+        .true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      for (let mirror of Object.values(PYPIMIRRORS)) {
+        expect(
+          testRunner.output,
+          `Failed to offer ${mirror} as a PyPI mirror option`
+        ).to.include(mirror);
+      }
+
+      logger.info("Select pypi mirror passed");
+      testRunner.output = "";
+      testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
       const selectInstallPath = await testRunner.waitForOutput(
         "Please select the ESP-IDF installation location"
       );
@@ -193,7 +220,7 @@ export function runCLIWizardInstallTest({
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      
+
       const startTime = Date.now();
       while (Date.now() - startTime < 3600000) {
         if (Date.now() - testRunner.lastDataTimestamp >= 600000) {

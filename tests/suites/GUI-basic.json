@@ -39,7 +39,8 @@
     "type": "version-management",
     "name": "GUI Version Management",
     "data": {
-      "idfList": "default|v5.4.3"
+      "idfList": "default|v5.4.3",
+      "installFolder": ".espcustom"
     }
   },
   {

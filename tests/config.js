@@ -12,6 +12,7 @@ import path from "path";
 // Define default values for offline tests
 let IDFDefaultVersion = "v5.5.1";
 let IDFAvailableVersions = ["master"];
+let IDFDefaultVersionIndex = 0;
 let availableTargets = [
   "esp32",
   "esp32s2",
@@ -38,14 +39,12 @@ try {
     if (idfVersions && idfVersions.length > 0) {
       IDFDefaultVersion =
         idfVersions.find(
-          (version) => version.old === false && version.pre_release !== true
+          (version) => version.old !== true && version.pre_release !== true && version.name !== 'latest'
         )?.name || IDFDefaultVersion;
       logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
-      IDFAvailableVersions.push(
-        ...idfVersions
-          .filter((version) => version.old === false)
-          .map((version) => version.name)
-      );
+      let IDFValidVersions = [...idfVersions.filter((v)=>v.old!==true && v.name !== 'latest').map((v)=>v.name)];
+      IDFDefaultVersionIndex = IDFValidVersions.indexOf(IDFDefaultVersion) === -1? IDFDefaultVersionIndex: IDFValidVersions.indexOf(IDFDefaultVersion);
+      IDFAvailableVersions.push(...IDFValidVersions);
       logger.info(`Available IDF Versions: ${IDFAvailableVersions.join(", ")}`);
     } else {
       logger.info("No IDF versions found in the response.");
@@ -71,6 +70,12 @@ const TOOLSMIRRORS = {
   github: "https://github.com",
   dl_com: "https://dl.espressif.com/github_assets",
   dl_cn: "https://dl.espressif.cn/github_assets",
+};
+const PYPIMIRRORS = {
+  pypi_org: "https://pypi.org/simple",
+  pypi_aliyun: "https://mirrors.aliyun.com/pypi/simple",
+  pypi_tsinghua: "https://pypi.tuna.tsinghua.edu.cn/simple",
+  pypi_ustc: "https://pypi.mirrors.ustc.edu.cn/simple"
 };
 
 // Default versions for EIM CLI and GUI for offline testing
@@ -128,7 +133,9 @@ logger.info(`Run in debug mode: ${runInDebug}`);
 export {
   IDFMIRRORS,
   TOOLSMIRRORS,
+  PYPIMIRRORS,
   IDFDefaultVersion,
+  IDFDefaultVersionIndex,
   IDFAvailableVersions,
   availableTargets,
   pathToEIMCLI,
