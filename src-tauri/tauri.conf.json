@@ -33,6 +33,30 @@
       "icons/icon.ico"
     ],
     "copyright": "Copyright © 2025 Espressif Systems. All rights reserved.",
+    "linux": {
+      "deb": {
+        "depends": [
+          "git",
+          "wget",
+          "flex",
+          "cmake",
+          "bison",
+          "gperf",
+          "ccache",
+          "libffi-dev",
+          "libssl-dev",
+          "dfu-util",
+          "libusb-1.0-0",
+          "libgcrypt20",
+          "libglib2.0-0",
+          "libpixman-1-0",
+          "libsdl2-2.0-0",
+          "libslirp0",
+          "python3 (>= 3.9)",
+          "python3 (<< 3.14)"
+        ]
+      }
+    },
     "macOS": {
       "entitlements": "../eim.entitlement",
       "exceptionDomain": "",

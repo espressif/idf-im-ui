@@ -980,6 +980,17 @@ jobs:
               sha256 "${{ steps.cli-checksums.outputs.macos_arm64_sha }}"
             end
 
+            depends_on "libgcrypt"
+            depends_on "glib"
+            depends_on "pixman"
+            depends_on "sdl2"
+            depends_on "libslirp"
+            depends_on "dfu-util"
+            depends_on "python@3.13" => :recommended
+            depends_on "python@3.12" => :recommended
+            depends_on "python@3.11" => :recommended
+            depends_on "python@3.10" => :recommended
+
             def install
               bin.install "eim"
             end
@@ -1004,6 +1015,17 @@ jobs:
               url "${{ steps.gui-checksums.outputs.macos_arm64_gui_url }}"
               sha256 "${{ steps.gui-checksums.outputs.macos_arm64_gui_sha }}"
             end
+
+            depends_on "libgcrypt"
+            depends_on "glib"
+            depends_on "pixman"
+            depends_on "sdl2"
+            depends_on "libslirp"
+            depends_on "dfu-util"
+            depends_on "python@3.13" => :recommended
+            depends_on "python@3.12" => :recommended
+            depends_on "python@3.11" => :recommended
+            depends_on "python@3.10" => :recommended
 
             name "ESP-IDF Installer and Manager"
             desc "GUI application for managing ESP-IDF installations"
