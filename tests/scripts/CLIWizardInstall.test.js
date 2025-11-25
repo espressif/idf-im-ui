@@ -180,7 +180,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectPyPIMirror = await testRunner.waitForOutput(
-        "Select a PyPI mirror for download Python packages"
+        "Select a PyPI mirror to download Python packages"
       );
       expect(selectPyPIMirror, "Failed to ask for PyPI download mirror").to.be
         .true;
