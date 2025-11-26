@@ -44,55 +44,10 @@ class CLITestRunner {
     }
   }
 
-  // Create isolated environment for network blocking
-  createIsolatedEnvironment() {
-    const proxyUrl = "http://127.0.0.1:8888";
-
-    // Set proxy environment variables to a monitoring server
-    this.environment.HTTP_PROXY = proxyUrl;
-    this.environment.HTTPS_PROXY = proxyUrl;
-    this.environment.http_proxy = proxyUrl;
-    this.environment.https_proxy = proxyUrl;
-    this.environment.FTP_PROXY = proxyUrl;
-    this.environment.ftp_proxy = proxyUrl;
-    this.environment.NO_PROXY = "";
-    this.environment.no_proxy = "";
-
-    // Additional environment variables that some tools respect
-    this.environment.REQUESTS_CA_BUNDLE = ""; // Disable SSL certificates for Python requests
-    this.environment.CURL_CA_BUNDLE = ""; // Disable SSL certificates for curl
-    this.environment.SSL_CERT_FILE = ""; // Disable SSL certificates
-    this.environment.SSL_CERT_DIR = ""; // Disable SSL certificates
-
-    // Rust/Cargo specific
-    this.environment.CARGO_HTTP_PROXY = proxyUrl;
-    this.environment.CARGO_HTTPS_PROXY = proxyUrl;
-
-    // Git specific
-    this.environment.GIT_PROXY_COMMAND = "";
-
-    // Node.js specific
-    this.environment.npm_config_proxy = proxyUrl;
-    this.environment.npm_config_https_proxy = proxyUrl;
-
-    // Python pip specific
-    this.environment.PIP_PROXY = proxyUrl;
-
-    logger.debug("Network isolation environment variables set");
-  }
-
-  async start({
-    command = this.command,
-    fullArgs = this.args,
-    isolatedEnvironment = false,
-  } = {}) {
+  async start({ command = this.command, fullArgs = this.args } = {}) {
     logger.debug(
       `Starting terminal emulator ${this.command} with args ${this.args}`
     );
-
-    if (isolatedEnvironment) {
-      this.createIsolatedEnvironment();
-    }
 
     this.process = pty.spawn(command, fullArgs, {
       name: "eim-terminal",

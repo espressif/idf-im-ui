@@ -13,6 +13,7 @@ export function runCLICustomInstallTest({
   offlineIDFVersion = null,
   offlinePkgName = null,
   testProxyMode = false,
+  proxyBlockList = [],
 }) {
   describe(`${id}- Run custom |`, function () {
     let testRunner = null;
@@ -35,7 +36,10 @@ export function runCLICustomInstallTest({
       }
       if (testProxyMode) {
         try {
-          proxy = new TestProxy({ mode: testProxyMode });
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
           await proxy.start();
         } catch (error) {
           logger.info("Error to start proxy server");
@@ -43,9 +47,7 @@ export function runCLICustomInstallTest({
         }
       }
       try {
-        await testRunner.start({
-          isolatedEnvironment: testProxyMode === false ? false : true,
-        });
+        await testRunner.start();
       } catch (error) {
         logger.info("Error to start terminal");
         logger.debug(`Error: ${error}`);
