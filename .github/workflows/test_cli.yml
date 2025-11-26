@@ -248,7 +248,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{inputs.run_self_hosted == 'true' && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}$${{ matrix.os == 'self-hosted' && '-CN' || '' }}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -257,13 +257,13 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${inputs.run_self_hosted == 'true' && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}
           path: |
             ./tests/results-*.json
             ./tests/*.log
 
       - name: Clean Up runner (Self-hosted MirrorRunner)
-        if: matrix.run_on == 'MirrorRunner' && inputs.run_self_hosted == 'true'
+        if: matrix.run_on == 'MirrorRunner' && matrix.os == 'self-hosted'
         run: |
           rm -rf ~/.local/share/eim
           rm -rf ~/runner/_work/idf-im-ui

@@ -64,7 +64,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3.13.8"
 
       - name: Download Build Info files
         uses: actions/download-artifact@v5
@@ -122,6 +122,7 @@ jobs:
       - name: Run IDF offline installation (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
+          python3 --version
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
           export BUILD_INFO_PATH="../artifacts"
@@ -140,15 +141,10 @@ jobs:
 
           ls ./artifacts/
 
-      - name: Update Python (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
-
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
         run: |
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:BUILD_INFO_PATH = "..\artifacts"

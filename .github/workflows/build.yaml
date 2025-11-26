@@ -861,7 +861,7 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))}}
+      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release')}}
       run_self_hosted: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER'))}}
 
   Autotest-GUI:
@@ -872,7 +872,7 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST'))}}
+      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release')}}
 
   update-release-info:
     name: Update Release Information
