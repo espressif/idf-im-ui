@@ -144,10 +144,6 @@ export default {
     }
   }),
   methods: {
-    normalizePingValue(value) {
-      if (value === undefined) return null; // not yet measured
-      return Number(value); // 0 => timeout, >0 => ms
-    },
     sortMirrorsByPing(list) {
       list.sort((a, b) => {
         const ap = (a.ping !== null && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY;
@@ -163,7 +159,7 @@ export default {
       const list = (urls || []).map((url) => ({
         value: url,
         label: url,
-        ping: this.normalizePingValue(latencyMap ? latencyMap[url] : undefined),
+        ping: (latencyMap && latencyMap[url] !== undefined) ? Number(latencyMap[url]) : null,
       }));
 
       if (type === 'idf') {
