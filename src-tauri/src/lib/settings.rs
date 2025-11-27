@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use config::{Config, ConfigError};
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -211,7 +210,7 @@ impl Settings {
             {
                 settings.wizard_all_questions = cli_settings_struct.wizard_all_questions;
             }
-            if cli_settings_struct.tools_mirror.is_some() && !cli_settings_struct.is_default("mirror") {
+            if cli_settings_struct.tools_mirror.is_some() && !cli_settings_struct.is_default("tools_mirror") {
                 settings.tools_mirror = cli_settings_struct.tools_mirror.clone();
             }
             if cli_settings_struct.idf_mirror.is_some()
@@ -515,41 +514,5 @@ impl Settings {
         actual_version,
         using_existing_idf,
       })
-    }
-
-    /// Compute the latency map for the tools mirror
-    pub async fn get_tools_mirror_latency_map(&self) -> Result<HashMap<String, u32>> {
-        let available_mirrors = crate::get_idf_tools_mirrors_list()
-            .to_vec()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-        let mirror_latency_map =
-            crate::utils::calculate_mirror_latency_map(&available_mirrors).await;
-        Ok(mirror_latency_map)
-    }
-
-    /// Compute the latency map for the IDF mirror
-    pub async fn get_idf_mirror_latency_map(&self) -> Result<HashMap<String, u32>> {
-        let available_mirrors = crate::get_idf_mirrors_list()
-            .to_vec()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-        let mirror_latency_map =
-            crate::utils::calculate_mirror_latency_map(&available_mirrors).await;
-        Ok(mirror_latency_map)
-    }
-
-    /// Compute the latency map for the PyPI mirror
-    pub async fn get_pypi_mirror_latency_map(&self) -> Result<HashMap<String, u32>> {
-        let available_mirrors = crate::get_pypi_mirrors_list()
-            .to_vec()
-            .iter()
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
-        let mirror_latency_map =
-            crate::utils::calculate_mirror_latency_map(&available_mirrors).await;
-        Ok(mirror_latency_map)
     }
 }

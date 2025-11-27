@@ -1,4 +1,5 @@
 use std::{ fs, path::Path};
+use std::collections::HashMap;
 
 /// Checks if a path is empty or doesn't exist
 ///
@@ -38,6 +39,28 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
         // Path is a file which is conflicting with the directory
         false
     }
+}
+
+pub async fn get_best_mirror(mirror_latency_map: &HashMap<String, Option<u32>>) -> Option<String> {
+    log::info!("Selecting best mirror from latency map: {:?}", mirror_latency_map);
+    let mut best_mirror: Option<String> = None;
+    let mut lowest_latency: Option<u32> = None;
+
+    for (mirror, latency) in mirror_latency_map {
+        if latency.is_none() {
+            log::warn!("Mirror {} has no latency data, skipping", mirror);
+            continue;
+        }
+        let latency_value = latency.unwrap();
+        log::info!("Mirror: {}, Latency: {}", mirror, latency_value);
+        if lowest_latency.is_none() || latency_value < lowest_latency.unwrap() {
+            lowest_latency = Some(latency_value);
+            best_mirror = Some(mirror.clone());
+        }
+    }
+
+    log::info!("Best mirror selected: {:?}", best_mirror);
+    best_mirror
 }
 
 #[cfg(test)]
