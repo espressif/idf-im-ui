@@ -1,4 +1,4 @@
-use crate::gui::ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar};
+use crate::gui::{ui::{InstallationProgress, InstallationStage, MessageLevel, ProgressBar, emit_installation_event, emit_log_message, send_message, send_tools_message}, utils::get_best_mirror};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
@@ -95,6 +95,7 @@ pub async fn setup_tools(
     offline_archive_dir: Option<&Path>,
 ) -> Result<Vec<String>> {
     info!("Setting up tools...");
+    let is_simple_installation = crate::gui::app_state::is_simple_installation(&app_handle);
 
     let version_path = idf_path
         .parent()
@@ -312,13 +313,23 @@ pub async fn setup_tools(
         }
     };
 
+    let tools_mirror = settings.tools_mirror.as_deref().unwrap();
+    let mut tools_mirror_to_use: Option<String> = Some(tools_mirror.to_string());
+    if is_simple_installation && settings.is_default("tools_mirror") {
+        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&idf_im_lib::get_idf_tools_mirrors_list().to_vec()).await;
+        let best_mirror = get_best_mirror(&mirror_latency_map).await;
+        if best_mirror.is_some() {
+            tools_mirror_to_use = Some(best_mirror.unwrap());
+        }
+    }
+
     // Use the library's setup_tools function
     let installed_tools_list = idf_tools::setup_tools(
         &tools,
         settings.target.clone().unwrap_or_default(),
         &PathBuf::from(&tool_setup.download_dir),
         &PathBuf::from(&tool_setup.install_dir),
-        settings.mirror.as_deref(),
+        tools_mirror_to_use.as_deref(),
         progress_callback,
     )
     .await
@@ -353,6 +364,16 @@ pub async fn setup_tools(
       }
     };
 
+    let pypi_mirror = settings.pypi_mirror.as_deref().unwrap();
+    let mut pypi_mirror_to_use: Option<String> = Some(pypi_mirror.to_string());
+    if is_simple_installation && settings.is_default("pypi_mirror") {
+        let pypi_mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&idf_im_lib::get_pypi_mirrors_list().to_vec()).await;
+        let best_pypi_mirror = get_best_mirror(&pypi_mirror_latency_map).await;
+        if best_pypi_mirror.is_some() {
+            pypi_mirror_to_use = Some(best_pypi_mirror.unwrap());
+        }
+    }
+    
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
@@ -361,7 +382,7 @@ pub async fn setup_tools(
         true, //TODO: actually read from config
         &settings.idf_features.clone().unwrap_or_default(),
         offline_archive_dir, // Offline archive directory
-        &settings.pypi_mirror, // PyPI mirror
+        &pypi_mirror_to_use, // PyPI mirror
     ).await {
         Ok(_) => {
             info!("Python environment installed");

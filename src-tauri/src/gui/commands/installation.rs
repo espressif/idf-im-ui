@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{InstallationProgress, InstallationStage, MessageLevel, emit_installation_event, emit_log_message}, utils::{get_best_mirror, is_path_empty_or_nonexistent}};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -17,7 +17,7 @@ use serde_json::json;
 
 use idf_im_lib::settings::Settings;
 use crate::gui::{
-  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status},
+  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status, set_is_simple_installation},
   commands,
   ui::{
       send_install_progress_message, send_message, send_simple_setup_message,
@@ -253,21 +253,32 @@ app_handle: &AppHandle,
         }
     });
 
-    let default_mirror = rust_i18n::t!("gui.installation.default_mirror").to_string();
-    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror);
+    let default_mirror_str = rust_i18n::t!("gui.installation.default_mirror").to_string();
+    let is_simple_installation = app_state::is_simple_installation(&app_handle);
+    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror_str);
+    let mut mirror_to_use: String = mirror.to_string();
+
+    if is_simple_installation && mirror == &default_mirror_str {
+        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&idf_im_lib::get_idf_mirrors_list().to_vec()).await;
+        let best_mirror = get_best_mirror(&mirror_latency_map).await;
+        if best_mirror.is_some() {
+            mirror_to_use = best_mirror.unwrap();
+        }
+    }
+
     emit_log_message(
         app_handle,
         MessageLevel::Info,
         rust_i18n::t!("gui.installation.cloning_from_mirror",
             version = version,
-            mirror = mirror).to_string(),
+            mirror = mirror_to_use.as_str()).to_string(),
     );
 
     let result = idf_im_lib::get_esp_idf(
         idf_path.to_str().unwrap(),
         settings.repo_stub.as_deref(),
         version,
-        settings.idf_mirror.as_deref(),
+        Some(mirror_to_use.as_str()),
         settings.recurse_submodules.unwrap_or_default(),
         tx,
     );
@@ -353,6 +364,7 @@ pub async fn install_single_version(
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    set_is_simple_installation(&app_handle, false)?;
 
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
@@ -774,7 +786,8 @@ fn is_process_running(pid: u32) -> bool {
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
-
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    set_is_simple_installation(&app_handle, false)?;
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
@@ -973,6 +986,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
 pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    app_state::set_is_simple_installation(&app_handle, true)?;
     println!("Starting simple setup");
     let settings = match get_locked_settings(&app_handle) {
         Ok(s) => s,

@@ -321,7 +321,7 @@ async fn download_and_extract_tools(
         config.target.clone().unwrap(),
         download_dir,
         install_dir,
-        config.mirror.as_deref(),
+        config.tools_mirror.as_deref(),
         progress_callback,
     )
     .await
@@ -397,7 +397,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     config = select_targets_and_versions(config).await?;
 
     // mirrors select
-    config = select_mirrors(config)?;
+    config = select_mirrors(config).await?;
 
     config = select_installation_path(config)?;
 
