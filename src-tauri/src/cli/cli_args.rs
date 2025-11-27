@@ -319,7 +319,8 @@ impl IntoIterator for InstallArgs {
                 "tools_json_file".to_string(),
                 self.tools_json_file.map(Into::into),
             ),
-            ("mirror".to_string(), self.mirror.map(Into::into)),
+            // map CLI flag `-m|--mirror` to settings field `tools_mirror`
+            ("tools_mirror".to_string(), self.mirror.map(Into::into)),
             ("idf_mirror".to_string(), self.idf_mirror.map(Into::into)),
             ("pypi_mirror".to_string(), self.pypi_mirror.map(Into::into)),
             (

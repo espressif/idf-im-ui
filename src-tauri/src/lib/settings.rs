@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use config::{Config, ConfigError};
 use log::warn;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};

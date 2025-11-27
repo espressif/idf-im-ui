@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{InstallationProgress, InstallationStage, MessageLevel, emit_installation_event, emit_log_message}, utils::{get_best_mirror, is_path_empty_or_nonexistent}};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -140,11 +140,11 @@ async fn download_idf(
                     if value != last_percentage && (value - last_percentage) >= 10 {
                         last_percentage = value;
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                                stage: InstallationStage::Download,
-                                percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
+                            stage: InstallationStage::Download,
+                            percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
                             message: rust_i18n::t!("gui.installation.cloning_repository", version = version_clone.clone()).to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_progress", percentage = value).to_string()),
-                                version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                         });
                     }
                 }
@@ -165,14 +165,14 @@ async fn download_idf(
                     let total_progress = submodule_base_progress + current_submodule_progress as u32 + individual_progress as u32;
 
                     emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: total_progress.min(65),
+                        stage: InstallationStage::Download,
+                        percentage: total_progress.min(65),
                         message: rust_i18n::t!("gui.installation.downloading_submodule", name = name.clone()).to_string(),
                         detail: Some(rust_i18n::t!("gui.installation.submodule_detail",
-                                    current = completed_submodules + 1,
-                                    total = total_estimated_submodules,
+                            current = completed_submodules + 1,
+                            total = total_estimated_submodules,
                             percentage = value).to_string()),
-                            version: Some(version_clone.clone()),
+                        version: Some(version_clone.clone()),
                     });
                 }
 
@@ -188,13 +188,13 @@ async fn download_idf(
 
                     let name_display = name.split('/').last().unwrap_or(&name).replace("_", " ");
                     emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: submodule_progress.min(65) as u32,
+                        stage: InstallationStage::Download,
+                        percentage: submodule_progress.min(65) as u32,
                         message: rust_i18n::t!("gui.installation.completed_submodule", name = name_display).to_string(),
                         detail: Some(rust_i18n::t!("gui.installation.submodule_progress",
-                                    completed = completed_submodules,
+                            completed = completed_submodules,
                             total = total_estimated_submodules).to_string()),
-                            version: Some(version_clone.clone()),
+                        version: Some(version_clone.clone()),
                     });
 
                     emit_log_message(&app_handle_clone, MessageLevel::Info,
@@ -210,11 +210,11 @@ async fn download_idf(
                     // If no submodules were processed, this means we're done with everything
                     if !has_submodules {
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                                stage: InstallationStage::Extract,
-                                percentage: 65,
+                            stage: InstallationStage::Extract,
+                            percentage: 65,
                             message: rust_i18n::t!("gui.installation.download_completed_no_submodules").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_cloned").to_string()),
-                                version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                         });
                         break;
                     }
@@ -222,22 +222,22 @@ async fn download_idf(
                     else if completed_submodules > 0 {
                         // We have processed some submodules, likely we're done
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                                stage: InstallationStage::Extract,
-                                percentage: 65,
+                            stage: InstallationStage::Extract,
+                            percentage: 65,
                             message: rust_i18n::t!("gui.installation.download_completed").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.repository_and_submodules", count = completed_submodules).to_string()),
-                                version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                         });
                         break;
                     }
                     // If we got Finish but haven't seen submodules yet, just note main repo is done
                     else {
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                                stage: InstallationStage::Download,
-                                percentage: 10,
+                            stage: InstallationStage::Download,
+                            percentage: 10,
                             message: rust_i18n::t!("gui.installation.main_cloned_waiting").to_string(),
                             detail: Some(rust_i18n::t!("gui.installation.waiting_submodules").to_string()),
-                                version: Some(version_clone.clone()),
+                            version: Some(version_clone.clone()),
                         });
                         // Don't break - keep waiting for submodules
                     }
@@ -248,8 +248,8 @@ async fn download_idf(
                     if main_repo_finished {
                         let final_percentage = if has_submodules { 65 } else { 65 };
                         emit_installation_event(&app_handle_clone, InstallationProgress {
-                                stage: InstallationStage::Extract,
-                                percentage: final_percentage,
+                            stage: InstallationStage::Extract,
+                            percentage: final_percentage,
                             message: rust_i18n::t!("gui.installation.download_completed").to_string(),
                                 detail: Some(if has_submodules {
                                 rust_i18n::t!("gui.installation.submodules_processed", count = completed_submodules).to_string()
@@ -266,28 +266,24 @@ async fn download_idf(
     });
 
     let default_mirror_str = rust_i18n::t!("gui.installation.default_mirror").to_string();
-    let default_mirror = settings
-        .idf_mirror
-        .as_deref()
-        .unwrap_or(&default_mirror_str);
-    let mirror_latency_map = settings.get_idf_mirror_latency_map().await.unwrap();
-    let best_mirror = mirror_latency_map
-        .iter()
-        .min_by_key(|(_, latency)| *latency)
-        .unwrap()
-        .0
-        .clone();
-    let mirror = match best_mirror.is_empty() {
-        true => default_mirror,
-        false => best_mirror.as_str(),
-    };
+    let is_simple_installation = app_state::is_simple_installation(&app_handle);
+    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror_str);
+    let mut mirror_to_use: String = mirror.to_string();
+
+    if is_simple_installation && mirror == &default_mirror_str {
+        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&idf_im_lib::get_idf_mirrors_list().to_vec()).await;
+        let best_mirror = get_best_mirror(&mirror_latency_map).await;
+        if best_mirror.is_some() {
+            mirror_to_use = best_mirror.unwrap();
+        }
+    }
 
     emit_log_message(
         app_handle,
         MessageLevel::Info,
         rust_i18n::t!("gui.installation.cloning_from_mirror",
             version = version,
-            mirror = mirror).to_string(),
+            mirror = mirror_to_use.as_str()).to_string(),
     );
 
     // Clone values needed for the blocking task
@@ -1008,6 +1004,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
 pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
+    app_state::set_is_simple_installation(&app_handle, true)?;
     println!("Starting simple setup");
     let settings = match get_locked_settings(&app_handle) {
         Ok(s) => s,

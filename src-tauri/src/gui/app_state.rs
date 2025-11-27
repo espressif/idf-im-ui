@@ -20,6 +20,29 @@ pub struct AppState {
     pub wizard_data: Mutex<WizardData>,
     pub settings: Mutex<Settings>,
     pub is_installing: Mutex<bool>,
+    pub is_simple_installation: Mutex<bool>,
+}
+
+pub fn set_is_simple_installation(app_handle: &AppHandle, is_simple: bool) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    let mut simple_installation = app_state
+        .is_simple_installation
+        .lock()
+        .map_err(|_| "Lock error".to_string())?;
+    *simple_installation = is_simple;
+    Ok(())
+}
+
+pub fn is_simple_installation(app_handle: &AppHandle) -> bool {
+    let app_state = app_handle.state::<AppState>();
+    app_state
+        .is_simple_installation
+        .lock()
+        .map(|guard| *guard)
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire is_simple_installation lock, assuming false");
+            false
+        })
 }
 
 /// Gets the current settings from the app state

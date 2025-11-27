@@ -1,3 +1,17 @@
+use crate::{
+    command_executor::execute_command,
+    idf_config::{IdfConfig, IdfInstallation},
+    idf_tools::read_and_parse_tools_file,
+    single_version_post_install,
+    version_manager::get_default_config_path,
+};
+use anyhow::{anyhow, Result, Error};
+use git2::Repository;
+use log::{debug, error, info, warn};
+use rust_search::SearchBuilder;
+use serde::{Deserialize, Serialize};
+use tar::Archive;
+use zstd::{decode_all, Decoder};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
@@ -14,23 +28,7 @@ use gix::prelude::*;
 use std::sync::atomic::AtomicBool;
 use log::{debug, error, info, warn};
 use regex::Regex;
-use reqwest::header::{RANGE, USER_AGENT};
-use rust_search::SearchBuilder;
-use serde::{Deserialize, Serialize};
-use tar::Archive;
 use url::Url;
-use zstd::{decode_all, Decoder};
-
-use crate::{
-    command_executor::execute_command,
-    idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file,
-    single_version_post_install,
-    version_manager::get_default_config_path,
-};
-
-/// A tuple containing a mirror URL and its measured latency.
-pub type MirrorEntry = (String, u32);
 
 /// This function retrieves the path to the git executable.
 ///
@@ -757,52 +755,47 @@ fn is_retryable_error(error: &io::Error) -> bool {
         _ => false,
     }
 }
-/// Returns the base domain from a full URL.
+/// Returns the base domain including port if present from a full URL.
 fn get_base_url(url_str: &str) -> Option<String> {
     let url = Url::parse(url_str).ok()?;
     let scheme = url.scheme();
     let host = url.host_str()?;
+    let port = url.port();
+    if port.is_some() {
+        return Some(format!("{}://{}:{}", scheme, host, port.unwrap()));
+    }
+
     Some(format!("{}://{}", scheme, host))
 }
 
 /// Measures response latency (in ms) for the HEAD request to the base domain of
 /// a given URL. Returns `Some(latency_ms)` if successful, or `None` if
 /// unreachable.
-pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Option<u32> {
+pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Result<u32, anyhow::Error> {
     // Extract base URL (e.g., "https://example.com")
-    let base_url = get_base_url(url)?;
+    let base_url = get_base_url(url);
 
     // Build the HTTP client
     let client = reqwest::Client::builder()
         .timeout(timeout)
         .redirect(reqwest::redirect::Policy::limited(5))
         .build()
-        .ok()?;
+        .ok();
 
-    // Try HEAD first
+    // Try HEAD request
     let start = Instant::now();
-    match client.head(&base_url).send().await {
+    if base_url.is_none() {
+        return Err(anyhow!("Invalid base URL: {}", url));
+    }
+    
+    match client.unwrap().head(&base_url.unwrap()).send().await {
         Ok(resp) if resp.status().is_success() => {
-            return Some(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
+            return Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
         }
         _ => {
-            // Fallback to GET
-            let start_get = Instant::now();
-            match client.get(&base_url).send().await {
-                Ok(resp) if resp.status().is_success() => {
-                    return Some(start_get.elapsed().as_millis().min(u32::MAX as u128) as u32);
-                }
-                Ok(resp) => {
-                    warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
-                }
-                Err(e) => {
-                    warn!("Mirror ping failed for {}: {:?}", base_url, e);
-                }
-            }
+            return Err(anyhow!("Mirror ping failed with HEAD for {}", url));
         }
     }
-
-    None
 }
 
 /// Measures response latency (in ms) for the GET request to the base domain of
@@ -822,7 +815,7 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
     let start_get = Instant::now();
     match client.get(&base_url).send().await {
         Ok(resp) if resp.status().is_success() => {
-            return Some(start_get.elapsed().as_millis().min(u32::MAX as u128) as u32);
+            return Some(start_get.elapsed().as_millis() as u32);
         }
         Ok(resp) => {
             warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
@@ -835,8 +828,8 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
     None
 }
 
-/// Return URL -> score (lower is better). Unreachable mirrors get u32::MAX.
-pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String, u32> {
+/// Return URL -> score (lower is better). Unreachable mirrors get None.
+pub async fn calculate_mirror_latency_map(mirrors: &Vec<&str>) -> HashMap<String, Option<u32>> {
     let timeout = Duration::from_millis(3000);
     info!(
         "Starting mirror latency checks ({} candidates)...",
@@ -845,19 +838,15 @@ pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String,
     let mut mirror_latency_map = HashMap::new();
     let mut head_latency_failed = false;
 
-    for m in mirrors {
-        let url = m.as_str();
+    for url in mirrors.iter() {
         if !head_latency_failed {
             match measure_url_score_head(url, timeout).await {
-                Some(score) => {
+                Ok(score) => {
                     info!("Mirror score: {} -> {}", url, score);
-                    mirror_latency_map.insert(m.clone(), score);
+                    mirror_latency_map.insert(url.to_string(), Some(score));
                 }
-                None => {
-                    info!(
-                        "Unable to measure head latency for {}: {:?}",
-                        url, timeout
-                    );
+                Err(e) => {
+                    warn!("{}", e.to_string());
                     head_latency_failed = true;
                 }
             }
@@ -871,55 +860,20 @@ pub async fn calculate_mirror_latency_map(mirrors: &[String]) -> HashMap<String,
     // and we also clear the map to avoid any potential contamination
     if head_latency_failed {
         mirror_latency_map.clear();
-        for m in mirrors {
-            let url = m.as_str();
+        for url in mirrors.iter() {
             match measure_url_score_get(url, timeout).await {
                 Some(score) => {
                     info!("Mirror get score: {} -> {}", url, score);
-                    mirror_latency_map.insert(m.clone(), score);
+                    mirror_latency_map.insert(url.to_string(), Some(score));
                 }
                 None => {
                     info!("Unable to measure get latency for {}: {:?}", url, timeout);
-                    mirror_latency_map.insert(m.clone(), u32::MAX);
+                    mirror_latency_map.insert(url.to_string(), None);
                 }
             }
         }
     }
     mirror_latency_map
-}
-
-/// Sort mirrors by measured latency (ascending), using u32::MAX for timeouts.
-pub async fn sorted_mirror_entries(mirrors: Vec<String>) -> Vec<MirrorEntry> {
-    let latency_map = calculate_mirror_latency_map(&mirrors).await;
-    let mut entries: Vec<MirrorEntry> = mirrors
-        .into_iter()
-        .map(|m| {
-            let score = *latency_map.get(&m).unwrap_or(&u32::MAX);
-            (m, score)
-        })
-        .collect();
-
-    entries.sort_by_key(|e| e.1);
-    entries
-}
-
-/// Turn `(url, latency)` tuples into display strings like `https://... (123 ms)` or `(... timeout)`.
-pub fn mirror_entries_to_display(entries: &[MirrorEntry]) -> Vec<String> {
-    entries
-        .iter()
-        .map(|(u, s)| {
-            if *s == u32::MAX {
-                format!("{u} (timeout)")
-            } else {
-                format!("{u} ({s} ms)")
-            }
-        })
-        .collect()
-}
-
-/// Strip the latency suffix back to a plain URL.
-pub fn url_from_display_line(selected: &str) -> String {
-    selected.split(" (").next().unwrap_or(selected).to_string()
 }
 
 
@@ -1443,65 +1397,22 @@ set(IDF_VERSION_MAJOR 5)
     async fn test_measure_url_score_invalid_url() {
         // Invalid URL should short-circuit (no network) and return None
         let res = measure_url_score_head("://", std::time::Duration::from_millis(50)).await;
-        assert!(res.is_none());
+        assert!(res.is_err());
     }
 
     #[tokio::test]
     async fn test_calculate_mirror_latency_map_with_invalid_urls() {
         // Invalid URLs should be mapped to u32::MAX deterministically
-        let mirrors = vec![
-            "not a url".to_string(),
-            "://".to_string(),
-            "file:///not-applicable".to_string(),
+        let mirrors: &'static [&'static str] = &[
+            "not a url",
+            "://",
+            "file:///not-applicable",
         ];
-        let map = calculate_mirror_latency_map(&mirrors).await;
+
+        let map = calculate_mirror_latency_map(&mirrors.to_vec()).await;
         assert_eq!(map.len(), 3);
-        for m in mirrors {
-            assert_eq!(map.get(&m), Some(&u32::MAX));
+        for m in mirrors.iter() {
+            assert_eq!(map.get(&m.to_string()), Some(&None));
         }
-    }
-
-    #[tokio::test]
-    async fn test_sorted_mirror_entries_all_invalid_preserves_order() {
-        let mirrors = vec![
-            "not a url".to_string(),
-            "file:///not-applicable".to_string(),
-            "://".to_string(),
-        ];
-        let entries = sorted_mirror_entries(mirrors.clone()).await;
-        assert_eq!(entries.len(), 3);
-        // All invalid -> all scores should be u32::MAX
-        assert!(entries.iter().all(|(_, s)| *s == u32::MAX));
-        // Sort is stable for equal keys; order of URLs should match input
-        let ordered_urls: Vec<String> = entries.into_iter().map(|(u, _)| u).collect();
-        assert_eq!(ordered_urls, mirrors);
-    }
-
-    #[test]
-    fn test_mirror_entries_to_display_formats() {
-        let entries: Vec<MirrorEntry> = vec![
-            ("https://example.com".to_string(), 123),
-            ("https://bad.example".to_string(), u32::MAX),
-        ];
-        let display = mirror_entries_to_display(&entries);
-        assert_eq!(display[0], "https://example.com (123 ms)");
-        assert_eq!(display[1], "https://bad.example (timeout)");
-    }
-
-    #[test]
-    fn test_url_from_display_line_roundtrip() {
-        assert_eq!(
-            url_from_display_line("https://example.com (123 ms)"),
-            "https://example.com"
-        );
-        assert_eq!(
-            url_from_display_line("https://example.com (timeout)"),
-            "https://example.com"
-        );
-        // If there is no suffix, it should return the whole string unchanged
-        assert_eq!(
-            url_from_display_line("https://example.com"),
-            "https://example.com"
-        );
     }
 }

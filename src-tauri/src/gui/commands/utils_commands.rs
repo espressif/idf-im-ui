@@ -13,7 +13,7 @@ use tauri::AppHandle;
 use num_cpus;
 use anyhow::{Result};
 
-use crate::gui;
+use crate::gui::{self, app_state};
 use crate::gui::utils::is_path_empty_or_nonexistent;
 
 #[cfg(windows)]

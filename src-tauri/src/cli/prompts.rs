@@ -192,7 +192,7 @@ async fn select_single_mirror<FGet, FSet>(
     field_name: &str,        // e.g. "idf_mirror"
     get_value: FGet,         // e.g. |c: &Settings| &c.idf_mirror
     set_value: FSet,         // e.g. |c: &mut Settings, v| c.idf_mirror = Some(v)
-    candidates: Vec<String>, // list of mirror URLs
+    candidates: &[&str], // list of mirror URLs
     wizard_key: &str,        // e.g. "wizard.idf.mirror"
     log_prefix: &str,        // e.g. "IDF", "Tools", "PyPI"
 ) -> Result<(), String>
@@ -200,27 +200,26 @@ where
     FGet: Fn(&Settings) -> &Option<String>,
     FSet: Fn(&mut Settings, String),
 {
-    let interactive = config.non_interactive == Some(false);
+    // Interactive by default when non_interactive is None
+    let interactive = !config.non_interactive.unwrap_or_default();
     let wizard_all = config.wizard_all_questions.unwrap_or_default();
     let current = get_value(config);
     let needs_value = current.is_none() || config.is_default(field_name);
 
-    // Measure and sort mirrors by latency
-    let entries = sorted_mirror_entries(candidates).await;
-
+    // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
-        // Interactive mode: show list and let user pick
+        let entries = sorted_mirror_entries(candidates).await;
         let display = mirror_entries_to_display(&entries);
         let selected = generic_select(wizard_key, &display)?;
         let url = url_from_display_line(&selected);
         set_value(config, url);
     } else if needs_value {
-        // Non-interactive or wizard not requesting this: pick best automatically
+        let entries = sorted_mirror_entries(candidates).await;
         if let Some((url, score)) = entries.first() {
-            if *score == u32::MAX {
+            if score.is_none() {
                 info!("Selected {log_prefix} mirror: {url} (timeout)");
             } else {
-                info!("Selected {log_prefix} mirror: {url} ({score} ms)");
+                info!("Selected {log_prefix} mirror: {url} ({:?} ms)", score.unwrap());
             }
             set_value(config, url.clone());
         }
@@ -231,10 +230,7 @@ where
 
 pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
     // IDF mirror
-    let idf_candidates: Vec<String> = idf_im_lib::get_idf_mirrors_list()
-        .iter()
-        .map(|&s| s.to_string())
-        .collect();
+    let idf_candidates = idf_im_lib::get_idf_mirrors_list();
 
     select_single_mirror(
         &mut config,
@@ -248,14 +244,11 @@ pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
     .await?;
 
     // Tools mirror
-    let tools_candidates: Vec<String> = idf_im_lib::get_idf_tools_mirrors_list()
-        .iter()
-        .map(|&s| s.to_string())
-        .collect();
+    let tools_candidates = idf_im_lib::get_idf_tools_mirrors_list();
 
     select_single_mirror(
         &mut config,
-        "mirror",
+        "tools_mirror",
         |c: &Settings| &c.tools_mirror,
         |c: &mut Settings, v| c.tools_mirror = Some(v),
         tools_candidates,
@@ -265,10 +258,7 @@ pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
     .await?;
 
     // PyPI mirror
-    let pypi_candidates: Vec<String> = idf_im_lib::get_pypi_mirrors_list()
-        .iter()
-        .map(|&s| s.to_string())
-        .collect();
+    let pypi_candidates = idf_im_lib::get_pypi_mirrors_list();
 
     select_single_mirror(
         &mut config,

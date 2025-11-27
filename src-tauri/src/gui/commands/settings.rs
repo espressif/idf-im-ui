@@ -220,16 +220,16 @@ pub async fn get_idf_mirror_list(app_handle: AppHandle) -> Value {
       }
   };
 
-    let mirror = settings.idf_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
+  let mirror = settings.idf_mirror.clone().unwrap_or_default();
+  let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
 
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
+  if !available_mirrors.contains(&mirror.as_str()) {
+     let mut new_mirrors = vec![mirror.as_str()];
+     new_mirrors.extend(available_mirrors);
+     available_mirrors = new_mirrors;
   }
 
-    let mirror_latency_map = settings.get_idf_mirror_latency_map().await.unwrap();
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
 
   json!({
     "mirrors": mirror_latency_map
@@ -294,16 +294,16 @@ pub async fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
       }
   };
 
-    let mirror = settings.tools_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
+  let mirror = settings.tools_mirror.clone().unwrap_or_default();
+  let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
 
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.contains(&mirror.as_str()) {
+      let mut new_mirrors = vec![mirror.as_str()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
-    let mirror_latency_map = settings.get_tools_mirror_latency_map().await.unwrap();
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
   json!({
     "mirrors": mirror_latency_map
   })
@@ -341,8 +341,8 @@ pub fn get_tools_mirror_urls(app_handle: AppHandle) -> Value {
 /// Sets the selected tools mirror
 #[tauri::command]
 pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
-    info!("Setting tools mirror: {}", mirror);
-    update_settings(&app_handle, |settings| {
+  info!("Setting tools mirror: {}", mirror);
+  update_settings(&app_handle, |settings| {
       settings.tools_mirror = Some(mirror);
   })?;
 
@@ -368,16 +368,16 @@ pub async fn get_pypi_mirror_list(app_handle: AppHandle) -> Value {
       }
   };
 
-    let mirror = settings.pypi_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
+  let mirror = settings.pypi_mirror.clone().unwrap_or_default();
+  let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
 
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
+  if !available_mirrors.contains(&mirror.as_str()) {
+      let mut new_mirrors = vec![mirror.as_str()];
       new_mirrors.extend(available_mirrors);
       available_mirrors = new_mirrors;
   }
 
-    let mirror_latency_map = settings.get_pypi_mirror_latency_map().await.unwrap();
+  let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&available_mirrors).await;
   json!({
     "mirrors": mirror_latency_map
   })
