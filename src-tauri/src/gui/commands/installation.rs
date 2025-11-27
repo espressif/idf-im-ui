@@ -17,7 +17,7 @@ use serde_json::json;
 
 use idf_im_lib::settings::Settings;
 use crate::gui::{
-  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status},
+  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status, set_is_simple_installation},
   commands,
   ui::{
       send_install_progress_message, send_message, send_simple_setup_message,
@@ -239,12 +239,12 @@ app_handle: &AppHandle,
                             stage: InstallationStage::Extract,
                             percentage: final_percentage,
                             message: rust_i18n::t!("gui.installation.download_completed").to_string(),
-                                detail: Some(if has_submodules {
+                            detail: Some(if has_submodules {
                                 rust_i18n::t!("gui.installation.submodules_processed", count = completed_submodules).to_string()
-                                } else {
-                                    rust_i18n::t!("gui.installation.repository_cloned").to_string()
-                                }),
-                                version: Some(version_clone.clone()),
+                            } else {
+                                rust_i18n::t!("gui.installation.repository_cloned").to_string()
+                            }),
+                            version: Some(version_clone.clone()),
                         });
                     }
                     break;
@@ -363,6 +363,9 @@ pub async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    set_is_simple_installation(&app_handle, false)?;
+
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
@@ -783,7 +786,8 @@ fn is_process_running(pid: u32) -> bool {
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
-
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    set_is_simple_installation(&app_handle, false)?;
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
@@ -982,6 +986,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
 pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
     app_state::set_is_simple_installation(&app_handle, true)?;
     println!("Starting simple setup");
     let settings = match get_locked_settings(&app_handle) {
