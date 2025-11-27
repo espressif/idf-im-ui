@@ -8,6 +8,10 @@ use std::{
     fmt::Write,
     time::{Duration, Instant},
 };
+use idf_im_lib::utils::{calculate_mirror_latency_map};
+
+/// A tuple containing a mirror URL and its measured latency.
+pub type MirrorEntry = (String, Option<u32>);
 
 pub fn run_with_spinner<F, T>(func: F) -> T
 where
@@ -139,4 +143,35 @@ pub async fn track_cli_event(event_name: &str, additional_data: Option<serde_jso
       "eim_version": EIM_VERSION,
       "additional_data": additional_data
     })).await;
+}
+
+/// Sort mirrors by measured latency (ascending), using None for timeouts.
+pub async fn sorted_mirror_entries(mirrors: &[&str]) -> Vec<MirrorEntry> {
+    let latency_map = calculate_mirror_latency_map(&mirrors.to_vec()).await;
+    let mut entries: Vec<MirrorEntry> = Vec::new();
+    for (key, value) in latency_map.iter() {
+        entries.push((key.clone(), value.clone()));
+    }
+
+    entries.sort_by_key(|e| e.1);
+    entries
+}
+
+/// Turn `(url, latency)` tuples into display strings like `https://... (123 ms)` or `(... timeout)`.
+pub fn mirror_entries_to_display(entries: &[MirrorEntry]) -> Vec<String> {
+    entries
+        .iter()
+        .map(|(u, s)| {
+            if s.is_none() {
+                format!("{u} (timeout)")
+            } else {
+                format!("{u} ({:?} ms)", s.unwrap())
+            }
+        })
+        .collect()
+}
+
+/// Strip the latency suffix back to a plain URL.
+pub fn url_from_display_line(selected: &str) -> String {
+    selected.split(" (").next().unwrap_or(selected).to_string()
 }
