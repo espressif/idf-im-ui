@@ -470,10 +470,12 @@ export const useMirrorsStore = defineStore("mirrors", {
     pypiLatencyMap: (state) => state.pypi_latency_map,
   },
   actions: {
+    // Backend uses Option<u32> for latency values; Timedout values are represented as None. 
+    // We normalize to 0 for timeout and the value for the latency. If the value is undefined, we return undefined as it means the mirror is not yet measured.
     normalizeLatencyValue(value) {
-      // Backend uses u32::MAX (4294967295) for timeouts; normalize to 0 for UI
-      if (value === undefined || value === null) return undefined;
-      return Number(value) === 4294967295 ? 0 : Number(value);
+      if (value === undefined) return undefined;
+      if (value == null) return 0;
+      return Number(value);
     },
 
     ttlValid(lastUpdated) {
