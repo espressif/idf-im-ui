@@ -923,13 +923,16 @@ jobs:
           # Download CLI binaries and calculate SHA256
           wget -q "${{ github.event.release.assets_url }}" -O assets.json
 
+          # Authenticate the request to get proper asset URLs
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "${{ github.event.release.assets_url }}")
+
           # macOS x64 CLI
-          macos_x64_url=$(jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url' assets.json)
+          macos_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url')
           wget -q "$macos_x64_url" -O eim-cli-macos-x64.zip
           macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
 
           # macOS ARM64 CLI
-          macos_arm64_url=$(jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url' assets.json)
+          macos_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url')
           wget -q "$macos_arm64_url" -O eim-cli-macos-aarch64.zip
           macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
 
@@ -941,13 +944,15 @@ jobs:
       - name: Download and calculate checksums for GUI
         id: gui-checksums
         run: |
-          # macOS x64 GUI
-          macos_x64_gui_url=$(jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url' assets.json)
+          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "${{ github.event.release.assets_url }}")
+
+          # macOS x64 GUI (DMG)
+          macos_x64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url')
           wget -q "$macos_x64_gui_url" -O eim-gui-macos-x64.dmg
           macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)
 
-          # macOS ARM64 GUI
-          macos_arm64_gui_url=$(jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url' assets.json)
+          # macOS ARM64 GUI (DMG)
+          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url')
           wget -q "$macos_arm64_gui_url" -O eim-gui-macos-aarch64.dmg
           macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)
 
@@ -957,82 +962,136 @@ jobs:
           echo "macos_arm64_gui_sha=$macos_arm64_gui_sha" >> $GITHUB_OUTPUT
 
       - name: Generate Homebrew Formula for CLI
+        env:
+          VERSION: ${{ steps.release-info.outputs.tag_name }}
+          MACOS_X64_URL: ${{ steps.cli-checksums.outputs.macos_x64_url }}
+          MACOS_X64_SHA: ${{ steps.cli-checksums.outputs.macos_x64_sha }}
+          MACOS_ARM64_URL: ${{ steps.cli-checksums.outputs.macos_arm64_url }}
+          MACOS_ARM64_SHA: ${{ steps.cli-checksums.outputs.macos_arm64_sha }}
         run: |
           mkdir -p homebrew-repo/Formula
-          cat > homebrew-repo/Formula/eim.rb << 'EOF'
-          class Eim < Formula
-            desc "ESP-IDF Installer and Manager CLI"
-            homepage "https://github.com/espressif/idf-im-ui"
-            version "${{ steps.release-info.outputs.tag_name }}"
 
-            if Hardware::CPU.intel?
-              url "${{ steps.cli-checksums.outputs.macos_x64_url }}"
-              sha256 "${{ steps.cli-checksums.outputs.macos_x64_sha }}"
-            elsif Hardware::CPU.arm?
-              url "${{ steps.cli-checksums.outputs.macos_arm64_url }}"
-              sha256 "${{ steps.cli-checksums.outputs.macos_arm64_sha }}"
+          # Remove 'v' prefix from version for formula
+          CLEAN_VERSION="${VERSION#v}"
+
+          cat > homebrew-repo/Formula/eim.rb << 'FORMULA_EOF'
+          # typed: false
+          # frozen_string_literal: true
+
+          class Eim < Formula
+            desc "ESP-IDF Installation Manager - CLI tool for setting up ESP-IDF development environment"
+            homepage "https://github.com/espressif/idf-im-ui"
+          FORMULA_EOF
+
+                    cat >> homebrew-repo/Formula/eim.rb << FORMULA_EOF
+            version "${CLEAN_VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_intel do
+                url "${MACOS_X64_URL}"
+                sha256 "${MACOS_X64_SHA}"
+              end
+              on_arm do
+                url "${MACOS_ARM64_URL}"
+                sha256 "${MACOS_ARM64_SHA}"
+              end
             end
 
+            # Runtime dependencies for QEMU (used by ESP-IDF for emulation)
             depends_on "libgcrypt"
             depends_on "glib"
             depends_on "pixman"
             depends_on "sdl2"
             depends_on "libslirp"
+
+            # DFU utility for flashing
             depends_on "dfu-util"
-            depends_on "python@3.13" => :recommended
-            depends_on "python@3.12" => :recommended
-            depends_on "python@3.11" => :recommended
-            depends_on "python@3.10" => :recommended
+
+            # ESP-IDF requires Python 3.9-3.13. We install python@3.12 as default.
+            # If user already has python@3.12, Homebrew won't reinstall it.
+            depends_on "python@3.12"
 
             def install
               bin.install "eim"
             end
 
+            def caveats
+              <<~EOS
+                ESP-IDF Installation Manager (EIM) has been installed.
+
+                Python 3.12 was installed as a dependency (ESP-IDF requires Python 3.9-3.13).
+                Python 3.14+ is not yet supported.
+
+                Run 'eim' to install ESP-IDF.
+              EOS
+            end
+
             test do
-              system "#{bin}/eim", "--version"
+              assert_match "eim", shell_output("#{bin}/eim --version")
             end
           end
-          EOF
+          FORMULA_EOF
+
+          echo "Generated CLI formula:"
+          cat homebrew-repo/Formula/eim.rb
 
       - name: Generate Homebrew Cask for GUI
+        env:
+          VERSION: ${{ steps.release-info.outputs.tag_name }}
+          MACOS_X64_GUI_URL: ${{ steps.gui-checksums.outputs.macos_x64_gui_url }}
+          MACOS_X64_GUI_SHA: ${{ steps.gui-checksums.outputs.macos_x64_gui_sha }}
+          MACOS_ARM64_GUI_URL: ${{ steps.gui-checksums.outputs.macos_arm64_gui_url }}
+          MACOS_ARM64_GUI_SHA: ${{ steps.gui-checksums.outputs.macos_arm64_gui_sha }}
         run: |
           mkdir -p homebrew-repo/Casks
-          cat > homebrew-repo/Casks/eim-gui.rb << 'EOF'
-          cask "eim-gui" do
-            version "${{ steps.release-info.outputs.tag_name }}"
 
-            if Hardware::CPU.intel?
-              url "${{ steps.gui-checksums.outputs.macos_x64_gui_url }}"
-              sha256 "${{ steps.gui-checksums.outputs.macos_x64_gui_sha }}"
-            elsif Hardware::CPU.arm?
-              url "${{ steps.gui-checksums.outputs.macos_arm64_gui_url }}"
-              sha256 "${{ steps.gui-checksums.outputs.macos_arm64_gui_sha }}"
+          # Remove 'v' prefix from version for cask
+          CLEAN_VERSION="${VERSION#v}"
+
+          cat > homebrew-repo/Casks/eim-gui.rb << CASK_EOF
+          cask "eim-gui" do
+            version "${CLEAN_VERSION}"
+
+            on_intel do
+              url "${MACOS_X64_GUI_URL}"
+              sha256 "${MACOS_X64_GUI_SHA}"
+            end
+            on_arm do
+              url "${MACOS_ARM64_GUI_URL}"
+              sha256 "${MACOS_ARM64_GUI_SHA}"
             end
 
-            depends_on "libgcrypt"
-            depends_on "glib"
-            depends_on "pixman"
-            depends_on "sdl2"
-            depends_on "libslirp"
-            depends_on "dfu-util"
-            depends_on "python@3.13" => :recommended
-            depends_on "python@3.12" => :recommended
-            depends_on "python@3.11" => :recommended
-            depends_on "python@3.10" => :recommended
-
-            name "ESP-IDF Installer and Manager"
-            desc "GUI application for managing ESP-IDF installations"
+            name "ESP-IDF Installation Manager"
+            desc "GUI application for installing and managing ESP-IDF development environment"
             homepage "https://github.com/espressif/idf-im-ui"
 
             app "eim.app"
 
+            caveats <<~EOS
+              ESP-IDF Installation Manager (EIM) has been installed.
+
+              IMPORTANT: ESP-IDF requires Python 3.9, 3.10, 3.11, 3.12, or 3.13.
+              Python 3.14+ is not yet supported.
+
+              If you don't have a compatible Python version, install one with:
+                brew install python@3.12
+
+              For QEMU emulation support, you may also need:
+                brew install libgcrypt glib pixman sdl2 libslirp dfu-util
+            EOS
+
             zap trash: [
-              "~/Library/Application Support/eim",
-              "~/Library/Caches/eim",
+              "~/Library/Application Support/com.espressif.eim",
+              "~/Library/Caches/com.espressif.eim",
               "~/Library/Preferences/com.espressif.eim.plist",
+              "~/Library/Saved Application State/com.espressif.eim.savedState",
             ]
           end
-          EOF
+          CASK_EOF
+
+          echo "Generated GUI cask:"
+          cat homebrew-repo/Casks/eim-gui.rb
 
       - name: Commit and push changes
         run: |
@@ -1040,7 +1099,7 @@ jobs:
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Formula/eim.rb Casks/eim-gui.rb
-          git commit -m "Update eim formula and cask to version ${{ steps.release-info.outputs.tag_name }}" || exit 0
+          git diff --staged --quiet || git commit -m "Update eim to version ${{ steps.release-info.outputs.tag_name }}"
           git push
 
   uupdate-apt-repo:
