@@ -758,5 +758,43 @@
       "entries": "({count} entries)"
     },
     "preparing": "Preparing installation..."
+  },
+  "featuresSelect": {
+    "title": "Select ESP-IDF Features",
+    "description": "Choose which features and packages you want to install with ESP-IDF",
+    "continueButton": "Continue to Installation Path",
+    "noDescription": "No description available",
+    "noFeatures": "No features available. Please select an ESP-IDF version first.",
+    "sections": {
+      "required": "Required Features",
+      "requiredDescription": "These features are required and will always be installed",
+      "optional": "Optional Features",
+      "optionalDescription": "Select additional features you want to install"
+    },
+    "badges": {
+      "required": "Required",
+      "optional": "Optional"
+    },
+    "actions": {
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All Optional"
+    },
+    "summary": "Selected {selected} of {total} features"
+  },
+  "gui": {
+    "settings": {
+      "features_updated": "Selected features have been updated",
+      "idf_mirror_updated": "IDF mirror has been updated"
+    }
+  },
+  "wizard": {
+    "requirements": {
+      "no_idf_version_specified": "No ESP-IDF version specified",
+      "read_failure": "Failed to read requirements file",
+      "selection_unavailable": "Feature selection will not be available"
+    },
+    "features": {
+      "selection_unavailable": "Feature selection is not available"
+    }
   }
 }

@@ -71,6 +71,9 @@ wizard.idf.user_cancelled:
 wizard.idf.cloning:
   en: Cloning ESP-IDF
   cn: 正在克隆 ESP-IDF
+wizard.idf.submodule_finish:
+  en: "IDF submodule correctly downloaded to:"
+  cn: "IDF 子模块已正确下载到:"
 wizard.idf_version.selected:
   en: "Selected IDF version: %{version}"
   cn: "已选择 IDF 版本: %{version}"

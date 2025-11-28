@@ -134,153 +134,88 @@ impl Settings {
         // Start with default settings
         let mut settings = Self::default();
 
+        // Collect CLI settings and track which were EXPLICITLY provided (not None)
+        let cli_items: Vec<_> = cli_settings.into_iter().collect();
+        let mut cli_overrides: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+        let mut cli_config = Config::builder();
+        for (key, value) in &cli_items {
+            if let Some(v) = value {
+                let v_str = v.to_string();
+                // Only track as override if value is not empty and not the config key itself
+                if !v_str.is_empty() && key != "config" {
+                    cli_config = cli_config.set_override(key, v.clone())?;
+                    cli_overrides.insert(key.clone());
+                    log::debug!("CLI override detected: {} = {}", key, v_str);
+                }
+            }
+        }
+
+        log::info!("CLI overrides: {:?}", cli_overrides);
+
         // If a config file is provided, load it
         if let Some(config_path) = config_path.clone() {
-            if config_path.exists() {
-                log::info!("Loading config from file: {:?}", config_path);
-                if let Err(e) = settings.load(config_path.to_str().unwrap_or_default()) {
-                    log::warn!("Failed to load config from file: {}", e);
-                }
+          if config_path.exists() {
+            log::info!("Loading config from file: {:?}", config_path);
+            match settings.load(config_path.to_str().unwrap_or_default()) {
+              Ok(_) => log::info!("Config loaded successfully"),
+              Err(e) => log::warn!("Failed to load config from file: {}", e),
             }
+          } else {
+            log::warn!("Config file does not exist: {:?}", config_path);
+          }
         }
+        log::info!("Settings after file load {:?}", settings);
 
-        // Apply CLI settings with higher priority
-        let mut cli_config = Config::builder();
-        for (key, value) in cli_settings {
-            if let Some(v) = value {
-                if v.to_string().is_empty() || key == "config" {
-                    continue;
-                }
-                cli_config = cli_config.set_override(&key, v)?;
-            }
-        }
+        log::debug!("Settings after config load - idf_features: {:?}", settings.idf_features);
 
-        // Build the CLI config
         let cli_config = cli_config.build()?;
-
-        // Deserialize CLI settings into a temporary struct
         if let Ok(cli_settings_struct) = cli_config.try_deserialize::<Settings>() {
-            // Merge CLI settings into our settings, overriding any existing values, if the new value is not default TODO: refactor
-            if cli_settings_struct.path.is_some() && !cli_settings_struct.is_default("path") {
-                settings.path = cli_settings_struct.path.clone();
-            }
-            if cli_settings_struct.idf_path.is_some() && !cli_settings_struct.is_default("idf_path")
-            {
-                settings.idf_path = cli_settings_struct.idf_path.clone();
-            }
-            if cli_settings_struct.esp_idf_json_path.is_some()
-                && !cli_settings_struct.is_default("esp_idf_json_path")
-            {
-                settings.esp_idf_json_path = cli_settings_struct.esp_idf_json_path.clone();
-            }
-            if cli_settings_struct.tool_download_folder_name.is_some()
-                && !cli_settings_struct.is_default("tool_download_folder_name")
-            {
-                settings.tool_download_folder_name =
-                    cli_settings_struct.tool_download_folder_name.clone();
-            }
-            if cli_settings_struct.tool_install_folder_name.is_some()
-                && !cli_settings_struct.is_default("tool_install_folder_name")
-            {
-                settings.tool_install_folder_name =
-                    cli_settings_struct.tool_install_folder_name.clone();
-            }
-            if cli_settings_struct.target.is_some() && !cli_settings_struct.is_default("target") {
-                settings.target = cli_settings_struct.target.clone();
-            }
-            if cli_settings_struct.idf_versions.is_some()
-                && !cli_settings_struct.is_default("idf_versions")
-            {
-                settings.idf_versions = cli_settings_struct.idf_versions.clone();
-            }
-            if cli_settings_struct.tools_json_file.is_some()
-                && !cli_settings_struct.is_default("tools_json_file")
-            {
-                settings.tools_json_file = cli_settings_struct.tools_json_file.clone();
-            }
-            if cli_settings_struct.config_file_save_path.is_some()
-                && !cli_settings_struct.is_default("config_file_save_path")
-            {
-                settings.config_file_save_path = cli_settings_struct.config_file_save_path.clone();
-            }
-            if cli_settings_struct.non_interactive.is_some()
-                && !cli_settings_struct.is_default("non_interactive")
-            {
-                settings.non_interactive = cli_settings_struct.non_interactive
-            }
-            if cli_settings_struct.wizard_all_questions.is_some()
-                && !cli_settings_struct.is_default("wizard_all_questions")
-            {
-                settings.wizard_all_questions = cli_settings_struct.wizard_all_questions;
-            }
-            if cli_settings_struct.mirror.is_some() && !cli_settings_struct.is_default("mirror") {
-                settings.mirror = cli_settings_struct.mirror.clone();
-            }
-            if cli_settings_struct.idf_mirror.is_some()
-                && !cli_settings_struct.is_default("idf_mirror")
-            {
-                settings.idf_mirror = cli_settings_struct.idf_mirror.clone();
-            }
-            if cli_settings_struct.pypi_mirror.is_some()
-                && !cli_settings_struct.is_default("pypi_mirror")
-            {
-                settings.pypi_mirror = cli_settings_struct.pypi_mirror.clone();
-            }
-            if cli_settings_struct.recurse_submodules.is_some()
-                && !cli_settings_struct.is_default("recurse_submodules")
-            {
-                settings.recurse_submodules = cli_settings_struct.recurse_submodules;
-            }
-            if cli_settings_struct.install_all_prerequisites.is_some()
-                && !cli_settings_struct.is_default("install_all_prerequisites")
-            {
-                settings.install_all_prerequisites =
-                    cli_settings_struct.install_all_prerequisites;
-            }
-            if cli_settings_struct.idf_features.is_some()
-                && !cli_settings_struct.is_default("idf_features")
-            {
-                settings.idf_features = cli_settings_struct.idf_features.clone();
-            }
-            if cli_settings_struct.repo_stub.is_some() && !cli_settings_struct.is_default("repo_stub") {
-                settings.repo_stub = cli_settings_struct.repo_stub.clone();
-            }
-            if cli_settings_struct.skip_prerequisites_check.is_some()
-                && !cli_settings_struct.is_default("skip_prerequisites_check")
-            {
-                settings.skip_prerequisites_check = cli_settings_struct.skip_prerequisites_check;
-            }
-            if cli_settings_struct.version_name.is_some()
-                && !cli_settings_struct.is_default("version_name")
-            {
-                settings.version_name = cli_settings_struct.version_name.clone();
-            }
-            if cli_settings_struct.python_env_folder_name.is_some()
-               && !cli_settings_struct.is_default("python_env_folder_name")
-            {
-              settings.python_env_folder_name = cli_settings_struct.python_env_folder_name.clone()
-            }
-            if cli_settings_struct.use_local_archive.is_some()
-                && !cli_settings_struct.is_default("use_local_archive")
-            {
-                settings.use_local_archive = cli_settings_struct.use_local_archive.clone();
-            }
-            if cli_settings_struct.activation_script_path_override.is_some()
-                && !cli_settings_struct.is_default("activation_script_path_override")
-            {
-                settings.activation_script_path_override = cli_settings_struct.activation_script_path_override.clone();
-            }
-            if cli_settings_struct.python_version_override.is_some()
-                && !cli_settings_struct.is_default("python_version_override")
-            {
-                settings.python_version_override = cli_settings_struct.python_version_override.clone();
-            }
+          macro_rules! apply_if_overridden {
+            ($($field:ident),*) => {
+              $(
+                if cli_overrides.contains(stringify!($field)) {
+                  log::debug!("Applying CLI override for {}: {:?}", stringify!($field), cli_settings_struct.$field);
+                  settings.$field = cli_settings_struct.$field.clone();
+                }
+              )*
+            };
+          }
+
+          apply_if_overridden!(
+            path,
+            idf_path,
+            esp_idf_json_path,
+            tool_download_folder_name,
+            tool_install_folder_name,
+            target,
+            idf_versions,
+            tools_json_file,
+            config_file_save_path,
+            non_interactive,
+            wizard_all_questions,
+            mirror,
+            idf_mirror,
+            pypi_mirror,
+            recurse_submodules,
+            install_all_prerequisites,
+            idf_features,
+            repo_stub,
+            skip_prerequisites_check,
+            version_name,
+            python_env_folder_name,
+            use_local_archive,
+            activation_script_path_override,
+            python_version_override
+          );
         }
 
-        // Set the config file field
+        // Set the config file field if not already set
         if settings.config_file.is_none() {
             settings.config_file = config_path;
         }
+        log::info!("Final settings: {:?}", settings);
+
 
         Ok(settings)
     }
