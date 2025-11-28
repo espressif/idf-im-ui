@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import { downloadOfflineArchive } from "../helper.js";
 import logger from "../classes/logger.class.js";
 import { By } from "selenium-webdriver";
@@ -13,11 +14,14 @@ export function runGUIOfflineInstallTest({
   pathToEIM,
   offlineIDFVersion,
   offlinePkgName,
+  testProxyMode = false,
+  proxyBlockList = [],
 }) {
   describe(`${id}- Run offline installation |`, () => {
     let eimRunner = null;
     let offlineInstallFailed = false;
     let pathToOfflineArchive = null;
+    let proxy = null;
 
     before(async function () {
       this.timeout(900000);
@@ -26,6 +30,18 @@ export function runGUIOfflineInstallTest({
         idfVersion: offlineIDFVersion,
         packageName: offlinePkgName,
       });
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
         await eimRunner.start();
       } catch (err) {
@@ -54,6 +70,14 @@ export function runGUIOfflineInstallTest({
         await eimRunner.stop();
       } catch (error) {
         logger.info("Error to close EIM application");
+      }
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
       if (pathToOfflineArchive) {
         try {

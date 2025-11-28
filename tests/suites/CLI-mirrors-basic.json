@@ -12,7 +12,8 @@
       "nonInteractive": true
     },
     "deleteAfterTest": true,
-    "testProxyMode": false
+    "testProxyMode": "block-list",
+    "proxyBlockList": ["github.com"]
   },
   {
     "id": 2,
@@ -27,6 +28,7 @@
       "nonInteractive": true
     },
     "deleteAfterTest": true,
-    "testProxyMode": false
+    "testProxyMode": "block-list",
+    "proxyBlockList": ["github.com"]
   }
 ]

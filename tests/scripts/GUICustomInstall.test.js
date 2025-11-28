@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import { By, Key } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
@@ -21,14 +22,29 @@ export function runGUICustomInstallTest({
   toolsMirror,
   idfMirror,
   pypiMirror,
+  testProxyMode = false,
+  proxyBlockList = [],
 }) {
   describe(`${id}- Run expert mode |`, () => {
     let eimRunner = null;
     let customInstallFailed = false;
+    let proxy = null;
 
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
+      if (testProxyMode) {
+        try {
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
+          await proxy.start();
+        } catch (error) {
+          logger.info("Error to start proxy server");
+          logger.debug(`Error: ${error}`);
+        }
+      }
       try {
         await eimRunner.start();
       } catch (err) {
@@ -59,6 +75,14 @@ export function runGUICustomInstallTest({
         eimRunner = null;
       } catch (error) {
         logger.info("Error to close EIM application");
+      }
+      if (testProxyMode) {
+        try {
+          await proxy.stop();
+        } catch (error) {
+          logger.info("Error stopping proxy server");
+          logger.info(`${error}`);
+        }
       }
     });
 

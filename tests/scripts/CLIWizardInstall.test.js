@@ -18,6 +18,7 @@ export function runCLIWizardInstallTest({
   id = 0,
   pathToEIM,
   testProxyMode = false,
+  proxyBlockList = [],
 }) {
   describe(`${id}- Run wizard |`, function () {
     let testRunner = null;
@@ -30,7 +31,10 @@ export function runCLIWizardInstallTest({
       testRunner = new CLITestRunner();
       if (testProxyMode) {
         try {
-          proxy = new TestProxy({ mode: testProxyMode });
+          proxy = new TestProxy({
+            mode: testProxyMode,
+            blockedDomains: proxyBlockList,
+          });
           await proxy.start();
         } catch (error) {
           logger.info("Error to start proxy server");
@@ -38,9 +42,7 @@ export function runCLIWizardInstallTest({
         }
       }
       try {
-        await testRunner.start({
-          isolatedEnvironment: testProxyMode === false ? false : true,
-        });
+        await testRunner.start();
       } catch (error) {
         logger.info("Error to start terminal");
         logger.debug(`Error: ${error}`);

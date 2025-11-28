@@ -14,7 +14,8 @@
             "pypiMirror": "pypi_org",    // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"
         }
         "deleteAfterTest": true          // Whether to remove IDF installation folder and IDF tools folder after test
-        "testProxyMode": "block"         // If the test run with local proxy to log or block internet access during test : "block", "log", false
+        "testProxyMode": "block"         // If the test run with local proxy to log or block internet access during test : "block", "block-list", "log", false
+        "proxyBlockList": []             // List of domains to block when testProxyMode is set to "block-list"
 
  */
 
@@ -69,11 +70,15 @@ function testRun(script) {
       //routine for default simplified installation
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         runGUISimplifiedInstallTest({
           id: `${test.id}1`,
           pathToEIM: pathToEIMGUI,
+          testProxyMode,
+          proxyBlockList,
         });
 
         runGUIAfterInstallTest({
@@ -122,6 +127,8 @@ function testRun(script) {
       const pypiMirror = test.data.pypiMirror || "pypi_org";
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         runGUICustomInstallTest({
@@ -133,6 +140,8 @@ function testRun(script) {
           toolsMirror,
           idfMirror,
           pypiMirror,
+          testProxyMode,
+          proxyBlockList,
         });
 
         runGUIAfterInstallTest({
@@ -170,7 +179,7 @@ function testRun(script) {
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
       const deleteAfterTest = test.deleteAfterTest ?? true;
-      
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
@@ -196,6 +205,8 @@ function testRun(script) {
         : INSTALLFOLDER;
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? "block";
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -205,6 +216,8 @@ function testRun(script) {
           pathToEIM: pathToEIMGUI,
           offlineIDFVersion: IDFDefaultVersion,
           offlinePkgName: pkgName,
+          testProxyMode,
+          proxyBlockList,
         });
 
         runGUIAfterInstallTest({
