@@ -17,7 +17,7 @@ on:
 
 jobs:
   setup:
-    name: Setup and Check merged PRs (schedule only)git
+    name: Setup and Check merged PRs (schedule only)
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
@@ -164,15 +164,15 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim
 
-      - name: Upload artifact for tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
-        with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-          path: release_cli/${{ matrix.package_name }}/eim
+      # - name: Upload artifact for tag
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
+      #     path: release_cli/${{ matrix.package_name }}/eim
 
       - name: Upload Release Asset - Unix
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
@@ -201,7 +201,7 @@ jobs:
       - name: Upload offline_installer_builder artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/offline_installer_builder
 
       - name: Upload offline_installer_builder Release Asset - Unix
@@ -238,7 +238,7 @@ jobs:
         if: github.event_name == 'release' && github.event.action == 'created'
         uses: actions/upload-artifact@v4
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}-deb
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
           path: src-tauri/target/debian/eim*.deb
           if-no-files-found: warn
 
@@ -413,15 +413,15 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.run_number }}
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
 
-      - name: Upload artifact for tag
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: actions/upload-artifact@v4
-        with:
-          name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
-          path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
+      # - name: Upload artifact for tag
+      #   if: startsWith(github.ref, 'refs/tags/')
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: eim-cli-${{ matrix.package_name }}-${{ github.ref_name }}
+      #     path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
 
       - name: Upload Release Asset - MacOs
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
@@ -511,7 +511,7 @@ jobs:
       - name: Upload offline_installer_builder build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ github.run_number }}
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/offline_installer_builder${{ runner.os == 'Windows' && '.exe' || '' }}
 
       - name: Upload offline_installer_builder Release Asset - MacOs
@@ -696,7 +696,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: |
             src-tauri/target/release/eim
             # src-tauri/target/release/bundle/deb/*.deb
@@ -708,7 +708,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-deb
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
           path: |
             src-tauri/target/release/bundle/deb/*.deb
             # src-tauri/target/release/bundle/rpm/*.rpm
@@ -719,7 +719,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-rpm
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
           path: |
             src-tauri/target/release/bundle/rpm/*.rpm
             # src-tauri/target/release/bundle/appimage/*.AppImage
@@ -729,7 +729,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-AppImage
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-AppImage
           path: |
             src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
@@ -738,7 +738,7 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: |
             # src-tauri/target/release/bundle/macos/eim.app
             # src-tauri/target/release/bundle/dmg/*.dmg
@@ -749,7 +749,7 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-dmg
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-dmg
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: warn
@@ -758,7 +758,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: |
             src-tauri/target/release/eim.exe
             # src-tauri/target/release/bundle/msi/*.msi
@@ -768,7 +768,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ github.run_number }}-msi
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-msi
           path: |
             src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
@@ -1043,7 +1043,7 @@ jobs:
           git commit -m "Update eim formula and cask to version ${{ steps.release-info.outputs.tag_name }}" || exit 0
           git push
 
-  uupdate-apt-repo:
+  update-apt-repo:
     name: Update APT Repository on S3
     needs: [build-cli-linux, build-gui, update-release-info]
     runs-on: ubuntu-latest
@@ -1067,26 +1067,26 @@ jobs:
       - name: Download GUI linux-x64 .deb artifact
         uses: actions/download-artifact@v4
         with:
-          name: eim-gui-linux-x64-${{ github.run_number }}-deb
+          name: eim-gui-linux-x64-${{ github.ref_name }}-deb
           path: new-debs/
 
       - name: Download GUI linux-aarch64 .deb artifact
         uses: actions/download-artifact@v4
         with:
-          name: eim-gui-linux-aarch64-${{ github.run_number }}-deb
+          name: eim-gui-linux-aarch64-${{ github.ref_name }}-deb
           path: new-debs/
         continue-on-error: true
 
       - name: Download CLI linux-x64 .deb artifact
         uses: actions/download-artifact@v4
         with:
-          name: eim-cli-linux-x64-${{ github.run_number }}-deb
+          name: eim-cli-linux-x64-${{ github.ref_name }}-deb
           path: new-debs/
 
       - name: Download CLI linux-aarch64 .deb artifact
         uses: actions/download-artifact@v4
         with:
-          name: eim-cli-linux-aarch64-${{ github.run_number }}-deb
+          name: eim-cli-linux-aarch64-${{ github.ref_name }}-deb
           path: new-debs/
         continue-on-error: true
 
@@ -1165,13 +1165,13 @@ jobs:
         - name: Download CLI windows-x64 artifact
           uses: actions/download-artifact@v4
           with:
-            name: eim-cli-windows-x64-${{ github.run_number }}
+            name: eim-cli-windows-x64-${{ github.ref_name }}
             path: artifacts/cli/
 
         - name: Download GUI windows-x64 artifact
           uses: actions/download-artifact@v4
           with:
-            name: eim-gui-windows-x64-${{ github.run_number }}
+            name: eim-gui-windows-x64-${{ github.ref_name }}
             path: artifacts/gui/
 
         - name: Setup .NET 6.0
