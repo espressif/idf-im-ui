@@ -364,7 +364,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           WINDOWS_PFX_FILE: ${{ secrets.GLOBALSIGN_PFX_BASE64 }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.GLOBALSIGN_PFX_PASSWORD }}
+          WINDOWS_PFX_PASSWORD: ""
         run: |
           echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
           certutil -decode cert.b64 cert.pfx
@@ -377,7 +377,7 @@ jobs:
             Write-Error "signtool.exe not found on the runner"
             exit 1
           }
-          & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
+          & $signtool.FullName sign /f cert.pfx /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
 
       - name: Codesign macOS Binary
         if: startsWith(matrix.os, 'macos')
@@ -481,7 +481,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           WINDOWS_PFX_FILE: ${{ secrets.GLOBALSIGN_PFX_BASE64 }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.GLOBALSIGN_PFX_PASSWORD }}
+          WINDOWS_PFX_PASSWORD: ""
         run: |
           $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
                       Sort-Object FullName -Descending |
@@ -491,7 +491,7 @@ jobs:
             Write-Error "signtool.exe not found on the runner"
             exit 1
           }
-          & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
+          & $signtool.FullName sign /f cert.pfx /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
 
       - name: Codesign macOS offline_installer_builder Binary
         if: startsWith(matrix.os, 'macos')
@@ -661,7 +661,7 @@ jobs:
         if: runner.os == 'Windows'
         env:
           WINDOWS_PFX_FILE: ${{ secrets.GLOBALSIGN_PFX_BASE64 }}
-          WINDOWS_PFX_PASSWORD: ${{ secrets.GLOBALSIGN_PFX_PASSWORD }}
+          WINDOWS_PFX_PASSWORD: ""
         run: |
           echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
           certutil -decode cert.b64 cert.pfx
