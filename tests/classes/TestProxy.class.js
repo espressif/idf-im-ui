@@ -24,22 +24,20 @@ class TestProxy {
   setEnvironment() {
     logger.info("Setting proxy environment variables");
     const proxyUrl = "http://127.0.0.1:8888";
-    let environment = { ...process.env };
-    environment.HTTP_PROXY = proxyUrl;
-    environment.HTTPS_PROXY = proxyUrl;
-    environment.http_proxy = proxyUrl;
-    environment.https_proxy = proxyUrl;
-    environment.FTP_PROXY = proxyUrl;
-    environment.ftp_proxy = proxyUrl;
-    environment.NO_PROXY = "127.0.0.1,localhost,::1";
-    environment.no_proxy = "127.0.0.1,localhost,::1";
-    environment.CARGO_HTTP_PROXY = proxyUrl;
-    environment.CARGO_HTTPS_PROXY = proxyUrl;
-    environment.GIT_PROXY_COMMAND = "";
-    environment.npm_config_proxy = proxyUrl;
-    environment.npm_config_https_proxy = proxyUrl;
-    environment.PIP_PROXY = proxyUrl;
-    process.env = { ...environment };
+    process.env.HTTP_PROXY = proxyUrl;
+    process.env.HTTPS_PROXY = proxyUrl;
+    process.env.http_proxy = proxyUrl;
+    process.env.https_proxy = proxyUrl;
+    process.env.FTP_PROXY = proxyUrl;
+    process.env.ftp_proxy = proxyUrl;
+    process.env.NO_PROXY = "127.0.0.1,localhost,::1";
+    process.env.no_proxy = "127.0.0.1,localhost,::1";
+    process.env.CARGO_HTTP_PROXY = proxyUrl;
+    process.env.CARGO_HTTPS_PROXY = proxyUrl;
+    process.env.GIT_PROXY_COMMAND = "";
+    process.env.npm_config_proxy = proxyUrl;
+    process.env.npm_config_https_proxy = proxyUrl;
+    process.env.PIP_PROXY = proxyUrl;
   }
 
   async start() {

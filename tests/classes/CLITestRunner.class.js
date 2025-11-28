@@ -17,7 +17,6 @@ class CLITestRunner {
       os.platform() !== "win32"
         ? []
         : ["-ExecutionPolicy", "Bypass", "-NoProfile"];
-    this.environment = { ...process.env };
   }
 
   async runIDFTerminal(loadScript, timeout = 3000) {
@@ -54,7 +53,7 @@ class CLITestRunner {
       cols: 80,
       rows: 30,
       cwd: process.cwd(),
-      env: this.environment,
+      env: process.env,
     });
     this.exited = false;
 

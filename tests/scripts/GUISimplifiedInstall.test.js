@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runGUISimplifiedInstallTest({

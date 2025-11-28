@@ -2,6 +2,7 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import { By, Key } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
+import TestProxy from "../classes/TestProxy.class.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
