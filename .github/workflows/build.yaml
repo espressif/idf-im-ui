@@ -360,24 +360,50 @@ jobs:
           zip -r eim.zip eim
         shell: bash
 
-      # - name: Sign Windows Binary
-      #   if: runner.os == 'Windows'
-      #   env:
-      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-      #   run: |
-      #     echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-      #     certutil -decode cert.b64 cert.pfx
-      #     Remove-Item cert.b64
-      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-      #                 Sort-Object FullName -Descending |
-      #                 Select-Object -First 1
+      - name: Install .NET 8 SDK and AzureSignTool
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mkdir dotnet
+          cd dotnet
+          $dotnet_url="https://download.visualstudio.microsoft.com/download/pr/5af098e1-e433-4fda-84af-3f54fd27c108/6bd1c6e48e64e64871957289023ca590/dotnet-sdk-8.0.302-win-x64.zip"
+          Invoke-WebRequest -Uri $dotnet_url -OutFile dotnet-sdk-8.0.302-win-x64.zip
+          Expand-Archive -LiteralPath .\dotnet-sdk-8.0.302-win-x64.zip -DestinationPath .
+          $Env:DOTNET_ROOT="$($(Get-Location).Path)\dotnet-sdk-8.0.302-win-x64"
+          $Env:PATH="$Env:DOTNET_ROOT;$Env:PATH"
+          $Env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE=$true
+          dotnet tool install --global AzureSignTool
+          cd ..
 
-      #     if (-not $signtool) {
-      #       Write-Error "signtool.exe not found on the runner"
-      #       exit 1
-      #     }
-      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/eim.exe
+      - name: Sign Windows Binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "release_cli\${{ matrix.package_name }}\eim.exe"
+          if (-not (Test-Path $exePath)) { throw "eim.exe not found at $exePath" }
+
+          $Env:DOTNET_ROOT="$PWD\dotnet\dotnet-sdk-8.0.302-win-x64"
+          $Env:PATH="$Env:DOTNET_ROOT;$Env:PATH"
+
+          AzureSignTool.exe sign `
+            -kvu "${{ secrets.AZURE_KEYVAULT_URI }}" `
+            -kvc "${{ secrets.AZURE_KEYVAULT_CERT_NAME }}" `
+            -kvi "${{ secrets.AZURE_CLIENT_ID }}" `
+            -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" `
+            --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" `
+            -tr http://timestamp.globalsign.com/tsa/advanced `
+            -td sha256 `
+            "$exePath"
+
+      - name: Verify Signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "release_cli\${{ matrix.package_name }}\eim.exe"
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Name "signtool.exe" | Select-Object -First 1
+          & "C:\Program Files (x86)\Windows Kits\$signtool" verify `
+          /pa `
+          "$exePath"
 
       - name: Codesign macOS Binary
         if: startsWith(matrix.os, 'macos')
@@ -477,21 +503,35 @@ jobs:
           zip -r offline_installer_builder.zip offline_installer_builder
         shell: bash
 
-      # - name: Sign Windows offline_installer_builder Binary
-      #   if: runner.os == 'Windows'
-      #   env:
-      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-      #   run: |
-      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-      #                 Sort-Object FullName -Descending |
-      #                 Select-Object -First 1
+      - name: Sign Windows offline_installer_builder Binary
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "release_cli\${{ matrix.package_name }}\offline_installer_builder.exe"
+          if (-not (Test-Path $exePath)) { throw "offline_installer_builder.exe not found at $exePath" }
 
-      #     if (-not $signtool) {
-      #       Write-Error "signtool.exe not found on the runner"
-      #       exit 1
-      #     }
-      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
+          $Env:DOTNET_ROOT="$PWD\dotnet\dotnet-sdk-8.0.302-win-x64"
+          $Env:PATH="$Env:DOTNET_ROOT;$Env:PATH"
+
+          AzureSignTool.exe sign `
+            -kvu "${{ secrets.AZURE_KEYVAULT_URI }}" `
+            -kvc "${{ secrets.AZURE_KEYVAULT_CERT_NAME }}" `
+            -kvi "${{ secrets.AZURE_CLIENT_ID }}" `
+            -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" `
+            --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" `
+            -tr http://timestamp.globalsign.com/tsa/advanced `
+            -td sha256 `
+            "$exePath"
+
+      - name: Verify offline_installer_builder Signature
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "release_cli\${{ matrix.package_name }}\offline_installer_builder.exe"
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Name "signtool.exe" | Select-Object -First 1
+          & "C:\Program Files (x86)\Windows Kits\$signtool" verify `
+          /pa `
+          "$exePath"
 
       - name: Codesign macOS offline_installer_builder Binary
         if: startsWith(matrix.os, 'macos')
@@ -657,25 +697,50 @@ jobs:
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
         run: yarn tauri build
 
-      # - name: Sign Windows Binary
-      #   if: runner.os == 'Windows'
-      #   env:
-      #     WINDOWS_PFX_FILE: ${{ secrets.WIN_CERTIFICATE }}
-      #     WINDOWS_PFX_PASSWORD: ${{ secrets.WIN_CERTIFICATE_PWD }}
-      #   run: |
-      #     echo $env:WINDOWS_PFX_FILE | Out-File -FilePath cert.b64 -Encoding ASCII
-      #     certutil -decode cert.b64 cert.pfx
-      #     Remove-Item cert.b64
-      #     $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
-      #                 Sort-Object FullName -Descending |
-      #                 Select-Object -First 1
+      - name: Install .NET 8 SDK and AzureSignTool (GUI)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          mkdir dotnet
+          cd dotnet
+          $dotnet_url="https://download.visualstudio.microsoft.com/download/pr/5af098e1-e433-4fda-84af-3f54fd27c108/6bd1c6e48e64e64871957289023ca590/dotnet-sdk-8.0.302-win-x64.zip"
+          Invoke-WebRequest -Uri $dotnet_url -OutFile dotnet-sdk-8.0.302-win-x64.zip
+          Expand-Archive -LiteralPath .\dotnet-sdk-8.0.302-win-x64.zip -DestinationPath .
+          $Env:DOTNET_ROOT="$($(Get-Location).Path)\dotnet-sdk-8.0.302-win-x64"
+          $Env:PATH="$Env:DOTNET_ROOT;$Env:PATH"
+          $Env:DOTNET_SKIP_FIRST_TIME_EXPERIENCE=$true
+          dotnet tool install --global AzureSignTool
+          cd ..
 
-      #     if (-not $signtool) {
-      #       Write-Error "signtool.exe not found on the runner"
-      #       exit 1
-      #     }
+      - name: Sign Windows Binary (GUI)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "src-tauri\target\release\eim.exe"
+          if (-not (Test-Path $exePath)) { throw "eim.exe not found at $exePath" }
 
-      #     & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 .\src-tauri\target\release\eim.exe
+          $Env:DOTNET_ROOT="$PWD\dotnet\dotnet-sdk-8.0.302-win-x64"
+          $Env:PATH="$Env:DOTNET_ROOT;$Env:PATH"
+
+          AzureSignTool.exe sign `
+            -kvu "${{ secrets.AZURE_KEYVAULT_URI }}" `
+            -kvc "${{ secrets.AZURE_KEYVAULT_CERT_NAME }}" `
+            -kvi "${{ secrets.AZURE_CLIENT_ID }}" `
+            -kvs "${{ secrets.AZURE_CLIENT_SECRET }}" `
+            --azure-key-vault-tenant-id "${{ secrets.AZURE_TENANT_ID }}" `
+            -tr http://timestamp.globalsign.com/tsa/advanced `
+            -td sha256 `
+            "$exePath"
+
+      - name: Verify Signature (GUI)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exePath = Join-Path $PWD "src-tauri\target\release\eim.exe"
+          $signtool = Get-ChildItem -Path "C:\Program Files (x86)\Windows Kits" -Recurse -Name "signtool.exe" | Select-Object -First 1
+          & "C:\Program Files (x86)\Windows Kits\$signtool" verify `
+          /pa `
+          "$exePath"
 
       - name: Handle Linux artifacts
         if: startsWith(matrix.os, 'ubuntu')
