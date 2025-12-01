@@ -147,22 +147,24 @@ export default {
 
     // Fetch and parse the latest version from the website
     const fetchLatestVersion = async () => {
-      try {
-        const response = await fetch('https://dl.espressif.com/dl/eim/eim_unified_release.json')
-        const data = await response.json()
-        const version = data.tag_name
+    try {
+      const data = await invoke('fetch_json_from_url', {
+        url: 'https://dl.espressif.com/dl/eim/eim_unified_release.json'
+      })
+      const version = data.tag_name
+      console.log('Fetched latest version:', version)
 
-        if (version) {
-          return version
-        }
-
-        return null
-      } catch (error) {
-        // Fail silently
-        console.log('Failed to fetch latest version:', error)
-        return null
+      if (version) {
+        return version
       }
+
+      return null
+    } catch (error) {
+      console.log('Failed to fetch latest version:', error)
+      return null
     }
+  }
+
 
 
     // Dismiss update

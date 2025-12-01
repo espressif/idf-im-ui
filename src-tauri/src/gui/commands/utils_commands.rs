@@ -34,6 +34,20 @@ use std::os::windows::process::CommandExt;
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tauri::command]
+pub async fn fetch_json_from_url(url: String) -> Result<Value, String> {
+    let response = reqwest::get(&url)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let json:Value = response
+        .json::<Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(json)
+}
+
+#[tauri::command]
 pub fn set_locale(locale: String) {
     rust_i18n::set_locale(&locale);
     info!("Set locale to: {}", locale);
