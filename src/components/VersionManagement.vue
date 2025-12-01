@@ -323,22 +323,6 @@ export default {
       return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
     }
 
-    const checkForUpdates = async () => {
-      checkingUpdates.value = true
-      try {
-        const hasUpdate = await invoke('check_for_updates')
-        if (hasUpdate) {
-          message.info(t('versionManagement.messages.success.updateAvailable'))
-        } else {
-          message.success(t('versionManagement.messages.success.latestVersion'))
-        }
-      } catch (error) {
-        message.error(t('versionManagement.messages.error.checkUpdates'))
-      } finally {
-        checkingUpdates.value = false
-      }
-    }
-
     const renameVersion = (version) => {
       selectedVersion.value = version
       newVersionName.value = version.name
@@ -511,7 +495,6 @@ export default {
       purgeConfirmed,
       formatDate,
       formatSize,
-      checkForUpdates,
       renameVersion,
       openIDFTerminal,
       confirmRename,

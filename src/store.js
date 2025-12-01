@@ -13,6 +13,7 @@ export const useAppStore = defineStore("app", {
     arch: "unknown",
     cpuCount: 0,
     additionalSystemInfo: {},
+    eim_version: "unknown",
 
     // Installation status
     installedVersions: [],
@@ -37,6 +38,13 @@ export const useAppStore = defineStore("app", {
       tools: [],
       options: {},
     },
+    // Prerequisites state
+    prerequisitesChecking: false,
+    prerequisitesLastChecked: null,
+    prerequisitesStatus: {
+      allOk: false,
+      missing: [],
+    },
   }),
 
   getters: {
@@ -60,7 +68,9 @@ export const useAppStore = defineStore("app", {
       const arch = await invoke('get_system_arch')
       const cpuCount = await invoke('cpu_count')
       const additionalSystemInfo = await invoke('get_system_info')
-      const info = { os, arch, cpuCount , additionalSystemInfo }
+      const app_info = await invoke('get_app_info')
+      const eim_version = app_info.version
+      const info = { os, arch, cpuCount , additionalSystemInfo , eim_version};
       this.setSystemInfo(info);
     },
     setSystemInfo(info) {
@@ -68,6 +78,7 @@ export const useAppStore = defineStore("app", {
       this.arch = info.arch;
       this.cpuCount = info.cpuCount;
       this.additionalSystemInfo = info.additionalSystemInfo;
+      this.eim_version = info.eim_version;
     },
 
     setInstalledVersions(versions) {
@@ -148,6 +159,62 @@ export const useAppStore = defineStore("app", {
         await this.fetchSystemInfo();
       }
       return this.arch;
+    },
+    async getEimVersion() {
+      if (!this.eim_version || this.eim_version === 'unknown') {
+        await this.fetchSystemInfo();
+      }
+      return this.eim_version;
+    },
+    async checkPrerequisites(force = false) {
+
+      // Skip if already checking or recently checked (unless forced)
+      if (this.prerequisitesChecking) {
+        return this.prerequisitesStatus;
+      }
+
+      // if (!force && this.prerequisitesLastChecked) {
+      //   const timeSinceLastCheck = Date.now() - this.prerequisitesLastChecked;
+      //   // Skip if checked within last 1 minute
+      //   if (timeSinceLastCheck < 1 * 60 * 1000) {
+      //     return this.prerequisitesStatus;
+      //   }
+      // }
+
+      this.prerequisitesChecking = true;
+
+      try {
+        const result = await invoke('check_prerequisites_detailed', {});
+
+        this.prerequisitesStatus = {
+          allOk: result.all_ok,
+          missing: result.missing || [],
+        };
+
+        this.prerequisitesLastChecked = Date.now();
+
+        // // Update the old format for backward compatibility
+        // this.prerequisitesInstalled = result.all_ok;
+        // this.missingPrerequisites = result.missing || [];
+
+        return this.prerequisitesStatus;
+      } catch (error) {
+        console.error("Error checking prerequisites:", error);
+        this.prerequisitesStatus = {
+          allOk: false,
+          missing: [],
+        };
+        return this.prerequisitesStatus;
+      } finally {
+        this.prerequisitesChecking = false;
+      }
+    },
+    // Non-blocking background check
+    checkPrerequisitesBackground() {
+      // Fire and forget - don't await
+      this.checkPrerequisites().catch(err => {
+        console.error("Background prerequisite check failed:", err);
+      });
     },
   },
 

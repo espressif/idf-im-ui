@@ -200,10 +200,15 @@ export default {
         loadingProgress.value = 40
 
         loadingMessage.value = t('basicInstaller.loading.checkingPrerequisites')
-        invoke('check_prerequisites_detailed').then(res => {
-          prerequisitesOk.value = res.all_ok
-          missingPrerequisites.value = res.missing || []
-        })
+        let prerequisitesStatus = null;
+        if (appStore.prerequisitesLastChecked !== null) {
+          prerequisitesStatus = appStore.prerequisitesStatus;
+        } else {
+          prerequisitesStatus = await appStore.checkPrerequisites();
+        }
+        prerequisitesOk.value = prerequisitesStatus.allOk
+        missingPrerequisites.value = prerequisitesStatus.missing || []
+
         loadingProgress.value = 60
 
         loadingMessage.value = t('basicInstaller.loading.scanningArchives')

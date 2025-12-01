@@ -179,6 +179,7 @@ import {
 import GlobalProgress from './GlobalProgress.vue'
 import { useAppStore } from '../store'
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { app } from '@tauri-apps/api'
 
 export default {
   name: 'SimpleSetup',
@@ -253,84 +254,81 @@ export default {
       return 'primary'
     })
 
-    const checkPrerequisites = async () => {
+    const checkPrerequisites = async (force) => {
       try {
         currentState.value = 'checking'
+        if (appStore.prerequisitesLastChecked === null || force) {
+          await appStore.checkPrerequisites(force);
+        }
         // Check prerequisites
-        const prereqResult = invoke('check_prerequisites_detailed').then(async (prereqResult) => {
-          if (!prereqResult.all_ok && appStore.os !== 'windows') {
-            errorTitle.value = t('simpleSetup.error.prerequisites.title')
-            errorMessage.value = t('simpleSetup.error.prerequisites.message')
-            if (appStore.os === 'macos') {
-              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.macosHint', { list: prereqResult.missing.join(' ') })
-            } else if (appStore.os === 'linux') {
-              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.linuxHint', { list: prereqResult.missing.join(' ') })
-            } else {
-              errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + prereqResult.missing.join(', ')
-            }
-            currentState.value = 'error'
-            return false
-          } // TODO: maybe on windows inform user which prerequisities will be installed
-          let python_sane = await invoke("python_sanity_check", {});
-          if (!python_sane) {
-            if (appStore.os == 'windows') {
-              console.log("Python sanity check failed - attempting automatic installation");
-              try {
-                console.log("Installing Python...");
-                await invoke("python_install", {});
-                python_sane = await invoke("python_sanity_check", {});
-              } catch (error) {
-                console.error('Automatic Python installation failed:', error);
-                python_sane = false;
-              }
-            } else {
-              console.log("Python sanity check failed");
-              errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
-              errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-              errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
-              currentState.value = 'error'
-              return false
+        let prereqResult = appStore.prerequisitesStatus;
+        if (!prereqResult.allOk && appStore.os !== 'windows') {
+          errorTitle.value = t('simpleSetup.error.prerequisites.title')
+          errorMessage.value = t('simpleSetup.error.prerequisites.message')
+          if (appStore.os === 'macos') {
+            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.macosHint', { list: prereqResult.missing.join(' ') })
+          } else if (appStore.os === 'linux') {
+            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.linuxHint', { list: prereqResult.missing.join(' ') })
+          } else {
+            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + prereqResult.missing.join(', ')
+          }
+          currentState.value = 'error'
+          return false
+        } // TODO: maybe on windows inform user which prerequisities will be installed
+        let python_sane = await invoke("python_sanity_check", {});
+        if (!python_sane) {
+          if (appStore.os == 'windows') {
+            console.log("Python sanity check failed - attempting automatic installation");
+            try {
+              console.log("Installing Python...");
+              await invoke("python_install", {});
+              python_sane = await invoke("python_sanity_check", {});
+            } catch (error) {
+              console.error('Automatic Python installation failed:', error);
+              python_sane = false;
             }
           } else {
-            console.log("Python sanity check passed");
+            console.log("Python sanity check failed");
+            errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
+            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
+            currentState.value = 'error'
+            return false
           }
-          // Get default installation path
-          invoke('get_settings').then(settings => {
-            installPath.value = settings?.path
-            console.log('Default installation path:', installPath.value);
-            // Get latest ESP-IDF version
-            invoke('get_idf_versions',{includeUnstable: false}).then(versions => {
-              selectedVersion.value = versions?.[0].name || 'v5.5.1';
-              // Check if path is valid
-              let path_to_check = installPath.value;
-              console.log('Checking installation path:', path_to_check);
-              invoke('is_path_empty_or_nonexistent_command', {
-                path: path_to_check,
-                versions: [selectedVersion.value]
-              }).then(pathValid => {
-                console.log('Installation path check result:', pathValid);
-                if (!pathValid) {
-                  errorTitle.value = 'Installation Path Not Empty'
-                  errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
-                  errorDetails.value = 'Please use custom installation to select a different path.'
-                  currentState.value = 'error'
-                  return false
-                } else {
-                  console.log('Installation path is valid:', installPath.value);
-                  currentState.value = 'ready';
-                }
+        } else {
+          console.log("Python sanity check passed");
+        }
+        // Get default installation path
+        invoke('get_settings').then(settings => {
+          installPath.value = settings?.path
+          console.log('Default installation path:', installPath.value);
+          // Get latest ESP-IDF version
+          invoke('get_idf_versions',{includeUnstable: false}).then(versions => {
+            selectedVersion.value = versions?.[0].name || 'v5.5.1';
+            // Check if path is valid
+            let path_to_check = installPath.value;
+            console.log('Checking installation path:', path_to_check);
+            invoke('is_path_empty_or_nonexistent_command', {
+              path: path_to_check,
+              versions: [selectedVersion.value]
+            }).then(pathValid => {
+              console.log('Installation path check result:', pathValid);
+              if (!pathValid) {
+                errorTitle.value = 'Installation Path Not Empty'
+                errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
+                errorDetails.value = 'Please use custom installation to select a different path.'
+                currentState.value = 'error'
+                return false
+              } else {
+                console.log('Installation path is valid:', installPath.value);
+                currentState.value = 'ready';
+              }
 
-              });
             });
           });
-
-
-
-          return true
-        })
+        });
 
         return true
-
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
         errorTitle.value = t('simpleSetup.error.system.title')
@@ -475,7 +473,7 @@ export default {
       installMessages.value = []
       nextTick(() => {
         setTimeout(() => {
-          checkPrerequisites();
+          checkPrerequisites(true);
         }, 300);
       });
     }

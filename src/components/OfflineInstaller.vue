@@ -772,27 +772,30 @@ export default {
     },
 
     check_prerequisites: async function () {
-      this.operating_system = await appStore.getOs();
+      this.operating_system = await this.appStore.getOs();
 
       if (this.operating_system == 'windows') {
         this.missing_prerequisities = [];
         return false;
       }
       this.checkingPrerequisites = true;
+      console.log("Checking prerequisites via store...");
 
-      this.$nextTick(() => {
-        setTimeout(() => {
-          invoke("check_prequisites", {}).then(missing_list => {
-            this.missing_prerequisities = missing_list;
-            console.log("missing prerequisities: ", missing_list);
-            this.checkingPrerequisites = false;
-          }).catch(error => {
-            console.error("Error checking prerequisites:", error);
-            this.checkingPrerequisites = false;
-          });
-        }, 300);
-      });
-      return false;
+      if (!this.appStore.prerequisitesChecking && this.appStore.prerequisitesLastChecked !== null) {
+        this.missing_prerequisities = this.appStore.prerequisitesStatus.missing || [];
+        console.log("Prerequisites already checked, using cached result:", this.missing_prerequisities);
+        this.checkingPrerequisites = false;
+      } else {
+        console.log("Prerequisites not checked yet, invoking store check...");
+        this.appStore.checkPrerequisites().then(() => {
+          this.missing_prerequisities = this.appStore.prerequisitesStatus.missing || [];
+          console.log("Prerequisites check completed via store:", this.missing_prerequisities);
+        }).catch(error => {
+          console.error("Error checking prerequisites via store:", error);
+        });
+        this.checkingPrerequisites = false;
+        return false;
+      }
     },
   },
 

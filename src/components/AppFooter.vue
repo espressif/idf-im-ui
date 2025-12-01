@@ -164,13 +164,7 @@ export default {
     })
 
     const getAppInfo = async () => {
-      try {
-        const info = await invoke('get_app_info')
-        appVersion.value = info.version
-        // buildInfo.value = info.build_info || `${info.build_date} - ${info.commit_hash?.substring(0, 7)}`
-      } catch (error) {
-        console.error('Failed to get app info:', error)
-      }
+      appVersion.value = await appStore.getEimVersion();
     }
 
     const getSystemInfo = async () => {

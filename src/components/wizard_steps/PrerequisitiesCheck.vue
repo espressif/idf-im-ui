@@ -44,7 +44,7 @@
         </div>
       </div>
       <div v-if="missing_prerequisities.length > 0 || !did_the_check_run">
-        <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
+        <n-button @click="check_prerequisites(true)" type="error" :loading="loading" data-id="check-prerequisites-button">
           {{ loading ? t('prerequisitiesCheck.status.checkingButton') : t('prerequisitiesCheck.actions.checkPrerequisites') }}
         </n-button>
       </div>
@@ -96,21 +96,21 @@ export default {
       }));
       return false;
     },
-    check_prerequisites: async function () {
+    check_prerequisites: async function (force) {
       this.loading = true;
-      setTimeout(() => {
-        invoke("check_prequisites", {}).then(missing_list => {
-          this.missing_prerequisities = missing_list;
-          console.log("missing prerequisities: ", missing_list);
-          this.did_the_check_run = true;
-          this.loading = false;
-          this.display_prerequisities = this.display_prerequisities.map(p => ({
-            name: p.name,
-            icon: missing_list.includes(p.name) ? '❌' : '✔',
-          }));
-        });
-      }, 400);
-
+      await this.get_prerequisities_list();
+      if (force) {
+        await this.appStore.checkPrerequisites(force);
+      }
+      let prerequisitesStatus = this.appStore.prerequisitesStatus;
+      console.log("Current prerequisites status from store:", prerequisitesStatus);
+      this.missing_prerequisities = prerequisitesStatus.missing || [];
+      this.did_the_check_run = this.appStore.prerequisitesLastChecked !== null;
+      this.loading = false;
+      this.display_prerequisities = this.display_prerequisities.map(p => ({
+        name: p.name,
+        icon: this.missing_prerequisities.includes(p.name) ? '❌' : '✔',
+      }));
       return false;
     },
     install_prerequisites: async function () {
@@ -131,7 +131,6 @@ export default {
     }
   },
   mounted() {
-    this.get_prerequisities_list();
     this.get_os();
     this.check_prerequisites();
   }
