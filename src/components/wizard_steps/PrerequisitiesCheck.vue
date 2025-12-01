@@ -57,6 +57,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from 'vue-i18n';
 import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
+import { useAppStore } from '../../store'
 
 export default {
   name: 'PrerequisitiesCheck',
@@ -76,6 +77,7 @@ export default {
     missing_prerequisities: [],
     display_prerequisities: [],
     os: undefined,
+    appStore: useAppStore()
   }),
   watch: {
     missing_prerequisities(newValue) {
@@ -119,7 +121,7 @@ export default {
       return false;
     },
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});;
+      this.os = await this.appStore.getOs();
       return false;
     },
   },

@@ -175,12 +175,9 @@ export default {
 
     const getSystemInfo = async () => {
       try {
-        const os = await invoke('get_operating_system')
-        const arch = await invoke('get_system_arch')
-        const cpuCount = await invoke('cpu_count')
-        const additionalSystemInfo = await invoke('get_system_info')
+        await appStore.fetchSystemInfo();
+        const { os, arch, cpuCount , additionalSystemInfo } = appStore;
         systemInfo.value = { os, arch, cpuCount , additionalSystemInfo }
-        appStore.setSystemInfo(systemInfo.value)
       } catch (error) {
         console.error('Failed to get system info:', error)
       }

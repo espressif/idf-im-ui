@@ -284,6 +284,7 @@ import {
   CloseCircleOutlined
 } from '@vicons/antd'
 import { useI18n } from 'vue-i18n'
+import { useAppStore } from '../store'
 
 export default {
   name: 'OfflineInstaller',
@@ -353,6 +354,8 @@ export default {
 
       missing_prerequisities: [],
       checkingPrerequisites: false,
+
+      appStore: useAppStore(),
     }
   },
 
@@ -769,10 +772,9 @@ export default {
     },
 
     check_prerequisites: async function () {
-      const os = await invoke('get_operating_system')
-      this.operating_system = os;
+      this.operating_system = await appStore.getOs();
 
-      if (os == 'windows') {
+      if (this.operating_system == 'windows') {
         this.missing_prerequisities = [];
         return false;
       }

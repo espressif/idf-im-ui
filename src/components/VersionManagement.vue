@@ -264,6 +264,7 @@ import {
   UsbOutlined,
   LaptopOutlined
 } from '@vicons/antd'
+import { useAppStore } from '../store'
 
 export default {
   name: 'VersionManagement',
@@ -292,6 +293,7 @@ export default {
     const selectedVersion = ref(null)
     const newVersionName = ref('')
     const purgeConfirmed = ref(false)
+    const appStore = useAppStore()
 
     const loadInstalledVersions = async () => {
       try {
@@ -304,7 +306,7 @@ export default {
     }
 
     const checkOS = async () => {
-      os.value = await invoke('get_operating_system')
+      os.value = await appStore.getOs();
       if (os.value === 'windows') {
         prerequisitesInstalled.value = await invoke('check_prerequisites')
       }

@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { invoke } from '@tauri-apps/api/core'
 
 export const useAppStore = defineStore("app", {
   state: () => ({
@@ -11,6 +12,7 @@ export const useAppStore = defineStore("app", {
     os: "unknown",
     arch: "unknown",
     cpuCount: 0,
+    additionalSystemInfo: {},
 
     // Installation status
     installedVersions: [],
@@ -53,10 +55,19 @@ export const useAppStore = defineStore("app", {
   },
 
   actions: {
+    async fetchSystemInfo() {
+      const os = await invoke('get_operating_system')
+      const arch = await invoke('get_system_arch')
+      const cpuCount = await invoke('cpu_count')
+      const additionalSystemInfo = await invoke('get_system_info')
+      const info = { os, arch, cpuCount , additionalSystemInfo }
+      this.setSystemInfo(info);
+    },
     setSystemInfo(info) {
       this.os = info.os;
       this.arch = info.arch;
       this.cpuCount = info.cpuCount;
+      this.additionalSystemInfo = info.additionalSystemInfo;
     },
 
     setInstalledVersions(versions) {
@@ -119,6 +130,24 @@ export const useAppStore = defineStore("app", {
 
     setDefaultConfig(config) {
       this.defaultConfig = config;
+    },
+    async getOs() {
+      if (!this.os || this.os === 'unknown') {
+        await this.fetchSystemInfo();
+      }
+      return this.os;
+    },
+    async getCpuCount() {
+      if (!this.cpuCount || this.cpuCount === 0) {
+        await this.fetchSystemInfo();
+      }
+      return this.cpuCount;
+    },
+    async getArch() {
+      if (!this.arch || this.arch === 'unknown') {
+        await this.fetchSystemInfo();
+      }
+      return this.arch;
     },
   },
 

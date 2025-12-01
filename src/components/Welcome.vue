@@ -115,6 +115,7 @@ import {
   FileZipOutlined,
   PlusCircleOutlined
 } from '@vicons/antd'
+import { useAppStore } from '../store'
 
 export default {
   name: 'Welcome',
@@ -143,6 +144,8 @@ export default {
     const dontShowAgain = ref(false)
     const allowUsageTracking = ref(true)
 
+    const appStore = useAppStore()
+
     const getWelcomeMessage = computed(() => {
       if (hasInstalledVersions.value && hasOfflineArchives.value) {
         return t('welcome.messages.withBoth')
@@ -156,12 +159,8 @@ export default {
     })
 
     const checkSystem = async () => {
-      try {
-        os.value = await invoke('get_operating_system')
-        cpuCount.value = await invoke('cpu_count')
-      } catch (error) {
-        console.error('Failed to check system:', error)
-      }
+      os.value = await appStore.getOs();
+      cpuCount.value = await appStore.getCpuCount();
     }
 
     const checkInstallationStatus = async () => {

@@ -103,6 +103,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-shell'
 import { NModal, NButton, useMessage } from 'naive-ui'
+import { useAppStore } from '../store'
 
 export default {
   name: 'UpdateNotification',
@@ -121,6 +122,8 @@ export default {
     const currentPlatform = ref('unknown')
 
     const DOWNLOAD_URL = 'https://dl.espressif.com/dl/eim/index.html'
+
+    const appStore = useAppStore()
 
     // Parse version string to comparable numbers
     const parseVersion = (versionStr) => {
@@ -206,7 +209,7 @@ export default {
         // Get current version and platform
         currentVersion.value = 'v' + await getVersion()
         console.log('Current version:', currentVersion.value)
-        currentPlatform.value = await invoke('get_operating_system')
+        currentPlatform.value = await appStore.getOs();
 
         // Fetch latest version
         const latest = await fetchLatestVersion()
