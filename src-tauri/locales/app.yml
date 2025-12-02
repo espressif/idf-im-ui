@@ -1259,3 +1259,6 @@ gui.offline.processed_archives:
 gui.offline.all_completed:
   en: "All offline installations completed successfully"
   cn: "所有离线安装成功"
+cli.select.activation_instructions:
+  en: "To activate this environment, run the following command in your terminal:"
+  cn: "要激活此环境，请在终端中运行以下命令："
