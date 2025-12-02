@@ -746,7 +746,7 @@ sudo apt install eim</code></pre>
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
                   <div class="download-buttons">
                     <github-icon-button :href="artifact.browser_download_url" @click="trackDownload(artifact, 'github', 'gui')"></github-icon-button>
-                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'gui')">Download</a>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'gui')" :download="artifact.name">Download</a>
                   </div>
                 </div>
               </div>
@@ -760,7 +760,7 @@ sudo apt install eim</code></pre>
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
                   <div class="download-buttons">
                     <github-icon-button :href="artifact.browser_download_url" @click="trackDownload(artifact, 'github', 'cli')"></github-icon-button>
-                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'cli')">Download</a>
+                    <a :href="getDlEspressifUrl(artifact.browser_download_url)" class="download-button" target="_blank" @click="trackDownload(artifact, 'espressif', 'cli')" :download="artifact.name">Download</a>
                   </div>
                 </div>
               </div>
@@ -815,7 +815,7 @@ sudo apt install eim</code></pre>
                 <div class="download-meta">
                   <span class="download-size">{{ formatSize(item.size) }}</span>
                   <div class="download-buttons">
-                    <a :href="item.url" class="download-button" target="_blank">Download</a>
+                    <a :href="item.url" class="download-button" target="_blank" :download="item.filename">Download</a>
                   </div>
                 </div>
               </div>
@@ -880,7 +880,7 @@ sudo apt install eim</code></pre>
                   <span class="download-size">{{ formatSize(tool.size) }}</span>
                   <div class="download-buttons">
                     <github-icon-button :href="tool.browser_download_url"></github-icon-button>
-                    <a :href="getDlEspressifUrl(tool.browser_download_url)" class="download-button" target="_blank">Download</a>
+                    <a :href="getDlEspressifUrl(tool.browser_download_url)" class="download-button" target="_blank" :download="tool.name">Download</a>
                   </div>
                 </div>
               </div>
