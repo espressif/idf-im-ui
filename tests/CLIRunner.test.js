@@ -16,7 +16,8 @@
             "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
         "deleteAfterTest": true         // Whether to remove IDF installation folder and IDF tools folder after test
-        "testProxyMode": "block"            // If the test run with local proxy to log or block internet access during test : "block", "log", false
+        "testProxyMode": "block"        // If the test run with local proxy to log or block internet access during test : "block", "block-list", "log", false
+        "proxyBlockList": []            // List of domains to block when testProxyMode is set to "block-list"
 
 
  */
@@ -84,6 +85,7 @@ function testRun(jsonScript) {
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -92,6 +94,7 @@ function testRun(jsonScript) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMCLI,
           testProxyMode,
+          proxyBlockList,
         });
 
         runInstallVerification({
@@ -137,13 +140,23 @@ function testRun(jsonScript) {
       test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
 
       test.data.toolsMirror &&
-        installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`);
+        installArgs.push(
+          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
+        );
 
       test.data.idfMirror &&
-        installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`);
+        installArgs.push(
+          `--idf-mirror ${
+            IDFMIRRORS[test.data.idfMirror] || "https://github.com"
+          }`
+        );
 
       test.data.pypiMirror &&
-        installArgs.push(`--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`);
+        installArgs.push(
+          `--pypi-mirror ${
+            PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"
+          }`
+        );
 
       test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
 
@@ -152,6 +165,7 @@ function testRun(jsonScript) {
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -161,6 +175,7 @@ function testRun(jsonScript) {
           pathToEIM: pathToEIMCLI,
           args: installArgs,
           testProxyMode,
+          proxyBlockList,
         });
 
         runInstallVerification({
@@ -193,7 +208,7 @@ function testRun(jsonScript) {
         : INSTALLFOLDER;
 
       const deleteAfterTest = test.deleteAfterTest ?? true;
-              
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
@@ -215,6 +230,7 @@ function testRun(jsonScript) {
       //routine for offline installation test
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? "block";
+      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, async function () {
         this.timeout(6000000);
@@ -225,6 +241,7 @@ function testRun(jsonScript) {
           offlineIDFVersion: IDFDefaultVersion,
           offlinePkgName: pkgName,
           testProxyMode,
+          proxyBlockList,
         });
 
         runInstallVerification({

@@ -34,7 +34,7 @@
     "deleteAfterTest": false,
     "testProxyMode": false
   },
-    {
+  {
     "id": 5,
     "type": "version-management",
     "name": "GUI Version Management",
@@ -49,6 +49,6 @@
     "name": "GUI Offline Installation",
     "data": {},
     "deleteAfterTest": true,
-    "testProxyMode": false
+    "testProxyMode": "block"
   }
 ]
