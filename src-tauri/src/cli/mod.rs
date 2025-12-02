@@ -12,6 +12,7 @@ use idf_im_lib::get_log_directory;
 use idf_im_lib::idf_versions;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
+use idf_im_lib::version_manager::get_selected_version;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
@@ -232,6 +233,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                                 Ok(selected) => match select_idf_version(&selected) {
                                     Ok(_) => {
                                         println!("{}", t!("select.success", version = selected));
+                                        if let Some(selected) = get_selected_version() {
+                                          println!("{}", t!("wizard.separator.line"));
+                                          println!("{}", t!("cli.select.activation_instructions"));
+                                          println!("source {}",selected.activation_script );
+                                          println!("{}", t!("wizard.separator.line"));
+                                        } else {
+                                          warn!("{}", t!("select.unable_to_get_selected"));
+                                        }
                                         Ok(())
                                     }
                                     Err(err) => Err(anyhow::anyhow!(err)),
@@ -250,6 +259,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 match select_idf_version(&version.clone().unwrap()) {
                     Ok(_) => {
                         info!("{}", t!("select.success", version = version.clone().unwrap()));
+                        if let Some(selected) = get_selected_version() {
+                          info!("{}", t!("wizard.separator.line"));
+                          info!("{}", t!("cli.select.activation_instructions"));
+                          info!("source {}",selected.activation_script );
+                          info!("{}", t!("wizard.separator.line"));
+                        } else {
+                          warn!("{}", t!("select.unable_to_get_selected"));
+                        }
                         Ok(())
                     }
                     Err(err) => Err(anyhow::anyhow!(err)),
