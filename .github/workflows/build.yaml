@@ -252,6 +252,36 @@ jobs:
           asset_path: src-tauri/target/debian/eim*.deb
           asset_name: eim-cli-${{ matrix.package_name }}.deb
 
+      - name: Build CLI .rpm package
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: |
+          cd src-tauri
+          # Install cargo-generate-rpm if not present
+          cargo install cargo-generate-rpm || true
+          # Build .rpm with version from tag
+          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+          cargo generate-rpm --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
+            --payload-compress gzip
+        shell: bash
+
+      - name: Upload CLI .rpm artifact
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          path: src-tauri/target/generate-rpm/*.rpm
+          if-no-files-found: warn
+
+      - name: Upload CLI .rpm Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/generate-rpm/*.rpm
+          asset_name: eim-cli-${{ matrix.package_name }}.rpm
+
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -790,6 +820,16 @@ jobs:
             # src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
+      - name: Upload Release Assets (Linux - .rpm)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/release/bundle/rpm/*.rpm
+          asset_name: eim-gui-${{ matrix.package_name }}.rpm
+
       - name: Upload Linux artifacts - .AppImage
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
@@ -1217,6 +1257,119 @@ jobs:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/apt/*"
+
+  update-rpm-repo:
+    name: Update RPM Repository on S3
+    needs: [build-cli-linux, build-gui, update-release-info]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release' && github.event.action == 'created'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Install createrepo_c for RPM repo management
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y createrepo-c rpm
+
+      - name: Download GUI linux-x64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-x64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Download GUI linux-aarch64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-aarch64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Download CLI linux-x64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+
+      - name: Download CLI linux-aarch64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Create RPM repository structure
+        run: |
+          # Create directory structure
+          mkdir -p rpm-repo/x86_64
+          mkdir -p rpm-repo/aarch64
+
+          # Sync existing .rpm files from S3
+          aws s3 sync s3://espdldata/dl/eim/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
+          aws s3 sync s3://espdldata/dl/eim/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
+
+          # Copy new .rpm files to appropriate architecture directories
+          find new-rpms -name "*x86_64*.rpm" -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
+          find new-rpms -name "*aarch64*.rpm" -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
+
+          # Debug: Show what's in the repo
+          echo "x86_64 RPMs:"
+          ls -la rpm-repo/x86_64/
+          echo "aarch64 RPMs:"
+          ls -la rpm-repo/aarch64/
+
+      - name: Generate RPM repository metadata
+        working-directory: rpm-repo
+        run: |
+          # Generate metadata for x86_64
+          if [ -n "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
+            createrepo_c x86_64/
+          else
+            echo "No x86_64 RPMs found, skipping metadata generation"
+          fi
+
+          # Generate metadata for aarch64
+          if [ -n "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
+            createrepo_c aarch64/
+          else
+            echo "No aarch64 RPMs found, skipping metadata generation"
+          fi
+
+      - name: Create repo file
+        run: |
+          cat > rpm-repo/eim.repo << EOF
+          [eim]
+          name=ESP-IDF Installation Manager
+          baseurl=https://dl.espressif.com/dl/eim/rpm/\$basearch
+          enabled=1
+          gpgcheck=0
+          EOF
+
+          echo "Generated eim.repo:"
+          cat rpm-repo/eim.repo
+
+      - name: Upload repository to S3
+        run: |
+          # Upload the entire repository structure
+          aws s3 sync rpm-repo/ s3://espdldata/dl/eim/rpm/ --acl public-read --delete
+
+          # Verify upload
+          echo "Uploaded repository structure:"
+          aws s3 ls s3://espdldata/dl/eim/rpm/ --recursive
+
+      - name: Invalidate CloudFront cache
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/rpm/*"
 
   generate-windows-packages:
       name: Generate Windows Packages
