@@ -271,8 +271,8 @@ async fn download_idf(
     let mut mirror_to_use: String = mirror.to_string();
 
     if is_simple_installation && mirror == &default_mirror_str {
-        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(&idf_im_lib::get_idf_mirrors_list().to_vec()).await;
-        let best_mirror = get_best_mirror(&mirror_latency_map).await;
+        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(idf_im_lib::get_idf_mirrors_list()).await;
+        let best_mirror = get_best_mirror(mirror_latency_map).await;
         if best_mirror.is_some() {
             mirror_to_use = best_mirror.unwrap();
         }
@@ -383,10 +383,8 @@ pub async fn install_single_version(
 }
 
 #[cfg(target_os = "windows")]
-#[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    set_is_simple_installation(&app_handle, false)?;
 
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
@@ -804,12 +802,18 @@ fn is_process_running(pid: u32) -> bool {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
 #[tauri::command]
+pub async fn start_installation_gui_cmd(app_handle: AppHandle) -> Result<(), String> {
+    info!("Starting installation via GUI command");
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    set_is_simple_installation(&app_handle, false)?;
+    start_installation(app_handle).await
+}
+
+#[cfg(not(target_os = "windows"))]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    set_is_simple_installation(&app_handle, false)?;
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);

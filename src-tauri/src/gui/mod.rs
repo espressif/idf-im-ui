@@ -242,7 +242,7 @@ pub fn run(leg_level_override: Option<log::LevelFilter>) {
             load_settings,
             get_installation_path,
             set_installation_path,
-            start_installation,
+            start_installation_gui_cmd,
             is_installing,
             start_simple_setup,
             quit_app,

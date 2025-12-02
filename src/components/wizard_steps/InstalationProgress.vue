@@ -342,7 +342,7 @@ export default {
             this._progressData.currentActivity = `${this.t('installationProgress.fixMode.title')} ${this.fixing_version.name}...`;
           }
         } else {
-          await invoke("start_installation", {});
+          await invoke("start_installation_gui_cmd", {});
         }
       } catch (e) {
         console.error('Error during installation:', e);

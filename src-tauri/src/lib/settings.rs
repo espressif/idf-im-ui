@@ -36,7 +36,7 @@ pub struct Settings {
     pub config_file_save_path: Option<PathBuf>,
     pub non_interactive: Option<bool>,
     pub wizard_all_questions: Option<bool>,
-    pub tools_mirror: Option<String>,
+    pub mirror: Option<String>,
     pub idf_mirror: Option<String>,
     pub pypi_mirror: Option<String>,
     pub recurse_submodules: Option<bool>,
@@ -105,7 +105,7 @@ impl Default for Settings {
             config_file_save_path: Some(PathBuf::from("eim_config.toml")),
             non_interactive: Some(true),
             wizard_all_questions: Some(false),
-            tools_mirror: Some(
+            mirror: Some(
                 crate::get_idf_tools_mirrors_list()
                     .first()
                     .unwrap()
@@ -276,7 +276,7 @@ impl Settings {
             config_file_save_path,
             non_interactive,
             wizard_all_questions,
-            tools_mirror,
+            mirror,
             idf_mirror,
             pypi_mirror,
             recurse_submodules,

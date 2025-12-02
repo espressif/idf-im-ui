@@ -294,7 +294,7 @@ pub async fn get_tools_mirror_list(app_handle: AppHandle) -> Value {
       }
   };
 
-  let mirror = settings.tools_mirror.clone().unwrap_or_default();
+  let mirror = settings.mirror.clone().unwrap_or_default();
   let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
 
   if !available_mirrors.contains(&mirror.as_str()) {
@@ -324,7 +324,7 @@ pub fn get_tools_mirror_urls(app_handle: AppHandle) -> Value {
         }
     };
 
-    let selected = settings.tools_mirror.clone().unwrap_or_default();
+    let selected = settings.mirror.clone().unwrap_or_default();
     let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
     if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
         let mut new_mirrors = vec![selected.as_str()];
@@ -343,7 +343,7 @@ pub fn get_tools_mirror_urls(app_handle: AppHandle) -> Value {
 pub fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
   info!("Setting tools mirror: {}", mirror);
   update_settings(&app_handle, |settings| {
-      settings.tools_mirror = Some(mirror);
+      settings.mirror = Some(mirror);
   })?;
 
   send_message(

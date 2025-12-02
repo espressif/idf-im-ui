@@ -20,6 +20,7 @@ use std::{
     io::{self, BufReader, Read},
     path::{Path, PathBuf},
     time::{Duration, Instant},
+    cmp::Ordering,
 };
 
 use anyhow::{anyhow, Result, Error};
@@ -29,6 +30,35 @@ use std::sync::atomic::AtomicBool;
 use log::{debug, error, info, warn};
 use regex::Regex;
 use url::Url;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MirrorEntry {
+    pub url: String,
+    pub latency: Option<u32>,
+}
+
+impl PartialOrd for MirrorEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MirrorEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.latency.is_some() && other.latency.is_some() {
+            let a = self.latency.unwrap();
+            let b = other.latency.unwrap();
+            return a.cmp(&b);
+        }
+        if self.latency.is_some() && other.latency.is_none() {
+            return Ordering::Less;
+        }
+        if self.latency.is_none() && other.latency.is_some() {
+            return Ordering::Greater;
+        }
+        Ordering::Equal
+    }
+}
 
 /// This function retrieves the path to the git executable.
 ///
@@ -829,7 +859,7 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
 }
 
 /// Return URL -> score (lower is better). Unreachable mirrors get None.
-pub async fn calculate_mirror_latency_map(mirrors: &Vec<&str>) -> HashMap<String, Option<u32>> {
+pub async fn calculate_mirror_latency_map(mirrors: &[&str]) -> HashMap<String, Option<u32>> {
     let timeout = Duration::from_millis(3000);
     info!(
         "Starting mirror latency checks ({} candidates)...",
@@ -1409,7 +1439,7 @@ set(IDF_VERSION_MAJOR 5)
             "file:///not-applicable",
         ];
 
-        let map = calculate_mirror_latency_map(&mirrors.to_vec()).await;
+        let map = calculate_mirror_latency_map(mirrors).await;
         assert_eq!(map.len(), 3);
         for m in mirrors.iter() {
             assert_eq!(map.get(&m.to_string()), Some(&None));

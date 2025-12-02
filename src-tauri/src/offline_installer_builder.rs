@@ -602,7 +602,7 @@ async fn main() {
             let download_links = get_list_of_tools_to_download(
                 tools.clone(),
                 settings.clone().target.unwrap_or(vec!["all".to_string()]),
-                settings.tools_mirror.as_deref(),
+                settings.mirror.as_deref(),
             );
 
             let tool_path = archive_dir.path().join("dist");

@@ -17,6 +17,8 @@ use rust_i18n::t;
 // no runtime creation here; we run inside the app's existing Tokio runtime
 
 use crate::cli::helpers::generic_confirm_with_default;
+use idf_im_lib::utils::calculate_mirror_latency_map;
+use idf_im_lib::utils::MirrorEntry;
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
@@ -189,12 +191,12 @@ pub fn check_and_install_python(
 
 async fn select_single_mirror<FGet, FSet>(
     config: &mut Settings,
-    field_name: &str,        // e.g. "idf_mirror"
-    get_value: FGet,         // e.g. |c: &Settings| &c.idf_mirror
-    set_value: FSet,         // e.g. |c: &mut Settings, v| c.idf_mirror = Some(v)
+    field_name: &str,    // e.g. "idf_mirror"
+    get_value: FGet,     // e.g. |c: &Settings| &c.idf_mirror
+    set_value: FSet,     // e.g. |c: &mut Settings, v| c.idf_mirror = Some(v)
     candidates: &[&str], // list of mirror URLs
-    wizard_key: &str,        // e.g. "wizard.idf.mirror"
-    log_prefix: &str,        // e.g. "IDF", "Tools", "PyPI"
+    wizard_key: &str,    // e.g. "wizard.idf.mirror"
+    log_prefix: &str,    // e.g. "IDF", "Tools", "PyPI"
 ) -> Result<(), String>
 where
     FGet: Fn(&Settings) -> &Option<String>,
@@ -208,20 +210,31 @@ where
 
     // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
-        let entries = sorted_mirror_entries(candidates).await;
-        let display = mirror_entries_to_display(&entries);
+        let mut entries = calculate_mirror_latency_map(candidates).await.into_iter()
+            .map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
+        entries.sort();
+        let display = entries.iter().map(|e| {
+            if e.latency.is_none() {
+                format!("{} (timeout)", e.url)
+            } else {
+                format!("{} ({:?} ms)", e.url, e.latency.unwrap())
+                }
+            })
+            .collect::<Vec<String>>();
         let selected = generic_select(wizard_key, &display)?;
-        let url = url_from_display_line(&selected);
+        let url = selected.split(" (").next().unwrap_or(&selected).to_string();
         set_value(config, url);
     } else if needs_value {
-        let entries = sorted_mirror_entries(candidates).await;
-        if let Some((url, score)) = entries.first() {
-            if score.is_none() {
-                info!("Selected {log_prefix} mirror: {url} (timeout)");
+        let mut entries = calculate_mirror_latency_map(candidates).await.into_iter()
+        .map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
+        entries.sort();
+        if let Some(entry) = entries.first() {
+            if entry.latency.is_none() {
+                info!("Selected {log_prefix} mirror: {} (timeout)", entry.url);
             } else {
-                info!("Selected {log_prefix} mirror: {url} ({:?} ms)", score.unwrap());
+                info!("Selected {log_prefix} mirror: {} ({:?} ms)", entry.url, entry.latency.unwrap());
             }
-            set_value(config, url.clone());
+            set_value(config, entry.url.clone());
         }
     }
 
@@ -248,9 +261,9 @@ pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
 
     select_single_mirror(
         &mut config,
-        "tools_mirror",
-        |c: &Settings| &c.tools_mirror,
-        |c: &mut Settings, v| c.tools_mirror = Some(v),
+        "mirror",
+        |c: &Settings| &c.mirror,
+        |c: &mut Settings, v| c.mirror = Some(v),
         tools_candidates,
         "wizard.tools.mirror",
         "Tools",
