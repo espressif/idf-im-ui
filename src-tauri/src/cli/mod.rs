@@ -155,11 +155,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             info!("Returned settings: {:?}", settings);
             match settings {
                 Ok(mut settings) => {
-                  info!("Settings before adjustments: {:?}", settings);
+                  debug!("Settings before adjustments: {:?}", settings);
                   if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
                   }
-                  info!("Settings after adjustments: {:?}", settings);
+                  debug!("Settings after adjustments: {:?}", settings);
                   let time = std::time::SystemTime::now();
                   if !do_not_track {
                       track_cli_event("CLI installation started", Some(json!({

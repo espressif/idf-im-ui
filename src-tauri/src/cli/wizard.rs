@@ -330,7 +330,7 @@ async fn download_and_extract_tools(
 }
 
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
-    info!(
+    debug!(
         "{}",
         t!(
             "wizard.debug.config_entering",

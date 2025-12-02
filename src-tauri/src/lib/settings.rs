@@ -154,7 +154,7 @@ impl Settings {
             }
         }
 
-        log::info!("CLI overrides: {:?}", cli_overrides);
+        log::debug!("CLI overrides: {:?}", cli_overrides);
 
         // If a config file is provided, load it
         if let Some(config_path) = config_path.clone() {
@@ -168,7 +168,7 @@ impl Settings {
             log::warn!("Config file does not exist: {:?}", config_path);
           }
         }
-        log::info!("Settings after file load {:?}", settings);
+        log::debug!("Settings after file load {:?}", settings);
 
         log::debug!("Settings after config load - idf_features: {:?}", settings.idf_features);
 
@@ -217,7 +217,7 @@ impl Settings {
         if settings.config_file.is_none() {
             settings.config_file = config_path;
         }
-        log::info!("Final settings: {:?}", settings);
+        log::debug!("Final settings: {:?}", settings);
 
 
         Ok(settings)
