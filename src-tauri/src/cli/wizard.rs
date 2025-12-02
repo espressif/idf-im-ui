@@ -323,7 +323,7 @@ async fn download_and_extract_tools(
         config.target.clone().unwrap(),
         download_dir,
         install_dir,
-        config.tools_mirror.as_deref(),
+        config.mirror.as_deref(),
         progress_callback,
     )
     .await

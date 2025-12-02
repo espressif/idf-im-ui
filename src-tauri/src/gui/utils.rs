@@ -1,5 +1,6 @@
 use std::{ fs, path::Path};
 use std::collections::HashMap;
+use idf_im_lib::utils::MirrorEntry;
 
 /// Checks if a path is empty or doesn't exist
 ///
@@ -41,26 +42,19 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
     }
 }
 
-pub async fn get_best_mirror(mirror_latency_map: &HashMap<String, Option<u32>>) -> Option<String> {
+pub async fn get_best_mirror(mirror_latency_map: HashMap<String, Option<u32>>) -> Option<String> {
     log::info!("Selecting best mirror from latency map: {:?}", mirror_latency_map);
-    let mut best_mirror: Option<String> = None;
-    let mut lowest_latency: Option<u32> = None;
-
-    for (mirror, latency) in mirror_latency_map {
-        if latency.is_none() {
-            log::warn!("Mirror {} has no latency data, skipping", mirror);
-            continue;
-        }
-        let latency_value = latency.unwrap();
-        log::info!("Mirror: {}, Latency: {}", mirror, latency_value);
-        if lowest_latency.is_none() || latency_value < lowest_latency.unwrap() {
-            lowest_latency = Some(latency_value);
-            best_mirror = Some(mirror.clone());
-        }
+    let mut mirror_entries = mirror_latency_map.into_iter().map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
+    mirror_entries.sort();
+    let best_mirror = mirror_entries.first();
+    if best_mirror.is_some() {
+        log::info!("Best mirror selected: {:?}", best_mirror.unwrap().url);
+        Some(best_mirror.unwrap().url.clone())
     }
-
-    log::info!("Best mirror selected: {:?}", best_mirror);
-    best_mirror
+    else {
+        log::info!("No best mirror found");
+        None
+    }
 }
 
 #[cfg(test)]
