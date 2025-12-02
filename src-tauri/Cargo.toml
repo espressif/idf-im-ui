@@ -17,13 +17,43 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies
 the setup process for ESP-IDF and integrated development environments (IDEs)
 across multiple platforms. This package contains the command-line interface."""
 license-file = ["../LICENSE"]
-depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, libgcrypt20, libglib2.0-0, libpixman-1-0, libsdl2-2.0-0 | libsdl2-dev, libslirp0 | libslirp-dev, python3 (>= 3.9)"
+depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, libgcrypt20, libglib2.0-0, libpixman-1-0, libsdl2-2.0-0 | libsdl2-dev, libslirp0 | libslirp-dev, python3 (>= 3.10)"
 assets = [
     ["target/release/eim", "usr/bin/", "755"],
     ["../README.md", "usr/share/doc/eim-cli/", "644"],
     ["../LICENSE", "usr/share/doc/eim-cli/", "644"],
     ["../man/eim.1", "usr/share/man/man1/", "644"],
 ]
+
+[package.metadata.generate-rpm]
+name = "eim-cli"
+summary = "ESP-IDF Installation Manager CLI"
+license = "MIT"
+assets = [
+    { source = "target/release/eim", dest = "/usr/bin/eim", mode = "755" },
+    { source = "../README.md", dest = "/usr/share/doc/eim-cli/README.md", mode = "644", doc = true },
+    { source = "../LICENSE", dest = "/usr/share/doc/eim-cli/LICENSE", mode = "644", doc = true },
+    { source = "../man/eim.1", dest = "/usr/share/man/man1/eim.1", mode = "644", doc = true },
+]
+
+[package.metadata.generate-rpm.requires]
+git = "*"
+wget = "*"
+flex = "*"
+cmake = "*"
+bison = "*"
+gperf = "*"
+ccache = "*"
+libffi-devel = "*"
+openssl-devel = "*"
+dfu-util = "*"
+libusb = "*"
+libgcrypt = "*"
+glib2 = "*"
+pixman = "*"
+SDL2 = "*"
+libslirp = "*"
+python3 = ">= 3.10"
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
