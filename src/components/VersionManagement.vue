@@ -264,6 +264,7 @@ import {
   UsbOutlined,
   LaptopOutlined
 } from '@vicons/antd'
+import { useAppStore } from '../store'
 
 export default {
   name: 'VersionManagement',
@@ -292,6 +293,7 @@ export default {
     const selectedVersion = ref(null)
     const newVersionName = ref('')
     const purgeConfirmed = ref(false)
+    const appStore = useAppStore()
 
     const loadInstalledVersions = async () => {
       try {
@@ -304,7 +306,7 @@ export default {
     }
 
     const checkOS = async () => {
-      os.value = await invoke('get_operating_system')
+      os.value = await appStore.getOs();
       if (os.value === 'windows') {
         prerequisitesInstalled.value = await invoke('check_prerequisites')
       }
@@ -319,22 +321,6 @@ export default {
       if (bytes === 0) return '0 B'
       const i = Math.floor(Math.log(bytes) / Math.log(1024))
       return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i]
-    }
-
-    const checkForUpdates = async () => {
-      checkingUpdates.value = true
-      try {
-        const hasUpdate = await invoke('check_for_updates')
-        if (hasUpdate) {
-          message.info(t('versionManagement.messages.success.updateAvailable'))
-        } else {
-          message.success(t('versionManagement.messages.success.latestVersion'))
-        }
-      } catch (error) {
-        message.error(t('versionManagement.messages.error.checkUpdates'))
-      } finally {
-        checkingUpdates.value = false
-      }
     }
 
     const renameVersion = (version) => {
@@ -509,7 +495,6 @@ export default {
       purgeConfirmed,
       formatDate,
       formatSize,
-      checkForUpdates,
       renameVersion,
       openIDFTerminal,
       confirmRename,

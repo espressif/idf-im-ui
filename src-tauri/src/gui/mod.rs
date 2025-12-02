@@ -21,7 +21,7 @@ pub mod utils;
 
 use app_state::{AppState};
 use ui::{send_message, ProgressBar};
-use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*, utils_commands::*, version_management::*};
+use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*, version_management::*};
 
 fn prepare_installation_directories(
     app_handle: AppHandle,
@@ -270,6 +270,7 @@ pub fn run() {
             open_terminal_with_script,
             get_pypi_mirror_list,
             set_pypi_mirror,
+            fetch_json_from_url
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

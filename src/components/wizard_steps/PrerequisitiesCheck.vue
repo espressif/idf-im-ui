@@ -44,7 +44,7 @@
         </div>
       </div>
       <div v-if="missing_prerequisities.length > 0 || !did_the_check_run">
-        <n-button @click="check_prerequisites" type="error" :loading="loading" data-id="check-prerequisites-button">
+        <n-button @click="check_prerequisites(true)" type="error" :loading="loading" data-id="check-prerequisites-button">
           {{ loading ? t('prerequisitiesCheck.status.checkingButton') : t('prerequisitiesCheck.actions.checkPrerequisites') }}
         </n-button>
       </div>
@@ -57,6 +57,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from 'vue-i18n';
 import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
+import { useAppStore } from '../../store'
 
 export default {
   name: 'PrerequisitiesCheck',
@@ -76,6 +77,7 @@ export default {
     missing_prerequisities: [],
     display_prerequisities: [],
     os: undefined,
+    appStore: useAppStore()
   }),
   watch: {
     missing_prerequisities(newValue) {
@@ -94,21 +96,21 @@ export default {
       }));
       return false;
     },
-    check_prerequisites: async function () {
+    check_prerequisites: async function (force) {
       this.loading = true;
-      setTimeout(() => {
-        invoke("check_prequisites", {}).then(missing_list => {
-          this.missing_prerequisities = missing_list;
-          console.log("missing prerequisities: ", missing_list);
-          this.did_the_check_run = true;
-          this.loading = false;
-          this.display_prerequisities = this.display_prerequisities.map(p => ({
-            name: p.name,
-            icon: missing_list.includes(p.name) ? '❌' : '✔',
-          }));
-        });
-      }, 400);
-
+      await this.get_prerequisities_list();
+      if (force) {
+        await this.appStore.checkPrerequisites(force);
+      }
+      let prerequisitesStatus = this.appStore.prerequisitesStatus;
+      console.log("Current prerequisites status from store:", prerequisitesStatus);
+      this.missing_prerequisities = prerequisitesStatus.missing || [];
+      this.did_the_check_run = this.appStore.prerequisitesLastChecked !== null;
+      this.loading = false;
+      this.display_prerequisities = this.display_prerequisities.map(p => ({
+        name: p.name,
+        icon: this.missing_prerequisities.includes(p.name) ? '❌' : '✔',
+      }));
       return false;
     },
     install_prerequisites: async function () {
@@ -119,7 +121,7 @@ export default {
       return false;
     },
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});;
+      this.os = await this.appStore.getOs();
       return false;
     },
   },
@@ -129,7 +131,6 @@ export default {
     }
   },
   mounted() {
-    this.get_prerequisities_list();
     this.get_os();
     this.check_prerequisites();
   }

@@ -97,7 +97,6 @@ export default {
         { titleKey: "wizardStep.steps.installationComplete" }
       ],
       transitionName: 'slide-left',
-      previousStep: 1
     }
   },
   computed: {

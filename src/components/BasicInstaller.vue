@@ -156,6 +156,7 @@ import {
   FileTextOutlined,
   InboxOutlined
 } from '@vicons/antd'
+import { useAppStore } from '../store'
 
 const loadingDiv = ref(null);
 
@@ -185,6 +186,7 @@ export default {
     const offlineInputCITests = ref(null);
     const configInputCITests = ref(null);
 
+    const appStore = useAppStore()
 
     const checkPrerequisites = async () => {
       try {
@@ -192,14 +194,21 @@ export default {
         loadingProgress.value = 20
 
         loadingMessage.value = t('basicInstaller.loading.detectingOS')
-        os.value = await invoke('get_operating_system')
+
+        os.value = await appStore.getOs();
+
         loadingProgress.value = 40
 
         loadingMessage.value = t('basicInstaller.loading.checkingPrerequisites')
-        invoke('check_prerequisites_detailed').then(res => {
-          prerequisitesOk.value = res.all_ok
-          missingPrerequisites.value = res.missing || []
-        })
+        let prerequisitesStatus = null;
+        if (appStore.prerequisitesLastChecked !== null) {
+          prerequisitesStatus = appStore.prerequisitesStatus;
+        } else {
+          prerequisitesStatus = await appStore.checkPrerequisites();
+        }
+        prerequisitesOk.value = prerequisitesStatus.allOk
+        missingPrerequisites.value = prerequisitesStatus.missing || []
+
         loadingProgress.value = 60
 
         loadingMessage.value = t('basicInstaller.loading.scanningArchives')

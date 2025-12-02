@@ -189,7 +189,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin, NCard, NTag, NTabs, NTabPane, NTable, NCollapse, NCollapseItem, NAlert, NProgress } from 'naive-ui'
 import { listen } from '@tauri-apps/api/event'
-import { useWizardStore } from '../../store'
+import { useWizardStore, useAppStore } from '../../store'
 import { navigationState } from '../../router';
 import { useI18n } from 'vue-i18n'
 
@@ -676,7 +676,7 @@ export default {
     },
 
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});
+      this.os = await this.appStore.getOs();
     },
 
     handleCompletion() {
@@ -749,6 +749,10 @@ export default {
   computed: {
     store() {
       return useWizardStore()
+    },
+
+    appStore() {
+      return useAppStore()
     },
 
     idf_versions() {

@@ -103,6 +103,7 @@ import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
 import { open } from '@tauri-apps/plugin-shell'
 import { NModal, NButton, useMessage } from 'naive-ui'
+import { useAppStore } from '../store'
 
 export default {
   name: 'UpdateNotification',
@@ -121,6 +122,8 @@ export default {
     const currentPlatform = ref('unknown')
 
     const DOWNLOAD_URL = 'https://dl.espressif.com/dl/eim/index.html'
+
+    const appStore = useAppStore()
 
     // Parse version string to comparable numbers
     const parseVersion = (versionStr) => {
@@ -147,22 +150,24 @@ export default {
 
     // Fetch and parse the latest version from the website
     const fetchLatestVersion = async () => {
-      try {
-        const response = await fetch('https://dl.espressif.com/dl/eim/eim_unified_release.json')
-        const data = await response.json()
-        const version = data.tag_name
+    try {
+      const data = await invoke('fetch_json_from_url', {
+        url: 'https://dl.espressif.com/dl/eim/eim_unified_release.json'
+      })
+      const version = data.tag_name
+      console.log('Fetched latest version:', version)
 
-        if (version) {
-          return version
-        }
-
-        return null
-      } catch (error) {
-        // Fail silently
-        console.log('Failed to fetch latest version:', error)
-        return null
+      if (version) {
+        return version
       }
+
+      return null
+    } catch (error) {
+      console.log('Failed to fetch latest version:', error)
+      return null
     }
+  }
+
 
 
     // Dismiss update
@@ -204,7 +209,7 @@ export default {
         // Get current version and platform
         currentVersion.value = 'v' + await getVersion()
         console.log('Current version:', currentVersion.value)
-        currentPlatform.value = await invoke('get_operating_system')
+        currentPlatform.value = await appStore.getOs();
 
         // Fetch latest version
         const latest = await fetchLatestVersion()

@@ -52,6 +52,7 @@ import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
+import { useAppStore } from '../../store'
 
 export default {
   name: 'PythonSanitycheck',
@@ -68,6 +69,7 @@ export default {
     loading: true,
     python_sane: false,
     installing_python: false,
+    appStore: useAppStore()
   }),
   watch: {
     python_sane(newValue) {
@@ -87,7 +89,7 @@ export default {
       return false;
     },
     get_os: async function () {
-      this.os = await invoke("get_operating_system", {});
+      this.os = await this.appStore.getOs();
       this.os = this.os.toLowerCase();
       return false;
     },

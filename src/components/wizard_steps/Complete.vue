@@ -69,7 +69,7 @@ import { NButton, NResult, NAlert } from 'naive-ui'
 import { save } from '@tauri-apps/plugin-dialog';
 import loading from "naive-ui/es/_internal/loading";
 import { useRouter } from 'vue-router'
-import { useWizardStore } from '../../store'
+import { useWizardStore, useAppStore } from '../../store'
 
 
 export default {
@@ -90,10 +90,13 @@ export default {
     wizStore() {
       return useWizardStore()
     },
+    appStore() {
+      return useAppStore()
+    }
   },
   methods: {
     async get_os() {
-      this.os = (await invoke("get_operating_system", {})).toLowerCase();
+      this.os = (await this.appStore.getOs()).toLowerCase();
     },
     goHome() {
       this.wizStore.resetWizard();
