@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{InstallationProgress, InstallationStage, MessageLevel, emit_installation_event, emit_log_message}, utils::{get_best_mirror, is_path_empty_or_nonexistent}};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::{is_path_empty_or_nonexistent, get_best_mirror}};
 use std::{
   fs,
   io::{BufRead, BufReader},
