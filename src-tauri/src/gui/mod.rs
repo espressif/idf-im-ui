@@ -271,9 +271,9 @@ pub fn run() {
             get_pypi_mirror_list,
             set_pypi_mirror,
             fetch_json_from_url,
-            get_features_list,
-            set_selected_features,
-            get_selected_features,
+            get_features_list_all_versions,
+            set_selected_features_per_version,
+            get_selected_features_per_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

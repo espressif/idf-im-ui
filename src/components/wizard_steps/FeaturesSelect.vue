@@ -5,117 +5,240 @@
 
     <n-card class="features-card" data-id="features-card">
       <n-spin :show="loading" data-id="features-loading-spinner">
-        <template v-if="!loading && features.length > 0">
-          <div class="features-content" data-id="features-content">
-            <!-- Single column with grouped sections -->
-            <div class="features-sections" data-id="features-sections">
+        <template v-if="!loading && versionFeatures.length > 0">
+          <!-- Version Tabs -->
+          <n-tabs
+            v-if="versionFeatures.length > 1"
+            v-model:value="activeVersion"
+            type="line"
+            class="version-tabs"
+            data-id="version-tabs"
+          >
+            <n-tab-pane
+              v-for="versionData in versionFeatures"
+              :key="versionData.version"
+              :name="versionData.version"
+              :tab="versionData.version"
+              :data-id="`version-tab-${versionData.version}`"
+            >
+              <div class="features-content" data-id="features-content">
+                <div class="features-sections" data-id="features-sections">
 
-              <!-- Required Features Section -->
-              <div class="feature-section" data-id="required-section">
-                <div class="section-header">
-                  <h3 class="section-title" data-id="required-title">
-                    {{ t('featuresSelect.sections.required') }}
-                  </h3>
-                  <span class="feature-count">{{ requiredFeatures.length }}</span>
-                </div>
-                <div class="feature-group" data-id="required-group">
-                  <div
-                    v-for="feature in requiredFeatures"
-                    :key="feature.name"
-                    class="feature-row required"
-                    :data-id="`feature-row-${feature.name}`"
-                  >
-                    <div class="feature-checkbox-wrapper">
-                      <n-checkbox
-                        :checked="true"
-                        disabled
-                        :data-id="`feature-checkbox-${feature.name}`"
-                      />
+                  <!-- Required Features Section -->
+                  <div class="feature-section" data-id="required-section">
+                    <div class="section-header">
+                      <h3 class="section-title" data-id="required-title">
+                        {{ t('featuresSelect.sections.required') }}
+                      </h3>
+                      <span class="feature-count">{{ getRequiredFeatures(versionData.version).length }}</span>
                     </div>
-                    <div class="feature-info">
-                      <span class="feature-name" :data-id="`feature-name-${feature.name}`">
-                        {{ feature.name }}
-                      </span>
-                      <span
-                        v-if="feature.description"
-                        class="feature-desc"
-                        :data-id="`feature-desc-${feature.name}`"
+                    <div class="feature-group" data-id="required-group">
+                      <div
+                        v-for="feature in getRequiredFeatures(versionData.version)"
+                        :key="`${versionData.version}-${feature.name}`"
+                        class="feature-row required"
+                        :data-id="`feature-row-${versionData.version}-${feature.name}`"
                       >
-                        {{ feature.description }}
-                      </span>
+                        <div class="feature-checkbox-wrapper">
+                          <n-checkbox
+                            :checked="true"
+                            disabled
+                            :data-id="`feature-checkbox-${versionData.version}-${feature.name}`"
+                          />
+                        </div>
+                        <div class="feature-info">
+                          <span class="feature-name" :data-id="`feature-name-${versionData.version}-${feature.name}`">
+                            {{ feature.name }}
+                          </span>
+                          <span
+                            v-if="feature.description"
+                            class="feature-desc"
+                            :data-id="`feature-desc-${versionData.version}-${feature.name}`"
+                          >
+                            {{ feature.description }}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
+
+                  <!-- Optional Features Section -->
+                  <div class="feature-section" data-id="optional-section">
+                    <div class="section-header">
+                      <h3 class="section-title" data-id="optional-title">
+                        {{ t('featuresSelect.sections.optional') }}
+                      </h3>
+                      <div class="section-actions">
+                        <n-button
+                          @click="selectAllOptional(versionData.version)"
+                          size="small"
+                          text
+                          type="primary"
+                          data-id="select-all-button"
+                        >
+                          {{ t('featuresSelect.actions.selectAll') }}
+                        </n-button>
+                        <span class="divider">|</span>
+                        <n-button
+                          @click="deselectAllOptional(versionData.version)"
+                          size="small"
+                          text
+                          type="primary"
+                          data-id="deselect-all-button"
+                        >
+                          {{ t('featuresSelect.actions.deselectAll') }}
+                        </n-button>
+                      </div>
+                    </div>
+                    <div class="feature-group" data-id="optional-group">
+                      <div
+                        v-for="feature in getOptionalFeatures(versionData.version)"
+                        :key="`${versionData.version}-${feature.name}`"
+                        class="feature-row optional"
+                        :class="{ 'selected': isFeatureSelected(versionData.version, feature.name) }"
+                        :data-id="`feature-row-${versionData.version}-${feature.name}`"
+                        @click="toggleFeature(versionData.version, feature.name)"
+                      >
+                        <div class="feature-checkbox-wrapper">
+                          <n-checkbox
+                            :checked="isFeatureSelected(versionData.version, feature.name)"
+                            :data-id="`feature-checkbox-${versionData.version}-${feature.name}`"
+                            @update:checked="() => toggleFeature(versionData.version, feature.name)"
+                          />
+                        </div>
+                        <div class="feature-info">
+                          <span class="feature-name" :data-id="`feature-name-${versionData.version}-${feature.name}`">
+                            {{ feature.name }}
+                          </span>
+                          <span
+                            v-if="feature.description"
+                            class="feature-desc"
+                            :data-id="`feature-desc-${versionData.version}-${feature.name}`"
+                          >
+                            {{ feature.description }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               </div>
+            </n-tab-pane>
+          </n-tabs>
 
-              <!-- Optional Features Section -->
-              <div class="feature-section" data-id="optional-section">
-                <div class="section-header">
-                  <h3 class="section-title" data-id="optional-title">
-                    {{ t('featuresSelect.sections.optional') }}
-                  </h3>
-                  <div class="section-actions">
-                    <n-button
-                      @click="selectAllOptional"
-                      size="small"
-                      text
-                      type="primary"
-                      data-id="select-all-button"
+          <!-- Single version (no tabs needed) -->
+          <template v-else>
+            <div class="features-content" data-id="features-content">
+              <div class="features-sections" data-id="features-sections">
+
+                <!-- Required Features Section -->
+                <div class="feature-section" data-id="required-section">
+                  <div class="section-header">
+                    <h3 class="section-title" data-id="required-title">
+                      {{ t('featuresSelect.sections.required') }}
+                    </h3>
+                    <span class="feature-count">{{ getRequiredFeatures(versionFeatures[0].version).length }}</span>
+                  </div>
+                  <div class="feature-group" data-id="required-group">
+                    <div
+                      v-for="feature in getRequiredFeatures(versionFeatures[0].version)"
+                      :key="feature.name"
+                      class="feature-row required"
+                      :data-id="`feature-row-${feature.name}`"
                     >
-                      {{ t('featuresSelect.actions.selectAll') }}
-                    </n-button>
-                    <span class="divider">|</span>
-                    <n-button
-                      @click="deselectAllOptional"
-                      size="small"
-                      text
-                      type="primary"
-                      data-id="deselect-all-button"
-                    >
-                      {{ t('featuresSelect.actions.deselectAll') }}
-                    </n-button>
+                      <div class="feature-checkbox-wrapper">
+                        <n-checkbox
+                          :checked="true"
+                          disabled
+                          :data-id="`feature-checkbox-${feature.name}`"
+                        />
+                      </div>
+                      <div class="feature-info">
+                        <span class="feature-name" :data-id="`feature-name-${feature.name}`">
+                          {{ feature.name }}
+                        </span>
+                        <span
+                          v-if="feature.description"
+                          class="feature-desc"
+                          :data-id="`feature-desc-${feature.name}`"
+                        >
+                          {{ feature.description }}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div class="feature-group" data-id="optional-group">
-                  <div
-                    v-for="feature in optionalFeatures"
-                    :key="feature.name"
-                    class="feature-row optional"
-                    :class="{ 'selected': isFeatureSelected(feature.name) }"
-                    :data-id="`feature-row-${feature.name}`"
-                    @click="toggleFeature(feature.name)"
-                  >
-                    <div class="feature-checkbox-wrapper">
-                      <n-checkbox
-                        :checked="isFeatureSelected(feature.name)"
-                        :data-id="`feature-checkbox-${feature.name}`"
-                        @update:checked="(value) => toggleFeature(feature.name)"
-                      />
-                    </div>
-                    <div class="feature-info">
-                      <span class="feature-name" :data-id="`feature-name-${feature.name}`">
-                        {{ feature.name }}
-                      </span>
-                      <span
-                        v-if="feature.description"
-                        class="feature-desc"
-                        :data-id="`feature-desc-${feature.name}`"
+
+                <!-- Optional Features Section -->
+                <div class="feature-section" data-id="optional-section">
+                  <div class="section-header">
+                    <h3 class="section-title" data-id="optional-title">
+                      {{ t('featuresSelect.sections.optional') }}
+                    </h3>
+                    <div class="section-actions">
+                      <n-button
+                        @click="selectAllOptional(versionFeatures[0].version)"
+                        size="small"
+                        text
+                        type="primary"
+                        data-id="select-all-button"
                       >
-                        {{ feature.description }}
-                      </span>
+                        {{ t('featuresSelect.actions.selectAll') }}
+                      </n-button>
+                      <span class="divider">|</span>
+                      <n-button
+                        @click="deselectAllOptional(versionFeatures[0].version)"
+                        size="small"
+                        text
+                        type="primary"
+                        data-id="deselect-all-button"
+                      >
+                        {{ t('featuresSelect.actions.deselectAll') }}
+                      </n-button>
+                    </div>
+                  </div>
+                  <div class="feature-group" data-id="optional-group">
+                    <div
+                      v-for="feature in getOptionalFeatures(versionFeatures[0].version)"
+                      :key="feature.name"
+                      class="feature-row optional"
+                      :class="{ 'selected': isFeatureSelected(versionFeatures[0].version, feature.name) }"
+                      :data-id="`feature-row-${feature.name}`"
+                      @click="toggleFeature(versionFeatures[0].version, feature.name)"
+                    >
+                      <div class="feature-checkbox-wrapper">
+                        <n-checkbox
+                          :checked="isFeatureSelected(versionFeatures[0].version, feature.name)"
+                          :data-id="`feature-checkbox-${feature.name}`"
+                          @update:checked="() => toggleFeature(versionFeatures[0].version, feature.name)"
+                        />
+                      </div>
+                      <div class="feature-info">
+                        <span class="feature-name" :data-id="`feature-name-${feature.name}`">
+                          {{ feature.name }}
+                        </span>
+                        <span
+                          v-if="feature.description"
+                          class="feature-desc"
+                          :data-id="`feature-desc-${feature.name}`"
+                        >
+                          {{ feature.description }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
 
+              </div>
             </div>
-          </div>
+          </template>
 
           <div class="action-footer" data-id="features-action-footer">
             <span class="selection-summary" data-id="selection-summary">
-              {{ t('featuresSelect.summary', {
-                selected: selectedFeatures.length,
-                total: features.length
+              {{ t('featuresSelect.summaryMultiVersion', {
+                versions: versionFeatures.length,
+                details: selectionSummary
               }) }}
             </span>
             <n-button
@@ -130,7 +253,7 @@
           </div>
         </template>
 
-        <template v-else-if="!loading && features.length === 0">
+        <template v-else-if="!loading && versionFeatures.length === 0">
           <div class="empty-state" data-id="empty-state">
             <p class="empty-message">{{ t('featuresSelect.noFeatures') }}</p>
           </div>
@@ -144,50 +267,82 @@
 import { ref, computed } from "vue";
 import { useI18n } from 'vue-i18n';
 import { invoke } from "@tauri-apps/api/core";
-import { NButton, NSpin, NCard, NCheckbox } from 'naive-ui'
+import { NButton, NSpin, NCard, NCheckbox, NTabs, NTabPane } from 'naive-ui'
 
 export default {
   name: 'FeaturesSelect',
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin, NCard, NCheckbox },
+  components: { NButton, NSpin, NCard, NCheckbox, NTabs, NTabPane },
   setup() {
     const { t } = useI18n()
     return { t }
   },
   data: () => ({
     loading: true,
-    features: [],
-    selectedFeatures: [],
+    // Array of { version: string, features: FeatureInfo[] }
+    versionFeatures: [],
+    // Map of version -> selected feature names
+    selectedFeaturesMap: {},
+    // Currently active tab
+    activeVersion: null,
   }),
   computed: {
-    requiredFeatures() {
-      return this.features.filter(f => !f.optional);
-    },
-    optionalFeatures() {
-      return this.features.filter(f => f.optional);
+    selectionSummary() {
+      return this.versionFeatures.map(vf => {
+        const selected = this.selectedFeaturesMap[vf.version]?.length || 0;
+        const total = vf.features.length;
+        return `${vf.version}: ${selected}/${total}`;
+      }).join(', ');
     },
     canProceed() {
-      return this.selectedFeatures.length >= this.requiredFeatures.length;
+      // Check that each version has at least the required features selected
+      return this.versionFeatures.every(vf => {
+        const required = this.getRequiredFeatures(vf.version);
+        const selected = this.selectedFeaturesMap[vf.version] || [];
+        return required.every(rf => selected.includes(rf.name));
+      });
     }
   },
   methods: {
     async getAvailableFeatures() {
       try {
         this.loading = true;
-        const features = await invoke("get_features_list", {});
-        this.features = features;
 
-        this.selectedFeatures = this.requiredFeatures.map(f => f.name);
+        // Fetch features for all versions
+        const versionFeatures = await invoke("get_features_list_all_versions", {});
+        this.versionFeatures = versionFeatures;
 
+        // Initialize selected features map with required features for each version
+        const initialMap = {};
+        for (const vf of versionFeatures) {
+          const required = vf.features.filter(f => !f.optional).map(f => f.name);
+          initialMap[vf.version] = [...required];
+        }
+        this.selectedFeaturesMap = initialMap;
+
+        // Set active tab to first version
+        if (versionFeatures.length > 0) {
+          this.activeVersion = versionFeatures[0].version;
+        }
+
+        // Try to restore previously saved selections
         try {
-          const savedFeatures = await invoke("get_selected_features", {});
-          if (savedFeatures && savedFeatures.length > 0) {
-            this.selectedFeatures = savedFeatures;
+          const savedFeatures = await invoke("get_selected_features_per_version", {});
+          if (savedFeatures && Object.keys(savedFeatures).length > 0) {
+            // Merge saved features with required features
+            for (const [version, features] of Object.entries(savedFeatures)) {
+              if (this.selectedFeaturesMap[version]) {
+                const required = this.getRequiredFeatures(version).map(f => f.name);
+                // Ensure required features are always included
+                const merged = [...new Set([...required, ...features])];
+                this.selectedFeaturesMap[version] = merged;
+              }
+            }
           }
         } catch (err) {
-          console.log("No previously saved features");
+          console.log("No previously saved features per version");
         }
 
         this.loading = false;
@@ -197,41 +352,62 @@ export default {
       }
     },
 
-    isFeatureSelected(featureName) {
-      return this.selectedFeatures.includes(featureName);
+    getFeaturesForVersion(version) {
+      const vf = this.versionFeatures.find(v => v.version === version);
+      return vf ? vf.features : [];
     },
 
-    toggleFeature(featureName) {
-      const feature = this.features.find(f => f.name === featureName);
+    getRequiredFeatures(version) {
+      return this.getFeaturesForVersion(version).filter(f => !f.optional);
+    },
 
+    getOptionalFeatures(version) {
+      return this.getFeaturesForVersion(version).filter(f => f.optional);
+    },
+
+    isFeatureSelected(version, featureName) {
+      const selected = this.selectedFeaturesMap[version] || [];
+      return selected.includes(featureName);
+    },
+
+    toggleFeature(version, featureName) {
+      const feature = this.getFeaturesForVersion(version).find(f => f.name === featureName);
+
+      // Don't allow toggling required features
       if (feature && !feature.optional) {
         return;
       }
 
-      const index = this.selectedFeatures.indexOf(featureName);
+      const selected = this.selectedFeaturesMap[version] || [];
+      const index = selected.indexOf(featureName);
+
       if (index > -1) {
-        this.selectedFeatures.splice(index, 1);
+        selected.splice(index, 1);
       } else {
-        this.selectedFeatures.push(featureName);
+        selected.push(featureName);
       }
+
+      // Trigger reactivity
+      this.selectedFeaturesMap = { ...this.selectedFeaturesMap, [version]: selected };
     },
 
-    selectAllOptional() {
-      const allFeatureNames = this.features.map(f => f.name);
-      this.selectedFeatures = [...allFeatureNames];
+    selectAllOptional(version) {
+      const allFeatureNames = this.getFeaturesForVersion(version).map(f => f.name);
+      this.selectedFeaturesMap = { ...this.selectedFeaturesMap, [version]: [...allFeatureNames] };
     },
 
-    deselectAllOptional() {
-      this.selectedFeatures = this.requiredFeatures.map(f => f.name);
+    deselectAllOptional(version) {
+      const required = this.getRequiredFeatures(version).map(f => f.name);
+      this.selectedFeaturesMap = { ...this.selectedFeaturesMap, [version]: [...required] };
     },
 
     async processChoices() {
-      console.log("Selected features:", this.selectedFeatures);
+      console.log("Selected features per version:", this.selectedFeaturesMap);
 
       if (!this.loading) {
         try {
-          await invoke("set_selected_features", {
-            features: this.selectedFeatures
+          await invoke("set_selected_features_per_version", {
+            featuresMap: this.selectedFeaturesMap
           });
           this.nextstep();
         } catch (error) {
@@ -271,6 +447,10 @@ export default {
 .features-card {
   background: white;
   padding: 1.5rem;
+}
+
+.version-tabs {
+  margin-bottom: 1rem;
 }
 
 .features-content {
@@ -428,6 +608,7 @@ export default {
 .n-card__content {
   padding: 0px;
 }
+
 .n-button[type="primary"] {
   background-color: #E8362D;
   color: #e5e7eb;

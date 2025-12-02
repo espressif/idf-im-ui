@@ -299,6 +299,53 @@ pub fn select_features(
     }
 }
 
+/// Helper function to get features for a specific version
+/// Handles both per-version features (GUI) and global features (CLI)
+pub fn get_features_for_version(
+    config: &Settings,
+    version: &str,
+    requirements_files: &RequirementsMetadata,
+) -> Result<Vec<FeatureInfo>, String> {
+    // First check if we have per-version features (from GUI)
+    if let Some(per_version) = &config.idf_features_per_version {
+        if let Some(feature_names) = per_version.get(version) {
+            // Convert feature names back to FeatureInfo
+            let features: Vec<FeatureInfo> = requirements_files.features
+                .iter()
+                .filter(|f| feature_names.contains(&f.name))
+                .cloned()
+                .collect();
+            return Ok(features);
+        }
+    }
+
+    // Fall back to global idf_features (from CLI)
+    if let Some(global_features) = &config.idf_features {
+        let features: Vec<FeatureInfo> = requirements_files.features
+            .iter()
+            .filter(|f| global_features.contains(&f.name))
+            .cloned()
+            .collect();
+        return Ok(features);
+    }
+
+    // If no features specified, use interactive selection (CLI) or return required only
+    if config.non_interactive.unwrap_or_default() {
+        // Non-interactive: return only required features
+        Ok(requirements_files.features
+            .iter()
+            .filter(|f| !f.optional)
+            .cloned()
+            .collect())
+    } else {
+        // Interactive: prompt user
+        select_features(
+            requirements_files,
+            config.non_interactive.unwrap_or_default(),
+            true,
+        )
+    }
+}
 /// Interactive feature selection with multi-select dialog
 fn select_features_interactive(
     metadata: &RequirementsMetadata,

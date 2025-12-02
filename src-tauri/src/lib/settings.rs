@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use config::{Config, ConfigError};
 use log::warn;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -42,6 +43,7 @@ pub struct Settings {
     pub recurse_submodules: Option<bool>,
     pub install_all_prerequisites: Option<bool>,
     pub idf_features: Option<Vec<String>>,
+    pub idf_features_per_version: Option<HashMap<String, Vec<String>>>,
     pub repo_stub: Option<String>,
     pub skip_prerequisites_check: Option<bool>,
     pub version_name: Option<String>,
@@ -115,6 +117,7 @@ impl Default for Settings {
             recurse_submodules: Some(true),
             install_all_prerequisites: Some(false),
             idf_features: None,
+            idf_features_per_version: None,
             repo_stub: None,
             skip_prerequisites_check: Some(false),
             version_name: None,
@@ -280,6 +283,7 @@ impl Settings {
             recurse_submodules,
             install_all_prerequisites,
             idf_features,
+            idf_features_per_version,
             repo_stub,
             skip_prerequisites_check,
             version_name,
@@ -458,5 +462,29 @@ impl Settings {
         actual_version,
         using_existing_idf,
       })
+    }
+
+    /// Get features for a version only if explicitly set (doesn't fall back to global)
+    /// Used to check if we need to prompt for selection
+    pub fn get_features_for_version_if_set(&self, version: &str) -> Option<Vec<String>> {
+        // First check per-version
+        if let Some(per_version) = &self.idf_features_per_version {
+            if let Some(features) = per_version.get(version) {
+                return Some(features.clone());
+            }
+        }
+
+        // Then check global (from CLI --idf-features)
+        // If global is set, it applies to all versions
+        if self.idf_features.is_some() {
+            return self.idf_features.clone();
+        }
+
+        None // No features set, need to prompt
+    }
+
+    /// Get features for a version with fallback to required-only
+    pub fn get_features_for_version(&self, version: &str) -> Vec<String> {
+        self.get_features_for_version_if_set(version).unwrap_or_default()
     }
 }

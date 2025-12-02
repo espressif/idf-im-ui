@@ -5,11 +5,18 @@ use idf_im_lib::{
   add_path_to_path, ensure_path, idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata}, idf_tools::{self, get_tools_export_paths}, settings::Settings, DownloadProgress
 };
 use log::{ error, info, warn};
+use serde::{Deserialize, Serialize};
 use std::{
-  path::{Path, PathBuf}, sync::{Arc, Mutex},
+  collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex}
 };
 use tauri::AppHandle;
 use rust_i18n::t;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionFeatureInfo {
+    pub version: String,
+    pub features: Vec<FeatureInfo>,
+}
 
 
 /// Represents the tool setup configuration
@@ -350,13 +357,22 @@ pub async fn setup_tools(
       }
     };
 
+    // Get features for this specific version
+    let features_for_version = settings.get_features_for_version(idf_version);
+
+    info!(
+        "Installing Python environment for {} with features: {:?}",
+        idf_version,
+        features_for_version
+    );
+
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
         &paths.actual_version,
         &paths.tool_install_directory,
         true, //TODO: actually read from config
-        &settings.idf_features.clone().unwrap_or_default(),
+        &features_for_version,
         offline_archive_dir, // Offline archive directory
         &settings.pypi_mirror, // PyPI mirror
     ).await {
@@ -418,40 +434,70 @@ pub async fn setup_tools(
 }
 
 #[tauri::command]
-pub async fn get_features_list(
+pub async fn get_features_list_all_versions(
     app_handle: AppHandle,
-) -> Result<Vec<FeatureInfo>, String> {
-  let settings = get_settings_non_blocking(&app_handle)?;
-    let first_version = match &settings.idf_versions {
-        Some(versions) if !versions.is_empty() => versions.first().unwrap(),
+) -> Result<Vec<VersionFeatureInfo>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+
+    let versions = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.clone(),
         _ => {
             let msg = t!("wizard.requirements.no_idf_version_specified").to_string();
             warn!("{}", msg);
             return Err(msg);
         }
     };
-    let req_url = get_requirements_json_url(settings.repo_stub.clone().as_deref(), &first_version.to_string(), settings.idf_mirror.clone().as_deref());
-    println!("Requirements URL: {}", req_url);
-    let requirements_files = match RequirementsMetadata::from_url_async(&req_url).await {
-        Ok(files) => files,
-        Err(err) => {
-            warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
-            return Err(err.to_string());
-        }
-    };
 
-    Ok(requirements_files.features.clone())
+    let mut result = Vec::new();
+
+    for version in versions {
+        let req_url = get_requirements_json_url(
+            settings.repo_stub.clone().as_deref(),
+            &version,
+            settings.idf_mirror.clone().as_deref()
+        );
+
+        info!("Fetching requirements for version {} from: {}", version, req_url);
+
+        let requirements_files = match RequirementsMetadata::from_url_async(&req_url).await {
+            Ok(files) => files,
+            Err(err) => {
+                warn!(
+                    "{}: {} for version {}. {}",
+                    t!("wizard.requirements.read_failure"),
+                    err,
+                    version,
+                    t!("wizard.features.selection_unavailable")
+                );
+                // Continue with other versions even if one fails
+                continue;
+            }
+        };
+
+        result.push(VersionFeatureInfo {
+            version: version.clone(),
+            features: requirements_files.features.clone(),
+        });
+    }
+
+    if result.is_empty() {
+        return Err(t!("wizard.requirements.no_features_available").to_string());
+    }
+
+    Ok(result)
 }
 
-/// Sets the selected ESP-IDF features
+/// Sets the selected ESP-IDF features for each version
+/// features_map: HashMap where key is version string, value is list of selected feature names
 #[tauri::command]
-pub fn set_selected_features(
+pub fn set_selected_features_per_version(
     app_handle: AppHandle,
-    features: Vec<String>,
+    features_map: HashMap<String, Vec<String>>,
 ) -> Result<(), String> {
-    info!("Setting selected features: {:?}", features);
+    info!("Setting selected features per version: {:?}", features_map);
+
     update_settings(&app_handle, |settings| {
-        settings.idf_features = Some(features);
+        settings.idf_features_per_version = Some(features_map);
     })?;
 
     send_message(
@@ -462,9 +508,12 @@ pub fn set_selected_features(
     Ok(())
 }
 
-/// Gets the currently selected features from settings
+/// Gets the previously selected features per version (for restoring state)
 #[tauri::command]
-pub fn get_selected_features(app_handle: AppHandle) -> Result<Vec<String>, String> {
+pub fn get_selected_features_per_version(
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<String>>, String> {
     let settings = get_settings_non_blocking(&app_handle)?;
-    Ok(settings.idf_features.clone().unwrap_or_default())
+
+    Ok(settings.idf_features_per_version.clone().unwrap_or_default())
 }
