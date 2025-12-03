@@ -17,7 +17,7 @@ use rust_i18n::t;
 // no runtime creation here; we run inside the app's existing Tokio runtime
 
 use crate::cli::helpers::generic_confirm_with_default;
-use idf_im_lib::utils::calculate_mirror_latency_map;
+use idf_im_lib::utils::calculate_mirrors_latency;
 use idf_im_lib::utils::MirrorEntry;
 
 pub async fn select_target() -> Result<Vec<String>, String> {
@@ -210,9 +210,7 @@ where
 
     // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
-        let mut entries = calculate_mirror_latency_map(candidates).await.into_iter()
-            .map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
-        entries.sort();
+        let entries = calculate_mirrors_latency(candidates).await;
         let display = entries.iter().map(|e| {
             if e.latency.is_none() {
                 format!("{} (timeout)", e.url)
@@ -225,9 +223,7 @@ where
         let url = selected.split(" (").next().unwrap_or(&selected).to_string();
         set_value(config, url);
     } else if needs_value {
-        let mut entries = calculate_mirror_latency_map(candidates).await.into_iter()
-        .map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
-        entries.sort();
+        let entries = calculate_mirrors_latency(candidates).await;
         if let Some(entry) = entries.first() {
             if entry.latency.is_none() {
                 info!("Selected {log_prefix} mirror: {} (timeout)", entry.url);

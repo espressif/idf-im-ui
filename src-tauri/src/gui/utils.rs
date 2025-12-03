@@ -42,21 +42,6 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
     }
 }
 
-pub async fn get_best_mirror(mirror_latency_map: HashMap<String, Option<u32>>) -> Option<String> {
-    log::info!("Selecting best mirror from latency map: {:?}", mirror_latency_map);
-    let mut mirror_entries = mirror_latency_map.into_iter().map(|(url, latency)| MirrorEntry { url, latency }).collect::<Vec<MirrorEntry>>();
-    mirror_entries.sort();
-    let best_mirror = mirror_entries.first();
-    if best_mirror.is_some() {
-        log::info!("Best mirror selected: {:?}", best_mirror.unwrap().url);
-        Some(best_mirror.unwrap().url.clone())
-    }
-    else {
-        log::info!("No best mirror found");
-        None
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

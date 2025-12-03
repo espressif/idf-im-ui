@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::{is_path_empty_or_nonexistent, get_best_mirror}};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -265,16 +265,15 @@ async fn download_idf(
         }
     });
 
-    let default_mirror_str = rust_i18n::t!("gui.installation.default_mirror").to_string();
+    let default_mirror_str = idf_im_lib::get_idf_mirrors_list().first().unwrap().to_string();
     let is_simple_installation = app_state::is_simple_installation(&app_handle);
-    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror_str);
-    let mut mirror_to_use: String = mirror.to_string();
+    let mut mirror_to_use = settings.idf_mirror.clone().unwrap_or_default();
 
-    if is_simple_installation && mirror == &default_mirror_str {
-        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(idf_im_lib::get_idf_mirrors_list()).await;
-        let best_mirror = get_best_mirror(mirror_latency_map).await;
-        if best_mirror.is_some() {
-            mirror_to_use = best_mirror.unwrap();
+    if is_simple_installation && mirror_to_use == default_mirror_str {
+        let mirror_latency_entries: Vec<MirrorEntry> = idf_im_lib::utils::calculate_mirrors_latency(idf_im_lib::get_idf_mirrors_list()).await;
+        
+        if let Some(best_mirror_entry) = mirror_latency_entries.first() {
+            mirror_to_use = best_mirror_entry.url.clone();
         }
     }
 

@@ -31,7 +31,7 @@ use log::{debug, error, info, warn};
 use regex::Regex;
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MirrorEntry {
     pub url: String,
     pub latency: Option<u32>,
@@ -45,18 +45,12 @@ impl PartialOrd for MirrorEntry {
 
 impl Ord for MirrorEntry {
     fn cmp(&self, other: &Self) -> Ordering {
-        if self.latency.is_some() && other.latency.is_some() {
-            let a = self.latency.unwrap();
-            let b = other.latency.unwrap();
-            return a.cmp(&b);
+        match (self.latency, other.latency) {
+            (Some(a), Some(b)) => a.cmp(&b),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
         }
-        if self.latency.is_some() && other.latency.is_none() {
-            return Ordering::Less;
-        }
-        if self.latency.is_none() && other.latency.is_some() {
-            return Ordering::Greater;
-        }
-        Ordering::Equal
     }
 }
 
@@ -858,14 +852,16 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
     None
 }
 
-/// Return URL -> score (lower is better). Unreachable mirrors get None.
-pub async fn calculate_mirror_latency_map(mirrors: &[&str]) -> HashMap<String, Option<u32>> {
+/// Return a list of MirrorEntry sorted by latency (lower is better). Unreachable mirrors get None.
+pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
     let timeout = Duration::from_millis(3000);
     info!(
         "Starting mirror latency checks ({} candidates)...",
         mirrors.len()
     );
-    let mut mirror_latency_map = HashMap::new();
+
+    let mut mirror_entries: Vec<MirrorEntry> = Vec::new();
+
     let mut head_latency_failed = false;
 
     for url in mirrors.iter() {
@@ -873,7 +869,7 @@ pub async fn calculate_mirror_latency_map(mirrors: &[&str]) -> HashMap<String, O
             match measure_url_score_head(url, timeout).await {
                 Ok(score) => {
                     info!("Mirror score: {} -> {}", url, score);
-                    mirror_latency_map.insert(url.to_string(), Some(score));
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
                 }
                 Err(e) => {
                     warn!("{}", e.to_string());
@@ -889,21 +885,22 @@ pub async fn calculate_mirror_latency_map(mirrors: &[&str]) -> HashMap<String, O
     // if head latency failed, measure get latency for all mirrors
     // and we also clear the map to avoid any potential contamination
     if head_latency_failed {
-        mirror_latency_map.clear();
+        mirror_entries.clear();
         for url in mirrors.iter() {
             match measure_url_score_get(url, timeout).await {
                 Some(score) => {
                     info!("Mirror get score: {} -> {}", url, score);
-                    mirror_latency_map.insert(url.to_string(), Some(score));
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
                 }
                 None => {
                     info!("Unable to measure get latency for {}: {:?}", url, timeout);
-                    mirror_latency_map.insert(url.to_string(), None);
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: None });
                 }
             }
         }
     }
-    mirror_latency_map
+    mirror_entries.sort();
+    mirror_entries
 }
 
 
@@ -1439,10 +1436,10 @@ set(IDF_VERSION_MAJOR 5)
             "file:///not-applicable",
         ];
 
-        let map = calculate_mirror_latency_map(mirrors).await;
+        let map = calculate_mirrors_latency(mirrors).await;
         assert_eq!(map.len(), 3);
         for m in mirrors.iter() {
-            assert_eq!(map.get(&m.to_string()), Some(&None));
+            assert_eq!(map.iter().find(|e| e.url == *m).unwrap().latency, None);
         }
     }
 }
