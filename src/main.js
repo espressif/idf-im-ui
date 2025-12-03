@@ -28,13 +28,6 @@ app.use(createPinia());
 app.use(router);
 app.use(naive);
 
-// Bootstrap background mirror latency on app launch
-try {
-  const mirrorsStore = useMirrorsStore();
-  mirrorsStore.bootstrapMirrors();
-} catch (_) {
-  // ignore bootstrap errors at startup; UI can still fetch lazily
-}
 app.mount("#app");
 
 // Initialize app store and trigger background checks
@@ -47,4 +40,14 @@ setTimeout(() => {
   }).catch(err => {
     console.error("Failed to initialize system info:", err);
   });
+}, 0);
+
+// Bootstrap background mirror latency on app launch
+const mirrorsStore = useMirrorsStore();
+setTimeout(() => {
+  try {
+    mirrorsStore.bootstrapMirrorsBackground();
+  } catch (_) {
+    // ignore bootstrap errors at startup; UI can still fetch lazily
+  }
 }, 0);

@@ -102,7 +102,7 @@
 </template>
 
 <script>
-import { ref, watch } from "vue";
+import { } from "vue";
 import { useI18n } from 'vue-i18n';
 import { useMirrorsStore } from "../../store.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -122,21 +122,9 @@ export default {
     return { t, mirrorsStore }
   },
   data: () => ({
-    loading_idfs: true,
-    loading_tools: true,
-    loading_pypi: true,
     selected_idf_mirror: null,
     selected_tools_mirror: null,
     selected_pypi_mirror: null,
-    idf_mirrors: [],
-    tools_mirrors: [],
-    pypi_mirrors: [],
-    defaultMirrors: {
-      idf: '',
-      tools: '',
-      pypi: ''
-    },
-    listeners: [],
     autoSelect: {
       idf: true,
       tools: true,
@@ -144,52 +132,21 @@ export default {
     }
   }),
   methods: {
-    sortMirrorsByPing(list) {
-      list.sort((a, b) => {
-        const ap = (a.ping !== null && a.ping > 0) ? a.ping : Number.POSITIVE_INFINITY;
-        const bp = (b.ping !== null && b.ping > 0) ? b.ping : Number.POSITIVE_INFINITY;
-        return ap - bp;
-      });
-    },
-    refreshListFromStore(type) {
+    buildMirrorList(type) {
       const urls = type === 'idf' ? this.mirrorsStore.idf_urls : type === 'tools' ? this.mirrorsStore.tools_urls : this.mirrorsStore.pypi_urls;
-      const latencyMap = type === 'idf' ? this.mirrorsStore.idf_latency_map : type === 'tools' ? this.mirrorsStore.tools_latency_map : this.mirrorsStore.pypi_latency_map;
-      const selectedFromStore = type === 'idf' ? this.mirrorsStore.selected_idf : type === 'tools' ? this.mirrorsStore.selected_tools : this.mirrorsStore.selected_pypi;
-
-      const list = (urls || []).map((url) => ({
+      const entries = type === 'idf' ? this.mirrorsStore.idf_entries : type === 'tools' ? this.mirrorsStore.tools_entries : this.mirrorsStore.pypi_entries;
+      if (Array.isArray(entries) && entries.length > 0) {
+        return entries.map(e => ({
+          value: e.url,
+          label: e.url,
+          ping: (e && Object.prototype.hasOwnProperty.call(e, 'latency')) ? (e.latency == null ? 0 : Number(e.latency)) : null,
+        }));
+      }
+      return (urls || []).map((url) => ({
         value: url,
         label: url,
-        ping: (latencyMap && latencyMap[url] !== undefined) ? Number(latencyMap[url]) : null,
+        ping: null,
       }));
-
-      if (type === 'idf') {
-        this.idf_mirrors = list;
-        if (!this.selected_idf_mirror) {
-          this.selected_idf_mirror = selectedFromStore || (list[0] ? list[0].value : null);
-          this.defaultMirrors.idf = this.selected_idf_mirror || '';
-        }
-        this.sortMirrorsByPing(this.idf_mirrors);
-        this.loading_idfs = this.mirrorsStore.loading_idf_urls || this.mirrorsStore.loading_idf_latency;
-        this.maybeAutoSelectBest('idf');
-      } else if (type === 'tools') {
-        this.tools_mirrors = list;
-        if (!this.selected_tools_mirror) {
-          this.selected_tools_mirror = selectedFromStore || (list[0] ? list[0].value : null);
-          this.defaultMirrors.tools = this.selected_tools_mirror || '';
-        }
-        this.sortMirrorsByPing(this.tools_mirrors);
-        this.loading_tools = this.mirrorsStore.loading_tools_urls || this.mirrorsStore.loading_tools_latency;
-        this.maybeAutoSelectBest('tools');
-      } else {
-        this.pypi_mirrors = list;
-        if (!this.selected_pypi_mirror) {
-          this.selected_pypi_mirror = selectedFromStore || (list[0] ? list[0].value : null);
-          this.defaultMirrors.pypi = this.selected_pypi_mirror || '';
-        }
-        this.sortMirrorsByPing(this.pypi_mirrors);
-        this.loading_pypi = this.mirrorsStore.loading_pypi_urls || this.mirrorsStore.loading_pypi_latency;
-        this.maybeAutoSelectBest('pypi');
-      }
     },
     onSelectChange(type) {
       // User has manually chosen a mirror for this type; stop auto-selecting
@@ -223,7 +180,8 @@ export default {
       }
     },
     isDefaultMirror(mirror, type) {
-      return mirror === this.defaultMirrors[type];
+      const selectedFromStore = type === 'idf' ? this.mirrorsStore.selected_idf : type === 'tools' ? this.mirrorsStore.selected_tools : this.mirrorsStore.selected_pypi;
+      return mirror === selectedFromStore;
     },
     processChoices: async function () {
       console.log("Mirror choices:", {
@@ -240,32 +198,71 @@ export default {
     }
   },
   computed: {
+    // Only show loading while the URL lists are being fetched.
+    // Do NOT block on latency computation (it happens in background).
+    idf_mirrors() {
+      return this.buildMirrorList('idf');
+    },
+    tools_mirrors() {
+      return this.buildMirrorList('tools');
+    },
+    pypi_mirrors() {
+      return this.buildMirrorList('pypi');
+    },
+    loading_idfs() {
+      return this.mirrorsStore.loading_idf_urls;
+    },
+    loading_tools() {
+      return this.mirrorsStore.loading_tools_urls;
+    },
+    loading_pypi() {
+      return this.mirrorsStore.loading_pypi_urls;
+    },
     canProceed() {
       return this.selected_idf_mirror && this.selected_tools_mirror && this.selected_pypi_mirror &&
         !this.loading_idfs && !this.loading_tools && !this.loading_pypi;
     }
   },
-  mounted() {
-    // Initial load from store
-    this.refreshListFromStore('idf');
-    this.refreshListFromStore('tools');
-    this.refreshListFromStore('pypi');
-
-    // Subscribe to store updates and refresh progressively per-type
-    const unsub = this.mirrorsStore.$subscribe(() => {
-      this.refreshListFromStore('idf');
-      this.refreshListFromStore('tools');
-      this.refreshListFromStore('pypi');
-    });
-    this.listeners = [unsub];
+  watch: {
+    idf_mirrors: {
+      immediate: true,
+      handler(list) {
+        if (!this.selected_idf_mirror) {
+          this.selected_idf_mirror = this.mirrorsStore.selected_idf || (list[0] ? list[0].value : null);
+        }
+        this.maybeAutoSelectBest('idf');
+      }
+    },
+    tools_mirrors: {
+      immediate: true,
+      handler(list) {
+        if (!this.selected_tools_mirror) {
+          this.selected_tools_mirror = this.mirrorsStore.selected_tools || (list[0] ? list[0].value : null);
+        }
+        this.maybeAutoSelectBest('tools');
+      }
+    },
+    pypi_mirrors: {
+      immediate: true,
+      handler(list) {
+        if (!this.selected_pypi_mirror) {
+          this.selected_pypi_mirror = this.mirrorsStore.selected_pypi || (list[0] ? list[0].value : null);
+        }
+        this.maybeAutoSelectBest('pypi');
+      }
+    }
   },
-  beforeUnmount() {
-    // cleanup store subscription
-    if (this.listeners && this.listeners.length) {
-      this.listeners.forEach(un => {
-        try { un(); } catch (_) {}
-      });
-      this.listeners = [];
+  mounted() {
+    // Ensure background bootstrap runs if user navigates directly here before app init
+    if (
+      this.mirrorsStore.idf_urls.length === 0 &&
+      this.mirrorsStore.tools_urls.length === 0 &&
+      this.mirrorsStore.pypi_urls.length === 0 &&
+      !this.mirrorsStore.loading_idf_urls &&
+      !this.mirrorsStore.loading_tools_urls &&
+      !this.mirrorsStore.loading_pypi_urls
+    ) {
+      try { this.mirrorsStore.bootstrapMirrorsBackground(); } catch (_) {}
     }
   }
 }

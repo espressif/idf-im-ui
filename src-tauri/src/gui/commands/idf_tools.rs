@@ -320,10 +320,10 @@ pub async fn setup_tools(
     let tools_mirror = settings.mirror.as_deref().unwrap();
     let mut tools_mirror_to_use: Option<String> = Some(tools_mirror.to_string());
     if is_simple_installation && settings.is_default("mirror") {
-        let mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(idf_im_lib::get_idf_tools_mirrors_list()).await;
-        let best_mirror = get_best_mirror(mirror_latency_map).await;
-        if best_mirror.is_some() {
-            tools_mirror_to_use = Some(best_mirror.unwrap());
+        let mirror_latency_entries = idf_im_lib::utils::calculate_mirrors_latency(idf_im_lib::get_idf_tools_mirrors_list()).await;
+        let best_mirror = mirror_latency_entries.first();
+        if let Some(best_mirror) = best_mirror {
+            tools_mirror_to_use = Some(best_mirror.url.clone());
         }
     }
 
@@ -392,10 +392,10 @@ pub async fn setup_tools(
     let pypi_mirror = settings.pypi_mirror.as_deref().unwrap();
     let mut pypi_mirror_to_use: Option<String> = Some(pypi_mirror.to_string());
     if is_simple_installation && settings.is_default("pypi_mirror") {
-        let pypi_mirror_latency_map = idf_im_lib::utils::calculate_mirror_latency_map(idf_im_lib::get_pypi_mirrors_list()).await;
-        let best_pypi_mirror = get_best_mirror(pypi_mirror_latency_map).await;
-        if best_pypi_mirror.is_some() {
-            pypi_mirror_to_use = Some(best_pypi_mirror.unwrap());
+        let pypi_mirror_latency_entries = idf_im_lib::utils::calculate_mirrors_latency(idf_im_lib::get_pypi_mirrors_list()).await;
+        let best_pypi_mirror = pypi_mirror_latency_entries.first();
+        if let Some(best_pypi_mirror) = best_pypi_mirror {
+            pypi_mirror_to_use = Some(best_pypi_mirror.url.clone());
         }
     }
     
