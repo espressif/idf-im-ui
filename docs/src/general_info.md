@@ -5,9 +5,12 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 > **💡 Quick Install:**
 > For most users, we recommend installing EIM using one of the package managers below — they make updates and maintenance easier:
 >
-> * **[Windows Installer](#windows-installation)** (recommended for Windows)
-> * **[Homebrew (macOS)](#macos-installation-via-homebrew)** 🧭 *recommended*
-> * **[APT (Debian-based Linux)](#debian-based-linux-installation-via-apt-repository)** 🧭 *recommended*
+> | Platform | Recommended Method |
+> |----------|-------------------|
+> | **Windows** | [WinGet](#windows-installation) |
+> | **macOS** | [Homebrew](#macos-installation-via-homebrew) |
+> | **Linux (Debian/Ubuntu)** | [APT](#debian-based-linux-installation-via-apt-repository) |
+> | **Linux (Fedora/RHEL)** | [RPM](#rpm-based-linux-installation-via-dnf-repository) |
 >
 > If you prefer a manual installation, you can download standalone installers for **all platforms** and **ESP-IDF versions** directly from the
 > 👉 [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
@@ -28,7 +31,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
   * **Multiple ESP-IDF version management**: Easily view, manage, and switch between multiple installed ESP-IDF versions from a centralized dashboard.
   * **Configurable installation paths**: Choose where your ESP-IDF environment is installed.
   * **Mirror selection for downloads**: Select a preferred mirror for downloading ESP-IDF and tools.
-  * **Prerequisites auto-detection and installation**: EIM can automatically detect and install missing prerequisites on supported platforms (installation of prerequisities is supported only on windows).
+  * **Prerequisites auto-detection and installation**: EIM can automatically detect and install missing prerequisites on supported platforms (installation of prerequisites is supported only on Windows).
   * **Configuration import/export**: Save and share your installation configurations with others in your team.
   * **Headless operation support**: Automate installations without user interaction.
   * **Offline installation support**: Install the entire ESP-IDF environment without an active internet connection using a single archive.
@@ -49,77 +52,156 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 
 ## Getting Started
 
-1. Choose your installation method based on your operating system.
+Choose your installation method based on your operating system.
+
+---
 
 ### Windows Installation
+
 <a id="windows-installation"></a>
 
-On **Windows**, the recommended way to get EIM is to download the latest installer directly:
+#### Option 1: WinGet (Recommended)
 
-- From [Espressif download page](https://dl.espressif.com/dl/eim/)
-- or from github releases [GitHub Releases](https://github.com/espressif/idf-im-ui/releases)
+The easiest way to install EIM on Windows is using [WinGet](https://learn.microsoft.com/en-us/windows/package-manager/winget/), the Windows Package Manager:
+
+```powershell
+# Install the GUI application (recommended for most users)
+winget install Espressif.EIM
+
+# Or install the CLI-only version
+winget install Espressif.EIM-CLI
+```
+
+To update EIM later:
+```powershell
+winget upgrade Espressif.EIM
+```
+
+#### Option 2: Direct Download
+
+Download the latest installer directly:
+- From [Espressif Download Page](https://dl.espressif.com/dl/eim/)
+- Or from [GitHub Releases](https://github.com/espressif/idf-im-ui/releases)
 
 After downloading, simply run the `.exe` installer.
 It will automatically detect and install any missing prerequisites and guide you through the setup process.
 
-You can also launch the GUI or use the CLI directly after installation:
-```bash
+#### Running EIM on Windows
+
+After installation, you can launch the GUI from the Start Menu or use the CLI:
+```powershell
 eim install
-````
+```
+
+---
 
 ### macOS Installation (via Homebrew)
 
 <a id="macos-installation-via-homebrew"></a>
 
-If you're using **macOS**, the **recommended** method is via Homebrew — this ensures EIM stays up to date automatically and integrates seamlessly with your system.
+The **recommended** method for macOS is via [Homebrew](https://brew.sh/) — this ensures EIM stays up to date automatically and integrates seamlessly with your system.
 
 ```bash
+# Add the Espressif tap
 brew tap espressif/eim
 
-# for GUI app runnable from apps
+# Install the GUI app (launchable from Applications)
 brew install --cask eim-gui
 
-# for CLI app runnable from terminal
+# Or install the CLI app (runnable from terminal)
 brew install eim
 ```
+
+To update EIM later:
+```bash
+brew upgrade eim
+# or
+brew upgrade --cask eim-gui
+```
+
 > 🧩 **Alternative:**
-> You can also download macOS `.dmg` or `.tar.gz` installers from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
+> You can also download macOS `.dmg` or `.zip` installers from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
 > This page contains versions for **Windows, macOS, and Linux**, as well as **all supported ESP-IDF releases** — useful if you prefer manual setup or offline installation.
+
+---
 
 ### Debian-Based Linux Installation (via APT Repository)
 
 <a id="debian-based-linux-installation-via-apt-repository"></a>
 
-If you're using a **Debian-based Linux** distribution (e.g. Ubuntu), the **recommended** installation method is through the official Espressif APT repository:
+For **Debian-based** distributions (Ubuntu, Debian, Linux Mint, etc.), use the official Espressif APT repository:
 
 ```bash
-# Add repository
+# Add the Espressif APT repository
 echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
 
+# Update package lists
 sudo apt update
 
 # Install CLI only
 sudo apt install eim-cli
 
-# Install GUI (includes CLI)
+# Or install GUI (includes CLI)
 sudo apt install eim
 ```
 
-> 🧩 **Alternative:**
-> You can also download `.deb` or `.tar.gz` packages for Linux from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
+To update EIM later:
+```bash
+sudo apt update && sudo apt upgrade eim
+```
+
+---
+
+### RPM-Based Linux Installation (via DNF Repository)
+
+<a id="rpm-based-linux-installation-via-dnf-repository"></a>
+
+For **RPM-based** distributions (Fedora, RHEL, CentOS, openSUSE, etc.), use the official Espressif RPM repository:
+
+```bash
+# Add the Espressif RPM repository
+sudo tee /etc/yum.repos.d/espressif-eim.repo << 'EOF'
+[eim]
+name=ESP-IDF Installation Manager
+baseurl=https://dl.espressif.com/dl/eim/rpm/$basearch
+enabled=1
+gpgcheck=0
+EOF
+
+# Install CLI only
+sudo dnf install eim-cli
+
+# Or install GUI (includes CLI)
+sudo dnf install eim
+```
+
+To update EIM later:
+```bash
+sudo dnf upgrade eim
+```
+
+---
+
+### Alternative: Direct Downloads
+
+> 🧩 You can download `.deb`, `.rpm`, `.msi`, `.dmg` packages or binaries for Linux from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
 > The download page includes packages for **all platforms** and **ESP-IDF versions** — ideal for offline or custom deployments.
 
 > **Note:**
 > The *GUI application* includes full *CLI capabilities* and can be invoked directly from the command line (`eim <command>`).
 > The *standalone CLI* (`eim-cli`) is *statically linked* and works on most Linux systems without additional dependencies.
 
-2. Launch the GUI for a visual installation experience or use the command line for automation.
-3. The **welcome page** will adapt based on your environment:
+---
+
+## Post-Installation
+
+1. Launch the GUI for a visual installation experience or use the command line for automation.
+2. The **welcome page** will adapt based on your environment:
 
    * **No previous installation or offline archive**: The installer will present options for a **New Installation**.
    * **Offline archive detected**: The installer will offer to **Install from Archive** or proceed with a **New Installation** from online sources.
    * **Previous installation detected**: The installer will offer to **Manage Installations** from the dashboard or start a **New Installation**.
-4. Follow the installation steps for your chosen method.
+3. Follow the installation steps for your chosen method.
 
 For detailed instructions, see:
 
