@@ -1,4 +1,4 @@
-use crate::gui::{ui::{InstallationProgress, InstallationStage, MessageLevel, ProgressBar, emit_installation_event, emit_log_message, send_message, send_tools_message}, utils::{get_mirror_to_use, MirrorType}};
+use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{InstallationProgress, InstallationStage, MessageLevel, ProgressBar, emit_installation_event, emit_log_message, send_message, send_tools_message}, utils::{get_mirror_to_use, MirrorType}};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{

@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use idf_im_lib::utils::{mirror_entries_to_display, sorted_mirror_entries, url_from_display_line};
-
 // no runtime creation here; we run inside the app's existing Tokio runtime
 use crate::cli::helpers::generic_confirm_with_default;
 use crate::cli::helpers::{
@@ -14,11 +12,9 @@ use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
-// no runtime creation here; we run inside the app's existing Tokio runtime
-
-use crate::cli::helpers::generic_confirm_with_default;
 use idf_im_lib::utils::calculate_mirrors_latency;
-use idf_im_lib::utils::MirrorEntry;
+
+// no runtime creation here; we run inside the app's existing Tokio runtime
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
