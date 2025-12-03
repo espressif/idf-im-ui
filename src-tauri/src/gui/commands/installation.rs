@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::{is_path_empty_or_nonexistent, MirrorType, get_mirror_to_use}};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -265,17 +265,9 @@ async fn download_idf(
         }
     });
 
-    let default_mirror_str = idf_im_lib::get_idf_mirrors_list().first().unwrap().to_string();
+    
     let is_simple_installation = app_state::is_simple_installation(&app_handle);
-    let mut mirror_to_use = settings.idf_mirror.clone().unwrap_or_default();
-
-    if is_simple_installation && mirror_to_use == default_mirror_str {
-        let mirror_latency_entries: Vec<MirrorEntry> = idf_im_lib::utils::calculate_mirrors_latency(idf_im_lib::get_idf_mirrors_list()).await;
-        
-        if let Some(best_mirror_entry) = mirror_latency_entries.first() {
-            mirror_to_use = best_mirror_entry.url.clone();
-        }
-    }
+    let mirror_to_use = get_mirror_to_use(MirrorType::IDF, settings, is_simple_installation, &app_handle).await;
 
     emit_log_message(
         app_handle,
@@ -382,6 +374,7 @@ pub async fn install_single_version(
 }
 
 #[cfg(target_os = "windows")]
+#[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
 
@@ -801,15 +794,8 @@ fn is_process_running(pid: u32) -> bool {
     }
 }
 
-#[tauri::command]
-pub async fn start_installation_gui_cmd(app_handle: AppHandle) -> Result<(), String> {
-    info!("Starting installation via GUI command");
-    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    set_is_simple_installation(&app_handle, false)?;
-    start_installation(app_handle).await
-}
-
 #[cfg(not(target_os = "windows"))]
+#[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
@@ -1192,7 +1178,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         version: settings.idf_versions.as_ref().and_then(|v| v.first().cloned()),
     });
 
-    start_installation(app_handle.clone()).await
+    let res = start_installation(app_handle.clone()).await;
+    app_state::set_is_simple_installation(&app_handle, false)?;
+    return res;
 }
 
 #[tauri::command]
