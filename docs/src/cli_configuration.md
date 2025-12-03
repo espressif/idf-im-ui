@@ -72,19 +72,72 @@ tools_json_file = "tools/tools.json"
 config_file_save_path = "eim_config.toml"
 non_interactive = true
 wizard_all_questions = false
-mirror = "[https://github.com](https://github.com)"
-idf_mirror = "[https://github.com](https://github.com)"
+mirror = "https://github.com"
+idf_mirror = "https://github.com"
 pypi_mirror = "https://pypi.org/simple"
 recurse_submodules = true
 install_all_prerequisites = true
 skip_prerequisites_check = false
+idf_features = ["ci", "docs"]
 ```
-
 
 Load a configuration file:
 ```bash
 eim install --config path/to/config.toml
 ```
+
+## IDF Features Configuration
+
+ESP-IDF supports optional features (such as `ci`, `docs`, `pytest`, etc.) that install additional Python dependencies. You can configure these features in several ways:
+
+### Global Features (All Versions)
+
+Use the `--idf-features` flag or `idf_features` config option to apply the same features to all ESP-IDF versions being installed:
+
+```bash
+# Via command line
+eim install -i v5.3.2,v5.4 --idf-features=ci,docs
+
+# Via configuration file
+idf_features = ["ci", "docs", "pytest"]
+```
+
+### Per-Version Features
+
+When installing multiple ESP-IDF versions, you may want different features for each version. Use the `idf_features_per_version` configuration option in your TOML file:
+
+```toml
+idf_versions = ["v5.3.2", "v5.4", "v5.5"]
+
+# Per-version feature selection
+[idf_features_per_version]
+"v5.3.2" = ["ci", "docs"]
+"v5.4" = ["ci", "pytest"]
+"v5.5" = ["ci", "docs", "pytest", "sbom"]
+```
+
+### Feature Selection Priority
+
+The installer determines which features to use for each version in the following order:
+
+1. **Per-version features** (`idf_features_per_version`): If specified for the version, these are used
+2. **Global features** (`idf_features` or `--idf-features`): Applied to all versions without per-version settings
+3. **Interactive selection**: In wizard mode, you'll be prompted to select features for each version
+4. **Required only**: In non-interactive mode without any feature configuration, only required features are installed
+
+### Interactive Feature Selection
+
+When using the wizard command, you'll be prompted to select features for each ESP-IDF version:
+
+```bash
+eim wizard -i v5.3.2,v5.4
+```
+
+The wizard will:
+- Display available features for each version (features may differ between versions)
+- Show which features are required vs optional
+- Allow you to select/deselect optional features independently for each version
+- Save your selections to the configuration if you choose to export it
 
 ## Headless Configuration
 
@@ -99,6 +152,9 @@ eim install -i v5.3.2 -p /opt/esp-idf
 
 # Headless with config file
 eim install --config path/to/config.toml
+
+# Headless with specific features
+eim install -i v5.3.2 --idf-features=ci,docs
 
 # To run in interactive mode, explicitly set non-interactive to false
 eim install -n false

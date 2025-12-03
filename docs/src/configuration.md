@@ -6,6 +6,7 @@ The ESP-IDF Installation Manager supports configuration through both its graphic
 - [CLI Configuration](./cli_configuration.md): Configure using command-line arguments or configuration files.
 
 ## Handling Existing ESP-IDF Repositories
+
 If you specify an installation path that already contains a valid ESP-IDF Git repository, EIM will detect and use this existing repository. In this scenario, any ESP-IDF version selections made in the configuration file, command line, or GUI will be disregarded. EIM will proceed to install the necessary tools based on the version of ESP-IDF found in the existing repository, without overwriting its contents. This allows you to manage your ESP-IDF Git clone independently and use EIM solely for toolchain setup.
 
 ## Configuration Priority
@@ -39,10 +40,67 @@ tools_json_file = "tools/tools.json"
 config_file_save_path = "eim_config.toml"
 non_interactive = true
 wizard_all_questions = false
-mirror = "[https://github.com](https://github.com)"
-idf_mirror = "[https://github.com](https://github.com)"
+mirror = "https://github.com"
+idf_mirror = "https://github.com"
 pypi_mirror = "https://pypi.org/simple"
 recurse_submodules = true
 install_all_prerequisites = true
 skip_prerequisites_check = false
+idf_features = ["ci", "docs"]
 ```
+
+## IDF Features
+
+ESP-IDF includes optional features that install additional Python dependencies for specific use cases. Common features include:
+
+| Feature | Description |
+|---------|-------------|
+| `ci` | Continuous integration tools |
+| `docs` | Documentation building tools |
+| `pytest` | Testing framework dependencies |
+| `sbom` | Software Bill of Materials generation |
+
+### Configuring Features
+
+Features can be configured in two ways:
+
+#### Global Features (All Versions)
+
+Apply the same features to all ESP-IDF versions:
+
+```toml
+idf_features = ["ci", "docs"]
+```
+
+Or via command line:
+```bash
+eim install -i v5.3.2 --idf-features=ci,docs
+```
+
+#### Per-Version Features
+
+When installing multiple versions, you can specify different features for each:
+
+```toml
+idf_versions = ["v5.3.2", "v5.4", "v5.5"]
+
+[idf_features_per_version]
+"v5.3.2" = ["ci"]
+"v5.4" = ["ci", "docs"]
+"v5.5" = ["ci", "docs", "pytest"]
+```
+
+This is particularly useful when:
+- Different versions have different available features
+- You need specific features for certain versions only
+- You want to minimize installation size for some versions
+
+### GUI Feature Selection
+
+In the GUI installer, when multiple ESP-IDF versions are selected, the feature selection screen displays tabs for each version. This allows you to:
+
+- View available features for each version independently
+- Select different optional features per version
+- See which features are required (always installed) vs optional
+
+For more details, see [CLI Configuration](./cli_configuration.md#idf-features-configuration).

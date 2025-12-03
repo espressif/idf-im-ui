@@ -71,6 +71,9 @@ wizard.idf.user_cancelled:
 wizard.idf.cloning:
   en: Cloning ESP-IDF
   cn: 正在克隆 ESP-IDF
+wizard.idf.submodule_finish:
+  en: "IDF submodule correctly downloaded to:"
+  cn: "IDF 子模块已正确下载到:"
 wizard.idf_version.selected:
   en: "Selected IDF version: %{version}"
   cn: "已选择 IDF 版本: %{version}"
@@ -1262,3 +1265,6 @@ gui.offline.all_completed:
 cli.select.activation_instructions:
   en: "To activate this environment, run the following command in your terminal:"
   cn: "要激活此环境，请在终端中运行以下命令："
+wizard.requirements.no_features_available:
+  en: "No features are available for the selected platform."
+  cn: "所选平台没有可用的功能。"

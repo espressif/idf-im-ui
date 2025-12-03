@@ -405,6 +405,7 @@
       "selectTarget": "选择目标设备",
       "selectVersion": "选择 IDF 版本",
       "selectMirror": "选择镜像",
+      "selectFeatures": "选择功能",
       "selectPath": "选择安装路径",
       "installationProgress": "安装进度",
       "installationComplete": "安装完成"
@@ -744,5 +745,43 @@
       "entries": "({count} 条记录)"
     },
     "preparing": "正在准备安装..."
+  },
+  "featuresSelect": {
+    "title": "选择 ESP-IDF 功能",
+    "description": "选择您希望随 ESP-IDF 一起安装的功能和组件",
+    "continueButton": "继续到安装路径",
+    "noDescription": "无可用描述",
+    "noFeatures": "无可用功能。请先选择一个 ESP-IDF 版本。",
+    "sections": {
+      "required": "必需功能",
+      "requiredDescription": "这些功能是必需的，将始终被安装",
+      "optional": "可选功能",
+      "optionalDescription": "选择您希望额外安装的功能"
+    },
+    "badges": {
+      "required": "必需",
+      "optional": "可选"
+    },
+    "actions": {
+      "selectAll": "全选",
+      "deselectAll": "取消选择所有可选功能"
+    },
+    "summary": "已选择 {selected} / {total} 项功能"
+  },
+  "gui": {
+    "settings": {
+      "features_updated": "已更新所选功能",
+      "idf_mirror_updated": "ESP-IDF 镜像源已更新"
+    }
+  },
+  "wizard": {
+    "requirements": {
+      "no_idf_version_specified": "未指定 ESP-IDF 版本",
+      "read_failure": "读取依赖文件失败",
+      "selection_unavailable": "功能选择不可用"
+    },
+    "features": {
+      "selection_unavailable": "功能选择不可用"
+    }
   }
 }

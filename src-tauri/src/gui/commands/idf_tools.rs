@@ -1,18 +1,22 @@
-use crate::gui::ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar};
+use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar}};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  add_path_to_path,ensure_path,
-  idf_tools::{self, get_tools_export_paths},
-  DownloadProgress,
-  settings::Settings,
+  add_path_to_path, ensure_path, idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata}, idf_tools::{self, get_tools_export_paths}, settings::Settings, DownloadProgress
 };
-use log::{ error, info};
+use log::{ error, info, warn};
+use serde::{Deserialize, Serialize};
 use std::{
-  path::{Path, PathBuf}, sync::{Arc, Mutex},
+  collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex}
 };
 use tauri::AppHandle;
 use rust_i18n::t;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionFeatureInfo {
+    pub version: String,
+    pub features: Vec<FeatureInfo>,
+}
 
 
 /// Represents the tool setup configuration
@@ -353,13 +357,22 @@ pub async fn setup_tools(
       }
     };
 
+    // Get features for this specific version
+    let features_for_version = settings.get_features_for_version(idf_version);
+
+    info!(
+        "Installing Python environment for {} with features: {:?}",
+        idf_version,
+        features_for_version
+    );
+
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
         &paths.actual_version,
         &paths.tool_install_directory,
         true, //TODO: actually read from config
-        &settings.idf_features.clone().unwrap_or_default(),
+        &features_for_version,
         offline_archive_dir, // Offline archive directory
         &settings.pypi_mirror, // PyPI mirror
     ).await {
@@ -418,4 +431,89 @@ pub async fn setup_tools(
         t!("gui.setup_tools.setup_completed").to_string());
 
     Ok(export_paths)
+}
+
+#[tauri::command]
+pub async fn get_features_list_all_versions(
+    app_handle: AppHandle,
+) -> Result<Vec<VersionFeatureInfo>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+
+    let versions = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.clone(),
+        _ => {
+            let msg = t!("wizard.requirements.no_idf_version_specified").to_string();
+            warn!("{}", msg);
+            return Err(msg);
+        }
+    };
+
+    let mut result = Vec::new();
+
+    for version in versions {
+        let req_url = get_requirements_json_url(
+            settings.repo_stub.clone().as_deref(),
+            &version,
+            settings.idf_mirror.clone().as_deref()
+        );
+
+        info!("Fetching requirements for version {} from: {}", version, req_url);
+
+        let requirements_files = match RequirementsMetadata::from_url_async(&req_url).await {
+            Ok(files) => files,
+            Err(err) => {
+                warn!(
+                    "{}: {} for version {}. {}",
+                    t!("wizard.requirements.read_failure"),
+                    err,
+                    version,
+                    t!("wizard.features.selection_unavailable")
+                );
+                // Continue with other versions even if one fails
+                continue;
+            }
+        };
+
+        result.push(VersionFeatureInfo {
+            version: version.clone(),
+            features: requirements_files.features.clone(),
+        });
+    }
+
+    if result.is_empty() {
+        return Err(t!("wizard.requirements.no_features_available").to_string());
+    }
+
+    Ok(result)
+}
+
+/// Sets the selected ESP-IDF features for each version
+/// features_map: HashMap where key is version string, value is list of selected feature names
+#[tauri::command]
+pub fn set_selected_features_per_version(
+    app_handle: AppHandle,
+    features_map: HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    info!("Setting selected features per version: {:?}", features_map);
+
+    update_settings(&app_handle, |settings| {
+        settings.idf_features_per_version = Some(features_map);
+    })?;
+
+    send_message(
+        &app_handle,
+        t!("gui.settings.features_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}
+
+/// Gets the previously selected features per version (for restoring state)
+#[tauri::command]
+pub fn get_selected_features_per_version(
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<String>>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+
+    Ok(settings.idf_features_per_version.clone().unwrap_or_default())
 }

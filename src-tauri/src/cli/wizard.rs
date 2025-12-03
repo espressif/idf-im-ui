@@ -1,6 +1,8 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
+use idf_im_lib::idf_features::get_requirements_json_url;
+use idf_im_lib::idf_features::RequirementsMetadata;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
@@ -401,6 +403,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
     config = select_installation_path(config)?;
 
+    // initialize the per-version map if not already set
+    if config.idf_features_per_version.is_none() {
+        config.idf_features_per_version = Some(HashMap::new());
+    }
     // Multiple version starts here
     let mut using_existing_idf = false;
     for idf_version in config.idf_versions.clone().unwrap() {
@@ -412,6 +418,55 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         config.idf_path = Some(paths.idf_path.clone());
         idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
+
+        let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
+
+        let requirements_files = match RequirementsMetadata::from_url(&req_url) {
+            Ok(files) => files,
+            Err(err) => {
+                warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
+                return Err(err.to_string());
+            }
+        };
+
+        // let features = select_features(
+        //     &requirements_files,
+        //     config.non_interactive.unwrap_or_default(),
+        //     true,
+        // )?;
+        // Check if we already have features for this version (from CLI arg or config file)
+        let features = if let Some(existing) = config.get_features_for_version_if_set(&idf_version) {
+            // Convert feature names back to FeatureInfo
+            requirements_files.features
+                .iter()
+                .filter(|f| existing.contains(&f.name))
+                .cloned()
+                .collect()
+        } else {
+            // Interactive selection for this version
+            select_features(
+                &requirements_files,
+                config.non_interactive.unwrap_or_default(),
+                true,
+            )?
+        };
+
+        debug!(
+            "{}: {}",
+            t!("wizard.features.selected"),
+            features
+                .iter()
+                .map(|f| f.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+        // Save to per-version map
+        if let Some(ref mut per_version) = config.idf_features_per_version {
+          per_version.insert(
+            idf_version.clone(),
+            features.iter().map(|f| f.name.clone()).collect(),
+          );
+        }
 
         if !using_existing_idf {
             // download idf
@@ -442,6 +497,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 }
             }
         }
+        // IDF features
+
+
+
         // setup tool directories
 
         let tool_download_directory = setup_directory(
@@ -515,7 +574,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             &paths.actual_version,
             &tool_install_directory,
             true, //TODO: actually read from config
-            &config.idf_features.clone().unwrap_or_default(),
+            &features.iter().map(|f| f.name.clone()).collect::<Vec<String>>(),
             if offline_mode {
                 Some(offline_archive_dir.as_ref().unwrap().path())
             } else {

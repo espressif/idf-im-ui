@@ -26,6 +26,7 @@ pub mod command_executor;
 pub mod idf_config;
 pub mod idf_tools;
 pub mod idf_versions;
+pub mod idf_features;
 pub mod python_utils;
 pub mod settings;
 pub mod system_dependencies;
@@ -1786,6 +1787,82 @@ pub fn run_idf_tools_using_rustpython(custom_path: &str) -> Result<String, std::
     }
 }
 
+pub fn get_repo_url(
+    repository: Option<&str>,
+    mirror: Option<&str>,
+) -> String {
+    // Determine the repository URL
+    let repo_part_url = match repository {
+        Some(repo) => format!("{}.git", repo),
+        None => {
+            if mirror.map_or(false, |m| m.contains("https://gitee.com/")) {
+                "EspressifSystems/esp-idf.git".to_string()
+            } else {
+                "espressif/esp-idf.git".to_string()
+            }
+        }
+    };
+
+    let url = match mirror {
+        Some(url) => format!("{}/{}", url, repo_part_url),
+        None => format!("https://github.com/{}", repo_part_url),
+    };
+    url
+}
+
+pub fn get_raw_file_url(
+    repository: Option<&str>,
+    version: &str,
+    mirror: Option<&str>,
+    file_path: &str,
+) -> String {
+    // Determine the repository name
+    let repo_name = match repository {
+        Some(repo) => repo.to_string(),
+        None => {
+            if mirror.map_or(false, |m| m.contains("https://gitee.com/")) {
+                "EspressifSystems/esp-idf".to_string()
+            } else {
+                "espressif/esp-idf".to_string()
+            }
+        }
+    };
+
+    // Normalize the version/reference
+    let ref_name = if version == "master" {
+        "master".to_string()
+    } else if version.contains("release") {
+        version.replace("release-", "release/")
+    } else if version.len() == 40 && version.chars().all(|c| c.is_ascii_hexdigit()) {
+        // Commit hash
+        version.to_string()
+    } else {
+        // Tag - need to prepend 'v' if not present for esp-idf tags
+        if version.starts_with('v') {
+            version.to_string()
+        } else {
+            format!("v{}", version)
+        }
+    };
+
+    // Build the raw file URL based on the hosting platform
+    if let Some(mirror_url) = mirror {
+        if mirror_url.contains("gitee.com") {
+            // Gitee raw format: https://gitee.com/owner/repo/raw/branch/path
+            format!("{}/{}/raw/{}/{}", mirror_url, repo_name, ref_name, file_path)
+        } else if mirror_url.contains("gitlab") {
+            // GitLab raw format: https://gitlab.com/owner/repo/-/raw/branch/path
+            format!("{}/{}/-/raw/{}/{}", mirror_url, repo_name, ref_name, file_path)
+        } else {
+            // Generic git hosting - try GitHub format
+            format!("{}/{}/raw/{}/{}", mirror_url, repo_name, ref_name, file_path)
+        }
+    } else {
+        // Default to GitHub raw format: https://raw.githubusercontent.com/owner/repo/branch/path
+        format!("https://raw.githubusercontent.com/{}/{}/{}", repo_name, ref_name, file_path)
+    }
+}
+
 /// Get ESP-IDF repository by version and mirror
 ///
 /// # Arguments
@@ -1809,22 +1886,7 @@ pub fn get_esp_idf(
     // Ensure the path exists
     let _ = ensure_path(path);
 
-    // Determine the repository URL
-    let repo_part_url = match repository {
-        Some(repo) => format!("{}.git", repo),
-        None => {
-            if mirror.map_or(false, |m| m.contains("https://gitee.com/")) {
-                "EspressifSystems/esp-idf.git".to_string()
-            } else {
-                "espressif/esp-idf.git".to_string()
-            }
-        }
-    };
-
-    let url = match mirror {
-        Some(url) => format!("{}/{}", url, repo_part_url),
-        None => format!("https://github.com/{}", repo_part_url),
-    };
+    let url = get_repo_url(repository, mirror);
 
     let mut shallow = true;
     // Parse version into a GitReference

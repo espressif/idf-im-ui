@@ -26,7 +26,8 @@ Running `eim wizard` starts an interactive wizard that guides you through the in
 2. Platform selection
 3. ESP-IDF version selection
 4. Mirror selection
-5. Installation path configuration
+5. Features selection
+6. Installation path configuration
 
 ### Command Line Arguments
 For automated installations, use command line arguments:

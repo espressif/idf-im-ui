@@ -60,9 +60,9 @@ Options:
 - `-r, --recurse-submodules <RECURSE_SUBMODULES>`: Should the installer recurse into submodules of the ESP-IDF repository (default true)
 - `-a, --install-all-prerequisites <INSTALL_ALL_PREREQUISITES>`: Should the installer attempt to install all missing prerequisites (Windows only)
 - `--config-file-save-path <CONFIG_FILE_SAVE_PATH>`: Path to save the configuration file
-- `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF
+- `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF. When installing multiple versions, these features are applied to all versions. For per-version feature configuration, use a configuration file with the `idf_features_per_version` option.
 - `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
-- `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing. This can produce installation which will not work or kill your kittens. Use at your own risk.
+- `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.
 - `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.13.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
@@ -76,6 +76,8 @@ eim wizard [OPTIONS]
 ```
 
 The wizard command accepts the same options as the install command but runs in interactive mode, guiding you through the installation process with a series of prompts.
+
+When installing multiple ESP-IDF versions, the wizard will prompt you to select features for each version independently, allowing you to customize the installation per version.
 
 ### List Command
 
@@ -167,11 +169,20 @@ eim install -i v5.3.2
 # Install ESP-IDF v5.3.2 in interactive mode
 eim install -i v5.3.2 -n false
 
+# Install with specific features
+eim install -i v5.3.2 --idf-features=ci,docs
+
+# Install multiple versions with features applied to all
+eim install -i v5.3.2,v5.4 --idf-features=ci,docs
+
 # Install using custom repository mirror and stub
 eim install -i v5.3.2 --mirror https://my.custom.mirror --repo-stub my-custom-idf
 
-# Run the interactive wizard
+# Run the interactive wizard (allows per-version feature selection)
 eim wizard
+
+# Run wizard with multiple versions
+eim wizard -i v5.3.2,v5.4
 
 # List installed versions
 eim list
@@ -191,3 +202,24 @@ eim purge
 # Import from a config file
 eim import /path/to/tools_set_config.json
 ```
+
+## Per-Version Feature Configuration
+
+When you need different features for different ESP-IDF versions, use a configuration file:
+
+```toml
+# config.toml
+idf_versions = ["v5.3.2", "v5.4", "v5.5"]
+
+[idf_features_per_version]
+"v5.3.2" = ["ci"]
+"v5.4" = ["ci", "docs"]
+"v5.5" = ["ci", "docs", "pytest", "sbom"]
+```
+
+Then run:
+```bash
+eim install --config config.toml
+```
+
+For more details on feature configuration, see [CLI Configuration](./cli_configuration.md#idf-features-configuration).
