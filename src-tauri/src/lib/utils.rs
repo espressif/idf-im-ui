@@ -25,7 +25,7 @@ use std::{
 use regex::Regex;
 use url::Url;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MirrorEntry {
     pub url: String,
     pub latency: Option<u32>,

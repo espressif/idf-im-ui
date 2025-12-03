@@ -229,10 +229,20 @@ pub async fn get_idf_mirror_latency_entries(app_handle: AppHandle) -> Value {
   }
 
   let mirror_latency_entries = idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-
-  json!({
-    "entries": mirror_latency_entries
-  })
+  let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+  match app_state::set_idf_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
+    Ok(_) => {
+        return json!({
+            "entries": mirror_latency_entries,
+        });
+    }
+    Err(e) => {
+      send_message(&app_handle, e, "error".to_string());
+      return json!({
+        "entries": mirror_latency_entries,
+      });
+    }
+  }
 }
 
 /// Returns only the available IDF mirror URLs quickly (no latency calculation)
@@ -302,9 +312,20 @@ pub async fn get_tools_mirror_latency_entries(app_handle: AppHandle) -> Value {
   }
 
   let mirror_latency_entries = idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-  json!({
-    "entries": mirror_latency_entries
-  })
+  let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+  match app_state::set_tools_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
+    Ok(_) => {
+        return json!({
+            "entries": mirror_latency_entries,
+        });
+    }
+    Err(e) => {
+      send_message(&app_handle, e, "error".to_string());
+      return json!({
+        "entries": mirror_latency_entries,
+      });
+    }
+  }
 }
 
 /// Returns only the available tools mirror URLs quickly (no latency
@@ -375,9 +396,20 @@ pub async fn get_pypi_mirror_latency_entries(app_handle: AppHandle) -> Value {
   }
 
   let mirror_latency_entries = idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-  json!({
-    "entries": mirror_latency_entries
-  })
+  let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+  match app_state::set_pypi_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
+    Ok(_) => {
+        return json!({
+            "entries": mirror_latency_entries,
+        });
+    }
+  Err(e) => {
+    send_message(&app_handle, e, "error".to_string());
+    return json!({
+      "entries": mirror_latency_entries,
+    });
+  }
+  }
 }
 
 /// Returns only the available PyPI mirror URLs quickly (no latency calculation)
