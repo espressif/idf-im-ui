@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-// no runtime creation here; we run inside the app's existing Tokio runtime
-use crate::cli::helpers::generic_confirm_with_default;
 use crate::cli::helpers::{
     first_defaulted_multiselect, generic_confirm, generic_input, generic_select, run_with_spinner,
 };
@@ -13,8 +11,8 @@ use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
 use idf_im_lib::utils::calculate_mirrors_latency;
+use crate::cli::helpers::generic_confirm_with_default;
 
-// no runtime creation here; we run inside the app's existing Tokio runtime
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
