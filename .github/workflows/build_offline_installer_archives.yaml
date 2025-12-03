@@ -333,7 +333,7 @@ jobs:
           fi
 
           # Upload to S3
-          aws s3 cp --acl=public-read "$archive" "s3://espdldata/dl/eim/$FILENAME"
+          aws s3 cp --acl=public-read --content-type="application/zstd" "$archive" "s3://espdldata/dl/eim/$FILENAME"
 
           # Generate build info
           mkdir -p build-info
@@ -370,7 +370,7 @@ jobs:
           $SIZE = $archive.Length
 
           # Upload to S3
-          aws s3 cp --acl=public-read "$archivePath" "s3://espdldata/dl/eim/$FILENAME"
+          aws s3 cp --acl=public-read --content-type="application/zstd" "$archivePath" "s3://espdldata/dl/eim/$FILENAME"
 
           # Generate build info
           New-Item -ItemType Directory -Path "build-info" -Force | Out-Null
