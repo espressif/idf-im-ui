@@ -56,12 +56,11 @@ libslirp = "*"
 python3 = ">= 3.10"
 
 [features]
-default = ["gui", "cli", "vendored-openssl"]
+default = ["gui", "cli"]
 gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log", "dep:num_cpus", "dep:tauri-plugin-store", "dep:tauri-plugin-opener"]
-cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs", "vendored-openssl"]
+cli = ["dep:clap", "dep:dialoguer", "dep:indicatif", "dep:console", "dep:log4rs"]
 offline = ["cli", "dep:fs_extra"]
 userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
-vendored-openssl = ["openssl-sys/vendored", "reqwest/native-tls-vendored"]
 
 [lib]
 name = "idf_im_lib"
@@ -81,7 +80,7 @@ required-features = ["offline"]
 tauri-build = { version = "2.3.1", features = [], optional = true }
 
 [dependencies]
-reqwest = {version = "0.12.4", features = ["json", "blocking"] }
+reqwest = { version = "0.12.4", default-features = false, features = ["json","blocking", "rustls-tls"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
@@ -114,7 +113,7 @@ idf-env = { git = "https://github.com/espressif/idf-env", rev="fd69ab4f550ef3564
 fs_extra = { version = "1.3.0", optional = true }
 lnk = "0.6.3"
 os_info = "3.12.0"
-include_url_macro = { version = "0.1", default-features = false, features = ["native-tls-vendored"] }
+include_url_macro = { version = "0.1", default-features = false, features = ["rustls"] }
 
 
 # GUI-related dependencies (optional)
@@ -142,21 +141,9 @@ rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch
 [target.'cfg(target_os = "linux")'.dependencies]
 fork = "0.1"
 
-[dependencies.openssl-sys]
-version = "0.9.0"
-
 [dependencies.libz-sys]
 version = "1.1"
 features = ["static"]
-
-[target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
-version = "0.9.0"
-features = ["vendored"]
-
-[target.'cfg(target_os = "windows")'.dependencies.reqwest]
-version = "0.12.4"
-default-features = false
-features = ["native-tls"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["wincon", "consoleapi", "processenv", "winbase", "handleapi", "processthreadsapi", "securitybaseapi", "winnt"] }
