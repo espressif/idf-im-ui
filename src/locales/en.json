@@ -14,7 +14,11 @@
       "dismissButton": "Dismiss",
       "copyCommand": "Copy to clipboard",
       "commandCopied": "Command copied to clipboard!",
-      "copyFailed": "Failed to copy command"
+      "copyFailed": "Failed to copy command",
+      "updateWithApt": "If you installed via apt, run the following command in your terminal to update:",
+      "updateWithBrew": "If you installed via Homebrew, run the following command in your terminal to update:",
+      "updateWithWinget": "If you installed via Winget, run the following command in your terminal to update:",
+      "downloadManually": "Download the latest version from the releases page:"
     }
   },
   "routes": {
