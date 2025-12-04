@@ -93,14 +93,17 @@ pub fn spawn_progress_monitor(
   })
 }
 
-/// Downloads the ESP-IDF for a specific version with detailed progress reporting
+/// Downloads the ESP-IDF for a specific version without the detailed progress reporting
+/// sadly the new gix library used in idf_im_lib for git operations does not provide progress
+/// updates when used in an async context like Tauri GUI app.
 async fn download_idf(
-app_handle: &AppHandle,
+    app_handle: &AppHandle,
     settings: &Settings,
     version: &str,
     idf_path: &PathBuf,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = mpsc::channel();
+    let (tx, _rx) = mpsc::channel();
+    idf_im_lib::ensure_path(idf_path.to_str().unwrap())?;
 
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Download,
@@ -108,149 +111,6 @@ app_handle: &AppHandle,
         message: rust_i18n::t!("gui.installation.download_starting", version = version).to_string(),
         detail: Some(rust_i18n::t!("gui.installation.download_preparing").to_string()),
         version: Some(version.to_string()),
-    });
-
-    let app_handle_clone = app_handle.clone();
-    let version_clone = version.to_string();
-
-    let handle = thread::spawn(move || {
-        let mut last_percentage = 0;
-        let mut submodule_count = 0;
-        let mut completed_submodules = 0;
-        let mut total_estimated_submodules = 35; // ESP-IDF typically has ~35 submodules
-        let mut main_repo_finished = false;
-        let mut has_submodules = true;
-
-        loop {
-            match rx.recv() {
-                Ok(ProgressMessage::Update(value)) => {
-                    // Main repository clone progress (0-10%)
-                    if value != last_percentage && (value - last_percentage) >= 10 {
-                        last_percentage = value;
-                        emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: (value * 10 / 100) as u32, // Main clone: 0-10%
-                            message: rust_i18n::t!("gui.installation.cloning_repository", version = version_clone.clone()).to_string(),
-                            detail: Some(rust_i18n::t!("gui.installation.repository_progress", percentage = value).to_string()),
-                            version: Some(version_clone.clone()),
-                        });
-                    }
-                }
-
-                Ok(ProgressMessage::SubmoduleUpdate((name, value))) => {
-                    has_submodules = true;
-
-                    // Update estimated total if we're seeing more submodules
-                    if submodule_count > total_estimated_submodules {
-                        total_estimated_submodules = submodule_count + 10;
-                    }
-
-                    // Submodules progress: 10-65% (55% total for submodules)
-                    let submodule_base_progress = 10;
-                    let submodule_range = 55;
-                    let current_submodule_progress = (completed_submodules as f32 / total_estimated_submodules as f32) * submodule_range as f32;
-                    let individual_progress = (value as f32 / 100.0) * (submodule_range as f32 / total_estimated_submodules as f32);
-                    let total_progress = submodule_base_progress + current_submodule_progress as u32 + individual_progress as u32;
-
-                    emit_installation_event(&app_handle_clone, InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: total_progress.min(65),
-                        message: rust_i18n::t!("gui.installation.downloading_submodule", name = name.clone()).to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.submodule_detail",
-                            current = completed_submodules + 1,
-                            total = total_estimated_submodules,
-                            percentage = value).to_string()),
-                        version: Some(version_clone.clone()),
-                    });
-                }
-
-                Ok(ProgressMessage::SubmoduleFinish(name)) => {
-                    has_submodules = true;
-                    completed_submodules += 1;
-                    submodule_count = completed_submodules; // Track actual count
-
-                    // More frequent updates for submodule completion since it's the main work
-                    let effective_total = total_estimated_submodules.max(completed_submodules);
-                    let submodule_progress = 10 + (completed_submodules * 55 / effective_total);
-                    // let submodule_progress = 10 + (completed_submodules * 55 / total_estimated_submodules.max(completed_submodules));
-
-                    let name_display = name.split('/').last().unwrap_or(&name).replace("_", " ");
-                    emit_installation_event(&app_handle_clone, InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: submodule_progress.min(65) as u32,
-                        message: rust_i18n::t!("gui.installation.completed_submodule", name = name_display).to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.submodule_progress",
-                            completed = completed_submodules,
-                            total = total_estimated_submodules).to_string()),
-                        version: Some(version_clone.clone()),
-                    });
-
-                    emit_log_message(&app_handle_clone, MessageLevel::Info,
-                        rust_i18n::t!("gui.installation.submodule_completed_log",
-                            name = name,
-                            completed = completed_submodules,
-                            total = total_estimated_submodules).to_string());
-                }
-
-                Ok(ProgressMessage::Finish) => {
-                    main_repo_finished = true;
-
-                    // If no submodules were processed, this means we're done with everything
-                    if !has_submodules {
-                        emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: 65,
-                            message: rust_i18n::t!("gui.installation.download_completed_no_submodules").to_string(),
-                            detail: Some(rust_i18n::t!("gui.installation.repository_cloned").to_string()),
-                            version: Some(version_clone.clone()),
-                        });
-                        break;
-                    }
-                    // If submodules were processed, check if we're actually done
-                    else if completed_submodules > 0 {
-                        // We have processed some submodules, likely we're done
-                        emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: 65,
-                            message: rust_i18n::t!("gui.installation.download_completed").to_string(),
-                            detail: Some(rust_i18n::t!("gui.installation.repository_and_submodules", count = completed_submodules).to_string()),
-                            version: Some(version_clone.clone()),
-                        });
-                        break;
-                    }
-                    // If we got Finish but haven't seen submodules yet, just note main repo is done
-                    else {
-                        emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Download,
-                            percentage: 10,
-                            message: rust_i18n::t!("gui.installation.main_cloned_waiting").to_string(),
-                            detail: Some(rust_i18n::t!("gui.installation.waiting_submodules").to_string()),
-                            version: Some(version_clone.clone()),
-                        });
-                        // Don't break - keep waiting for submodules
-                    }
-                }
-
-                Err(_) => {
-                    // Channel closed - check our state and finish appropriately
-                    if main_repo_finished {
-                        let final_percentage = if has_submodules { 65 } else { 65 };
-                        emit_installation_event(&app_handle_clone, InstallationProgress {
-                            stage: InstallationStage::Extract,
-                            percentage: final_percentage,
-                            message: rust_i18n::t!("gui.installation.download_completed").to_string(),
-                            detail: Some(if has_submodules {
-                                rust_i18n::t!("gui.installation.submodules_processed", count = completed_submodules).to_string()
-                            } else {
-                                rust_i18n::t!("gui.installation.repository_cloned").to_string()
-                            }),
-                            version: Some(version_clone.clone()),
-                        });
-                    }
-                    break;
-                }
-            }
-        }
     });
 
     let default_mirror = rust_i18n::t!("gui.installation.default_mirror").to_string();
@@ -263,16 +123,26 @@ app_handle: &AppHandle,
             mirror = mirror).to_string(),
     );
 
-    let result = idf_im_lib::get_esp_idf(
-        idf_path.to_str().unwrap(),
-        settings.repo_stub.as_deref(),
-        version,
-        settings.idf_mirror.as_deref(),
-        settings.recurse_submodules.unwrap_or_default(),
-        tx,
-    );
+    // Clone values needed for the blocking task
+    let idf_path_str = idf_path.to_str().unwrap().to_string();
+    let repo_stub = settings.repo_stub.clone();
+    let version_owned = version.to_string();
+    let idf_mirror = settings.idf_mirror.clone();
+    let recurse_submodules = settings.recurse_submodules.unwrap_or_default();
 
-    handle.join().unwrap();
+    let result = match std::thread::spawn(move || {
+      idf_im_lib::get_esp_idf(
+        &idf_path_str,
+        repo_stub.as_deref(),
+        &version_owned,
+        idf_mirror.as_deref(),
+        recurse_submodules,
+        tx,
+      )
+    }).join(){
+        Ok(res) => res,
+        Err(e) => Err(format!("Installation thread panicked: {:?}", e)),
+    };
 
     match result {
         Ok(_) => {
