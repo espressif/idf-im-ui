@@ -427,3 +427,108 @@ export const useWizardStore = defineStore("wizard", {
     },
   },
 });
+
+export const useMirrorsStore = defineStore("mirrors", {
+  state: () => ({
+    // URL lists
+    idf_urls: [],
+    tools_urls: [],
+    pypi_urls: [],
+
+    // Latency entries from backend (Vec<MirrorEntry> where MirrorEntry { url, latency })
+    idf_entries: [],
+    tools_entries: [],
+    pypi_entries: [],
+
+    // Selected (from backend quick URL endpoints)
+    selected_idf: "",
+    selected_tools: "",
+    selected_pypi: "",
+
+    // Loading flags
+    loading_idf_urls: false,
+    loading_tools_urls: false,
+    loading_pypi_urls: false,
+    loading_idf_latency: false,
+    loading_tools_latency: false,
+    loading_pypi_latency: false,
+
+    // Last updated timestamps (ms epoch)
+    idf_last_updated: 0,
+    tools_last_updated: 0,
+    pypi_last_updated: 0,
+
+    // TTL for latency cache (15 minutes)
+    latency_ttl_ms: 15 * 60 * 1000,
+  }),
+  getters: {
+    idfUrls: (state) => state.idf_urls,
+    toolsUrls: (state) => state.tools_urls,
+    pypiUrls: (state) => state.pypi_urls,
+    idfEntries: (state) => state.idf_entries,
+    toolsEntries: (state) => state.tools_entries,
+    pypiEntries: (state) => state.pypi_entries,
+  },
+  actions: {
+    async ttlValid(lastUpdated) {
+      if (!lastUpdated) return false;
+      const now = Date.now();
+      return now - lastUpdated < this.latency_ttl_ms;
+    },
+
+
+    bootstrapMirrorsBackground() {
+      this.bootstrapMirrors().catch(err => {
+        console.error("Background mirror bootstrap failed:", err);
+      });
+    },
+
+    async bootstrapMirrors() {
+      // Fetch quick URL lists + defaults for all types in parallel
+      console.log("Bootstrapping mirrors background...");
+      this.loading_idf_urls = true;
+      this.loading_tools_urls = true;
+      this.loading_pypi_urls = true;
+      try {
+        const idf = await invoke("get_idf_mirror_urls", {});
+        const tools = await invoke("get_tools_mirror_urls", {});
+        const pypi = await invoke("get_pypi_mirror_urls", {});
+        
+        this.idf_urls = Array.isArray(idf.mirrors) ? idf.mirrors : [];
+        this.tools_urls = Array.isArray(tools.mirrors) ? tools.mirrors : [];
+        this.pypi_urls = Array.isArray(pypi.mirrors) ? pypi.mirrors : [];
+        this.selected_idf = typeof idf.selected === "string" ? idf.selected : "";
+        this.selected_tools = typeof tools.selected === "string" ? tools.selected : "";
+        this.selected_pypi = typeof pypi.selected === "string" ? pypi.selected : "";
+      } finally {
+        this.loading_idf_urls = false;
+        this.loading_tools_urls = false;
+        this.loading_pypi_urls = false;
+      }
+      // Compute latency in background
+      await this.computeLatencyInBackground();
+    },
+
+    async computeLatencyInBackground() {
+      await this.updateMirrorLatency("idf_entries", "loading_idf_latency", "idf_last_updated", "get_idf_mirror_latency_entries");
+      await this.updateMirrorLatency("tools_entries", "loading_tools_latency", "tools_last_updated", "get_tools_mirror_latency_entries");
+      await this.updateMirrorLatency("pypi_entries", "loading_pypi_latency", "pypi_last_updated", "get_pypi_mirror_latency_entries");
+    },
+    
+    async updateMirrorLatency(entriesKey, loadingKey, lastUpdatedKey, invokeCmd) {
+      if (!await this.ttlValid(this[lastUpdatedKey]) && !this[loadingKey]) {
+        this[loadingKey] = true;
+        try {
+          const res = await invoke(invokeCmd, {});
+          const entries = (res && res.entries) || [];
+          this[entriesKey] = Array.isArray(entries) ? entries : [];
+          this[lastUpdatedKey] = Date.now();
+        } catch (err) {
+          console.error(`Failed to compute ${entriesKey} latency:`, err);
+        } finally {
+          this[loadingKey] = false;
+        }
+      }
+    },
+  },
+});
