@@ -176,6 +176,7 @@ jobs:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: release_cli/${{ matrix.package_name }}/eim.zip
           asset_name: eim-cli-${{ matrix.package_name }}.zip
+
       # offline installer
       - name: Build offline_installer_builder
         run: |
@@ -215,20 +216,26 @@ jobs:
         shell: bash
 
       - name: Build CLI .deb package
-        if: github.event_name == 'release' && github.event.action == 'created'
         run: |
           cd src-tauri
           # Install cargo-deb if not present
           cargo install cargo-deb || true
           # Build .deb with version from tag
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
+          # Use tag version only when ref is a tag
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-${GITHUB_SHA:0:7}"
+          fi
+
+          echo "Using version: $VERSION"
+
           cargo deb --no-build --no-default-features --features cli \
             --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
             --deb-version $VERSION
         shell: bash
 
       - name: Upload CLI .deb artifact
-        if: github.event_name == 'release' && github.event.action == 'created'
         uses: actions/upload-artifact@v4
         with:
           name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
@@ -246,33 +253,73 @@ jobs:
           asset_name: eim-cli-${{ matrix.package_name }}.deb
 
       - name: Build CLI .rpm package
-        if: github.event_name == 'release' && github.event.action == 'created'
         run: |
           cd src-tauri
           # Install cargo-generate-rpm if not present
           cargo install cargo-generate-rpm || true
-          # Build .rpm with version from tag
-          VERSION=$(echo ${{ github.ref_name }} | sed 's/v//')
-          cargo generate-rpm --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
-            --payload-compress gzip
+          # Use tag version only when ref is a tag
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-${GITHUB_SHA:0:7}"
+          fi
+
+          echo "Using version: $VERSION"
+
+
+          # Create .rpmbuild directory structure
+          mkdir -p ~/.rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+          # Generate RPM with proper configuration
+          cargo generate-rpm \
+            --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
+            --payload-compress gzip \
+
+          # Debug: Show what was generated
+          echo "Generated RPM files:"
+          find target -name "*.rpm" -type f
         shell: bash
 
-      - name: Upload CLI .rpm artifact
-        if: github.event_name == 'release' && github.event.action == 'created'
+      - name: Find and upload RPM artifacts
+        id: find-rpms
+        run: |
+          # Find all RPM files and copy them to a known location
+          RPM_DIR="rpm_output"
+          mkdir -p "$RPM_DIR"
+
+          # Search for RPM files in all possible locations
+          find src-tauri/target -name "*.rpm" -type f -exec cp {} "$RPM_DIR/" \;
+
+          echo "Contents of $RPM_DIR:"
+          ls -la "$RPM_DIR"/
+
+          # List all found RPM files
+          if [ -d "$RPM_DIR" ] && [ "$(ls -A $RPM_DIR)" ]; then
+            echo "rpm_files_found=true" >> $GITHUB_OUTPUT
+            echo "rpm_count=$(ls $RPM_DIR/*.rpm 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
+            echo "rpm_dir=$RPM_DIR" >> $GITHUB_OUTPUT
+          else
+            echo "rpm_files_found=false" >> $GITHUB_OUTPUT
+            echo "No RPM files found!" >&2
+            exit 1
+          fi
+
+      - name: Upload RPM artifacts to workflow
+        if: steps.find-rpms.outputs.rpm_files_found == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
-          path: src-tauri/target/generate-rpm/*.rpm
+          path: rpm_output/*.rpm
           if-no-files-found: warn
 
-      - name: Upload CLI .rpm Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
+      - name: Upload CLI .rpm Release Assets
+        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
         uses: shogo82148/actions-upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/generate-rpm/*.rpm
+          asset_path: rpm_output/*.rpm
           asset_name: eim-cli-${{ matrix.package_name }}.rpm
 
   build-cli:
@@ -780,8 +827,6 @@ jobs:
           name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: |
             src-tauri/target/release/eim
-            # src-tauri/target/release/bundle/deb/*.deb
-            # src-tauri/target/release/bundle/rpm/*.rpm
             # src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
 
@@ -792,28 +837,47 @@ jobs:
           name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
           path: |
             src-tauri/target/release/bundle/deb/*.deb
-            # src-tauri/target/release/bundle/rpm/*.rpm
             # src-tauri/target/release/bundle/appimage/*.AppImage
           if-no-files-found: warn
+
+      - name: Find and upload Linux RPM artifacts
+        if: startsWith(matrix.os, 'ubuntu')
+        id: find-gui-rpms
+        run: |
+          RPM_DIR="gui_rpm_output"
+          mkdir -p "$RPM_DIR"
+
+          # Find RPM files in GUI build output
+          find src-tauri/target/release/bundle -name "*.rpm" -type f -exec cp {} "$RPM_DIR/" \;
+
+          echo "Contents of $RPM_DIR:"
+          ls -la "$RPM_DIR"/
+
+          if [ -d "$RPM_DIR" ] && [ "$(ls -A $RPM_DIR)" ]; then
+            echo "gui_rpm_files_found=true" >> $GITHUB_OUTPUT
+            echo "gui_rpm_count=$(ls $RPM_DIR/*.rpm 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
+            echo "gui_rpm_dir=$RPM_DIR" >> $GITHUB_OUTPUT
+          else
+            echo "gui_rpm_files_found=false" >> $GITHUB_OUTPUT
+            echo "No GUI RPM files found!" >&2
+          fi
 
       - name: Upload Linux artifacts - .rpm
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
           name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
-          path: |
-            src-tauri/target/release/bundle/rpm/*.rpm
-            # src-tauri/target/release/bundle/appimage/*.AppImage
+          path: gui_rpm_output/*.rpm
           if-no-files-found: warn
 
       - name: Upload Release Assets (Linux - .rpm)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
         uses: shogo82148/actions-upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/rpm/*.rpm
+          asset_path: gui_rpm_output/*.rpm
           asset_name: eim-gui-${{ matrix.package_name }}.rpm
 
       - name: Upload Linux artifacts - .AppImage
@@ -905,13 +969,13 @@ jobs:
           asset_name: eim-gui-${{ matrix.package_name }}.deb
 
       - name: Upload Release Assets (Linux - .rpm)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
         uses: shogo82148/actions-upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/deb/*.rpm
+          asset_path: gui_rpm_output/*.rpm
           asset_name: eim-gui-${{ matrix.package_name }}.rpm
 
       - name: Upload Release Assets (Linux - .AppImage)
@@ -1324,6 +1388,19 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y createrepo-c rpm
 
+      - name: Download CLI linux-x64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+
+      - name: Download CLI linux-aarch64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ github.ref_name }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
       - name: Download GUI linux-x64 .rpm artifact
         uses: actions/download-artifact@v4
         with:
@@ -1338,19 +1415,6 @@ jobs:
           path: new-rpms/
         continue-on-error: true
 
-      - name: Download CLI linux-x64 .rpm artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: eim-cli-linux-x64-${{ github.ref_name }}-rpm
-          path: new-rpms/
-
-      - name: Download CLI linux-aarch64 .rpm artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: eim-cli-linux-aarch64-${{ github.ref_name }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
       - name: Create RPM repository structure
         run: |
           # Create directory structure
@@ -1361,29 +1425,45 @@ jobs:
           aws s3 sync s3://espdldata/dl/eim/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
           aws s3 sync s3://espdldata/dl/eim/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
 
-          # Copy new .rpm files to appropriate architecture directories
-          find new-rpms -name "*x86_64*.rpm" -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
-          find new-rpms -name "*aarch64*.rpm" -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
+          # Debug: Show contents of downloaded RPMs
+          echo "Downloaded RPM artifacts:"
+          find new-rpms -type f -name "*.rpm" -exec ls -la {} \;
 
-          # Debug: Show what's in the repo
-          echo "x86_64 RPMs:"
-          ls -la rpm-repo/x86_64/
-          echo "aarch64 RPMs:"
-          ls -la rpm-repo/aarch64/
+          # Copy new .rpm files to appropriate architecture directories
+          # Improved file discovery logic
+          if [ -d "new-rpms" ] && [ "$(ls -A new-rpms)" ]; then
+            # Copy x86_64 RPMs
+            find new-rpms -type f \( -name "*x86_64*.rpm" -o -name "*amd64*.rpm" -o -name "*linux-x64*.rpm" \) -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
+
+            # Copy aarch64 RPMs
+            find new-rpms -type f \( -name "*aarch64*.rpm" -o -name "*arm64*.rpm" -o -name "*linux-aarch64*.rpm" \) -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
+
+            echo "Copied RPM files:"
+            echo "x86_64 RPMs:"
+            ls -la rpm-repo/x86_64/ || echo "No x86_64 RPMs"
+            echo "aarch64 RPMs:"
+            ls -la rpm-repo/aarch64/ || echo "No aarch64 RPMs"
+          else
+            echo "No RPM artifacts downloaded"
+          fi
 
       - name: Generate RPM repository metadata
         working-directory: rpm-repo
         run: |
           # Generate metadata for x86_64
-          if [ -n "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
-            createrepo_c x86_64/
+          if [ -d "x86_64" ] && [ "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
+            echo "Generating metadata for x86_64 RPMs..."
+            createrepo_c x86_64/ --update
+            echo "x86_64 metadata generated successfully"
           else
             echo "No x86_64 RPMs found, skipping metadata generation"
           fi
 
           # Generate metadata for aarch64
-          if [ -n "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
-            createrepo_c aarch64/
+          if [ -d "aarch64" ] && [ "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
+            echo "Generating metadata for aarch64 RPMs..."
+            createrepo_c aarch64/ --update
+            echo "aarch64 metadata generated successfully"
           else
             echo "No aarch64 RPMs found, skipping metadata generation"
           fi
@@ -1516,9 +1596,14 @@ jobs:
     name: Publish CLI to WinGet
     needs: [build-cli, update-release-info]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'created'
     steps:
-      - name: Publish EIM-CLI to WinGet
+      - name: Sync WinGet fork
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          gh repo sync Hahihula/winget-pkgs --source microsoft/winget-pkgs --force
+
+      - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: Espressif.EIM-CLI
@@ -1530,12 +1615,17 @@ jobs:
     name: Publish GUI to WinGet
     needs: [build-gui, update-release-info]
     runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'created'
     steps:
-      - name: Publish EIM to WinGet
+      - name: Sync WinGet fork
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          gh repo sync Hahihula/winget-pkgs --source microsoft/winget-pkgs --force
+
+      - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: Espressif.EIM
+          identifier: Espressif.eim
           installers-regex: 'eim-gui-windows-x64\.msi$'
           token: ${{ secrets.WINGET_PAT }}
           fork-user: Hahihula
