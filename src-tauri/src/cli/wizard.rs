@@ -115,14 +115,16 @@ pub enum DownloadError {
     UserCancelled,
 }
 
-fn handle_download_error(err: git2::Error) -> Result<(), DownloadError> {
-    match err.code() {
-        git2::ErrorCode::Exists => match generic_confirm("wizard.idf_path_exists.prompt") {
+fn handle_download_error(err: String) -> Result<(), DownloadError> {
+    let err_string = err;
+    if err_string.contains("exists") || err_string.contains("not empty") {
+        match generic_confirm("wizard.idf_path_exists.prompt") {
             Ok(true) => Ok(()),
             Ok(false) => Err(DownloadError::UserCancelled),
             Err(e) => Err(DownloadError::DownloadFailed(e.to_string())),
-        },
-        _ => Err(DownloadError::DownloadFailed(err.to_string())),
+        }
+    } else {
+        Err(DownloadError::DownloadFailed(err_string))
     }
 }
 

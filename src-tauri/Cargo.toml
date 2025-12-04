@@ -85,7 +85,14 @@ reqwest = {version = "0.12.4", features = ["json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-git2 = { version = "0.19.0", features = ["vendored-libgit2"] }
+gix = { version = "0.72", default-features = false, features = [
+    "blocking-network-client",
+    "blocking-http-transport-reqwest",
+    "blocking-http-transport-reqwest-rust-tls",
+    "worktree-mutation",
+    "attributes",
+    "max-control"
+] }
 sha2 = "0.10.8"
 log = "0.4.21"
 dirs = "6.0.0"
