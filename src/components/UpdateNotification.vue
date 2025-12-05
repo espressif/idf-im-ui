@@ -188,8 +188,10 @@ export default {
         return 'sudo apt update && sudo apt upgrade eim'
       } else if (os.includes('darwin') || os.includes('macos')) {
         return 'brew update && brew upgrade eim'
+      } else if (os.includes('windows')) {
+        return 'winget upgrade Espressif.eim'
       }
-      return null // Windows doesn't have command-line update
+      return null
     })
 
     const updateDescription = computed(() => {
@@ -199,6 +201,8 @@ export default {
         return t('app.updateAvailable.updateWithApt')
       } else if (os.includes('darwin') || os.includes('macos')) {
         return t('app.updateAvailable.updateWithBrew')
+      } else if (os.includes('windows')) {
+        return t('app.updateAvailable.updateWithWinget')
       }
       return t('app.updateAvailable.downloadManually')
     })
