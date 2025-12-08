@@ -43,7 +43,7 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 
 ### How does offline installation work?
 
-The offline installation allows you to install ESP-IDF without an internet connection. You need to download an offline installer artifact (a zip file) for your specific OS and ESP-IDF version. This artifact contains the installer and a `.zst` archive with all the necessary data. You then run the installer with the `--use-local-archive` flag, pointing to the `.zst` file. Remember **not** to unpack the `.zst` archive. Also, the offline installation currently requires **Python 3.11**. For detailed instructions, please see the [Offline Installation](./offline_installation.md) guide.
+The offline installation allows you to install ESP-IDF without an internet connection. You need to download an offline installer artifact (a zip file) for your specific OS and ESP-IDF version. This artifact contains the installer and a `.zst` archive with all the necessary data. You then run the installer with the `--use-local-archive` flag, pointing to the `.zst` file. Remember **not** to unpack the `.zst` archive. Also, the offline installation currently requires **Python 3.11 to 3.13**. For detailed instructions, please see the [Offline Installation](./offline_installation.md) guide.
 
 ### The installer says prerequisites are missing, but they are already installed
 In rare cases, the installer might fail to detect prerequisites even if they are properly installed on your system.

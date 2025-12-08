@@ -25,6 +25,8 @@ Configuration files can be used with both the GUI and CLI versions of the instal
 
 The installer uses the TOML format for configuration files. Every line is optional; you only need to include the parameters you want to configure.
 
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, and 3.13. Python 3.14 and later are not supported.
+
 Here is an example of a comprehensive configuration file:
 
 ```toml

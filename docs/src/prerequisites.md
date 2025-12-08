@@ -2,6 +2,13 @@
 
 Below are the minimum requirements for running the ESP-IDF. The Installation Manager itself has no dependencies, but during its run, it checks the system to ensure the dependencies of IDF are met.
 
+## Python Version
+
+ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, and **3.13**. 
+
+> **Important**
+> Python 3.14 and later are **not supported**. Please ensure you have a compatible Python version installed.
+
 ## Windows
 
 To get started with ESP-IDF, you need Git and Python. The ESP-IDF Installation Manager will verify the required prerequisites on your system and install any that are missing.
@@ -23,7 +30,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 
 > **Note**
 > On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed.
-> For offline installations, **Python 3.11** is required.
+> For offline installations, Python **3.11** to **3.13** is required.
 
 ## Linux
 
@@ -86,4 +93,4 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
 > **Note**
-> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, **Python 3.11** is required.
+> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.13** is required.

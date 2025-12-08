@@ -18,6 +18,8 @@ Before using the `offline-installer-builder`, ensure the following is installed:
 
 > 💡 The builder does **not** bundle `uv` — you must install it separately.
 
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, and 3.13. Python 3.14 and later are not supported. When building an offline archive, you can specify which Python versions to include wheels for. See the `--python-version` and `--wheel-python-versions` options for more details.
+
 ---
 
 ## Usage
