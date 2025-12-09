@@ -106,4 +106,27 @@ const downloadOfflineArchive = async ({
   }
 };
 
-export { getPlatformKey, getOSName, getArchitecture, downloadOfflineArchive };
+// function to get the list of available features for a given IDF version
+// If IDF version is not provided, it will use the default version
+// and return array of all features available for that version
+const getAvailableFeatures = async (idfVersion = IDFDefaultVersion) => {
+  const requirementsURL = `https://github.com/espressif/esp-idf/raw/${idfVersion.replace("release-","release/")}/tools/requirements.json`;
+  try {
+    const res = await fetch(requirementsURL);
+    if (res.ok) {
+      const data = await res.json();
+      const featuresRawList = data.features || [];
+      const features = featuresRawList.map((feature) => feature.name);
+      logger.info(`Available features for IDF version ${idfVersion}: ${features.join(", ")}`);
+      return features;
+    } else {
+      throw new Error(`Failed to fetch requirements.json: ${res.statusText}`);
+    }
+  } catch (error) {
+    logger.error(`Error fetching available features: ${error.message}`);
+    return [];
+  }
+}
+
+export { getPlatformKey, getOSName, getArchitecture, downloadOfflineArchive, getAvailableFeatures };
+
