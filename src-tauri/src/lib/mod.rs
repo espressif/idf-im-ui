@@ -1540,7 +1540,6 @@ pub fn clone_repository(
 }
 
 /// Update submodules fetching ONLY the specific commit SHA with progress reporting
-/// Update submodules fetching ONLY the specific commit SHA with progress reporting
 pub fn update_submodules_shallow(
     repo: &gix::Repository,
     tx: Sender<ProgressMessage>,
@@ -1814,7 +1813,6 @@ fn collect_submodule_commits(
     Ok(())
 }
 
-/// Initialize the repository structure in .git/modules/<path>
 /// Initialize the repository structure in .git/modules/<path>
 fn initialize_modules_repo(
     modules_dir: &Path,
@@ -2109,50 +2107,6 @@ fn checkout_tree_recursive(
     Ok(())
 }
 
-/// Initialize submodule metadata without git CLI
-fn initialize_submodule_pure(
-    parent_repo: &gix::Repository,
-    name: &str,
-    path: &str,
-    url: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-    use std::path::Path;
-
-    let workdir = parent_repo.work_dir()
-        .ok_or("Repository has no working directory")?;
-    let git_dir = parent_repo.git_dir();
-
-    // 1. Add submodule to .git/config
-    let config_path = git_dir.join("config");
-    add_submodule_to_config(&config_path, name, path, url)?;
-
-    // 2. Create .git/modules/<path>/ directory structure
-    let modules_dir = git_dir.join("modules").join(path);
-    fs::create_dir_all(&modules_dir)?;
-
-    // 3. Create a minimal config in the submodule's git dir
-    let submodule_config_path = modules_dir.join("config");
-    create_submodule_config(&submodule_config_path, url)?;
-
-    // 4. Create the gitlink file (.git file in submodule directory)
-    let submodule_workdir = workdir.join(path);
-    fs::create_dir_all(&submodule_workdir)?;
-
-    let gitlink_path = submodule_workdir.join(".git");
-    let relative_modules_path = format!("gitdir: ../../.git/modules/{}", path);
-    fs::write(&gitlink_path, relative_modules_path)?;
-
-    // 5. Create reverse link from modules dir to workdir
-    let git_dir_file = modules_dir.join("gitdir");
-    let workdir_path = submodule_workdir.canonicalize()
-        .unwrap_or_else(|_| submodule_workdir.clone());
-    fs::write(&git_dir_file, format!("{}\n", workdir_path.display()))?;
-
-    debug!("Initialized submodule metadata for {} at {}", name, path);
-    Ok(())
-}
-
 /// Add submodule configuration to parent's .git/config
 fn add_submodule_to_config(
     config_path: &Path,
@@ -2182,33 +2136,6 @@ fn add_submodule_to_config(
     writeln!(file, "\tpath = {}", path)?;
 
     debug!("Added submodule {} to .git/config", name);
-    Ok(())
-}
-
-/// Create minimal config for the submodule's git directory
-fn create_submodule_config(
-    config_path: &Path,
-    url: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-
-    if config_path.exists() {
-        return Ok(());
-    }
-
-    let config_content = format!(
-        "[core]\n\
-         \trepositoryformatversion = 0\n\
-         \tfilemode = true\n\
-         \tbare = false\n\
-         \tlogallrefupdates = true\n\
-         [remote \"origin\"]\n\
-         \turl = {}\n\
-         \tfetch = +refs/heads/*:refs/remotes/origin/*\n",
-        url
-    );
-
-    fs::write(config_path, config_content)?;
     Ok(())
 }
 
