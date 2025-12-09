@@ -317,7 +317,7 @@ pub async fn setup_tools(
         }
     };
 
-    let tools_mirror_to_use = get_mirror_to_use(MirrorType::IDFTools, settings, is_simple_installation, &app_handle).await;
+    let tools_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDFTools, settings, is_simple_installation).await;
 
     // Use the library's setup_tools function
     let installed_tools_list = idf_tools::setup_tools(
@@ -368,7 +368,7 @@ pub async fn setup_tools(
         idf_version,
         features_for_version
     );
-    let pypi_mirror_to_use = get_mirror_to_use(MirrorType::PyPI, settings, is_simple_installation, &app_handle).await;
+    let pypi_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::PyPI, settings, is_simple_installation).await;
     
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(

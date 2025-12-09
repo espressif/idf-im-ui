@@ -87,7 +87,7 @@ async fn choose_mirror(fallback: Option<String>, settings_key: &str, is_simple_i
     }
 }
 
-pub async fn get_mirror_to_use(mirror_type: MirrorType, settings: &Settings, is_simple_installation: bool, app_handle: &AppHandle) -> String {
+pub async fn get_mirror_to_use(app_handle: &AppHandle, mirror_type: MirrorType, settings: &Settings, is_simple_installation: bool) -> String {
     match mirror_type {
         MirrorType::IDF => {
             choose_mirror(settings.idf_mirror.clone(), "idf_mirror", is_simple_installation, settings,

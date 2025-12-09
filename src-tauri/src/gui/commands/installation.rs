@@ -255,7 +255,7 @@ app_handle: &AppHandle,
 
     
     let is_simple_installation = app_state::is_simple_installation(&app_handle);
-    let mirror_to_use = get_mirror_to_use(MirrorType::IDF, settings, is_simple_installation, &app_handle).await;
+    let mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDF, settings, is_simple_installation).await;
 
     emit_log_message(
         app_handle,
