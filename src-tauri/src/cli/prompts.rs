@@ -219,12 +219,15 @@ where
     } else if needs_value {
         let entries = calculate_mirrors_latency(candidates).await;
         if let Some(entry) = entries.first() {
-            if entry.latency.is_none() {
-                info!("Selected {log_prefix} mirror: {} (timeout)", entry.url);
-            } else {
+            if entry.latency.is_some() {
+                // The first entry is best mirror to select
                 info!("Selected {log_prefix} mirror: {} ({:?} ms)", entry.url, entry.latency.unwrap());
+                set_value(config, entry.url.clone());
             }
-            set_value(config, entry.url.clone());
+        } else {
+            // If the first entry is timeout or None there are no good mirrors to select try logging a proper message and return an error
+            info!("No good {log_prefix} mirrors found, please check your internet connection and try again§");
+            return Err(format!("No good {log_prefix} mirrors found, please check your internet connection and try again"));
         }
     }
 

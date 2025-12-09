@@ -30,24 +30,19 @@ app.use(naive);
 
 app.mount("#app");
 
-// Initialize app store and trigger background checks
-const appStore = useAppStore();
-
-// Fetch system info and check prerequisites in background
+// Initialize stores after app is mounted
 setTimeout(() => {
+  // Initialize app store and trigger background checks
+  const appStore = useAppStore();
+  
+  // Fetch system info and check prerequisites in background
   appStore.fetchSystemInfo().then(() => {
     appStore.checkPrerequisitesBackground();
   }).catch(err => {
     console.error("Failed to initialize system info:", err);
   });
-}, 0);
 
-// Bootstrap background mirror latency on app launch
-const mirrorsStore = useMirrorsStore();
-setTimeout(() => {
-  try {
-    mirrorsStore.bootstrapMirrorsBackground();
-  } catch (_) {
-    // ignore bootstrap errors at startup; UI can still fetch lazily
-  }
-}, 0);
+  // Bootstrap mirrors in background (lazy load)
+  const mirrorsStore = useMirrorsStore();
+  mirrorsStore.bootstrapMirrorsBackground();
+}, 100);

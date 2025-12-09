@@ -254,15 +254,25 @@ export default {
   },
   mounted() {
     // Ensure background bootstrap runs if user navigates directly here before app init
-    if (
-      this.mirrorsStore.idf_urls.length === 0 &&
-      this.mirrorsStore.tools_urls.length === 0 &&
-      this.mirrorsStore.pypi_urls.length === 0 &&
-      !this.mirrorsStore.loading_idf_urls &&
-      !this.mirrorsStore.loading_tools_urls &&
-      !this.mirrorsStore.loading_pypi_urls
-    ) {
-      try { this.mirrorsStore.bootstrapMirrorsBackground(); } catch (_) {}
+    // if (
+    //   this.mirrorsStore.idf_urls.length === 0 &&
+    //   this.mirrorsStore.tools_urls.length === 0 &&
+    //   this.mirrorsStore.pypi_urls.length === 0 &&
+    //   !this.mirrorsStore.loading_idf_urls &&
+    //   !this.mirrorsStore.loading_tools_urls &&
+    //   !this.mirrorsStore.loading_pypi_urls
+    // ) {
+    //   try { this.mirrorsStore.bootstrapMirrorsBackground(); } catch (_) {}
+    // }
+
+    if (this.mirrorsStore.idf_urls.length === 0 && !this.mirrorsStore.loading_idf_urls) {
+      this.mirrorsStore.updateMirrors("idf");
+    }
+    if (this.mirrorsStore.tools_urls.length === 0 && !this.mirrorsStore.loading_tools_urls) {
+      this.mirrorsStore.updateMirrors("tools");
+    }
+    if (this.mirrorsStore.pypi_urls.length === 0 && !this.mirrorsStore.loading_pypi_urls) {
+      this.mirrorsStore.updateMirrors("pypi");
     }
   }
 }

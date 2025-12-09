@@ -874,11 +874,9 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
                 Err(e) => {
                     warn!("{}", e.to_string());
                     head_latency_failed = true;
+                    break;
                 }
             }
-        }
-        if head_latency_failed {
-            break;
         }
     }
 

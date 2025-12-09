@@ -460,6 +460,37 @@ export const useMirrorsStore = defineStore("mirrors", {
 
     // TTL for latency cache (15 minutes)
     latency_ttl_ms: 15 * 60 * 1000,
+
+    MIRROR_CONFIG: {
+      idf: {
+        urlsCmd: "get_idf_mirror_urls",
+        urlsKey: "idf_urls",
+        selectedKey: "selected_idf",
+        entriesKey: "idf_entries",
+        loadingKey: "loading_idf_latency",
+        lastUpdatedKey: "idf_last_updated",
+        latencyCmd: "get_idf_mirror_latency_entries",
+      },
+      tools: {
+        urlsCmd: "get_tools_mirror_urls",
+        urlsKey: "tools_urls",
+        selectedKey: "selected_tools",
+        entriesKey: "tools_entries",
+        loadingKey: "loading_tools_latency",
+        lastUpdatedKey: "tools_last_updated",
+        latencyCmd: "get_tools_mirror_latency_entries",
+      },
+      pypi: {
+        urlsCmd: "get_pypi_mirror_urls",
+        urlsKey: "pypi_urls",
+        selectedKey: "selected_pypi",
+        entriesKey: "pypi_entries",
+        loadingKey: "loading_pypi_latency",
+        lastUpdatedKey: "pypi_last_updated",
+        latencyCmd: "get_pypi_mirror_latency_entries",
+      },
+    },
+
   }),
   getters: {
     idfUrls: (state) => state.idf_urls,
@@ -486,35 +517,30 @@ export const useMirrorsStore = defineStore("mirrors", {
     async bootstrapMirrors() {
       // Fetch quick URL lists + defaults for all types in parallel
       console.log("Bootstrapping mirrors background...");
-      this.loading_idf_urls = true;
-      this.loading_tools_urls = true;
-      this.loading_pypi_urls = true;
-      try {
-        const idf = await invoke("get_idf_mirror_urls", {});
-        const tools = await invoke("get_tools_mirror_urls", {});
-        const pypi = await invoke("get_pypi_mirror_urls", {});
-        
-        this.idf_urls = Array.isArray(idf.mirrors) ? idf.mirrors : [];
-        this.tools_urls = Array.isArray(tools.mirrors) ? tools.mirrors : [];
-        this.pypi_urls = Array.isArray(pypi.mirrors) ? pypi.mirrors : [];
-        this.selected_idf = typeof idf.selected === "string" ? idf.selected : "";
-        this.selected_tools = typeof tools.selected === "string" ? tools.selected : "";
-        this.selected_pypi = typeof pypi.selected === "string" ? pypi.selected : "";
-      } finally {
-        this.loading_idf_urls = false;
-        this.loading_tools_urls = false;
-        this.loading_pypi_urls = false;
-      }
-      // Compute latency in background
-      await this.computeLatencyInBackground();
+      await this.updateMirrors("idf");
+      await this.updateMirrors("tools");
+      await this.updateMirrors("pypi");
     },
 
-    async computeLatencyInBackground() {
-      await this.updateMirrorLatency("idf_entries", "loading_idf_latency", "idf_last_updated", "get_idf_mirror_latency_entries");
-      await this.updateMirrorLatency("tools_entries", "loading_tools_latency", "tools_last_updated", "get_tools_mirror_latency_entries");
-      await this.updateMirrorLatency("pypi_entries", "loading_pypi_latency", "pypi_last_updated", "get_pypi_mirror_latency_entries");
+    async updateMirrors(kind) {
+      const config = this.MIRROR_CONFIG[kind];
+      if (!config) {
+        console.error(`Unknown mirror type: ${kind}`);
+        return;
+      }
+
+      try {
+        const res = await invoke(config.urlsCmd, {});
+        this[config.urlsKey] = Array.isArray(res.mirrors) ? res.mirrors : [];
+        this[config.selectedKey] = typeof res.selected === "string" ? res.selected : "";
+        return this.updateMirrorLatency(config.entriesKey, config.loadingKey, config.lastUpdatedKey, config.latencyCmd);
+      } catch (err) {
+        console.error(`Failed to update ${kind} mirrors:`, err);
+      } finally {
+        this[config.loadingKey] = false;
+      }
     },
-    
+
     async updateMirrorLatency(entriesKey, loadingKey, lastUpdatedKey, invokeCmd) {
       if (!await this.ttlValid(this[lastUpdatedKey]) && !this[loadingKey]) {
         this[loadingKey] = true;
