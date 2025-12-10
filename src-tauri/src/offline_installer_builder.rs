@@ -568,7 +568,7 @@ async fn main() {
             });
 
             let idf_path = version_path.join("esp-idf");
-            match idf_im_lib::get_esp_idf(
+            match idf_im_lib::git_tools::get_esp_idf(
                 idf_path.to_str().unwrap(),
                 settings.repo_stub.as_deref(),
                 &idf_version,

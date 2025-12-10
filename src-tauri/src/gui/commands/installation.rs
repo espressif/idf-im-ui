@@ -11,7 +11,14 @@ use std::{
 };
 
 use anyhow::{anyhow, Context, Result};
-use idf_im_lib::{ensure_path, expand_tilde, idf_config::IdfConfig, offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive}, utils::{copy_dir_contents, extract_zst_archive, is_valid_idf_directory, parse_cmake_version}, version_manager::{get_default_config_path, prepare_settings_for_fix_idf_installation}, ProgressMessage};
+use idf_im_lib::{
+  ensure_path,
+  expand_tilde,
+  idf_config::IdfConfig,
+  offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive},
+  utils::{copy_dir_contents, extract_zst_archive, is_valid_idf_directory, parse_cmake_version},
+  version_manager::{get_default_config_path, prepare_settings_for_fix_idf_installation},
+  git_tools::ProgressMessage};
 use log::{debug, error, info, warn};
 use serde_json::json;
 
@@ -131,7 +138,7 @@ async fn download_idf(
     let recurse_submodules = settings.recurse_submodules.unwrap_or_default();
 
     let result = match std::thread::spawn(move || {
-      idf_im_lib::get_esp_idf(
+      idf_im_lib::git_tools::get_esp_idf(
         &idf_path_str,
         repo_stub.as_deref(),
         &version_owned,

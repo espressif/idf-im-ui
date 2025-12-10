@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-use crate::get_raw_file_url;
+use crate::git_tools::get_raw_file_url;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RequirementsMetadata {
