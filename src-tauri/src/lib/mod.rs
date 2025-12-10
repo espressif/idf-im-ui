@@ -15,7 +15,6 @@ use system_dependencies::copy_openocd_rules;
 use tempfile::TempDir;
 use std::collections::{HashMap, HashSet};
 use std::fs::metadata;
-use std::io::BufReader;
 use tar::Archive;
 use tera::{Context, Tera};
 use thiserror::Error;
@@ -37,11 +36,18 @@ pub mod telemetry;
 use std::fs::{set_permissions, File};
 use std::{
     env,
-    fs::{self},
-    io::{self, Read, Write},
+    fs::{self,OpenOptions,read_to_string},
+    io::{self, Read, Write, BufRead, BufReader},
     path::{Path, PathBuf},
     sync::mpsc::Sender,
 };
+use gix::bstr::ByteSlice;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+use std::process::{Command, Stdio};
+use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
+use gix::refs::Target;
+
 
 /// Creates an executable shell script with the given content and file path.
 ///
@@ -294,8 +300,7 @@ fn get_windows_terminal_settings_path() -> Result<PathBuf, std::io::Error> {
 ///
 /// * `String` - A valid GUID string
 fn generate_guid_from_string(input: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+
 
     let mut hasher = DefaultHasher::new();
     input.hash(&mut hasher);
@@ -1646,7 +1651,7 @@ pub fn update_submodules_shallow(
 
 /// Get the remote URL of the repository
 fn get_remote_url(repo: &gix::Repository) -> Result<String, Box<dyn std::error::Error>> {
-    use gix::bstr::ByteSlice;
+
 
     // Try to get the origin remote first
     match repo.find_remote("origin") {
@@ -1784,7 +1789,6 @@ fn collect_submodule_commits(
     prefix: &str,
     commits: &mut std::collections::HashMap<String, gix::ObjectId>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use gix::bstr::ByteSlice;
 
     for entry in tree.iter() {
         let entry = entry?;
@@ -1819,7 +1823,6 @@ fn initialize_modules_repo(
     submodule_workdir: &Path,
     url: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
 
     // Check if already initialized
     if modules_dir.join("config").exists() {
@@ -1921,8 +1924,6 @@ fn create_gitlink(
     parent_git_dir: &Path,
     submodule_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-    use std::path::Path;
 
     let gitlink_path = submodule_dir.join(".git");
 
@@ -1970,7 +1971,6 @@ fn fetch_single_commit_to_modules(
     tx: Option<Sender<ProgressMessage>>,
     submodule_name: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::num::NonZeroU32;
 
     send_progress(&tx, submodule_name, 20);
 
@@ -2040,8 +2040,6 @@ fn checkout_submodule_worktree(
     submodule_workdir: &Path,
     commit_sha: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-    use gix::bstr::ByteSlice;
 
     // Open the repository at modules dir
     let repo = gix::open(modules_dir)?;
@@ -2064,8 +2062,6 @@ fn checkout_tree_recursive(
     tree: &gix::Tree,
     target_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-    use gix::bstr::ByteSlice;
 
     for entry in tree.iter() {
         let entry = entry?;
@@ -2114,8 +2110,6 @@ fn add_submodule_to_config(
     path: &str,
     url: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs::{OpenOptions, read_to_string};
-    use std::io::Write;
 
     let existing_config = read_to_string(config_path).unwrap_or_default();
 
@@ -2175,7 +2169,6 @@ fn fetch_single_commit_gix(
     tx: &Option<Sender<ProgressMessage>>,
     submodule_name: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
 
     let should_interrupt = &AtomicBool::new(false);
 
@@ -2299,8 +2292,6 @@ fn checkout_commit_gix(
     repo: &gix::Repository,
     commit_oid: gix::ObjectId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs;
-    use gix::bstr::ByteSlice;
 
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
@@ -2352,7 +2343,6 @@ fn checkout_with_git_cli(
     dest_path: &Path,
     commit_sha: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::process::Command;
 
     let checkout_result = Command::new("git")
         .args(["checkout", commit_sha])
@@ -2378,8 +2368,6 @@ fn fetch_single_commit_git_cli(
     tx: &Option<Sender<ProgressMessage>>,
     submodule_name: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use std::process::{Command, Stdio};
-    use std::io::{BufRead, BufReader};
 
     if !dest_path.join(".git").exists() {
         std::fs::create_dir_all(dest_path)?;
@@ -2555,8 +2543,6 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 }
 
 fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) -> Result<()> {
-    use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
-    use gix::refs::Target;
 
     let edit = RefEdit {
         change: Change::Update {
@@ -2577,8 +2563,6 @@ fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) 
 }
 
 fn set_head_to_ref(repo: &gix::Repository, refname: &str, message: &str) -> Result<()> {
-    use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
-    use gix::refs::Target;
 
     let edit = RefEdit {
         change: Change::Update {

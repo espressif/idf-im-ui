@@ -881,6 +881,9 @@ gui.installation.completed_list:
 gui.installation.batch_completed:
   en: "Batch installation completed successfully - %{count} version(s) installed"
   cn: "批量安装成功完成 - 已安装 %{count} 个版本"
+gui.installation.thread_panic:
+  en: "Installation thread panicked: %{error}"
+  cn: "安装线程崩溃：%{error}"
 gui.simple_setup.starting:
   en: "Starting installation..."
   cn: "启动安装..."

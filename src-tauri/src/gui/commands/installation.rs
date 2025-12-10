@@ -141,7 +141,7 @@ async fn download_idf(
       )
     }).join(){
         Ok(res) => res,
-        Err(e) => Err(format!("Installation thread panicked: {:?}", e)),
+        Err(e) => Err(rust_i18n::t!("gui.installation.thread_panic", error = format!("{:?}", e)).to_string()),
     };
 
     match result {
