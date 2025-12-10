@@ -10,6 +10,7 @@ import {
   IDFAvailableVersions,
   availableTargets,
 } from "../config.js";
+import { getAvailableFeatures } from "../helper.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
@@ -389,9 +390,42 @@ export function runGUICustomInstallTest({
       );
     });
 
-    it("08- Should show installation path", async function () {
+    it("08- Should show list of optional features", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue with Selected Mirrors");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      for (let version of idfVersionList) {
+        if (idfVersionList.length > 1) {
+          await eimRunner.clickElement(version);
+        }
+
+        const requiredFeaturesList = await eimRunner.findByDataId(
+          "required-group"
+        );
+        const requiredFeaturesListText = await requiredFeaturesList.getText();
+        expect(
+          requiredFeaturesListText,
+          "Core feature not added to the required features"
+        ).to.include("core");
+
+        const optionalFeaturesList = await eimRunner.findByDataId(
+          "optional-group"
+        );
+        const optionalFeaturesListText = await optionalFeaturesList.getText();
+        const expectedFeatures = await getAvailableFeatures(version);
+        for (let feature of expectedFeatures.shift()) {
+          expect(
+            optionalFeaturesListText,
+            `Feature ${feature} not listed in the optional features`
+          ).to.include(feature);
+        }
+      }
+    });
+
+    it("09- Should show installation path", async function () {
+      this.timeout(10000);
+      await eimRunner.clickButton("Continue to Installation Path");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const installPath = await eimRunner.findByDataId("path-info-title");
       expect(await installPath.getText()).to.equal(
@@ -410,7 +444,7 @@ export function runGUICustomInstallTest({
       expect(await input.getAttribute("value")).to.equal(installFolder);
     });
 
-    it("11- Should show installation summary", async function () {
+    it("10- Should show installation summary", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue");
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -425,7 +459,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("09- Should install IDF using expert setup", async function () {
+    it("11- Should install IDF using expert setup", async function () {
       this.timeout(2730000);
 
       try {
@@ -458,7 +492,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("10- Should offer to save installation configuration", async function () {
+    it("12- Should offer to save installation configuration", async function () {
       this.timeout(15000);
 
       try {
