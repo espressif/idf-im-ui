@@ -1,0 +1,149 @@
+name: Generate Windows Packages and Publish to WinGet
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'The release version/tag (e.g., v1.2.3) for artifact names and publishing'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The release version/tag (e.g., v1.2.3) for artifact names and publishing'
+        required: true
+        type: string
+
+jobs:
+  generate-windows-packages:
+    name: Generate Windows Packages (Scoop)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download CLI windows-x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-windows-x64-${{ inputs.version }}
+          path: artifacts/cli/
+
+      - name: Download GUI windows-x64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-windows-x64-${{ inputs.version }}
+          path: artifacts/gui/
+
+      - name: Generate Scoop manifests
+        shell: powershell
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          $version = "${env:VERSION}".TrimStart('v')
+          New-Item -ItemType Directory -Path manifests-scoop -Force | Out-Null
+
+          # CLI Scoop manifest
+          $cliHash = (Get-FileHash artifacts/cli/eim.exe -Algorithm SHA256).Hash.ToLower()
+          $cliJson = @{
+              version = $version
+              description = "ESP-IDF Installation Manager CLI - Setup tool for ESP-IDF development environment"
+              homepage = "https://github.com/espressif/idf-im-ui"
+              license = "MIT"
+              architecture = @{
+                  "64bit" = @{
+                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-cli-windows-x64.exe#/eim.exe"
+                      hash = $cliHash
+                  }
+              }
+              bin = "eim.exe"
+              checkver = @{
+                  github = "https://github.com/espressif/idf-im-ui"
+              }
+              autoupdate = @{
+                  architecture = @{
+                      "64bit" = @{
+                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-cli-windows-x64.exe#/eim.exe"
+                      }
+                  }
+              }
+          }
+          $cliJson | ConvertTo-Json -Depth 10 | Out-File -FilePath manifests-scoop/eim-cli.json -Encoding UTF8
+
+          # GUI Scoop manifest
+          $guiHash = (Get-FileHash artifacts/gui/eim.exe -Algorithm SHA256).Hash.ToLower()
+          $guiJson = @{
+              version = $version
+              description = "ESP-IDF Installation Manager GUI - Graphical setup tool for ESP-IDF development environment"
+              homepage = "https://github.com/espressif/idf-im-ui"
+              license = "MIT"
+              architecture = @{
+                  "64bit" = @{
+                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-gui-windows-x64.exe#/eim-gui.exe"
+                      hash = $guiHash
+                  }
+              }
+              bin = "eim-gui.exe"
+              shortcuts = @(
+                  @("eim-gui.exe", "ESP-IDF Installation Manager")
+              )
+              checkver = @{
+                  github = "https://github.com/espressif/idf-im-ui"
+              }
+              autoupdate = @{
+                  architecture = @{
+                      "64bit" = @{
+                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-gui-windows-x64.exe#/eim-gui.exe"
+                      }
+                  }
+              }
+          }
+          $guiJson | ConvertTo-Json -Depth 10 | Out-File -FilePath manifests-scoop/eim.json -Encoding UTF8
+
+          Write-Host "Generated Scoop manifests"
+
+      - name: Upload Scoop manifests to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ inputs.version }} manifests-scoop/*.json --clobber
+        shell: bash
+
+  publish-winget-cli:
+    name: Publish CLI to WinGet
+    needs: generate-windows-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync WinGet fork
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          gh repo sync Hahihula/winget-pkgs --source microsoft/winget-pkgs --force
+
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Espressif.EIM-CLI
+          installers-regex: 'eim-cli-windows-x64\.exe$'
+          version-filter: ${{ inputs.version }}
+          token: ${{ secrets.WINGET_PAT }}
+          fork-user: Hahihula
+
+  publish-winget-gui:
+    name: Publish GUI to WinGet
+    needs: generate-windows-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync WinGet fork
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_PAT }}
+        run: |
+          gh repo sync Hahihula/winget-pkgs --source microsoft/winget-pkgs --force
+
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: Espressif.eim
+          installers-regex: 'eim-gui-windows-x64\.msi$'
+          version-filter: ${{ inputs.version }}
+          token: ${{ secrets.WINGET_PAT }}
+          fork-user: Hahihula
