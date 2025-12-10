@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, warn};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 
@@ -36,15 +36,27 @@ pub struct Releases {
     pub RELEASES: std::collections::HashMap<String, Release>,
 }
 
+pub const IDF_VERSIONS_URL: &str =
+    "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
+
 // TODO: handle the possibility of multiple downloads
 pub async fn get_idf_versions() -> Result<Releases, String> {
+  let cached_idf_versions = env!("CACHED_IDF_VERSIONS");
   match download_idf_versions().await {
       Ok(versions) => Ok(versions),
-      Err(e) => {
-          let err_msg = format!("Failed to download IDF versions.json file: {}", e);
-          error!("{}", err_msg);
-          Err(err_msg)
-      }
+      Err(err) => {
+          warn!(
+              "Error downloading IDF versions from {}: {}. Using cached versions.",
+              IDF_VERSIONS_URL, err
+          );
+          let versions: Releases = serde_json::from_str(&cached_idf_versions).map_err(|e| {
+              format!(
+                  "Error parsing cached IDF versions JSON: {}",
+                  e.to_string()
+              )
+          })?;
+          Ok(versions)
+      },
     }
 }
 
@@ -90,7 +102,7 @@ pub async fn get_avalible_targets() -> Result<Vec<String>, String> {
 /// * If there is an error during the JSON deserialization, the error is returned as a `serde_json::Error`.
 ///
 pub async fn download_idf_versions() -> Result<Releases, Box<dyn std::error::Error>> {
-    let url = "https://dl.espressif.com/dl/esp-idf/idf_versions.json".to_string();
+    let url = IDF_VERSIONS_URL.to_string();
     let client = reqwest::Client::builder()
         .user_agent("esp-idf-installer")
         .build()?;
