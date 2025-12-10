@@ -14,7 +14,20 @@ use std::io::Write;
 use crate::command_executor::{ execute_command_with_dir, spawn_with_dir};
 use crate::ensure_path;
 
-/// Use git CLI to checkout a commit (fast operation, always works)
+/// Checks out a specific commit in a repository using the `git` command-line tool.
+///
+/// This function is a straightforward wrapper around `git checkout <commit_sha>`.
+/// It is considered a fast and reliable operation.
+///
+/// # Arguments
+///
+/// * `dest_path` - The path to the local repository.
+/// * `commit_sha` - The SHA of the commit to check out.
+///
+/// # Returns
+///
+/// * `Ok(())` if the checkout is successful.
+/// * `Err` with a descriptive error message if the `git` command fails.
 pub fn checkout_with_git_cli(
     dest_path: &Path,
     commit_sha: &str,
@@ -33,19 +46,40 @@ pub fn checkout_with_git_cli(
     Ok(())
 }
 
-/// Messages that can be sent to update the progress bar.
+/// Represents messages for tracking the progress of Git operations.
+///
+/// This enum is used to send updates from long-running Git tasks (like cloning or fetching)
+/// to another thread, typically for updating a user interface.
 pub enum ProgressMessage {
-    /// Update the progress bar with the given value (percentage 0-100).
+    /// A general progress update. The value is a percentage (0-100).
     Update(u64),
-    /// Finish the progress bar.
+    /// Indicates that the operation has completed successfully.
     Finish,
-    /// Update submodule progress: (name, percentage 0-100)
+    /// A progress update for a specific submodule. The tuple contains the submodule name and its progress percentage (0-100).
     SubmoduleUpdate((String, u64)),
-    /// Submodule finished
+    /// Indicates that the processing of a specific submodule has finished. The string is the submodule's name.
     SubmoduleFinish(String),
 }
 
-/// Fallback: Fetch using git CLI with real progress parsing
+/// Fetches a single commit from a remote repository using the `git` command-line tool.
+///
+/// This function serves as a fallback mechanism when a more direct method (like `gix`) fails.
+/// It initializes a new repository if one doesn't exist, adds the remote, and then performs
+/// a shallow fetch (`--depth 1`) for the specified commit. It parses the stderr of the `git`
+/// process to provide progress updates.
+///
+/// # Arguments
+///
+/// * `dest_path` - The path to the local repository.
+/// * `url` - The URL of the remote repository.
+/// * `commit_sha` - The SHA of the commit to fetch.
+/// * `tx` - An optional sender for sending `ProgressMessage` updates.
+/// * `submodule_name` - An optional name of the submodule, used for submodule-specific progress updates.
+///
+/// # Returns
+///
+/// * `Ok(())` if the fetch and checkout are successful.
+/// * `Err` if any of the `git` commands fail.
 pub fn fetch_single_commit_git_cli(
     dest_path: &Path,
     url: &str,
@@ -128,9 +162,21 @@ pub fn fetch_single_commit_git_cli(
     Ok(())
 }
 
-/// Parse git progress output to extract percentage
+/// Parses a line of `git fetch` stderr output to extract a progress percentage.
 ///
-/// Returns Some(percentage) if a progress percentage is found, None otherwise
+/// Git's progress output can have a few different formats, such as:
+/// - "Receiving objects:  45% (123/456)"
+/// - "Resolving deltas: 100% (12/12), done."
+/// This function attempts to parse the percentage value from these lines.
+///
+/// # Arguments
+///
+/// * `line` - A string slice representing a single line from git's stderr.
+///
+/// # Returns
+///
+/// * `Some(percentage)` if a percentage is successfully parsed.
+/// * `None` if the line does not contain a recognizable progress format.
 fn parse_git_progress(line: &str) -> Option<u64> {
     // Look for patterns like "Receiving objects:  45%" or "Resolving deltas:  12%"
     if let Some(pos) = line.find('(') {
@@ -155,12 +201,40 @@ fn parse_git_progress(line: &str) -> Option<u64> {
     percentage_str.parse::<u64>().ok()
 }
 
-/// Public function for testing parse_git_progress functionality
+/// A public test wrapper for the private `parse_git_progress` function.
+///
+/// This function exposes the functionality of `parse_git_progress` for use in tests
+/// or other modules, without making the original function public.
+///
+/// # Arguments
+///
+/// * `line` - A string slice representing a single line from git's stderr.
+///
+/// # Returns
+///
+/// * The result of `parse_git_progress(line)`.
 pub fn parse_git_progress_test(line: &str) -> Option<u64> {
     parse_git_progress(line)
 }
 
-/// Clone or update a git submodule with progress reporting
+/// Clones or updates a git submodule to a specific commit with progress reporting.
+///
+/// This function uses the `git` command-line tool to perform the operations. It initializes
+/// the submodule repository if it doesn't exist, fetches the specific commit with a shallow
+/// depth, and then checks it out. Progress is reported through the provided sender.
+///
+/// # Arguments
+///
+/// * `submodule_name` - The name of the submodule.
+/// * `url` - The URL of the submodule's repository.
+/// * `commit_sha` - The commit SHA to check out.
+/// * `dest_path` - The local path where the submodule should be cloned/updated.
+/// * `tx` - A sender for reporting progress as `(String, u8)` tuples (submodule name, percentage).
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if any of the git operations fail.
 pub fn clone_or_update_submodule(
     submodule_name: &str,
     url: &str,
@@ -245,10 +319,17 @@ pub fn clone_or_update_submodule(
     Ok(())
 }
 
-
-
-
-/// Helper to send progress updates
+/// A helper function to send progress updates via an optional `Sender`.
+///
+/// It constructs the appropriate `ProgressMessage` based on whether a `submodule_name`
+/// is provided and sends it through the channel.
+///
+/// # Arguments
+///
+/// * `tx` - An optional `Sender<ProgressMessage>`. If `None`, the function does nothing.
+/// * `submodule_name` - An optional name of a submodule. If `Some`, a `SubmoduleUpdate` message is sent.
+///   If `None`, a general `Update` message is sent.
+/// * `percentage` - The progress percentage (0-100).
 fn send_progress(
     tx: &Option<Sender<ProgressMessage>>,
     submodule_name: Option<&str>,
@@ -263,7 +344,21 @@ fn send_progress(
     }
 }
 
-
+/// Clones a Git repository using the `gix` library.
+///
+/// This function handles the entire process of cloning, including setting up a shallow clone,
+/// fetching the repository data, checking out the main worktree, checking out a specific
+/// reference (branch, tag, or commit), and recursively updating submodules if requested.
+///
+/// # Arguments
+///
+/// * `options` - A `CloneOptions` struct specifying the URL, local path, reference, and other clone settings.
+/// * `tx` - A sender for reporting `ProgressMessage` updates.
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` with the path to the cloned repository on success.
+/// * `Err` if any stage of the cloning process fails.
 pub fn clone_repository(
     options: CloneOptions,
     tx: Sender<ProgressMessage>,
@@ -343,7 +438,22 @@ pub fn clone_repository(
     Ok(dest_path)
 }
 
-/// Update submodules fetching ONLY the specific commit SHA with progress reporting
+/// Updates all submodules in a repository to their specified commits using a shallow fetch.
+///
+/// This function manually implements the logic of `git submodule update --init`. It reads the
+/// `.gitmodules` file, finds the commit SHA for each submodule in the parent repository's tree,
+/// and then fetches only that specific commit for the submodule. This is more efficient than
+/// cloning the entire history of each submodule. It handles nested submodules recursively.
+///
+/// # Arguments
+///
+/// * `repo` - The parent `gix::Repository` containing the submodules.
+/// * `tx` - A sender for reporting `ProgressMessage` updates for each submodule.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if reading submodule configuration or updating a submodule fails.
 pub fn update_submodules_shallow(
     repo: &gix::Repository,
     tx: Sender<ProgressMessage>,
@@ -448,7 +558,19 @@ pub fn update_submodules_shallow(
     Ok(())
 }
 
-/// Get the remote URL of the repository
+/// Retrieves the fetch URL of a remote for a `gix` repository.
+///
+/// It first attempts to find the remote named "origin". If that fails, it iterates
+/// through all available remotes and returns the URL of the first one it finds.
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` to inspect.
+///
+/// # Returns
+///
+/// * `Ok(String)` with the remote's fetch URL.
+/// * `Err` if no remotes with a fetch URL can be found.
 fn get_remote_url(repo: &gix::Repository) -> Result<String, Box<dyn std::error::Error>> {
 
 
@@ -479,7 +601,21 @@ fn get_remote_url(repo: &gix::Repository) -> Result<String, Box<dyn std::error::
     }
 }
 
-/// Resolve a potentially relative submodule URL against the parent URL
+/// Resolves a potentially relative submodule URL against its parent repository's URL.
+///
+/// Submodule URLs in `.gitmodules` can be relative (e.g., `../another-repo.git`). This
+/// function correctly resolves these relative URLs into absolute ones based on the parent
+/// repository's remote URL. It handles both HTTP(S) and SCP-style SSH URLs.
+///
+/// # Arguments
+///
+/// * `submodule_url` - The URL of the submodule, which may be relative.
+/// * `parent_url` - The absolute URL of the parent repository.
+///
+/// # Returns
+///
+/// * `Ok(String)` with the resolved, absolute URL for the submodule.
+/// * `Err` if URL parsing fails.
 fn resolve_submodule_url(
     submodule_url: &str,
     parent_url: &str,
@@ -503,7 +639,17 @@ fn resolve_submodule_url(
     }
 }
 
-/// Resolve relative URL for HTTP(S) URLs
+/// Resolves a relative URL path against a base HTTP(S) URL.
+///
+/// # Arguments
+///
+/// * `relative` - The relative path (e.g., `../foo.git`).
+/// * `base` - The full base URL (e.g., `https://example.com/bar/baz.git`).
+///
+/// # Returns
+///
+/// * `Ok(String)` with the resolved URL (e.g., `https://example.com/foo.git`).
+/// * `Err` if the base URL cannot be parsed.
 fn resolve_http_relative_url(
     relative: &str,
     base: &str,
@@ -543,7 +689,17 @@ fn resolve_http_relative_url(
     Ok(format!("{}://{}/{}", scheme, host, path))
 }
 
-/// Resolve relative URL for SSH URLs (git@host:path format)
+/// Resolves a relative URL path against a base SCP-style SSH URL.
+///
+/// # Arguments
+///
+/// * `relative` - The relative path (e.g., `../foo.git`).
+/// * `base` - The full base SSH URL (e.g., `git@example.com:bar/baz.git`).
+///
+/// # Returns
+///
+/// * `Ok(String)` with the resolved URL (e.g., `git@example.com:bar/foo.git`).
+/// * `Err` if the base URL format is invalid.
 fn resolve_ssh_relative_url(
     relative: &str,
     base: &str,
@@ -582,7 +738,22 @@ fn resolve_ssh_relative_url(
     Ok(format!("{}:{}", host_part, new_path))
 }
 
-/// Recursively collect all submodule commits from the tree
+/// Recursively traverses a git tree to find all submodule entries (gitlinks) and their commit SHAs.
+///
+/// This function walks through a `gix::Tree`, identifying entries that are gitlinks (submodule
+/// references). For each one found, it adds the submodule's full path and its corresponding
+/// commit `ObjectId` to the provided HashMap. It descends into subtrees to find nested submodules.
+///
+/// # Arguments
+///
+/// * `tree` - The `gix::Tree` to search within.
+/// * `prefix` - The path prefix for the current tree, used to construct the full path of entries.
+/// * `commits` - A mutable HashMap to populate with `(path, ObjectId)` pairs for each submodule found.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful traversal.
+/// * `Err` if there is an issue iterating through the tree or its entries.
 fn collect_submodule_commits(
     tree: &gix::Tree,
     prefix: &str,
@@ -616,7 +787,22 @@ fn collect_submodule_commits(
     Ok(())
 }
 
-/// Initialize the repository structure in .git/modules/<path>
+/// Initializes the repository structure for a submodule within the parent's `.git/modules/` directory.
+///
+/// This function performs the setup required to manage a submodule. It creates a bare repository
+/// in `.git/modules/<path>`, then modifies its configuration to be non-bare, point its worktree
+/// to the correct submodule working directory, and adds the remote "origin".
+///
+/// # Arguments
+///
+/// * `modules_dir` - The path to the submodule's repository inside `.git/modules/`.
+/// * `submodule_workdir` - The path to the submodule's working directory.
+/// * `url` - The remote URL of the submodule.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful initialization.
+/// * `Err` if directory creation or file I/O fails.
 fn initialize_modules_repo(
     modules_dir: &Path,
     submodule_workdir: &Path,
@@ -717,7 +903,23 @@ fn initialize_modules_repo(
     Ok(())
 }
 
-/// Create the gitlink file in the submodule's working directory
+/// Creates the `.git` file in a submodule's working directory.
+///
+/// This file, often called a "gitlink," doesn't contain the repository itself but
+/// instead points to the actual Git directory located within the parent's `.git/modules/`
+/// directory. This function also creates the reverse link (`gitdir` file) in the modules
+/// directory, which points back to the worktree.
+///
+/// # Arguments
+///
+/// * `submodule_dir` - The path to the submodule's working directory.
+/// * `parent_git_dir` - The path to the parent repository's `.git` directory.
+/// * `submodule_path` - The relative path of the submodule within the parent repository.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful creation of the gitlink files.
+/// * `Err` if file I/O fails.
 fn create_gitlink(
     submodule_dir: &Path,
     parent_git_dir: &Path,
@@ -762,7 +964,24 @@ fn create_gitlink(
     Ok(())
 }
 
-/// Fetch a commit into the modules directory
+/// Fetches a single commit into a submodule's repository located in `.git/modules/`.
+///
+/// This function uses `gix` to perform a shallow fetch (`depth=1`) of exactly the commit
+/// required. If the commit already exists locally, the fetch is skipped. After a successful
+/// fetch, it updates the `HEAD` of the submodule's repository to point to the fetched commit.
+///
+/// # Arguments
+///
+/// * `modules_dir` - The path to the submodule's repository inside `.git/modules/`.
+/// * `url` - The remote URL of the submodule.
+/// * `commit_sha` - The SHA of the commit to fetch.
+/// * `tx` - An optional sender for reporting progress.
+/// * `submodule_name` - An optional name of the submodule for progress reporting.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if the fetch fails or the commit cannot be found after fetching.
 fn fetch_single_commit_to_modules(
     modules_dir: &Path,
     url: &str,
@@ -797,13 +1016,7 @@ fn fetch_single_commit_to_modules(
         .map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
     let remote = repo
-        .remote_at(remote_url)?
-        .with_fetch_tags(gix::remote::fetch::Tags::None)
-        .with_refspecs(
-            [commit_sha].into_iter(),
-            gix::remote::Direction::Fetch,
-        )
-        .map_err(|e| format!("Failed to set refspec: {}", e))?;
+        .remote_at(remote_url)?;
 
     let connection = remote
         .connect(gix::remote::Direction::Fetch)
@@ -833,7 +1046,21 @@ fn fetch_single_commit_to_modules(
     Ok(())
 }
 
-/// Checkout files from modules repo to the submodule's working directory
+/// Checks out the files from a submodule's repository into its working directory.
+///
+/// This function takes the commit from the repository stored in `.git/modules/` and
+/// populates the submodule's working directory with the files from that commit's tree.
+///
+/// # Arguments
+///
+/// * `modules_dir` - The path to the submodule's repository inside `.git/modules/`.
+/// * `submodule_workdir` - The path to the submodule's working directory where files will be checked out.
+/// * `commit_sha` - The SHA of the commit to check out.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful checkout.
+/// * `Err` if the repository cannot be opened or the checkout process fails.
 fn checkout_submodule_worktree(
     modules_dir: &Path,
     submodule_workdir: &Path,
@@ -855,7 +1082,22 @@ fn checkout_submodule_worktree(
     Ok(())
 }
 
-/// Recursively checkout a tree
+/// Recursively checks out the contents of a `gix::Tree` to a target directory.
+///
+/// This helper function iterates through a tree's entries. For subtrees, it creates a
+/// corresponding directory and recurses. For blobs, it writes the file content to the
+/// target directory. It also sets the executable bit for files where required on Unix-like systems.
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` that owns the tree.
+/// * `tree` - The `gix::Tree` to check out.
+/// * `target_dir` - The directory where the tree's contents will be placed.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful checkout.
+/// * `Err` if file or directory I/O fails.
 fn checkout_tree_recursive(
     repo: &gix::Repository,
     tree: &gix::Tree,
@@ -884,7 +1126,7 @@ fn checkout_tree_recursive(
             }
 
             // Write blob content
-            let object = repo.find_object(entry_oid)?;
+            let object = repo.find_object(entry.oid())?;
             let blob = object.try_into_blob()?;
             fs::write(&target_path, blob.data.clone())?;
 
@@ -902,7 +1144,22 @@ fn checkout_tree_recursive(
     Ok(())
 }
 
-/// Add submodule configuration to parent's .git/config
+/// Adds a submodule's configuration to the parent repository's `.git/config` file.
+///
+/// This function appends a `[submodule "<name>"]` section with the submodule's path and URL
+/// to the main `.git/config` file. It checks if the section already exists to avoid duplicates.
+///
+/// # Arguments
+///
+/// * `config_path` - The path to the parent's `.git/config` file.
+/// * `name` - The name of the submodule.
+/// * `path` - The relative path of the submodule within the parent repository.
+/// * `url` - The remote URL of the submodule.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if the config file cannot be opened or written to.
 fn add_submodule_to_config(
     config_path: &Path,
     name: &str,
@@ -932,7 +1189,24 @@ fn add_submodule_to_config(
     Ok(())
 }
 
-/// Fetch a single commit with depth=1 and progress reporting (updated for submodules)
+/// Fetches a single commit with `depth=1`, providing progress updates.
+///
+/// This is a high-level wrapper that first attempts to fetch the commit using the pure-Rust
+/// `gix` library (`fetch_single_commit_gix`). If that fails, it falls back to using the
+/// `git` command-line tool (`fetch_single_commit_git_cli`) for robustness.
+///
+/// # Arguments
+///
+/// * `dest_path` - The path to the local repository.
+/// * `url` - The URL of the remote repository.
+/// * `commit_sha` - The SHA of the commit to fetch.
+/// * `tx` - An optional sender for sending `ProgressMessage` updates.
+/// * `submodule_name` - An optional name for submodule-specific progress reporting.
+///
+/// # Returns
+///
+/// * `Ok(())` if the commit is fetched successfully by either method.
+/// * `Err` if both `gix` and the `git` CLI fail.
 pub fn fetch_single_commit(
     dest_path: &Path,
     url: &str,
@@ -960,7 +1234,24 @@ pub fn fetch_single_commit(
     }
 }
 
-/// Fetch using gix with milestone-based progress reporting (updated for submodules)
+/// Fetches a single commit using the `gix` library with milestone-based progress.
+///
+/// This function performs a shallow fetch (`depth=1`) for a specific commit. It handles
+/// both standard repositories and submodules (by resolving the `gitlink` file). If the
+/// commit already exists locally, it skips the fetch and proceeds directly to checkout.
+///
+/// # Arguments
+///
+/// * `dest_path` - The path to the local repository or submodule worktree.
+/// * `url` - The URL of the remote repository.
+/// * `commit_sha` - The SHA of the commit to fetch.
+/// * `tx` - An optional sender for sending `ProgressMessage` updates.
+/// * `submodule_name` - An optional name for submodule-specific progress reporting.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if any stage of the `gix`-based fetch and checkout process fails.
 fn fetch_single_commit_gix(
     dest_path: &Path,
     url: &str,
@@ -979,6 +1270,7 @@ fn fetch_single_commit_gix(
     let git_path = dest_path.join(".git");
     let is_submodule = git_path.is_file(); // Submodules have .git as a file, not a directory
 
+    // Determine the actual git directory
     // Determine the actual git directory
     let actual_git_dir = if is_submodule {
         // Read the gitlink file to find the actual .git directory
@@ -1086,7 +1378,22 @@ fn fetch_single_commit_gix(
     Ok(())
 }
 
-/// Checkout a commit using gix (pure Rust)
+/// Checks out a specific commit's tree to the working directory using `gix`.
+///
+/// This function performs a basic checkout by iterating through the commit's tree and
+/// writing each blob to its corresponding path in the working directory. It does not
+/// update the Git index, but it does update the `HEAD` file to point to the given
+/// commit, resulting in a detached HEAD state.
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` to perform the checkout in.
+/// * `commit_oid` - The `ObjectId` of the commit to check out.
+///
+/// # Returns
+///
+/// * `Ok(())` on successful checkout.
+/// * `Err` if the repository has no workdir or if file I/O fails.
 fn checkout_commit_gix(
     repo: &gix::Repository,
     commit_oid: gix::ObjectId,
@@ -1137,26 +1444,49 @@ fn checkout_commit_gix(
     Ok(())
 }
 
-/// Use git CLI to checkout a commit (fast operation, always works)
-
-
+/// Defines the type of Git reference to be checked out.
 #[derive(Debug)]
 pub enum GitReference {
+    /// A branch reference.
     Branch(String),
+    /// A tag reference.
     Tag(String),
+    /// A specific commit hash.
     Commit(String),
+    /// No specific reference; use the default from the clone.
     None,
 }
 
+/// Configuration options for cloning a Git repository.
 #[derive(Debug)]
 pub struct CloneOptions {
+    /// The URL of the repository to clone.
     pub url: String,
+    /// The local filesystem path where the repository will be cloned.
     pub path: String,
+    /// The specific `GitReference` (branch, tag, or commit) to check out after cloning.
     pub reference: GitReference,
+    /// If `true`, submodules will be initialized and updated recursively.
     pub recurse_submodules: bool,
+    /// If `true`, a shallow clone (`depth=1`) will be performed.
     pub shallow: bool,
 }
 
+/// Checks out a specific `GitReference` (branch, tag, or commit) in a `gix` repository.
+///
+/// - For a `Branch`, it creates a local branch that tracks the remote branch and updates `HEAD` to point to it.
+/// - For a `Tag` or `Commit`, it sets `HEAD` to a detached state pointing directly at the commit object.
+/// - For `None`, it does nothing, leaving the repository at the default reference provided by the clone.
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` to operate on.
+/// * `reference` - The `GitReference` to check out.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if the reference cannot be found or the `HEAD` update fails.
 fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Result<()> {
     match reference {
         GitReference::Branch(branch) => {
@@ -1210,6 +1540,18 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
     Ok(())
 }
 
+/// Sets the repository's `HEAD` to a detached state pointing at a specific commit ID.
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` to modify.
+/// * `commit_id` - The `gix::Id` of the commit to detach `HEAD` at.
+/// * `message` - The reflog message for this change.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if the reference edit fails.
 fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) -> Result<()> {
 
     let edit = RefEdit {
@@ -1230,6 +1572,18 @@ fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) 
     Ok(())
 }
 
+/// Sets the repository's `HEAD` to be a symbolic reference pointing to another reference (e.g., a branch).
+///
+/// # Arguments
+///
+/// * `repo` - The `gix::Repository` to modify.
+/// * `refname` - The full name of the reference that `HEAD` should point to (e.g., "refs/heads/master").
+/// * `message` - The reflog message for this change.
+///
+/// # Returns
+///
+/// * `Ok(())` on success.
+/// * `Err` if the reference edit fails.
 fn set_head_to_ref(repo: &gix::Repository, refname: &str, message: &str) -> Result<()> {
 
     let edit = RefEdit {
@@ -1250,18 +1604,25 @@ fn set_head_to_ref(repo: &gix::Repository, refname: &str, message: &str) -> Resu
     Ok(())
 }
 
-/// Get ESP-IDF repository by version and mirror
+/// Clones the ESP-IDF repository with specified options.
+///
+/// This is a high-level function that orchestrates the cloning of ESP-IDF. It determines
+/// the correct repository URL based on mirror settings, parses the desired version into a
+/// `GitReference`, and then calls `clone_repository` to perform the actual clone operation.
 ///
 /// # Arguments
-/// * `path` - Path where to clone the repository
-/// * `repository` - Optional repository name pair (e.g. "espressif/esp-idf")
-/// * `version` - Version to checkout (tag or commit or 'master')
-/// * `mirror` - Optional mirror URL
-/// * `with_submodules` - Whether to also clone submodules
-/// * `tx` - Sender for progress reporting
+///
+/// * `path` - The local filesystem path where the repository should be cloned.
+/// * `repository` - An optional repository string (e.g., "espressif/esp-idf").
+/// * `version` - The version to check out (can be a branch, tag, or commit SHA).
+/// * `mirror` - An optional mirror URL prefix.
+/// * `with_submodules` - If `true`, submodules will be initialized and updated.
+/// * `tx` - A sender for reporting clone progress.
 ///
 /// # Returns
-/// * `Result<String, git2::Error>` - Repository path or an error
+///
+/// * `Ok(String)` with the path to the cloned repository on success.
+/// * `Err(String)` with an error message on failure.
 pub fn get_esp_idf(
     path: &str,
     repository: Option<&str>,
@@ -1303,6 +1664,19 @@ pub fn get_esp_idf(
     }
 }
 
+/// Constructs the full git repository URL from optional repository and mirror parts.
+///
+/// It intelligently combines the base URL from the mirror (or GitHub by default) with
+/// the repository path.
+///
+/// # Arguments
+///
+/// * `repository` - An optional repository string (e.g., "espressif/esp-idf"). Defaults to a suitable value for ESP-IDF.
+/// * `mirror` - An optional mirror URL prefix (e.g., "https://gitee.com").
+///
+/// # Returns
+///
+/// A `String` containing the full URL for the repository.
 pub fn get_repo_url(
     repository: Option<&str>,
     mirror: Option<&str>,
@@ -1326,6 +1700,22 @@ pub fn get_repo_url(
     url
 }
 
+/// Constructs the URL for fetching a single raw file from a git repository host.
+///
+/// This function builds the correct URL format for accessing a raw file based on the
+/// hosting platform (e.g., GitHub, Gitee, GitLab). It handles different URL structures
+/// and reference naming conventions.
+///
+/// # Arguments
+///
+/// * `repository` - An optional repository string (e.g., "espressif/esp-idf").
+/// * `version` - The git reference (branch, tag, or commit) containing the file.
+/// * `mirror` - An optional mirror URL, used to detect the hosting platform.
+/// * `file_path` - The path to the file within the repository.
+///
+/// # Returns
+///
+/// A `String` containing the full URL to the raw file.
 pub fn get_raw_file_url(
     repository: Option<&str>,
     version: &str,
