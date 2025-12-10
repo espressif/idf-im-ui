@@ -10,7 +10,7 @@ use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::parse_cmake_version;
 use idf_im_lib::verify_file_checksum;
-use idf_im_lib::ProgressMessage;
+use idf_im_lib::git_tools::ProgressMessage;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use log::error;
