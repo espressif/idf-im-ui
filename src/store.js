@@ -430,77 +430,59 @@ export const useWizardStore = defineStore("wizard", {
 
 export const useMirrorsStore = defineStore("mirrors", {
   state: () => ({
-    // URL lists
-    idf_urls: [],
-    tools_urls: [],
-    pypi_urls: [],
-
-    // Latency entries from backend (Vec<MirrorEntry> where MirrorEntry { url, latency })
-    idf_entries: [],
-    tools_entries: [],
-    pypi_entries: [],
-
-    // Selected (from backend quick URL endpoints)
-    selected_idf: "",
-    selected_tools: "",
-    selected_pypi: "",
-
-    // Loading flags
-    loading_idf_urls: false,
-    loading_tools_urls: false,
-    loading_pypi_urls: false,
-    loading_idf_latency: false,
-    loading_tools_latency: false,
-    loading_pypi_latency: false,
-
-    // Last updated timestamps (ms epoch)
-    idf_last_updated: 0,
-    tools_last_updated: 0,
-    pypi_last_updated: 0,
+    mirrors: {
+      idf: {
+        urlsCmd: "get_idf_mirror_urls",
+        latencyCmd: "get_idf_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+      tools: {
+        urlsCmd: "get_tools_mirror_urls",
+        latencyCmd: "get_tools_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+      pypi: {
+        urlsCmd: "get_pypi_mirror_urls",
+        latencyCmd: "get_pypi_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+    },
 
     // TTL for latency cache (15 minutes)
     latency_ttl_ms: 15 * 60 * 1000,
 
-    MIRROR_CONFIG: {
-      idf: {
-        urlsCmd: "get_idf_mirror_urls",
-        urlsKey: "idf_urls",
-        selectedKey: "selected_idf",
-        entriesKey: "idf_entries",
-        loadingKey: "loading_idf_latency",
-        lastUpdatedKey: "idf_last_updated",
-        latencyCmd: "get_idf_mirror_latency_entries",
-      },
-      tools: {
-        urlsCmd: "get_tools_mirror_urls",
-        urlsKey: "tools_urls",
-        selectedKey: "selected_tools",
-        entriesKey: "tools_entries",
-        loadingKey: "loading_tools_latency",
-        lastUpdatedKey: "tools_last_updated",
-        latencyCmd: "get_tools_mirror_latency_entries",
-      },
-      pypi: {
-        urlsCmd: "get_pypi_mirror_urls",
-        urlsKey: "pypi_urls",
-        selectedKey: "selected_pypi",
-        entriesKey: "pypi_entries",
-        loadingKey: "loading_pypi_latency",
-        lastUpdatedKey: "pypi_last_updated",
-        latencyCmd: "get_pypi_mirror_latency_entries",
-      },
-    },
-
   }),
   getters: {
-    idfUrls: (state) => state.idf_urls,
-    toolsUrls: (state) => state.tools_urls,
-    pypiUrls: (state) => state.pypi_urls,
-    idfEntries: (state) => state.idf_entries,
-    toolsEntries: (state) => state.tools_entries,
-    pypiEntries: (state) => state.pypi_entries,
+    idfUrls: (state) => state.mirrors.idf.urls,
+    toolsUrls: (state) => state.mirrors.tools.urls,
+    pypiUrls: (state) => state.mirrors.pypi.urls,
+    idfEntries: (state) => state.mirrors.idf.entries,
+    toolsEntries: (state) => state.mirrors.tools.entries,
+    pypiEntries: (state) => state.mirrors.pypi.entries,
   },
   actions: {
+    getMirror(kind) {
+      const mirror = this.mirrors[kind];
+      if (!mirror) {
+        console.error(`Unknown mirror type: ${kind}`);
+      }
+      return mirror;
+    },
     async ttlValid(lastUpdated) {
       if (!lastUpdated) return false;
       const now = Date.now();
@@ -523,37 +505,40 @@ export const useMirrorsStore = defineStore("mirrors", {
     },
 
     async updateMirrors(kind) {
-      const config = this.MIRROR_CONFIG[kind];
-      if (!config) {
-        console.error(`Unknown mirror type: ${kind}`);
-        return;
-      }
+      const mirror = this.getMirror(kind);
+      if (!mirror || !mirror.urlsCmd) return;
 
+      mirror.loading_urls = true;
       try {
-        const res = await invoke(config.urlsCmd, {});
-        this[config.urlsKey] = Array.isArray(res.mirrors) ? res.mirrors : [];
-        this[config.selectedKey] = typeof res.selected === "string" ? res.selected : "";
-        return this.updateMirrorLatency(config.entriesKey, config.loadingKey, config.lastUpdatedKey, config.latencyCmd);
+        const res = await invoke(mirror.urlsCmd, {});
+        mirror.urls = Array.isArray(res.mirrors) ? res.mirrors : [];
+        mirror.selected = typeof res.selected === "string" ? res.selected : "";
+        return this.updateMirrorLatency(kind);
       } catch (err) {
         console.error(`Failed to update ${kind} mirrors:`, err);
       } finally {
-        this[config.loadingKey] = false;
+        mirror.loading_urls = false;
       }
     },
 
-    async updateMirrorLatency(entriesKey, loadingKey, lastUpdatedKey, invokeCmd) {
-      if (!await this.ttlValid(this[lastUpdatedKey]) && !this[loadingKey]) {
-        this[loadingKey] = true;
-        try {
-          const res = await invoke(invokeCmd, {});
-          const entries = (res && res.entries) || [];
-          this[entriesKey] = Array.isArray(entries) ? entries : [];
-          this[lastUpdatedKey] = Date.now();
-        } catch (err) {
-          console.error(`Failed to compute ${entriesKey} latency:`, err);
-        } finally {
-          this[loadingKey] = false;
-        }
+    async updateMirrorLatency(kind) {
+      const mirror = this.getMirror(kind);
+      if (!mirror || !mirror.latencyCmd) return;
+
+      if (await this.ttlValid(mirror.last_updated) || mirror.loading_latency) {
+        return;
+      }
+
+      mirror.loading_latency = true;
+      try {
+        const res = await invoke(mirror.latencyCmd, {});
+        const entries = (res && res.entries) || [];
+        mirror.entries = Array.isArray(entries) ? entries : [];
+        mirror.last_updated = Date.now();
+      } catch (err) {
+        console.error(`Failed to compute ${kind} mirror latency:`, err);
+      } finally {
+        mirror.loading_latency = false;
       }
     },
   },

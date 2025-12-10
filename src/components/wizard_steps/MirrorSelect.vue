@@ -102,7 +102,7 @@
 </template>
 
 <script>
-import { } from "vue";
+import { ref} from "vue";
 import { useI18n } from 'vue-i18n';
 import { useMirrorsStore } from "../../store.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -133,20 +133,20 @@ export default {
   }),
   methods: {
     buildMirrorList(type) {
-      const urls = type === 'idf' ? this.mirrorsStore.idf_urls : type === 'tools' ? this.mirrorsStore.tools_urls : this.mirrorsStore.pypi_urls;
-      const entries = type === 'idf' ? this.mirrorsStore.idf_entries : type === 'tools' ? this.mirrorsStore.tools_entries : this.mirrorsStore.pypi_entries;
-      if (Array.isArray(entries) && entries.length > 0) {
-        return entries.map(e => ({
-          value: e.url,
-          label: e.url,
-          ping: (e && Object.prototype.hasOwnProperty.call(e, 'latency')) ? (e.latency == null ? 0 : Number(e.latency)) : null,
+      const mirrorBucket = this.mirrorsStore.mirrors[type] || {};
+      const urls = mirrorBucket.urls || [];
+      const entries = mirrorBucket.entries || [];
+      console.log("Building mirror list for", type, "with", entries?.length, "entries and", urls?.length, "urls");
+      return entries?.length > 0 ? entries.map(entry => ({
+          value: entry.url,
+          label: entry.url,
+          ping: entry?.latency == null ? 0 : Number(entry.latency)
+        }))
+        : urls.map(url => ({
+          value: url,
+          label: url,
+          ping: null,
         }));
-      }
-      return (urls || []).map((url) => ({
-        value: url,
-        label: url,
-        ping: null,
-      }));
     },
     onSelectChange(type) {
       // User has manually chosen a mirror for this type; stop auto-selecting
@@ -154,22 +154,13 @@ export default {
         this.autoSelect[type] = false;
       }
     },
-    getBestMirror(list) {
-      // best = smallest positive ping; ignore null (unknown) and 0 (timeout)
-      const candidates = list.filter(m => m.ping !== null && m.ping > 0);
-      if (candidates.length === 0) return null;
-      let best = candidates[0];
-      for (let i = 1; i < candidates.length; i++) {
-        if (candidates[i].ping < best.ping) best = candidates[i];
-      }
-      return best;
-    },
     maybeAutoSelectBest(type) {
       if (!this.autoSelect[type]) return;
-      const list = type === 'idf' ? this.idf_mirrors : type === 'tools' ? this.tools_mirrors : this.pypi_mirrors;
-      const best = this.getBestMirror(list);
+      const list = this[`${type}_mirrors`];
+      const best = list.filter(m => m.ping !== null && m.ping > 0).reduce((best, cur) => best && best.ping < cur.ping ? best : cur, null);
+
       if (!best) return;
-      const selectedKey = type === 'idf' ? 'selected_idf_mirror' : type === 'tools' ? 'selected_tools_mirror' : 'selected_pypi_mirror';
+      const selectedKey = `selected_${type}_mirror`;
       const current = this[selectedKey];
       // If nothing selected or current is slower (or unknown), switch to best
       const currentEntry = list.find(m => m.value === current) || null;
@@ -180,7 +171,7 @@ export default {
       }
     },
     isDefaultMirror(mirror, type) {
-      const selectedFromStore = type === 'idf' ? this.mirrorsStore.selected_idf : type === 'tools' ? this.mirrorsStore.selected_tools : this.mirrorsStore.selected_pypi;
+      const selectedFromStore = this.mirrorsStore.mirrors?.[type]?.selected;
       return mirror === selectedFromStore;
     },
     processChoices: async function () {
@@ -210,13 +201,13 @@ export default {
       return this.buildMirrorList('pypi');
     },
     loading_idfs() {
-      return this.mirrorsStore.loading_idf_urls;
+      return this.mirrorsStore.mirrors.idf.loading_urls;
     },
     loading_tools() {
-      return this.mirrorsStore.loading_tools_urls;
+      return this.mirrorsStore.mirrors.tools.loading_urls;
     },
     loading_pypi() {
-      return this.mirrorsStore.loading_pypi_urls;
+      return this.mirrorsStore.mirrors.pypi.loading_urls;
     },
     canProceed() {
       return this.selected_idf_mirror && this.selected_tools_mirror && this.selected_pypi_mirror &&
@@ -228,7 +219,7 @@ export default {
       immediate: true,
       handler(list) {
         if (!this.selected_idf_mirror) {
-          this.selected_idf_mirror = this.mirrorsStore.selected_idf || (list[0] ? list[0].value : null);
+          this.selected_idf_mirror = this.mirrorsStore.mirrors.idf.selected || (list[0] ? list[0].value : null);
         }
         this.maybeAutoSelectBest('idf');
       }
@@ -237,7 +228,7 @@ export default {
       immediate: true,
       handler(list) {
         if (!this.selected_tools_mirror) {
-          this.selected_tools_mirror = this.mirrorsStore.selected_tools || (list[0] ? list[0].value : null);
+          this.selected_tools_mirror = this.mirrorsStore.mirrors.tools.selected || (list[0] ? list[0].value : null);
         }
         this.maybeAutoSelectBest('tools');
       }
@@ -246,20 +237,20 @@ export default {
       immediate: true,
       handler(list) {
         if (!this.selected_pypi_mirror) {
-          this.selected_pypi_mirror = this.mirrorsStore.selected_pypi || (list[0] ? list[0].value : null);
+          this.selected_pypi_mirror = this.mirrorsStore.mirrors.pypi.selected || (list[0] ? list[0].value : null);
         }
         this.maybeAutoSelectBest('pypi');
       }
     }
   },
   mounted() {
-    if (this.mirrorsStore.idf_urls.length === 0 && !this.mirrorsStore.loading_idf_urls) {
+    if (this.mirrorsStore.mirrors.idf.urls.length === 0 && !this.mirrorsStore.mirrors.idf.loading_urls) {
       this.mirrorsStore.updateMirrors("idf");
     }
-    if (this.mirrorsStore.tools_urls.length === 0 && !this.mirrorsStore.loading_tools_urls) {
+    if (this.mirrorsStore.mirrors.tools.urls.length === 0 && !this.mirrorsStore.mirrors.tools.loading_urls) {
       this.mirrorsStore.updateMirrors("tools");
     }
-    if (this.mirrorsStore.pypi_urls.length === 0 && !this.mirrorsStore.loading_pypi_urls) {
+    if (this.mirrorsStore.mirrors.pypi.urls.length === 0 && !this.mirrorsStore.mirrors.pypi.loading_urls) {
       this.mirrorsStore.updateMirrors("pypi");
     }
   }

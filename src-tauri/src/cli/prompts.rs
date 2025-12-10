@@ -226,7 +226,7 @@ where
             }
         } else {
             // If the first entry is timeout or None there are no good mirrors to select try logging a proper message and return an error
-            info!("No good {log_prefix} mirrors found, please check your internet connection and try again§");
+            info!("No good {log_prefix} mirrors found, please check your internet connection and try again");
             return Err(format!("No good {log_prefix} mirrors found, please check your internet connection and try again"));
         }
     }
