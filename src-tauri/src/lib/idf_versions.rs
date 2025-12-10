@@ -1,4 +1,3 @@
-use include_url_macro::include_url;
 use log::{error, warn};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
@@ -42,7 +41,8 @@ pub const IDF_VERSIONS_URL: &str =
 
 // TODO: handle the possibility of multiple downloads
 pub async fn get_idf_versions() -> Result<Releases, String> {
-  let cached_idf_versions = include_url!("https://dl.espressif.com/dl/esp-idf/idf_versions.json");
+  let cached_idf_versions = env!("CACHED_IDF_VERSIONS");
+
   match download_idf_versions().await {
       Ok(versions) => Ok(versions),
       Err(err) => {
