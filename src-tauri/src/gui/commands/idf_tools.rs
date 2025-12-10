@@ -1,4 +1,4 @@
-use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar}};
+use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{InstallationProgress, InstallationStage, MessageLevel, ProgressBar, emit_installation_event, emit_log_message, send_message, send_tools_message}, utils::{get_mirror_to_use, MirrorType}};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
@@ -99,6 +99,7 @@ pub async fn setup_tools(
     offline_archive_dir: Option<&Path>,
 ) -> Result<Vec<String>> {
     info!("Setting up tools...");
+    let is_simple_installation = crate::gui::app_state::is_simple_installation(&app_handle);
 
     let version_path = idf_path
         .parent()
@@ -316,13 +317,15 @@ pub async fn setup_tools(
         }
     };
 
+    let tools_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDFTools, settings, is_simple_installation).await;
+
     // Use the library's setup_tools function
     let installed_tools_list = idf_tools::setup_tools(
         &tools,
         settings.target.clone().unwrap_or_default(),
         &PathBuf::from(&tool_setup.download_dir),
         &PathBuf::from(&tool_setup.install_dir),
-        settings.mirror.as_deref(),
+        Some(&tools_mirror_to_use),
         progress_callback,
     )
     .await
@@ -365,7 +368,8 @@ pub async fn setup_tools(
         idf_version,
         features_for_version
     );
-
+    let pypi_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::PyPI, settings, is_simple_installation).await;
+    
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
@@ -374,7 +378,7 @@ pub async fn setup_tools(
         true, //TODO: actually read from config
         &features_for_version,
         offline_archive_dir, // Offline archive directory
-        &settings.pypi_mirror, // PyPI mirror
+        &Some(pypi_mirror_to_use), // PyPI mirror
     ).await {
         Ok(_) => {
             info!("Python environment installed");

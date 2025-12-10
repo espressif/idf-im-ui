@@ -507,6 +507,9 @@
     "tags": {
       "default": "默认"
     },
+    "status": {
+      "timeout": "超时"
+    },
     "continueButton": "使用所选镜像继续"
   },
   "installationPathSelect": {
