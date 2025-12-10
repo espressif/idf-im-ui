@@ -139,9 +139,27 @@ class TestProxy {
       });
 
       serverSocket.on("error", (err) => {
-        logger.info("HTTPS Connection error:", err);
-        clientSocket.write("HTTP/1.1 500 Connection error\r\n\r\n");
-        clientSocket.end();
+        if (
+          err.code === "ECONNRESET" ||
+          err.code === "ETIMEDOUT" ||
+          err.code === "ECONNREFUSED"
+        ) {
+          logger.debug(
+            `HTTPS Connection to ${host} closed by server (${err.code}), allowing client to reconnect`
+          );
+        } else {
+          logger.info("HTTPS Connection error:", err);
+        }
+        clientSocket.destroy();
+      });
+
+      clientSocket.on("error", (err) => {
+        if (err.code === "ECONNRESET" || err.code === "EPIPE") {
+          logger.debug(`Client socket closed (${err.code})`);
+        } else {
+          logger.info("Client socket error:", err);
+        }
+        serverSocket.destroy();
       });
     });
 
