@@ -79,6 +79,7 @@ required-features = ["offline"]
 
 [build-dependencies]
 tauri-build = { version = "2.3.1", features = [], optional = true }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 
 [dependencies]
 reqwest = {version = "0.12.4", features = ["json", "blocking", "rustls-tls", "stream"] }
