@@ -464,16 +464,16 @@ pub fn update_submodules_shallow(
 
     let gitmodules_path = workdir.join(".gitmodules");
     if !gitmodules_path.exists() {
-        info!("No .gitmodules file found, skipping submodule initialization");
+        debug!("No .gitmodules file found, skipping submodule initialization");
         return Ok(());
     }
 
-    info!(".gitmodules found at {}", gitmodules_path.display());
+    debug!(".gitmodules found at {}", gitmodules_path.display());
 
     let submodules = match repo.submodules()? {
         Some(subs) => subs,
         None => {
-            info!("No submodules configured");
+            debug!("No submodules configured");
             return Ok(());
         }
     };
@@ -482,7 +482,7 @@ pub fn update_submodules_shallow(
 
     // Get the parent repository's remote URL for resolving relative URLs
     let parent_url = get_remote_url(repo)?;
-    info!("Parent repository URL: {}", parent_url);
+    debug!("Parent repository URL: {}", parent_url);
 
     // Get HEAD tree to find submodule commit SHAs
     let head_commit = repo.head_commit()?;
@@ -492,7 +492,7 @@ pub fn update_submodules_shallow(
     let mut submodule_commits = std::collections::HashMap::new();
     collect_submodule_commits(&tree, "", &mut submodule_commits)?;
 
-    info!("Found {} submodule commit entries in tree", submodule_commits.len());
+    debug!("Found {} submodule commit entries in tree", submodule_commits.len());
 
     for submodule in submodules {
         let name = submodule.name().to_string();
@@ -502,9 +502,9 @@ pub fn update_submodules_shallow(
         // Resolve relative URLs
         let url = resolve_submodule_url(&url_raw, &parent_url)?;
 
-        info!("Processing submodule: {} at path: {}", name, path);
+        debug!("Processing submodule: {} at path: {}", name, path);
         if url != url_raw {
-            info!("  Resolved URL: {} -> {}", url_raw, url);
+            debug!("  Resolved URL: {} -> {}", url_raw, url);
         }
 
         let _ = tx.send(ProgressMessage::SubmoduleUpdate((name.clone(), 0)));
@@ -519,7 +519,7 @@ pub fn update_submodules_shallow(
             }
         };
 
-        info!("Submodule {} should be at commit {}", name, &expected_sha[..7]);
+        debug!("Submodule {} should be at commit {}", name, &expected_sha[..7]);
 
         let submodule_dir = workdir.join(&path);
         let modules_dir = git_dir.join("modules").join(&path);
@@ -982,6 +982,7 @@ fn create_gitlink(
 ///
 /// * `Ok(())` on success.
 /// * `Err` if the fetch fails or the commit cannot be found after fetching.
+/// Fetches a single commit into a submodule's repository located in `.git/modules/`.
 fn fetch_single_commit_to_modules(
     modules_dir: &Path,
     url: &str,
@@ -1015,8 +1016,15 @@ fn fetch_single_commit_to_modules(
     let remote_url = gix::url::parse(url.into())
         .map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
+    // Create remote WITH refspec for fetching the specific commit
     let remote = repo
-        .remote_at(remote_url)?;
+        .remote_at(remote_url)?
+        .with_fetch_tags(gix::remote::fetch::Tags::None)
+        .with_refspecs(
+            [commit_sha].into_iter(),
+            gix::remote::Direction::Fetch,
+        )
+        .map_err(|e| format!("Failed to set refspec: {}", e))?;
 
     let connection = remote
         .connect(gix::remote::Direction::Fetch)
@@ -1270,7 +1278,6 @@ fn fetch_single_commit_gix(
     let git_path = dest_path.join(".git");
     let is_submodule = git_path.is_file(); // Submodules have .git as a file, not a directory
 
-    // Determine the actual git directory
     // Determine the actual git directory
     let actual_git_dir = if is_submodule {
         // Read the gitlink file to find the actual .git directory
