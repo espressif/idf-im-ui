@@ -788,7 +788,9 @@
   "gui": {
     "settings": {
       "features_updated": "Selected features have been updated",
-      "idf_mirror_updated": "IDF mirror has been updated"
+      "idf_mirror_updated": "IDF mirror has been updated",
+      "tools_updated": "Tool selection has been updated"
+
     }
   },
   "wizard": {
@@ -799,6 +801,28 @@
     },
     "features": {
       "selection_unavailable": "Feature selection is not available"
+    },
+    "tools": {
+      "no_idf_version_specified": "No IDF version specified for tool selection",
+      "read_failure": "Failed to read tools configuration",
+      "selection_unavailable": "Tool selection will not be available for this version.",
+      "no_tools_available": "No tools available for any of the selected versions"
     }
+  },
+  "toolsSelect": {
+    "title": "Select Tools",
+    "description": "Choose which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected.",
+    "sections": {
+      "required": "Required Tools",
+      "optional": "Optional Tools"
+    },
+    "actions": {
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All"
+    },
+    "summaryMultiVersion": "{versions} version(s): {details}",
+    "continueButton": "Continue",
+    "noTools": "No tools available for the selected configuration.",
+    "noOptionalTools": "No optional tools available for this version."
   }
 }

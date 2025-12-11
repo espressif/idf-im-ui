@@ -274,6 +274,9 @@ pub fn run() {
             get_features_list_all_versions,
             set_selected_features_per_version,
             get_selected_features_per_version,
+            get_tools_list_all_versions,
+            set_selected_tools_per_version,
+            get_selected_tools_per_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -8,6 +8,10 @@ use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::tool_selection::fetch_tools_file;
+use idf_im_lib::tool_selection::get_tool_names;
+use idf_im_lib::tool_selection::get_tools_json_url;
+use idf_im_lib::tool_selection::select_tools;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
@@ -429,11 +433,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         };
 
-        // let features = select_features(
-        //     &requirements_files,
-        //     config.non_interactive.unwrap_or_default(),
-        //     true,
-        // )?;
         // Check if we already have features for this version (from CLI arg or config file)
         let features = if let Some(existing) = config.get_features_for_version_if_set(&idf_version) {
             // Convert feature names back to FeatureInfo
@@ -442,13 +441,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 .filter(|f| existing.contains(&f.name))
                 .cloned()
                 .collect()
-        } else {
+        } else if !offline_mode {
             // Interactive selection for this version
             select_features(
                 &requirements_files,
                 config.non_interactive.unwrap_or_default(),
                 true,
             )?
+        } else {
+            Vec::new() // Empty - will use defaults later
         };
 
         debug!(
@@ -466,6 +467,77 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             idf_version.clone(),
             features.iter().map(|f| f.name.clone()).collect(),
           );
+        }
+        let remote_tools_file = if offline_mode {
+            None
+        } else {
+          let tools_url = get_tools_json_url(
+              config.repo_stub.clone().as_deref(),
+              &idf_version.to_string(),
+              config.idf_mirror.clone().as_deref()
+          );
+
+          // Try to fetch tools.json from remote first (for selection before download)
+          match fetch_tools_file(&tools_url) {
+              Ok(file) => Some(file),
+              Err(err) => {
+                  warn!("{}: {}. {}",
+                      t!("wizard.tools.read_failure"),
+                      err,
+                      t!("wizard.tools.selection_unavailable")
+                  );
+                  None
+              }
+          }
+        };
+
+        // Only do tool selection if we got the remote file
+        let selected_tools = if let Some(ref tools_file) = remote_tools_file {
+            // Check if we already have tools for this version (from CLI arg or config file)
+            if let Some(existing) = config.get_tools_for_version_if_set(&idf_version) {
+                // Convert tool names back to ToolSelectionInfo (validates against available tools)
+                select_tools(
+                    tools_file,
+                    config.non_interactive.unwrap_or_default(),
+                    true,
+                    config.target.as_ref().map(|t| t.as_slice()),
+                    Some(&existing),
+                )?
+            } else {
+                // Interactive selection for this version
+                select_tools(
+                    tools_file,
+                    config.non_interactive.unwrap_or_default(),
+                    true,
+                    config.target.as_ref().map(|t| t.as_slice()),
+                    None,
+                )?
+            }
+        } else {
+            Vec::new() // Empty - will use defaults later
+        };
+
+        debug!(
+            "{}: {}",
+            t!("wizard.tools.selected"),
+            selected_tools
+                .iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
+
+        // Save tools to per-version map
+        if !selected_tools.is_empty() {
+            if config.idf_tools_per_version.is_none() {
+                config.idf_tools_per_version = Some(HashMap::new());
+            }
+            if let Some(ref mut per_version) = config.idf_tools_per_version {
+                per_version.insert(
+                    idf_version.clone(),
+                    get_tool_names(&selected_tools),
+                );
+            }
         }
 
         if !using_existing_idf {
@@ -544,8 +616,27 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             )
         );
 
-        let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
+        let mut tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
+        if let Some(ref per_version) = config.idf_tools_per_version {
+            if let Some(selected_tool_names) = per_version.get(&idf_version) {
+                tools.tools = tools.tools
+                    .into_iter()
+                    .filter(|tool| {
+                        // Always include "always" install tools
+                        tool.install == "always" ||
+                        // Include user-selected optional tools
+                        selected_tool_names.contains(&tool.name)
+                    })
+                    .collect();
+
+                info!(
+                    "Filtered to {} tools based on user selection for {}",
+                    tools.tools.len(),
+                    idf_version
+                );
+            }
+        }
 
         let installed_tools_list = match download_and_extract_tools(
             &config,
