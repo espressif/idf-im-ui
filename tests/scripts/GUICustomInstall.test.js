@@ -413,8 +413,11 @@ export function runGUICustomInstallTest({
           "optional-group"
         );
         const optionalFeaturesListText = await optionalFeaturesList.getText();
-        const expectedFeatures = await getAvailableFeatures(version);
-        for (let feature of expectedFeatures.shift()) {
+        const expectedFeaturesAll = await getAvailableFeatures(version);
+        const expectedFeaturesOptional = expectedFeaturesAll.filter(
+          (feature) => feature !== "core"
+        );
+        for (let feature of expectedFeaturesOptional) {
           expect(
             optionalFeaturesListText,
             `Feature ${feature} not listed in the optional features`
