@@ -1413,36 +1413,7 @@ fn checkout_commit_gix(
         .ok_or("Repository has no working directory")?;
 
     // Walk the tree and checkout each file
-    for entry in tree.iter() {
-        let entry = entry?;
-        let path = worktree.join(entry.repo.path());
-
-        if entry.mode().is_tree() {
-            // Create directory
-            fs::create_dir_all(&path)?;
-        } else if entry.mode().is_blob() || entry.mode().is_executable() {
-            // Create parent directory
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            // Get blob content
-            let object = repo.find_object(entry.oid())?;
-            let blob = object.try_into_blob()?;
-
-            // Write file
-            fs::write(&path, blob.data.clone())?;
-
-            // Set executable bit if needed
-            #[cfg(unix)]
-            if entry.mode().is_executable() {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&path)?.permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&path, perms)?;
-            }
-        }
-    }
+    checkout_tree_recursive(repo, &tree, worktree)?;
 
     // Update HEAD
     let git_dir = repo.git_dir();
@@ -1500,7 +1471,7 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
             info!("Checking out branch: {}", branch);
 
             let refname = format!("refs/remotes/origin/{}", branch);
-            let mut  git_ref = match repo.find_reference(&refname){
+            let mut git_ref = match repo.find_reference(&refname){
               Ok(r) => r,
               Err(_) => repo.find_reference(&format!("refs/heads/{}", branch))?,
             };
@@ -1519,6 +1490,12 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             // Set HEAD
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
+
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for branch {}: {}", branch, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
@@ -1530,6 +1507,11 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             set_head_detached(repo, commit.id(), &format!("checkout: moving to {}", &commit.id()))?;
 
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for tag {}: {}", tag, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::Commit(commit_id) => {
             info!("Checking out commit: {}", commit_id);
@@ -1538,6 +1520,12 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             let commit = repo.find_commit(oid)?;
             set_head_detached(repo, commit.id(), &format!("checkout: moving to {}", &commit.id()))?;
+
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for commit {}: {}", commit_id, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::None => {
             debug!("Using default reference from clone");
