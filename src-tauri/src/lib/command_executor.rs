@@ -4,6 +4,8 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::process::{Command, Output};
 
+use std::process::Child;
+
 pub trait CommandExecutor: Send {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output>;
     fn execute_with_env(
@@ -12,6 +14,18 @@ pub trait CommandExecutor: Send {
         args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output>;
+    fn execute_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Output>;
+    fn spawn_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
 }
 
@@ -33,6 +47,28 @@ impl CommandExecutor for DefaultExecutor {
             command = command.env(key, value);
         }
         command.output()
+    }
+    fn execute_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Output> {
+        Command::new(command)
+            .args(args)
+            .current_dir(dir)
+            .output()
+    }
+    fn spawn_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Child> {
+        Command::new(command)
+            .args(args)
+            .current_dir(dir)
+            .spawn()
     }
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
         self.execute("bash", &["-c", script])
@@ -100,6 +136,36 @@ impl CommandExecutor for WindowsExecutor {
             command = command.env(key, value);
         }
         command.output()
+    }
+
+    fn execute_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Output> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(command)
+            .args(args)
+            .current_dir(dir)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+    }
+
+    fn spawn_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Child> {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(command)
+            .args(args)
+            .current_dir(dir)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
     }
 
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
@@ -195,4 +261,22 @@ pub fn execute_command_with_env(
 ) -> std::io::Result<Output> {
     let executor = get_executor();
     executor.execute_with_env(command, args, env)
+}
+
+pub fn execute_command_with_dir(
+    command: &str,
+    args: &[&str],
+    dir: &str,
+) -> std::io::Result<Output> {
+    let executor = get_executor();
+    executor.execute_with_dir(command, args, dir)
+}
+
+pub fn spawn_with_dir(
+    command: &str,
+    args: &[&str],
+    dir: &str,
+) -> std::io::Result<Child> {
+    let executor = get_executor();
+    executor.spawn_with_dir(command, args, dir)
 }

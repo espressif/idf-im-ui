@@ -54,7 +54,7 @@ async fn download_idf(
 
     let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
 
-    match idf_im_lib::get_esp_idf(
+    match idf_im_lib::git_tools::get_esp_idf(
       idf_path.to_str().unwrap(),
       settings.repo_stub.as_deref(),
       version,

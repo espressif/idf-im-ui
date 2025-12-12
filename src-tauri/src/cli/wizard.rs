@@ -10,7 +10,8 @@ use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
-use idf_im_lib::{ensure_path, DownloadProgress, ProgressMessage};
+use idf_im_lib::{ensure_path, DownloadProgress};
+use idf_im_lib::git_tools::ProgressMessage;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
@@ -115,14 +116,16 @@ pub enum DownloadError {
     UserCancelled,
 }
 
-fn handle_download_error(err: git2::Error) -> Result<(), DownloadError> {
-    match err.code() {
-        git2::ErrorCode::Exists => match generic_confirm("wizard.idf_path_exists.prompt") {
+fn handle_download_error(err: String) -> Result<(), DownloadError> {
+    let err_string = err;
+    if err_string.contains("exists") || err_string.contains("not empty") {
+        match generic_confirm("wizard.idf_path_exists.prompt") {
             Ok(true) => Ok(()),
             Ok(false) => Err(DownloadError::UserCancelled),
             Err(e) => Err(DownloadError::DownloadFailed(e.to_string())),
-        },
-        _ => Err(DownloadError::DownloadFailed(err.to_string())),
+        }
+    } else {
+        Err(DownloadError::DownloadFailed(err_string))
     }
 }
 
@@ -171,7 +174,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
 
     info!("{}", t!("wizard.idf.cloning"));
 
-    match idf_im_lib::get_esp_idf(
+    match idf_im_lib::git_tools::get_esp_idf(
         &config.idf_path,
         config.repo_stub.as_deref(),
         &config.idf_version,
