@@ -8,13 +8,21 @@
     "id": 2,
     "type": "default",
     "name": "CLI Wizard Default",
-    "deleteAfterTest": false,
+    "deleteAfterTest": true,
     "testProxyMode": false
   },
   {
     "id": 3,
     "type": "custom",
     "name": "CLI Non-Interactive Default",
+    "data": {},
+    "deleteAfterTest": false,
+    "testProxyMode": false
+  },
+  {
+    "id": 4,
+    "type": "custom",
+    "name": "CLI Non-Interactive v5.4.3",
     "data": {
       "idfList": "v5.4.3"
     },
@@ -22,7 +30,7 @@
     "testProxyMode": false
   },
   {
-    "id": 4,
+    "id": 5,
     "type": "version-management",
     "name": "CLI Version Management",
     "data": {
@@ -30,7 +38,7 @@
     }
   },
   {
-    "id": 5,
+    "id": 6,
     "type": "offline",
     "name": "CLI Offline Installation",
     "deleteAfterTest": true,

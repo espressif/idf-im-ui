@@ -10,6 +10,7 @@ import {
   availableTargets,
   runInDebug,
 } from "../config.js";
+import { getAvailableFeatures } from "../helper.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
@@ -219,6 +220,28 @@ export function runCLIWizardInstallTest({
       ).to.include(defaultPath);
 
       logger.info("Select install path passed");
+
+      testRunner.output = "";
+      testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const selectFeatures = await testRunner.waitForOutput(
+        "Select ESP-IDF features to install"
+      );
+      expect(selectFeatures, "Failed to ask for ESP-IDF features").to.be.true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const availableFeatures = await getAvailableFeatures();
+      for (let feature of availableFeatures) {
+        expect(
+          testRunner.output,
+          `Failed to show ${feature} as available ESP-IDF feature`
+        ).to.include(feature);
+      }
+
+      logger.info("Select ESP-IDF feature passed");
+
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
