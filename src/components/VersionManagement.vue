@@ -435,7 +435,7 @@ export default {
     const confirmPurge = async () => {
       if (!purgeConfirmed.value) {
         message.warning(t('versionManagement.messages.warning.confirmAction'))
-        return
+        return false;
       }
       try {
         await invoke('purge_all_installations')
