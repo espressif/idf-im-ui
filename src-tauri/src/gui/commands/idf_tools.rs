@@ -1,8 +1,8 @@
-use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{emit_installation_event, emit_log_message, send_message, send_tools_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar}};
+use crate::gui::{ app_state::{get_settings_non_blocking, update_settings}, ui::{emit_installation_event, emit_log_message, send_message, InstallationProgress, InstallationStage, MessageLevel, ProgressBar}};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  DownloadProgress, add_path_to_path, ensure_path, idf_features::{FeatureInfo, RequirementsMetadata, get_requirements_json_url}, idf_tools::{self, get_tools_export_paths}, settings::Settings, tool_selection::{VersionToolsInfo, fetch_tools_file_async, get_tools_for_selection}
+  DownloadProgress, add_path_to_path, ensure_path, idf_features::{FeatureInfo, RequirementsMetadata, get_requirements_json_url}, idf_tools, settings::Settings, tool_selection::{VersionToolsInfo, fetch_tools_file_async, get_tools_for_selection}
 };
 use log::{ error, info, warn};
 use serde::{Deserialize, Serialize};
@@ -517,9 +517,6 @@ pub fn get_selected_features_per_version(
 
     Ok(settings.idf_features_per_version.clone().unwrap_or_default())
 }
-
-// Assuming these helper functions exist in your codebase
-// use crate::helpers::{get_settings_non_blocking, update_settings, send_message};
 
 /// Gets the list of available tools for all selected IDF versions
 #[tauri::command]

@@ -48,6 +48,7 @@
         "installPath": "Installation Path",
         "versionSelection": "Version Selection",
         "toolsSelection": "Tools Selection",
+
         "pythonConfig": "Python Configuration",
         "mirrorSelection": "Mirror Selection",
         "additionalOptions": "Additional Options",
@@ -423,6 +424,7 @@
       "selectVersion": "Select IDF Version",
       "selectMirror": "Select Mirror",
       "selectFeatures": "Select Features",
+      "selectTools": "Select Tools",
       "selectPath": "Select Installation Path",
       "installationProgress": "Installation Progress",
       "installationComplete": "Installation Complete"
@@ -811,7 +813,7 @@
   },
   "toolsSelect": {
     "title": "Select Tools",
-    "description": "Choose which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected.",
+    "description": "Choose which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected. Tools already present on your system will be reused.",
     "sections": {
       "required": "Required Tools",
       "optional": "Optional Tools"

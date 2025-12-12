@@ -13,7 +13,6 @@ use rust_i18n::t;
 use idf_im_lib::tool_selection::{
     fetch_tools_file, get_tools_for_selection, get_tools_json_url,
     select_tools_interactive, select_tools_non_interactive,
-    get_required_tools, ToolSelectionInfo,
 };
 use std::collections::HashMap;
 
@@ -521,7 +520,6 @@ pub fn wizard_select_tools(settings: &mut Settings) -> Result<(), String> {
         }
     };
 
-    let targets = settings.target.clone();
     let non_interactive = settings.non_interactive.unwrap_or(false);
 
     let mut tools_per_version: HashMap<String, Vec<String>> = HashMap::new();
@@ -558,7 +556,7 @@ pub fn wizard_select_tools(settings: &mut Settings) -> Result<(), String> {
 
         let available_tools = match get_tools_for_selection(
             &tools_file,
-            targets.as_ref().map(|t| t.as_slice()),
+            settings.target.as_ref().map(|t| t.as_slice()),
         ) {
             Ok(tools) => tools,
             Err(err) => {
