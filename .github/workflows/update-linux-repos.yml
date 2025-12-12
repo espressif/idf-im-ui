@@ -1,0 +1,252 @@
+name: Update APT and RPM Repositories
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'The release version/tag (e.g., v1.2.3) for artifact names'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The release version/tag (e.g., v1.2.3) for artifact names'
+        required: true
+        type: string
+
+jobs:
+  update-apt-repo:
+    name: Update APT Repository on S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Install dependencies for APT repo tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev apt-utils gzip
+
+      - name: Download GUI linux-x64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-x64-${{ inputs.version }}-deb
+          path: new-debs/
+
+      - name: Download GUI linux-aarch64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-aarch64-${{ inputs.version }}-deb
+          path: new-debs/
+        continue-on-error: true
+
+      - name: Download CLI linux-x64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ inputs.version }}-deb
+          path: new-debs/
+
+      - name: Download CLI linux-aarch64 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ inputs.version }}-deb
+          path: new-debs/
+        continue-on-error: true
+
+      - name: Create proper APT repository structure
+        run: |
+          # Create proper directory structure
+          mkdir -p apt-repo/pool/main
+          mkdir -p apt-repo/dists/stable/main/binary-amd64
+          mkdir -p apt-repo/dists/stable/main/binary-arm64
+
+          # Sync existing .deb files from S3 pool
+          aws s3 sync s3://espdldata/dl/eim/apt/pool/main/ apt-repo/pool/main/ --exclude "*" --include "*.deb" || echo "No existing pool found"
+
+          # Copy new .deb files to pool
+          find new-debs -name "*.deb" -exec cp {} apt-repo/pool/main/ \; || echo "Warning: Some .deb files could not be copied"
+
+          # Debug: Show what's in the pool
+          echo "Pool contents:"
+          ls -la apt-repo/pool/main/
+
+      - name: Generate APT repository metadata
+        working-directory: apt-repo
+        run: |
+          # Generate Packages files for each architecture
+          # AMD64 packages
+          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
+          gzip -k -f dists/stable/main/binary-amd64/Packages
+
+          # ARM64 packages
+          dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages
+          gzip -k -f dists/stable/main/binary-arm64/Packages
+
+          # Generate Release file
+          cd dists/stable
+          cat > Release << EOF
+          Origin: Espressif Systems
+          Label: ESP-IDF Installation Manager
+          Suite: stable
+          Codename: stable
+          Architectures: amd64 arm64
+          Components: main
+          Description: ESP-IDF Installation Manager packages
+          Date: $(date -Ru)
+          EOF
+
+          # Add file hashes to Release
+          apt-ftparchive release . >> Release
+
+          echo "Generated Release file:"
+          cat Release
+
+      - name: Upload repository to S3
+        run: |
+          # Upload the entire repository structure
+          aws s3 sync apt-repo/ s3://espdldata/dl/eim/apt/ --acl public-read --delete
+
+          # Verify upload
+          echo "Uploaded repository structure:"
+          aws s3 ls s3://espdldata/dl/eim/apt/ --recursive
+
+      - name: Invalidate CloudFront cache
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/apt/*"
+
+  update-rpm-repo:
+    name: Update RPM Repository on S3
+    needs: update-apt-repo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Install createrepo_c for RPM repo management
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y createrepo_c rpm
+
+      - name: Download CLI linux-x64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ inputs.version }}-rpm
+          path: new-rpms/
+
+      - name: Download CLI linux-aarch64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ inputs.version }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Download GUI linux-x64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-x64-${{ inputs.version }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Download GUI linux-aarch64 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-aarch64-${{ inputs.version }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
+      - name: Create RPM repository structure
+        run: |
+          # Create directory structure
+          mkdir -p rpm-repo/x86_64
+          mkdir -p rpm-repo/aarch64
+
+          # Sync existing .rpm files from S3
+          aws s3 sync s3://espdldata/dl/eim/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
+          aws s3 sync s3://espdldata/dl/eim/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
+
+          # Debug: Show contents of downloaded RPMs
+          echo "Downloaded RPM artifacts:"
+          find new-rpms -type f -name "*.rpm" -exec ls -la {} \;
+
+          # Copy new .rpm files to appropriate architecture directories
+          # Improved file discovery logic
+          if [ -d "new-rpms" ] && [ "$(ls -A new-rpms)" ]; then
+            # Copy x86_64 RPMs
+            find new-rpms -type f \( -name "*x86_64*.rpm" -o -name "*amd64*.rpm" -o -name "*linux-x64*.rpm" \) -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
+
+            # Copy aarch64 RPMs
+            find new-rpms -type f \( -name "*aarch64*.rpm" -o -name "*arm64*.rpm" -o -name "*linux-aarch64*.rpm" \) -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
+
+            echo "Copied RPM files:"
+            echo "x86_64 RPMs:"
+            ls -la rpm-repo/x86_64/ || echo "No x86_64 RPMs"
+            echo "aarch64 RPMs:"
+            ls -la rpm-repo/aarch64/ || echo "No aarch64 RPMs"
+          else
+            echo "No RPM artifacts downloaded"
+          fi
+
+      - name: Generate RPM repository metadata
+        working-directory: rpm-repo
+        run: |
+          # Generate metadata for x86_64
+          if [ -d "x86_64" ] && [ "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
+            echo "Generating metadata for x86_64 RPMs..."
+            createrepo_c x86_64/ --update
+            echo "x86_64 metadata generated successfully"
+          else
+            echo "No x86_64 RPMs found, skipping metadata generation"
+          fi
+
+          # Generate metadata for aarch64
+          if [ -d "aarch64" ] && [ "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
+            echo "Generating metadata for aarch64 RPMs..."
+            createrepo_c aarch64/ --update
+            echo "aarch64 metadata generated successfully"
+          else
+            echo "No aarch64 RPMs found, skipping metadata generation"
+          fi
+
+      - name: Create repo file
+        run: |
+          cat > rpm-repo/eim.repo << EOF
+          [eim]
+          name=ESP-IDF Installation Manager
+          baseurl=https://dl.espressif.com/dl/eim/rpm/\$basearch
+          enabled=1
+          gpgcheck=0
+          EOF
+
+          echo "Generated eim.repo:"
+          cat rpm-repo/eim.repo
+
+      - name: Upload repository to S3
+        run: |
+          # Upload the entire repository structure
+          aws s3 sync rpm-repo/ s3://espdldata/dl/eim/rpm/ --acl public-read --delete
+
+          # Verify upload
+          echo "Uploaded repository structure:"
+          aws s3 ls s3://espdldata/dl/eim/rpm/ --recursive
+
+      - name: Invalidate CloudFront cache
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/rpm/*"
