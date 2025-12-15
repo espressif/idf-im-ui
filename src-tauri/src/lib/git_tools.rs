@@ -387,6 +387,35 @@ pub fn clone_repository(
         .with_remote_name("origin")?
         .with_shallow(shallow);
 
+    // Configure which ref to fetch based on the reference type
+    match &options.reference {
+        GitReference::Branch(branch) => {
+            // For branches, configure the refspec to fetch that specific branch
+            let refspec = format!("+refs/heads/{}:refs/remotes/origin/{}", branch, branch);
+            prepare = prepare
+                .configure_remote(move |remote| {
+                    Ok(remote.with_refspecs(
+                        Some(BString::from(refspec.clone())),
+                        gix::remote::Direction::Fetch
+                    )?)
+                });
+        }
+        GitReference::Tag(tag) => {
+            // For tags, configure to fetch that specific tag
+            let refspec = format!("+refs/tags/{}:refs/tags/{}", tag, tag);
+            prepare = prepare
+                .configure_remote(move |remote| {
+                    Ok(remote.with_refspecs(
+                        Some(BString::from(refspec.clone())),
+                        gix::remote::Direction::Fetch
+                    )?)
+                });
+        }
+        _ => {
+            // For commits or None, use default behavior
+        }
+    }
+
     // Fetch
     info!("Cloning repository from {:?}", options);
     let (mut checkout, _) = match prepare
@@ -1573,10 +1602,17 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
             info!("Checking out branch: {}", branch);
 
             let refname = format!("refs/remotes/origin/{}", branch);
-            let mut git_ref = match repo.find_reference(&refname){
-              Ok(r) => r,
-              Err(_) => repo.find_reference(&format!("refs/heads/{}", branch))?,
-            };
+            let mut git_ref = repo.find_reference(&refname)
+                .or_else(|_| {
+                    debug!("Could not find remote ref {}, trying local branch", refname);
+                    repo.find_reference(&format!("refs/heads/{}", branch))
+                })
+                .or_else(|_| {
+                    debug!("Could not find local branch, trying packed refs");
+                    // For shallow clones, the branch might be in HEAD directly
+                    repo.find_reference("HEAD")
+                })
+                .map_err(|e| anyhow!("Could not find branch '{}': {}", branch, e))?;
 
             let commit = git_ref.peel_to_commit()?;
 
