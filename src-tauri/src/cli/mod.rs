@@ -10,6 +10,7 @@ use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::idf_versions;
+use idf_im_lib::idf_versions::get_latest_idf_version;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
@@ -158,6 +159,13 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                   debug!("Settings before adjustments: {:?}", settings);
                   if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
+                  }
+                  if install_args.idf_versions.is_none() {
+                    settings.idf_versions = match get_latest_idf_version(false).await {
+                      Ok(Some(version)) => Some(vec![version.name]),
+                      Ok(None) => None,
+                      Err(_) => None,
+                    };
                   }
                   debug!("Settings after adjustments: {:?}", settings);
                   let time = std::time::SystemTime::now();

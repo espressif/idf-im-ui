@@ -60,6 +60,55 @@ pub async fn get_idf_versions() -> Result<Releases, String> {
     }
 }
 
+/// Retrieves the latest available IDF version.
+///
+/// This function fetches the IDF versions and returns the latest non-EOL, non-old version.
+/// The "latest" version name is excluded from consideration.
+///
+/// # Arguments
+///
+/// * `include_prerelease` - A boolean flag indicating whether to include pre-release versions.
+///
+/// # Returns
+///
+/// * A `Result` containing an `Option<Version>` if successful. Returns `Some(Version)` if a valid
+///   latest version is found, or `None` if no valid versions exist.
+///   If there is an error fetching the IDF versions, a `String` containing the error message is returned.
+///
+/// # Errors
+///
+/// * If there is an error fetching the IDF versions or processing them, a `String` containing the error message is returned.
+///
+pub async fn get_latest_idf_version(include_prerelease: bool) -> Result<Option<Version>, String> {
+    let releases = get_idf_versions().await?;
+
+    let latest_version = releases
+        .VERSIONS
+        .iter()
+        .filter(|v| {
+            !v.end_of_life
+                && !v.old
+                && v.name != "latest"
+                && (include_prerelease || !v.pre_release)
+        })
+        .max_by(|a, b| {
+            // Parse versions, stripping 'v' prefix if present
+            let parse_version = |s: &str| {
+                let version_str = s.strip_prefix('v').unwrap_or(s);
+                semver::Version::parse(version_str)
+            };
+
+            match (parse_version(&a.name), parse_version(&b.name)) {
+                (Ok(ver_a), Ok(ver_b)) => ver_a.cmp(&ver_b),
+                // If parsing fails, fall back to string comparison
+                _ => a.name.cmp(&b.name),
+            }
+        })
+        .cloned();
+
+    Ok(latest_version)
+}
+
 /// Retrieves the available IDF targets from the official website.
 ///
 /// This function fetches the IDF versions from the official website, extracts the available targets,
