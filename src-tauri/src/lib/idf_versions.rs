@@ -1,4 +1,4 @@
-use log::error;
+use log::{error, warn};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 
@@ -36,16 +36,77 @@ pub struct Releases {
     pub RELEASES: std::collections::HashMap<String, Release>,
 }
 
+pub const IDF_VERSIONS_URL: &str =
+    "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
+
 // TODO: handle the possibility of multiple downloads
 pub async fn get_idf_versions() -> Result<Releases, String> {
+  let cached_idf_versions = env!("CACHED_IDF_VERSIONS");
   match download_idf_versions().await {
       Ok(versions) => Ok(versions),
-      Err(e) => {
-          let err_msg = format!("Failed to download IDF versions.json file: {}", e);
-          error!("{}", err_msg);
-          Err(err_msg)
-      }
+      Err(err) => {
+          warn!(
+              "Error downloading IDF versions from {}: {}. Using cached versions.",
+              IDF_VERSIONS_URL, err
+          );
+          let versions: Releases = serde_json::from_str(&cached_idf_versions).map_err(|e| {
+              format!(
+                  "Error parsing cached IDF versions JSON: {}",
+                  e.to_string()
+              )
+          })?;
+          Ok(versions)
+      },
     }
+}
+
+/// Retrieves the latest available IDF version.
+///
+/// This function fetches the IDF versions and returns the latest non-EOL, non-old version.
+/// The "latest" version name is excluded from consideration.
+///
+/// # Arguments
+///
+/// * `include_prerelease` - A boolean flag indicating whether to include pre-release versions.
+///
+/// # Returns
+///
+/// * A `Result` containing an `Option<Version>` if successful. Returns `Some(Version)` if a valid
+///   latest version is found, or `None` if no valid versions exist.
+///   If there is an error fetching the IDF versions, a `String` containing the error message is returned.
+///
+/// # Errors
+///
+/// * If there is an error fetching the IDF versions or processing them, a `String` containing the error message is returned.
+///
+pub async fn get_latest_idf_version(include_prerelease: bool) -> Result<Option<Version>, String> {
+    let releases = get_idf_versions().await?;
+
+    let latest_version = releases
+        .VERSIONS
+        .iter()
+        .filter(|v| {
+            !v.end_of_life
+                && !v.old
+                && v.name != "latest"
+                && (include_prerelease || !v.pre_release)
+        })
+        .max_by(|a, b| {
+            // Parse versions, stripping 'v' prefix if present
+            let parse_version = |s: &str| {
+                let version_str = s.strip_prefix('v').unwrap_or(s);
+                semver::Version::parse(version_str)
+            };
+
+            match (parse_version(&a.name), parse_version(&b.name)) {
+                (Ok(ver_a), Ok(ver_b)) => ver_a.cmp(&ver_b),
+                // If parsing fails, fall back to string comparison
+                _ => a.name.cmp(&b.name),
+            }
+        })
+        .cloned();
+
+    Ok(latest_version)
 }
 
 /// Retrieves the available IDF targets from the official website.
@@ -90,7 +151,7 @@ pub async fn get_avalible_targets() -> Result<Vec<String>, String> {
 /// * If there is an error during the JSON deserialization, the error is returned as a `serde_json::Error`.
 ///
 pub async fn download_idf_versions() -> Result<Releases, Box<dyn std::error::Error>> {
-    let url = "https://dl.espressif.com/dl/esp-idf/idf_versions.json".to_string();
+    let url = IDF_VERSIONS_URL.to_string();
     let client = reqwest::Client::builder()
         .user_agent("esp-idf-installer")
         .build()?;
