@@ -637,6 +637,7 @@ async fn main() {
                     idf_version.to_string()
                 }
             };
+            info!("Using constraints IDF version: {} from CMake", constrains_idf_version);
 
             let constraint_file = match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
                 Ok(file) => {

@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use log::{debug, error, info, trace, warn};
-use gix::bstr::ByteSlice;
+use gix::bstr::{BString, ByteSlice};
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
 use gix::refs::Target;
 use anyhow::{anyhow, Result};
@@ -387,6 +387,35 @@ pub fn clone_repository(
         .with_remote_name("origin")?
         .with_shallow(shallow);
 
+    // Configure which ref to fetch based on the reference type
+    match &options.reference {
+        GitReference::Branch(branch) => {
+            // For branches, configure the refspec to fetch that specific branch
+            let refspec = format!("+refs/heads/{}:refs/remotes/origin/{}", branch, branch);
+            prepare = prepare
+                .configure_remote(move |remote| {
+                    Ok(remote.with_refspecs(
+                        Some(BString::from(refspec.clone())),
+                        gix::remote::Direction::Fetch
+                    )?)
+                });
+        }
+        GitReference::Tag(tag) => {
+            // For tags, configure to fetch that specific tag
+            let refspec = format!("+refs/tags/{}:refs/tags/{}", tag, tag);
+            prepare = prepare
+                .configure_remote(move |remote| {
+                    Ok(remote.with_refspecs(
+                        Some(BString::from(refspec.clone())),
+                        gix::remote::Direction::Fetch
+                    )?)
+                });
+        }
+        _ => {
+            // For commits or None, use default behavior
+        }
+    }
+
     // Fetch
     info!("Cloning repository from {:?}", options);
     let (mut checkout, _) = match prepare
@@ -497,6 +526,8 @@ pub fn update_submodules_shallow(
     for submodule in submodules {
         let name = submodule.name().to_string();
         let path = submodule.path()?.to_string();
+        // Normalize path to forward slashes for consistency
+        let normalized_path = path.replace('\\', "/");
         let url_raw = submodule.url()?.to_bstring().to_string();
 
         // Resolve relative URLs
@@ -510,7 +541,7 @@ pub fn update_submodules_shallow(
         let _ = tx.send(ProgressMessage::SubmoduleUpdate((name.clone(), 0)));
 
         // Get the expected commit SHA
-        let expected_sha = match submodule_commits.get(&path) {
+        let expected_sha = match submodule_commits.get(&normalized_path) {
             Some(oid) => oid.to_string(),
             None => {
                 warn!("No commit entry found for submodule {} at path {}", name, path);
@@ -925,44 +956,55 @@ fn create_gitlink(
     parent_git_dir: &Path,
     submodule_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let gitlink_path = submodule_dir.join(".git");
 
-    // Calculate the relative path from submodule workdir to .git/modules/<path>
-    // We need to go up from the submodule dir to the repo root, then into .git/modules/<path>
+    // Normalize path to forward slashes for consistency
+    let normalized_path = submodule_path.replace('\\', "/");
 
-    // Count directory depth of submodule path
-    let path_components: Vec<&str> = submodule_path.split('/').collect();
+    // Use PathBuf to correctly handle relative paths
+    let mut relative_path = PathBuf::new();
+
+    // Count directory depth
+    let path_components: Vec<&str> = normalized_path.split('/').collect();
     let depth = path_components.len();
 
-    // Build relative path: ../ for each component + .git/modules/<path>
-    let mut relative_path = String::new();
+    // Add "../" for each level
     for _ in 0..depth {
-        relative_path.push_str("../");
+        relative_path.push("..");
     }
-    relative_path.push_str(".git/modules/");
-    relative_path.push_str(submodule_path);
 
-    let gitlink_content = format!("gitdir: {}\n", relative_path);
+    // Add the rest of the path
+    relative_path.push(".git");
+    relative_path.push("modules");
 
+    for component in path_components {
+        relative_path.push(component);
+    }
+
+    // Convert to string with forward slashes for Git compatibility
+    let gitlink_content = format!("gitdir: {}\n", relative_path.display().to_string().replace('\\', "/"));
     fs::write(&gitlink_path, gitlink_content.clone())?;
 
     debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
 
-    // CRITICAL: Also create the reverse link (gitdir file in modules dir)
-    let modules_dir = parent_git_dir.join("modules").join(submodule_path);
+    // Create the reverse link
+    let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
     let gitdir_file = modules_dir.join("gitdir");
 
-    // This should be an absolute path or relative path to the workdir
-    let workdir_path = submodule_dir.canonicalize()
+    // Use forward slashes for consistency
+    let workdir_path = submodule_dir
+        .canonicalize()
         .unwrap_or_else(|_| submodule_dir.to_path_buf());
 
-    fs::write(&gitdir_file, format!("{}\n", workdir_path.display()))?;
+    // Convert Windows path to forward slashes for Git compatibility
+    let workdir_str = workdir_path.display().to_string().replace('\\', "/");
+    fs::write(&gitdir_file, format!("{}\n", workdir_str))?;
 
     debug!("Created gitdir link at {}", gitdir_file.display());
 
     Ok(())
 }
+
 
 /// Fetches a single commit into a submodule's repository located in `.git/modules/`.
 ///
@@ -1405,50 +1447,137 @@ fn checkout_commit_gix(
     repo: &gix::Repository,
     commit_oid: gix::ObjectId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
+    info!("Checking out commit {} to worktree", commit_oid);
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
 
     let worktree = repo.work_dir()
         .ok_or("Repository has no working directory")?;
 
-    // Walk the tree and checkout each file
-    for entry in tree.iter() {
+    // IMPORTANT: Remove everything except .git before checkout!
+    for entry in fs::read_dir(worktree)? {
         let entry = entry?;
-        let path = worktree.join(entry.repo.path());
-
-        if entry.mode().is_tree() {
-            // Create directory
-            fs::create_dir_all(&path)?;
-        } else if entry.mode().is_blob() || entry.mode().is_executable() {
-            // Create parent directory
-            if let Some(parent) = path.parent() {
-                fs::create_dir_all(parent)?;
-            }
-
-            // Get blob content
-            let object = repo.find_object(entry.oid())?;
-            let blob = object.try_into_blob()?;
-
-            // Write file
-            fs::write(&path, blob.data.clone())?;
-
-            // Set executable bit if needed
-            #[cfg(unix)]
-            if entry.mode().is_executable() {
-                use std::os::unix::fs::PermissionsExt;
-                let mut perms = fs::metadata(&path)?.permissions();
-                perms.set_mode(0o755);
-                fs::set_permissions(&path, perms)?;
+        let path = entry.path();
+        if path.file_name() != Some(std::ffi::OsStr::new(".git")) {
+            if path.is_dir() {
+                fs::remove_dir_all(&path)?;
+            } else {
+                fs::remove_file(&path)?;
             }
         }
     }
+
+    // Now checkout the tree
+    checkout_tree_recursive(repo, &tree, worktree)?;
+
+    // Update the index
+    populate_index_from_tree(repo, &tree)?;
 
     // Update HEAD
     let git_dir = repo.git_dir();
     fs::write(git_dir.join("HEAD"), format!("{}\n", commit_oid))?;
 
     Ok(())
+}
+/// Populate the index from a tree object
+fn populate_index_from_tree(
+    repo: &gix::Repository,
+    tree: &gix::Tree,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Collect all entries from the tree
+    let mut entries = Vec::new();
+    collect_tree_entries(tree, "", &mut entries, repo)?;
+
+    // Sort entries by path (required by git index format)
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+    // Write a new index file directly
+    let git_dir = repo.git_dir();
+    let index_path = git_dir.join("index");
+
+    // Get the repository's object hash kind (usually SHA1)
+    let object_hash = repo.object_hash();
+
+    // Create a new empty index with the correct hash
+    let mut new_index = gix::index::File::from_state(
+        gix::index::State::new(object_hash),
+        index_path.clone(),
+    );
+
+    // Add all entries
+    for entry in entries {
+        new_index.dangerously_push_entry(
+            entry.stat,
+            entry.id,
+            entry.flags,
+            entry.mode.into(),
+            entry.path.as_bstr(),
+        );
+    }
+
+    // Write the new index
+    let index_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&index_path)?;
+
+    new_index.write_to(
+        std::io::BufWriter::new(index_file),
+        gix::index::write::Options::default()
+    )?;
+
+    Ok(())
+}
+
+/// Recursively collect all entries from a tree
+fn collect_tree_entries(
+    tree: &gix::Tree,
+    prefix: &str,
+    entries: &mut Vec<IndexEntryData>,
+    repo: &gix::Repository,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use gix::bstr::BString;
+
+    for entry in tree.iter() {
+        let entry = entry?;
+        let entry_mode = entry.mode();
+        let entry_oid = entry.oid();
+        let entry_name = entry.filename();
+
+        // Build the full path
+        let full_path = if prefix.is_empty() {
+            entry_name.to_str_lossy().to_string()
+        } else {
+            format!("{}/{}", prefix, entry_name.to_str_lossy())
+        };
+
+        if entry_mode.is_tree() {
+            // Recurse into subdirectory
+            let subtree = repo.find_tree(entry_oid)?;
+            collect_tree_entries(&subtree, &full_path, entries, repo)?;
+        } else {
+            // Add this entry (blob, executable, or gitlink/commit)
+            entries.push(IndexEntryData {
+                stat: gix::index::entry::Stat::default(),
+                id: entry_oid.into(),
+                flags: gix::index::entry::Flags::empty(),
+                mode: entry_mode,
+                path: BString::from(full_path),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Helper struct to collect index entry data
+struct IndexEntryData {
+    stat: gix::index::entry::Stat,
+    id: gix::ObjectId,
+    flags: gix::index::entry::Flags,
+    mode: gix::objs::tree::EntryMode,
+    path: gix::bstr::BString,
 }
 
 /// Defines the type of Git reference to be checked out.
@@ -1500,10 +1629,17 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
             info!("Checking out branch: {}", branch);
 
             let refname = format!("refs/remotes/origin/{}", branch);
-            let mut  git_ref = match repo.find_reference(&refname){
-              Ok(r) => r,
-              Err(_) => repo.find_reference(&format!("refs/heads/{}", branch))?,
-            };
+            let mut git_ref = repo.find_reference(&refname)
+                .or_else(|_| {
+                    debug!("Could not find remote ref {}, trying local branch", refname);
+                    repo.find_reference(&format!("refs/heads/{}", branch))
+                })
+                .or_else(|_| {
+                    debug!("Could not find local branch, trying packed refs");
+                    // For shallow clones, the branch might be in HEAD directly
+                    repo.find_reference("HEAD")
+                })
+                .map_err(|e| anyhow!("Could not find branch '{}': {}", branch, e))?;
 
             let commit = git_ref.peel_to_commit()?;
 
@@ -1519,6 +1655,12 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             // Set HEAD
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
+
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for branch {}: {}", branch, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
@@ -1530,6 +1672,11 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             set_head_detached(repo, commit.id(), &format!("checkout: moving to {}", &commit.id()))?;
 
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for tag {}: {}", tag, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::Commit(commit_id) => {
             info!("Checking out commit: {}", commit_id);
@@ -1538,6 +1685,12 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             let commit = repo.find_commit(oid)?;
             set_head_detached(repo, commit.id(), &format!("checkout: moving to {}", &commit.id()))?;
+
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+                error!("Error checking out files for commit {}: {}", commit_id, e);
+                anyhow::anyhow!("{}", e)
+            })?
         }
         GitReference::None => {
             debug!("Using default reference from clone");
