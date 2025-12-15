@@ -526,6 +526,8 @@ pub fn update_submodules_shallow(
     for submodule in submodules {
         let name = submodule.name().to_string();
         let path = submodule.path()?.to_string();
+        // Normalize path to forward slashes for consistency
+        let normalized_path = path.replace('\\', "/");
         let url_raw = submodule.url()?.to_bstring().to_string();
 
         // Resolve relative URLs
@@ -539,7 +541,7 @@ pub fn update_submodules_shallow(
         let _ = tx.send(ProgressMessage::SubmoduleUpdate((name.clone(), 0)));
 
         // Get the expected commit SHA
-        let expected_sha = match submodule_commits.get(&path) {
+        let expected_sha = match submodule_commits.get(&normalized_path) {
             Some(oid) => oid.to_string(),
             None => {
                 warn!("No commit entry found for submodule {} at path {}", name, path);
@@ -954,44 +956,55 @@ fn create_gitlink(
     parent_git_dir: &Path,
     submodule_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let gitlink_path = submodule_dir.join(".git");
 
-    // Calculate the relative path from submodule workdir to .git/modules/<path>
-    // We need to go up from the submodule dir to the repo root, then into .git/modules/<path>
+    // Normalize path to forward slashes for consistency
+    let normalized_path = submodule_path.replace('\\', "/");
 
-    // Count directory depth of submodule path
-    let path_components: Vec<&str> = submodule_path.split('/').collect();
+    // Use PathBuf to correctly handle relative paths
+    let mut relative_path = PathBuf::new();
+
+    // Count directory depth
+    let path_components: Vec<&str> = normalized_path.split('/').collect();
     let depth = path_components.len();
 
-    // Build relative path: ../ for each component + .git/modules/<path>
-    let mut relative_path = String::new();
+    // Add "../" for each level
     for _ in 0..depth {
-        relative_path.push_str("../");
+        relative_path.push("..");
     }
-    relative_path.push_str(".git/modules/");
-    relative_path.push_str(submodule_path);
 
-    let gitlink_content = format!("gitdir: {}\n", relative_path);
+    // Add the rest of the path
+    relative_path.push(".git");
+    relative_path.push("modules");
 
+    for component in path_components {
+        relative_path.push(component);
+    }
+
+    // Convert to string with forward slashes for Git compatibility
+    let gitlink_content = format!("gitdir: {}\n", relative_path.display().to_string().replace('\\', "/"));
     fs::write(&gitlink_path, gitlink_content.clone())?;
 
     debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
 
-    // CRITICAL: Also create the reverse link (gitdir file in modules dir)
-    let modules_dir = parent_git_dir.join("modules").join(submodule_path);
+    // Create the reverse link
+    let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
     let gitdir_file = modules_dir.join("gitdir");
 
-    // This should be an absolute path or relative path to the workdir
-    let workdir_path = submodule_dir.canonicalize()
+    // Use forward slashes for consistency
+    let workdir_path = submodule_dir
+        .canonicalize()
         .unwrap_or_else(|_| submodule_dir.to_path_buf());
 
-    fs::write(&gitdir_file, format!("{}\n", workdir_path.display()))?;
+    // Convert Windows path to forward slashes for Git compatibility
+    let workdir_str = workdir_path.display().to_string().replace('\\', "/");
+    fs::write(&gitdir_file, format!("{}\n", workdir_str))?;
 
     debug!("Created gitdir link at {}", gitdir_file.display());
 
     Ok(())
 }
+
 
 /// Fetches a single commit into a submodule's repository located in `.git/modules/`.
 ///
