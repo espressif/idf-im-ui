@@ -5,7 +5,7 @@ use std::io::{BufRead, BufReader};
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::Sender;
 use log::{debug, error, info, trace, warn};
-use gix::bstr::ByteSlice;
+use gix::bstr::{BString, ByteSlice};
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
 use gix::refs::Target;
 use anyhow::{anyhow, Result};
@@ -1405,21 +1405,123 @@ fn checkout_commit_gix(
     repo: &gix::Repository,
     commit_oid: gix::ObjectId,
 ) -> Result<(), Box<dyn std::error::Error>> {
-
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
 
     let worktree = repo.work_dir()
         .ok_or("Repository has no working directory")?;
 
-    // Walk the tree and checkout each file
+    // Checkout files using our working function
     checkout_tree_recursive(repo, &tree, worktree)?;
+
+    // Update the index from the tree
+    populate_index_from_tree(repo, &tree)?;
 
     // Update HEAD
     let git_dir = repo.git_dir();
     fs::write(git_dir.join("HEAD"), format!("{}\n", commit_oid))?;
 
     Ok(())
+}
+/// Populate the index from a tree object
+fn populate_index_from_tree(
+    repo: &gix::Repository,
+    tree: &gix::Tree,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Collect all entries from the tree
+    let mut entries = Vec::new();
+    collect_tree_entries(tree, "", &mut entries, repo)?;
+
+    // Sort entries by path (required by git index format)
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+    // Write a new index file directly
+    let git_dir = repo.git_dir();
+    let index_path = git_dir.join("index");
+
+    // Get the repository's object hash kind (usually SHA1)
+    let object_hash = repo.object_hash();
+
+    // Create a new empty index with the correct hash
+    let mut new_index = gix::index::File::from_state(
+        gix::index::State::new(object_hash),
+        index_path.clone(),
+    );
+
+    // Add all entries
+    for entry in entries {
+        new_index.dangerously_push_entry(
+            entry.stat,
+            entry.id,
+            entry.flags,
+            entry.mode.into(),
+            entry.path.as_bstr(),
+        );
+    }
+
+    // Write the new index
+    let index_file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(&index_path)?;
+
+    new_index.write_to(
+        std::io::BufWriter::new(index_file),
+        gix::index::write::Options::default()
+    )?;
+
+    Ok(())
+}
+
+/// Recursively collect all entries from a tree
+fn collect_tree_entries(
+    tree: &gix::Tree,
+    prefix: &str,
+    entries: &mut Vec<IndexEntryData>,
+    repo: &gix::Repository,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use gix::bstr::BString;
+
+    for entry in tree.iter() {
+        let entry = entry?;
+        let entry_mode = entry.mode();
+        let entry_oid = entry.oid();
+        let entry_name = entry.filename();
+
+        // Build the full path
+        let full_path = if prefix.is_empty() {
+            entry_name.to_str_lossy().to_string()
+        } else {
+            format!("{}/{}", prefix, entry_name.to_str_lossy())
+        };
+
+        if entry_mode.is_tree() {
+            // Recurse into subdirectory
+            let subtree = repo.find_tree(entry_oid)?;
+            collect_tree_entries(&subtree, &full_path, entries, repo)?;
+        } else {
+            // Add this entry (blob, executable, or gitlink/commit)
+            entries.push(IndexEntryData {
+                stat: gix::index::entry::Stat::default(),
+                id: entry_oid.into(),
+                flags: gix::index::entry::Flags::empty(),
+                mode: entry_mode,
+                path: BString::from(full_path),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+/// Helper struct to collect index entry data
+struct IndexEntryData {
+    stat: gix::index::entry::Stat,
+    id: gix::ObjectId,
+    flags: gix::index::entry::Flags,
+    mode: gix::objs::tree::EntryMode,
+    path: gix::bstr::BString,
 }
 
 /// Defines the type of Git reference to be checked out.
