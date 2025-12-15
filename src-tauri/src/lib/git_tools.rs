@@ -1434,16 +1434,30 @@ fn checkout_commit_gix(
     repo: &gix::Repository,
     commit_oid: gix::ObjectId,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    info!("Checking out commit {} to worktree", commit_oid);
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
 
     let worktree = repo.work_dir()
         .ok_or("Repository has no working directory")?;
 
-    // Checkout files using our working function
+    // IMPORTANT: Remove everything except .git before checkout!
+    for entry in fs::read_dir(worktree)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.file_name() != Some(std::ffi::OsStr::new(".git")) {
+            if path.is_dir() {
+                fs::remove_dir_all(&path)?;
+            } else {
+                fs::remove_file(&path)?;
+            }
+        }
+    }
+
+    // Now checkout the tree
     checkout_tree_recursive(repo, &tree, worktree)?;
 
-    // Update the index from the tree
+    // Update the index
     populate_index_from_tree(repo, &tree)?;
 
     // Update HEAD
