@@ -137,7 +137,7 @@ async fn main() {
     #[cfg(not(feature = "cli"))]
     {
         set_locale(&None);
-        gui::run();
+        gui::run(None);
     }
     // both GUI and CLI features are enabled
     #[cfg(target_os = "windows")]

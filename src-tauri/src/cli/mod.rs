@@ -567,7 +567,12 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Gui(_install_args) => {
             #[cfg(not(feature = "gui"))]
             unimplemented!("GUI not present in this type of build");
-            gui::run();
+            let log_level = match cli.verbose {
+                0 => LevelFilter::Info,
+                1 => LevelFilter::Debug,
+                _ => LevelFilter::Trace,
+            };
+            gui::run(Some(log_level));
             Ok(())
         }
         Commands::InstallDrivers => {
