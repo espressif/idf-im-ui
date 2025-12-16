@@ -1568,7 +1568,6 @@ dependencies = [
  "fork",
  "fs_extra",
  "gix",
- "futures",
  "idf-env",
  "indicatif",
  "libz-sys",

@@ -6,7 +6,6 @@ use crate::{
     version_manager::get_default_config_path,
 };
 use anyhow::{anyhow, Result, Error};
-use git2::Repository;
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
@@ -23,11 +22,8 @@ use std::{
     cmp::Ordering,
 };
 
-use anyhow::{anyhow, Result, Error};
-use futures::StreamExt;
 use gix::prelude::*;
 use std::sync::atomic::AtomicBool;
-use log::{debug, error, info, warn};
 use regex::Regex;
 use url::Url;
 
