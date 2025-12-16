@@ -4,6 +4,7 @@ use log::{debug, error, info, trace, warn};
 use rustpython_vm as vm;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::function::PosArgs;
+use semver::{Version, VersionReq};
 #[cfg(feature = "userustpython")]
 use std::process::ExitCode;
 use std::{
@@ -812,15 +813,43 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
 ///   containing the standard error as a string.
 pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> {
     let mut outputs = Vec::new();
+    // Check Python version
+    let version_output = command_executor::execute_command(
+        python.unwrap_or("python3"),
+        &["--version"],
+    );
+    match version_output {
+        Ok(out) if out.status.success() => {
+            let version_str = String::from_utf8_lossy(&out.stdout)
+                .trim()
+                .replace("Python ", "");
+            match Version::parse(&version_str) {
+                Ok(version) => {
+                    let req = VersionReq::parse(">=3.10.0, <3.14.0").unwrap();
+                    if req.matches(&version) {
+                        outputs.push(Ok(format!("Python version {} is supported", version)));
+                    } else {
+                        outputs.push(Err(format!(
+                            "Python version {} is not supported. Required: >=3.10.0, <3.14.0",
+                            version
+                        )));
+                    }
+                }
+                Err(_) => outputs.push(Err("Failed to parse Python version".to_string())),
+            }
+        }
+        Ok(out) => outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string())),
+        Err(e) => outputs.push(Err(e.to_string())),
+    }
     // check pip
     let output =
         command_executor::execute_command(python.unwrap_or("python3"), &["-m", "pip", "--version"]);
     match output {
         Ok(out) => {
             if out.status.success() {
-                outputs.push(Ok(std::str::from_utf8(&out.stdout).unwrap().to_string()));
+                outputs.push(Ok(String::from_utf8_lossy(&out.stdout).to_string()));
             } else {
-                outputs.push(Err(std::str::from_utf8(&out.stderr).unwrap().to_string()));
+                outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string()));
             }
         }
         Err(e) => outputs.push(Err(e.to_string())),
@@ -831,9 +860,9 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> 
     match output_2 {
         Ok(out) => {
             if out.status.success() {
-                outputs.push(Ok(std::str::from_utf8(&out.stdout).unwrap().to_string()));
+                outputs.push(Ok(String::from_utf8_lossy(&out.stdout).to_string()));
             } else {
-                outputs.push(Err(std::str::from_utf8(&out.stderr).unwrap().to_string()));
+                outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string()));
             }
         }
         Err(e) => outputs.push(Err(e.to_string())),
