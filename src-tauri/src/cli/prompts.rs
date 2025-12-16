@@ -25,9 +25,11 @@ pub async fn select_idf_version(
 ) -> Result<Vec<String>, String> {
     let mut avalible_versions = if target == "all" {
         //todo process vector of targets
-        idf_im_lib::idf_versions::get_idf_names(true).await
+        // in non-interactive mode, we want to skip pre-releases
+        idf_im_lib::idf_versions::get_idf_names(!non_interactive).await
     } else {
-        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase(),true).await
+        // in non-interactive mode, we want to skip pre-releases
+        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase(),!non_interactive).await
     };
     avalible_versions.push("master".to_string());
     if non_interactive {
