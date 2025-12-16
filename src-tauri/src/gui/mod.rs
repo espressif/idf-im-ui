@@ -180,7 +180,7 @@ fn is_process_running(pid: u32) -> bool {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
+pub fn run(leg_level_override: Option<log::LevelFilter>) {
     // this is here because macos bundled .app does not inherit path
     #[cfg(target_os = "macos")]
     {
@@ -207,9 +207,9 @@ pub fn run() {
                         file_name: Some("eim_gui_log".to_string()),
                     },
                 ))
-                .level(log::LevelFilter::Info)
-                .level_for("idf_im_lib", log::LevelFilter::Info)
-                .level_for("eim_lib", log::LevelFilter::Info)
+                .level(leg_level_override.unwrap_or(log::LevelFilter::Info))
+                .level_for("idf_im_lib", leg_level_override.unwrap_or(log::LevelFilter::Info))
+                .level_for("eim_lib", leg_level_override.unwrap_or(log::LevelFilter::Info))
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
