@@ -128,6 +128,9 @@ export default {
   },
   mounted() {
     this.get_os();
+  },
+  beforeUnmount() {
+    const _ = invoke("reset_settings_to_default", {});
   }
 }
 </script>

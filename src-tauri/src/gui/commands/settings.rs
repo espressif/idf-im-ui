@@ -1,5 +1,5 @@
 use tauri::{AppHandle, Manager};
-use idf_im_lib::{settings,to_absolute_path, utils::is_valid_idf_directory};
+use idf_im_lib::{settings::{self, Settings},to_absolute_path, utils::is_valid_idf_directory};
 use crate::gui::{
   app_state::{self, get_locked_settings, get_settings_non_blocking, update_settings, AppState},
   ui::send_message,
@@ -369,4 +369,18 @@ pub async fn is_path_empty_or_nonexistent_command(app_handle: AppHandle, path: S
 #[tauri::command]
 pub async fn is_path_idf_directory(_app_handle: AppHandle, path: String) -> bool {
    is_valid_idf_directory(&path)
+}
+
+/// Resets the settings to their default values
+#[tauri::command]
+pub fn reset_settings_to_default(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    let mut settings = app_state.settings.lock().map_err(|_| {
+        "Failed to obtain lock on AppState. Please retry the last action later.".to_string()
+    })?;
+
+    *settings = Settings::default();
+    log::info!("Settings reset to default values");
+
+    Ok(())
 }

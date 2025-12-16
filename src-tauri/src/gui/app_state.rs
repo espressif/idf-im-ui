@@ -17,9 +17,9 @@ pub struct WizardData {
 /// Application state that is managed by Tauri and accessible across commands
 #[derive(Default, Serialize, Deserialize)]
 pub struct AppState {
-    wizard_data: Mutex<WizardData>,
-    settings: Mutex<Settings>,
-    is_installing: Mutex<bool>,
+    pub wizard_data: Mutex<WizardData>,
+    pub settings: Mutex<Settings>,
+    pub is_installing: Mutex<bool>,
 }
 
 /// Gets the current settings from the app state
