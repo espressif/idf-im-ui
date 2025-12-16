@@ -968,16 +968,6 @@ jobs:
           asset_path: src-tauri/target/release/bundle/deb/*.deb
           asset_name: eim-gui-${{ matrix.package_name }}.deb
 
-      - name: Upload Release Assets (Linux - .rpm)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: gui_rpm_output/*.rpm
-          asset_name: eim-gui-${{ matrix.package_name }}.rpm
-
       - name: Upload Release Assets (Linux - .AppImage)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
         uses: shogo82148/actions-upload-release-asset@v1
