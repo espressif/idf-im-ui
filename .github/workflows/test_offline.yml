@@ -62,9 +62,9 @@ jobs:
           node-version: "20"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.1.0
         with:
-          python-version: "3.13.8"
+          python-version: "3.12.9"
 
       - name: Download Build Info files
         uses: actions/download-artifact@v5
