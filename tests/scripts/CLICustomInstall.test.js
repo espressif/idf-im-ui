@@ -31,8 +31,13 @@ export function runCLICustomInstallTest({
           idfVersion: offlineIDFVersion,
           packageName: offlinePkgName,
         });
-
-        args.push(`--use-local-archive "${pathToOfflineArchive}"`);
+        if (pathToOfflineArchive) {
+          args.push(`--use-local-archive "${pathToOfflineArchive}"`);
+        }
+      }
+      if (offlineIDFVersion && !pathToOfflineArchive) {
+        logger.info(">>>>>>> Offline archive not found, skipping this test");
+        this.skip();
       }
       if (testProxyMode) {
         try {
