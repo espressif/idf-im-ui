@@ -455,7 +455,7 @@
       },
       "setupRequired": {
         "title": "需要设置 Python",
-        "description": "需要 Python 3.10+，并支持 pip、virtualenv 和 SSL"
+        "description": "需要 Python >= 3.10 < 3.14，并支持 pip、virtualenv 和 SSL"
       }
     },
     "actions": {
@@ -643,7 +643,7 @@
         "message": "未安装部分必要的依赖项。",
         "python": {
           "title": "Python 配置不正确",
-          "message": "缺少可用的 Python 3.10 或更高版本，以及 pip、virtualenv 和 SSL。",
+          "message": "缺少可用的 Python >= 3.10 < 3.14，以及 pip、virtualenv 和 SSL。",
           "details": "请安装 Python 或使用自定义安装进行配置。"
         }
       },
