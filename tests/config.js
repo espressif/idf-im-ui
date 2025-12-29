@@ -130,6 +130,14 @@ logger.info(`Tools folder set to: ${TOOLSFOLDER}`);
 const runInDebug = (process.env.DEBUG || "false") === "true";
 logger.info(`Run in debug mode: ${runInDebug}`);
 
+// Define versions of python Wheels included in the offline package
+let pythonWheelsVersion = ["311"]
+if (os.platform() !== "win32") {
+  pythonWheelsVersion.push("310", "312", "313");
+}
+logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`)
+
+
 export {
   IDFMIRRORS,
   TOOLSMIRRORS,
@@ -147,4 +155,5 @@ export {
   TOOLSFOLDER,
   pkgName,
   runInDebug,
+  pythonWheelsVersion,
 };

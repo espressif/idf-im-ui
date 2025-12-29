@@ -19,7 +19,9 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   pathToBuildInfo,
+  pythonWheelsVersion,
 } from "./config.js";
+import { getPlatformKey_eim } from "./helper.js";
 import path from "path";
 import fs from "fs";
 
@@ -36,7 +38,11 @@ if (fs.existsSync(pathToBuildInfo)) {
         try {
           const content = fs.readFileSync(fullPath, "utf8");
           const jsonData = JSON.parse(content);
-          buildInfo.push(jsonData);
+          if (Array.isArray(jsonData)) {
+            buildInfo.push(...jsonData);
+          } else {
+            buildInfo.push(jsonData);
+          }
         } catch (err) {
           logger.error(`Failed to read or parse ${fullPath}: ${err.message}`);
         }
@@ -44,6 +50,8 @@ if (fs.existsSync(pathToBuildInfo)) {
     });
   }
   readJsonFilesRecursively(pathToBuildInfo);
+  const runnerPlatform = getPlatformKey_eim();
+  buildInfo = buildInfo.filter((info) => info.platform === runnerPlatform);
 } else {
   logger.error(`Directory not found: ${pathToBuildInfo}`);
 }
@@ -69,6 +77,7 @@ function testRun(archiveInfo) {
         offlineIDFVersion: info.version,
         offlinePkgName: info.platform,
         testProxyMode: "block",
+        pythonWheelsVersion,
       });
 
       runInstallVerification({

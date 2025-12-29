@@ -393,7 +393,7 @@ export function runGUICustomInstallTest({
     it("08- Should show list of optional features", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue with Selected Mirrors");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 4000));
 
       for (let version of idfVersionList) {
         if (idfVersionList.length > 1) {

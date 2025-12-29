@@ -582,5 +582,5 @@ jobs:
     uses: ./.github/workflows/test_offline.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
-      run_id: ${{ github.run_id }}
-      eim_cli_run_id: ${{ (github.event_name == 'workflow_call' && inputs.run_id) || 'release' }}
+      build_info_run_id: ${{ github.run_id }}
+      eim_cli_run_id: ${{ inputs.run_id }}

@@ -6,7 +6,7 @@ on:
       ref:
         required: true
         type: string
-      run_id:
+      build_info_run_id:
         required: true
         type: string
       eim_cli_run_id:
@@ -16,10 +16,11 @@ on:
 
   workflow_dispatch:
     inputs:
-      run_id:
-        description: "The run id from which to take the offline installer archive"
+      build_info_run_id:
+        description: "The run id from which to take the offline archive build info files - Use 'release' to take from eim download page"
         required: true
         type: string
+        default: "release"
       eim_cli_run_id:
         description: "The run id from which to take the eim-cli binary - Use 'release' to take from latest release"
         required: false
@@ -62,17 +63,18 @@ jobs:
           node-version: "20"
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6.1.0
         with:
-          python-version: "3.13.8"
+          python-version: "3.12.9"
 
-      - name: Download Build Info files
+      - name: Download Build Info files from another run_id
         uses: actions/download-artifact@v5
+        if: inputs.build_info_run_id != 'release'
         with:
           pattern: build-info-*-${{ matrix.package_name }}
           path: ./artifacts
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.run_id }}
+          run-id: ${{ inputs.build_info_run_id }}
 
       - name: Download EIM-CLI artifacts from another run id
         uses: actions/download-artifact@v4
@@ -85,6 +87,14 @@ jobs:
           run-id: ${{ inputs.eim_cli_run_id }}
 
       # Non-Windows steps
+
+      - name: Download Build Info file from Espressif download page (non-Windows)
+        if: matrix.os != 'windows-latest' && inputs.build_info_run_id == 'release'
+        run: |
+          mkdir -p ./artifacts
+          curl -fsSL -o ./artifacts/offline_archives.json https://dl.espressif.com/dl/eim/offline_archives.json
+          echo "Downloaded $(wc -c < ./artifacts/offline_archives.json) bytes"
+          ls -la ./artifacts/
 
       - name: Download latest EIM CLI binary (non-Windows)
         if: matrix.os != 'windows-latest' && inputs.eim_cli_run_id == 'release'
@@ -107,15 +117,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0
-          python3 --version
           cd tests
           npm ci
 
       - name: Install dependencies and node.js (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
-          brew install dfu-util libgcrypt glib pixman sdl2 libslirp python3
-          python3 --version
+          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
           cd tests
           npm ci
 
@@ -123,6 +131,13 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: |
           python3 --version
+          SETUP_PYTHON=$(which python3)
+          echo "Setup python is at: $SETUP_PYTHON"
+          mkdir -p $HOME/.local/bin
+          ln -sf $SETUP_PYTHON $HOME/.local/bin/python3
+          export PATH="$HOME/.local/bin:$PATH"
+          python3 --version
+          which python3          
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
           export BUILD_INFO_PATH="../artifacts"
@@ -131,6 +146,14 @@ jobs:
         continue-on-error: true
 
       # Windows steps
+
+      - name: Download Build Info file from Espressif download page (Windows)
+        if: matrix.os == 'windows-latest' && inputs.build_info_run_id == 'release'
+        run: |
+          New-Item -ItemType Directory -Force -Path "./artifacts" | Out-Null
+          Invoke-WebRequest -Uri 'https://dl.espressif.com/dl/eim/offline_archives.json' -OutFile './artifacts/offline_archives.json' -UseBasicParsing
+          Write-Host "Downloaded $(Get-Item ./artifacts/offline_archives.json).Length bytes"
+          ls ./artifacts/
 
       - name: Download latest EIM CLI binary (Windows)
         if: matrix.os == 'windows-latest' && inputs.eim_cli_run_id == 'release'

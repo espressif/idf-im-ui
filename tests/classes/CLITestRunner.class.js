@@ -19,7 +19,7 @@ class CLITestRunner {
         : ["-ExecutionPolicy", "Bypass", "-NoProfile"];
   }
 
-  async runIDFTerminal(loadScript, timeout = 3000) {
+  async runIDFTerminal(loadScript, timeout = 5000) {
     try {
       await this.start();
       const loadCommand =
