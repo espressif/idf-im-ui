@@ -5,6 +5,8 @@ import logger from "../classes/logger.class.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import { downloadOfflineArchive } from "../helper.js";
 import fs from "fs";
+import path from "path";
+import os from "os";
 
 export function runCLICustomInstallTest({
   id = 0,
@@ -20,6 +22,7 @@ export function runCLICustomInstallTest({
     let testRunner = null;
     let proxy = null;
     let pathToOfflineArchive = null;
+    const archiveDir = path.join(os.homedir(), "archive");
 
     before(async function () {
       logger.debug(
@@ -53,8 +56,11 @@ export function runCLICustomInstallTest({
       }
       if (pathToOfflineArchive) {
         args.push(`--use-local-archive "${pathToOfflineArchive}"`);
-        testRunner.sendInput("mkdir ~/archive");
-        testRunner.sendInput(`tar -xf ${pathToOfflineArchive} -C ~/archive`);
+        testRunner.sendInput(`mkdir ${archiveDir}`);
+        testRunner.sendInput(
+          `tar -xf ${pathToOfflineArchive} -C ${archiveDir}`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 15000));
       }
       if (offlineIDFVersion && !pathToOfflineArchive) {
         logger.info(">>>>>>> Offline archive not found, skipping this test");
@@ -72,7 +78,7 @@ export function runCLICustomInstallTest({
 
     after(async function () {
       logger.info("Custom installation routine completed");
-      this.timeout(20000);
+      this.timeout(50000);
       try {
         await testRunner.stop();
       } catch (error) {
@@ -93,7 +99,7 @@ export function runCLICustomInstallTest({
       if (pathToOfflineArchive) {
         try {
           fs.rmSync(pathToOfflineArchive, { force: true });
-          fs.rmSync("~/archive", { recursive: true, force: true });
+          fs.rmSync(archiveDir, { recursive: true, force: true });
           logger.info(`Successfully deleted offline archive`);
         } catch (err) {
           logger.info(`Error deleting offline archive`);
@@ -103,6 +109,7 @@ export function runCLICustomInstallTest({
 
     for (let pythonVersion of pythonWheelsVersion) {
       it(`0- Should verify wheels for python${pythonVersion} on offline archive`, function () {
+        this.timeout(20000);
         if (!offlineIDFVersion && !pathToOfflineArchive) {
           this.skip();
         }
@@ -111,12 +118,15 @@ export function runCLICustomInstallTest({
           fs.existsSync(pathToOfflineArchive),
           `Offline archive not found at ${pathToOfflineArchive}`
         ).to.be.true;
+        logger.info(`Checking for wheels folder for Python ${pythonVersion}`);
+        logger.info(`Archive contents: ${fs.readdirSync(archiveDir)}`);
         expect(
-          fs.existsSync(`~/archive/wheels_py${pythonVersion}`),
+          fs.existsSync(path.join(archiveDir, `wheels_py${pythonVersion}`)),
           `Wheels folder for Python ${pythonVersion} not found in offline archive`
         ).to.be.true;
         expect(
-          fs.readdirSync(`~/archive/wheels_py${pythonVersion}`).length > 0,
+          fs.readdirSync(path.join(archiveDir, `wheels_py${pythonVersion}`))
+            .length > 0,
           `No wheels found for Python ${pythonVersion} in offline archive`
         ).to.be.true;
       });

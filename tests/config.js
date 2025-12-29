@@ -132,8 +132,8 @@ logger.info(`Run in debug mode: ${runInDebug}`);
 
 // Define versions of python Wheels included in the offline package
 let pythonWheelsVersion = ["311"]
-if (os.platform !== "win32") {
-  pythonWheelsVersion.push("310", "312", "313")
+if (os.platform() !== "win32") {
+  pythonWheelsVersion.push("310", "312", "313");
 }
 logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`)
 

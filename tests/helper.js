@@ -31,6 +31,26 @@ function getPlatformKey() {
   return null;
 }
 
+// function to get the platform string used in the EIM build info files
+function getPlatformKey_eim() {
+  const arch = os.arch();
+  const platform = os.platform();
+
+  if (platform === "linux") {
+    if (arch === "x64") return "linux-x64";
+    if (arch === "arm64") return "linux-aarch64";
+  }
+  if (platform === "darwin") {
+    if (arch === "x64") return "macos-x64";
+    if (arch === "arm64") return "macos-aarch64";
+  }
+  if (platform === "win32") {
+    if (arch === "x64") return "windows-x64";
+    if (arch === "arm64") return "windows-aarch64";
+  }
+  return null;
+}
+
 // function to get the OS name matching strings from GUI
 function getOSName() {
   const platform = os.platform();
@@ -128,5 +148,12 @@ const getAvailableFeatures = async (idfVersion = IDFDefaultVersion) => {
   }
 }
 
-export { getPlatformKey, getOSName, getArchitecture, downloadOfflineArchive, getAvailableFeatures };
+export {
+  getPlatformKey,
+  getPlatformKey_eim,
+  getOSName,
+  getArchitecture,
+  downloadOfflineArchive,
+  getAvailableFeatures,
+};
 
