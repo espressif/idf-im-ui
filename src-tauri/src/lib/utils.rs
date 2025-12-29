@@ -6,8 +6,6 @@ use crate::{
     version_manager::get_default_config_path,
 };
 use anyhow::{anyhow, Result, Error};
-use gix::prelude::*;
-use std::sync::atomic::AtomicBool;
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
@@ -20,8 +18,37 @@ use std::{
     fs::{self, File},
     io::{self, BufReader, Read},
     path::{Path, PathBuf},
+    time::{Duration, Instant},
+    cmp::Ordering,
 };
+
+use gix::prelude::*;
+use std::sync::atomic::AtomicBool;
 use regex::Regex;
+use url::Url;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MirrorEntry {
+    pub url: String,
+    pub latency: Option<u32>,
+}
+
+impl PartialOrd for MirrorEntry {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for MirrorEntry {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self.latency, other.latency) {
+            (Some(a), Some(b)) => a.cmp(&b),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        }
+    }
+}
 
 /// This function retrieves the path to the git executable.
 ///
@@ -748,6 +775,128 @@ fn is_retryable_error(error: &io::Error) -> bool {
         _ => false,
     }
 }
+/// Returns the base domain including port if present from a full URL.
+fn get_base_url(url_str: &str) -> Option<String> {
+    let url = Url::parse(url_str).ok()?;
+    let scheme = url.scheme();
+    let host = url.host_str()?;
+    let port = url.port();
+    if port.is_some() {
+        return Some(format!("{}://{}:{}", scheme, host, port.unwrap()));
+    }
+
+    Some(format!("{}://{}", scheme, host))
+}
+
+/// Measures response latency (in ms) for the HEAD request to the base domain of
+/// a given URL. Returns `Some(latency_ms)` if successful, or `None` if
+/// unreachable.
+pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Result<u32, anyhow::Error> {
+    // Extract base URL (e.g., "https://example.com")
+    let base_url = get_base_url(url);
+
+    // Build the HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .ok();
+
+    // Try HEAD request
+    let start = Instant::now();
+    if base_url.is_none() {
+        return Err(anyhow!("Invalid base URL: {}", url));
+    }
+    
+    match client.unwrap().head(&base_url.unwrap()).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            return Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
+        }
+        _ => {
+            return Err(anyhow!("Mirror ping failed with HEAD for {}", url));
+        }
+    }
+}
+
+/// Measures response latency (in ms) for the GET request to the base domain of
+/// a given URL. Returns `Some(latency_ms)` if successful, or `None` if
+/// unreachable.
+pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> {
+    // Extract base URL (e.g., "https://example.com")
+    let base_url = get_base_url(url)?;
+
+    // Build the HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(timeout)
+        .redirect(reqwest::redirect::Policy::limited(5))
+        .build()
+        .ok()?;
+
+    let start_get = Instant::now();
+    match client.get(&base_url).send().await {
+        Ok(resp) if resp.status().is_success() => {
+            return Some(start_get.elapsed().as_millis() as u32);
+        }
+        Ok(resp) => {
+            warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
+        }
+        Err(e) => {
+            warn!("Mirror ping failed for {}: {:?}", base_url, e);
+        }
+    }
+
+    None
+}
+
+/// Return a list of MirrorEntry sorted by latency (lower is better). Unreachable mirrors get None.
+pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
+    let timeout = Duration::from_millis(3000);
+    info!(
+        "Starting mirror latency checks ({} candidates)...",
+        mirrors.len()
+    );
+
+    let mut mirror_entries: Vec<MirrorEntry> = Vec::new();
+
+    let mut head_latency_failed = false;
+
+    for url in mirrors.iter() {
+        if !head_latency_failed {
+            match measure_url_score_head(url, timeout).await {
+                Ok(score) => {
+                    info!("Mirror score: {} -> {}", url, score);
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
+                }
+                Err(e) => {
+                    warn!("{}", e.to_string());
+                    head_latency_failed = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    // if head latency failed, measure get latency for all mirrors
+    // and we also clear the map to avoid any potential contamination
+    if head_latency_failed {
+        mirror_entries.clear();
+        for url in mirrors.iter() {
+            match measure_url_score_get(url, timeout).await {
+                Some(score) => {
+                    info!("Mirror get score: {} -> {}", url, score);
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
+                }
+                None => {
+                    info!("Unable to measure get latency for {}: {:?}", url, timeout);
+                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: None });
+                }
+            }
+        }
+    }
+    mirror_entries.sort();
+    mirror_entries
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -1245,5 +1394,46 @@ set(IDF_VERSION_MAJOR 5)
 
         let result = extract_zst_archive(&nonexistent_path, &extract_to);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_base_url_basic() {
+        // Standard HTTP/HTTPS with paths and queries should reduce to scheme + host (no
+        // port)
+        let u1 = "https://example.com/path?x=1";
+        let u2 = "http://example.org/another/path#frag";
+        assert_eq!(get_base_url(u1), Some("https://example.com".to_string()));
+        assert_eq!(get_base_url(u2), Some("http://example.org".to_string()));
+    }
+
+    #[test]
+    fn test_get_base_url_invalid_and_file_scheme() {
+        // Invalid URL
+        assert_eq!(get_base_url("not a url"), None);
+        // File scheme has no host
+        assert_eq!(get_base_url("file:///tmp/test"), None);
+    }
+
+    #[tokio::test]
+    async fn test_measure_url_score_invalid_url() {
+        // Invalid URL should short-circuit (no network) and return None
+        let res = measure_url_score_head("://", std::time::Duration::from_millis(50)).await;
+        assert!(res.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_calculate_mirror_latency_map_with_invalid_urls() {
+        // Invalid URLs should be mapped to u32::MAX deterministically
+        let mirrors: &'static [&'static str] = &[
+            "not a url",
+            "://",
+            "file:///not-applicable",
+        ];
+
+        let map = calculate_mirrors_latency(mirrors).await;
+        assert_eq!(map.len(), 3);
+        for m in mirrors.iter() {
+            assert_eq!(map.iter().find(|e| e.url == *m).unwrap().latency, None);
+        }
     }
 }
