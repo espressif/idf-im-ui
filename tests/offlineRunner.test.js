@@ -19,6 +19,7 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   pathToBuildInfo,
+  pythonWheelsVersion,
 } from "./config.js";
 import path from "path";
 import fs from "fs";
@@ -69,6 +70,7 @@ function testRun(archiveInfo) {
         offlineIDFVersion: info.version,
         offlinePkgName: info.platform,
         testProxyMode: "block",
+        pythonWheelsVersion,
       });
 
       runInstallVerification({

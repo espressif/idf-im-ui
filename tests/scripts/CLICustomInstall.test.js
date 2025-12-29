@@ -14,6 +14,7 @@ export function runCLICustomInstallTest({
   offlinePkgName = null,
   testProxyMode = false,
   proxyBlockList = [],
+  pythonWheelsVersion = [],
 }) {
   describe(`${id}- Run custom |`, function () {
     let testRunner = null;
@@ -31,13 +32,6 @@ export function runCLICustomInstallTest({
           idfVersion: offlineIDFVersion,
           packageName: offlinePkgName,
         });
-        if (pathToOfflineArchive) {
-          args.push(`--use-local-archive "${pathToOfflineArchive}"`);
-        }
-      }
-      if (offlineIDFVersion && !pathToOfflineArchive) {
-        logger.info(">>>>>>> Offline archive not found, skipping this test");
-        this.skip();
       }
       if (testProxyMode) {
         try {
@@ -56,6 +50,15 @@ export function runCLICustomInstallTest({
       } catch (error) {
         logger.info("Error to start terminal");
         logger.debug(`Error: ${error}`);
+      }
+      if (pathToOfflineArchive) {
+        args.push(`--use-local-archive "${pathToOfflineArchive}"`);
+        testRunner.sendInput("mkdir ~/archive");
+        testRunner.sendInput(`tar -xf ${pathToOfflineArchive} -C ~/archive`);
+      }
+      if (offlineIDFVersion && !pathToOfflineArchive) {
+        logger.info(">>>>>>> Offline archive not found, skipping this test");
+        this.skip();
       }
     });
 
@@ -90,12 +93,34 @@ export function runCLICustomInstallTest({
       if (pathToOfflineArchive) {
         try {
           fs.rmSync(pathToOfflineArchive, { force: true });
+          fs.rmSync("~/archive", { recursive: true, force: true });
           logger.info(`Successfully deleted offline archive`);
         } catch (err) {
           logger.info(`Error deleting offline archive`);
         }
       }
     });
+
+    for (let pythonVersion of pythonWheelsVersion) {
+      it(`0- Should verify wheels for python${pythonVersion} on offline archive`, function () {
+        if (!offlineIDFVersion && !pathToOfflineArchive) {
+          this.skip();
+        }
+        logger.info(`Verifying wheels for ${pythonVersion} on offline archive`);
+        expect(
+          fs.existsSync(pathToOfflineArchive),
+          `Offline archive not found at ${pathToOfflineArchive}`
+        ).to.be.true;
+        expect(
+          fs.existsSync(`~/archive/wheels_py${pythonVersion}`),
+          `Wheels folder for Python ${pythonVersion} not found in offline archive`
+        ).to.be.true;
+        expect(
+          fs.readdirSync(`~/archive/wheels_py${pythonVersion}`).length > 0,
+          `No wheels found for Python ${pythonVersion} in offline archive`
+        ).to.be.true;
+      });
+    }
 
     /** Run installation with full parameters, no need to ask questions
      *
