@@ -12,7 +12,7 @@ use rust_i18n::t;
 pub fn get_prequisites() -> Vec<&'static str> {
    idf_im_lib::system_dependencies::get_prequisites()
     .into_iter()
-    .chain(idf_im_lib::system_dependencies::get_additional_prerequisites_based_on_package_manager())
+    .chain(idf_im_lib::system_dependencies::get_general_prerequisites_based_on_package_manager())
     .collect()
 }
 

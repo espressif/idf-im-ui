@@ -129,6 +129,44 @@ pub async fn setup_tools(
             anyhow!(t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string())
         })?;
 
+    if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
+        let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
+        match qemu_prereqs {
+          Err(err) => {
+            error!(
+              "{}: {}",
+              t!("wizard.qemu.prerequisites.check_error"),
+              err
+              );
+              emit_installation_event(app_handle, InstallationProgress {
+                  stage: InstallationStage::Tools,
+                  percentage: 65,
+                  message: t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string(),
+                  detail: Some(t!("gui.setup_tools.qemu_prerequisites_check.xyz").to_string()),
+                  version: Some(idf_version.to_string()),
+              });
+              return Err(anyhow!(t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string()));
+          }
+          Ok(qemu_prereqs) => {
+            if !qemu_prereqs.is_empty() {
+              error!(
+                "{}: {:?}",
+                t!("wizard.qemu.prerequisites.missing"),
+                qemu_prereqs
+              );
+              emit_installation_event(app_handle, InstallationProgress {
+                  stage: InstallationStage::Tools,
+                  percentage: 65,
+                  message: t!("gui.setup_tools.qemu_prerequisites_check.missing").to_string(),
+                  detail: Some(t!("gui.setup_tools.qemu_prerequisites_check.missing_details", list = qemu_prereqs.join(", ")).to_string()),
+                  version: Some(idf_version.to_string()),
+              });
+              return Err(anyhow!(t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string()));
+            }
+          }
+        }
+    }
+
     // Start tools installation phase (65% of total progress)
     emit_installation_event(app_handle, InstallationProgress {
         stage: InstallationStage::Tools,

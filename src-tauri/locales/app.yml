@@ -110,6 +110,15 @@ wizard.tools_json.unparsable:
 wizard.tools.mirror:
   en: Select a source from which to download tools
   cn: 请选择下载工具的来源
+wizard.qemu.prerequisites.missing:
+  en: The following prerequisites for QEMU are not satisfied
+  cn: 以下 QEMU 依赖项不满足
+wizard.qemu.prerequisites.check_error:
+  en: Failed to check QEMU prerequisites. Error:%{e}
+  cn: 无法检查 QEMU 依赖项。错误：%{e}
+wizard.qemu.prerequisites.unmet:
+  en: QEMU prerequisites are not satisfied and you selected QEMU for installation.
+  cn: QEMU 依赖项不满足，且您选择安装 QEMU。
 wizard.pypi.mirror:
   en: Select a PyPI mirror to download Python packages
   cn: 请选择 PyPI 镜像来下载 Python 包
@@ -467,6 +476,18 @@ drivers.windows_only:
 cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
+gui.setup_tools.qemu_prerequisites_check.failed:
+  en: "Failed to check QEMU prerequisites: %{error}"
+  cn: "无法检查 QEMU 依赖项：%{error}"
+gui.setup_tools.qemu_prerequisites_check.xyz:
+  en: "You selected QEMU tools installation but the wizard was unable to verify that all QEMU prerequisites are met."
+  cn: "您选择安装 QEMU 工具，但向导无法验证是否满足所有 QEMU 依赖项。"
+gui.setup_tools.qemu_prerequisites_check.missing:
+  en: "Some of the qemu prerequisites are not satisfied"
+  cn: "部分 QEMU 依赖项不满足"
+gui.setup_tools.qemu_prerequisites_check.missing_details:
+  en: "You selected QEMU tools installation but some of the QEMU prerequisites are not satisfied: %{list}"
+  cn: "您选择安装 QEMU 工具，但部分 QEMU 依赖项不满足：%{list}"
 gui.setup_tools.dir_create_failed:
   en: "Failed to create download directory: %{error}"
   cn: "创建下载目录失败：%{error}"
