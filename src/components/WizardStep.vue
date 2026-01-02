@@ -41,9 +41,10 @@
             <VersionSelect :nextstep="nextStep" v-if="currentStep === 4" data-id="version-select" />
             <MirrorSelect :nextstep="nextStep" v-if="currentStep === 5" data-id="mirror-select" />
             <FeaturesSelect :nextstep=nextStep v-if="currentStep === 6" data-id="features-select" />
-            <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 7" data-id="installation-path-select" />
-            <InstalationProgress :nextstep=nextStep v-if="currentStep === 8" data-id="installation-progress" />
-            <Complete v-if="currentStep === 9" data-id="complete" />
+            <ToolsSelect :nextstep=nextStep v-if="currentStep === 7" data-id="tools-select" />
+            <InstallationPathSelect :nextstep=nextStep v-if="currentStep === 8" data-id="installation-path-select" />
+            <InstalationProgress :nextstep=nextStep v-if="currentStep === 9" data-id="installation-progress" />
+            <Complete v-if="currentStep === 10" data-id="complete" />
           </div>
         </transition>
       </div>
@@ -63,6 +64,7 @@ import TargetSelect from './wizard_steps/TargetSelect.vue';
 import VersionSelect from './wizard_steps/VersionSelect.vue';
 import MirrorSelect from './wizard_steps/MirrorSelect.vue';
 import FeaturesSelect from './wizard_steps/FeaturesSelect.vue';
+import ToolsSelect from './wizard_steps/ToolsSelect.vue';
 import InstallationPathSelect from './wizard_steps/InstallationPathSelect.vue';
 import InstalationProgress from './wizard_steps/InstalationProgress.vue';
 import Complete from './wizard_steps/Complete.vue';
@@ -80,6 +82,7 @@ export default {
     VersionSelect,
     MirrorSelect,
     FeaturesSelect,
+    ToolsSelect,
     InstallationPathSelect,
     InstalationProgress,
   },
@@ -96,6 +99,7 @@ export default {
         { titleKey: "wizardStep.steps.selectVersion" },
         { titleKey: "wizardStep.steps.selectMirror" },
         { titleKey: "wizardStep.steps.selectFeatures" },
+        { titleKey: "wizardStep.steps.selectTools" },
         { titleKey: "wizardStep.steps.selectPath" },
         { titleKey: "wizardStep.steps.installationProgress" },
         { titleKey: "wizardStep.steps.installationComplete" }
@@ -132,6 +136,7 @@ export default {
         { titleKey: "wizardStep.steps.selectVersion" },
         { titleKey: "wizardStep.steps.selectMirror" },
         { titleKey: "wizardStep.steps.selectFeatures" },
+        { titleKey: "wizardStep.steps.selectTools" },
         { titleKey: "wizardStep.steps.selectPath" },
         { titleKey: "wizardStep.steps.installationProgress" },
         { titleKey: "wizardStep.steps.installationComplete" }

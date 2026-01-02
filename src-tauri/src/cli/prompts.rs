@@ -11,6 +11,12 @@ use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
 use idf_im_lib::utils::calculate_mirrors_latency;
+use idf_im_lib::tool_selection::{
+    fetch_tools_file, get_tools_for_selection, get_tools_json_url,
+    select_tools_interactive, select_tools_non_interactive,
+};
+use std::collections::HashMap;
+
 use crate::cli::helpers::generic_confirm_with_default;
 
 
@@ -556,4 +562,108 @@ pub fn select_features_advanced(
             .map(|idx| filtered_features[idx].clone())
             .collect())
     }
+}
+
+/// Handles tool selection for all IDF versions in the wizard
+/// Should be called after feature selection
+pub fn wizard_select_tools(settings: &mut Settings) -> Result<(), String> {
+    let versions = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.clone(),
+        _ => {
+            log::warn!("No IDF versions specified, skipping tool selection");
+            return Ok(());
+        }
+    };
+
+    let non_interactive = settings.non_interactive.unwrap_or(false);
+
+    let mut tools_per_version: HashMap<String, Vec<String>> = HashMap::new();
+
+    for version in &versions {
+        // Check if tools are already set for this version
+        if let Some(existing) = settings.get_tools_for_version_if_set(version) {
+            log::info!("Using pre-configured tools for version {}: {:?}", version, existing);
+            tools_per_version.insert(version.clone(), existing);
+            continue;
+        }
+
+        // Fetch tools.json for this version
+        let tools_url = get_tools_json_url(
+            settings.repo_stub.as_deref(),
+            version,
+            settings.idf_mirror.as_deref(),
+        );
+
+        log::info!("Fetching tools for version {} from: {}", version, tools_url);
+
+        let tools_file = match fetch_tools_file(&tools_url) {
+            Ok(file) => file,
+            Err(err) => {
+                log::warn!(
+                    "Failed to fetch tools.json for version {}: {}. Using default tools.",
+                    version,
+                    err
+                );
+                // Continue without custom tool selection
+                continue;
+            }
+        };
+
+        let available_tools = match get_tools_for_selection(
+            &tools_file,
+            settings.target.as_ref().map(|t| t.as_slice()),
+        ) {
+            Ok(tools) => tools,
+            Err(err) => {
+                log::warn!(
+                    "Failed to get tools for selection for version {}: {}",
+                    version,
+                    err
+                );
+                continue;
+            }
+        };
+
+        if available_tools.is_empty() {
+            log::info!("No tools available for selection for version {}", version);
+            continue;
+        }
+
+        let selected_tools = if non_interactive {
+            // Non-interactive: use required tools only
+            log::info!(
+                "Non-interactive mode: selecting required tools only for version {}",
+                version
+            );
+            select_tools_non_interactive(&available_tools, false)
+        } else {
+            // Interactive: prompt user
+            println!("\n=== Tool Selection for ESP-IDF {} ===", version);
+
+            match select_tools_interactive(&available_tools, None) {
+                Ok(selected) => selected,
+                Err(err) => {
+                    log::error!("Tool selection failed for version {}: {}", version, err);
+                    // Fall back to required tools
+                    select_tools_non_interactive(&available_tools, false)
+                }
+            }
+        };
+
+        log::info!(
+            "Selected {} tools for version {}: {:?}",
+            selected_tools.len(),
+            version,
+            selected_tools
+        );
+
+        tools_per_version.insert(version.clone(), selected_tools);
+    }
+
+    // Save to settings
+    if !tools_per_version.is_empty() {
+        settings.idf_tools_per_version = Some(tools_per_version);
+    }
+
+    Ok(())
 }

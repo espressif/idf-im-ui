@@ -44,6 +44,8 @@ pub struct Settings {
     pub install_all_prerequisites: Option<bool>,
     pub idf_features: Option<Vec<String>>,
     pub idf_features_per_version: Option<HashMap<String, Vec<String>>>,
+    pub idf_tools: Option<Vec<String>>,
+    pub idf_tools_per_version: Option<HashMap<String, Vec<String>>>,
     pub repo_stub: Option<String>,
     pub skip_prerequisites_check: Option<bool>,
     pub version_name: Option<String>,
@@ -118,6 +120,8 @@ impl Default for Settings {
             install_all_prerequisites: Some(false),
             idf_features: None,
             idf_features_per_version: None,
+            idf_tools: None,
+            idf_tools_per_version: None,
             repo_stub: None,
             skip_prerequisites_check: Some(false),
             version_name: None,
@@ -203,6 +207,7 @@ impl Settings {
             recurse_submodules,
             install_all_prerequisites,
             idf_features,
+            idf_tools,
             repo_stub,
             skip_prerequisites_check,
             version_name,
@@ -284,6 +289,8 @@ impl Settings {
             install_all_prerequisites,
             idf_features,
             idf_features_per_version,
+            idf_tools,
+            idf_tools_per_version,
             repo_stub,
             skip_prerequisites_check,
             version_name,
@@ -486,5 +493,28 @@ impl Settings {
     /// Get features for a version with fallback to required-only
     pub fn get_features_for_version(&self, version: &str) -> Vec<String> {
         self.get_features_for_version_if_set(version).unwrap_or_default()
+    }
+    /// Get tools for a version only if explicitly set (doesn't fall back to global)
+    /// Used to check if we need to prompt for selection
+    pub fn get_tools_for_version_if_set(&self, version: &str) -> Option<Vec<String>> {
+        // First check per-version
+        if let Some(per_version) = &self.idf_tools_per_version {
+            if let Some(tools) = per_version.get(version) {
+                return Some(tools.clone());
+            }
+        }
+
+        // Then check global (from CLI --idf-tools)
+        // If global is set, it applies to all versions
+        if self.idf_tools.is_some() {
+            return self.idf_tools.clone();
+        }
+
+        None // No tools set, need to prompt or use defaults
+    }
+
+    /// Get tools for a version with fallback to empty (required tools will be added during installation)
+    pub fn get_tools_for_version(&self, version: &str) -> Vec<String> {
+        self.get_tools_for_version_if_set(version).unwrap_or_default()
     }
 }
