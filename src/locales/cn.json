@@ -811,7 +811,8 @@
   "gui": {
     "settings": {
       "features_updated": "已更新所选功能",
-      "idf_mirror_updated": "ESP-IDF 镜像源已更新"
+      "idf_mirror_updated": "ESP-IDF 镜像源已更新",
+      "tools_updated": "工具选择已更新"
     }
   },
   "wizard": {
@@ -822,6 +823,28 @@
     },
     "features": {
       "selection_unavailable": "功能选择不可用"
+    },
+     "tools": {
+      "no_idf_version_specified": "未指定用于工具选择的 IDF 版本",
+      "read_failure": "读取工具配置失败",
+      "selection_unavailable": "此版本将无法进行工具选择。",
+      "no_tools_available": "所选版本均无可用工具"
     }
+  },
+  "toolsSelect": {
+    "title": "选择工具",
+    "description": "选择要为每个 ESP-IDF 版本安装的开发工具。必需的工具已预先选中，无法取消选择。系统中已存在的工具将被复用。",
+    "sections": {
+      "required": "必需工具",
+      "optional": "可选工具"
+    },
+    "actions": {
+      "selectAll": "全选",
+      "deselectAll": "取消全选"
+    },
+    "summaryMultiVersion": "{versions} 个版本: {details}",
+    "continueButton": "继续",
+    "noTools": "所选配置没有可用的工具。",
+    "noOptionalTools": "此版本没有可选工具。"
   }
 }
