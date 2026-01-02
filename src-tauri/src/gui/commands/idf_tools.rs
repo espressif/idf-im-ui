@@ -4,7 +4,7 @@ use anyhow::{anyhow, Context, Result};
 use idf_im_lib::{
   DownloadProgress, add_path_to_path, ensure_path, idf_features::{FeatureInfo, RequirementsMetadata, get_requirements_json_url}, idf_tools, settings::Settings, tool_selection::{VersionToolsInfo, fetch_tools_file_async, get_tools_for_selection}
 };
-use log::{ error, info, warn};
+use log::{ debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
   collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex}
@@ -547,7 +547,7 @@ pub async fn get_tools_list_all_versions(
 
         info!("Fetching tools for version {} from: {}", version, tools_url);
 
-        let tools_file = match fetch_tools_file_async(&tools_url).await {
+        let mut tools_file = match fetch_tools_file_async(&tools_url).await {
             Ok(file) => file,
             Err(err) => {
                 warn!(
@@ -561,6 +561,16 @@ pub async fn get_tools_list_all_versions(
                 continue;
             }
         };
+
+        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
+        /// This is needed because the IDEs expect clang to be always installed                     ///
+        ///////////////////////////////////////////////////////////////////////////////////////////////
+        for t in tools_file.tools.iter_mut() {
+          if t.name.contains("clang") {
+            t.install = "always".to_string();
+            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+          }
+        }
 
         let tools = match get_tools_for_selection(
             &tools_file,

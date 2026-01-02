@@ -98,6 +98,9 @@ wizard.tools_json.prompt.failure:
 wizard.tools_json.not_found:
   en: tools.json file does not exist. Please select valid tools.json file
   cn: tools.json 文件不存在，请选择有效的 tools.json 文件
+wizard.tools_json.modify_clang:
+  en: Modifying clang tool to always be installed
+  cn: 修改 clang 工具以始终安装
 wizard.tools_json.select.prompt:
   en: Select tools.json file manually
   cn: 手动选择 tools.json 文件
