@@ -2,7 +2,7 @@
 
 Expert installation is a wizard that guides you through the installation process step by step, enabling you to customize installation settings as needed.
 
-## Prerequisities Check
+## Prerequisites Check
 
 The installer will first verify that all prerequisites are met.
 
