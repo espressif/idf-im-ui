@@ -1,5 +1,6 @@
 use clap::builder::styling::{AnsiColor, Color, Style, Styles};
-use clap::{arg, command, ColorChoice, Parser, Subcommand};
+use clap::{arg, command, value_parser, ColorChoice, Parser, Subcommand};
+use clap_complete::aot::Shell;
 use idf_im_lib::to_absolute_path;
 use std::path::PathBuf;
 
@@ -113,6 +114,12 @@ pub enum Commands {
 
     /// Install drivers for ESP-IDF. This is only available on Windows platforms.
     InstallDrivers,
+
+    /// Generate shell completion script to stdout
+    Completions {
+        #[arg(help = "Shell for which to generate completion.", value_parser = value_parser!(Shell))]
+        shell: Shell,
+    },
 }
 
 #[derive(Parser, Debug, Clone, Default)]
