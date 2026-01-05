@@ -1,0 +1,17 @@
+[files]
+extend-exclude = [
+  "*.lock",
+  "*.rs",
+  "*.vue",
+  "*.js",
+  "*.json",
+  "*.ps1",
+  "man",
+  "build",
+  "src-tauri/locales/app.yml",
+]
+
+[default.extend-words]
+bu = "bu"
+inout = "inout"
+NEmpty = "NEmpty"
