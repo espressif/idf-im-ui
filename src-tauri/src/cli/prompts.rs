@@ -235,8 +235,8 @@ pub fn select_installation_path(mut config: Settings) -> Result<Settings, String
         && config.non_interactive == Some(false)
     {
         let path = match generic_input(
-            "wizard.instalation_path.prompt",
-            "wizard.instalation_path.unselected",
+            "wizard.installation_path.prompt",
+            "wizard.installation_path.unselected",
             config.path.clone().unwrap_or_default().to_str().unwrap(),
         ) {
             Ok(path) => PathBuf::from(path),

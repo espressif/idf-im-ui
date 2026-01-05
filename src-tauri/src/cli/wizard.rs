@@ -484,7 +484,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
             match download_idf(download_config) {
                 Ok(_) => {
-                    debug!("{}", t!("wizard.idf.sucess"));
+                    debug!("{}", t!("wizard.idf.success"));
                 }
                 Err(DownloadError::PathCreationFailed(err)) => {
                     error!("{} {:?}", t!("wizard.idf.path_creation_failure"), err);
