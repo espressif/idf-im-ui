@@ -938,6 +938,15 @@ gui.simple_setup.version_selected_event:
 gui.simple_setup.config_failed:
   en: "Failed to configure ESP-IDF version"
   cn: "配置 ESP-IDF 版本失败"
+gui.simple_setup.ide_feature_added:
+  en: "IDE integration feature added"
+  cn: "已添加 IDE 集成功能"
+gui.simple_setup.ide_feature_configured:
+  en: "IDE integration feature configured"
+  cn: "IDE 集成功能已配置"
+gui.simple_setup.config_ide_failed:
+  en: "Failed to configure IDE integration feature"
+  cn: "配置 IDE 集成功能失败"
 gui.simple_setup.starting_installation:
   en: "Starting ESP-IDF installation..."
   cn: "开始安装 ESP-IDF ..."
