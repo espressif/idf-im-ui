@@ -110,6 +110,10 @@ Path to save the configuration file
 Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF
 
 .TP
+.B \-\-idf\-tools \fIIDF_TOOLS\fR
+Comma-separated list of tools to be installed with ESP-IDF. When installing multiple versions, these tools are applied to all versions. For per-version tool configuration, use a configuration file with the idf_tools_per_version option.
+
+.TP
 .B \-\-repo\-stub \fIREPO_STUB\fR
 Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
 
@@ -276,6 +280,10 @@ Install ESP-IDF v5.3.2 in interactive mode
 .TP
 Install using custom repository mirror and stub
 .B eim install \-i v5.3.2 \-\-mirror https://my.custom.mirror \-\-repo\-stub my-custom-idf
+
+.TP
+Install with specific tools
+.B eim install \-i v5.3.2 \-\-idf\-tools cmake,openocd
 
 .TP
 Run the interactive wizard
