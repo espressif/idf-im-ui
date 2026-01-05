@@ -119,7 +119,7 @@ async fn download_idf(
         detail: Some(rust_i18n::t!("gui.installation.download_preparing").to_string()),
         version: Some(version.to_string()),
     });
-    
+
     let is_simple_installation = app_state::is_simple_installation(&app_handle);
     let mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDF, settings, is_simple_installation).await;
 
@@ -1019,6 +1019,41 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 });
                 return Err(e);
             }
+        }
+    }
+
+    match update_settings(&app_handle, |settings| {
+      let mut features = settings.idf_features
+        .clone()
+        .unwrap_or_default();
+
+      if !features.contains(&"ide".to_string()) {
+        features.push("ide".to_string());
+      }
+
+      settings.idf_features = Some(features);
+    }) {
+        Ok(_) => {
+            emit_log_message(&app_handle, MessageLevel::Info,
+                rust_i18n::t!("gui.simple_setup.ide_feature_added").to_string());
+
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Configure,
+                percentage: 35,
+                message: rust_i18n::t!("gui.simple_setup.ide_feature_configured").to_string(),
+                detail: None,
+                version: None,
+            });
+        }
+        Err(e) => {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: rust_i18n::t!("gui.simple_setup.config_ide_failed").to_string(),
+                detail: Some(e.to_string()),
+                version: None,
+            });
+            return Err(e);
         }
     }
 
