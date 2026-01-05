@@ -69,6 +69,7 @@ Options:
 - `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.13.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
+- `--idf-tools <IDF_TOOLS>`: Comma separated list of tools to be installed with ESP-IDF. When installing multiple versions, these tools are applied to all versions. For per-version tool configuration, use a configuration file with the `idf_tools_per_version` option.
 
 ### Wizard Command
 
@@ -187,6 +188,12 @@ eim install -i v5.3.2 --idf-features=ci,docs
 
 # Install multiple versions with features applied to all
 eim install -i v5.3.2,v5.4 --idf-features=ci,docs
+
+# Install with specific tools
+eim install -i v5.3.2 --idf-tools=cmake,openocd
+
+# Install multiple versions with tools applied to all
+eim install -i v5.3.2,v5.4 --idf-tools=cmake,openocd
 
 # Install using custom repository mirror and stub
 eim install -i v5.3.2 --mirror https://my.custom.mirror --repo-stub my-custom-idf
