@@ -25,25 +25,27 @@ pub fn get_settings(app_handle: tauri::AppHandle) -> settings::Settings {
 
 /// Loads settings from a file
 #[tauri::command]
-pub fn load_settings(app_handle: AppHandle, path: &str) {
-  update_settings(&app_handle, |settings| {
-      log::debug!("settings before load {:?}", settings);
-      settings.load(path)
-          .map_err(|_| {
-              send_message(
-                  &app_handle,
-                  t!("gui.settings.failed_to_load", path = path).to_string(),
-                  "warning".to_string(),
-              )
-          })
-          .expect("Failed to load settings");
-        log::debug!("settings after load {:?}", settings);
-  }).unwrap_or_else(|e| warn!("Failed to update settings: {}", e));
-  send_message(
-      &app_handle,
-      t!("gui.settings.loaded_successfully", path = path).to_string(),
-      "info".to_string(),
-  );
+pub fn load_settings(app_handle: AppHandle, path: &str) -> Result<(), String> {
+    let mut load_error: Option<String> = None;
+
+    update_settings(&app_handle, |settings| {
+        if let Err(e) = settings.load(path) {
+            log::error!("settings failed to load: {:?}", e);
+            load_error = Some(e.to_string());
+        }
+    })
+    .map_err(|e| {
+        log::error!("Failed to update settings: {}", e);
+        format!("Failed to update settings: {}", e)
+    })?;
+
+    if let Some(e) = load_error {
+        send_message(&app_handle, t!("gui.settings.failed_to_load", path = path).to_string(), "error".to_string());
+        return Err(e);
+    }
+
+    send_message(&app_handle, t!("gui.settings.loaded_successfully", path = path).to_string(), "info".to_string());
+    Ok(())
 }
 
 /// Saves the current config to a file
