@@ -427,3 +427,119 @@ export const useWizardStore = defineStore("wizard", {
     },
   },
 });
+
+export const useMirrorsStore = defineStore("mirrors", {
+  state: () => ({
+    mirrors: {
+      idf: {
+        urlsCmd: "get_idf_mirror_urls",
+        latencyCmd: "get_idf_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+      tools: {
+        urlsCmd: "get_tools_mirror_urls",
+        latencyCmd: "get_tools_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+      pypi: {
+        urlsCmd: "get_pypi_mirror_urls",
+        latencyCmd: "get_pypi_mirror_latency_entries",
+        urls: [],
+        entries: [],
+        selected: "",
+        loading_urls: false,
+        loading_latency: false,
+        last_updated: 0,
+      },
+    },
+
+    // TTL for latency cache (15 minutes)
+    latency_ttl_ms: 15 * 60 * 1000,
+
+  }),
+  getters: {
+    idfUrls: (state) => state.mirrors.idf.urls,
+    toolsUrls: (state) => state.mirrors.tools.urls,
+    pypiUrls: (state) => state.mirrors.pypi.urls,
+    idfEntries: (state) => state.mirrors.idf.entries,
+    toolsEntries: (state) => state.mirrors.tools.entries,
+    pypiEntries: (state) => state.mirrors.pypi.entries,
+  },
+  actions: {
+    getMirror(kind) {
+      const mirror = this.mirrors[kind];
+      if (!mirror) {
+        console.error(`Unknown mirror type: ${kind}`);
+      }
+      return mirror;
+    },
+    async ttlValid(lastUpdated) {
+      if (!lastUpdated) return false;
+      const now = Date.now();
+      return now - lastUpdated < this.latency_ttl_ms;
+    },
+
+
+    bootstrapMirrorsBackground() {
+      this.bootstrapMirrors().catch(err => {
+        console.error("Background mirror bootstrap failed:", err);
+      });
+    },
+
+    async bootstrapMirrors() {
+      // Fetch quick URL lists + defaults for all types in parallel
+      console.log("Bootstrapping mirrors background...");
+      await this.updateMirrors("idf");
+      await this.updateMirrors("tools");
+      await this.updateMirrors("pypi");
+    },
+
+    async updateMirrors(kind) {
+      const mirror = this.getMirror(kind);
+      if (!mirror || !mirror.urlsCmd) return;
+
+      mirror.loading_urls = true;
+      try {
+        const res = await invoke(mirror.urlsCmd, {});
+        mirror.urls = Array.isArray(res.mirrors) ? res.mirrors : [];
+        mirror.selected = typeof res.selected === "string" ? res.selected : "";
+        return this.updateMirrorLatency(kind);
+      } catch (err) {
+        console.error(`Failed to update ${kind} mirrors:`, err);
+      } finally {
+        mirror.loading_urls = false;
+      }
+    },
+
+    async updateMirrorLatency(kind) {
+      const mirror = this.getMirror(kind);
+      if (!mirror || !mirror.latencyCmd) return;
+
+      if (await this.ttlValid(mirror.last_updated) || mirror.loading_latency) {
+        return;
+      }
+
+      mirror.loading_latency = true;
+      try {
+        const res = await invoke(mirror.latencyCmd, {});
+        const entries = (res && res.entries) || [];
+        mirror.entries = Array.isArray(entries) ? entries : [];
+        mirror.last_updated = Date.now();
+      } catch (err) {
+        console.error(`Failed to compute ${kind} mirror latency:`, err);
+      } finally {
+        mirror.loading_latency = false;
+      }
+    },
+  },
+});

@@ -6,6 +6,7 @@ import router from "./router";
 import naive from "naive-ui";
 import "./assets/main.css"; // Import the CSS file
 import { useAppStore } from './store'
+import { useMirrorsStore } from "./store";
 
 // Translation files
 import en from "./locales/en.json";
@@ -26,16 +27,22 @@ app.use(i18n);
 app.use(createPinia());
 app.use(router);
 app.use(naive);
+
 app.mount("#app");
 
-// Initialize app store and trigger background checks
-const appStore = useAppStore();
-
-// Fetch system info and check prerequisites in background
+// Initialize stores after app is mounted
 setTimeout(() => {
+  // Initialize app store and trigger background checks
+  const appStore = useAppStore();
+  
+  // Fetch system info and check prerequisites in background
   appStore.fetchSystemInfo().then(() => {
     appStore.checkPrerequisitesBackground();
   }).catch(err => {
     console.error("Failed to initialize system info:", err);
   });
-}, 0);
+
+  // Bootstrap mirrors in background (lazy load)
+  const mirrorsStore = useMirrorsStore();
+  mirrorsStore.bootstrapMirrorsBackground();
+}, 100);

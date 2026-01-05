@@ -1,5 +1,16 @@
 use std::{ fs, path::Path};
 
+use idf_im_lib::settings::Settings;
+use tauri::AppHandle;
+use idf_im_lib::utils::MirrorEntry;
+use crate::gui::app_state;
+
+pub enum MirrorType {
+    IDF,
+    IDFTools,
+    PyPI,
+}
+
 /// Checks if a path is empty or doesn't exist
 ///
 /// Returns true if:
@@ -37,6 +48,61 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
   } else {
         // Path is a file which is conflicting with the directory
         false
+    }
+}
+
+async fn choose_mirror(fallback: Option<String>, settings_key: &str, is_simple_installation: bool, settings: &Settings, cached_latency_entries: Option<Vec<MirrorEntry>>, mirrors_list: &[&str]) -> String {
+    let fallback = fallback.unwrap_or_default();
+
+    // Advanced install or user-overridden setting → just use what’s configured.
+    if !is_simple_installation || !settings.is_default(settings_key) {
+        log::info!("Not simple installation or user-overridden setting, using mirror: {} for {}", fallback, settings_key);
+        return fallback;
+    }
+
+    // Prefer best from app-state cache.
+    if let Some(cached_latency_entries) = cached_latency_entries {
+        match cached_latency_entries.first() {
+            Some(entry) => {
+                log::info!("Using cached mirror: {} for {}", entry.url, settings_key);
+                return entry.url.clone();
+            }
+            None => {
+                log::info!("No cached mirror found for {}, using fallback: {}", settings_key, fallback);
+                return fallback;
+            }
+        }
+    } else {
+        let entries = idf_im_lib::utils::calculate_mirrors_latency(mirrors_list).await;
+        match entries.first() {
+            Some(entry) => {
+                log::info!("Using calculated mirror: {} for {}", entry.url, settings_key);
+                return entry.url.clone();
+            }
+            None => {
+                log::info!("No calculated mirror found for {}, using fallback: {}", settings_key, fallback);
+                return fallback;
+            }
+        }
+    }
+}
+
+pub async fn get_mirror_to_use(app_handle: &AppHandle, mirror_type: MirrorType, settings: &Settings, is_simple_installation: bool) -> String {
+    match mirror_type {
+        MirrorType::IDF => {
+            choose_mirror(settings.idf_mirror.clone(), "idf_mirror", is_simple_installation, settings,
+            app_state::get_idf_mirror_latency_entries(app_handle), idf_im_lib::get_idf_mirrors_list()).await
+        }
+
+        MirrorType::IDFTools => {
+            choose_mirror(settings.mirror.clone(), "mirror", is_simple_installation, settings,
+            app_state::get_tools_mirror_latency_entries(app_handle), idf_im_lib::get_idf_tools_mirrors_list()).await
+        }
+
+        MirrorType::PyPI => {
+            choose_mirror(settings.pypi_mirror.clone(), "pypi_mirror", is_simple_installation, settings,
+            app_state::get_pypi_mirror_latency_entries(app_handle), idf_im_lib::get_pypi_mirrors_list()).await
+        }
     }
 }
 

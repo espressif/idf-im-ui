@@ -1,6 +1,6 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::is_path_empty_or_nonexistent};
+use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::{is_path_empty_or_nonexistent, MirrorType, get_mirror_to_use}};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -24,7 +24,7 @@ use serde_json::json;
 
 use idf_im_lib::settings::Settings;
 use crate::gui::{
-  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status},
+  app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status, set_is_simple_installation},
   commands,
   ui::{
       send_install_progress_message, send_message, send_simple_setup_message,
@@ -119,22 +119,22 @@ async fn download_idf(
         detail: Some(rust_i18n::t!("gui.installation.download_preparing").to_string()),
         version: Some(version.to_string()),
     });
+    
+    let is_simple_installation = app_state::is_simple_installation(&app_handle);
+    let mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDF, settings, is_simple_installation).await;
 
-    let default_mirror = rust_i18n::t!("gui.installation.default_mirror").to_string();
-    let mirror = settings.idf_mirror.as_deref().unwrap_or(&default_mirror);
     emit_log_message(
         app_handle,
         MessageLevel::Info,
         rust_i18n::t!("gui.installation.cloning_from_mirror",
             version = version,
-            mirror = mirror).to_string(),
+            mirror = mirror_to_use.as_str()).to_string(),
     );
 
     // Clone values needed for the blocking task
     let idf_path_str = idf_path.to_str().unwrap().to_string();
     let repo_stub = settings.repo_stub.clone();
     let version_owned = version.to_string();
-    let idf_mirror = settings.idf_mirror.clone();
     let recurse_submodules = settings.recurse_submodules.unwrap_or_default();
 
     let result = match std::thread::spawn(move || {
@@ -142,7 +142,7 @@ async fn download_idf(
         &idf_path_str,
         repo_stub.as_deref(),
         &version_owned,
-        idf_mirror.as_deref(),
+        Some(&mirror_to_use),
         recurse_submodules,
         tx,
       )
@@ -229,6 +229,8 @@ pub async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
@@ -649,7 +651,7 @@ fn is_process_running(pid: u32) -> bool {
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
-
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
         return Err(e);
@@ -848,6 +850,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
 pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+    app_state::set_is_simple_installation(&app_handle, true)?;
     println!("Starting simple setup");
     let settings = match get_locked_settings(&app_handle) {
         Ok(s) => s,
@@ -1027,7 +1031,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         version: settings.idf_versions.as_ref().and_then(|v| v.first().cloned()),
     });
 
-    start_installation(app_handle.clone()).await
+    let res = start_installation(app_handle.clone()).await;
+    app_state::set_is_simple_installation(&app_handle, false)?;
+    return res;
 }
 
 #[tauri::command]

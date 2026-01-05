@@ -701,9 +701,6 @@ gui.installation.using_existing:
 gui.installation.cloning_from_mirror:
   en: "Cloning ESP-IDF %{version} repository from %{mirror}"
   cn: "从 %{mirror} 克隆 ESP-IDF %{version} 仓库"
-gui.installation.default_mirror:
-  en: "default mirror"
-  cn: "默认镜像"
 gui.installation.path_not_available:
   en: "Installation path not available"
   cn: "安装路径不可用"
