@@ -198,6 +198,7 @@
     "messages": {
       "startingPrerequisites": "正在安装依赖项...",
       "configLoaded": "配置已加载",
+      "configLoadFailed": "加载配置失败",
       "errors": {
         "systemRequirements": "检查系统要求失败",
         "prerequisites": "安装依赖项失败",

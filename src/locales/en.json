@@ -198,6 +198,7 @@
     "messages": {
       "startingPrerequisites": "Starting prerequisites installation...",
       "configLoaded": "Configuration loaded",
+      "configLoadFailed": "Failed to load configuration",
       "errors": {
         "systemRequirements": "Failed to check system requirements",
         "prerequisites": "Failed to install prerequisites",

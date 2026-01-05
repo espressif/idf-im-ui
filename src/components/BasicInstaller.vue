@@ -273,12 +273,16 @@ export default {
         }
 
         if (selected) {
-          const _ = await invoke("load_settings", { path: selected });
-          message.success('Configuration loaded')
-          router.push('/installation-progress')
+          invoke("load_settings", { path: selected }).then(() => {
+            message.success(t('basicInstaller.messages.configLoaded'))
+            router.push('/installation-progress')
+          }).catch((error) => {
+            console.error('Failed to load configuration:', error)
+            message.error(t('configLoadFailed.messages.configLoadFailed'))
+          })
         }
       } catch (error) {
-        message.error('Failed to load configuration')
+        message.error(t('configLoadFailed.messages.configLoadFailed'))
       }
     }
 
