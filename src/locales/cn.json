@@ -431,10 +431,29 @@
   "versionSelect": {
     "title": "选择 ESP-IDF 版本",
     "description": "选择要安装的 ESP-IDF SDK 版本：",
+    "sections": {
+      "stable": {
+        "title": "稳定版",
+        "description": "推荐用于大多数项目的生产就绪版本。这些版本经过充分测试，适用于商业和生产环境。"
+      },
+      "preRelease": {
+        "title": "预发布版本",
+        "description": "预发布版本包含最新功能和尚未正式发布的错误修复。如果您需要使用最新的改进，请选择这些版本，但请注意，它们可能不如正式发布版本稳定。"
+      },
+      "development": {
+        "title": "开发分支",
+        "warningTitle": "⚠️ 仅限高级用户使用",
+        "description": "主分支（master）包含最新的开发代码，稳定性极低。仅当您是 ESP-IDF 开发者、需要测试未发布功能，或必须使用最新更改时，才应安装此分支。该分支可能存在破坏性变更，不适用于生产环境。"
+      }
+    },
     "tags": {
       "latest": "最新",
-      "lts": "长期支持版本"
+      "lts": "长期支持版本",
+      "preRelease": "预发布版",
+      "unstable": "不稳定版"
     },
+    "supportedTargets": "支持的目标平台",
+    "masterDescription": "最新开发代码——可能包含破坏性变更",
     "selectedVersions": "已选版本：",
     "continueInstallation": "继续安装"
   },
