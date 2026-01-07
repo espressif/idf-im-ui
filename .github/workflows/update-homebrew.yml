@@ -13,7 +13,6 @@ on:
         description: 'The release tag name (e.g., v1.2.3) to update for'
         required: true
         type: string
-        default: ''
 
 jobs:
   update-homebrew:
@@ -39,7 +38,7 @@ jobs:
       - name: Get release information
         id: release-info
         run: |
-          echo "tag_name=${{ steps.tag.outputs.version }}" >> $GITHUB_OUTPUT
+          echo "version=${{ steps.tag.outputs.tag_name }}" >> $GITHUB_OUTPUT
           echo "release_url=${{ github.event.release.html_url || format('https://github.com/{0}/releases/tag/{1}', github.repository, steps.tag.outputs.tag_name) }}" >> $GITHUB_OUTPUT
 
       - name: Download and calculate checksums for CLI
