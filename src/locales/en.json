@@ -431,10 +431,29 @@
   "versionSelect": {
     "title": "Select ESP-IDF Versions",
     "description": "Choose which ESP-IDF SDK versions to install:",
+    "sections": {
+      "stable": {
+        "title": "Stable Releases",
+        "description": "Production-ready versions recommended for most projects. These versions are thoroughly tested and suitable for commercial and production environments."
+      },
+      "preRelease": {
+        "title": "Pre-Release Versions",
+        "description": "If a required feature is not yet available in a stable release, but you do not want to use the master branch, it is possible to check out a pre-release version or a release branch."
+      },
+      "development": {
+        "title": "Master Branch",
+        "warningTitle": "⚠️ For Advanced Users Only",
+        "description": "For prototyping, experimentation or for developing new ESP-IDF features, use the latest version (master branch). The latest version in the master branch has all the latest features and has passed automated testing, but has not been completely manually tested (\"bleeding edge\")."
+      }
+    },
     "tags": {
       "latest": "Latest",
-      "lts": "LTS"
+      "lts": "LTS",
+      "preRelease": "Pre-release",
+      "unstable": "Unstable"
     },
+    "supportedTargets": "Supported targets",
+    "masterDescription": "Latest development code - may contain breaking changes",
     "selectedVersions": "Selected versions:",
     "continueInstallation": "Continue Installation"
   },

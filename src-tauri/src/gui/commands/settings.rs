@@ -157,37 +157,82 @@ pub fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), St
 #[tauri::command]
 pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> Vec<Value> {
   let settings = match get_settings_non_blocking(&app_handle) {
-      Ok(s) => s,
-      Err(e) => {
-          send_message(&app_handle, e, "error".to_string());
-          return Vec::new();
-      }
+    Ok(s) => s,
+    Err(e) => {
+      send_message(&app_handle, e, "error".to_string());
+      return Vec::new();
+    }
   };
 
   let targets = settings.target.clone().unwrap_or_default();
-  let versions = settings.idf_versions.clone().unwrap_or_default();
-
+  let selected_versions = settings.idf_versions.clone().unwrap_or_default();
   let targets_vec: Vec<String> = targets.to_vec();
-  let mut available_versions = if targets_vec.contains(&"all".to_string()) {
-      idf_im_lib::idf_versions::get_idf_names(include_unstable).await
-  } else if !targets.is_empty() {
-      // todo: handle multiple targets
-      idf_im_lib::idf_versions::get_idf_name_by_target(&targets[0].to_string().to_lowercase(), true)
-          .await
-  } else {
-      Vec::new()
+
+  // Get full version information
+  let releases = match idf_im_lib::idf_versions::get_idf_versions().await {
+    Ok(r) => r,
+    Err(e) => {
+      send_message(&app_handle, e, "error".to_string());
+      return Vec::new();
+    }
   };
-  available_versions.push("master".to_string());
+  let mut first = true;
+  let mut available_versions: Vec<Value> = releases
+    .VERSIONS
+    .iter()
+    .filter(|v| {
+      // Filter out end_of_life and old versions
+      if v.end_of_life || v.old || v.name == "latest" {
+        return false;
+      }
+      // Filter out pre-release if not requested
+      if !include_unstable && v.pre_release {
+        return false;
+      }
+      // Filter by target if specified
+      if !targets_vec.is_empty() && !targets_vec.contains(&"all".to_string()) {
+        return v.supported_targets.iter().any(|t| {
+          targets_vec.contains(&t.to_lowercase())
+        });
+      }
+      true
+    })
+    .map(|v| {
+        // Determine if this is the latest stable version
+        let is_latest = !v.pre_release && first;
+        if is_latest {
+          first = false;
+        }
+
+        json!({
+          "name": v.name,
+          "pre_release": v.pre_release,
+          "old": v.old,
+          "end_of_life": v.end_of_life,
+          "has_targets": v.has_targets,
+          "supported_targets": v.supported_targets,
+          "selected": selected_versions.contains(&v.name),
+          "latest": is_latest,
+          "category": if v.pre_release { "pre_release" } else { "stable" }
+        })
+    })
+    .collect();
+
+  // Add master branch option
+  available_versions.push(json!({
+    "name": "master",
+    "pre_release": false,
+    "old": false,
+    "end_of_life": false,
+    "has_targets": true,
+    "supported_targets": ["all"],
+    "selected": selected_versions.contains(&"master".to_string()),
+    "latest": false,
+    "category": "development",
+    "is_master": true
+  }));
 
   available_versions
-      .into_iter()
-      .map(|v| {
-          json!({
-            "name": v,
-            "selected": versions.contains(&v),
-          })
-      })
-      .collect()
 }
 
 /// Sets the selected IDF versions
