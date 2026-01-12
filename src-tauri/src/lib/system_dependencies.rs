@@ -155,10 +155,10 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
 ///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **zypper (openSUSE/SUSE Linux Enterprise):**
-///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `libgcrypt20`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `glib2`: Runtime library for GLib (QEMU dependency).
 ///   - `pixman-1`: Runtime library for pixman (QEMU dependency).
-///   - `libsdl2-2_0_0`: Runtime library for SDL2 (QEMU dependency).
+///   - `libSDL2-2_0-0`: Runtime library for SDL2 (QEMU dependency).
 ///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// # macOS Prerequisites:
@@ -176,7 +176,7 @@ pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
             Some("dpkg") => vec!["libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
             Some("dnf") => vec!["libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
             Some("pacman") => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
-            Some("zypper") => vec!["libgcrypt", "glib2", "pixman-1", "libsdl2-2_0_0", "libslirp"],
+            Some("zypper") => vec!["libgcrypt20", "glib2", "pixman-1", "libSDL2-2_0-0", "libslirp"],
             _ => vec![],
         },
         "macos" => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
