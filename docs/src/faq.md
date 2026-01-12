@@ -45,6 +45,10 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 
 The offline installation allows you to install ESP-IDF without an internet connection. You need to download an offline installer artifact (a zip file) for your specific OS and ESP-IDF version. This artifact contains the installer and a `.zst` archive with all the necessary data. You then run the installer with the `--use-local-archive` flag, pointing to the `.zst` file. Remember **not** to unpack the `.zst` archive. Also, the offline installation currently requires **Python 3.11 to 3.13**. For detailed instructions, please see the [Offline Installation](./offline_installation.md) guide.
 
+### What is the offline_installer_builder-* binary for?
+
+The `offline_installer_builder-*` binary is **not** required for performing offline installations. It is a separate tool that allows you to create custom offline installation archives for specific or all ESP-IDF versions. These archives contain everything needed for offline installation — ESP-IDF source, tools, Python wheels, and prerequisites — making them ideal for air-gapped environments, enterprise deployment, or ensuring your whole team has the same offline installable environment. You only need this tool if you want to create your own offline installer archives; for regular offline installation, you only need the pre-built offline installer artifacts available from the [Espressif Download Portal](https://dl.espressif.com/dl/eim/?tab=offline).
+
 ### The installer says prerequisites are missing, but they are already installed
 In rare cases, the installer might fail to detect prerequisites even if they are properly installed on your system.
 If this happens, you can use the CLI version of the installer with the following flag to skip the check:
@@ -107,6 +111,10 @@ This error indicates that your Linux system is using an outdated version of the 
 
 ### How can I use EIM in CI/CD pipelines?
 For GitHub Actions, use the [install-esp-idf-action](https://github.com/espressif/install-esp-idf-action). For other CI/CD systems, use the headless mode with appropriate configuration. See [Headless Usage](./headless_usage.md) for details.
+
+### The installer crashes on startup / appears to crash immediately after I double-click it
+
+If you downloaded the CLI-only version (e.g., `eim-cli-*.exe`) and double-clicked the executable, this behavior is expected. CLI releases must be run from a terminal/command prompt rather than double-clicking. When you double-click the executable, it opens a terminal window briefly, displays help information, and then closes immediately, which may appear as if the installer crashed. Instead, open PowerShell or Command Prompt, navigate to the file location, and run it with `.\eim-cli-*.exe --help`.
 
 ## More Questions?
 

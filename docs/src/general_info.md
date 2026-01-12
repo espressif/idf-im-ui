@@ -86,6 +86,9 @@ Download the latest installer directly:
 After downloading, simply run the `.exe` installer.
 It will automatically detect and install any missing prerequisites and guide you through the setup process.
 
+> **Note for CLI Releases:**
+> If you download the CLI-only version (e.g., `eim-cli-*.exe`), it must be run from a terminal/command prompt rather than double-clicking the executable. Double-clicking will open a terminal window briefly, display help information, and then close immediately, which may appear as if the installer crashed. Instead, open PowerShell, navigate to the file location, and run it with `.\eim-cli-*.exe --help`.
+
 #### Running EIM on Windows
 
 After installation, you can launch the GUI from the Start Menu or use the CLI:

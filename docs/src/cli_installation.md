@@ -5,6 +5,8 @@ The command line interface (CLI) of ESP-IDF Installation Manager provides a flex
 ## Getting Started
 
 ### Windows
+> **Important:** CLI releases (e.g., `eim-cli-*.exe`) must be run from PowerShell or Command Prompt rather than double-clicking the executable. Double-clicking will open a terminal window briefly, display help information, and then close immediately, which may appear as if the installer crashed.
+
 Run EIM from PowerShell (do not use x86 version). Navigate to the EIM directory and run:
 ```bash
 .\eim --help
