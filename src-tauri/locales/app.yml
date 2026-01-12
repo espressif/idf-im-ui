@@ -50,16 +50,16 @@ python.install.failure:
 python.install.refuse:
   en: Please install Python3 with pip and SSL support and try again
   cn: 请安装支持 pip 和 SSL 的 Python3 并重试
-wizard.instalation_path.prompt:
+wizard.installation_path.prompt:
   en: Please select the ESP-IDF installation location
   cn: 请选择 ESP-IDF 安装位置
-wizard.instalation_path.unselected:
+wizard.installation_path.unselected:
   en: You really need to select some installation path
   cn: 请选择安装位置
 wizard.idf.mirror:
   en: Select the source from which to download ESP-IDF
   cn: 请选择下载 ESP-IDF 的来源
-wizard.idf.sucess:
+wizard.idf.success:
   en: Download ESP-IDF successfully
   cn: 成功下载 ESP-IDF
 wizard.idf.failure:
@@ -77,10 +77,10 @@ wizard.idf.submodule_finish:
 wizard.idf_version.selected:
   en: "Selected IDF version: %{version}"
   cn: "已选择 IDF 版本: %{version}"
-wizard.tools.donwload.prompt:
+wizard.tools.download.prompt:
   en: Choose the folder where the tools will be downloaded
   cn: 请选择要下载的工具所在目录
-wizard.tools.donwload.prompt.failure:
+wizard.tools.download.prompt.failure:
   en: You really need to select some folder
   cn: 请选择目录
 wizard.tools.install.prompt:
@@ -110,6 +110,15 @@ wizard.tools_json.unparsable:
 wizard.tools.mirror:
   en: Select a source from which to download tools
   cn: 请选择下载工具的来源
+wizard.qemu.prerequisites.missing:
+  en: The following prerequisites for QEMU are not satisfied
+  cn: 以下 QEMU 依赖项不满足
+wizard.qemu.prerequisites.check_error:
+  en: Failed to check QEMU prerequisites. Error:%{e}
+  cn: 无法检查 QEMU 依赖项。错误：%{e}
+wizard.qemu.prerequisites.unmet:
+  en: QEMU prerequisites are not satisfied and you selected QEMU for installation.
+  cn: QEMU 依赖项不满足，且您选择安装 QEMU。
 wizard.pypi.mirror:
   en: Select a PyPI mirror to download Python packages
   cn: 请选择 PyPI 镜像来下载 Python 包
@@ -131,10 +140,10 @@ wizard.idf_tools.unreachable:
 wizard.idf_tools.failed_to_run:
   en: Failed to run idf_tools.py file. Error
   cn: idf_tools.py 文件无法运行。错误
-wizard.windows.succes_message:
+wizard.windows.success_message:
   en: \n\rYour environment variables have been updated! Shell may need to be restarted for changes to be effective.
   cn: \n\r你的环境变量已更新！Shell 需要重启才能生效
-wizard.posix.succes_message:
+wizard.posix.success_message:
   en: please copy and paste the following lines to your terminal
   cn: 请复制并粘贴以下行到终端
 wizard.spinner.message:
@@ -173,7 +182,7 @@ wizard.tool_file.missing:
 wizard.tool.download_failed:
   en: Download failed
   cn: 下载失败
-wizard.tool.corupted:
+wizard.tool.corrupted:
   en: The downloaded file is corrupted.
   cn: 下载的文件已损坏
 wizard.tool.removed:
@@ -467,6 +476,18 @@ drivers.windows_only:
 cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
+gui.setup_tools.qemu_prerequisites_check.failed:
+  en: "Failed to check QEMU prerequisites: %{error}"
+  cn: "无法检查 QEMU 依赖项：%{error}"
+gui.setup_tools.qemu_prerequisites_check.xyz:
+  en: "You selected QEMU tools installation but the wizard was unable to verify that all QEMU prerequisites are met."
+  cn: "您选择安装 QEMU 工具，但向导无法验证是否满足所有 QEMU 依赖项。"
+gui.setup_tools.qemu_prerequisites_check.missing:
+  en: "Some of the qemu prerequisites are not satisfied"
+  cn: "部分 QEMU 依赖项不满足"
+gui.setup_tools.qemu_prerequisites_check.missing_details:
+  en: "You selected QEMU tools installation but some of the QEMU prerequisites are not satisfied: %{list}"
+  cn: "您选择安装 QEMU 工具，但部分 QEMU 依赖项不满足：%{list}"
 gui.setup_tools.dir_create_failed:
   en: "Failed to create download directory: %{error}"
   cn: "创建下载目录失败：%{error}"

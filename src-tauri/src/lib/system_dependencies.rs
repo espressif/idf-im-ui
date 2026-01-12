@@ -61,20 +61,18 @@ pub fn get_prequisites() -> Vec<&'static str> {
     }
 }
 
-/// Returns a list of additional system-level prerequisites (development libraries)
-/// required for certain functionalities, based on the detected operating system
+/// Returns a list of system-level prerequisites (development libraries)
+/// required for general functionalities, based on the detected operating system
 /// and, for Linux, the package manager in use.
 ///
 /// These prerequisites are typically needed for compiling or running applications
-/// that depend on native libraries like `libffi`, `libusb`, `OpenSSL`, and
-/// libraries required for QEMU (e.g., `libgcrypt`, `glib`, `pixman`, `sdl2`, `libslirp`).
+/// that depend on native libraries like `libffi`, `libusb`, and `OpenSSL`.
 ///
 /// # Returns
 ///
 /// A `Vec<&'static str>` containing the names of the packages to be installed.
-/// An empty `Vec` is returned if the operating system is not Linux (unless it's macOS with specific QEMU needs),
-/// or if the Linux package manager is not recognized or does not have specific prerequisites
-/// defined by this function.
+/// An empty `Vec` is returned if the operating system is not Linux,
+/// or if the Linux package manager is not recognized.
 ///
 /// # Linux Package Manager Mappings:
 ///
@@ -82,6 +80,57 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libffi-dev`: Development headers for Foreign Function Interface.
 ///   - `libusb-1.0-0`: Runtime library for USB device access.
 ///   - `libssl-dev`: Development headers for OpenSSL (SSL/TLS cryptography).
+///
+/// - **dpkg (Debian/Ubuntu fallback):**
+///   - Same as `apt`.
+///
+/// - **dnf (Fedora/RHEL/CentOS):**
+///   - `libffi-devel`: Development headers for Foreign Function Interface.
+///   - `libusb`: Runtime library for USB device access.
+///   - `openssl-devel`: Development headers for OpenSSL.
+///
+/// - **pacman (Arch Linux):**
+///   - `libusb`: Includes both runtime and development files for USB access.
+///   - `libffi`: Includes both runtime and development files for Foreign Function Interface.
+///   - `openssl`: Includes both runtime and development files for OpenSSL.
+///
+/// - **zypper (openSUSE/SUSE Linux Enterprise):**
+///   - `libusb-1_0-0`: Runtime library for USB device access.
+///   - `libffi-devel`: Development headers for Foreign Function Interface.
+///   - `libopenssl-devel`: Development headers for OpenSSL.
+///
+/// For other operating systems (Windows, macOS) or unrecognized Linux package managers,
+/// an empty vector is returned.
+pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str> {
+    match std::env::consts::OS {
+        "linux" => match determine_package_manager() {
+            Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
+            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
+            Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel"],
+            Some("pacman") => vec!["libusb", "libffi", "openssl"],
+            Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel"],
+            _ => vec![],
+        },
+        _ => vec![],
+    }
+}
+
+/// Returns a list of QEMU-specific system-level prerequisites (development libraries)
+/// required for running QEMU, based on the detected operating system
+/// and, for Linux, the package manager in use.
+///
+/// These prerequisites include libraries required for QEMU such as
+/// `libgcrypt`, `glib`, `pixman`, `sdl2`, and `libslirp`.
+///
+/// # Returns
+///
+/// A `Vec<&'static str>` containing the names of the packages to be installed.
+/// An empty `Vec` is returned if the operating system is Windows,
+/// or if the Linux package manager is not recognized.
+///
+/// # Linux Package Manager Mappings:
+///
+/// - **apt (Debian/Ubuntu):**
 ///   - `libgcrypt20`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `libglib2.0-0`: Runtime library for GLib (QEMU dependency).
 ///   - `libpixman-1-0`: Runtime library for pixman (QEMU dependency).
@@ -92,9 +141,6 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - Same as `apt`.
 ///
 /// - **dnf (Fedora/RHEL/CentOS):**
-///   - `libffi-devel`: Development headers for Foreign Function Interface.
-///   - `libusb`: Runtime library for USB device access.
-///   - `openssl-devel`: Development headers for OpenSSL.
 ///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `glib2`: Runtime library for GLib (QEMU dependency).
 ///   - `pixman`: Runtime library for pixman (QEMU dependency).
@@ -102,9 +148,6 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **pacman (Arch Linux):**
-///   - `libusb`: Includes both runtime and development files for USB access.
-///   - `libffi`: Includes both runtime and development files for Foreign Function Interface.
-///   - `openssl`: Includes both runtime and development files for OpenSSL.
 ///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `glib`: Runtime library for GLib (QEMU dependency).
 ///   - `pixman`: Runtime library for pixman (QEMU dependency).
@@ -112,9 +155,6 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
 /// - **zypper (openSUSE/SUSE Linux Enterprise):**
-///   - `libusb-1_0-0`: Runtime library for USB device access.
-///   - `libffi-devel`: Development headers for Foreign Function Interface.
-///   - `libopenssl-devel`: Development headers for OpenSSL.
 ///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `glib2`: Runtime library for GLib (QEMU dependency).
 ///   - `pixman-1`: Runtime library for pixman (QEMU dependency).
@@ -128,40 +168,39 @@ pub fn get_prequisites() -> Vec<&'static str> {
 /// - `sdl2`: Runtime library for SDL2 (QEMU dependency).
 /// - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
-/// For other operating systems (Windows) or unrecognized Linux package managers,
-/// an empty vector is returned.
-pub fn get_additional_prerequisites_based_on_package_manager() -> Vec<&'static str> {
+/// For Windows or unrecognized Linux package managers, an empty vector is returned.
+pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => match determine_package_manager() {
-            Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev", "libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
-            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev", "libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
-            Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel", "libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
-            Some("pacman") => vec!["libusb", "libffi", "openssl", "libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
-            Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel", "libgcrypt", "glib2", "pixman-1", "libsdl2-2_0_0", "libslirp"],
+            Some("apt") => vec!["libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
+            Some("dpkg") => vec!["libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
+            Some("dnf") => vec!["libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
+            Some("pacman") => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
+            Some("zypper") => vec!["libgcrypt", "glib2", "pixman-1", "libsdl2-2_0_0", "libslirp"],
             _ => vec![],
         },
-        "windows" => vec![],
         "macos" => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
         _ => vec![],
     }
 }
 
-/// Checks the system for the required tools and returns a list of unsatisfied tools.
+/// Checks if the given list of tools/packages are installed on the system.
 ///
-/// This function determines the operating system and package manager, then checks if each required tool is installed.
-/// If a tool is not found, it is added to the `unsatisfied` vector and returned.
-/// The prerequsites are met when empty vector is returned.
+/// This is a helper function that contains the core checking logic for different
+/// operating systems and package managers.
+///
+/// # Arguments
+///
+/// * `tools` - A vector of tool/package names to check
 ///
 /// # Returns
 ///
-/// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied tools.
-/// * `Err(String)` - If an error occurs, returns an error message.
-pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
-    let mut list_of_required_tools = get_prequisites();
-    list_of_required_tools = [list_of_required_tools, get_additional_prerequisites_based_on_package_manager()].concat();
-    debug!("Checking for prerequisites...");
-    debug!("will be checking for : {:?}", list_of_required_tools);
+/// * `Ok(Vec<&'static str>)` - Vector of unsatisfied tools/packages
+/// * `Err(String)` - If an error occurs, returns an error message
+fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, String> {
+    let mut list_of_required_tools = tools;
     let mut unsatisfied = vec![];
+
     match std::env::consts::OS {
         "linux" => {
             // git needs to be checked separately
@@ -180,6 +219,7 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                     unsatisfied.push("git");
                 }
             };
+
             // check with which command
             list_of_required_tools.retain(|&tool| {
                 match command_executor::execute_command("which", &["-a", tool]) {
@@ -197,9 +237,11 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
                     }
                 }
             });
+
             // now check if the tools are installed with the package manager
             let package_manager = determine_package_manager();
             debug!("Detected package manager: {:?}", package_manager);
+
             match package_manager {
                 Some("apt") => {
                     for tool in list_of_required_tools {
@@ -356,8 +398,8 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
         }
         "windows" => {
             for tool in list_of_required_tools {
-              let current_path = std::env::var("PATH").unwrap_or_default();
-              let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
+                let current_path = std::env::var("PATH").unwrap_or_default();
+                let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
                 let output = command_executor::execute_command_with_env(
                     "powershell",
                     &vec!["-Command", &format!("{} --version", tool)],
@@ -382,7 +424,45 @@ pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
             return Err(format!("Unsupported OS - {}", std::env::consts::OS));
         }
     }
+
     Ok(unsatisfied)
+}
+
+/// Checks the system for the required tools and returns a list of unsatisfied tools.
+///
+/// This function determines the operating system and package manager, then checks if each required tool is installed.
+/// If a tool is not found, it is added to the `unsatisfied` vector and returned.
+/// The prerequisites are met when empty vector is returned.
+///
+/// # Returns
+///
+/// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied tools.
+/// * `Err(String)` - If an error occurs, returns an error message.
+pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
+    let mut list_of_required_tools = get_prequisites();
+    list_of_required_tools = [list_of_required_tools, get_general_prerequisites_based_on_package_manager()].concat();
+    debug!("Checking for prerequisites...");
+    debug!("will be checking for : {:?}", list_of_required_tools);
+
+    check_tools_installed(list_of_required_tools)
+}
+
+/// Checks the system for QEMU-specific dependencies and returns a list of unsatisfied packages.
+///
+/// This function retrieves the QEMU prerequisites based on the operating system and package manager,
+/// then checks if each required package is installed. If a package is not found, it is added to
+/// the `unsatisfied` vector and returned. The prerequisites are met when an empty vector is returned.
+///
+/// # Returns
+///
+/// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied QEMU packages.
+/// * `Err(String)` - If an error occurs, returns an error message.
+pub fn check_qemu_prerequisites() -> Result<Vec<&'static str>, String> {
+    let list_of_qemu_tools = get_qemu_prerequisites_based_on_package_manager();
+    debug!("Checking for QEMU prerequisites...");
+    debug!("will be checking for : {:?}", list_of_qemu_tools);
+
+    check_tools_installed(list_of_qemu_tools)
 }
 
 /// Returns the path to the Scoop shims directory.

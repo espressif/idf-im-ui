@@ -3,6 +3,7 @@ use anyhow::Result;
 use dialoguer::FolderSelect;
 use idf_im_lib::idf_features::get_requirements_json_url;
 use idf_im_lib::idf_features::RequirementsMetadata;
+use idf_im_lib::idf_tools::Tool;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
@@ -483,7 +484,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
             match download_idf(download_config) {
                 Ok(_) => {
-                    debug!("{}", t!("wizard.idf.sucess"));
+                    debug!("{}", t!("wizard.idf.success"));
                 }
                 Err(DownloadError::PathCreationFailed(err)) => {
                     error!("{} {:?}", t!("wizard.idf.path_creation_failure"), err);
@@ -544,6 +545,29 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         let tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
+
+        if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
+            let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
+            match qemu_prereqs {
+            Ok(prereqs) if !prereqs.is_empty() => {
+                error!(
+                    "{}: {:?}",
+                    t!("wizard.qemu.prerequisites.missing"),
+                    prereqs
+                );
+                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+            }
+            Err(err) => {
+                error!(
+                    "{}: {}",
+                    t!("wizard.qemu.prerequisites.check_error"),
+                    err
+                );
+                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+            }
+            Ok(_) => { /* All good, continue. */ }
+        }
+        }
 
         let installed_tools_list = match download_and_extract_tools(
             &config,

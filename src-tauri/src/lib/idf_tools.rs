@@ -11,7 +11,7 @@ use crate::command_executor::{execute_command, execute_command_with_env};
 use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
 use crate::utils::{find_by_name_and_extension, find_directories_by_name, versions_match};
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Tool {
     pub description: String,
     pub export_paths: Vec<Vec<String>>,
@@ -34,7 +34,7 @@ pub struct Tool {
     pub versions: Vec<Version>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct PlatformOverride {
     #[serde(default)]
     pub install: Option<String>,
@@ -43,7 +43,7 @@ pub struct PlatformOverride {
     pub export_paths: Option<Vec<Vec<String>>>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Version {
     pub name: String,
     pub status: String,
@@ -51,7 +51,7 @@ pub struct Version {
     pub downloads: HashMap<String, Download>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
 pub struct Download {
     pub sha256: String,
     pub size: u64,
