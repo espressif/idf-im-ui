@@ -161,6 +161,23 @@ jobs:
           zip -r eim.zip eim
         shell: bash
 
+      - name: Generate Completions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd src-tauri
+          TGT="target${{ matrix.target && format('/{0}', matrix.target) || '' }}/release"
+          OUTDIR="$TGT/completions"
+          mkdir -p "$OUTDIR"
+          BIN="$TGT/eim"
+          "$BIN" completions zsh > "$OUTDIR/_eim"
+          "$BIN" completions bash > "$OUTDIR/eim.bash"
+          "$BIN" completions fish > "$OUTDIR/eim.fish"
+          "$BIN" completions elvish > "$OUTDIR/eim.elvish"
+
+          mkdir -p target/release/completions
+          cp -a "$OUTDIR"/* target/release/completions/
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
