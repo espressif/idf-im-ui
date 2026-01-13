@@ -28,7 +28,7 @@ assets = [
     ["target/release/completions/eim.bash", "usr/share/bash-completion/completions/eim", "644"],
     ["target/release/completions/_eim",     "usr/share/zsh/site-functions/_eim", "644"],
     ["target/release/completions/eim.fish", "usr/share/fish/vendor_completions.d/eim.fish", "644"],
-    ["target/release/completions/eim.elvish", "usr/share/elvish/site-functions/eim.elvish", "644"],
+    ["target/release/completions/eim.elv", "usr/share/elvish/site-functions/eim.elv", "644"],
 ]
 
 [package.metadata.generate-rpm]
@@ -45,7 +45,7 @@ assets = [
     { source = "target/release/completions/eim.bash", dest = "/usr/share/bash-completion/completions/eim", mode = "644" },
     { source = "target/release/completions/_eim", dest = "/usr/share/zsh/site-functions/_eim", mode = "644" },
     { source = "target/release/completions/eim.fish", dest = "/usr/share/fish/vendor_completions.d/eim.fish", mode = "644" },
-    { source = "target/release/completions/eim.elvish", dest = "/usr/share/elvish/site-functions/eim.elvish", mode = "644" },
+    { source = "target/release/completions/eim.elv", dest = "/usr/share/elvish/site-functions/eim.elv", mode = "644" },
 
 ]
 

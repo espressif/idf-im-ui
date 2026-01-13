@@ -185,7 +185,7 @@ jobs:
           "$BIN" completions zsh > "$OUTDIR/_eim"
           "$BIN" completions bash > "$OUTDIR/eim.bash"
           "$BIN" completions fish > "$OUTDIR/eim.fish"
-          "$BIN" completions elvish > "$OUTDIR/eim.elvish"
+          "$BIN" completions elvish > "$OUTDIR/eim.elv"
 
           mkdir -p target/release/completions
           cp -a "$OUTDIR"/. target/release/completions/
