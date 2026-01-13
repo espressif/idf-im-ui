@@ -181,7 +181,6 @@ jobs:
 
           OUTDIR="$REAL_TGT/completions"
           mkdir -p "$OUTDIR"
-          BIN="$TGT/eim"
           "$BIN" completions zsh > "$OUTDIR/_eim"
           "$BIN" completions bash > "$OUTDIR/eim.bash"
           "$BIN" completions fish > "$OUTDIR/eim.fish"
