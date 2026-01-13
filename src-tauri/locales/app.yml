@@ -936,8 +936,8 @@ gui.simple_setup.python_not_found:
   en: "Python not found"
   cn: "未找到 Python"
 gui.simple_setup.install_python_manually:
-  en: "Please install Python 3.11 manually"
-  cn: "请手动安装 Python 3.11"
+  en: "Automatic installation of Python failed. Please install compatible Python manually."
+  cn: "自动安装 Python 失败。请手动安装兼容的 Python。"
 gui.simple_setup.python_ready:
   en: "Python environment ready"
   cn: "Python 环境已就绪"
