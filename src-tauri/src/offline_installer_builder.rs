@@ -16,6 +16,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use tauri::http::version;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
@@ -207,6 +208,7 @@ async fn download_wheels_for_python_versions(
         }
     }
 
+    let mut versions_failed = vec![];
     for python_version in python_versions {
         info!("Processing Python version: {}", python_version);
 
@@ -306,17 +308,25 @@ async fn download_wheels_for_python_versions(
                         python_version,
                         String::from_utf8_lossy(&output.stderr)
                     );
+                    versions_failed.push(python_version.to_string());
                     // Continue with other versions even if one fails
                 }
             }
             Err(err) => {
                 error!("Failed to download packages for Python {}: {}", python_version, err);
+                versions_failed.push(python_version.to_string());
                 // Continue with other versions even if one fails
             }
         }
     }
-
-    Ok(())
+    if versions_failed.len() >= python_versions.len() {
+        Err(format!(
+            "Failed to download wheels for Python versions: {:?}",
+            versions_failed.join(", ")
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -516,6 +526,7 @@ async fn main() {
         };
 
         // ITERATE OVER EACH VERSION AND BUILD SEPARATE ARCHIVE
+        let mut failed_versions = vec![];
         for idf_version in version_list {
             info!("=== Processing ESP-IDF version: {} ===", idf_version);
 
@@ -667,6 +678,7 @@ async fn main() {
                 &wheel_versions,
             ).await {
                 error!("Failed to download wheels for {}: {}", idf_version, e);
+                failed_versions.push(idf_version.clone());
                 continue;
             }
 
@@ -722,8 +734,13 @@ async fn main() {
             info!("✅ Archive for {} saved to: {:?}", idf_version, output_path);
         }
 
-        info!("🎉 All requested versions processed.");
-        return; // Exit after creating archives
+        if failed_versions.is_empty() {
+            info!("🎉 All requested versions processed successfully.");
+            return;
+        } else {
+            error!("Some versions failed to process: {:?}", failed_versions);
+            std::process::exit(1);
+        }
     } else if let Some(archive_path) = args.archive {
         // Extract installation data from archive
         info!("Extracting installation data from archive: {:?}", archive_path);
