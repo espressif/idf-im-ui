@@ -135,6 +135,7 @@ jobs:
 
             def install
               bin.install "eim"
+              (zsh_completion/"_eim").write Utils.safe_popen_read("#{bin}/eim", "completions", "zsh")
             end
 
             def caveats
@@ -143,6 +144,11 @@ jobs:
 
                 Python 3.12 was installed as a dependency (ESP-IDF requires Python 3.9-3.13).
                 Python 3.14+ is not yet supported.
+
+                Zsh completions have been installed.
+                They will be available in new terminal sessions.
+                If they don't work immediately, restart your shell:
+                  exec zsh
 
                 Run 'eim' to install ESP-IDF.
               EOS
