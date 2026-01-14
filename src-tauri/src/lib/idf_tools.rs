@@ -146,6 +146,86 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
     tools_file
 }
 
+/// Removes the specified number of top directory levels when extracting an archive.
+/// If the operation fails, the original directory is restored.
+/// E.g. if levels=2, archive path a/b/c/d.txt will be extracted as c/d.txt.
+///
+/// # Arguments
+///
+/// * `path` - The path to the extracted archive directory
+/// * `levels` - The number of directory levels to strip
+///
+/// # Returns
+///
+/// * `Result<()>` - Ok if successful, Err otherwise
+fn do_strip_container_dirs(path: &Path, levels: u8) -> Result<()> {
+    if levels == 0 {
+        return Ok(());
+    }
+
+    let tmp_path = path.with_extension("tmp");
+
+    // Clean up any existing tmp directory and move current path to tmp
+    if tmp_path.exists() {
+        std::fs::remove_dir_all(&tmp_path)?;
+    }
+    std::fs::rename(path, &tmp_path)?;
+
+    // Define rollback function
+    let rollback = || {
+        if let Err(e) = std::fs::rename(&tmp_path, path) {
+            log::error!("Failed to rollback after strip_container_dirs error: {}", e);
+        }
+    };
+
+    // Navigate down through the specified levels
+    let base_path = match (0..levels).try_fold(tmp_path.clone(), |current_path, level| {
+        let mut entries = std::fs::read_dir(current_path)?;
+
+        let entry = entries.next()
+            .ok_or_else(|| anyhow!("at level {}, directory is empty", level))??;
+
+        // Check if there's only one entry
+        if entries.next().is_some() {
+            return Err(anyhow!("at level {}, expected 1 entry, found multiple", level));
+        }
+
+        let next_path = entry.path();
+        if !next_path.is_dir() {
+            return Err(anyhow!("at level {}, '{}' is not a directory", level, entry.file_name().to_string_lossy()));
+        }
+
+        Ok(next_path)
+    }) {
+        Ok(path) => path,
+        Err(e) => {
+            rollback();
+            return Err(e);
+        }
+    };
+
+    // Recreate the original directory and move contents
+    if let Err(e) = std::fs::create_dir(path) {
+        rollback();
+        return Err(e.into());
+    }
+
+    for entry in std::fs::read_dir(base_path)? {
+        let entry = entry?;
+        if let Err(e) = std::fs::rename(entry.path(), path.join(entry.file_name())) {
+            // Try to clean up the partially created directory
+            let _ = std::fs::remove_dir_all(path);
+            rollback();
+            return Err(e.into());
+        }
+    }
+
+    // Clean up temporary directory
+    std::fs::remove_dir_all(&tmp_path)?;
+
+    Ok(())
+}
+
 /// Filters a list of tools based on the given target platform.
 ///
 /// # Arguments
@@ -627,17 +707,12 @@ pub async fn setup_tools(
       if let Ok(true) = verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()) {
         progress_callback(DownloadProgress::Verified(download_link.url.clone()));
         decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
-        // this is fix for ninja not having `x` permission in zip archive
-        if tool_name.contains("ninja") {
-          match add_x_permission_to_tool(&this_install_dir, "ninja") {
-            Ok(_) => {
-              log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
-            }
-            Err(e) => {
-              log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
-            }
-          }
+
+        // Post-extraction operations
+        if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
+          post_extract_operations(tool_name, tool, &this_install_dir)?;
         }
+
         progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
         progress_callback(DownloadProgress::Complete);
         continue;
@@ -675,15 +750,12 @@ pub async fn setup_tools(
             // Extract the archive
 
             decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
-            // this is fix for ninja not having `x` permission in zip archive
-            match add_x_permission_to_tool(&this_install_dir, "ninja") {
-              Ok(_) => {
-                log::info!("Set executable permissions for ninja in {}", this_install_dir.display());
-              }
-              Err(e) => {
-                log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
-              }
+
+            // Post-extraction operations
+            if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
+              post_extract_operations(tool_name, tool, &this_install_dir)?;
             }
+
             progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
             progress_callback(DownloadProgress::Complete);
           } else {
@@ -700,6 +772,44 @@ pub async fn setup_tools(
     }
 
     Ok(download_links)
+}
+
+/// Performs post-extraction operations: stripping container directories and setting permissions.
+///
+/// # Arguments
+///
+/// * `tool_name` - The name of the tool
+/// * `tool` - The Tool struct containing configuration
+/// * `install_dir` - The directory where the tool was extracted
+///
+/// # Returns
+///
+/// * `Result<()>` - Ok if successful, Err otherwise
+fn post_extract_operations(tool_name: &str, tool: &Tool, install_dir: &PathBuf) -> Result<()> {
+  // Strip container directories if specified
+  if let Some(levels) = tool.strip_container_dirs {
+    if levels > 0 {
+        log::debug!("Stripping {} container directory levels for tool '{}'", levels, tool_name);
+      if let Err(e) = do_strip_container_dirs(install_dir, levels) {
+        log::warn!("Failed to strip container directories for '{}': {}. Continuing anyway.", tool_name, e);
+        // Don't return error - if stripping fails, we still have a usable installation
+      }
+    }
+  }
+
+  // Fix for ninja not having `x` permission in zip archive
+  if tool_name.contains("ninja") {
+    match add_x_permission_to_tool(install_dir, "ninja") {
+      Ok(_) => {
+        log::info!("Set executable permissions for ninja in {}", install_dir.display());
+      }
+      Err(e) => {
+        log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+      }
+    }
+  }
+
+  Ok(())
 }
 
 /// Adds execute (x) permission to the specified tool within the installation directory.
