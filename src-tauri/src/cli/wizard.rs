@@ -258,27 +258,6 @@ fn get_tools_json_path(config: &mut Settings, idf_path: &Path) -> PathBuf {
     tools_json_file
 }
 
-fn validate_tools_json_file(tools_json_file: &Path, config: &mut Settings) -> String {
-    if fs::metadata(tools_json_file).is_err() {
-        warn!("{}", t!("wizard.tools_json.not_found"));
-        let selected_file = FolderSelect::with_theme(&create_theme())
-            .with_prompt(t!("wizard.tools_json.select.prompt"))
-            .folder(tools_json_file.to_str().unwrap())
-            .file(true)
-            .interact()
-            .unwrap();
-        if fs::metadata(&selected_file).is_ok() {
-            config.tools_json_file = Some(selected_file.to_string());
-            selected_file
-        } else {
-            // TODO: implement the retry logic -> in interactive mode the user should not be able to proceed until the files is found
-            panic!("{}", t!("wizard.tools_json.unreachable"));
-        }
-    } else {
-        tools_json_file.to_str().unwrap().to_string()
-    }
-}
-
 async fn download_and_extract_tools(
     config: &Settings,
     tools: &ToolsFile,
@@ -657,8 +636,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // tools_json_file
 
         let tools_json_file = get_tools_json_path(&mut config, &paths.idf_path);
-
-        let validated_file = validate_tools_json_file(&tools_json_file, &mut config);
+        let validated_file = tools_json_file.to_string_lossy().to_string();
 
         debug!(
             "{}",
