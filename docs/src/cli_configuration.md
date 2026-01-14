@@ -1,5 +1,7 @@
 # CLI Configuration
 
+> **Important:** CLI releases (e.g., `eim-cli-*.exe` on Windows) must be run from a terminal like PowerShell rather than double-clicking the executable. Double-clicking will open a terminal window briefly, display help information, and then close immediately, which may appear as if the installer crashed.
+
 The command-line interface supports multiple configuration methods with the following priority (highest to lowest):
 
 1. Command line arguments
