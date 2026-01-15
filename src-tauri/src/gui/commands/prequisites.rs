@@ -18,21 +18,22 @@ pub fn get_prequisites() -> Vec<&'static str> {
 /// Checks which prerequisites are missing
 #[tauri::command]
 pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
-    match idf_im_lib::system_dependencies::check_prerequisites() {
-        Ok(prerequisites) => {
-            if prerequisites.is_empty() {
+    match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+        Ok(result) => {
+            if result.shell_failed {
+                let error_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                send_message(&app_handle, error_msg.clone(), "error".to_string());
+                error!("{}", error_msg);
+                vec![]
+            } else if result.missing.is_empty() {
                 vec![]
             } else {
-                prerequisites.into_iter().map(|p| p.to_string()).collect()
+                result.missing.into_iter().map(|p| p.to_string()).collect()
             }
         }
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
-            send_message(
-                &app_handle,
-                error_msg.clone(),
-                "error".to_string(),
-            );
+            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            send_message(&app_handle, error_msg.clone(), "error".to_string());
             error!("{}", error_msg);
             vec![]
         }
@@ -41,49 +42,68 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
 
 #[tauri::command]
 pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value {
-  match idf_im_lib::system_dependencies::check_prerequisites() {
-    Ok(prerequisites) => {
-            if prerequisites.is_empty() {
-              json!({
-                "all_ok": true,
-                "missing": []
-              })
+    match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+        Ok(result) => {
+            if result.shell_failed {
+                // Shell execution failed - can't verify, user can skip
+                let warning_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                send_message(&app_handle, warning_msg.clone(), "warning".to_string());
+                warn!("{}", warning_msg);
+                json!({
+                    "all_ok": false,
+                    "missing": [],
+                    "can_verify": false,
+                    "shell_failed": true
+                })
+            } else if result.missing.is_empty() {
+                // All prerequisites satisfied
+                json!({
+                    "all_ok": true,
+                    "missing": [],
+                    "can_verify": true,
+                    "shell_failed": false
+                })
             } else {
-              json!({
-                "all_ok": false,
-                "missing": prerequisites.into_iter().map(|p| p.to_string()).collect::<Vec<_>>()
-              })
+                // Some prerequisites missing - normal flow
+                json!({
+                    "all_ok": false,
+                    "missing": result.missing.into_iter().map(|p| p.to_string()).collect::<Vec<_>>(),
+                    "can_verify": true,
+                    "shell_failed": false
+                })
             }
         }
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
-            send_message(
-                &app_handle,
-                error_msg.clone(),
-                "error".to_string(),
-            );
-            error!("{}", error_msg);
+            // Error during checking (e.g., unsupported package manager) - can't verify, user can skip
+            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            send_message(&app_handle, error_msg.clone(), "warning".to_string());
+            warn!("{}", error_msg);
             json!({
                 "all_ok": false,
-                "missing": []
+                "missing": [],
+                "can_verify": false,
+                "shell_failed": false
             })
         }
     }
-
 }
 
 /// Installs missing prerequisites
 #[tauri::command]
 pub fn install_prerequisites(app_handle: AppHandle) -> bool {
-    let unsatisfied_prerequisites = match idf_im_lib::system_dependencies::check_prerequisites() {
-        Ok(prereqs) => prereqs.into_iter().map(|p| p.to_string()).collect(),
+    let unsatisfied_prerequisites = match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+        Ok(result) => {
+            if result.shell_failed {
+                let error_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                send_message(&app_handle, error_msg.clone(), "error".to_string());
+                error!("{}", error_msg);
+                return false;
+            }
+            result.missing.into_iter().map(|p| p.to_string()).collect()
+        }
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_checking_prerequisites", error = err.to_string()).to_string();
-            send_message(
-                &app_handle,
-                error_msg.clone(),
-                "error".to_string(),
-            );
+            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            send_message(&app_handle, error_msg.clone(), "error".to_string());
             error!("{}", error_msg);
             return false;
         }

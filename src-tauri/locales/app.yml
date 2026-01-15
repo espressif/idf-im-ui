@@ -11,6 +11,9 @@ prerequisites.not_ok:
 prerequisites.missing:
   en: The following prerequisites are not satisfied
   cn: 以下依赖项不满足
+prerequisites.failed:
+  en: The installer is unable to verify the prerequisites. Please try again with the --skip-prerequisites-check flag.
+  cn: 安装程序无法验证依赖项。请使用 --skip-prerequisites-check 标志重试。
 prerequisites.install.prompt:
   en: Do you want to install prerequisites?
   cn: 是否要安装这些依赖项？
@@ -620,6 +623,12 @@ gui.system_dependencies.python_sanity_check_failed:
 gui.system_dependencies.error_installing_python:
   en: "Error installing Python: %{error}"
   cn: "安装 Python 时出错：%{error}"
+gui.system_dependencies.shell_verification_failed:
+  en: "Unable to verify prerequisites: basic shell execution failed. You can skip this check if you are certain the required tools are installed."
+  cn: "无法验证依赖项：基本 Shell 执行失败。如果您确定所需工具已安装，可以跳过此检查。"
+gui.system_dependencies.verification_error:
+  en: "Unable to verify prerequisites: %{error}. You can skip this check if you are certain the required tools are installed."
+  cn: "无法验证依赖项：%{error}。如果您确定所需工具已安装，可以跳过此检查。"
 gui.settings.failed_to_load:
   en: "Failed to load settings from file: %{path}"
   cn: "从文件加载设置失败：%{path}"

@@ -48,14 +48,18 @@ pub async fn select_idf_version(
 }
 
 fn check_prerequisites() -> Result<Vec<String>, String> {
-    match system_dependencies::check_prerequisites() {
-        Ok(prerequisites) => {
-            if prerequisites.is_empty() {
+    match system_dependencies::check_prerequisites_with_result() {
+        Ok(result) => {
+            if result.shell_failed {
+                return Err(t!("prerequisites.failed").to_string());
+            }
+            
+            if result.missing.is_empty() {
                 debug!("{}", t!("prerequisites.ok"));
                 Ok(vec![])
             } else {
-                info!("{} {:?}", t!("prerequisites.missing"), prerequisites);
-                Ok(prerequisites.into_iter().map(|p| p.to_string()).collect())
+                info!("{} {:?}", t!("prerequisites.missing"), result.missing);
+                Ok(result.missing.into_iter().map(|p| p.to_string()).collect())
             }
         }
         Err(err) => Err(err),
