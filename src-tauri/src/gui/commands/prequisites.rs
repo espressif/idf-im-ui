@@ -21,9 +21,9 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
     match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
         Ok(result) => {
             if result.shell_failed {
-                let error_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
-                send_message(&app_handle, error_msg.clone(), "error".to_string());
-                error!("{}", error_msg);
+                let warning_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                send_message(&app_handle, warning_msg.clone(), "warning".to_string());
+                warn!("{}", warning_msg);
                 vec![]
             } else if result.missing.is_empty() {
                 vec![]
@@ -32,9 +32,9 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
             }
         }
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
-            send_message(&app_handle, error_msg.clone(), "error".to_string());
-            error!("{}", error_msg);
+            let warning_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            send_message(&app_handle, warning_msg.clone(), "warning".to_string());
+            warn!("{}", warning_msg);
             vec![]
         }
     }
