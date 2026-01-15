@@ -235,6 +235,43 @@ export default {
     const errorDetails = ref('')
     const verificationFailed = ref(false)
 
+    // Helper function to fetch settings, versions, and validate installation path
+    const prepareForInstallation = async () => {
+      try {
+        const settings = await invoke('get_settings')
+        installPath.value = settings?.path
+        console.log('Default installation path:', installPath.value)
+
+        const versions = await invoke('get_idf_versions', { includeUnstable: false })
+        selectedVersion.value = versions?.[0]?.name || 'v5.5.1'
+        console.log('Selected version:', selectedVersion.value)
+
+        const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
+          path: installPath.value,
+          versions: [selectedVersion.value]
+        })
+        console.log('Installation path check result:', pathValid)
+
+        if (!pathValid) {
+          errorTitle.value = 'Installation Path Not Empty'
+          errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
+          errorDetails.value = 'Please use custom installation to select a different path.'
+          currentState.value = 'error'
+          return false
+        }
+
+        currentState.value = 'ready'
+        return true
+      } catch (error) {
+        console.error('Failed to prepare for installation:', error)
+        errorTitle.value = t('simpleSetup.error.system.title')
+        errorMessage.value = t('simpleSetup.error.system.message')
+        errorDetails.value = error.toString()
+        currentState.value = 'error'
+        return false
+      }
+    }
+
     // Event listeners
     let unlistenProgress = null
     let unlistenComplete = null
@@ -318,37 +355,9 @@ export default {
         } else {
           console.log("Python sanity check passed");
         }
-        // Get default installation path
-        invoke('get_settings').then(settings => {
-          installPath.value = settings?.path
-          console.log('Default installation path:', installPath.value);
-          // Get latest ESP-IDF version
-          invoke('get_idf_versions',{includeUnstable: false}).then(versions => {
-            selectedVersion.value = versions?.[0].name || 'v5.5.1';
-            // Check if path is valid
-            let path_to_check = installPath.value;
-            console.log('Checking installation path:', path_to_check);
-            invoke('is_path_empty_or_nonexistent_command', {
-              path: path_to_check,
-              versions: [selectedVersion.value]
-            }).then(pathValid => {
-              console.log('Installation path check result:', pathValid);
-              if (!pathValid) {
-                errorTitle.value = 'Installation Path Not Empty'
-                errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
-                errorDetails.value = 'Please use custom installation to select a different path.'
-                currentState.value = 'error'
-                return false
-              } else {
-                console.log('Installation path is valid:', installPath.value);
-                currentState.value = 'ready';
-              }
-
-            });
-          });
-        });
-
-        return true
+        
+        // Fetch settings, versions, and validate installation path
+        return await prepareForInstallation()
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
         errorTitle.value = t('simpleSetup.error.system.title')
@@ -505,36 +514,8 @@ export default {
       errorDetails.value = ''
       currentState.value = 'checking'
       
-      // Get default installation path and version, then go to ready state
-      try {
-        const settings = await invoke('get_settings')
-        installPath.value = settings?.path
-        
-        const versions = await invoke('get_idf_versions', { includeUnstable: false })
-        selectedVersion.value = versions?.[0]?.name || 'v5.5.1'
-        
-        // Check if path is valid
-        const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
-          path: installPath.value,
-          versions: [selectedVersion.value]
-        })
-        
-        if (!pathValid) {
-          errorTitle.value = 'Installation Path Not Empty'
-          errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
-          errorDetails.value = 'Please use custom installation to select a different path.'
-          currentState.value = 'error'
-          return
-        }
-        
-        currentState.value = 'ready'
-      } catch (error) {
-        console.error('Failed during skip and continue:', error)
-        errorTitle.value = t('simpleSetup.error.system.title')
-        errorMessage.value = t('simpleSetup.error.system.message')
-        errorDetails.value = error.toString()
-        currentState.value = 'error'
-      }
+      // Fetch settings, versions, and validate installation path
+      await prepareForInstallation()
     }
 
     const viewLogs = async () => {
