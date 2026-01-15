@@ -28,21 +28,9 @@
       </n-card>
     </div>
 
-    <!-- Verification Failed Alert -->
+    <!-- Prerequisites Alert -->
     <n-alert
-      v-if="!isLoading && !canVerify && os !== 'unknown'"
-      type="warning"
-      class="prerequisites-alert"
-      data-id="verification-failed-alert"
-    >
-      <template #header>{{ $t('common.prerequisites.verificationFailedTitle') }}</template>
-      <p>{{ shellFailed ? $t('common.prerequisites.shellFailed') : $t('common.prerequisites.verificationError') }}</p>
-      <p style="margin-top: 10px;">{{ $t('common.prerequisites.verificationFailedHint') }}</p>
-    </n-alert>
-
-    <!-- Prerequisites Alert (only when verification succeeded but prerequisites missing) -->
-    <n-alert
-      v-if="!isLoading && canVerify && !prerequisitesOk && os !== 'unknown'"
+      v-if="!isLoading && !prerequisitesOk && os !== 'unknown'"
       :type="os === 'windows' ? 'warning' : 'error'"
       class="prerequisites-alert"
       data-id="prerequisites-alert"
@@ -193,8 +181,6 @@ export default {
     const os = ref('unknown')
     const prerequisitesOk = ref(true)
     const missingPrerequisites = ref([])
-    const canVerify = ref(true)
-    const shellFailed = ref(false)
 
     // Input elements for external tests
     const offlineInputCITests = ref(null);
@@ -222,8 +208,6 @@ export default {
         }
         prerequisitesOk.value = prerequisitesStatus.allOk
         missingPrerequisites.value = prerequisitesStatus.missing || []
-        canVerify.value = prerequisitesStatus.canVerify !== false
-        shellFailed.value = prerequisitesStatus.shellFailed || false
 
         loadingProgress.value = 60
 
@@ -257,8 +241,7 @@ export default {
     }
 
     const startEasyMode = async () => {
-      // Allow proceeding if: prerequisites OK, OR can't verify (user can skip), OR Windows (can auto-install)
-      if (!prerequisitesOk.value && canVerify.value && os.value !== 'windows') {
+      if (!prerequisitesOk.value && os.value !== 'windows') {
         message.warning(t('basicInstaller.prerequisites.warning'))
         return
       }
@@ -266,8 +249,7 @@ export default {
     }
 
     const startWizard = () => {
-      // Allow proceeding if: prerequisites OK, OR can't verify (user can skip), OR Windows (can auto-install)
-      if (!prerequisitesOk.value && canVerify.value && os.value !== 'windows') {
+      if (!prerequisitesOk.value && os.value !== 'windows') {
         message.warning(t('basicInstaller.prerequisites.warning'))
         return
       }
@@ -360,8 +342,6 @@ export default {
       os,
       prerequisitesOk,
       missingPrerequisites,
-      canVerify,
-      shellFailed,
       selectOfflineArchive,
       checkPrerequisites,
       installPrerequisites,
