@@ -6,14 +6,14 @@ use crate::cli::helpers::{
 use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
+use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use idf_im_lib::system_dependencies;
 use log::{debug, info};
 use rust_i18n::t;
 use idf_im_lib::utils::calculate_mirrors_latency;
 use idf_im_lib::tool_selection::{
-    fetch_tools_file, get_tools_for_selection, get_tools_json_url,
-    select_tools_interactive, select_tools_non_interactive,
+    ToolSelectionInfo, fetch_tools_file, get_optional_tools, get_required_tools, get_tools_for_selection, get_tools_json_url
 };
 use std::collections::HashMap;
 
@@ -564,106 +564,162 @@ pub fn select_features_advanced(
     }
 }
 
-/// Handles tool selection for all IDF versions in the wizard
-/// Should be called after feature selection
-pub fn wizard_select_tools(settings: &mut Settings) -> Result<(), String> {
-    let versions = match &settings.idf_versions {
-        Some(versions) if !versions.is_empty() => versions.clone(),
-        _ => {
-            log::warn!("No IDF versions specified, skipping tool selection");
-            return Ok(());
-        }
-    };
+/// Select tools interactively (CLI)
+pub fn select_tools_interactive(
+    tools: &[ToolSelectionInfo],
+    pre_selected: Option<&[String]>,
+) -> Result<Vec<String>, String> {
+    use dialoguer::{theme::ColorfulTheme, MultiSelect};
 
-    let non_interactive = settings.non_interactive.unwrap_or(false);
+    let optional_tools: Vec<&ToolSelectionInfo> = get_optional_tools(tools);
+    let required_tools: Vec<&ToolSelectionInfo> = get_required_tools(tools);
 
-    let mut tools_per_version: HashMap<String, Vec<String>> = HashMap::new();
+    if optional_tools.is_empty() && required_tools.is_empty() {
+        return Err("No tools available for selection".to_string());
+    }
 
-    for version in &versions {
-        // Check if tools are already set for this version
-        if let Some(existing) = settings.get_tools_for_version_if_set(version) {
-            log::info!("Using pre-configured tools for version {}: {:?}", version, existing);
-            tools_per_version.insert(version.clone(), existing);
-            continue;
-        }
+    // Always include required tools
+    let mut selected: Vec<String> = required_tools.iter().map(|t| t.name.clone()).collect();
 
-        // Fetch tools.json for this version
-        let tools_url = get_tools_json_url(
-            settings.repo_stub.as_deref(),
-            version,
-            settings.idf_mirror.as_deref(),
-        );
+    if optional_tools.is_empty() {
+        info!("No optional tools available. Using {} required tools.", selected.len());
+        return Ok(selected);
+    }
 
-        log::info!("Fetching tools for version {} from: {}", version, tools_url);
+    // Create display strings for optional tools
+    let items: Vec<String> = optional_tools
+        .iter()
+        .map(|t| {
+            format!(
+                "{} - {}",
+                t.name,
+                t.description.as_deref().unwrap_or("No description")
+            )
+        })
+        .collect();
 
-        let tools_file = match fetch_tools_file(&tools_url) {
-            Ok(file) => file,
-            Err(err) => {
-                log::warn!(
-                    "Failed to fetch tools.json for version {}: {}. Using default tools.",
-                    version,
-                    err
-                );
-                // Continue without custom tool selection
-                continue;
-            }
-        };
+    // Determine defaults based on pre_selected or default to none
+    let defaults: Vec<bool> = optional_tools
+        .iter()
+        .map(|t| {
+            pre_selected
+                .map(|ps| ps.contains(&t.name))
+                .unwrap_or(false)
+        })
+        .collect();
 
-        let available_tools = match get_tools_for_selection(
-            &tools_file,
-            settings.target.as_ref().map(|t| t.as_slice()),
-        ) {
-            Ok(tools) => tools,
-            Err(err) => {
-                log::warn!(
-                    "Failed to get tools for selection for version {}: {}",
-                    version,
-                    err
-                );
-                continue;
-            }
-        };
+    println!("\nRequired tools (will be installed automatically):");
+    for tool in &required_tools {
+        println!("  [*] {} - {}", tool.name, tool.description.as_deref().unwrap_or(""));
+    }
+    println!();
 
-        if available_tools.is_empty() {
-            log::info!("No tools available for selection for version {}", version);
-            continue;
-        }
+    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt("Select additional tools to install (Space to toggle, Enter to confirm)")
+        .items(&items)
+        .defaults(&defaults)
+        .interact()
+        .map_err(|e| format!("Selection failed: {}", e))?;
 
-        let selected_tools = if non_interactive {
-            // Non-interactive: use required tools only
-            log::info!(
-                "Non-interactive mode: selecting required tools only for version {}",
-                version
-            );
-            select_tools_non_interactive(&available_tools, false)
+    // Add selected optional tools
+    for idx in selections {
+        selected.push(optional_tools[idx].name.clone());
+    }
+
+    Ok(selected)
+}
+
+/// Select tools non-interactively (return required tools only, or all if specified)
+pub fn select_tools_non_interactive(
+    tools: &[ToolSelectionInfo],
+    include_optional: bool,
+) -> Vec<String> {
+    if include_optional {
+        tools.iter().map(|t| t.name.clone()).collect()
+    } else {
+        get_required_tools(tools).iter().map(|t| t.name.clone()).collect()
+    }
+}
+
+/// Select tools - checks for existing selection first, then falls back to interactive/non-interactive
+/// This mirrors the pattern used for feature selection
+pub fn select_tools(
+    tools_file: &ToolsFile,
+    non_interactive: bool,
+    include_optional: bool,
+    targets: Option<&[String]>,
+    existing_selection: Option<&[String]>,
+) -> Result<Vec<ToolSelectionInfo>, String> {
+    let available = get_tools_for_selection(tools_file, targets)
+        .map_err(|e| e.to_string())?;
+
+    if available.is_empty() {
+        return Err("No tools available for selection".to_string());
+    }
+
+    // If we have existing selection, convert tool names back to ToolSelectionInfo
+    if let Some(existing) = existing_selection {
+        let selected: Vec<ToolSelectionInfo> = available
+            .iter()
+            .filter(|t| existing.contains(&t.name) || t.install == "always")
+            .cloned()
+            .collect();
+        return Ok(selected);
+    }
+
+    // No existing selection - do interactive or non-interactive selection
+    if non_interactive {
+        // Non-interactive mode: return required tools, optionally include all
+        info!("Non-interactive mode: selecting {} tools by default",
+            if include_optional { "all" } else { "required" });
+        let selected: Vec<ToolSelectionInfo> = if include_optional {
+            available
         } else {
-            // Interactive: prompt user
-            println!("\n=== Tool Selection for ESP-IDF {} ===", version);
-
-            match select_tools_interactive(&available_tools, None) {
-                Ok(selected) => selected,
-                Err(err) => {
-                    log::error!("Tool selection failed for version {}: {}", version, err);
-                    // Fall back to required tools
-                    select_tools_non_interactive(&available_tools, false)
-                }
-            }
+            available.into_iter().filter(|t| t.install == "always").collect()
         };
-
-        log::info!(
-            "Selected {} tools for version {}: {:?}",
-            selected_tools.len(),
-            version,
-            selected_tools
-        );
-
-        tools_per_version.insert(version.clone(), selected_tools);
+        Ok(selected)
+    } else {
+        // Interactive mode: prompt user
+        let selected_names = select_tools_interactive(&available, None)?;
+        let selected: Vec<ToolSelectionInfo> = available
+            .into_iter()
+            .filter(|t| selected_names.contains(&t.name))
+            .collect();
+        Ok(selected)
     }
+}
 
-    // Save to settings
-    if !tools_per_version.is_empty() {
-        settings.idf_tools_per_version = Some(tools_per_version);
+
+#[cfg(test)]
+mod tests {
+use super::*;
+
+  fn create_test_tool(name: &str, install: &str) -> ToolSelectionInfo {
+    ToolSelectionInfo {
+      name: name.to_string(),
+      description: Some(format!("Description for {}", name)),
+      install: install.to_string(),
+      editable: install == "on_request",
+      supported_targets: Some(vec!["all".to_string()]),
     }
+  }
 
-    Ok(())
+  #[test]
+  fn test_select_tools_non_interactive() {
+    let tools = vec![
+        create_test_tool("required1", "always"),
+        create_test_tool("optional1", "on_request"),
+        create_test_tool("required2", "always"),
+    ];
+
+    // Without optional
+    let selected = select_tools_non_interactive(&tools, false);
+    assert_eq!(selected.len(), 2);
+    assert!(selected.contains(&"required1".to_string()));
+    assert!(selected.contains(&"required2".to_string()));
+
+    // With optional
+    let selected = select_tools_non_interactive(&tools, true);
+    assert_eq!(selected.len(), 3);
+  }
 }

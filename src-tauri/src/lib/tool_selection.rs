@@ -144,82 +144,7 @@ pub fn get_optional_tools(tools: &[ToolSelectionInfo]) -> Vec<&ToolSelectionInfo
     tools.iter().filter(|t| t.install == "on_request").collect()
 }
 
-/// Select tools interactively (CLI)
-pub fn select_tools_interactive(
-    tools: &[ToolSelectionInfo],
-    pre_selected: Option<&[String]>,
-) -> Result<Vec<String>, String> {
-    use dialoguer::{theme::ColorfulTheme, MultiSelect};
 
-    let optional_tools: Vec<&ToolSelectionInfo> = get_optional_tools(tools);
-    let required_tools: Vec<&ToolSelectionInfo> = get_required_tools(tools);
-
-    if optional_tools.is_empty() && required_tools.is_empty() {
-        return Err("No tools available for selection".to_string());
-    }
-
-    // Always include required tools
-    let mut selected: Vec<String> = required_tools.iter().map(|t| t.name.clone()).collect();
-
-    if optional_tools.is_empty() {
-        info!("No optional tools available. Using {} required tools.", selected.len());
-        return Ok(selected);
-    }
-
-    // Create display strings for optional tools
-    let items: Vec<String> = optional_tools
-        .iter()
-        .map(|t| {
-            format!(
-                "{} - {}",
-                t.name,
-                t.description.as_deref().unwrap_or("No description")
-            )
-        })
-        .collect();
-
-    // Determine defaults based on pre_selected or default to none
-    let defaults: Vec<bool> = optional_tools
-        .iter()
-        .map(|t| {
-            pre_selected
-                .map(|ps| ps.contains(&t.name))
-                .unwrap_or(false)
-        })
-        .collect();
-
-    println!("\nRequired tools (will be installed automatically):");
-    for tool in &required_tools {
-        println!("  [*] {} - {}", tool.name, tool.description.as_deref().unwrap_or(""));
-    }
-    println!();
-
-    let selections = MultiSelect::with_theme(&ColorfulTheme::default())
-        .with_prompt("Select additional tools to install (Space to toggle, Enter to confirm)")
-        .items(&items)
-        .defaults(&defaults)
-        .interact()
-        .map_err(|e| format!("Selection failed: {}", e))?;
-
-    // Add selected optional tools
-    for idx in selections {
-        selected.push(optional_tools[idx].name.clone());
-    }
-
-    Ok(selected)
-}
-
-/// Select tools non-interactively (return required tools only, or all if specified)
-pub fn select_tools_non_interactive(
-    tools: &[ToolSelectionInfo],
-    include_optional: bool,
-) -> Vec<String> {
-    if include_optional {
-        tools.iter().map(|t| t.name.clone()).collect()
-    } else {
-        get_required_tools(tools).iter().map(|t| t.name.clone()).collect()
-    }
-}
 
 /// Validate selected tools against available tools
 pub fn validate_tool_selection(
@@ -274,53 +199,7 @@ pub fn get_tools_for_version(
     Ok(get_required_tools(&available).iter().map(|t| t.name.clone()).collect())
 }
 
-/// Select tools - checks for existing selection first, then falls back to interactive/non-interactive
-/// This mirrors the pattern used for feature selection
-pub fn select_tools(
-    tools_file: &ToolsFile,
-    non_interactive: bool,
-    include_optional: bool,
-    targets: Option<&[String]>,
-    existing_selection: Option<&[String]>,
-) -> Result<Vec<ToolSelectionInfo>, String> {
-    let available = get_tools_for_selection(tools_file, targets)
-        .map_err(|e| e.to_string())?;
 
-    if available.is_empty() {
-        return Err("No tools available for selection".to_string());
-    }
-
-    // If we have existing selection, convert tool names back to ToolSelectionInfo
-    if let Some(existing) = existing_selection {
-        let selected: Vec<ToolSelectionInfo> = available
-            .iter()
-            .filter(|t| existing.contains(&t.name) || t.install == "always")
-            .cloned()
-            .collect();
-        return Ok(selected);
-    }
-
-    // No existing selection - do interactive or non-interactive selection
-    if non_interactive {
-        // Non-interactive mode: return required tools, optionally include all
-        info!("Non-interactive mode: selecting {} tools by default",
-            if include_optional { "all" } else { "required" });
-        let selected: Vec<ToolSelectionInfo> = if include_optional {
-            available
-        } else {
-            available.into_iter().filter(|t| t.install == "always").collect()
-        };
-        Ok(selected)
-    } else {
-        // Interactive mode: prompt user
-        let selected_names = select_tools_interactive(&available, None)?;
-        let selected: Vec<ToolSelectionInfo> = available
-            .into_iter()
-            .filter(|t| selected_names.contains(&t.name))
-            .collect();
-        Ok(selected)
-    }
-}
 
 /// Get tool names from ToolSelectionInfo vector
 pub fn get_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
@@ -369,24 +248,7 @@ mod tests {
         assert!(optional.iter().any(|t| t.name == "tool3"));
     }
 
-    #[test]
-    fn test_select_tools_non_interactive() {
-        let tools = vec![
-            create_test_tool("required1", "always"),
-            create_test_tool("optional1", "on_request"),
-            create_test_tool("required2", "always"),
-        ];
 
-        // Without optional
-        let selected = select_tools_non_interactive(&tools, false);
-        assert_eq!(selected.len(), 2);
-        assert!(selected.contains(&"required1".to_string()));
-        assert!(selected.contains(&"required2".to_string()));
-
-        // With optional
-        let selected = select_tools_non_interactive(&tools, true);
-        assert_eq!(selected.len(), 3);
-    }
 
     #[test]
     fn test_validate_tool_selection() {

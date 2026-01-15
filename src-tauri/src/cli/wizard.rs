@@ -12,7 +12,6 @@ use idf_im_lib::settings::Settings;
 use idf_im_lib::tool_selection::fetch_tools_file;
 use idf_im_lib::tool_selection::get_tool_names;
 use idf_im_lib::tool_selection::get_tools_json_url;
-use idf_im_lib::tool_selection::select_tools;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::{ensure_path, DownloadProgress};
