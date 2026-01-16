@@ -2,9 +2,9 @@ use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{I
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  add_path_to_path, ensure_path, idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata}, idf_tools::{self, get_tools_export_paths}, settings::Settings, DownloadProgress
+  DownloadProgress, add_path_to_path, ensure_path, idf_features::{FeatureInfo, RequirementsMetadata, get_requirements_json_url}, idf_tools, settings::Settings, tool_selection::{VersionToolsInfo, fetch_tools_file_async, get_tools_for_selection}
 };
-use log::{ error, info, warn};
+use log::{ debug, error, info, warn};
 use serde::{Deserialize, Serialize};
 use std::{
   collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex}
@@ -407,7 +407,7 @@ pub async fn setup_tools(
         features_for_version
     );
     let pypi_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::PyPI, settings, is_simple_installation).await;
-    
+
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
         &paths,
@@ -558,4 +558,113 @@ pub fn get_selected_features_per_version(
     let settings = get_settings_non_blocking(&app_handle)?;
 
     Ok(settings.idf_features_per_version.clone().unwrap_or_default())
+}
+
+/// Gets the list of available tools for all selected IDF versions
+#[tauri::command]
+pub async fn get_tools_list_all_versions(
+    app_handle: AppHandle,
+) -> Result<Vec<VersionToolsInfo>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+
+    let versions = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.clone(),
+        _ => {
+            let msg = t!("wizard.tools.no_idf_version_specified").to_string();
+            warn!("{}", msg);
+            return Err(msg);
+        }
+    };
+
+    let targets = settings.target.clone();
+
+    let mut result = Vec::new();
+
+    for version in versions {
+        let tools_url = idf_im_lib::tool_selection::get_tools_json_url(
+            settings.repo_stub.clone().as_deref(),
+            &version,
+            settings.idf_mirror.clone().as_deref()
+        );
+
+        info!("Fetching tools for version {} from: {}", version, tools_url);
+
+        let mut tools_file = match fetch_tools_file_async(&tools_url).await {
+            Ok(file) => file,
+            Err(err) => {
+                warn!(
+                    "{}: {} for version {}. {}",
+                    t!("wizard.tools.read_failure"),
+                    err,
+                    version,
+                    t!("wizard.tools.selection_unavailable")
+                );
+                // Continue with other versions even if one fails
+                continue;
+            }
+        };
+
+        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
+        /// This is needed because the IDEs expect clang to be always installed                     ///
+        ///////////////////////////////////////////////////////////////////////////////////////////////
+        for t in tools_file.tools.iter_mut() {
+          if t.name.contains("clang") {
+            t.install = "always".to_string();
+            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+          }
+        }
+
+        let tools = match get_tools_for_selection(
+            &tools_file,
+            targets.as_ref().map(|t| t.as_slice()),
+        ) {
+            Ok(tools) => tools,
+            Err(err) => {
+                warn!("Failed to get tools for version {}: {}", version, err);
+                continue;
+            }
+        };
+
+        result.push(VersionToolsInfo {
+            version: version.clone(),
+            tools,
+        });
+    }
+
+    if result.is_empty() {
+        return Err(t!("wizard.tools.no_tools_available").to_string());
+    }
+
+    Ok(result)
+}
+
+/// Sets the selected tools for each version
+/// tools_map: HashMap where key is version string, value is list of selected tool names
+#[tauri::command]
+pub fn set_selected_tools_per_version(
+    app_handle: AppHandle,
+    tools_map: HashMap<String, Vec<String>>,
+) -> Result<(), String> {
+    info!("Setting selected tools per version: {:?}", tools_map);
+
+    update_settings(&app_handle, |settings| {
+        settings.idf_tools_per_version = Some(tools_map);
+    })?;
+
+    send_message(
+        &app_handle,
+        t!("gui.settings.tools_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}
+
+/// Gets the previously selected tools per version (for restoring state)
+#[tauri::command]
+pub fn get_selected_tools_per_version(
+    app_handle: AppHandle,
+) -> Result<HashMap<String, Vec<String>>, String> {
+    let settings = get_settings_non_blocking(&app_handle)?;
+
+    Ok(settings.idf_tools_per_version.clone().unwrap_or_default())
 }

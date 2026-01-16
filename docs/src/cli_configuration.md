@@ -129,6 +129,59 @@ The installer determines which features to use for each version in the following
 3. **Interactive selection**: In wizard mode, you'll be prompted to select features for each version
 4. **Required only**: In non-interactive mode without any feature configuration, only required features are installed
 
+## IDF Tools Configuration
+
+Similar to features, ESP-IDF supports configuring which development tools to install. You can configure these tools in several ways:
+
+### Global Tools (All Versions)
+
+Use the `--idf-tools` flag or `idf_tools` config option to apply the same tools to all ESP-IDF versions being installed:
+
+```bash
+# Via command line
+eim install -i v5.3.2,v5.4 --idf-tools=cmake,openocd
+
+# Via configuration file
+idf_tools = ["cmake", "openocd", "idf-exe"]
+```
+
+### Per-Version Tools
+
+When installing multiple ESP-IDF versions, you may want different tools for each version. Use the `idf_tools_per_version` configuration option in your TOML file:
+
+```toml
+idf_versions = ["v5.3.2", "v5.4", "v5.5"]
+
+# Per-version tool selection
+[idf_tools_per_version]
+"v5.3.2" = ["cmake", "openocd"]
+"v5.4" = ["cmake", "openocd", "idf-exe"]
+"v5.5" = ["cmake", "openocd", "idf-exe", "esp-venv"]
+```
+
+### Tool Selection Priority
+
+The installer determines which tools to use for each version in the following order:
+
+1. **Per-version tools** (`idf_tools_per_version`): If specified for the version, these are used
+2. **Global tools** (`idf_tools` or `--idf-tools`): Applied to all versions without per-version settings
+3. **Interactive selection**: In wizard mode, you'll be prompted to select tools for each version
+4. **Required only**: In non-interactive mode without any tool configuration, only required tools are installed
+
+### Interactive Tool Selection
+
+When using the wizard command, you'll be prompted to select tools for each ESP-IDF version:
+
+```bash
+eim wizard -i v5.3.2,v5.4
+```
+
+The wizard will:
+- Fetch available tools for each version and your platform
+- Display required tools (pre-selected and cannot be deselected)
+- Allow you to select/deselect optional tools independently for each version
+- Save your selections to the configuration if you choose to export it
+
 ### Interactive Feature Selection
 
 When using the wizard command, you'll be prompted to select features for each ESP-IDF version:
@@ -142,6 +195,11 @@ The wizard will:
 - Show which features are required vs optional
 - Allow you to select/deselect optional features independently for each version
 - Save your selections to the configuration if you choose to export it
+
+Load a configuration file:
+```bash
+eim install --config path/to/config.toml
+```
 
 ## Headless Configuration
 
