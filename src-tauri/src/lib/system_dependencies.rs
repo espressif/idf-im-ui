@@ -505,25 +505,6 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
     Ok(unsatisfied)
 }
 
-/// Checks the system for the required tools and returns a list of unsatisfied tools.
-///
-/// This function determines the operating system and package manager, then checks if each required tool is installed.
-/// If a tool is not found, it is added to the `unsatisfied` vector and returned.
-/// The prerequisites are met when empty vector is returned.
-///
-/// # Returns
-///
-/// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied tools.
-/// * `Err(String)` - If an error occurs, returns an error message.
-// pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
-//     let mut list_of_required_tools = get_prequisites();
-//     list_of_required_tools = [list_of_required_tools, get_general_prerequisites_based_on_package_manager()].concat();
-//     debug!("Checking for prerequisites...");
-//     debug!("will be checking for : {:?}", list_of_required_tools);
-
-//     check_tools_installed(list_of_required_tools)
-// }
-
 /// Checks the system for the required tools and returns a detailed result.
 ///
 /// This function determines the operating system and package manager, then checks if each required tool is installed.
