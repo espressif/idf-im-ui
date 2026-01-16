@@ -4,7 +4,7 @@ Below are the minimum requirements for running the ESP-IDF. The Installation Man
 
 ## Python Version
 
-ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, and **3.13**. 
+ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, and **3.13**.
 
 > **Important**
 > Python 3.14 and later are **not supported**. Please ensure you have a compatible Python version installed.
@@ -86,10 +86,10 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libusb-1_0-0`: Runtime library for USB device access.
 - `libffi-devel`: Development headers for Foreign Function Interface.
 - `libopenssl-devel`: Development headers for OpenSSL.
-- `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+- `libgcrypt20`: Runtime library for cryptographic functions (QEMU dependency).
 - `glib2`: Runtime library for GLib (QEMU dependency).
 - `pixman-1`: Runtime library for pixman (QEMU dependency).
-- `libsdl2-2_0_0`: Runtime library for SDL2 (QEMU dependency).
+- `libSDL2-2_0-0`: Runtime library for SDL2 (QEMU dependency).
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
 > **Note**
