@@ -789,7 +789,8 @@
   "featuresSelect": {
     "title": "选择 ESP-IDF 功能",
     "description": "选择您希望随 ESP-IDF 一起安装的功能和组件",
-    "continueButton": "继续到安装路径",
+    "continueButton": "继续选择工具",
+    "summaryMultiVersion":"{versions} 个版本: {details}",
     "noDescription": "无可用描述",
     "noFeatures": "无可用功能。请先选择一个 ESP-IDF 版本。",
     "sections": {

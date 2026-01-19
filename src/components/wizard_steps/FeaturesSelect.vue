@@ -101,6 +101,7 @@
                       >
                         <div class="feature-checkbox-wrapper">
                           <n-checkbox
+                            @click="toggleFeature(versionData.version, feature.name)"
                             :checked="isFeatureSelected(versionData.version, feature.name)"
                             :data-id="`feature-checkbox-${versionData.version}-${feature.name}`"
                             @update:checked="() => toggleFeature(versionData.version, feature.name)"

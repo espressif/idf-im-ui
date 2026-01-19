@@ -791,7 +791,8 @@
   "featuresSelect": {
     "title": "Select ESP-IDF Features",
     "description": "Choose which features and packages you want to install with ESP-IDF",
-    "continueButton": "Continue to Installation Path",
+    "continueButton": "Continue to Tools selection",
+    "summaryMultiVersion":"{versions} version(s): {details}",
     "noDescription": "No description available",
     "noFeatures": "No features available. Please select an ESP-IDF version first.",
     "sections": {
