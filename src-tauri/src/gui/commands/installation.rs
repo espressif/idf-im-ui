@@ -23,6 +23,7 @@ use log::{debug, error, info, warn};
 use serde_json::json;
 
 use idf_im_lib::settings::Settings;
+use idf_im_lib::system_dependencies;
 use crate::gui::{
   app_state::{get_locked_settings, get_settings_non_blocking, set_installation_status, set_is_simple_installation},
   commands,
@@ -32,7 +33,7 @@ use crate::gui::{
   },
 };
 
-use super::{prequisites::{check_prequisites, install_prerequisites, python_install, python_sanity_check}, settings};
+use super::{prequisites::{install_prerequisites, python_install, python_sanity_check}, settings};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {
@@ -869,8 +870,41 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         version: None,
     });
 
-    // Check prerequisites
-    let mut prerequisites = check_prequisites(app_handle.clone());
+    // Check prerequisites using the detailed result
+    let prereq_result = match system_dependencies::check_prerequisites_with_result() {
+        Ok(result) => result,
+        Err(err) => {
+            // Error during checking (e.g., unsupported package manager)
+            let error_msg = rust_i18n::t!("gui.system_dependencies.verification_error", error = err.clone()).to_string();
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: rust_i18n::t!("gui.simple_setup.prerequisites_check_failed").to_string(),
+                detail: Some(error_msg.clone()),
+                version: None,
+            });
+            return Err(error_msg);
+        }
+    };
+
+    // Handle verification failures (shell failed or can't verify)
+    if prereq_result.shell_failed || !prereq_result.can_verify {
+        let error_msg = if prereq_result.shell_failed {
+            rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
+        } else {
+            rust_i18n::t!("gui.system_dependencies.verification_error", error = "unknown").to_string()
+        };
+        emit_installation_event(&app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: rust_i18n::t!("gui.simple_setup.prerequisites_check_failed").to_string(),
+            detail: Some(error_msg.clone()),
+            version: None,
+        });
+        return Err(error_msg);
+    }
+
+    let mut prerequisites: Vec<String> = prereq_result.missing.into_iter().map(|p| p.to_string()).collect();
     let os = std::env::consts::OS.to_lowercase();
 
     // Install prerequisites on Windows if needed
@@ -884,7 +918,10 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         });
 
         if !install_prerequisites(app_handle.clone()) {
-            prerequisites = check_prequisites(app_handle.clone());
+            // Re-check after failed install attempt
+            if let Ok(recheck) = system_dependencies::check_prerequisites_with_result() {
+                prerequisites = recheck.missing.into_iter().map(|p| p.to_string()).collect();
+            }
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
@@ -895,7 +932,10 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             return Err(rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string());
         }
 
-        prerequisites = check_prequisites(app_handle.clone());
+        // Re-check after successful install
+        if let Ok(recheck) = system_dependencies::check_prerequisites_with_result() {
+            prerequisites = recheck.missing.into_iter().map(|p| p.to_string()).collect();
+        }
     }
 
     // Check if any prerequisites are still missing
@@ -1540,7 +1580,43 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: None,
             });
 
-            let prereq = check_prequisites(app_handle.clone());
+            // Use detailed prerequisites check
+            let prereq_result = match system_dependencies::check_prerequisites_with_result() {
+                Ok(result) => result,
+                Err(err) => {
+                    let error_msg = rust_i18n::t!("gui.system_dependencies.verification_error", error = err.clone()).to_string();
+                    emit_installation_event(&app_handle, InstallationProgress {
+                        stage: InstallationStage::Error,
+                        percentage: 0,
+                        message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
+                        detail: Some(error_msg.clone()),
+                        version: None,
+                    });
+                    set_installation_status(&app_handle, false)?;
+                    return Err(error_msg);
+                }
+            };
+
+            // Handle verification failures
+            if prereq_result.shell_failed || !prereq_result.can_verify {
+                let error_msg = if prereq_result.shell_failed {
+                    rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
+                } else {
+                    rust_i18n::t!("gui.system_dependencies.verification_error", error = "unknown").to_string()
+                };
+                emit_installation_event(&app_handle, InstallationProgress {
+                    stage: InstallationStage::Error,
+                    percentage: 0,
+                    message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
+                    detail: Some(error_msg.clone()),
+                    version: None,
+                });
+                set_installation_status(&app_handle, false)?;
+                return Err(error_msg);
+            }
+
+            // Check for missing prerequisites
+            let prereq: Vec<String> = prereq_result.missing.into_iter().map(|p| p.to_string()).collect();
             if !prereq.is_empty() {
                 let error_msg = rust_i18n::t!("gui.offline.missing_prerequisites", items = prereq.join(", ")).to_string();
                 emit_installation_event(&app_handle, InstallationProgress {
