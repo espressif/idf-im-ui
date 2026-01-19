@@ -825,14 +825,23 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> 
                 .replace("Python ", "");
             match Version::parse(&version_str) {
                 Ok(version) => {
-                    let req = VersionReq::parse(">=3.10.0, <3.14.0").unwrap();
+                    let req = match std::env::consts::OS {
+                        "windows" => VersionReq::parse(">=3.10.0, <3.14.0").unwrap(),
+                        _ => VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
+                    };
                     if req.matches(&version) {
                         outputs.push(Ok(format!("Python version {} is supported", version)));
                     } else {
-                        outputs.push(Err(format!(
+                      match std::env::consts::OS {
+                        "windows" => outputs.push(Err(format!(
                             "Python version {} is not supported. Required: >=3.10.0, <3.14.0",
                             version
-                        )));
+                        ))),
+                        _ => outputs.push(Err(format!(
+                            "Python version {} is not supported. Required: >=3.10.0, <3.15.0",
+                            version
+                        ))),
+                      }
                     }
                 }
                 Err(_) => outputs.push(Err("Failed to parse Python version".to_string())),
