@@ -9,7 +9,6 @@
         :checked="isRequired || isSelected"
         :disabled="isRequired"
         :data-id="version ? `tool-checkbox-${version}-${tool.name}` : `tool-checkbox-${tool.name}`"
-        @update:checked="handleClick"
       />
     </div>
     <div class="tool-info">

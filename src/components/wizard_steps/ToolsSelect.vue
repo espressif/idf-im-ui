@@ -212,7 +212,7 @@ export default {
     },
 
     async processChoices() {
-      console.log("Selected tools per version:", this.selectedToolsMap);
+      console.log("Selected tools per version:", JSON.stringify(this.selectedToolsMap));
 
       if (!this.loading) {
         try {
