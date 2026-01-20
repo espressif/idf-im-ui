@@ -703,6 +703,10 @@
         "title": "System Check Failed",
         "message": "Failed to verify system requirements."
       },
+      "versions": {
+        "title": "Version Fetch Failed",
+        "message": "Unable to fetch available ESP-IDF versions."
+      },
       "start": {
         "title": "Failed to Start Installation"
       },

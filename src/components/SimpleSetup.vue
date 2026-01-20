@@ -243,8 +243,10 @@ export default {
         console.log('Default installation path:', installPath.value)
 
         const versions = await invoke('get_idf_versions', { includeUnstable: false })
-        selectedVersion.value = versions?.[0]?.name || 'v5.5.1'
-        console.log('Selected version:', selectedVersion.value)
+        if (!versions || versions.length === 0 || !versions[0]?.name) {
+          throw new Error(t('simpleSetup.error.versions.message'))
+        }
+        selectedVersion.value = versions[0].name
 
         const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
           path: installPath.value,
