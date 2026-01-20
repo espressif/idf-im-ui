@@ -670,10 +670,10 @@ pub fn select_tools(
     // No existing selection - do interactive or non-interactive selection
     if non_interactive {
         // Non-interactive mode: return required tools, optionally include all
-        info!("Non-interactive mode: selecting {} tools by default",
+        info!("Non-interactive mode: selecting {} tools by default (QEMU excluded)",
             if include_optional { "all" } else { "required" });
         let selected: Vec<ToolSelectionInfo> = if include_optional {
-            available
+            available.into_iter().filter(|t| !t.name.contains("qemu")).collect()
         } else {
             available.into_iter().filter(|t| t.install == "always").collect()
         };

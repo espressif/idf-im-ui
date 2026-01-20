@@ -206,6 +206,11 @@ pub fn get_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
     tools.iter().map(|t| t.name.clone()).collect()
 }
 
+/// Get required tool names from ToolSelectionInfo vector
+pub fn get_required_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
+    tools.iter().filter(|t| t.install == "always").map(|t| t.name.clone()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

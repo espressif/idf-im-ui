@@ -10,6 +10,7 @@ use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::tool_selection::fetch_tools_file;
+use idf_im_lib::tool_selection::get_required_tool_names;
 use idf_im_lib::tool_selection::get_tool_names;
 use idf_im_lib::tool_selection::get_tools_json_url;
 use idf_im_lib::utils::copy_dir_contents;
@@ -538,6 +539,29 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 .collect::<Vec<String>>()
                 .join(", ")
         );
+        if selected_tools.iter().any(|t| t.name.contains("qemu")) {
+          let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
+            match qemu_prereqs {
+            Ok(prereqs) if !prereqs.is_empty() => {
+                error!(
+                    "{}: {:?}",
+                    t!("wizard.qemu.prerequisites.missing"),
+                    prereqs
+                );
+                 panic!("wizard.qemu.prerequisites.unmet").to_string();
+            }
+            Err(err) => {
+                error!(
+                    "{}: {}",
+                    t!("wizard.qemu.prerequisites.check_error"),
+                    err
+                );
+                panic!("wizard.qemu.prerequisites.unmet").to_string();
+            }
+            Ok(_) => { /* All good, continue. */ }
+          }
+        }
+
 
         // Save tools to per-version map
         if !selected_tools.is_empty() {
@@ -551,7 +575,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 );
             }
         }
-
         if !using_existing_idf {
             // download idf
             let download_config = DownloadConfig {
@@ -627,7 +650,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let mut tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
         if let Some(ref per_version) = config.idf_tools_per_version {
+
             if let Some(selected_tool_names) = per_version.get(&idf_version) {
+              info!("{}: {}",
+                  t!("wizard.tools.filtering.selected_tools"),
+                  selected_tool_names.join(", ")
+                );
                 tools.tools = tools.tools
                     .into_iter()
                     .filter(|tool| {
@@ -644,6 +672,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     idf_version
                 );
             }
+        } else {
+          tools.tools = tools.tools
+            .into_iter()
+            .filter(|tool| {
+                tool.install == "always" ||
+                // Include user-selected optional tools
+                selected_tools.iter().any(|t| t.name == tool.name)
+            })
+            .collect();
         }
 
         if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
@@ -666,8 +703,18 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
             }
             Ok(_) => { /* All good, continue. */ }
+          }
         }
-        }
+        debug!(
+            "{}: {}",
+            t!("wizard.tools.to_install"),
+            tools
+                .tools
+                .iter()
+                .map(|t| t.name.clone())
+                .collect::<Vec<String>>()
+                .join(", ")
+        );
 
         let installed_tools_list = match download_and_extract_tools(
             &config,

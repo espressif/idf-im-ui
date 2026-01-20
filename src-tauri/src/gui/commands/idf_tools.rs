@@ -99,6 +99,7 @@ pub async fn setup_tools(
     offline_archive_dir: Option<&Path>,
 ) -> Result<Vec<String>> {
     info!("Setting up tools...");
+
     let is_simple_installation = crate::gui::app_state::is_simple_installation(&app_handle);
 
     let version_path = idf_path
@@ -120,7 +121,7 @@ pub async fn setup_tools(
         .map_err(|e| anyhow!("Failed to validate tools.json: {}", e))?;
 
     // Parse tools.json and get list of tools to download
-    let tools = idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
+    let mut tools = idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
         .map_err(|e| {
             emit_log_message(
                 app_handle,
@@ -129,6 +130,32 @@ pub async fn setup_tools(
             );
             anyhow!(t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string())
         })?;
+    if let Some(ref per_version) = settings.idf_tools_per_version {
+      if let Some(selected_tool_names) = per_version.get(idf_version) {
+        tools.tools = tools.tools
+          .into_iter()
+          .filter(|tool| {
+            // Always include "always" install tools
+            tool.install == "always" ||
+            // Include user-selected optional tools
+            selected_tool_names.contains(&tool.name)
+          })
+          .collect();
+
+        info!(
+          "Filtered to {} tools based on user selection for {}",
+          tools.tools.len(),
+          idf_version
+        );
+      }
+    } else {
+      tools.tools = tools.tools
+        .into_iter()
+        .filter(|tool| {
+            tool.install == "always"
+        })
+        .collect();
+    }
 
     if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
         let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();

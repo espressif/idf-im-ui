@@ -147,19 +147,12 @@ export default {
               if (this.selectedToolsMap[version] !== undefined) {
                 const required = this.getRequiredTools(version).map(t => t.name);
                 const merged = [...new Set([...required, ...tools])];
-                this.selectedToolsMap[version] = merged;
+                // this.selectedToolsMap[version] = merged;
               }
-            }
-          } else {
-            for (const vt of versionTools) {
-              this.selectAllOptional(vt.version);
             }
           }
         } catch (err) {
           console.log("No previously saved tools per version");
-          for (const vt of versionTools) {
-            this.selectAllOptional(vt.version);
-          }
         }
 
         this.loading = false;
