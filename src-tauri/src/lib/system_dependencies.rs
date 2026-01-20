@@ -79,9 +79,10 @@ fn determine_package_manager() -> Option<&'static str> {
 ///
 /// # Returns
 ///
-/// * `true` - If shell execution works correctly
-/// * `false` - If shell execution fails or the OS is unsupported
-pub fn verify_shell_execution() -> bool {
+/// * `Some(true)` - If shell execution works correctly
+/// * `Some(false)` - If shell execution fails
+/// * `None` - If the OS is unsupported
+pub fn verify_shell_execution() -> Option<bool> {
     let result = match std::env::consts::OS {
         "linux" => {
             command_executor::execute_command("sh", &["-c", "echo test"])
@@ -94,7 +95,7 @@ pub fn verify_shell_execution() -> bool {
         }
         _ => {
             debug!("Unsupported OS for shell verification: {}", std::env::consts::OS);
-            return false;
+            return None;
         }
     };
 
@@ -102,15 +103,15 @@ pub fn verify_shell_execution() -> bool {
         Ok(output) => {
             if output.status.success() {
                 debug!("Shell execution verification succeeded");
-                true
+                Some(true)
             } else {
                 debug!("Shell execution verification failed with non-zero exit code");
-                false
+                Some(false)
             }
         }
         Err(e) => {
             debug!("Shell execution verification failed with error: {:?}", e);
-            false
+            Some(false)
         }
     }
 }
@@ -533,8 +534,7 @@ pub fn check_prerequisites_with_result() -> Result<PrerequisitesCheckResult, Str
         Err(error_msg) => {
             debug!("Prerequisites check encountered an error: {}", error_msg);
             
-            let os_supported = matches!(std::env::consts::OS, "linux" | "macos" | "windows");
-            if os_supported && !verify_shell_execution() {
+            if verify_shell_execution() == Some(false) {
                 debug!("Shell execution verification also failed");
                 Ok(PrerequisitesCheckResult::new(vec![], false, true))
             } else {
