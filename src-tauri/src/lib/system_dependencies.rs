@@ -532,13 +532,12 @@ pub fn check_prerequisites_with_result() -> Result<PrerequisitesCheckResult, Str
         }
         Err(error_msg) => {
             debug!("Prerequisites check encountered an error: {}", error_msg);
-            let shell_failed = !verify_shell_execution();
-            // Verify if shell execution works
-            if shell_failed {
+            
+            let os_supported = matches!(std::env::consts::OS, "linux" | "macos" | "windows");
+            if os_supported && !verify_shell_execution() {
                 debug!("Shell execution verification also failed");
                 Ok(PrerequisitesCheckResult::new(vec![], false, true))
             } else {
-                // Shell works but we had an error - return the original error
                 Err(error_msg)
             }
         }
