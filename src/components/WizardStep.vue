@@ -13,8 +13,8 @@
           <div v-for="(step, index) in steps" :key="index" class="step-item" :class="{
             'active': currentStep === index + 1,
             'completed': currentStep > index + 1,
-            'disabled': currentStep === 8 || currentStep === 9,
-            'clickable': currentStep > index + 1 && currentStep < 8
+            'disabled': currentStep === totalSteps-1 || currentStep === totalSteps,
+            'clickable': currentStep > index + 1 && currentStep < totalSteps
           }" @click="handleStepClick(index + 1)" :data-id="`step-item-${index + 1}`">
             <div class="step-number" :data-id="`step-number-${index + 1}`">
               <template v-if="currentStep > index + 1">
@@ -140,9 +140,9 @@ export default {
     handleStepClick(stepNumber) {
       // Only allow navigation if:
       // 1. The step has been completed (currentStep > stepNumber)
-      // 2. We're not in the installation or completion steps (currentStep < 8)
+      // 2. We're not in the installation or completion steps (currentStep < totalSteps - 1)
       // 3. We're not trying to navigate to a step after our current position
-      if (this.currentStep > stepNumber && this.currentStep < 8) {
+      if (this.currentStep > stepNumber && this.currentStep < this.totalSteps - 1) {
         this.store.goToStep(stepNumber);
       }
     },
