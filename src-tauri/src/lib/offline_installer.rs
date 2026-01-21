@@ -584,6 +584,21 @@ pub fn copy_idf_from_offline_archive(
   }
 }
 
+pub fn copy_components_from_offline_archive(
+    archive_dir: &TempDir,
+    target_dir: &Path,
+) -> Result<(), String> {
+    match copy_dir_contents(&archive_dir.path().join("components"), target_dir) {
+        Ok(_) => {
+            info!("Successfully copied components from offline archive to: {}", target_dir.display());
+            Ok(())
+        }
+        Err(err) => {
+            Err(format!("Failed to copy components from offline archive: {}", err))
+        }
+    }
+}
+
 pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {
     debug!("Using offline archive: {:?}", config.use_local_archive);
     if !config.use_local_archive.as_ref().unwrap().exists() {
