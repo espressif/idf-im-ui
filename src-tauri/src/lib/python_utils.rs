@@ -786,9 +786,9 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
     match output {
         Ok(out) => {
             if out.status.success() {
-                Ok(std::str::from_utf8(&out.stdout).unwrap().to_string())
+                Ok(String::from_utf8_lossy(&out.stdout).to_string())
             } else {
-                Err(std::str::from_utf8(&out.stderr).unwrap().to_string())
+                Err(String::from_utf8_lossy(&out.stderr).to_string())
             }
         }
         Err(e) => Err(e.to_string()),
