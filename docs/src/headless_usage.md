@@ -43,6 +43,21 @@ For reproducible installations, use a configuration file:
 eim install --config path/to/config.toml
 ```
 
+Configuration files support tool selection in addition to other settings:
+
+```toml
+# Example configuration with tool selection
+idf_versions = ["v5.3.2", "v5.4"]
+
+# Global tools for all versions
+idf_tools = ["cmake", "openocd"]
+
+# Or per-version tool selection
+[idf_tools_per_version]
+"v5.3.2" = ["cmake", "openocd"]
+"v5.4" = ["cmake", "openocd", "idf-exe"]
+```
+
 ### Managing Installations
 
 You can also use other commands:

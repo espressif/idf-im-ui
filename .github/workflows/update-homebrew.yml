@@ -119,13 +119,6 @@ jobs:
               end
             end
 
-            # Runtime dependencies for QEMU (used by ESP-IDF for emulation)
-            depends_on "libgcrypt"
-            depends_on "glib"
-            depends_on "pixman"
-            depends_on "sdl2"
-            depends_on "libslirp"
-
             # DFU utility for flashing
             depends_on "dfu-util"
 

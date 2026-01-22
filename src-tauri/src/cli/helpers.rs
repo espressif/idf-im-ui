@@ -1,6 +1,6 @@
 use console::Style;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
-use idf_im_lib::telemetry::track_event;
+use idf_im_lib::{settings::Settings, telemetry::track_event};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use rust_i18n::t;
@@ -139,4 +139,17 @@ pub async fn track_cli_event(event_name: &str, additional_data: Option<serde_jso
       "eim_version": EIM_VERSION,
       "additional_data": additional_data
     })).await;
+}
+
+pub fn print_tool_selection_summary(settings: &Settings) {
+    if let Some(tools_per_version) = &settings.idf_tools_per_version {
+        println!("\n=== Tool Selection Summary ===");
+        for (version, tools) in tools_per_version {
+            println!("  {} ({} tools):", version, tools.len());
+            for tool in tools {
+                println!("    - {}", tool);
+            }
+        }
+        println!();
+    }
 }

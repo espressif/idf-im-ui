@@ -98,6 +98,9 @@ wizard.tools_json.prompt.failure:
 wizard.tools_json.not_found:
   en: tools.json file does not exist. Please select valid tools.json file
   cn: tools.json 文件不存在，请选择有效的 tools.json 文件
+wizard.tools_json.modify_clang:
+  en: Modifying clang tool to always be installed
+  cn: 修改 clang 工具以始终安装
 wizard.tools_json.select.prompt:
   en: Select tools.json file manually
   cn: 手动选择 tools.json 文件
@@ -1298,3 +1301,18 @@ cli.select.activation_instructions:
 wizard.requirements.no_features_available:
   en: "No features are available for the selected platform."
   cn: "所选平台没有可用的功能。"
+wizard.tools.no_idf_version_specified:
+  en: "No IDF version specified for tool selection"
+  cn: "未指定 IDF 版本用于工具选择"
+wizard.tools.read_failure:
+  en: "Failed to read tools configuration"
+  cn: "读取工具配置失败"
+wizard.tools.selection_unavailable:
+  en: "Tool selection will not be available for this version."
+  cn: "此版本将不提供工具选择功能。"
+wizard.tools.no_tools_available:
+  en: "No tools available for any of the selected versions"
+  cn: "所选版本中没有可用的工具"
+gui.settings.tools_updated:
+  en: "Tool selection has been updated"
+  cn: "工具选择已更新"

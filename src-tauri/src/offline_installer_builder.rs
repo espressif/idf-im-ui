@@ -16,7 +16,6 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use tauri::http::version;
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;

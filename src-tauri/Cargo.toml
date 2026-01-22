@@ -17,7 +17,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies
 the setup process for ESP-IDF and integrated development environments (IDEs)
 across multiple platforms. This package contains the command-line interface."""
 license-file = ["../LICENSE"]
-depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, libgcrypt20, libglib2.0-0, libpixman-1-0, libsdl2-2.0-0 | libsdl2-dev, libslirp0 | libslirp-dev, python3 (>= 3.10)"
+depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, python3 (>= 3.10)"
 assets = [
     ["target/release/eim", "usr/bin/", "755"],
     ["../README.md", "usr/share/doc/eim-cli/", "644"],
@@ -61,11 +61,6 @@ libffi-devel = "*"
 openssl-devel = "*"
 dfu-util = "*"
 libusb = "*"
-libgcrypt = "*"
-glib2 = "*"
-pixman = "*"
-SDL2 = "*"
-libslirp = "*"
 python3 = ">= 3.10"
 
 [features]
@@ -99,7 +94,7 @@ reqwest = {version = "0.12.4", features = ["json", "blocking", "rustls-tls", "st
 serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_json = "1.0"
-gix = { version = "0.75", default-features = false, features = [
+gix = { version = "0.77", default-features = false, features = [
     "blocking-network-client",
     "blocking-http-transport-reqwest-rust-tls",
     "worktree-mutation",

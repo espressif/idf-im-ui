@@ -278,6 +278,9 @@ pub fn run(leg_level_override: Option<log::LevelFilter>) {
             set_selected_features_per_version,
             get_selected_features_per_version,
             reset_settings_to_default,
+            get_tools_list_all_versions,
+            set_selected_tools_per_version,
+            get_selected_tools_per_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

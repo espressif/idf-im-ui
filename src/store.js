@@ -233,7 +233,7 @@ export const useAppStore = defineStore("app", {
 export const useWizardStore = defineStore("wizard", {
   state: () => ({
     currentStep: 1,
-    totalSteps: 9,
+    totalSteps: 10,
     wizardData: {
       // Step 1: Prerequisites
       prerequisites: {

@@ -48,6 +48,7 @@
         "installPath": "Installation Path",
         "versionSelection": "Version Selection",
         "toolsSelection": "Tools Selection",
+
         "pythonConfig": "Python Configuration",
         "mirrorSelection": "Mirror Selection",
         "additionalOptions": "Additional Options",
@@ -424,6 +425,7 @@
       "selectVersion": "Select IDF Version",
       "selectMirror": "Select Mirror",
       "selectFeatures": "Select Features",
+      "selectTools": "Select Tools",
       "selectPath": "Select Installation Path",
       "installationProgress": "Installation Progress",
       "installationComplete": "Installation Complete"
@@ -789,7 +791,8 @@
   "featuresSelect": {
     "title": "Select ESP-IDF Features",
     "description": "Choose which features and packages you want to install with ESP-IDF",
-    "continueButton": "Continue to Installation Path",
+    "continueButton": "Continue to Tools selection",
+    "summaryMultiVersion":"{versions} version(s): {details}",
     "noDescription": "No description available",
     "noFeatures": "No features available. Please select an ESP-IDF version first.",
     "sections": {
@@ -811,7 +814,9 @@
   "gui": {
     "settings": {
       "features_updated": "Selected features have been updated",
-      "idf_mirror_updated": "IDF mirror has been updated"
+      "idf_mirror_updated": "IDF mirror has been updated",
+      "tools_updated": "Tool selection has been updated"
+
     }
   },
   "wizard": {
@@ -822,6 +827,28 @@
     },
     "features": {
       "selection_unavailable": "Feature selection is not available"
+    },
+    "tools": {
+      "no_idf_version_specified": "No IDF version specified for tool selection",
+      "read_failure": "Failed to read tools configuration",
+      "selection_unavailable": "Tool selection will not be available for this version.",
+      "no_tools_available": "No tools available for any of the selected versions"
     }
+  },
+  "toolsSelect": {
+    "title": "Select Tools",
+    "description": "Choose which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected. Tools already present on your system will be reused.",
+    "sections": {
+      "required": "Required Tools",
+      "optional": "Optional Tools"
+    },
+    "actions": {
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All"
+    },
+    "summaryMultiVersion": "{versions} version(s): {details}",
+    "continueButton": "Continue",
+    "noTools": "No tools available for the selected configuration.",
+    "noOptionalTools": "No optional tools available for this version."
   }
 }

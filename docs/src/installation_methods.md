@@ -9,6 +9,8 @@ The GUI installer provides two primary entry points from the welcome screen:
 1.  **New Installation**: A wizard that guides you through the installation process. It offers both a streamlined **Simplified Installation** and a more customizable **Expert Installation**.
 2.  **Offline Installation**: If an offline archive (`.zst` file) is detected, the installer will present this option to perform a full installation without an internet connection.
 
+The **Expert Installation** wizard includes a new **Tools Selection** step where you can choose which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected, while optional tools can be selected based on your development needs.
+
 ![Installation methods](./screenshots/installation_methods.png)
 
 If you have an existing ESP-IDF installation, the welcome page will change to give you the option to **Manage Installations**, which takes you to the new **Version Management** dashboard.

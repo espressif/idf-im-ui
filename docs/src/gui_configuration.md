@@ -41,6 +41,15 @@ Select from a list of supported ESP-IDF versions. While multiple versions can be
 
 Choose mirrors for downloading ESP-IDF and tools. For users in mainland China, non-GitHub mirrors are recommended.
 
+### Tools Selection
+
+Select which development tools to install for each ESP-IDF version. The installer will fetch the available tools for your platform and IDF version, categorizing them as:
+
+- **Required Tools**: Pre-selected and cannot be deselected. These are essential for ESP-IDF to function properly.
+- **Optional Tools**: You can choose which optional tools to install based on your development needs.
+
+The clang tool is automatically marked as required to ensure IDE compatibility. Tools already present on your system will be reused.
+
 ### Installation Path
 
 Specify where ESP-IDF should be installed. The default path is `C:\esp` on Windows and `~/.espressif` on POSIX systems.
