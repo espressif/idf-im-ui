@@ -6,29 +6,23 @@ use cli_args::Commands;
 use clap::CommandFactory;
 use clap_complete::generate;
 use cli_args::InstallArgs;
-use config::ConfigError;
+use fern::Dispatch;
 use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
-use idf_im_lib::idf_versions;
-use idf_im_lib::idf_versions::get_latest_idf_version;
+use idf_im_lib::logging::formatter;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::select_idf_version;
-use idf_im_lib::telemetry::track_event;
+use idf_im_lib::logging;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use log::LevelFilter;
-use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
-use log4rs::config::Appender;
-use log4rs::config::Root;
-use log4rs::encode::pattern::PatternEncoder;
 use serde_json::json;
 use rust_i18n::t;
 
@@ -41,79 +35,65 @@ pub mod helpers;
 pub mod prompts;
 pub mod wizard;
 
-fn setup_logging(cli: &cli_args::Cli, non_interactive: bool) -> anyhow::Result<()> {
-    let log_file_name = cli.log_file.clone().map_or_else(
-        || {
-            get_log_directory()
-                .map(|dir| dir.join("eim.log"))
-                .unwrap_or_else(|| {
-                    eprintln!("Failed to get log directory, using default eim.log");
-                    PathBuf::from("eim.log")
-                })
-        },
-        PathBuf::from,
-    );
-
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-        .build(log_file_name)
-        .map_err(|e| ConfigError::Message(format!("Failed to build file appender: {}", e)))?;
-
-    let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-        .build();
-
-    let console_log_level = match (cli.verbose, non_interactive) {
+/// Setup logging for the CLI application.
+///
+/// # Arguments
+/// * `verbose` - Verbosity level (0=Info, 1=Debug, 2+=Trace)
+/// * `non_interactive` - Whether running in non-interactive mode
+/// * `custom_log_path` - Optional custom path for the log file
+///
+/// # Log Level Behavior
+/// | verbose | non_interactive | Console Level | File Level |
+/// |---------|-----------------|---------------|------------|
+/// | 0       | false           | Info          | Trace      |
+/// | 0       | true            | Debug         | Trace      |
+/// | 1       | *               | Debug         | Trace      |
+/// | 2+      | *               | Trace         | Trace      |
+pub fn setup_cli(
+    verbose: u8,
+    non_interactive: bool,
+    custom_log_path: Option<PathBuf>,
+) -> Result<(), fern::InitError> {
+    // Console level based on verbosity and mode
+    let console_level = match (verbose, non_interactive) {
         (0, false) => LevelFilter::Info,
-        (0, true) => LevelFilter::Debug, // At least Debug level for non-interactive mode
+        (0, true) => LevelFilter::Debug,   // Non-interactive needs Debug minimum
         (1, _) => LevelFilter::Debug,
         (_, _) => LevelFilter::Trace,
     };
 
-    let file_log_level = LevelFilter::Trace;
+    // File level is always Trace for maximum detail
+    let file_level = LevelFilter::Trace;
 
-    let config = log4rs::Config::builder()
-        .appender(
-            Appender::builder()
-                .filter(Box::new(log4rs::filter::threshold::ThresholdFilter::new(
-                    file_log_level,
-                )))
-                .build("file", Box::new(logfile)),
-        )
-        .appender(
-            Appender::builder()
-                .filter(Box::new(log4rs::filter::threshold::ThresholdFilter::new(
-                    console_log_level,
-                )))
-                .build("stdout", Box::new(stdout)),
-        )
-        .logger(
-            log4rs::config::Logger::builder()
-                .build("lnk", LevelFilter::Off)
-        )
-        .build(
-            Root::builder()
-                .appender("stdout")
-                .appender("file")
-                .build(LevelFilter::Trace),
-        )
-        .map_err(|e| ConfigError::Message(format!("Failed to build log4rs config: {}", e)))?;
+    // Determine log file path
+    let log_file_path = custom_log_path.unwrap_or_else(|| {
+        get_log_directory()
+            .map(|dir| dir.join("eim.log"))
+            .unwrap_or_else(|| PathBuf::from("eim.log"))
+    });
 
-    log4rs::init_config(config)
-        .map_err(|e| ConfigError::Message(format!("Failed to initialize logger: {}", e)))?;
+    // Build dispatch with file chain first (Trace level)
+    // Then add console chain with configurable level
+    // Module filters are applied globally
+    Dispatch::new()
+        .format(formatter)
+        // Apply file at Trace level
+        .chain(
+            Dispatch::new()
+                .level(file_level)
+                .chain(fern::log_file(&log_file_path)?)
+        )
+        // Apply console at configurable level
+        .chain(
+            Dispatch::new()
+                .level(console_level)
+                .chain(std::io::stdout())
+        )
+        .apply()?;
 
-    // Log the configuration to verify settings
-    debug!(
-        "Logging initialized with console level: {:?}, file level: {:?}",
-        console_log_level, file_log_level
-    );
-    debug!("Non-interactive mode: {}", non_interactive);
-    debug!("Verbosity level: {}", cli.verbose);
-
+    log::trace!("CLI logging initialized. Console: {:?}, File: {:?}", console_level, file_level);
     Ok(())
 }
-
-
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
   let do_not_track = cli.do_not_track;
@@ -138,9 +118,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             #[cfg(not(feature = "gui"))]
             unimplemented!("GUI not present in this type of build");
             println!("{}", t!("gui.running"));
+            // Skip CLI logging setup - tauri-plugin-log handles GUI logging
         }
         _ => {
-            setup_logging(&cli, false).context("Failed to setup logging")?;
+            setup_cli(cli.verbose, false, cli.log_file.map(PathBuf::from))
+                .context("Failed to setup logging")?;
         }
     }
     if !do_not_track {

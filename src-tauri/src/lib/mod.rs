@@ -30,6 +30,7 @@ pub mod version_manager;
 pub mod offline_installer;
 pub mod telemetry;
 pub mod tool_selection;
+pub mod logging;
 use std::fs::{set_permissions, File};
 use std::{
     env,
