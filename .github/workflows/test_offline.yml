@@ -93,8 +93,6 @@ jobs:
         run: |
           mkdir -p ./artifacts
           curl -fsSL -o ./artifacts/offline_archives.json https://dl.espressif.com/dl/eim/offline_archives.json
-          echo "Downloaded $(wc -c < ./artifacts/offline_archives.json) bytes"
-          ls -la ./artifacts/
 
       - name: Download latest EIM CLI binary (non-Windows)
         if: matrix.os != 'windows-latest' && inputs.eim_cli_run_id == 'release'
@@ -102,14 +100,11 @@ jobs:
           latest_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
           eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.zip")) | .browser_download_url')
           curl -L -o ./artifacts/eim-cli.zip "$eim_cli_url"
-
-          ls -la ./artifacts/
           unzip ./artifacts/eim-cli.zip -d ./artifacts/
 
       - name: Check artifact and make it executable (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          ls -la ./artifacts/
           chmod +x artifacts/eim
 
       - name: Install dependencies and node.js (Ubuntu)
@@ -132,12 +127,9 @@ jobs:
         run: |
           python3 --version
           SETUP_PYTHON=$(which python3)
-          echo "Setup python is at: $SETUP_PYTHON"
           mkdir -p $HOME/.local/bin
           ln -sf $SETUP_PYTHON $HOME/.local/bin/python3
           export PATH="$HOME/.local/bin:$PATH"
-          python3 --version
-          which python3          
           export LOG_TO_FILE="true"
           export EIM_CLI_PATH="../artifacts/eim"
           export BUILD_INFO_PATH="../artifacts"
@@ -152,8 +144,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path "./artifacts" | Out-Null
           Invoke-WebRequest -Uri 'https://dl.espressif.com/dl/eim/offline_archives.json' -OutFile './artifacts/offline_archives.json' -UseBasicParsing
-          Write-Host "Downloaded $(Get-Item ./artifacts/offline_archives.json).Length bytes"
-          ls ./artifacts/
 
       - name: Download latest EIM CLI binary (Windows)
         if: matrix.os == 'windows-latest' && inputs.eim_cli_run_id == 'release'
@@ -161,8 +151,6 @@ jobs:
           $latest_release = Invoke-RestMethod -Uri "https://api.github.com/repos/espressif/idf-im-ui/releases/latest"
           $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}.exe" } | Select-Object -ExpandProperty browser_download_url
           Invoke-WebRequest -Uri $eim_cli_url -OutFile ".\artifacts\eim.exe"
-
-          ls ./artifacts/
 
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
@@ -180,19 +168,21 @@ jobs:
       - name: Copy EIM Log files (ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
-          cp ~/.local/share/eim/logs/*.log ./tests/
+          cp ~/.local/share/eim/logs/*.log ./tests/ 2>/dev/null || true
         continue-on-error: true
 
       - name: Copy EIM Log files (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
-          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/
+          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/ 2>/dev/null || true
         continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+          if (Test-Path "$env:LOCALAPPDATA\eim\logs\") {
+             Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force -ErrorAction SilentlyContinue
+          }
         continue-on-error: true
 
       # Upload test results
