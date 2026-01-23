@@ -1606,6 +1606,7 @@ dependencies = [
  "deranged",
  "dialoguer",
  "dirs 6.0.0",
+ "fern",
  "flate2",
  "fork",
  "fs_extra",

@@ -11,6 +11,8 @@ use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::parse_cmake_version;
 use idf_im_lib::verify_file_checksum;
 use idf_im_lib::git_tools::ProgressMessage;
+use idf_im_lib::logging;
+use idf_im_lib::get_log_directory;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use log::error;
@@ -28,64 +30,56 @@ use tar::Builder as TarBuilder;
 use tar::Archive;
 use tempfile::TempDir;
 use zstd::{encode_all, decode_all};
+use fern::Dispatch;
 use log::LevelFilter;
-use log4rs::append::console::ConsoleAppender;
-use log4rs::append::file::FileAppender;
-use log4rs::config::{Appender, Root};
-use log4rs::encode::pattern::PatternEncoder;
-use idf_im_lib::get_log_directory;
 
 pub const PYTHON_VERSION: &str = "3.11";
 pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13"];
 
-fn setup_logging(verbose: u8) -> anyhow::Result<()> {
-    let log_file_name = get_log_directory()
-        .map(|dir| dir.join("offline_installer.log"))
-        .unwrap_or_else(|| {
-            eprintln!("Failed to get log directory, using default offline_installer.log");
-            std::path::PathBuf::from("offline_installer.log")
-        });
-
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-        .build(log_file_name)?;
-
-    let stdout = ConsoleAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {l} - {m}\n")))
-        .build();
-
-    let console_log_level = match verbose {
+/// Setup logging for the offline installer builder.
+///
+/// # Arguments
+/// * `verbose` - Verbosity level (0=Info, 1=Debug, 2+=Trace)
+/// * `custom_log_dir` - Optional custom directory for the log file
+///
+/// The log file will be named "offline_installer.log" in the specified directory.
+///
+/// # Log Level Behavior
+/// | verbose | Log Level |
+/// |---------|-----------|
+/// | 0       | Info      |
+/// | 1       | Debug     |
+/// | 2+      | Trace     |
+pub fn setup_offline_installer(
+    verbose: u8,
+    custom_log_dir: Option<PathBuf>,
+) -> Result<(), fern::InitError> {
+    let log_level = match verbose {
         0 => LevelFilter::Info,
         1 => LevelFilter::Debug,
         _ => LevelFilter::Trace,
     };
 
-    let file_log_level = LevelFilter::Trace;
+    // Determine log file path
+    let log_dir = custom_log_dir.or_else(get_log_directory).unwrap_or_else(|| PathBuf::from("."));
+    let log_file_path = log_dir.join("offline_installer.log");
 
-    let config = log4rs::Config::builder()
-        .appender(
-            Appender::builder()
-                .build("file", Box::new(logfile)),
-        )
-        .appender(
-            Appender::builder()
-                .build("stdout", Box::new(stdout)),
-        )
-        .build(
-            Root::builder()
-                .appender("stdout")
-                .appender("file")
-                .build(LevelFilter::Trace),
-        )?;
+    // Ensure log directory exists
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        eprintln!("Failed to create log directory {}: {}", log_dir.display(), e);
+    }
 
-    log4rs::init_config(config)?;
+    Dispatch::new()
+        .format(logging::formatter)
+        .level(log_level)
+        .chain(fern::log_file(&log_file_path)?)
+        .chain(std::io::stdout())
+        .apply()?;
 
-    log::debug!(
-        "Logging initialized with console level: {:?}, file level: {:?}",
-        console_log_level, file_log_level
-    );
+    log::debug!("Offline installer logging initialized at level: {:?}", log_level);
     Ok(())
 }
+
 
 pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(100);
@@ -382,6 +376,10 @@ struct Args {
     /// Output format: one version per line
     #[arg(long)]
     list_versions: bool,
+
+    /// Custom log directory (default: system log directory)
+    #[arg(long, value_name = "DIR")]
+    log_dir: Option<PathBuf>,
 }
 
 #[tokio::main]
@@ -395,8 +393,8 @@ async fn main() {
         return;
     }
 
-    // Setup logging
-    if let Err(e) = setup_logging(args.verbose) {
+    // Setup logging using fern
+    if let Err(e) = setup_offline_installer(args.verbose, args.log_dir.clone()) {
         error!("Failed to initialize logging: {e}");
     }
 
