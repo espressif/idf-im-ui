@@ -1,12 +1,14 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
+use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_features::get_requirements_json_url;
 use idf_im_lib::idf_features::RequirementsMetadata;
 use idf_im_lib::idf_tools::Tool;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
+use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::tool_selection::fetch_tools_file;
@@ -428,14 +430,34 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.idf_path = Some(paths.idf_path.clone());
         idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
 
+        let requirements_files = if offline_mode {
+            // Merge requirements
+            let requirements_dir = paths.idf_path.join("tools").join("requirements");
+            if let Err(e) = merge_requirements_files(&requirements_dir) {
+                error!("Failed to merge requirements: {}", e);
+                continue;
+            }
 
-        let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
+            let requirements_file = requirements_dir.join("requirements.merged.txt").to_string_lossy().to_string();
+            let feature_info = FeatureInfo {
+                name: "merged".to_string(),
+                description: Some("All merged ESP-IDF features available in the offline installer".to_string()),
+                optional: false,
+                requirement_path: requirements_file,
+            };
+            RequirementsMetadata {
+                version: 1,
+                features: vec![feature_info],
+            }
+        } else {
+            let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
 
-        let requirements_files = match RequirementsMetadata::from_url(&req_url) {
-            Ok(files) => files,
-            Err(err) => {
-                warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
-                return Err(err.to_string());
+            match RequirementsMetadata::from_url(&req_url) {
+                Ok(files) => files,
+                Err(err) => {
+                    warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
+                    return Err(err.to_string());
+                }
             }
         };
 

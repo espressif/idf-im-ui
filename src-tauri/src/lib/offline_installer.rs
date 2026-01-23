@@ -1,4 +1,4 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
@@ -619,4 +619,64 @@ pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) 
       warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
     }
     Ok(config)
+}
+
+/// Finds all 'requirements.*' files in a given directory,
+/// merges their content, and writes it to 'requirements.merged.txt'.
+///
+/// # Arguments
+/// * `folder_path` - The path to the directory to search.
+///
+/// # Returns
+/// `Result<(), io::Error>` - Ok(()) on success, or an io::Error on failure.
+pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
+    let mut merged_content = String::new();
+    let mut requirements_found = false;
+
+    // Ensure the folder exists and is a directory
+    if !folder_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Folder not found: {}", folder_path.display()),
+        ));
+    }
+    if !folder_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("Path is not a directory: {}", folder_path.display()),
+        ));
+    }
+
+    for entry in fs::read_dir(folder_path)? {
+        let entry = entry?;
+        let path = entry.path();
+
+        if path.is_file() {
+            if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+                if file_name.starts_with("requirements.") {
+                    requirements_found = true;
+                    println!("Merging file: {}", path.display());
+                    let mut file = fs::File::open(&path)?;
+                    file.read_to_string(&mut merged_content)?;
+                    // Add a newline to separate content from different files, if they don't end with one
+                    if !merged_content.ends_with('\n') && !merged_content.is_empty() {
+                        merged_content.push('\n');
+                    }
+                }
+            }
+        }
+    }
+
+    if !requirements_found {
+        println!("No 'requirements.*' files found in {}", folder_path.display());
+        return Ok(()); // Or return an error if you consider it an error
+    }
+
+    let output_file_path = folder_path.join("requirements.merged.txt");
+    let mut output_file = fs::File::create(&output_file_path)?;
+    output_file.write_all(merged_content.as_bytes())?;
+
+    println!("Successfully merged requirements files to: {}", output_file_path.display());
+
+    Ok(())
 }
