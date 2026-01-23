@@ -38,7 +38,6 @@ import {
   EIMGUIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pkgName,
 } from "./config.js";
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
@@ -215,7 +214,6 @@ function testRun(script) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMGUI,
           offlineIDFVersion: IDFDefaultVersion,
-          offlinePkgName: pkgName,
           testProxyMode,
           proxyBlockList,
         });

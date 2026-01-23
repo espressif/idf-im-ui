@@ -13,7 +13,6 @@ export function runGUIOfflineInstallTest({
   id = 0,
   pathToEIM,
   offlineIDFVersion,
-  offlinePkgName,
   testProxyMode = false,
   proxyBlockList = [],
 }) {
@@ -28,7 +27,6 @@ export function runGUIOfflineInstallTest({
       eimRunner = new GUITestRunner(pathToEIM);
       pathToOfflineArchive = await downloadOfflineArchive({
         idfVersion: offlineIDFVersion,
-        packageName: offlinePkgName,
       });
       if (testProxyMode) {
         try {
@@ -96,7 +94,7 @@ export function runGUIOfflineInstallTest({
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
-        "Welcome to ESP-IDF Installation Manager"
+        "Welcome to ESP-IDF Installation Manager",
       );
     });
 
@@ -108,14 +106,14 @@ export function runGUIOfflineInstallTest({
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
       expect(text, "Expected installation setup screen").to.equal(
-        "Install ESP-IDF"
+        "Install ESP-IDF",
       );
       const simplified = await eimRunner.findByText("Offline Installation");
       expect(simplified, "Expected option for offline installation").to.not.be
         .false;
       expect(
         await simplified.isDisplayed(),
-        "Expected option for offline installation"
+        "Expected option for offline installation",
       ).to.be.true;
     });
 
@@ -124,7 +122,7 @@ export function runGUIOfflineInstallTest({
 
       await eimRunner.driver.executeScript(
         "document.querySelector('#eim_offline_installation_input').value = arguments[0]",
-        `${pathToOfflineArchive}`
+        `${pathToOfflineArchive}`,
       );
       await eimRunner.clickButton("Browse Archive File");
 
@@ -132,17 +130,17 @@ export function runGUIOfflineInstallTest({
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
       expect(text, "Expected offline installation summary screen").to.equal(
-        "Offline Installation"
+        "Offline Installation",
       );
 
       const selectedFile = await eimRunner.findByRelation(
         "parent",
         "div",
-        "Selected Archive"
+        "Selected Archive",
       );
       const selectedFileText = await selectedFile.getText();
       expect(selectedFileText, "Expected file path to be shown").to.include(
-        `offlineArchive_${offlineIDFVersion}.zst`
+        `offlineArchive_${offlineIDFVersion}.zst`,
       );
 
       const pathInput = await eimRunner.findByCSS("input");
@@ -153,7 +151,7 @@ export function runGUIOfflineInstallTest({
       expect(await pathInput.getAttribute("value")).to.include(defaultInput);
 
       const useDefault = await eimRunner.findByText(
-        "Use default installation path"
+        "Use default installation path",
       );
       const isDisplayed = await useDefault.isDisplayed();
       expect(isDisplayed, "Expected option to use default installation path").to
@@ -161,11 +159,11 @@ export function runGUIOfflineInstallTest({
       const checkBox = await eimRunner.findByRelation(
         "parent",
         "div",
-        "Use default installation path"
+        "Use default installation path",
       );
       const checked = await checkBox.getAttribute("class");
       expect(checked, "Expected checkbox to be unchecked").to.include(
-        "checked"
+        "checked",
       );
 
       const startButton = await eimRunner.findByText("Start Installation");
@@ -173,7 +171,7 @@ export function runGUIOfflineInstallTest({
         .false;
       expect(
         await startButton.isDisplayed(),
-        "Expected start button to be displayed"
+        "Expected start button to be displayed",
       ).to.be.true;
     });
 
@@ -183,16 +181,16 @@ export function runGUIOfflineInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const installing = await eimRunner.findByText(
         "Installing ESP-IDF from Offline Archive",
-        20000
+        20000,
       );
 
       expect(
         installing,
-        "Expected installation to start Installing ESP-IDF from Archive"
+        "Expected installation to start Installing ESP-IDF from Archive",
       ).to.not.be.false;
       expect(
         await installing.isDisplayed(),
-        "Expected installation progress screen"
+        "Expected installation progress screen",
       ).to.be.true;
 
       const startTime = Date.now();
@@ -215,13 +213,13 @@ export function runGUIOfflineInstallTest({
         logger.info("Installation timed out after 45 minutes");
       }
       const completed = await eimRunner.findByText(
-        "Offline Installation Complete"
+        "Offline Installation Complete",
       );
       expect(completed, "Expected installation to be completed").to.not.be
         .false;
       expect(
         await completed.isDisplayed(),
-        "Expected 'Installation Complete' text displayed"
+        "Expected 'Installation Complete' text displayed",
       ).to.be.true;
     });
 
@@ -233,7 +231,7 @@ export function runGUIOfflineInstallTest({
       let versionsList = [];
       for (let card of cards) {
         const versionElement = await card.findElement(
-          By.className("version-info")
+          By.className("version-info"),
         );
         const versionText = await versionElement.getText();
         versionsList.push(versionText);
@@ -241,7 +239,7 @@ export function runGUIOfflineInstallTest({
       logger.debug(`Installed versions: ${versionsList}`);
       expect(
         versionsList.includes(offlineIDFVersion),
-        `Expected dashboard card to be shown for version ${offlineIDFVersion} `
+        `Expected dashboard card to be shown for version ${offlineIDFVersion} `,
       ).to.be.true;
     });
   });

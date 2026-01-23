@@ -13,7 +13,7 @@ export function runCLICustomInstallTest({
   pathToEIM,
   args = [],
   offlineIDFVersion = null,
-  offlinePkgName = null,
+  offlinePkgFilename = null,
   testProxyMode = false,
   proxyBlockList = [],
   pythonWheelsVersion = [],
@@ -26,14 +26,14 @@ export function runCLICustomInstallTest({
 
     before(async function () {
       logger.debug(
-        `Installing custom IDF version with parameters ${args.join(" ")}`
+        `Installing custom IDF version with parameters ${args.join(" ")}`,
       );
       this.timeout(900000);
       testRunner = new CLITestRunner();
       if (offlineIDFVersion) {
         pathToOfflineArchive = await downloadOfflineArchive({
           idfVersion: offlineIDFVersion,
-          packageName: offlinePkgName,
+          packageFilename: offlinePkgFilename,
         });
       }
       if (testProxyMode) {
@@ -58,7 +58,7 @@ export function runCLICustomInstallTest({
         args.push(`--use-local-archive "${pathToOfflineArchive}"`);
         testRunner.sendInput(`mkdir ${archiveDir}`);
         testRunner.sendInput(
-          `tar -xf ${pathToOfflineArchive} -C ${archiveDir}`
+          `tar -xf ${pathToOfflineArchive} -C ${archiveDir}`,
         );
         await new Promise((resolve) => setTimeout(resolve, 15000));
       }
@@ -116,18 +116,18 @@ export function runCLICustomInstallTest({
         logger.info(`Verifying wheels for ${pythonVersion} on offline archive`);
         expect(
           fs.existsSync(pathToOfflineArchive),
-          `Offline archive not found at ${pathToOfflineArchive}`
+          `Offline archive not found at ${pathToOfflineArchive}`,
         ).to.be.true;
         logger.info(`Checking for wheels folder for Python ${pythonVersion}`);
         logger.info(`Archive contents: ${fs.readdirSync(archiveDir)}`);
         expect(
           fs.existsSync(path.join(archiveDir, `wheels_py${pythonVersion}`)),
-          `Wheels folder for Python ${pythonVersion} not found in offline archive`
+          `Wheels folder for Python ${pythonVersion} not found in offline archive`,
         ).to.be.true;
         expect(
           fs.readdirSync(path.join(archiveDir, `wheels_py${pythonVersion}`))
             .length > 0,
-          `No wheels found for Python ${pythonVersion} in offline archive`
+          `No wheels found for Python ${pythonVersion} in offline archive`,
         ).to.be.true;
       });
     }
@@ -156,7 +156,7 @@ export function runCLICustomInstallTest({
           if (
             await testRunner.waitForOutput(
               "Do you want to save the installer configuration",
-              1000
+              1000,
             )
           ) {
             logger.info(">>>>>>>Completed!!!");
@@ -170,7 +170,7 @@ export function runCLICustomInstallTest({
 
         expect(
           testRunner.output,
-          "Failed to ask to save installation configuration - failure to install using full arguments on run time"
+          "Failed to ask to save installation configuration - failure to install using full arguments on run time",
         ).to.include("Do you want to save the installer configuration");
 
         logger.info("Installation completed");
@@ -191,7 +191,7 @@ export function runCLICustomInstallTest({
         if (
           await testRunner.waitForOutput(
             "Now you can start using IDF tools",
-            1000
+            1000,
           )
         ) {
           logger.info(">>>>>>>Completed!!!");
@@ -205,17 +205,17 @@ export function runCLICustomInstallTest({
 
       expect(
         testRunner.output,
-        "Failed to complete installation, missing 'Successfully Installed IDF'"
+        "Failed to complete installation, missing 'Successfully Installed IDF'",
       ).to.include("Successfully installed IDF");
 
       expect(
         testRunner.output,
-        "Failed to complete installation, missing 'Now you can start using IDF tools'"
+        "Failed to complete installation, missing 'Now you can start using IDF tools'",
       ).to.include("Now you can start using IDF tools");
 
       if (testProxyMode === "block" && proxy.attempts.length > 0) {
         logger.error(
-          ">>>>>>>>>>>>>>>>>>Internet Connection Attempt Detected - This should be a failure"
+          ">>>>>>>>>>>>>>>>>>Internet Connection Attempt Detected - This should be a failure",
         );
       }
     });

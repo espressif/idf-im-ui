@@ -85,14 +85,6 @@ logger.info(
   `EIM CLI version set to: ${EIMCLIVersion} and GUI to: ${EIMGUIVersion}`
 );
 
-// Get platform name from environmental variables
-const pkgName = process.env.PACKAGE_NAME
-  ? process.env.PACKAGE_NAME
-  : os.platform() === "win32"
-  ? "windows-x64"
-  : "linux-x64";
-logger.info(`Package name set to: ${pkgName}`);
-
 // Default path to EIM CLI and GUI executables for offline testing
 //Should use path provided by environment variables or default to home directory
 
@@ -133,7 +125,7 @@ logger.info(`Run in debug mode: ${runInDebug}`);
 // Define versions of python Wheels included in the offline package
 let pythonWheelsVersion = ["311"]
 if (os.platform() !== "win32") {
-  pythonWheelsVersion.push("310", "312", "313");
+  pythonWheelsVersion.push("310", "312", "313", "314");
 }
 logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`)
 
@@ -153,7 +145,6 @@ export {
   EIMCLIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
-  pkgName,
   runInDebug,
   pythonWheelsVersion,
 };

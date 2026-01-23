@@ -41,7 +41,6 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   runInDebug,
-  pkgName,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -239,7 +238,6 @@ function testRun(jsonScript) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMCLI,
           offlineIDFVersion: IDFDefaultVersion,
-          offlinePkgName: pkgName,
           testProxyMode,
           proxyBlockList,
         });
