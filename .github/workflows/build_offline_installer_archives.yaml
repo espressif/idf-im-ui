@@ -247,6 +247,8 @@ jobs:
           set -o pipefail
           $BINARY -c default --idf-version-override ${{ matrix.idf_version }} 2>&1 | tee "$LOG_FILE"
 
+          cat github_summary.out >> $GITHUB_STEP_SUMMARY
+
           for file in archive_v*.zst; do
             if [ ! -f "$file" ]; then continue; fi
             NEW_NAME="archive_v${VERSION}_${PLATFORM}.zst"
