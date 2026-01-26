@@ -653,9 +653,9 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-                if file_name.starts_with("requirements.") {
+                if file_name.starts_with("requirements.") && file_name != "requirements.merged.txt" {
                     requirements_found = true;
-                    println!("Merging file: {}", path.display());
+                    debug!("Merging file: {}", path.display());
                     let mut file = fs::File::open(&path)?;
                     file.read_to_string(&mut merged_content)?;
                     // Add a newline to separate content from different files, if they don't end with one
@@ -668,7 +668,7 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     }
 
     if !requirements_found {
-        println!("No 'requirements.*' files found in {}", folder_path.display());
+        warn!("No 'requirements.*' files found in {}", folder_path.display());
         return Ok(()); // Or return an error if you consider it an error
     }
 
@@ -676,7 +676,7 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     let mut output_file = fs::File::create(&output_file_path)?;
     output_file.write_all(merged_content.as_bytes())?;
 
-    println!("Successfully merged requirements files to: {}", output_file_path.display());
+    info!("Successfully merged requirements files to: {}", output_file_path.display());
 
     Ok(())
 }

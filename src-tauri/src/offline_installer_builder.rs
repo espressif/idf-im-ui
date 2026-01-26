@@ -231,6 +231,10 @@ async fn download_wheels_for_python_versions(
                 constraint_file.to_str().unwrap(),
                 "--dest",
                 wheel_dir.to_str().unwrap(),
+                "--index-url",
+                "https://dl.espressif.com/pypi/",
+                "--extra-index-url",
+                "https://pypi.org/simple",
             ],
         ) {
             Ok(output) => {
@@ -508,7 +512,7 @@ async fn main() {
                             let message = format!("{}: {}", name, 100);
                             progress_bar.set_message(message);
                             progress_bar.finish();
-                            println!("submodule: {}", name);
+                            info!("submodule: {}", name);
                             progress_bar = create_progress_bar();
                         }
                         Err(_) => break,
