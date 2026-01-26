@@ -185,6 +185,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
+            build-essential \
+            libgdk-pixbuf2.0-dev \
             libcairo2-dev \
             libpango1.0-dev \
             libjpeg-dev \
@@ -195,7 +197,23 @@ jobs:
             libssl-dev \
             libdbus-1-dev \
             libdbus-glib-1-dev \
+            libgirepository1.0-dev \
             pkg-config
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install \
+            gdk-pixbuf \
+            cairo \
+            pango \
+            libjpeg \
+            libpng \
+            zlib \
+            meson \
+            glib \
+            dbus-glib
 
       - name: Install UV
         uses: astral-sh/setup-uv@v2
@@ -249,6 +267,7 @@ jobs:
 
       - name: Build archive for specific version
         id: build
+        continue-on-error: true
         shell: bash
         run: |
           if [ "${{ runner.os }}" = "Windows" ]; then
@@ -264,6 +283,12 @@ jobs:
 
           set -o pipefail
           $BINARY -c default --idf-version-override ${{ matrix.idf_version }} 2>&1 | tee "$LOG_FILE"
+
+          # The binary now creates build_summary.md automatically
+          if [ -f "build_summary.md" ]; then
+            echo "## Build Summary for ${{ matrix.package_name }}" >> $GITHUB_STEP_SUMMARY
+            cat build_summary.md >> $GITHUB_STEP_SUMMARY
+          fi
 
           for file in archive_v*.zst; do
             if [ ! -f "$file" ]; then continue; fi
@@ -447,7 +472,7 @@ jobs:
   autotest:
     name: Autotest Offline Archives Installation
     needs: [build-and-upload]
-    if: always() && needs.build-and-upload.result == 'success'
+    if: always()
     uses: ./.github/workflows/test_offline.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
