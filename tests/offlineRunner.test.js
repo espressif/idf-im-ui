@@ -75,7 +75,7 @@ function testRun(archiveInfo) {
         id: `11`,
         pathToEIM: pathToEIMCLI,
         offlineIDFVersion: info.version,
-        offlinePkgName: info.platform,
+        offlinePkgFilename: info.filename,
         testProxyMode: "block",
         pythonWheelsVersion,
       });

@@ -1,5 +1,5 @@
 import logger from "./classes/logger.class.js";
-import { IDFDefaultVersion, pkgName } from "./config.js";
+import { IDFDefaultVersion } from "./config.js";
 import { Readable } from "stream";
 import { finished } from "stream/promises";
 import os from "os";
@@ -7,7 +7,7 @@ import fs from "fs";
 import path from "path";
 
 // Base url for offline archive files
-const offlineBaseUrl = "https://dl.espressif.com/dl/eim/archive_";
+const offlineBaseUrl = "https://dl.espressif.com/dl/eim/";
 
 // function to get the tag for the operating system to use when reading tools.json
 function getPlatformKey() {
@@ -82,13 +82,15 @@ function getArchitecture() {
 // the path to the downloaded file
 const downloadOfflineArchive = async ({
   idfVersion = IDFDefaultVersion,
-  packageName = pkgName,
+  packageFilename = null,
 }) => {
-  const archiveUrl = `${offlineBaseUrl}${idfVersion}_${packageName}.zst`;
+  const archiveUrl = packageFilename
+    ? `${offlineBaseUrl}${packageFilename}`
+    : `${offlineBaseUrl}archive_${idfVersion}_${getPlatformKey_eim()}.zst`;
 
   const pathToOfflineArchive = path.resolve(
     process.cwd(),
-    `offlineArchive_${idfVersion}.zst`
+    `offlineArchive_${idfVersion}.zst`,
   );
   logger.info(`Downloading offline archive from ${archiveUrl}`);
   try {
