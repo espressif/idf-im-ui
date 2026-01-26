@@ -43,6 +43,7 @@ pub struct Cli {
         short,
         long,
         action = clap::ArgAction::Count,
+        global = true,
         help = "Increase verbosity level (can be used multiple times)"
     )]
     pub verbose: u8,

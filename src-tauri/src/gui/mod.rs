@@ -1,11 +1,15 @@
 use anyhow::Result;
+use fern::Dispatch;
 #[cfg(target_os = "linux")]
 use fork::{daemon, Fork};
+use idf_im_lib::get_log_directory;
+use idf_im_lib::logging::formatter;
 use idf_im_lib::{
     add_path_to_path, ensure_path,
+    logging,
     settings::Settings,
 };
-use log::{debug, error, info};
+use log::{LevelFilter, debug, error, info};
 use std::process::Command;
 use std::{
     env,
@@ -179,39 +183,64 @@ fn is_process_running(pid: u32) -> bool {
     }
 }
 
+/// Setup logging for the GUI application.
+///
+/// # Arguments
+/// * `log_level_override` - Optional log level override (uses Info if None)
+///
+/// # Log Level Behavior
+/// - File: Always Trace level (all logs)
+/// - Console: Info level in debug builds, no console in production
+pub fn setup_gui_logging(
+    log_level_override: Option<LevelFilter>,
+) -> Result<(), fern::InitError> {
+    let console_level = log_level_override.unwrap_or(LevelFilter::Info);
+    let log_dir = get_log_directory().unwrap_or_else(|| PathBuf::from("logs"));
+
+    // Create log directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all(&log_dir) {
+        log::error!("Failed to create log directory {}: {}", log_dir.display(), e);
+    }
+
+    let log_file_path = log_dir.join("eim_gui.log");
+
+    // Build dispatch with file chain (always Trace) and console chain (debug only)
+    let mut dispatch = Dispatch::new()
+        .format(formatter)
+        // File at Trace level
+        .chain(
+            Dispatch::new()
+                .level(LevelFilter::Trace)
+                .chain(fern::log_file(&log_file_path)?)
+        );
+
+    // Add console in debug builds
+    #[cfg(debug_assertions)]
+    {
+        dispatch = dispatch.chain(
+            Dispatch::new()
+                .level(console_level)
+                .chain(std::io::stdout())
+        );
+    }
+
+    dispatch.apply()?;
+
+    log::info!("GUI logging initialized. File: {:?}, Console: {:?}", log_file_path, console_level);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(leg_level_override: Option<log::LevelFilter>) {
+pub fn run(log_level_override: Option<log::LevelFilter>) {
     // this is here because macos bundled .app does not inherit path
     #[cfg(target_os = "macos")]
     {
         env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
     }
-    let log_dir = idf_im_lib::get_log_directory().unwrap_or_else(|| {
-        error!("Failed to get log directory.");
-        PathBuf::from("")
-    });
+
+    let _ = setup_gui_logging(log_level_override);
+
     tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Stdout,
-                ))
-                .target(tauri_plugin_log::Target::new(
-                    // this actually can not keep pace with the console, so maybe we should disable it for production build
-                    tauri_plugin_log::TargetKind::Webview,
-                ))
-                // Add new file target with path configuration
-                .target(tauri_plugin_log::Target::new(
-                    tauri_plugin_log::TargetKind::Folder {
-                        path: log_dir,
-                        file_name: Some("eim_gui_log".to_string()),
-                    },
-                ))
-                .level(leg_level_override.unwrap_or(log::LevelFilter::Info))
-                .level_for("idf_im_lib", leg_level_override.unwrap_or(log::LevelFilter::Info))
-                .level_for("eim_lib", leg_level_override.unwrap_or(log::LevelFilter::Info))
-                .build(),
-        )
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .setup(|app| {
