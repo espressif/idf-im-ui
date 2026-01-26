@@ -35,7 +35,7 @@ use fern::Dispatch;
 use log::LevelFilter;
 
 pub const PYTHON_VERSION: &str = "3.11";
-pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13"];
+pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13", "3.14"];
 
 /// Setup logging for the offline installer builder.
 ///
@@ -219,24 +219,37 @@ async fn download_wheels_for_python_versions(
 
         // Download wheels for this Python version
         info!("Downloading wheels for Python {}...", python_version);
-        match execute_command(
+        let mut result = execute_command(
             python_executable.to_str().unwrap(),
             &[
-                "-m",
-                "pip",
-                "download",
-                "-r",
-                requirements_path.to_str().unwrap(),
-                "-c",
-                constraint_file.to_str().unwrap(),
-                "--dest",
-                wheel_dir.to_str().unwrap(),
-                "--index-url",
-                "https://dl.espressif.com/pypi/",
-                "--extra-index-url",
-                "https://pypi.org/simple",
+                "-m", "pip", "download",
+                "-r", requirements_path.to_str().unwrap(),
+                "-c", constraint_file.to_str().unwrap(),
+                "--dest", wheel_dir.to_str().unwrap(),
+                "--only-binary=:all:",
+                "--index-url", "https://dl.espressif.com/pypi/",
+                "--extra-index-url", "https://pypi.org/simple",
             ],
-        ) {
+        );
+
+        // If that fails, try again allowing source builds
+        result = if result.is_err() || !result.as_ref().unwrap().status.success() {
+            warn!("Binary-only download failed, retrying with source builds allowed...");
+            execute_command(
+                python_executable.to_str().unwrap(),
+                &[
+                    "-m", "pip", "download",
+                    "-r", requirements_path.to_str().unwrap(),
+                    "-c", constraint_file.to_str().unwrap(),
+                    "--dest", wheel_dir.to_str().unwrap(),
+                    "--index-url", "https://dl.espressif.com/pypi/",
+                    "--extra-index-url", "https://pypi.org/simple",
+                ],
+            )
+        } else {
+            result
+        };
+        match result {
             Ok(output) => {
                 if output.status.success() {
                     info!("Python {} packages downloaded successfully.", python_version);
