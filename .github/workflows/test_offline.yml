@@ -34,22 +34,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        version: [3.12.9, 3.14.2]
         include:
           - os: ubuntu-latest
             package_name: linux-x64
-            run_on: GitHub
-          - os: ubuntu-24.04-arm
-            package_name: linux-aarch64
-            run_on: GitHub
-          - os: windows-latest
-            package_name: windows-x64
-            run_on: GitHub
           - os: macos-latest
             package_name: macos-aarch64
-            run_on: GitHub
+          - os: windows-latest
+            package_name: windows-x64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            version: 3.12.9
           - os: macos-15-intel
             package_name: macos-x64
-            run_on: GitHub
+            version: 3.12.9
 
     steps:
       - name: Checkout repository
@@ -65,7 +64,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6.1.0
         with:
-          python-version: "3.12.9"
+          python-version: ${{ matrix.version }}
 
       - name: Download Build Info files from another run_id
         uses: actions/download-artifact@v5
