@@ -179,6 +179,24 @@ jobs:
         if: runner.os != 'Windows'
         run: chmod +x ./offline_installer_builder
 
+        # Only needed for version IDF 5.1
+      - name: Install dependencies (Unix)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libcairo2-dev \
+            libpango1.0-dev \
+            libjpeg-dev \
+            libpng-dev \
+            zlib1g-dev \
+            meson \
+            libglib2.0-dev \
+            libssl-dev \
+            libdbus-1-dev \
+            libdbus-glib-1-dev \
+            pkg-config
+
       - name: Install UV
         uses: astral-sh/setup-uv@v2
 
