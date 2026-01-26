@@ -45,6 +45,16 @@
               </div>
             </header>
 
+            <!-- Elevation Warning Banner -->
+            <WarningBanner
+              v-if="showElevationWarning && !elevationWarningDismissed"
+              type="warning"
+              :title="$t('warnings.elevation.title')"
+              :message="elevationWarningMessage"
+              :show="true"
+              @dismiss="elevationWarningDismissed = true"
+            />
+
             <!-- Main Content Area -->
             <main class="app-main">
               <router-view v-slot="{ Component }">
@@ -83,8 +93,10 @@ import {
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
 import UpdateNotification from './components/UpdateNotification.vue'
+import WarningBanner from './components/WarningBanner.vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
+import { useAppStore } from './store'
 
 export default {
   name: 'App',
@@ -100,7 +112,8 @@ export default {
     NDropdown,
     NIcon,
     AppFooter,
-    UpdateNotification
+    UpdateNotification,
+    WarningBanner
   },
   setup() {
     const route = useRoute()
@@ -108,6 +121,23 @@ export default {
     const { locale, t } = useI18n()
     const theme = ref(null)
     const showSplash = ref(true)
+    const appStore = useAppStore()
+
+    // Elevation warning state
+    const elevationWarningDismissed = ref(false)
+
+    // Computed: show elevation warning if elevated and not dismissed
+    const showElevationWarning = computed(() => {
+      return appStore.isElevated && !showSplash.value
+    })
+
+    // Computed: elevation warning message based on OS
+    const elevationWarningMessage = computed(() => {
+      if (appStore.os === 'windows') {
+        return t('warnings.elevation.windows')
+      }
+      return t('warnings.elevation.posix')
+    })
 
     // Hide splash screen after delay
     setTimeout(async () => {
@@ -213,7 +243,10 @@ export default {
       showSplash,
       languageOptions,
       currentLanguageLabel,
-      handleLanguageChange
+      handleLanguageChange,
+      showElevationWarning,
+      elevationWarningMessage,
+      elevationWarningDismissed
     }
   }
 }
