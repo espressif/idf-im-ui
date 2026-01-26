@@ -12,7 +12,7 @@ import fs from "fs";
 export function runGUIOfflineInstallTest({
   id = 0,
   pathToEIM,
-  offlineIDFVersion,
+  offlineIDFVersion = null,
   testProxyMode = false,
   proxyBlockList = [],
 }) {
@@ -44,6 +44,10 @@ export function runGUIOfflineInstallTest({
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+      }
+      if (!pathToOfflineArchive) {
+        logger.info(">>>>>>> Offline archive not found, skipping this test");
+        this.skip();
       }
     });
 
