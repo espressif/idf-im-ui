@@ -258,14 +258,11 @@ pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcom
     }
 }
 
+/// Check if running with elevated permissions (Administrator on Windows, root on POSIX)
 #[tauri::command]
-pub fn check_elevation() -> Result<bool, String> {
-    match std::env::consts::OS {
-        "windows" => Ok(idf_im_lib::utils::is_running_elevated()),
-        _ => Ok(false),
-    }
+pub fn check_elevated_permissions() -> Result<bool, String> {
+    Ok(idf_im_lib::utils::is_running_elevated())
 }
-
 
 #[tauri::command]
 pub async fn install_drivers() -> Result<(), String> {

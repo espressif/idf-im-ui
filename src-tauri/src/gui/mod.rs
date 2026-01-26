@@ -292,7 +292,7 @@ pub fn run(log_level_override: Option<log::LevelFilter>) {
             get_app_settings,
             save_app_settings,
             start_offline_installation,
-            check_elevation,
+            check_elevated_permissions,
             install_drivers,
             get_system_info,
             cpu_count,

@@ -45,6 +45,9 @@ export const useAppStore = defineStore("app", {
       allOk: false,
       missing: [],
     },
+
+    // Elevation state (for warning banner)
+    isElevated: false,
   }),
 
   getters: {
@@ -72,6 +75,20 @@ export const useAppStore = defineStore("app", {
       const eim_version = app_info.version
       const info = { os, arch, cpuCount , additionalSystemInfo , eim_version};
       this.setSystemInfo(info);
+      // Check elevation status for warning banner
+      await this.checkElevatedPermissions();
+    },
+
+    async checkElevatedPermissions() {
+      try {
+        const elevated = await invoke('check_elevated_permissions');
+        this.isElevated = elevated;
+        return elevated;
+      } catch (error) {
+        console.error("Failed to check elevated permissions:", error);
+        this.isElevated = false;
+        return false;
+      }
     },
     setSystemInfo(info) {
       this.os = info.os;
