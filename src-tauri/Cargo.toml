@@ -132,6 +132,7 @@ url = "2.5.7"
 fern = "0.7.1"
 semver = "1.0.27"
 sysinfo = "0.38.0"
+libc = "0.2.180"
 
 # GUI-related dependencies (optional)
 tauri = { version = "2.7.0", features = [], optional = true }
