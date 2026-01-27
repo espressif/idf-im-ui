@@ -294,6 +294,7 @@ jobs:
             if [ ! -f "$file" ]; then continue; fi
             NEW_NAME="archive_v${VERSION}_${PLATFORM}.zst"
             mv "$file" "built_archives/$NEW_NAME"
+            echo "Built archive: built_archives/$NEW_NAME"
           done
           if [ ! "$(ls -A built_archives/*.zst 2>/dev/null)" ]; then
             echo "ERROR: No archives built!" >&2

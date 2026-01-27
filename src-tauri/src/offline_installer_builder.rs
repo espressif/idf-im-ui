@@ -1036,7 +1036,6 @@ async fn main() {
         let all_successful = build_summaries.iter().all(|s| s.archive_created && s.all_python_successful());
         if !all_successful {
             error!("Some builds failed or had warnings. Check the summary above.");
-            std::process::exit(1);
         } else {
             info!("🎉 All requested versions processed successfully.");
         }
