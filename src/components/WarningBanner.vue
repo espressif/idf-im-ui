@@ -1,89 +1,66 @@
 <template>
-  <transition name="slide-down">
-    <div
-      v-if="visible"
-      :class="['warning-banner', `warning-banner--${type}`]"
-      data-id="warning-banner"
-    >
-      <div class="warning-content">
-        <div class="warning-icon">
-          <!-- Warning icon (triangle with exclamation) -->
-          <svg v-if="type === 'warning'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
-          </svg>
-          <!-- Info icon -->
-          <svg v-else-if="type === 'info'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
-          </svg>
-          <!-- Error icon -->
-          <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-          </svg>
+  <div class="warning-banners" v-if="warnings.length > 0">
+    <transition-group name="slide-down">
+      <div
+        v-for="warning in warnings"
+        :key="warning.id"
+        :class="['warning-banner', `warning-banner--${warning.type}`]"
+        data-id="warning-banner"
+      >
+        <div class="warning-content">
+          <div class="warning-icon">
+            <!-- Warning icon (triangle with exclamation) -->
+            <svg v-if="warning.type === 'warning'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/>
+            </svg>
+            <!-- Info icon -->
+            <svg v-else-if="warning.type === 'info'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+            </svg>
+            <!-- Error icon -->
+            <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+          </div>
+          <div class="warning-text">
+            <span class="warning-title">{{ warning.title }}</span>
+            <span v-if="warning.message" class="warning-message">{{ warning.message }}</span>
+          </div>
+          <button 
+            v-if="warning.dismissible" 
+            class="warning-close" 
+            @click="dismissWarning(warning.id)" 
+            data-id="dismiss-warning"
+            :aria-label="$t('common.dismiss') || 'Dismiss'"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+            </svg>
+          </button>
         </div>
-        <div class="warning-text">
-          <span class="warning-title">{{ title }}</span>
-          <span v-if="message" class="warning-message">{{ message }}</span>
-        </div>
-        <button 
-          v-if="dismissible" 
-          class="warning-close" 
-          @click="handleDismiss" 
-          data-id="dismiss-warning"
-          :aria-label="$t('common.dismiss') || 'Dismiss'"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-          </svg>
-        </button>
       </div>
-    </div>
-  </transition>
+    </transition-group>
+  </div>
 </template>
 
 <script>
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
+import { useAppStore } from '../store'
 
 export default {
   name: 'WarningBanner',
-  props: {
-    type: {
-      type: String,
-      default: 'warning',
-      validator: (value) => ['warning', 'info', 'error'].includes(value)
-    },
-    title: {
-      type: String,
-      required: true
-    },
-    message: {
-      type: String,
-      default: ''
-    },
-    dismissible: {
-      type: Boolean,
-      default: true
-    },
-    show: {
-      type: Boolean,
-      default: true
-    }
-  },
-  emits: ['dismiss'],
-  setup(props, { emit }) {
-    const visible = ref(props.show)
+  setup() {
+    const appStore = useAppStore()
 
-    watch(() => props.show, (newVal) => {
-      visible.value = newVal
-    })
+    const warnings = computed(() => appStore.warnings)
 
-    const handleDismiss = () => {
-      visible.value = false
-      emit('dismiss')
+    const dismissWarning = (id) => {
+      appStore.removeWarning(id)
     }
 
     return {
-      visible,
-      handleDismiss
+      warnings,
+      dismissWarning
     }
   }
 }

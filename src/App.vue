@@ -45,15 +45,8 @@
               </div>
             </header>
 
-            <!-- Elevation Warning Banner -->
-            <WarningBanner
-              v-if="showElevationWarning && !elevationWarningDismissed"
-              type="warning"
-              :title="$t('warnings.elevation.title')"
-              :message="elevationWarningMessage"
-              :show="true"
-              @dismiss="elevationWarningDismissed = true"
-            />
+            <!-- Warning Banner (listens to store) -->
+            <WarningBanner v-if="!showSplash" />
 
             <!-- Main Content Area -->
             <main class="app-main">
@@ -75,7 +68,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -123,26 +116,23 @@ export default {
     const showSplash = ref(true)
     const appStore = useAppStore()
 
-    // Elevation warning state
-    const elevationWarningDismissed = ref(false)
-
-    // Computed: show elevation warning if elevated and not dismissed
-    const showElevationWarning = computed(() => {
-      return appStore.isElevated && !showSplash.value
-    })
-
-    // Computed: elevation warning message based on OS
-    const elevationWarningMessage = computed(() => {
-      if (appStore.os === 'windows') {
-        return t('warnings.elevation.windows')
-      }
-      return t('warnings.elevation.posix')
-    })
-
     // Hide splash screen after delay
     setTimeout(async () => {
       showSplash.value = false
       await invoke('set_locale', { locale: locale.value })
+
+      // Add elevation warning if running elevated
+      if (appStore.isElevated) {
+        const message = appStore.os === 'windows'
+          ? t('warnings.elevation.windows')
+          : t('warnings.elevation.posix')
+        appStore.addWarning({
+          id: 'elevation-warning',
+          type: 'warning',
+          title: t('warnings.elevation.title'),
+          message: message,
+        })
+      }
     }, 1500)
 
     // Language configuration
@@ -243,10 +233,7 @@ export default {
       showSplash,
       languageOptions,
       currentLanguageLabel,
-      handleLanguageChange,
-      showElevationWarning,
-      elevationWarningMessage,
-      elevationWarningDismissed
+      handleLanguageChange
     }
   }
 }
