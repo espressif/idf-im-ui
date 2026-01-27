@@ -202,24 +202,25 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
 /// - Other system-level errors prevent the command from executing.
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
 fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
-  info!("Creating Python virtual environment at: {}", venv_path);
+    info!("Creating Python virtual environment at: {}", venv_path);
 
-    let output = match std::env::consts::OS {
-        "windows" => command_executor::execute_command(
-            "powershell",
-            &["-Command", python_executable, "-m", "venv", venv_path],
-        ),
-        _ => command_executor::execute_command(
-            "bash",
-            &["-c", &format!("{} -m venv {}", python_executable, venv_path)],
-        ),
-    };
+    // Use direct execution - no shell means spaces and UTF-8 work perfectly
+    // Python doesn't need shell features (no variable expansion, globs, etc.)
+    let output = command_executor::execute_command_direct(
+        python_executable,
+        &["-m", "venv", venv_path],
+    );
+
     match output {
         Ok(out) => {
             if out.status.success() {
-                Ok(std::str::from_utf8(&out.stdout).unwrap().to_string())
+                Ok(std::str::from_utf8(&out.stdout)
+                    .unwrap_or("Success (non-UTF8 output)")
+                    .to_string())
             } else {
-                Err(std::str::from_utf8(&out.stderr).unwrap().to_string())
+                Err(std::str::from_utf8(&out.stderr)
+                    .unwrap_or("Error (non-UTF8 output)")
+                    .to_string())
             }
         }
         Err(e) => Err(e.to_string()),
