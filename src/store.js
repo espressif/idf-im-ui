@@ -46,8 +46,11 @@ export const useAppStore = defineStore("app", {
       missing: [],
     },
 
-    // Elevation state (for warning banner)
+    // Elevation state
     isElevated: false,
+
+    // Global warnings (for warning banner)
+    warnings: [],
   }),
 
   getters: {
@@ -90,6 +93,32 @@ export const useAppStore = defineStore("app", {
         return false;
       }
     },
+
+    // Warning management
+    addWarning(warning) {
+      // Prevent duplicate warnings with same id
+      if (warning.id && this.warnings.some(w => w.id === warning.id)) {
+        return warning.id;
+      }
+      const id = warning.id || Date.now().toString();
+      this.warnings.push({
+        id,
+        type: warning.type || 'warning',
+        title: warning.title,
+        message: warning.message || '',
+        dismissible: warning.dismissible !== false,
+      });
+      return id;
+    },
+
+    removeWarning(id) {
+      this.warnings = this.warnings.filter(w => w.id !== id);
+    },
+
+    clearWarnings() {
+      this.warnings = [];
+    },
+
     setSystemInfo(info) {
       this.os = info.os;
       this.arch = info.arch;
