@@ -29,13 +29,13 @@ on:
 
 jobs:
   test-offline:
-    name: Offline Installation (${{ matrix.package_name }})
+    name: Offline Installation (${{ matrix.package_name }}) Python ${{ matrix.version }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        version: [3.12.9, 3.14.2]
+        version: [3.11, 3.14]
         include:
           - os: ubuntu-latest
             package_name: linux-x64

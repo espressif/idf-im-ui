@@ -150,6 +150,50 @@ const getAvailableFeatures = async (idfVersion = IDFDefaultVersion) => {
   }
 }
 
+// function to get the list of available tools for a given IDF version
+// If IDF version is not provided, it will use the default version
+// and return array of all tools available for that version, including required and optional
+const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
+  const toolsFileURL = `https://github.com/espressif/esp-idf/raw/${idfVersion.replace("release-","release/")}/tools/tools.json`;
+  try {
+    const res = await fetch(toolsFileURL);
+    if (res.ok) {
+      const data = await res.json();
+      const toolsRawList = data.tools || [];
+      const platformKey = getPlatformKey();
+      const osRequiredTools = toolsRawList.filter((tool) => {
+        // This is commented
+        // if (tool.platform_overrides) {
+        //   for (let entry of tool.platform_overrides) {
+        //     if (entry.install && entry.platforms.includes(platformKey)) {
+        //       if (
+        //         entry.install === "always" ||
+        //         entry.install === "on_request"
+        //       ) {
+        //         return true;
+        //       }
+        //     }
+        //   }
+        // }
+        if (tool.install === "always" || tool.install === "on_request") {
+          return true;
+        }
+        return false;
+      });
+      const tools = osRequiredTools.map((tool) => tool.name);
+      logger.info(
+        `required tools for IDF version ${idfVersion}: ${tools.join(", ")}`,
+      );
+      return tools;
+    } else {
+      throw new Error(`Failed to fetch tools.json: ${res.statusText}`);
+    }
+  } catch (error) {
+    logger.error(`Error fetching available tools: ${error.message}`);
+    return [];
+  }
+}
+
 export {
   getPlatformKey,
   getPlatformKey_eim,
@@ -157,5 +201,6 @@ export {
   getArchitecture,
   downloadOfflineArchive,
   getAvailableFeatures,
+  getAvailableTools,
 };
 
