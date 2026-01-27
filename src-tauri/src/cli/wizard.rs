@@ -519,15 +519,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         // Only do tool selection if we got the remote file
         let selected_tools = if let Some(mut tools_file) = remote_tools_file {
-            ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
-            /// This is needed because the IDEs expect clang to be always installed                     ///
-            ///////////////////////////////////////////////////////////////////////////////////////////////
-            for t in tools_file.tools.iter_mut() {
-              if t.name.contains("clang") {
-                t.install = "always".to_string();
-                debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
-              }
-            }
             // Check if we already have tools for this version (from CLI arg or config file)
             if let Some(existing) = config.get_tools_for_version_if_set(&idf_version) {
                 // Convert tool names back to ToolSelectionInfo (validates against available tools)
@@ -659,6 +650,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // tools_json_file
 
         let tools_json_file = get_tools_json_path(&mut config, &paths.idf_path);
+
         let validated_file = validate_tools_json_file(&tools_json_file, &mut config);
 
         debug!(
@@ -671,6 +663,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         let mut tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
+        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
+        /// This is needed because the IDEs expect clang to be always installed                     ///
+        ///////////////////////////////////////////////////////////////////////////////////////////////
+        for t in tools.tools.iter_mut() {
+          if t.name.contains("clang") {
+            t.install = "always".to_string();
+            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+          }
+        }
         if let Some(ref per_version) = config.idf_tools_per_version {
 
             if let Some(selected_tool_names) = per_version.get(&idf_version) {
