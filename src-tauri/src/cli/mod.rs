@@ -77,6 +77,8 @@ pub fn setup_cli(
     // Module filters are applied globally
     Dispatch::new()
         .format(formatter)
+        // Filter reqwest to only show warnings and errors
+        .level_for("reqwest", LevelFilter::Warn)
         // Apply file at Trace level
         .chain(
             Dispatch::new()
