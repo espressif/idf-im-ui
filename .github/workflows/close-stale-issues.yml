@@ -1,0 +1,114 @@
+name: Close Stale Issues
+
+on:
+  schedule:
+    # Run daily at 9:00 UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  close-stale-issues:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Close stale issues awaiting user response
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const STALE_DAYS = 14;
+            const STALE_MS = STALE_DAYS * 24 * 60 * 60 * 1000;
+            const now = Date.now();
+
+            // Get all open issues
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+
+            // Get repository collaborators/maintainers
+            let collaborators = [];
+            try {
+              const collabResponse = await github.paginate(github.rest.repos.listCollaborators, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+              collaborators = collabResponse.map(c => c.login.toLowerCase());
+            } catch (e) {
+              // If we can't get collaborators (e.g., no permission),
+              // fall back to checking for MEMBER/OWNER association
+              console.log('Could not fetch collaborators, will use author_association instead');
+            }
+
+            for (const issue of issues) {
+              // Skip pull requests
+              if (issue.pull_request) continue;
+
+              const issueAuthor = issue.user.login.toLowerCase();
+
+              // Get all comments on this issue
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                per_page: 100
+              });
+
+              // Rule 1: Don't close issues without any comments/reactions
+              if (comments.length === 0) {
+                console.log(`#${issue.number}: Skipping - no comments yet`);
+                continue;
+              }
+
+              // Get the last comment
+              const lastComment = comments[comments.length - 1];
+              const lastCommenter = lastComment.user.login.toLowerCase();
+              const lastCommentDate = new Date(lastComment.created_at).getTime();
+
+              // Rule 2: Don't close if last activity is from the issue author
+              if (lastCommenter === issueAuthor) {
+                console.log(`#${issue.number}: Skipping - last comment is from issue author`);
+                continue;
+              }
+
+              // Check if the last commenter is a maintainer/collaborator
+              const isMaintainer = collaborators.length > 0
+                ? collaborators.includes(lastCommenter)
+                : ['MEMBER', 'OWNER', 'COLLABORATOR'].includes(lastComment.author_association);
+
+              // Only close if a maintainer responded and user hasn't replied
+              if (!isMaintainer) {
+                console.log(`#${issue.number}: Skipping - last commenter is not a maintainer`);
+                continue;
+              }
+
+              // Check if the issue is stale (14+ days since maintainer's last comment)
+              const daysSinceLastComment = (now - lastCommentDate) / (24 * 60 * 60 * 1000);
+
+              if (daysSinceLastComment < STALE_DAYS) {
+                console.log(`#${issue.number}: Skipping - only ${Math.floor(daysSinceLastComment)} days since last maintainer comment`);
+                continue;
+              }
+
+              // Close the issue
+              console.log(`#${issue.number}: Closing - inactive for ${Math.floor(daysSinceLastComment)} days after maintainer response`);
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `This issue has been automatically closed due to inactivity. It has been ${STALE_DAYS}+ days since a maintainer responded and no follow-up was received.\n\nIf this issue is still relevant, please feel free to reopen it or create a new issue with updated information.`
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+                state_reason: 'not_planned'
+              });
+            }
