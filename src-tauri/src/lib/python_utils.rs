@@ -10,7 +10,6 @@ use std::process::ExitCode;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::mpsc,
     time::{Duration, SystemTime},
     vec,
 };
@@ -18,7 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
+    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{parse_cmake_version, remove_after_second_dot}
 };
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -296,7 +295,7 @@ pub fn pip_install_requirements(
                     "--upgrade", "--constraint", constrain_path,
                     "--no-index", "--find-links", wheel_dir.to_str().unwrap()
                 ];
-                command_executor::execute_command_with_env(
+                command_executor::execute_command_direct_with_env(
                     python_location.to_str().unwrap(),
                     &args,
                     vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
@@ -314,7 +313,7 @@ pub fn pip_install_requirements(
                     args.push(mirror_url.as_str());
                 }
 
-                command_executor::execute_command_with_env(
+                command_executor::execute_command_direct_with_env(
                     python_location.to_str().unwrap(),
                     &args,
                     vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
@@ -335,7 +334,7 @@ pub fn pip_install_requirements(
         }
         _ => {
             match if let Some(wheel_dir) = wheel_dir {
-                command_executor::execute_command_with_env(
+                command_executor::execute_command_direct_with_env(
                   "bash",
                   &vec![
                       "-c",
@@ -362,7 +361,7 @@ pub fn pip_install_requirements(
                     cmd.push_str(&format!(" --index-url {}", shlex::quote(mirror_url)));
                 }
 
-                command_executor::execute_command_with_env(
+                command_executor::execute_command_direct_with_env(
                     "bash",
                     &vec!["-c", &cmd],
                     vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
@@ -396,9 +395,8 @@ pub fn pip_install_requirements(
 /// # Returns
 /// * `Result<String, String>` - Python version string (e.g., "3.11") or error
 fn detect_python_version(python_executable: &str) -> Result<String, String> {
-    use crate::command_executor::execute_command;
 
-    match execute_command(python_executable, &["--version"]) {
+    match execute_command_direct(python_executable, &["--version"]) {
         Ok(output) => {
             if output.status.success() {
                 let version_output = String::from_utf8_lossy(&output.stdout);
@@ -783,7 +781,7 @@ fn run_install_python_env_script_with_features(
 /// * `Result<String, String>` - On success, returns a `Result` containing the standard output of the Python script as a string.
 ///   On error, returns a `Result` containing the standard error of the Python script as a string.
 pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, String> {
-    let output = command_executor::execute_command(python.unwrap_or("python3"), &["-c", script]);
+    let output = command_executor::execute_command_direct(python.unwrap_or("python3"), &["-c", script]);
     match output {
         Ok(out) => {
             if out.status.success() {
@@ -815,7 +813,7 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
 pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> {
     let mut outputs = Vec::new();
     // Check Python version
-    let version_output = command_executor::execute_command(
+    let version_output = command_executor::execute_command_direct(
         python.unwrap_or("python3"),
         &["--version"],
     );
@@ -853,7 +851,7 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> 
     }
     // check pip
     let output =
-        command_executor::execute_command(python.unwrap_or("python3"), &["-m", "pip", "--version"]);
+        command_executor::execute_command_direct(python.unwrap_or("python3"), &["-m", "pip", "--version"]);
     match output {
         Ok(out) => {
             if out.status.success() {
@@ -866,7 +864,7 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> 
     }
     // check venv
     let output_2 =
-        command_executor::execute_command(python.unwrap_or("python3"), &["-m", "venv", "-h"]);
+        command_executor::execute_command_direct(python.unwrap_or("python3"), &["-m", "venv", "-h"]);
     match output_2 {
         Ok(out) => {
             if out.status.success() {

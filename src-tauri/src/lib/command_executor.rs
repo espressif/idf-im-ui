@@ -791,7 +791,7 @@ mod tests {
         // Test that shell execution expands variables but direct doesn't
         #[cfg(not(target_os = "windows"))]
         {
-            // With shell - should expand $HOME
+            // With shell - should NOT expand properly quoted $HOME
             let output_shell = execute_command("echo", &["$HOME"]).unwrap();
             let stdout_shell = String::from_utf8_lossy(&output_shell.stdout);
 
@@ -799,9 +799,9 @@ mod tests {
             let output_direct = execute_command_direct("echo", &["$HOME"]).unwrap();
             let stdout_direct = String::from_utf8_lossy(&output_direct.stdout);
 
-            // Shell should expand, direct should keep literal
-            assert!(stdout_shell.trim() == "$HOME");  // Shell expands
-            assert_eq!(stdout_direct.trim(), "$HOME"); // Direct keeps literal
+            // Shell should not expand but keep literal
+            assert!(stdout_shell.trim() == "$HOME");
+            assert_eq!(stdout_direct.trim(), "$HOME");
         }
 
         #[cfg(target_os = "windows")]
