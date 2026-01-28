@@ -78,6 +78,26 @@ function getArchitecture() {
   return "Unknown Architecture";
 }
 
+// function to get the archive filename for a given IDF version and platform
+const getOfflineArchiveFilename = async (idfVersion) => {
+  const platformKey = getPlatformKey_eim();
+  const latestBuildInfoURL =
+    "https://dl.espressif.com/dl/eim/offline_archives.json";
+  const res = await fetch(latestBuildInfoURL);
+  if (res.ok) {
+    const data = await res.json();
+    for (let entry of data) {
+      if (entry.version === idfVersion && entry.platform === platformKey) {
+        return entry.filename;
+      }
+    }
+  } else {
+    logger.error(
+      `Failed to fetch offline archives info: ${res.statusText}`,
+    );
+  }
+}
+
 // function to download the offline archive for a given IDF version and provide
 // the path to the downloaded file
 const downloadOfflineArchive = async ({
@@ -86,7 +106,7 @@ const downloadOfflineArchive = async ({
 }) => {
   const archiveUrl = packageFilename
     ? `${offlineBaseUrl}${packageFilename}`
-    : `${offlineBaseUrl}archive_${idfVersion}_${getPlatformKey_eim()}.zst`;
+    : `${offlineBaseUrl}${await getOfflineArchiveFilename(idfVersion)}`;
 
   const pathToOfflineArchive = path.resolve(
     process.cwd(),
@@ -161,8 +181,9 @@ const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
       const data = await res.json();
       const toolsRawList = data.tools || [];
       const platformKey = getPlatformKey();
-      const osRequiredTools = toolsRawList.filter((tool) => {
-        // This is commented
+      const availableTools = toolsRawList.filter((tool) => {
+        // This is commented due to existing bug on EIM that is not properly parsing the platform overrides
+        // Once the bug is fixed this block needs to be enabled
         // if (tool.platform_overrides) {
         //   for (let entry of tool.platform_overrides) {
         //     if (entry.install && entry.platforms.includes(platformKey)) {
@@ -175,14 +196,25 @@ const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
         //     }
         //   }
         // }
+
+        // Finally return all tools that are set as required or optional
         if (tool.install === "always" || tool.install === "on_request") {
           return true;
         }
         return false;
       });
-      const tools = osRequiredTools.map((tool) => tool.name);
+      // Filter out tools that does not have binaries for the current platform
+      const platformAvailableTools = availableTools.filter((tool) => {
+        for (let version of tool.versions) {
+          if (Object.keys(version).includes(platformKey)) {
+            return true;
+          }
+        }
+        return false;
+      });
+      const tools = platformAvailableTools.map((tool) => tool.name);
       logger.info(
-        `required tools for IDF version ${idfVersion}: ${tools.join(", ")}`,
+        `available tools for IDF version ${idfVersion}: ${tools.join(", ")}`,
       );
       return tools;
     } else {

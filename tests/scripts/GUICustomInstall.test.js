@@ -166,7 +166,7 @@ export function runGUICustomInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 4000));
 
       const IDFListStable = await eimRunner.findByDataId(
-        "undefined-versions-section",
+        "stable-versions-section",
       );
       const IDFListStableText = await IDFListStable.getText();
       for (let version of IDFAvailableVersions.stable) {

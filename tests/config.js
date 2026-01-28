@@ -44,22 +44,17 @@ try {
       logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
       let IDFValidVersions = [...idfVersions.filter((v)=>v.old!==true && v.name !== 'latest').map((v)=>v.name)];
       IDFDefaultVersionIndex = IDFValidVersions.indexOf(IDFDefaultVersion) === -1? IDFDefaultVersionIndex: IDFValidVersions.indexOf(IDFDefaultVersion);
-      IDFAvailableVersions.stable = [
-        ...idfVersions
-          .filter(
-            (v) =>
-              v.old !== true && v.name !== "latest" && v.pre_release !== true,
-          )
-          .map((v) => v.name),
-      ];
-      IDFAvailableVersions.prerelease = [
-        ...idfVersions
-          .filter(
-            (v) =>
-              v.old !== true && v.name !== "latest" && v.pre_release === true,
-          )
-          .map((v) => v.name),
-      ];
+
+      const validIdfVersions = idfVersions.filter(
+        (v) => v.old !== true && v.name !== "latest",
+      );
+      IDFAvailableVersions.stable = validIdfVersions
+        .filter((v) => v.pre_release !== true)
+        .map((v) => v.name);
+      IDFAvailableVersions.prerelease = validIdfVersions
+        .filter((v) => v.pre_release === true)
+        .map((v) => v.name);
+
       logger.info(
         `Available IDF Versions: ${JSON.stringify(IDFAvailableVersions)}`,
       );
