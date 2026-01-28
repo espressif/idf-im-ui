@@ -266,46 +266,26 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
         }
         Commands::Run { command, idf } => {
-          if idf.is_none() {
-            // if there is selected version, use it
-            match get_selected_version() {
-              Some(selected) => {
+            let idf_identifier = if let Some(idf_str) = idf {
+                idf_str
+            } else if let Some(selected) = get_selected_version() {
                 info!("{}", t!("run.using_selected", idf = selected.name));
-                match run_command_in_context(&selected.id, &command) {
-                  Ok(output) => {
-                  match output.status.success() {
-                    true => {
-                      println!("{}", String::from_utf8_lossy(&output.stdout));
+                selected.id
+            } else {
+                return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")));
+            };
+
+            match run_command_in_context(&idf_identifier, &command) {
+                Ok(output) => {
+                    if output.status.success() {
+                        println!("{}", String::from_utf8_lossy(&output.stdout));
+                    } else {
+                        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
                     }
-                    false => {
-                      eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                    }
-                  }
-                  return Ok(())
+                    Ok(())
                 }
-                Err(err) => return Err(anyhow::anyhow!(err)),
-                }
-              }
-              None => {
-                return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")))
-              }
+                Err(err) => Err(err),
             }
-          } else {
-            match run_command_in_context(&idf.clone().unwrap(), &command) {
-              Ok(output) => {
-                match output.status.success() {
-                  true => {
-                    println!("{}", String::from_utf8_lossy(&output.stdout));
-                  }
-                  false => {
-                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                  }
-                }
-                Ok(())
-              }
-              Err(err) => Err(anyhow::anyhow!(err)),
-            }
-          }
         }
         Commands::Rename { version, new_name } => {
             if version.is_none() {
