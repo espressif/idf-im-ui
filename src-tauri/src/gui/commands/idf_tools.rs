@@ -130,6 +130,15 @@ pub async fn setup_tools(
             );
             anyhow!(t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string())
         })?;
+    ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
+    /// This is needed because the IDEs expect clang to be always installed                     ///
+    ///////////////////////////////////////////////////////////////////////////////////////////////
+    for t in tools.tools.iter_mut() {
+      if t.name.contains("clang") {
+        t.install = "always".to_string();
+        debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+      }
+    }
     if let Some(ref per_version) = settings.idf_tools_per_version {
       if let Some(selected_tool_names) = per_version.get(idf_version) {
         tools.tools = tools.tools
