@@ -124,7 +124,8 @@ export function runCLIWizardInstallTest({
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      for (let version of IDFAvailableVersions) {
+      let IDFAvailableVersionsFlat = Object.values(IDFAvailableVersions).flat();
+      for (let version of IDFAvailableVersionsFlat) {
         expect(
           testRunner.output,
           `Failed to offer installation for IDF version '${version}'`,

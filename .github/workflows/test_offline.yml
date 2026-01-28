@@ -45,10 +45,10 @@ jobs:
             package_name: windows-x64
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
-            version: 3.12.9
+            version: 3.11
           - os: macos-15-intel
             package_name: macos-x64
-            version: 3.12.9
+            version: 3.11
 
     steps:
       - name: Checkout repository
@@ -187,18 +187,8 @@ jobs:
       # Upload test results
       - name: Upload test results (non-windows)
         uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-Offline-results-${{ matrix.package_name }}
-          path: |
-            ./tests/results-*.json
-            ./tests/*.log
-
-      - name: Upload test results (windows)
-        uses: actions/upload-artifact@v4
-        if: matrix.os == 'windows-latest'
-        with:
-          name: autotest-CLI-Offline-results-${{ matrix.package_name }}
+          name: autotest-CLI-Offline-results-${{ matrix.package_name }}-python-${{ matrix.version }}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -208,7 +198,7 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: CLI-Offline-Autotests-${{ matrix.package_name }}
+          name: CLI-Offline-Autotests-${{ matrix.package_name }}-python-${{ matrix.version }}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json

@@ -10,7 +10,7 @@ import {
   IDFAvailableVersions,
   availableTargets,
 } from "../config.js";
-import { getAvailableFeatures } from "../helper.js";
+import { getAvailableFeatures, getAvailableTools } from "../helper.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
@@ -94,7 +94,7 @@ export function runGUICustomInstallTest({
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
-        "Welcome to ESP-IDF Installation Manager"
+        "Welcome to ESP-IDF Installation Manager",
       );
     });
 
@@ -105,13 +105,13 @@ export function runGUICustomInstallTest({
       const header = await eimRunner.findByCSS("h1");
       const text = await header.getText();
       expect(text, "Expected installation setup screen").to.equal(
-        "Install ESP-IDF"
+        "Install ESP-IDF",
       );
       const custom = await eimRunner.findByText("Custom Installation");
       expect(custom, "Expected option for custom installation").to.not.be.false;
       expect(
         await custom.isDisplayed(),
-        "Expected option for simplified installation"
+        "Expected option for simplified installation",
       ).to.be.true;
     });
 
@@ -126,20 +126,20 @@ export function runGUICustomInstallTest({
       }
       let targetAll = await eimRunner.findByText("All");
       expect(
-        await targetAll.findElement(By.css("Div")).getAttribute("class")
+        await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).to.include("checked");
       let targetESP32 = await eimRunner.findByDataId("target-item-esp32");
       expect(await targetESP32.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       await eimRunner.clickElement("esp32");
       expect(
-        await targetAll.findElement(By.css("Div")).getAttribute("class")
+        await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).not.to.include("checked");
       expect(await targetESP32.getAttribute("class")).to.include("selected");
       await eimRunner.clickElement("esp32");
       expect(
-        await targetAll.findElement(By.css("Div")).getAttribute("class")
+        await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).to.include("checked");
       await eimRunner.clickElement("All");
 
@@ -147,14 +147,14 @@ export function runGUICustomInstallTest({
         await eimRunner.clickElement(target);
         if (target === "All") {
           expect(
-            await targetAll.findElement(By.css("Div")).getAttribute("class")
+            await targetAll.findElement(By.css("Div")).getAttribute("class"),
           ).to.include("checked");
         } else {
           let selectedTarget = await eimRunner.findByDataId(
-            `target-item-${target}`
+            `target-item-${target}`,
           );
           expect(await selectedTarget.getAttribute("class")).to.include(
-            "selected"
+            "selected",
           );
         }
       }
@@ -164,33 +164,48 @@ export function runGUICustomInstallTest({
       this.timeout(15000);
       await eimRunner.clickButton("Continue with Selected Targets");
       await new Promise((resolve) => setTimeout(resolve, 4000));
-      const IDFList = await eimRunner.findByDataId("versions-grid");
-      const IDFListText = await IDFList.getText();
-      for (let version of IDFAvailableVersions) {
-        expect(IDFListText).to.include(version);
+
+      const IDFListStable = await eimRunner.findByDataId(
+        "undefined-versions-section",
+      );
+      const IDFListStableText = await IDFListStable.getText();
+      for (let version of IDFAvailableVersions.stable) {
+        expect(IDFListStableText).to.include(version);
+      }
+      const IDFListPrerelease = await eimRunner.findByDataId(
+        "prerelease-versions-section",
+      );
+      const IDFListPrereleaseText = await IDFListPrerelease.getText();
+      for (let version of IDFAvailableVersions.prerelease) {
+        expect(IDFListPrereleaseText).to.include(version);
+      }
+      const IDFListDevelopment = await eimRunner.findByDataId(
+        "development-versions-section",
+      );
+      const IDFListDevelopmentText = await IDFListDevelopment.getText();
+      for (let version of IDFAvailableVersions.development) {
+        expect(IDFListDevelopmentText).to.include(version);
       }
       let IDFMaster = await eimRunner.findByDataId("version-item-master");
       expect(await IDFMaster.getAttribute("class")).to.not.include("selected");
-      await eimRunner.clickElement("master");
+      await eimRunner.driver.executeScript("arguments[0].click();", IDFMaster);
       expect(await IDFMaster.getAttribute("class")).to.include("selected");
       const selectedMaster = await eimRunner.findByDataId(
-        "selected-tag-master"
+        "selected-tag-master",
       );
       let closeButton = await selectedMaster.findElement(By.css("button"));
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        closeButton
+        closeButton,
       );
       expect(await IDFMaster.getAttribute("class")).to.not.include("selected");
       for (let version of idfVersionList) {
         await eimRunner.clickElement(version);
       }
-
-      const selectedVersions = await eimRunner.findByText("Selected versions");
+      const selectedVersions = await eimRunner.findByDataId("selected-tags");
       const selectedVersionsText = await selectedVersions.getText();
-      const expected = ["Selected versions:", ...idfVersionList];
-      for (let substring of expected) {
-        expect(selectedVersionsText).to.include(substring);
+      for (let version of idfVersionList) {
+        expect(selectedVersionsText).to.include(version);
       }
     });
 
@@ -201,7 +216,7 @@ export function runGUICustomInstallTest({
       const IDFMirrorsList = await eimRunner.findByRelation(
         "parent",
         "div",
-        "ESP-IDF Repository Mirror"
+        "ESP-IDF Repository Mirror",
       );
       let IDFMirrorsListText = await IDFMirrorsList.getText();
       for (let mirror of Object.values(IDFMIRRORS)) {
@@ -209,33 +224,38 @@ export function runGUICustomInstallTest({
       }
 
       let githubMirror = await eimRunner.findByDataId(
-        "idf-mirror-option-https://github.com"
+        "idf-mirror-option-https://github.com",
       );
       let jihulabMirror = await eimRunner.findByDataId(
-        "idf-mirror-option-https://jihulab.com/esp-mirror"
+        "idf-mirror-option-https://jihulab.com/esp-mirror",
+      );
+
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        githubMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.include("selected");
       expect(await jihulabMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        jihulabMirror
+        jihulabMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await jihulabMirror.getAttribute("class")).to.include("selected");
 
       idfMirror === "github" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          githubMirror
+          githubMirror,
         ));
       idfMirror === "jihulab" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          jihulabMirror
+          jihulabMirror,
         ));
     });
 
@@ -244,69 +264,73 @@ export function runGUICustomInstallTest({
       const toolsMirrorsList = await eimRunner.findByRelation(
         "parent",
         "div",
-        "ESP-IDF Tools Mirror"
+        "ESP-IDF Tools Mirror",
       );
       let toolsMirrorsListText = await toolsMirrorsList.getText();
       for (let mirror of Object.values(TOOLSMIRRORS)) {
         expect(toolsMirrorsListText).to.include(mirror);
       }
       let githubMirror = await eimRunner.findByDataId(
-        "tools-mirror-option-https://github.com"
+        "tools-mirror-option-https://github.com",
       );
       let espressifComMirror = await eimRunner.findByDataId(
-        "tools-mirror-option-https://dl.espressif.com/github_assets"
+        "tools-mirror-option-https://dl.espressif.com/github_assets",
       );
       let espressifCnMirror = await eimRunner.findByDataId(
-        "tools-mirror-option-https://dl.espressif.cn/github_assets"
+        "tools-mirror-option-https://dl.espressif.cn/github_assets",
+      );
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        githubMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.include("selected");
       expect(await espressifComMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await espressifCnMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        espressifComMirror
+        espressifComMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await espressifComMirror.getAttribute("class")).to.include(
-        "selected"
+        "selected",
       );
       expect(await espressifCnMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        espressifCnMirror
+        espressifCnMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await espressifComMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await espressifCnMirror.getAttribute("class")).to.include(
-        "selected"
+        "selected",
       );
 
       toolsMirror === "github" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          githubMirror
+          githubMirror,
         ));
       toolsMirror === "dl_com" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          espressifComMirror
+          espressifComMirror,
         ));
       toolsMirror === "dl_cn" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          espressifCnMirror
+          espressifCnMirror,
         ));
     });
 
@@ -315,78 +339,81 @@ export function runGUICustomInstallTest({
       const pypiMirrorsList = await eimRunner.findByRelation(
         "parent",
         "div",
-        "PyPI Mirror"
+        "PyPI Mirror",
       );
       let pypiMirrorsListText = await pypiMirrorsList.getText();
       for (let mirror of Object.values(PYPIMIRRORS)) {
         expect(pypiMirrorsListText).to.include(mirror);
       }
       let officialMirror = await eimRunner.findByDataId(
-        "pypi-mirror-option-https://pypi.org/simple"
+        "pypi-mirror-option-https://pypi.org/simple",
       );
       let aliyunMirror = await eimRunner.findByDataId(
-        "pypi-mirror-option-https://mirrors.aliyun.com/pypi/simple"
+        "pypi-mirror-option-https://mirrors.aliyun.com/pypi/simple",
       );
       let tsinghuaMirror = await eimRunner.findByDataId(
-        "pypi-mirror-option-https://pypi.tuna.tsinghua.edu.cn/simple"
+        "pypi-mirror-option-https://pypi.tuna.tsinghua.edu.cn/simple",
       );
       let ustcMirror = await eimRunner.findByDataId(
-        "pypi-mirror-option-https://pypi.mirrors.ustc.edu.cn/simple"
+        "pypi-mirror-option-https://pypi.mirrors.ustc.edu.cn/simple",
       );
-
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        officialMirror,
+      );
       expect(await officialMirror.getAttribute("class")).to.include("selected");
       expect(await aliyunMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
 
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        aliyunMirror
+        aliyunMirror,
       );
       expect(await officialMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await aliyunMirror.getAttribute("class")).to.include("selected");
       expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
 
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        tsinghuaMirror
+        tsinghuaMirror,
       );
       expect(await officialMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await aliyunMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await tsinghuaMirror.getAttribute("class")).to.include("selected");
       expect(await ustcMirror.getAttribute("class")).to.not.include("selected");
 
       await eimRunner.driver.executeScript("arguments[0].click();", ustcMirror);
       expect(await officialMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await aliyunMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await tsinghuaMirror.getAttribute("class")).to.not.include(
-        "selected"
+        "selected",
       );
       expect(await ustcMirror.getAttribute("class")).to.include("selected");
 
       const pypiMirrorButton = await eimRunner.findByText(
-        PYPIMIRRORS[pypiMirror]
+        PYPIMIRRORS[pypiMirror],
       );
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        pypiMirrorButton
+        pypiMirrorButton,
       );
     });
 
@@ -400,39 +427,61 @@ export function runGUICustomInstallTest({
           await eimRunner.clickElement(version);
         }
 
-        const requiredFeaturesList = await eimRunner.findByDataId(
-          "required-group"
-        );
+        const requiredFeaturesList =
+          await eimRunner.findByDataId("required-group");
         const requiredFeaturesListText = await requiredFeaturesList.getText();
         expect(
           requiredFeaturesListText,
-          "Core feature not added to the required features"
+          "Core feature not added to the required features",
         ).to.include("core");
 
-        const optionalFeaturesList = await eimRunner.findByDataId(
-          "optional-group"
-        );
+        const optionalFeaturesList =
+          await eimRunner.findByDataId("optional-group");
         const optionalFeaturesListText = await optionalFeaturesList.getText();
         const expectedFeaturesAll = await getAvailableFeatures(version);
         const expectedFeaturesOptional = expectedFeaturesAll.filter(
-          (feature) => feature !== "core"
+          (feature) => feature !== "core",
         );
         for (let feature of expectedFeaturesOptional) {
           expect(
             optionalFeaturesListText,
-            `Feature ${feature} not listed in the optional features`
+            `Feature ${feature} not listed in the optional features`,
           ).to.include(feature);
         }
       }
     });
 
-    it("09- Should show installation path", async function () {
+    it("09- Should show list of Tools", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton("Continue to Installation Path");
+      await eimRunner.clickButton("Continue to Tools selection");
+      await new Promise((resolve) => setTimeout(resolve, 4000));
+
+      for (let version of idfVersionList) {
+        if (idfVersionList.length > 1) {
+          await eimRunner.clickElement(version);
+        }
+
+        const completeToolsList =
+          await eimRunner.findByDataId("tools-sections");
+        const completeToolsListText = await completeToolsList.getText();
+        const expectedToolsAll = await getAvailableTools(version);
+
+        for (let tool of expectedToolsAll) {
+          expect(
+            completeToolsListText,
+            `Tool ${tool} not listed in the tools list`,
+          ).to.include(tool);
+        }
+      }
+    });
+
+    it("10- Should show installation path", async function () {
+      this.timeout(10000);
+      await eimRunner.clickButton("Continue");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const installPath = await eimRunner.findByDataId("path-info-title");
       expect(await installPath.getText()).to.equal(
-        "ESP-IDF Installation Directory"
+        "ESP-IDF Installation Directory",
       );
       expect(await installPath.isDisplayed()).to.be.true;
       const pathInput = await eimRunner.findByDataId("installation-path-input");
@@ -447,13 +496,13 @@ export function runGUICustomInstallTest({
       expect(await input.getAttribute("value")).to.equal(installFolder);
     });
 
-    it("10- Should show installation summary", async function () {
+    it("11- Should show installation summary", async function () {
       this.timeout(10000);
       await eimRunner.clickButton("Continue");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const versionSummary = await eimRunner.findByDataId("versions-info");
       expect(await versionSummary.getText()).to.include(
-        "Installing ESP-IDF Versions"
+        "Installing ESP-IDF Versions",
       );
       const selectedVersions = await eimRunner.findByDataId("version-chips");
       const selectedVersionsText = await selectedVersions.getText();
@@ -462,7 +511,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("11- Should install IDF using expert setup", async function () {
+    it("12- Should install IDF using expert setup", async function () {
       this.timeout(2730000);
 
       try {
@@ -495,7 +544,7 @@ export function runGUICustomInstallTest({
       }
     });
 
-    it("12- Should offer to save installation configuration", async function () {
+    it("13- Should offer to save installation configuration", async function () {
       this.timeout(15000);
 
       try {

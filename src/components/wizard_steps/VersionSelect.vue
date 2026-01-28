@@ -13,6 +13,7 @@
           :versions="stableVersions"
           :selected="selected_versions"
           @toggle="toggleVersion"
+          type="stable"
         />
 
         <!-- Pre-release Versions Section -->
