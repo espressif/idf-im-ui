@@ -409,8 +409,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     // select target & idf version
     config = select_targets_and_versions(config).await?;
 
-    // mirrors select
-    config = select_mirrors(config).await?;
+    // mirrors select (skip in offline mode - mirrors aren't used)
+    if !offline_mode {
+        config = select_mirrors(config).await?;
+    }
 
     config = select_installation_path(config)?;
 
