@@ -16,6 +16,7 @@ use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
+use idf_im_lib::version_manager::run_command_in_context;
 use idf_im_lib::version_manager::select_idf_version;
 use idf_im_lib::logging;
 use log::debug;
@@ -23,6 +24,7 @@ use log::error;
 use log::info;
 use log::warn;
 use log::LevelFilter;
+use semver::Op;
 use serde_json::json;
 use rust_i18n::t;
 
@@ -262,6 +264,48 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     Err(err) => Err(anyhow::anyhow!(err)),
                 }
             }
+        }
+        Commands::Run { command, idf } => {
+          if idf.is_none() {
+            // if there is selected version, use it
+            match get_selected_version() {
+              Some(selected) => {
+                info!("{}", t!("run.using_selected", idf = selected.name));
+                match run_command_in_context(&selected.id, &command) {
+                  Ok(output) => {
+                  match output.status.success() {
+                    true => {
+                      println!("{}", String::from_utf8_lossy(&output.stdout));
+                    }
+                    false => {
+                      eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                    }
+                  }
+                  return Ok(())
+                }
+                Err(err) => return Err(anyhow::anyhow!(err)),
+                }
+              }
+              None => {
+                return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")))
+              }
+            }
+          } else {
+            match run_command_in_context(&idf.clone().unwrap(), &command) {
+              Ok(output) => {
+                match output.status.success() {
+                  true => {
+                    println!("{}", String::from_utf8_lossy(&output.stdout));
+                  }
+                  false => {
+                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                  }
+                }
+                Ok(())
+              }
+              Err(err) => Err(anyhow::anyhow!(err)),
+            }
+          }
         }
         Commands::Rename { version, new_name } => {
             if version.is_none() {
