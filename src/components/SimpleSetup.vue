@@ -128,14 +128,17 @@
     <!-- Installation Failed -->
     <n-card v-else-if="currentState === 'error'" class="status-card">
       <div class="error-status">
-        <n-result status="error" :title="errorTitle" :description="errorMessage">
+        <n-result :status="verificationFailed ? 'warning' : 'error'" :title="errorTitle" :description="errorMessage">
           <template #icon>
-            <n-icon :size="72" color="#ff4d4f">
+            <n-icon :size="72" :color="verificationFailed ? '#faad14' : '#ff4d4f'">
               <CloseCircleOutlined />
             </n-icon>
           </template>
           <template #footer>
             <div class="error-actions">
+              <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
+                {{ $t('common.prerequisites.skipCheck') }}
+              </n-button>
               <n-button @click="viewLogs" type="info" size="large">
                 {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
@@ -149,7 +152,7 @@
           </template>
         </n-result>
 
-        <n-alert v-if="errorDetails" type="error" style="margin-top: 2rem;">
+        <n-alert v-if="errorDetails" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
@@ -230,6 +233,46 @@ export default {
     const errorTitle = ref('Installation Failed')
     const errorMessage = ref('')
     const errorDetails = ref('')
+    const verificationFailed = ref(false)
+
+    // Helper function to fetch settings, versions, and validate installation path
+    const prepareForInstallation = async () => {
+      try {
+        const settings = await invoke('get_settings')
+        installPath.value = settings?.path
+        console.log('Default installation path:', installPath.value)
+
+        const versions = await invoke('get_idf_versions', { includeUnstable: false })
+        if (!versions || versions.length === 0 || !versions[0]?.name) {
+          throw new Error(t('simpleSetup.error.versions.message'))
+        }
+        selectedVersion.value = versions[0].name
+
+        const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
+          path: installPath.value,
+          versions: [selectedVersion.value]
+        })
+        console.log('Installation path check result:', pathValid)
+
+        if (!pathValid) {
+          errorTitle.value = 'Installation Path Not Empty'
+          errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
+          errorDetails.value = 'Please use custom installation to select a different path.'
+          currentState.value = 'error'
+          return false
+        }
+
+        currentState.value = 'ready'
+        return true
+      } catch (error) {
+        console.error('Failed to prepare for installation:', error)
+        errorTitle.value = t('simpleSetup.error.system.title')
+        errorMessage.value = t('simpleSetup.error.system.message')
+        errorDetails.value = error.toString()
+        currentState.value = 'error'
+        return false
+      }
+    }
 
     // Event listeners
     let unlistenProgress = null
@@ -257,20 +300,36 @@ export default {
     const checkPrerequisites = async (force) => {
       try {
         currentState.value = 'checking'
+        verificationFailed.value = false
         if (appStore.prerequisitesLastChecked === null || force) {
           await appStore.checkPrerequisites(force);
         }
         // Check prerequisites
         let prereqResult = appStore.prerequisitesStatus;
+        
+        // Check if verification itself failed (shell or other error)
+        if (!prereqResult.canVerify) {
+          verificationFailed.value = true
+          errorTitle.value = t('common.prerequisites.verificationFailedTitle')
+          if (prereqResult.shellFailed) {
+            errorMessage.value = t('common.prerequisites.shellFailed')
+          } else {
+            errorMessage.value = t('common.prerequisites.verificationError')
+          }
+          errorDetails.value = t('common.prerequisites.verificationFailedHint')
+          currentState.value = 'error'
+          return false
+        }
+        
         if (!prereqResult.allOk && appStore.os !== 'windows') {
           errorTitle.value = t('simpleSetup.error.prerequisites.title')
           errorMessage.value = t('simpleSetup.error.prerequisites.message')
           if (appStore.os === 'macos') {
-            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.macosHint', { list: prereqResult.missing.join(' ') })
+            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.macosHint', { list: prereqResult.missing.join(' ') })
           } else if (appStore.os === 'linux') {
-            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + t('simpleSetup.messages.linuxHint', { list: prereqResult.missing.join(' ') })
+            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.linuxHint', { list: prereqResult.missing.join(' ') })
           } else {
-            errorDetails.value = t('simpleSetup.messages.manualHint') + '\n' + prereqResult.missing.join(', ')
+            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + prereqResult.missing.join(', ')
           }
           currentState.value = 'error'
           return false
@@ -298,37 +357,9 @@ export default {
         } else {
           console.log("Python sanity check passed");
         }
-        // Get default installation path
-        invoke('get_settings').then(settings => {
-          installPath.value = settings?.path
-          console.log('Default installation path:', installPath.value);
-          // Get latest ESP-IDF version
-          invoke('get_idf_versions',{includeUnstable: false}).then(versions => {
-            selectedVersion.value = versions?.[0].name || 'v5.5.1';
-            // Check if path is valid
-            let path_to_check = installPath.value;
-            console.log('Checking installation path:', path_to_check);
-            invoke('is_path_empty_or_nonexistent_command', {
-              path: path_to_check,
-              versions: [selectedVersion.value]
-            }).then(pathValid => {
-              console.log('Installation path check result:', pathValid);
-              if (!pathValid) {
-                errorTitle.value = 'Installation Path Not Empty'
-                errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
-                errorDetails.value = 'Please use custom installation to select a different path.'
-                currentState.value = 'error'
-                return false
-              } else {
-                console.log('Installation path is valid:', installPath.value);
-                currentState.value = 'ready';
-              }
-
-            });
-          });
-        });
-
-        return true
+        
+        // Fetch settings, versions, and validate installation path
+        return await prepareForInstallation()
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
         errorTitle.value = t('simpleSetup.error.system.title')
@@ -478,6 +509,16 @@ export default {
       });
     }
 
+    const skipAndContinue = async () => {
+      // Skip prerequisites verification and proceed with setup
+      verificationFailed.value = false
+      errorMessage.value = ''
+      errorDetails.value = ''
+      currentState.value = 'checking'
+      
+      // Fetch settings, versions, and validate installation path
+      await prepareForInstallation()
+    }
 
     const viewLogs = async () => {
       try {
@@ -545,11 +586,13 @@ export default {
       errorTitle,
       errorMessage,
       errorDetails,
+      verificationFailed,
       getStatusIcon,
       getStatusIconClass,
       getProgressColorScheme,
       startInstallation,
       retry,
+      skipAndContinue,
       viewLogs,
       viewDocumentation,
       openIDE,
