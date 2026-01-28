@@ -27,6 +27,19 @@ use std::sync::atomic::AtomicBool;
 use regex::Regex;
 use url::Url;
 
+#[cfg(windows)]
+use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
+#[cfg(windows)]
+use winapi::um::securitybaseapi::GetTokenInformation;
+#[cfg(windows)]
+use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+#[cfg(windows)]
+use winapi::um::handleapi::CloseHandle;
+#[cfg(windows)]
+use winapi::shared::minwindef::{DWORD, FALSE};
+#[cfg(windows)]
+use std::mem;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MirrorEntry {
     pub url: String,
@@ -897,6 +910,41 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
     mirror_entries
 }
 
+#[cfg(target_os = "windows")]
+pub fn is_running_elevated() -> bool {
+    unsafe {
+        let process = GetCurrentProcess();
+        let mut token = std::ptr::null_mut();
+
+        if OpenProcessToken(process, TOKEN_QUERY, &mut token) == FALSE {
+            return false;
+        }
+
+        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
+        let mut return_length: DWORD = 0;
+
+        let result = GetTokenInformation(
+            token,
+            TokenElevation,
+            &mut elevation as *mut _ as *mut _,
+            mem::size_of::<TOKEN_ELEVATION>() as DWORD,
+            &mut return_length,
+        );
+
+        CloseHandle(token);
+
+        if result == FALSE {
+            return false;
+        }
+
+        elevation.TokenIsElevated != 0
+    }
+}
+
+#[cfg(not(windows))]
+pub fn is_running_elevated() -> bool {
+    unsafe { libc::geteuid() == 0 }
+}
 
 #[cfg(test)]
 mod tests {

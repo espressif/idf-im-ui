@@ -123,6 +123,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         _ => {
             setup_cli(cli.verbose, false, cli.log_file.map(PathBuf::from))
                 .context("Failed to setup logging")?;
+            let is_elevated = idf_im_lib::utils::is_running_elevated();
+            if is_elevated {
+                log::warn!("Running as elevated user. This is not recommended but it is required if you want to install drivers.");
+                if cfg!(target_os = "windows") {
+                    println!("{}", t!("cli.running_as_elevated_windows"));
+                } else {
+                    println!("{}", t!("cli.running_as_elevated_posix"));
+                }
+            }
         }
     }
     if !do_not_track {

@@ -479,6 +479,12 @@ drivers.windows_only:
 cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
+cli.running_as_elevated_posix:
+  en: Running as elevated user. This is not recommended.
+  cn: 以管理员权限运行。这不是推荐的做法。
+cli.running_as_elevated_windows:
+  en: Running as elevated user. This is not recommended but it is required if you want to install drivers.
+  cn: 以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。
 gui.setup_tools.qemu_prerequisites_check.failed:
   en: "Failed to check QEMU prerequisites: %{error}"
   cn: "无法检查 QEMU 依赖项：%{error}"

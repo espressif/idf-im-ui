@@ -457,7 +457,7 @@ export default {
 
     const installDrivers = async () => {
       try {
-        let res = await invoke('check_elevation')
+        let res = await invoke('check_elevated_permissions')
         if (!res) {
           message.error(t('versionManagement.messages.error.driversPermission'))
           return
