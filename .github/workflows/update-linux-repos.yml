@@ -208,7 +208,7 @@ jobs:
           # Generate metadata for x86_64
           if [ -d "x86_64" ] && [ "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
             echo "Generating metadata for x86_64 RPMs..."
-            createrepo-c x86_64/ --update
+            createrepo_c x86_64/ --update
             echo "x86_64 metadata generated successfully"
           else
             echo "No x86_64 RPMs found, skipping metadata generation"
@@ -217,7 +217,7 @@ jobs:
           # Generate metadata for aarch64
           if [ -d "aarch64" ] && [ "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
             echo "Generating metadata for aarch64 RPMs..."
-            createrepo-c aarch64/ --update
+            createrepo_c aarch64/ --update
             echo "aarch64 metadata generated successfully"
           else
             echo "No aarch64 RPMs found, skipping metadata generation"
