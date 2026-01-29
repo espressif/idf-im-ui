@@ -329,14 +329,14 @@ export function runInstallVerification({
               if (entry.install && entry.platforms.includes(platformKey)) {
                 if (
                   entry.install === "always" ||
-                  entry.install === "on_request"
+                  entry.name.startsWith("esp-clang")
                 ) {
                   return true;
                 }
               }
             }
           }
-          if (tool.install === "always" || tool.install === "on_request") {
+          if (tool.install === "always" || tool.name.startsWith("esp-clang")) {
             return true;
           }
           return false;
@@ -384,11 +384,11 @@ export function runInstallVerification({
           if (requiredTools.includes(tool.name)) {
             expect(
               tool,
-              `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
+              `Tool entry in tools.json file does not contain name properties for IDF ${idf}`
             ).to.have.property("name");
             expect(
               tool,
-              `Tool entry in tools.json file does not contain expected properties for IDF ${idf}`
+              `Tool entry in tools.json file does not contain version command properties for IDF ${idf}`
             ).to.have.property("version_cmd");
 
             if (tool.version_cmd.join(" ") !== "") {

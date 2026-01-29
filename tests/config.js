@@ -11,7 +11,7 @@ import path from "path";
 
 // Define default values for offline tests
 let IDFDefaultVersion = "v5.5.1";
-let IDFAvailableVersions = ["master"];
+let IDFAvailableVersions = { development: "master" };
 let IDFDefaultVersionIndex = 0;
 let availableTargets = [
   "esp32",
@@ -44,8 +44,23 @@ try {
       logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
       let IDFValidVersions = [...idfVersions.filter((v)=>v.old!==true && v.name !== 'latest').map((v)=>v.name)];
       IDFDefaultVersionIndex = IDFValidVersions.indexOf(IDFDefaultVersion) === -1? IDFDefaultVersionIndex: IDFValidVersions.indexOf(IDFDefaultVersion);
-      IDFAvailableVersions.push(...IDFValidVersions);
-      logger.info(`Available IDF Versions: ${IDFAvailableVersions.join(", ")}`);
+
+      const validIdfVersions = idfVersions.filter(
+        (v) => v.old !== true && v.name !== "latest",
+      );
+      IDFAvailableVersions.stable = validIdfVersions
+        .filter((v) => v.pre_release !== true)
+        .map((v) => v.name);
+      IDFAvailableVersions.prerelease = validIdfVersions
+        .filter((v) => v.pre_release === true)
+        .map((v) => v.name);
+
+      logger.info(
+        `Available IDF Versions: ${JSON.stringify(IDFAvailableVersions)}`,
+      );
+      logger.info(
+        `IDF Default Version Index set to: ${IDFDefaultVersionIndex}`,
+      );
     } else {
       logger.info("No IDF versions found in the response.");
     }
