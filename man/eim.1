@@ -126,6 +126,10 @@ Skip prerequisites check. This is useful if you are sure that all prerequisites 
 Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
 
 .TP
+.B \-\-cleanup \fICLEANUP\fR
+If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
+
+.TP
 .B \-\-use\-local\-archive \fIPATH_TO_ARCHIVE\fR
 Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a .zst file. Do not unpack the .zst archive. This option is not compatible with online installation options like --idf-versions, --mirror, etc. At this time, offline installation only supports Python 3.11 to 3.13.
 
