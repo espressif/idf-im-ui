@@ -1,7 +1,6 @@
 use clap::builder;
 use clap::Parser;
-use idf_im_lib::command_executor::execute_command;
-use idf_im_lib::command_executor::execute_command_with_env;
+use idf_im_lib::command_executor::{execute_command_with_dir, execute_command,execute_command_with_env};
 use idf_im_lib::download_file;
 use idf_im_lib::download_file_and_rename;
 use idf_im_lib::ensure_path;
@@ -9,7 +8,7 @@ use idf_im_lib::idf_tools::get_list_of_tools_to_download;
 use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::extract_zst_archive;
-use idf_im_lib::utils::parse_cmake_version;
+use idf_im_lib::utils::{parse_cmake_version, find_by_name_and_extension};
 use idf_im_lib::verify_file_checksum;
 use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::git_tools::ProgressMessage;
@@ -858,6 +857,131 @@ async fn main() {
                 }
             }
             handle.join().unwrap(); // Wait for progress bar thread to finish
+
+
+            // Create a temporary venv for compote
+            let compote_env = archive_dir.path().join("compote_env");
+            ensure_path(compote_env.to_str().unwrap())
+                .expect("Failed to create compote env directory");
+
+            // Create virtual environment for compote using uv
+            info!("Creating virtual environment for compote...");
+            match execute_command(
+                "uv",
+                &[
+                    "venv",
+                    "--python",
+                    &global_python_version,
+                    compote_env.to_str().unwrap(),
+                ],
+            ) {
+                Ok(output) => {
+                    if !output.status.success() {
+                        error!(
+                            "Failed to create compote virtual environment: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        continue;
+                    }
+                    info!("Compote virtual environment created successfully.");
+                }
+                Err(err) => {
+                    error!("Failed to create compote venv: {}", err);
+                    continue;
+                }
+            }
+
+            // Install idf-component-manager using uv pip
+            info!("Installing idf-component-manager...");
+            match execute_command(
+                "uv",
+                &[
+                    "pip",
+                    "install",
+                    "--python",
+                    compote_env.to_str().unwrap(),
+                    "idf-component-manager",
+                ],
+            ) {
+                Ok(output) => {
+                    if !output.status.success() {
+                        error!(
+                            "Failed to install idf-component-manager: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        continue;
+                    }
+                    info!("idf-component-manager installed successfully.");
+                }
+                Err(err) => {
+                    error!("Failed to install idf-component-manager: {}", err);
+                    continue;
+                }
+            }
+
+            // Determine compote executable path
+            let compote_executable = match std::env::consts::OS {
+                "windows" => compote_env.join("Scripts").join("compote.exe"),
+                _ => compote_env.join("bin").join("compote"),
+            };
+
+            if !compote_executable.exists() {
+                error!("Compote executable not found at: {:?}", compote_executable);
+                continue;
+            }
+
+            // Create components download directory
+            let components_dir = archive_dir.path().join("components");
+            ensure_path(components_dir.to_str().unwrap())
+                .expect("Failed to create components directory");
+
+            // Build compote command arguments
+            // Format: compote registry sync --component name==version --component name2==version2 --recursive [dest]
+            let mut compote_args: Vec<String> = vec![
+                "registry".to_string(),
+                "sync".to_string(),
+                "--resolution".to_string(),
+                "latest".to_string(),
+                "--recursive".to_string(),
+            ];
+
+            compote_args.push(components_dir.to_str().unwrap().to_string());
+
+            info!(
+                "Syncing components to {:?}...",
+                components_dir
+            );
+            debug!("Compote command: {:?} {:?}", compote_executable, compote_args);
+
+            match execute_command_with_dir(
+                compote_executable.to_str().unwrap(),
+                &compote_args.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
+                idf_path.to_str().unwrap(),
+            ) {
+                Ok(output) => {
+                    if output.status.success() {
+                        info!(
+                            "Successfully synced components.",
+                        );
+                        debug!("Compote output: {}", String::from_utf8_lossy(&output.stdout));
+                    } else {
+                        error!(
+                            "Failed to sync components: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        // Don't fail the entire build, just warn
+                        warn!("Component sync failed, continuing without components...");
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to run compote: {}", err);
+                    warn!("Component sync failed, continuing without components...");
+                }
+            }
+
+            if let Err(e) = fs::remove_dir_all(&compote_env) {
+                warn!("Failed to clean up compote environment: {}", e);
+            }
 
             // Read tools.json
             let tools_json_file = idf_path
