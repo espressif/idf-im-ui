@@ -756,6 +756,26 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 return Err(err.to_string());
             }
         };
+        if config.cleanup.unwrap_or(false) {
+            // remove tool download directory
+            match fs::remove_dir_all(&tool_download_directory) {
+                Ok(_) => {
+                    info!(
+                        "{}: {}",
+                        t!("wizard.tools.cleanup.success"),
+                        tool_download_directory.display()
+                    );
+                }
+                Err(err) => {
+                    warn!(
+                        "{}: {}. {}",
+                        t!("wizard.tools.cleanup.failure"),
+                        tool_download_directory.display(),
+                        err
+                    );
+                }
+            }
+        }
 
         match idf_im_lib::python_utils::install_python_env(
             &paths,
