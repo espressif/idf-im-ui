@@ -1,5 +1,6 @@
 use flate2::read::GzDecoder;
 use std::ffi::OsStr;
+use gix::validate::path::component;
 use std::hash::{DefaultHasher, Hash,Hasher};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
@@ -1027,6 +1028,7 @@ pub fn setup_environment_variables(
 
     let instal_dir_string = tool_install_directory.to_str().unwrap().to_string();
     env_vars.push(("IDF_TOOLS_PATH".to_string(), instal_dir_string));
+    env_vars.push(("IDF_COMPONENT_LOCAL_STORAGE_URL".to_string(), format!("file://{}", tool_install_directory.to_str().unwrap())));
     let idf_path_string = idf_path.to_str().unwrap().to_string();
     env_vars.push(("IDF_PATH".to_string(), idf_path_string));
     env_vars.push((
@@ -1813,6 +1815,7 @@ pub fn single_version_post_install(
             }
         }
     }
+
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut
@@ -1903,6 +1906,7 @@ pub fn single_version_post_install(
             }
         }
     }
+
 }
 
 /// Returns a list of available IDF mirrors.

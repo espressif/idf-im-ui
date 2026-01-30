@@ -821,6 +821,14 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         }
     }
 
+    for idf_version in versions {
+      let paths = settings.get_version_paths(&idf_version).map_err(|err| {
+        error!("Failed to get version paths: {}", err);
+        err.to_string()
+      })?;
+      idf_im_lib::utils::synchronize_component_manager(&paths.tool_install_directory.to_string_lossy(), &paths.idf_path.to_string_lossy());
+    }
+
     // Final completion (95-100%)
     emit_installation_event(&app_handle, InstallationProgress {
         stage: InstallationStage::Configure,
@@ -1273,10 +1281,10 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     })?;
 
     // Debug: Check what config_path contains
-    info!("Config path for IDE JSON: {}", config_path.display());
-    info!("Config path exists: {}", config_path.exists());
-    info!("Config path is file: {}", config_path.is_file());
-    info!("Config path is dir: {}", config_path.is_dir());
+    debug!("Config path for IDE JSON: {}", config_path.display());
+    debug!("Config path exists: {}", config_path.exists());
+    debug!("Config path is file: {}", config_path.is_file());
+    debug!("Config path is dir: {}", config_path.is_dir());
 
     // Create a properly configured Settings object for IDE JSON saving
     let mut updated_settings = settings.clone();
@@ -1396,6 +1404,25 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
                 }
             }
         }
+    }
+
+    info!(
+      "Syncing components to {:?}...",
+      settings.tool_install_folder_name
+    );
+    let command = format!(
+      "compote registry sync --resolution=latest --recursive {}",
+      settings.tool_install_folder_name.unwrap()
+    );
+    match idf_im_lib::version_manager::run_command_in_context(&id, &command) {
+      Ok(status) => {
+        if !status.success() {
+          warn!("Component registry sync command exited with non-zero status: {} \r\n Component will be synced on first build", status);
+        } else {
+          info!("Component registry synced successfully");
+        }
+      }
+      Err(err) => warn!("Component registry sync failed. Error: {:?}. Component will be synced on first build", err),
     }
 
     // Final completion
@@ -1835,6 +1862,14 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
 
         let ide_conf_path_tmp = PathBuf::from(&settings.esp_idf_json_path.clone().unwrap_or_default());
         debug!("IDE configuration path: {}", ide_conf_path_tmp.display());
+
+        for idf_version in settings.idf_versions.clone().unwrap() {
+          let paths = settings.get_version_paths(&idf_version).map_err(|err| {
+            error!("Failed to get version paths: {}", err);
+            err.to_string()
+          })?;
+          idf_im_lib::utils::synchronize_component_manager(&paths.tool_install_directory.to_string_lossy(), &paths.idf_path.to_string_lossy());
+        }
 
         match ensure_path(ide_conf_path_tmp.to_str().unwrap()) {
             Ok(_) => {

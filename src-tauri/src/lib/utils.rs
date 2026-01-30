@@ -1191,6 +1191,28 @@ pub fn is_running_elevated() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
+pub fn synchronize_component_manager(tool_install_directory: &str, idf_path: &str) {
+   // Synchronize component manager
+  info!(
+      "Syncing components to {:?}...",
+      tool_install_directory
+  );
+  let command = format!(
+      "compote registry sync --resolution=latest --recursive {}",
+      tool_install_directory
+  );
+ match crate::version_manager::run_command_in_context(&idf_path, &command) {
+        Ok(status) => {
+            if !status.success() {
+                warn!("Component registry sync command exited with non-zero status: {} \r\n Component will be synced on first build", status);
+            } else {
+                info!("Component registry synced successfully");
+            }
+        }
+        Err(err) => warn!("Component registry sync failed. Error: {:?}. Component will be synced on first build", err),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
