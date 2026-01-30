@@ -33,7 +33,25 @@ eim install -p /opt/esp-idf
 
 # Install prerequisites (Windows only)
 eim install -a true
+
+# Clean up tool archives after installation (reduces final image size)
+eim install --cleanup true
 ```
+
+### Reducing Docker Image Size
+
+For Docker and CI environments, use the `--cleanup` flag to remove tool archive files after installation:
+
+```bash
+# Clean up tool archives after installation (reduces final image size)
+eim install --cleanup true
+```
+
+This removes the `dist` directory containing downloaded tool archives, which can save significant disk space in environments where no further installations are expected. This is particularly useful for:
+
+- **Docker images**: Reduces final image size
+- **CI/CD pipelines**: Clean up after successful installation
+- **Single-use environments**: Where archives won't be reused
 
 ### Using Configuration Files
 
@@ -139,7 +157,7 @@ RUN set -x && \
     # Cleanup
     rm -rf /tmp/eim.zip /tmp/eim
 
-RUN eim install -i v5.3.1 -n true -a true -r false
+RUN eim install -i v5.3.1 -n true -a true -r false --cleanup true
 
 RUN mkdir /tmp/project
 WORKDIR /tmp/project
@@ -170,3 +188,4 @@ The mirror parameter should point to the root URL of your repository host, while
 3. **Error Handling**: In CI/CD environments, ensure proper error handling and logging
 4. **Prerequisites**: On Windows, use `-a true` to automatically install prerequisites
 5. **Path Management**: Use absolute paths to avoid any ambiguity
+6. **Cleanup**: Use `--cleanup true` in Docker and CI environments to reduce image size by removing temporary tool archives
