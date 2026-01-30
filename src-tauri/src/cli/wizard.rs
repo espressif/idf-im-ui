@@ -453,12 +453,17 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         } else {
             let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
-
+            debug!("repo url: {} ", req_url);
             match RequirementsMetadata::from_url(&req_url) {
                 Ok(files) => files,
                 Err(err) => {
-                    warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
-                    return Err(err.to_string());
+                  warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
+                  // Missing option for feature selction should not block installation
+                  // This is exceptionally important for headless run against private repos
+                  RequirementsMetadata {
+                    version: 1,
+                    features: vec![],
+                  }
                 }
             }
         };

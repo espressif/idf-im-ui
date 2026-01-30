@@ -1301,6 +1301,9 @@ cli.select.activation_instructions:
 wizard.requirements.no_features_available:
   en: "No features are available for the selected platform."
   cn: "所选平台没有可用的功能。"
+wizard.requirements.read_failure:
+  en: "Failed to read requirements configuration"
+  cn: "读取需求配置失败"
 wizard.tools.no_idf_version_specified:
   en: "No IDF version specified for tool selection"
   cn: "未指定 IDF 版本用于工具选择"
