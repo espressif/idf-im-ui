@@ -240,8 +240,8 @@ html, body {
 }
 
 #app {
-  height: 100vh;
-  min-height: 100vh;
+  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
@@ -249,7 +249,8 @@ html, body {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
 }
 
