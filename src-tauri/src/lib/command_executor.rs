@@ -339,9 +339,10 @@ impl CommandExecutor for WindowsExecutor {
         if ps_version >= 7 {
             let mut temp_file = tempfile::NamedTempFile::new()?;
 
-            let bom = "\u{FEFF}";
+            // For PowerShell 7+, write UTF-8 with BOM to temp file
+            let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
             let script_content = format!(
-                "{}$OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
                 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
                 $ProgressPreference = 'SilentlyContinue'\n\
                 $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
@@ -349,11 +350,13 @@ impl CommandExecutor for WindowsExecutor {
                 Set-ExecutionPolicy Bypass -Scope Process -Force\n\
                 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\n\
                 {}",
-                bom,
                 script
             );
 
+            // Write BOM first, then content
+            temp_file.write_all(bom)?;
             temp_file.write_all(script_content.as_bytes())?;
+            temp_file.flush()?;
 
             let mut child = Command::new("powershell")
                 .args([
@@ -377,32 +380,37 @@ impl CommandExecutor for WindowsExecutor {
             let output = child.wait_with_output()?;
             Ok(output)
         } else {
+            // PowerShell < 7: Use -Command with -EncodedCommand for better reliability
+            // Or use temp file approach for better UTF-8 handling
+            let mut temp_file = tempfile::NamedTempFile::new()?;
+
+            // Write UTF-8 with BOM
+            let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
+            let script_content = format!(
+                "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                {}",
+                script
+            );
+
+            // Write BOM first, then content
+            temp_file.write_all(bom)?;
+            temp_file.write_all(script_content.as_bytes())?;
+            temp_file.flush()?;
+
             let mut child = Command::new("powershell")
                 .args([
                     "-NoLogo",
                     "-NoProfile",
                     "-ExecutionPolicy",
                     "Bypass",
-                    "-Command",
-                    "-",
+                    "-File",
+                    temp_file.path().to_str().unwrap(),
                 ])
                 .creation_flags(CREATE_NO_WINDOW)
-                .stdin(std::process::Stdio::piped())
                 .stdout(std::process::Stdio::piped())
                 .stderr(std::process::Stdio::piped())
                 .spawn()?;
-
-            if let Some(mut stdin) = child.stdin.take() {
-                let bom = "\u{FEFF}";
-                let script_with_setup = format!(
-                    "{}$OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    {}",
-                    bom,
-                    script
-                );
-                stdin.write_all(script_with_setup.as_bytes())?;
-            }
 
             let output = child.wait_with_output()?;
             Ok(output)
