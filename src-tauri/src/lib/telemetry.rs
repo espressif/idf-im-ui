@@ -1,6 +1,7 @@
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use serde::Serialize;
+use sysinfo::System;
 use std::time::Duration;
 
 static CONNECTION_STRING: Option<&str> = option_env!("APP_INSIGHTS_CONNECTION_STRING");
@@ -71,4 +72,21 @@ fn parse_connection_string() -> (String, String) {
         }
     }
     (i_key, base)
+}
+
+pub fn get_system_info() -> String {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    let os_name = System::name().unwrap_or_else(|| "Unknown".to_string());
+    let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
+    let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
+    let arch = System::cpu_arch();
+
+    format!("OS: {} {} | Architecture: {} | Kernel: {}",
+        os_name,
+        os_version,
+        arch,
+        kernel_version
+    )
 }
