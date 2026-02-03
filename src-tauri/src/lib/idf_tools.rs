@@ -125,7 +125,7 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
             let mut override_applied = false;
 
             for override_entry in platform_overrides {
-                if override_entry.platforms.contains(&platform.to_string()) {
+                if override_entry.platforms.iter().any(|p| p == platform) {
                     debug!(
                         "Applying platform override for tool '{}' on platform '{}'",
                         tool.name,
