@@ -1,4 +1,3 @@
-use gui::ui::send_message;
 use idf_im_lib::{self, ensure_path};
 use idf_im_lib::telemetry::track_event;
 use log::{error, info};
@@ -10,11 +9,8 @@ use std::{
     process::Command,
 };
 use tauri::AppHandle;
-use num_cpus;
 use anyhow::{Result};
-
-use crate::gui;
-use crate::gui::utils::is_path_empty_or_nonexistent;
+use sysinfo::System;
 
 #[cfg(windows)]
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
@@ -30,6 +26,8 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 use std::mem;
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
+
+use crate::gui::ui::send_message;
 
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -62,35 +60,25 @@ pub fn get_app_info() -> Value {
 
 #[tauri::command]
 pub fn get_system_arch() -> String {
-    let arch = if cfg!(target_arch = "x86") {
-        "x86"
-    } else if cfg!(target_arch = "x86_64") {
-        "x86_64"
-    } else if cfg!(target_arch = "arm") {
-        "arm"
-    } else if cfg!(target_arch = "aarch64") {
-        "aarch64"
-    } else {
-        "unknown"
-    };
-    arch.to_string()
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    // Get architecture from sysinfo
+    System::cpu_arch()
 }
 
 /// Returns the operating system name
 #[tauri::command]
 pub fn get_operating_system() -> String {
-    std::env::consts::OS.to_string()
+    let mut sys = System::new_all();
+    sys.refresh_all();
+
+    System::name().unwrap_or_else(|| std::env::consts::OS.to_string())
 }
 
 #[tauri::command]
 pub fn get_system_info() -> String {
-    let info = os_info::get();
-    format!("OS: {} {} | Architecture: {} | Kernel: {}",
-        info.os_type(),
-        info.version(),
-        info.architecture().unwrap_or("unknown"),
-        std::env::consts::ARCH
-    )
+  idf_im_lib::telemetry::get_system_info()
 }
 
 /// Gets the logs folder path
@@ -185,7 +173,8 @@ pub fn quit_app(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn cpu_count() -> usize {
-    num_cpus::get()
+    let mut sys = System::new_all();
+    sys.cpus().len()
 }
 
 #[tauri::command]
