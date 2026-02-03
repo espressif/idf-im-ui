@@ -60,7 +60,7 @@ export function runCLICustomInstallTest({
         testRunner.sendInput(
           `tar -xf ${pathToOfflineArchive} -C ${archiveDir}`,
         );
-        await new Promise((resolve) => setTimeout(resolve, 15000));
+        await new Promise((resolve) => setTimeout(resolve, 20000));
       }
       if (offlineIDFVersion && !pathToOfflineArchive) {
         logger.info(">>>>>>> Offline archive not found, skipping this test");

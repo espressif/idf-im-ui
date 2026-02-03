@@ -10,7 +10,7 @@ import {
   availableTargets,
   runInDebug,
 } from "../config.js";
-import { getAvailableFeatures } from "../helper.js";
+import { getAvailableFeatures, getAvailableTools } from "../helper.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
@@ -93,7 +93,7 @@ export function runCLIWizardInstallTest({
       testRunner.sendInput(`${pathToEIM} ${runInDebug ? "-vvv " : ""}wizard`);
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
-        30000
+        30000,
       );
       expect(selectTargetQuestion, "Failed to ask for installation targets").to
         .be.true;
@@ -103,13 +103,13 @@ export function runCLIWizardInstallTest({
       for (let target of availableTargets) {
         expect(
           testRunner.output,
-          `Failed to offer installation for target '${target}'`
+          `Failed to offer installation for target '${target}'`,
         ).to.include(target);
       }
 
       expect(
         testRunner.output,
-        "Failed to offer installation for 'all' targets"
+        "Failed to offer installation for 'all' targets",
       ).to.include("all");
 
       logger.info("Select Target Passed");
@@ -118,16 +118,17 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFVersion = await testRunner.waitForOutput(
-        "Please select the desired ESP-IDF version"
+        "Please select the desired ESP-IDF version",
       );
       expect(selectIDFVersion, "Failed to ask for IDF version").to.be.true;
 
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      for (let version of IDFAvailableVersions) {
+      let IDFAvailableVersionsFlat = Object.values(IDFAvailableVersions).flat();
+      for (let version of IDFAvailableVersionsFlat) {
         expect(
           testRunner.output,
-          `Failed to offer installation for IDF version '${version}'`
+          `Failed to offer installation for IDF version '${version}'`,
         ).to.include(version);
       }
       testRunner.process.write(" ");
@@ -142,7 +143,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectIDFMirror = await testRunner.waitForOutput(
-        "Select the source from which to download ESP-IDF"
+        "Select the source from which to download ESP-IDF",
       );
       expect(selectIDFMirror, "Failed to ask for IDF download mirrors").to.be
         .true;
@@ -152,7 +153,7 @@ export function runCLIWizardInstallTest({
       for (let mirror of Object.values(IDFMIRRORS)) {
         expect(
           testRunner.output,
-          `Failed to offer ${mirror} as a download mirror option`
+          `Failed to offer ${mirror} as a download mirror option`,
         ).to.include(mirror);
       }
 
@@ -163,7 +164,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectToolsMirror = await testRunner.waitForOutput(
-        "Select a source from which to download tools"
+        "Select a source from which to download tools",
       );
       expect(selectToolsMirror, "Failed to ask for tools download mirror").to.be
         .true;
@@ -173,7 +174,7 @@ export function runCLIWizardInstallTest({
       for (let mirror of Object.values(TOOLSMIRRORS)) {
         expect(
           testRunner.output,
-          `Failed to offer ${mirror} as a tool mirror option`
+          `Failed to offer ${mirror} as a tool mirror option`,
         ).to.include(mirror);
       }
 
@@ -183,7 +184,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectPyPIMirror = await testRunner.waitForOutput(
-        "Select a PyPI mirror to download Python packages"
+        "Select a PyPI mirror to download Python packages",
       );
       expect(selectPyPIMirror, "Failed to ask for PyPI download mirror").to.be
         .true;
@@ -193,17 +194,18 @@ export function runCLIWizardInstallTest({
       for (let mirror of Object.values(PYPIMIRRORS)) {
         expect(
           testRunner.output,
-          `Failed to offer ${mirror} as a PyPI mirror option`
+          `Failed to offer ${mirror} as a PyPI mirror option`,
         ).to.include(mirror);
       }
 
       logger.info("Select pypi mirror passed");
+
       testRunner.output = "";
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectInstallPath = await testRunner.waitForOutput(
-        "Please select the ESP-IDF installation location"
+        "Please select the ESP-IDF installation location",
       );
       expect(selectInstallPath, "Failed to ask for installation path").to.be
         .true;
@@ -216,7 +218,7 @@ export function runCLIWizardInstallTest({
           : `(${os.homedir()}/.espressif)`;
       expect(
         testRunner.output,
-        "Failed to provide default installation path"
+        "Failed to provide default installation path",
       ).to.include(defaultPath);
 
       logger.info("Select install path passed");
@@ -226,7 +228,7 @@ export function runCLIWizardInstallTest({
       await new Promise((resolve) => setTimeout(resolve, 500));
 
       const selectFeatures = await testRunner.waitForOutput(
-        "Select ESP-IDF features to install"
+        "Select ESP-IDF features to install",
       );
       expect(selectFeatures, "Failed to ask for ESP-IDF features").to.be.true;
 
@@ -236,11 +238,32 @@ export function runCLIWizardInstallTest({
       for (let feature of availableFeatures) {
         expect(
           testRunner.output,
-          `Failed to show ${feature} as available ESP-IDF feature`
+          `Failed to show ${feature} as available ESP-IDF feature`,
         ).to.include(feature);
       }
 
       logger.info("Select ESP-IDF feature passed");
+
+      testRunner.output = "";
+      testRunner.sendInput("");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const selectTools = await testRunner.waitForOutput(
+        "Select additional tools to install",
+      );
+      expect(selectTools, "Failed to ask for additional tools").to.be.true;
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const availableTools = await getAvailableTools();
+      for (let tool of availableTools) {
+        expect(
+          testRunner.output,
+          `Failed to show ${tool} as available additional tool`,
+        ).to.include(tool);
+      }
+
+      logger.info("Select additional tools passed");
 
       testRunner.output = "";
       testRunner.sendInput("");
