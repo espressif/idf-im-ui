@@ -1,6 +1,7 @@
 use log::{debug, trace};
 use regex::Regex;
 use serde::{de, Deserialize};
+use sysinfo::System;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
@@ -284,15 +285,17 @@ pub fn filter_tools_by_target(tools: Vec<Tool>, target: &[String]) -> Vec<Tool> 
         .collect()
 }
 
-/// Returns a standardized platform identifier string based on the current Rust target.
+/// Returns a standardized platform identifier string based on the current system.
 ///
-/// This function maps the Rust-specific platform definition (e.g., "windows-x86_64")
-/// obtained from `get_rust_platform_definition()` to a more common and standardized
-/// identifier (e.g., "win64").
+/// This function maps the system's OS and architecture to a more common and standardized
+/// identifier (e.g., "win64", "macos-arm64").
+///
+/// Uses `sysinfo` to detect the actual running system at runtime, which provides better
+/// compatibility and accurate detection (e.g., properly detecting Windows 11).
 ///
 /// # Errors
 ///
-/// Returns an `Err` containing a `String` if the current Rust platform is not
+/// Returns an `Err` containing a `String` if the current platform is not
 /// explicitly supported and mapped within the function.
 ///
 /// # Examples
@@ -318,26 +321,26 @@ pub fn filter_tools_by_target(tools: Vec<Tool>, target: &[String]) -> Vec<Tool> 
 pub fn get_platform_identification() -> Result<String, String> {
     let mut platform_from_name = HashMap::new();
 
-    // Rust native Windows identifiers
+    // Windows identifiers
     platform_from_name.insert("windows-x86", "win32");
     platform_from_name.insert("windows-x86_64", "win64");
     platform_from_name.insert("windows-aarch64", "win64");
 
-    // Rust native macOS identifiers
+    // macOS identifiers
     platform_from_name.insert("macos-x86_64", "macos");
     platform_from_name.insert("macos-aarch64", "macos-arm64");
 
-    // Rust native Linux identifiers
+    // Linux identifiers
     platform_from_name.insert("linux-x86", "linux-i686");
     platform_from_name.insert("linux-x86_64", "linux-amd64");
     platform_from_name.insert("linux-aarch64", "linux-arm64");
     platform_from_name.insert("linux-arm", "linux-armel");
 
-    // Rust native FreeBSD identifiers
+    // FreeBSD identifiers
     platform_from_name.insert("freebsd-x86_64", "linux-amd64");
     platform_from_name.insert("freebsd-x86", "linux-i686");
 
-    let platform_string = get_rust_platform_definition();
+    let platform_string = get_platform_definition();
 
     let platform = match platform_from_name.get(&platform_string.as_str()) {
         Some(platform) => platform,
@@ -346,16 +349,16 @@ pub fn get_platform_identification() -> Result<String, String> {
     Ok(platform.to_string())
 }
 
-/// Returns a string representing the current Rust platform in the format "os-arch".
+/// Returns a string representing the current platform in the format "os-arch".
 ///
 /// This function retrieves the operating system and architecture information
-/// at compile time using `std::env::consts::OS` and `std::env::consts::ARCH`
-/// respectively.
+/// at runtime using `sysinfo`, with fallback to compile-time constants.
+/// This provides better accuracy for OS detection (e.g., Windows 11 vs Windows 10).
 ///
 /// # Examples
 ///
 /// ```
-/// let platform = get_rust_platform_definition();
+/// let platform = get_platform_definition();
 /// // On a 64-bit Linux system, platform might be "linux-x86_64"
 /// // On a macOS M1 system, platform might be "macos-aarch64"
 /// println!("{}", platform);
@@ -364,11 +367,59 @@ pub fn get_platform_identification() -> Result<String, String> {
 /// # Returns
 ///
 /// A `String` in the format "os-arch" (e.g., "linux-x86_64", "macos-aarch64").
-fn get_rust_platform_definition() -> String {
-    let os = std::env::consts::OS;
-    let arch = std::env::consts::ARCH;
+fn get_platform_definition() -> String {
+    let os = get_os_name();
+    let arch = get_arch_name();
 
     format!("{}-{}", os, arch)
+}
+
+/// Gets the operating system name using sysinfo with fallback to compile-time constant.
+///
+/// Returns a normalized OS name compatible with the existing platform identification system.
+fn get_os_name() -> String {
+    // Try runtime detection first
+    if let Some(name) = System::name() {
+        let name_lower = name.to_lowercase();
+
+        // Normalize OS names to match our existing convention
+        if name_lower.contains("windows") {
+            return "windows".to_string();
+        } else if name_lower.contains("darwin") || name_lower.contains("macos") || name_lower.contains("mac os") {
+            return "macos".to_string();
+        } else if name_lower.contains("linux") {
+            return "linux".to_string();
+        } else if name_lower.contains("freebsd") {
+            return "freebsd".to_string();
+        }
+    }
+
+    // Fallback to compile-time constant
+    std::env::consts::OS.to_string()
+}
+
+/// Gets the architecture name using sysinfo with fallback to compile-time constant.
+///
+/// Returns a normalized architecture name compatible with the existing platform identification system.
+fn get_arch_name() -> String {
+    // Try runtime detection first
+    if let arch = System::cpu_arch() {
+        let arch_lower = arch.to_lowercase();
+
+        // Normalize architecture names to match our existing convention
+        if arch_lower.contains("x86_64") || arch_lower.contains("amd64") {
+            return "x86_64".to_string();
+        } else if arch_lower.contains("aarch64") || arch_lower.contains("arm64") {
+            return "aarch64".to_string();
+        } else if arch_lower.contains("i686") || arch_lower.contains("x86") && !arch_lower.contains("x86_64") {
+            return "x86".to_string();
+        } else if arch_lower.contains("arm") && !arch_lower.contains("aarch64") {
+            return "arm".to_string();
+        }
+    }
+
+    // Fallback to compile-time constant
+    std::env::consts::ARCH.to_string()
 }
 
 /// Given a list of `Tool` structs and a target platform, this function returns a HashMap
@@ -1202,15 +1253,6 @@ mod tests {
     }
 
     #[test]
-    fn test_rust_platform_definition() {
-        let platform_def = get_rust_platform_definition();
-        println!("Platform definition: {}", platform_def);
-
-        // Should match one of the expected formats
-        assert!(platform_def.contains("-"));
-    }
-
-    #[test]
     fn test_apply_platform_overrides() {
         let mut tool = Tool {
             description: "Test tool".to_string(),
@@ -1427,5 +1469,52 @@ mod tests {
         // First override should win
         assert_eq!(result.tools[0].install, "always");
         assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]); // Unchanged from original
+    }
+    #[test]
+    fn test_platform_identification() {
+        let result = get_platform_identification();
+        assert!(result.is_ok());
+
+        let platform = result.unwrap();
+        println!("Platform: {}", platform);
+
+        // Should be one of the known platforms
+        let valid_platforms = vec![
+            "win32", "win64", "macos", "macos-arm64",
+            "linux-i686", "linux-amd64", "linux-arm64", "linux-armel"
+        ];
+        assert!(valid_platforms.contains(&platform.as_str()));
+    }
+
+    #[test]
+    fn test_platform_definition() {
+        let platform = get_platform_definition();
+        println!("Platform definition: {}", platform);
+
+        // Should contain a hyphen separating os and arch
+        assert!(platform.contains('-'));
+
+        let parts: Vec<&str> = platform.split('-').collect();
+        assert_eq!(parts.len(), 2);
+    }
+
+    #[test]
+    fn test_os_name() {
+        let os = get_os_name();
+        println!("OS: {}", os);
+
+        // Should be one of the known OS names
+        let valid_os = vec!["windows", "macos", "linux", "freebsd"];
+        assert!(valid_os.contains(&os.as_str()));
+    }
+
+    #[test]
+    fn test_arch_name() {
+        let arch = get_arch_name();
+        println!("Arch: {}", arch);
+
+        // Should be one of the known architectures
+        let valid_arch = vec!["x86", "x86_64", "arm", "aarch64"];
+        assert!(valid_arch.contains(&arch.as_str()));
     }
 }
