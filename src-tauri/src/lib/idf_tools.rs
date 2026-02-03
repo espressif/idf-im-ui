@@ -102,8 +102,8 @@ pub fn read_and_parse_tools_file(path: &str) -> Result<ToolsFile, Box<dyn std::e
 /// for an override entry that matches the given `platform` string.
 ///
 /// Upon finding a matching override, it applies the specified `install` and
-/// `export_paths` from the override entry
-/// to the tool. Only the first matching override for a tool is applied.
+/// `export_paths` from the override entry to the tool. Only the first matching
+/// override for a tool is applied.
 ///
 /// After processing, the `platform_overrides` field for each tool is set to `None`
 /// to ensure the function is idempotent (running it multiple times with the same
@@ -112,7 +112,7 @@ pub fn read_and_parse_tools_file(path: &str) -> Result<ToolsFile, Box<dyn std::e
 /// # Arguments
 ///
 /// * `tools_file` - A `ToolsFile` struct, which will be mutated to apply overrides.
-/// * `platform` - A string slice representing the current platform (e.g., "windows", "linux", "macos").
+/// * `platform` - A string slice representing the current platform (e.g., "win64", "linux-amd64", "macos-arm64").
 ///
 /// # Returns
 ///
@@ -121,21 +121,47 @@ pub fn read_and_parse_tools_file(path: &str) -> Result<ToolsFile, Box<dyn std::e
 pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> ToolsFile {
     for tool in &mut tools_file.tools {
         if let Some(platform_overrides) = &tool.platform_overrides {
+            let mut override_applied = false;
+
             for override_entry in platform_overrides {
                 if override_entry.platforms.contains(&platform.to_string()) {
-                    debug!("Applying platform override for tool: {} on platform: {}", tool.name, platform);
+                    debug!(
+                        "Applying platform override for tool '{}' on platform '{}'",
+                        tool.name,
+                        platform
+                    );
+
+                    // Apply install override if present
                     if let Some(install) = &override_entry.install {
+                        debug!(
+                            "  - Overriding install: '{}' -> '{}'",
+                            tool.install,
+                            install
+                        );
                         tool.install = install.clone();
                     }
 
+                    // Apply export_paths override if present
                     if let Some(export_paths) = &override_entry.export_paths {
+                        debug!(
+                            "  - Overriding export_paths ({} paths)",
+                            export_paths.len()
+                        );
                         tool.export_paths = export_paths.clone();
                     }
 
+                    override_applied = true;
                     break; // Apply only the first matching override
-                } else {
-                    debug!("No matching platform override for tool: {} on platform: {}", tool.name, platform);
                 }
+            }
+
+            if !override_applied {
+                debug!(
+                    "No matching platform override for tool '{}' on platform '{}' (has {} override(s) defined)",
+                    tool.name,
+                    platform,
+                    platform_overrides.len()
+                );
             }
         }
 
@@ -1242,5 +1268,164 @@ mod tests {
         let result_second = apply_platform_overrides(result_first.clone(), "win64");
         assert_eq!(result_first.tools[0].install, result_second.tools[0].install);
         assert_eq!(result_first.tools[0].export_paths, result_second.tools[0].export_paths);
+    }
+    #[test]
+    fn test_platform_override_install_only() {
+        let mut tool = Tool {
+            description: "Test tool".to_string(),
+            export_paths: vec![vec!["bin".to_string()]],
+            export_vars: HashMap::new(),
+            info_url: "https://example.com".to_string(),
+            install: "on_request".to_string(),
+            license: None,
+            name: "test-tool".to_string(),
+            platform_overrides: Some(vec![
+                PlatformOverride {
+                    install: Some("always".to_string()),
+                    platforms: vec!["win64".to_string()],
+                    export_paths: None,
+                }
+            ]),
+            supported_targets: None,
+            strip_container_dirs: None,
+            version_cmd: vec![],
+            version_regex: "".to_string(),
+            version_regex_replace: None,
+            versions: vec![],
+        };
+
+        let tools_file = ToolsFile {
+            tools: vec![tool.clone()],
+            version: 1,
+        };
+
+        let result = apply_platform_overrides(tools_file, "win64");
+
+        assert_eq!(result.tools[0].install, "always");
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]);
+        assert!(result.tools[0].platform_overrides.is_none());
+    }
+
+    #[test]
+    fn test_platform_override_export_paths_only() {
+        let mut tool = Tool {
+            description: "CMake".to_string(),
+            export_paths: vec![vec!["bin".to_string()]],
+            export_vars: HashMap::new(),
+            info_url: "https://example.com".to_string(),
+            install: "on_request".to_string(),
+            license: None,
+            name: "cmake".to_string(),
+            platform_overrides: Some(vec![
+                PlatformOverride {
+                    install: None,
+                    platforms: vec!["macos".to_string(), "macos-arm64".to_string()],
+                    export_paths: Some(vec![vec![
+                        "CMake.app".to_string(),
+                        "Contents".to_string(),
+                        "bin".to_string()
+                    ]]),
+                }
+            ]),
+            supported_targets: None,
+            strip_container_dirs: None,
+            version_cmd: vec![],
+            version_regex: "".to_string(),
+            version_regex_replace: None,
+            versions: vec![],
+        };
+
+        let tools_file = ToolsFile {
+            tools: vec![tool.clone()],
+            version: 1,
+        };
+
+        let result = apply_platform_overrides(tools_file, "macos-arm64");
+
+        assert_eq!(result.tools[0].install, "on_request"); // Unchanged
+        assert_eq!(
+            result.tools[0].export_paths,
+            vec![vec!["CMake.app".to_string(), "Contents".to_string(), "bin".to_string()]]
+        );
+    }
+
+    #[test]
+    fn test_no_matching_platform() {
+        let mut tool = Tool {
+            description: "Test tool".to_string(),
+            export_paths: vec![vec!["bin".to_string()]],
+            export_vars: HashMap::new(),
+            info_url: "https://example.com".to_string(),
+            install: "on_request".to_string(),
+            license: None,
+            name: "test-tool".to_string(),
+            platform_overrides: Some(vec![
+                PlatformOverride {
+                    install: Some("always".to_string()),
+                    platforms: vec!["win64".to_string()],
+                    export_paths: None,
+                }
+            ]),
+            supported_targets: None,
+            strip_container_dirs: None,
+            version_cmd: vec![],
+            version_regex: "".to_string(),
+            version_regex_replace: None,
+            versions: vec![],
+        };
+
+        let tools_file = ToolsFile {
+            tools: vec![tool.clone()],
+            version: 1,
+        };
+
+        let result = apply_platform_overrides(tools_file, "linux-amd64");
+
+        // Nothing should change except platform_overrides being removed
+        assert_eq!(result.tools[0].install, "on_request");
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]);
+        assert!(result.tools[0].platform_overrides.is_none());
+    }
+
+    #[test]
+    fn test_multiple_overrides_first_match_wins() {
+        let mut tool = Tool {
+            description: "Test tool".to_string(),
+            export_paths: vec![vec!["bin".to_string()]],
+            export_vars: HashMap::new(),
+            info_url: "https://example.com".to_string(),
+            install: "never".to_string(),
+            license: None,
+            name: "test-tool".to_string(),
+            platform_overrides: Some(vec![
+                PlatformOverride {
+                    install: Some("always".to_string()),
+                    platforms: vec!["win64".to_string(), "linux-amd64".to_string()],
+                    export_paths: None,
+                },
+                PlatformOverride {
+                    install: Some("on_request".to_string()),
+                    platforms: vec!["linux-amd64".to_string()],
+                    export_paths: Some(vec![vec!["other".to_string()]]),
+                }
+            ]),
+            supported_targets: None,
+            strip_container_dirs: None,
+            version_cmd: vec![],
+            version_regex: "".to_string(),
+            version_regex_replace: None,
+            versions: vec![],
+        };
+
+        let tools_file = ToolsFile {
+            tools: vec![tool.clone()],
+            version: 1,
+        };
+
+        let result = apply_platform_overrides(tools_file, "linux-amd64");
+
+        // First override should win
+        assert_eq!(result.tools[0].install, "always");
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]); // Unchanged from original
     }
 }
