@@ -19,3 +19,4 @@
 - [Report issue](./issue_reporting.md)
 - [Headless Usage](./headless_usage.md)
 - [FAQ](./faq.md)
+- [Maintenance Guide](./MAINTENANCE.md)
