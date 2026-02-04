@@ -337,7 +337,11 @@ impl CommandExecutor for WindowsExecutor {
         let ps_version = get_powershell_version()?;
 
         if ps_version >= 7 {
-            let mut temp_file = tempfile::NamedTempFile::new()?;
+            // Create temp file with .ps1 extension - PowerShell requires this
+            let mut temp_file = tempfile::Builder::new()
+                .prefix("ps_script_")
+                .suffix(".ps1")
+                .tempfile()?;
 
             // For PowerShell 7+, write UTF-8 with BOM to temp file
             let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
@@ -353,11 +357,17 @@ impl CommandExecutor for WindowsExecutor {
                 script
             );
 
-            // Write BOM first, then content
+            // Write directly to the temp_file handle
             temp_file.write_all(bom)?;
             temp_file.write_all(script_content.as_bytes())?;
             temp_file.flush()?;
 
+            // Get the path and then fully close the file by persisting and dropping
+            let path = temp_file.path().to_path_buf();
+            let persist_path = temp_file.into_temp_path();
+            let final_path = persist_path.keep()?;
+
+            // Now the file is fully closed and PowerShell can access it
             let mut child = Command::new("powershell")
                 .args([
                     "-NoLogo",
@@ -366,7 +376,7 @@ impl CommandExecutor for WindowsExecutor {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-File",
-                    temp_file.path().to_str().unwrap(),
+                    final_path.to_str().unwrap(),
                 ])
                 .creation_flags(CREATE_NO_WINDOW)
                 .stdout(std::process::Stdio::piped())
@@ -378,11 +388,17 @@ impl CommandExecutor for WindowsExecutor {
                 .spawn()?;
 
             let output = child.wait_with_output()?;
+
+            // Clean up the temp file manually
+            let _ = std::fs::remove_file(&final_path);
+
             Ok(output)
         } else {
-            // PowerShell < 7: Use -Command with -EncodedCommand for better reliability
-            // Or use temp file approach for better UTF-8 handling
-            let mut temp_file = tempfile::NamedTempFile::new()?;
+            // PowerShell < 7: Also use temp file with .ps1 extension
+            let mut temp_file = tempfile::Builder::new()
+                .prefix("ps_script_")
+                .suffix(".ps1")
+                .tempfile()?;
 
             // Write UTF-8 with BOM
             let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
@@ -393,11 +409,16 @@ impl CommandExecutor for WindowsExecutor {
                 script
             );
 
-            // Write BOM first, then content
+            // Write directly to the temp_file handle
             temp_file.write_all(bom)?;
             temp_file.write_all(script_content.as_bytes())?;
             temp_file.flush()?;
 
+            // Get the path and then fully close the file by persisting and dropping
+            let persist_path = temp_file.into_temp_path();
+            let final_path = persist_path.keep()?;
+
+            // Now the file is fully closed and PowerShell can access it
             let mut child = Command::new("powershell")
                 .args([
                     "-NoLogo",
@@ -405,7 +426,7 @@ impl CommandExecutor for WindowsExecutor {
                     "-ExecutionPolicy",
                     "Bypass",
                     "-File",
-                    temp_file.path().to_str().unwrap(),
+                    final_path.to_str().unwrap(),
                 ])
                 .creation_flags(CREATE_NO_WINDOW)
                 .stdout(std::process::Stdio::piped())
@@ -413,6 +434,10 @@ impl CommandExecutor for WindowsExecutor {
                 .spawn()?;
 
             let output = child.wait_with_output()?;
+
+            // Clean up the temp file manually
+            let _ = std::fs::remove_file(&final_path);
+
             Ok(output)
         }
     }
