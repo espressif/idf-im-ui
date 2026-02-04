@@ -20,6 +20,83 @@ This document provides comprehensive guidance for maintaining the various distri
 - [Maintenance Checklists](#maintenance-checklists)
 - [Secrets Reference](#secrets-reference)
 
+The checklists and secrets reference below are the most frequently used part of this guide; the detailed sections that follow give context for each component.
+
+---
+
+## Maintenance Checklists
+
+### After Each Release
+
+- [ ] Verify correct version of EIM and offline installer archives is on dl.espressif
+- [ ] Verify Homebrew formula updated automatically (check https://github.com/espressif/homebrew-eim)
+- [ ] Verify WinGet PR created (check https://github.com/microsoft/winget-pkgs/pulls)
+- [ ] Verify WinGet PR merged (may take 1-3 days for Microsoft review)
+- [ ] Verify APT repository updated (`apt-cache policy eim`)
+- [ ] Verify RPM repository updated (`dnf info eim`)
+- [ ] Verify Scoop manifests attached to release (when Scoop workflow is enabled)
+- [ ] Test Docker image with new release
+
+### Monthly Maintenance
+
+- [ ] Check Scoop manifest template versions against upstream:
+  ```bash
+  curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/7zip.json | jq .version
+  curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json | jq .version
+  ```
+- [ ] Sync PowerShell scripts with upstream if needed (diff with ScoopInstaller/Install)
+- [ ] Verify all PAT tokens are valid:
+  - `WINGET_PAT` - test with `gh auth status`
+  - `HOMEBREW_UPDATE_TOKEN` - check workflow logs
+- [ ] Test installation on all platforms
+- [ ] Update dependencies (e.g. Rust, Node, GitHub Actions) as needed
+
+### With Major EIM Changes
+
+- [ ] Update man page with new commands/options
+- [ ] Update or create TLDR page
+- [ ] Update Docker repository if installation flags changed
+- [ ] Update install-esp-idf-action if CLI interface changed
+- [ ] Update documentation references
+
+### Quarterly Security Review
+
+- [ ] Check signing certificates expiration dates
+- [ ] Rotate PAT tokens approaching expiration
+- [ ] Review AWS IAM permissions
+- [ ] Check for security advisories on dependencies
+- [ ] Update base images (Docker, etc.)
+
+---
+
+## Secrets Reference
+
+| Secret Name | Purpose | Where Used | Renewal Location |
+|-------------|---------|------------|------------------|
+| `HOMEBREW_UPDATE_TOKEN` | Push to espressif/homebrew-eim | update-homebrew.yml | GitHub PAT settings |
+| `WINGET_PAT` | Fork sync and PR creation to WinGet | update-windows-packages.yml | GitHub PAT settings |
+| `AWS_ACCESS_KEY_ID` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
+| `AWS_SECRET_ACCESS_KEY` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
+| `DL_DISTRIBUTION_ID` | CloudFront cache invalidation | update-linux-repos.yml | AWS CloudFront Console |
+| `GITHUB_TOKEN` | Automatic, for release asset uploads | Various workflows | Automatic (no renewal needed) |
+
+### How to Update Secrets
+
+1. Go to repository `Settings > Secrets and variables > Actions`
+2. Click on the secret name
+3. Click "Update secret"
+4. Paste the new value
+5. Click "Update secret"
+
+### PAT Token Scopes Required
+
+**HOMEBREW_UPDATE_TOKEN:**
+- `repo` (for pushing to homebrew-eim)
+
+**WINGET_PAT:**
+- `repo` (for fork access)
+- `workflow` (for PR creation)
+
 ---
 
 ## Overview
@@ -177,6 +254,8 @@ curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/dark
 - Python manifests include PEP-514 registry entries for Python discovery by other tools
 - Test offline installation after any manifest changes
 
+**Important:** The actual download URLs for the dependency files (7-Zip, Git, Python, etc.) are currently **hardcoded in the offline installer** code. The version update procedure above (fetching from upstream and updating manifests) may therefore not work as described until the installer is changed to resolve or configure those URLs. This is expected to be addressed in [EIM-381](https://jira.espressif.com:8443/browse/EIM-381).
+
 ---
 
 ## 2. Scoop Installer PowerShell Scripts
@@ -274,6 +353,14 @@ function Install-ScoopOffline {
 ### Used by Workflows
 
 No workflow in **this** repository builds or updates the Docker image. The image lives in a separate repository (Hahihula/eim-idf-build-docker). Optionally, that repo could be triggered on new EIM releases (e.g. via `repository_dispatch` or a manual trigger); currently it is updated manually when EIM or ESP-IDF versions change.
+
+### Official and reference Docker resources
+
+- **Official Docker image:** The ESP-IDF repository hosts an official Docker image that is being migrated to EIM; this is expected to be in place after the next release.
+- **CI images:** CI/build Docker images are maintained in the **esp-dockerfiles** repository.
+- **Documentation:** The EIM documentation includes a Dockerfile example; see the [headless usage / Docker integration](https://docs.espressif.com/projects/idf-im-ui/en/latest/headless_usage.html) docs.
+
+The repository and image below are a **proof-of-concept** example for non-interactive EIM installation.
 
 ### Repository
 
@@ -1039,6 +1126,10 @@ If PRs are not being created:
 
 ## 11. Scoop Distribution (Online)
 
+### Current status
+
+**There is no Scoop repository at the moment, and the Scoop-related workflow is currently turned off.** The following section describes how Scoop distribution is intended to work when the workflow is enabled, for future reference.
+
 ### Used by Workflows
 
 **Invocation:** Same as WinGet — the job `update-windows-packages` in `build.yaml` calls `update-windows-packages.yml` with `version: ${{ github.ref_name }}` on release.
@@ -1107,78 +1198,6 @@ eim --version
 | Purpose | End-user installation | Bundled in offline archives |
 | Generated | Automatically by workflow | Manually maintained |
 | Location | GitHub release assets | `src-tauri/scoop_manifest_templates/` |
-
----
-
-## Maintenance Checklists
-
-### After Each Release
-
-- [ ] Verify Homebrew formula updated automatically (check https://github.com/espressif/homebrew-eim)
-- [ ] Verify WinGet PR created (check https://github.com/microsoft/winget-pkgs/pulls)
-- [ ] Verify WinGet PR merged (may take 1-3 days for Microsoft review)
-- [ ] Verify APT repository updated (`apt-cache policy eim`)
-- [ ] Verify RPM repository updated (`dnf info eim`)
-- [ ] Verify Scoop manifests attached to release
-- [ ] Test Docker image with new release
-
-### Monthly Maintenance
-
-- [ ] Check Scoop manifest template versions against upstream:
-  ```bash
-  curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/7zip.json | jq .version
-  curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json | jq .version
-  ```
-- [ ] Sync PowerShell scripts with upstream if needed (diff with ScoopInstaller/Install)
-- [ ] Verify all PAT tokens are valid:
-  - `WINGET_PAT` - test with `gh auth status`
-  - `HOMEBREW_UPDATE_TOKEN` - check workflow logs
-- [ ] Test installation on all platforms
-
-### With Major EIM Changes
-
-- [ ] Update man page with new commands/options
-- [ ] Update or create TLDR page
-- [ ] Update Docker repository if installation flags changed
-- [ ] Update install-esp-idf-action if CLI interface changed
-- [ ] Update documentation references
-
-### Quarterly Security Review
-
-- [ ] Rotate PAT tokens approaching expiration
-- [ ] Review AWS IAM permissions
-- [ ] Check for security advisories on dependencies
-- [ ] Update base images (Docker, etc.)
-
----
-
-## Secrets Reference
-
-| Secret Name | Purpose | Where Used | Renewal Location |
-|-------------|---------|------------|------------------|
-| `HOMEBREW_UPDATE_TOKEN` | Push to espressif/homebrew-eim | update-homebrew.yml | GitHub PAT settings |
-| `WINGET_PAT` | Fork sync and PR creation to WinGet | update-windows-packages.yml | GitHub PAT settings |
-| `AWS_ACCESS_KEY_ID` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
-| `AWS_SECRET_ACCESS_KEY` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
-| `DL_DISTRIBUTION_ID` | CloudFront cache invalidation | update-linux-repos.yml | AWS CloudFront Console |
-| `GITHUB_TOKEN` | Automatic, for release asset uploads | Various workflows | Automatic (no renewal needed) |
-
-### How to Update Secrets
-
-1. Go to repository `Settings > Secrets and variables > Actions`
-2. Click on the secret name
-3. Click "Update secret"
-4. Paste the new value
-5. Click "Update secret"
-
-### PAT Token Scopes Required
-
-**HOMEBREW_UPDATE_TOKEN:**
-- `repo` (for pushing to homebrew-eim)
-
-**WINGET_PAT:**
-- `repo` (for fork access)
-- `workflow` (for PR creation)
 
 ---
 
