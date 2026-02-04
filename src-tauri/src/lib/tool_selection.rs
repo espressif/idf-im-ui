@@ -2,7 +2,7 @@ use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{git_tools::get_raw_file_url, idf_tools::{Tool, ToolsFile, filter_tools_by_target, get_platform_identification}};
+use crate::{git_tools::get_raw_file_url, idf_tools::{Tool, ToolsFile, apply_platform_overrides, filter_tools_by_target, get_platform_identification}};
 
 /// Information about a tool for selection purposes
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -65,7 +65,9 @@ pub fn fetch_tools_file(url: &str) -> Result<ToolsFile, ToolSelectionError> {
     let tools_file: ToolsFile = serde_json::from_str(&text)
         .map_err(|e| ToolSelectionError::JsonError(e.to_string()))?;
 
-    Ok(tools_file)
+    let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
+
+    Ok(apply_platform_overrides(tools_file, &platform))
 }
 
 /// Fetch tools.json from URL (async)
@@ -82,7 +84,9 @@ pub async fn fetch_tools_file_async(url: &str) -> Result<ToolsFile, ToolSelectio
     let tools_file: ToolsFile = serde_json::from_str(&text)
         .map_err(|e| ToolSelectionError::JsonError(e.to_string()))?;
 
-    Ok(tools_file)
+    let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
+
+    Ok(apply_platform_overrides(tools_file, &platform))
 }
 
 /// Convert Tool to ToolSelectionInfo for UI display
