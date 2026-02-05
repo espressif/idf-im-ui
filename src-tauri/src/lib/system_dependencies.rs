@@ -750,9 +750,14 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
 
 pub fn get_correct_powershell_command() -> String {
     match command_executor::execute_command("pwsh", &["--version"]) {
-        Ok(_) => {
-            debug!("Found powershell core");
+        Ok(o) => {
+          if (o.status.success()) {
+            debug!("Powershell core is available: {:?}", o.stdout);
             "pwsh".to_string()
+          } else {
+            debug!("Powershell core check failed: {:?}, {:?}", o.stdout, o.stderr);
+            "powershell".to_string()
+          }
         }
         Err(_) => {
             debug!("Powershell core not found, using powershell");
