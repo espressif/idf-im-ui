@@ -336,110 +336,104 @@ impl CommandExecutor for WindowsExecutor {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
         let ps_version = get_powershell_version()?;
 
-        if ps_version >= 7 {
-            // Create temp file with .ps1 extension - PowerShell requires this
-            let mut temp_file = tempfile::Builder::new()
-                .prefix("ps_script_")
-                .suffix(".ps1")
-                .tempfile()?;
+        // Generate a unique temp file path with .ps1 extension
+        let temp_dir = std::env::temp_dir();
+        let file_name = format!("ps_script_{}.ps1",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos());
+        let script_path = temp_dir.join(&file_name);
 
-            // For PowerShell 7+, write UTF-8 with BOM to temp file
-            let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
-            let script_content = format!(
-                "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                $ProgressPreference = 'SilentlyContinue'\n\
-                $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
-                Import-Module Microsoft.PowerShell.Security -Force\n\
-                Set-ExecutionPolicy Bypass -Scope Process -Force\n\
-                [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\n\
-                {}",
-                script
-            );
+        // Check if script starts with param() block
+        let script_trimmed = script.trim_start();
+        let has_param_block = script_trimmed.starts_with("param");
 
-            // Write directly to the temp_file handle
-            temp_file.write_all(bom)?;
-            temp_file.write_all(script_content.as_bytes())?;
-            temp_file.flush()?;
+        // Write the script to the file
+        let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
 
-            // Get the path and then fully close the file by persisting and dropping
-            let path = temp_file.path().to_path_buf();
-            let persist_path = temp_file.into_temp_path();
-            let final_path = persist_path.keep()?;
-
-            // Now the file is fully closed and PowerShell can access it
-            let mut child = Command::new("powershell")
-                .args([
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-NonInteractive",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    final_path.to_str().unwrap(),
-                ])
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .env(
-                    "PSModulePath",
-                    std::env::var("PSModulePath").unwrap_or_default(),
+        let script_content = if has_param_block {
+            // If script has param block, don't add anything before it
+            // Just add encoding setup after the param block
+            if ps_version >= 7 {
+                format!(
+                    "{}\n\
+                    $OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    $ProgressPreference = 'SilentlyContinue'\n\
+                    $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
+                    Import-Module Microsoft.PowerShell.Security -Force\n\
+                    Set-ExecutionPolicy Bypass -Scope Process -Force\n\
+                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072",
+                    script
                 )
-                .spawn()?;
-
-            let output = child.wait_with_output()?;
-
-            // Clean up the temp file manually
-            let _ = std::fs::remove_file(&final_path);
-
-            Ok(output)
+            } else {
+                format!(
+                    "{}\n\
+                    $OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+                    script
+                )
+            }
         } else {
-            // PowerShell < 7: Also use temp file with .ps1 extension
-            let mut temp_file = tempfile::Builder::new()
-                .prefix("ps_script_")
-                .suffix(".ps1")
-                .tempfile()?;
+            // No param block, safe to add setup at the beginning
+            if ps_version >= 7 {
+                format!(
+                    "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    $ProgressPreference = 'SilentlyContinue'\n\
+                    $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
+                    Import-Module Microsoft.PowerShell.Security -Force\n\
+                    Set-ExecutionPolicy Bypass -Scope Process -Force\n\
+                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\n\
+                    {}",
+                    script
+                )
+            } else {
+                format!(
+                    "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
+                    {}",
+                    script
+                )
+            }
+        };
 
-            // Write UTF-8 with BOM
-            let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
-            let script_content = format!(
-                "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                {}",
-                script
-            );
+        // Create and write the file, then close it immediately
+        {
+            use std::io::Write;
+            let mut file = std::fs::File::create(&script_path)?;
+            file.write_all(bom)?;
+            file.write_all(script_content.as_bytes())?;
+            file.flush()?;
+        } // File handle is closed here when it goes out of scope
 
-            // Write directly to the temp_file handle
-            temp_file.write_all(bom)?;
-            temp_file.write_all(script_content.as_bytes())?;
-            temp_file.flush()?;
+        // Now execute PowerShell with the file (file is fully closed)
+        let mut child = Command::new("powershell")
+            .args([
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                script_path.to_str().unwrap(),
+            ])
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .env(
+                "PSModulePath",
+                std::env::var("PSModulePath").unwrap_or_default(),
+            )
+            .spawn()?;
 
-            // Get the path and then fully close the file by persisting and dropping
-            let persist_path = temp_file.into_temp_path();
-            let final_path = persist_path.keep()?;
+        let output = child.wait_with_output()?;
 
-            // Now the file is fully closed and PowerShell can access it
-            let mut child = Command::new("powershell")
-                .args([
-                    "-NoLogo",
-                    "-NoProfile",
-                    "-ExecutionPolicy",
-                    "Bypass",
-                    "-File",
-                    final_path.to_str().unwrap(),
-                ])
-                .creation_flags(CREATE_NO_WINDOW)
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::piped())
-                .spawn()?;
+        // Clean up the temp file
+        let _ = std::fs::remove_file(&script_path);
 
-            let output = child.wait_with_output()?;
-
-            // Clean up the temp file manually
-            let _ = std::fs::remove_file(&final_path);
-
-            Ok(output)
-        }
+        Ok(output)
     }
 
     fn execute_direct(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {

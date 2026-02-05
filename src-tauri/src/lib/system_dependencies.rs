@@ -627,7 +627,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
             match package_manager {
                 Some("apt") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command(
+                        let output = command_executor::execute_command_direct(
                             "sudo",
                             &["apt", "install", "-y", &package],
                         );
@@ -641,7 +641,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("dnf") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command(
+                        let output = command_executor::execute_command_direct(
                             "sudo",
                             &["dnf", "install", "-y", &package],
                         );
@@ -655,7 +655,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("pacman") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command(
+                        let output = command_executor::execute_command_direct(
                             "sudo",
                             &["pacman", "-S", "--noconfirm", &package],
                         );
@@ -669,7 +669,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("zypper") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command(
+                        let output = command_executor::execute_command_direct(
                             "sudo",
                             &["zypper", "install", "-y", &package],
                         );
@@ -691,7 +691,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
         "macos" => {
             for package in packages_list {
-                let output = command_executor::execute_command("brew", &["install", &package]);
+                let output = command_executor::execute_command_direct("brew", &["install", &package]);
                 match output {
                     Ok(_) => {
                         debug!("Successfully installed {}", package);
@@ -711,17 +711,16 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                     }
                 };
                 debug!("Installing {} with scoop: {}", package, path_with_scoop);
-                let mut main_command = get_correct_powershell_command();
+                let main_command = get_correct_powershell_command();
+                let ps_command = format!("scoop install {}", package);
 
-                let output = command_executor::execute_command_with_env(
+                let output = command_executor::execute_command_direct_with_env(
                     &main_command,
                     &vec![
                         "-ExecutionPolicy",
                         "Bypass",
                         "-Command",
-                        "scoop",
-                        "install",
-                        &package,
+                        &ps_command,
                     ],
                     vec![("PATH", &add_to_path(&path_with_scoop).unwrap())],
                 );
@@ -749,7 +748,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
 }
 
 pub fn get_correct_powershell_command() -> String {
-    match command_executor::execute_command("pwsh", &["--version"]) {
+    match command_executor::execute_command_direct("pwsh", &["--version"]) {
         Ok(o) => {
           if (o.status.success()) {
             debug!("Powershell core is available: {:?}", o.stdout);
