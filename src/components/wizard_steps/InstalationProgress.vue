@@ -1215,6 +1215,8 @@ export default {
   border: 1px solid #D5D5D5;
   max-height: 300px;
   overflow: auto;
+  padding-left: 12px;
+  padding-right: 12px;
 }
 
 tbody span {
