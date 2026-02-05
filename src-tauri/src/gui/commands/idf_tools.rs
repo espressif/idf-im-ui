@@ -132,9 +132,10 @@ pub async fn setup_tools(
         })?;
     ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
     /// This is needed because the IDEs expect clang to be always installed                     ///
+    /// ninja is included as without it the users are not able to actually build the projects   ///
     ///////////////////////////////////////////////////////////////////////////////////////////////
     for t in tools.tools.iter_mut() {
-      if t.name.contains("clang") {
+      if t.name.contains("clang") || t.name.contains("ninja"){
         t.install = "always".to_string();
         debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
       }
@@ -642,9 +643,10 @@ pub async fn get_tools_list_all_versions(
 
         ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
         /// This is needed because the IDEs expect clang to be always installed                     ///
+        /// ninja is included as without it the users are not able to actually build the projects   ///
         ///////////////////////////////////////////////////////////////////////////////////////////////
         for t in tools_file.tools.iter_mut() {
-          if t.name.contains("clang") {
+          if t.name.contains("clang") || t.name.contains("ninja") {
             t.install = "always".to_string();
             debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
           }
