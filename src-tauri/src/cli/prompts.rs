@@ -93,7 +93,8 @@ pub fn check_and_install_prerequisites(
             // Some prerequisites are missing
             let unsatisfied_prerequisites: Vec<String> = 
                 result.missing.into_iter().map(|p| p.to_string()).collect();
-            
+
+            info!("{} {:?}", t!("prerequisites.missing"), unsatisfied_prerequisites);
             info!(
                 "{}",
                 t!(
