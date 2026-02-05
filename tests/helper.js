@@ -182,20 +182,18 @@ const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
       const toolsRawList = data.tools || [];
       const platformKey = getPlatformKey();
       const availableTools = toolsRawList.filter((tool) => {
-        // This is commented due to existing bug on EIM that is not properly parsing the platform overrides
-        // Once the bug is fixed this block needs to be enabled
-        // if (tool.platform_overrides) {
-        //   for (let entry of tool.platform_overrides) {
-        //     if (entry.install && entry.platforms.includes(platformKey)) {
-        //       if (
-        //         entry.install === "always" ||
-        //         entry.install === "on_request"
-        //       ) {
-        //         return true;
-        //       }
-        //     }
-        //   }
-        // }
+        if (tool.platform_overrides) {
+          for (let entry of tool.platform_overrides) {
+            if (entry.install && entry.platforms.includes(platformKey)) {
+              if (
+                entry.install === "always" ||
+                entry.install === "on_request"
+              ) {
+                return true;
+              }
+            }
+          }
+        }
 
         // Finally return all tools that are set as required or optional
         if (tool.install === "always" || tool.install === "on_request") {
