@@ -222,7 +222,9 @@ where
         let selected = generic_select(wizard_key, &display)?;
         let url = selected.split(" (").next().unwrap_or(&selected).to_string();
         set_value(config, url);
-    } else if needs_value {
+    } else if needs_value && config.config_file.is_none() {
+        // Only auto-select based on latency if no config file was loaded
+        // This prevents overriding user's mirror selection from GUI/config file
         let entries = calculate_mirrors_latency(candidates).await;
         if let Some(entry) = entries.first() {
             if entry.latency.is_some() {
