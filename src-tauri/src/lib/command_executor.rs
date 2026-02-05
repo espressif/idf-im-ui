@@ -35,7 +35,6 @@ impl CommandExecutor for DefaultExecutor {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
         Command::new(command).args(args).output()
     }
-
     fn execute_with_env(
         &self,
         command: &str,
@@ -49,7 +48,6 @@ impl CommandExecutor for DefaultExecutor {
         }
         command.output()
     }
-
     fn execute_with_dir(
         &self,
         command: &str,
@@ -61,7 +59,6 @@ impl CommandExecutor for DefaultExecutor {
             .current_dir(dir)
             .output()
     }
-
     fn spawn_with_dir(
         &self,
         command: &str,
@@ -73,7 +70,6 @@ impl CommandExecutor for DefaultExecutor {
             .current_dir(dir)
             .spawn()
     }
-
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
         Command::new("bash")
             .args(["-c", script])
@@ -104,7 +100,6 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 
 #[cfg(target_os = "windows")]
 impl CommandExecutor for WindowsExecutor {
-    // REVERTED: Direct execution like original - no shell
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -203,7 +198,6 @@ impl CommandExecutor for WindowsExecutor {
 
         Ok(output)
     }
-
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {

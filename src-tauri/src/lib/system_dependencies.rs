@@ -519,22 +519,20 @@ pub fn get_scoop_git_path() -> Option<String> {
 fn install_scoop_package_manager() -> Result<(), String> {
     match std::env::consts::OS {
         "windows" => {
-            let path_with_scoop = match get_scoop_path() {
-                Some(s) => s,
+            match get_scoop_path() {
+                Some(s) => add_to_path(&s).unwrap(),
                 None => {
                     debug!("Could not get scoop path");
                     return Err(String::from("Could not get scoop path"));
                 }
             };
-            let git_scoop_path = match get_scoop_git_path() {
-                Some(s) => s,
+            match get_scoop_git_path() {
+                Some(s) => add_to_path(&s).unwrap(),
                 None => {
                     debug!("Could not get scoop git path");
-                    return Err(String::from("Could not get scoop git path"));
+                    "".to_string()
                 }
             };
-            let path_with_scoop = format!("{};{}", git_scoop_path, path_with_scoop);
-            add_to_path(&path_with_scoop).unwrap();
 
             let scoop_install_cmd = include_str!("../../powershell_scripts/install_scoop.ps1");
             let output = crate::run_powershell_script(scoop_install_cmd);
@@ -543,34 +541,7 @@ fn install_scoop_package_manager() -> Result<(), String> {
                 Ok(o) => {
                     trace!("output: {}", o);
                     debug!("Successfully installed Scoop package manager. Adding to PATH");
-                    add_to_path(&path_with_scoop).unwrap();
-                    let output = command_executor::execute_command(
-                        "powershell",
-                        &[
-                          "-ExecutionPolicy",
-                          "Bypass",
-                          "-Command",
-                          "scoop",
-                          "bucket",
-                          "add",
-                          "versions"
-                        ],
-                    );
-                    match output {
-                        Ok(o) => {
-                            if o.status.success() {
-                                debug!("Successfully added versions bucket to scoop");
-                            } else {
-                                let output = String::from_utf8(o.stdout).unwrap();
-                                let error_message = String::from_utf8(o.stderr).unwrap();
-                                debug!("Failed to add versions bucket to scoop: {}", error_message);
-                                debug!("Output: {}", output);
-                            }
-                        }
-                        Err(e) => {
-                            debug!("Failed to add versions bucket to scoop: {}", e);
-                        }
-                    }
+
                     Ok(())
                 }
                 Err(e) => Err(e.to_string()),
@@ -604,16 +575,16 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
                     return Err(String::from("Could not get scoop path"));
                 }
             };
-            // #[cfg(windows)]
-            // crate::win_tools::add_to_win_path(&path_with_scoop).unwrap();
-            // add_to_windows_path(&path_with_scoop).unwrap();
             add_to_path(&path_with_scoop).unwrap();
-            let output = command_executor::execute_command(
-                "powershell",
-                &["-Command", "scoop", "--version"],
-            );
+
+            let executor = command_executor::get_executor();
+            let output = executor.run_script_from_string("if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }");
             match output {
                 Ok(o) => {
+                    let stdout = String::from_utf8_lossy(&o.stdout);
+                    debug!("scoop check stdout: {}", stdout);
+                    debug!("scoop check status: {}", o.status);
+
                     if o.status.success() {
                         debug!("Scoop package manager is already installed");
                         Ok(())
@@ -626,7 +597,6 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
             }
         }
         _ => {
-            // this function should not be called on non-windows platforms
             debug!("Scoop package manager is only supported on Windows. Skipping installation.");
             Err(format!("Unsupported OS - {}", std::env::consts::OS))
         }
@@ -728,46 +698,60 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
         "windows" => {
             ensure_scoop_package_manager()?;
+
+            let executor = command_executor::get_executor();
+
             for package in packages_list {
                 let path_with_scoop = match get_scoop_path() {
-                    Some(s) => s,
+                    Some(s) => add_to_path(&s).unwrap(),
                     None => {
                         debug!("Could not get scoop path");
                         return Err(String::from("Could not get scoop path"));
                     }
                 };
-                let git_scoop_path = match get_scoop_git_path() {
-                    Some(s) => s,
+                match get_scoop_git_path() {
+                    Some(s) => add_to_path(&s).unwrap(),
                     None => {
                         debug!("Could not get scoop git path");
-                        return Err(String::from("Could not get scoop git path"));
+                        "".to_string()
                     }
                 };
-                let path_with_scoop = format!("{};{}", git_scoop_path, path_with_scoop);
                 debug!("Installing {} with scoop: {}", package, path_with_scoop);
-                let main_command = get_correct_powershell_command();
-                let ps_command = format!("scoop install {}", package);
 
-                let output = command_executor::execute_command_direct_with_env(
-                    &main_command,
-                    &vec![
-                        "-ExecutionPolicy",
-                        "Bypass",
-                        "-Command",
-                        &ps_command,
-                    ],
-                    vec![("PATH", &add_to_path(&path_with_scoop).unwrap())],
-                );
+                add_to_path(&path_with_scoop).unwrap();
+
+                let output = executor.run_script_from_string("scoop bucket add versions");
                 match output {
                     Ok(o) => {
                         if o.status.success() {
-                            trace!("{}", String::from_utf8(o.stdout).unwrap());
+                            debug!("Successfully added versions bucket to scoop");
+                        } else {
+                            let stdout = String::from_utf8_lossy(&o.stdout);
+                            let stderr = String::from_utf8_lossy(&o.stderr);
+                            debug!("Failed to add versions bucket to scoop: {} {}", stderr, stdout);
+                        }
+                    }
+                    Err(e) => {
+                        debug!("Failed to add versions bucket to scoop: {}", e);
+                    }
+                }
+
+                // Install package using script approach to handle paths with spaces
+                let install_script = format!("scoop install {}", package);
+                let output = executor.run_script_from_string(&install_script);
+
+                match output {
+                    Ok(o) => {
+                        if o.status.success() {
+                            let stdout = String::from_utf8_lossy(&o.stdout);
+                            trace!("{}", stdout);
                             debug!("Successfully installed {:?}", package);
                         } else {
-                            let output = String::from_utf8(o.stdout).unwrap();
-                            let error_message = String::from_utf8(o.stderr).unwrap();
-                            debug!("Failed to install {}: {}", package, error_message);
-                            debug!("Output: {}", output);
+                            let stdout = String::from_utf8_lossy(&o.stdout);
+                            let stderr = String::from_utf8_lossy(&o.stderr);
+                            debug!("Failed to install {}: {}", package, stderr);
+                            debug!("Output: {}", stdout);
+                            return Err(format!("Failed to install {}: {} {}", package, stderr, stdout));
                         }
                     }
                     Err(e) => panic!("Failed to install {}: {}", package, e),
@@ -816,34 +800,54 @@ pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     let binding = env::var_os("PATH").unwrap_or_default();
     let paths = binding.to_str().unwrap();
 
+    // Note: We wrap the path in quotes for Windows to handle spaces correctly.
     let new_path_string = match std::env::consts::OS {
-        "windows" => format!("{};{}", new_path, paths),
+        "windows" => format!("\"{}\";{}", new_path, paths),
         _ => format!("{}:{}", new_path, paths),
     };
+
     if !paths.contains(new_path) {
-        // Update current process PATH
         env::set_var("PATH", &new_path_string);
     }
+
     if std::env::consts::OS == "windows" {
-        // PowerShell 7+ compatible command
-        let ps_command = format!(
-            "$oldPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); \
-               if (-not $oldPath.Contains('{}')) {{ \
-                   $newPath = '{}' + ';' + $oldPath; \
-                   [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User'); \
-               }}",
-            new_path.replace("'", "''"),
-            new_path.replace("'", "''")
+        // Escape single quotes by doubling them for PowerShell string literals
+        let escaped_path = new_path.replace("'", "''");
+
+        let ps_script = format!(
+            r#"
+ $newDir = '{}'
+ $oldPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+if ($oldPath -eq $null) {{ $oldPath = '' }}
+
+# Only add if not already present.
+# We check for the raw path (without quotes) to avoid duplicates if the user adds it manually differently.
+if (-not $oldPath.Contains($newDir)) {{
+    # Wrap in double quotes to handle spaces in the path
+    $quotedDir = "`"" + $newDir + "`""
+    $newPath = $quotedDir + ';' + $oldPath
+    [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+}}
+"#,
+            escaped_path
         );
 
-        let res = command_executor::execute_command(
-            "powershell",
-            &["-NoProfile", "-NonInteractive", "-Command", &ps_command],
-        );
+        let executor = command_executor::get_executor();
+        let res = executor.run_script_from_string(&ps_script);
 
         match res {
-            Ok(_) => {
-                debug!("Added {} to PATH", new_path);
+            Ok(o) => {
+                if o.status.success() {
+                    debug!("Added {} to PATH", new_path);
+                } else {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    let stdout = String::from_utf8_lossy(&o.stdout);
+                    warn!("Failed to add {} to PATH: {} {}", new_path, stderr, stdout);
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("Failed to update PATH: {} {}", stderr, stdout),
+                    ));
+                }
             }
             Err(e) => {
                 warn!("Failed to add {} to PATH: {}", new_path, e);

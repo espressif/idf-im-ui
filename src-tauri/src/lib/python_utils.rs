@@ -203,8 +203,6 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
 fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
     info!("Creating Python virtual environment at: {}", venv_path);
 
-    // Use direct execution - no shell means spaces and UTF-8 work perfectly
-    // Python doesn't need shell features (no variable expansion, globs, etc.)
     let output = command_executor::execute_command_direct(
         python_executable,
         &["-m", "venv", venv_path],
