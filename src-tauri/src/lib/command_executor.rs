@@ -27,77 +27,13 @@ pub trait CommandExecutor: Send {
         dir: &str,
     ) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
-
-    fn execute_direct(&self, command: &str, args: &[&str]) -> std::io::Result<Output>;
-    fn execute_direct_with_env(
-        &self,
-        command: &str,
-        args: &[&str],
-        env: Vec<(&str, &str)>,
-    ) -> std::io::Result<Output>;
-    fn execute_direct_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output>;
-}
-
-/// Helper function to escape shell arguments for bash
-fn escape_bash_arg(arg: &str) -> String {
-    // If the argument contains no special characters, return as-is
-    if arg.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '-' || c == '.' || c == '/') {
-        return arg.to_string();
-    }
-
-    // Otherwise, wrap in single quotes and escape any single quotes
-    format!("'{}'", arg.replace('\'', "'\\''"))
-}
-
-/// Helper function to escape PowerShell arguments
-#[cfg(target_os = "windows")]
-fn escape_powershell_arg(arg: &str) -> String {
-    // PowerShell requires different escaping than cmd
-    let mut escaped = String::new();
-    let needs_quotes = arg.contains(' ') || arg.contains('\t') || arg.contains('\'') || arg.contains('"');
-
-    if needs_quotes {
-        escaped.push('"');
-    }
-
-    for ch in arg.chars() {
-        match ch {
-            '"' => escaped.push_str("`\""),
-            '`' => escaped.push_str("``"),
-            '$' => escaped.push_str("`$"),
-            _ => escaped.push(ch),
-        }
-    }
-
-    if needs_quotes {
-        escaped.push('"');
-    } else {
-        escaped = arg.to_string();
-    }
-
-    escaped
 }
 
 struct DefaultExecutor;
 
 impl CommandExecutor for DefaultExecutor {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
-        // Use shell to preserve variable expansion, globs, etc.
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_bash_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            escape_bash_arg(command)
-        } else {
-            format!("{} {}", escape_bash_arg(command), escaped_args.join(" "))
-        };
-
-        Command::new("bash")
-            .args(["-c", &full_command])
-            .output()
+        Command::new(command).args(args).output()
     }
 
     fn execute_with_env(
@@ -106,87 +42,15 @@ impl CommandExecutor for DefaultExecutor {
         args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output> {
-        // Use shell with environment variables
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_bash_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            escape_bash_arg(command)
-        } else {
-            format!("{} {}", escape_bash_arg(command), escaped_args.join(" "))
-        };
-
-        let mut binding = Command::new("bash");
-        let mut cmd = binding.args(["-c", &full_command]);
+        let mut binding = Command::new(command);
+        let mut command = binding.args(args);
         for (key, value) in env {
-            cmd = cmd.env(key, value);
+            command = command.env(key, value);
         }
-        cmd.output()
+        command.output()
     }
 
     fn execute_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output> {
-        // Use shell with directory
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_bash_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            escape_bash_arg(command)
-        } else {
-            format!("{} {}", escape_bash_arg(command), escaped_args.join(" "))
-        };
-
-        Command::new("bash")
-            .args(["-c", &full_command])
-            .current_dir(dir)
-            .output()
-    }
-
-    fn spawn_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Child> {
-        // Use shell with directory
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_bash_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            escape_bash_arg(command)
-        } else {
-            format!("{} {}", escape_bash_arg(command), escaped_args.join(" "))
-        };
-
-        Command::new("bash")
-            .args(["-c", &full_command])
-            .current_dir(dir)
-            .spawn()
-    }
-
-    fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
-        Command::new("bash")
-            .args(["-c", script])
-            .output()
-    }
-
-    fn execute_direct(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
-        Command::new(command).args(args).output()
-    }
-
-    fn execute_direct_with_env(
-        &self,
-        command: &str,
-        args: &[&str],
-        env: Vec<(&str, &str)>,
-    ) -> std::io::Result<Output> {
-        let mut binding = Command::new(command);
-        let mut cmd = binding.args(args);
-        for (key, value) in env {
-            cmd = cmd.env(key, value);
-        }
-        cmd.output()
-    }
-
-    fn execute_direct_with_dir(
         &self,
         command: &str,
         args: &[&str],
@@ -197,27 +61,29 @@ impl CommandExecutor for DefaultExecutor {
             .current_dir(dir)
             .output()
     }
+
+    fn spawn_with_dir(
+        &self,
+        command: &str,
+        args: &[&str],
+        dir: &str,
+    ) -> std::io::Result<Child> {
+        Command::new(command)
+            .args(args)
+            .current_dir(dir)
+            .spawn()
+    }
+
+    fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+        Command::new("bash")
+            .args(["-c", script])
+            .output()
+    }
 }
 
 #[cfg(target_os = "windows")]
 struct WindowsExecutor;
 
-/// Retrieves the major version number of PowerShell installed on the system.
-///
-/// This function executes a PowerShell command to fetch the major version number
-/// of the installed PowerShell. On Windows, it uses the CREATE_NO_WINDOW flag
-/// to prevent a console window from appearing during execution.
-///
-/// # Returns
-///
-/// Returns a `Result` containing:
-/// - `Ok(i32)`: The major version number of PowerShell if successfully retrieved.
-///   If parsing fails, it defaults to version 5.
-/// - `Err(std::io::Error)`: An error if the PowerShell command execution fails.
-///
-/// # Platform-specific behavior
-///
-/// On Windows, this function uses the CREATE_NO_WINDOW flag to suppress the console window.
 pub fn get_powershell_version() -> std::io::Result<i32> {
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     let mut binding = Command::new("powershell");
@@ -238,21 +104,12 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 
 #[cfg(target_os = "windows")]
 impl CommandExecutor for WindowsExecutor {
+    // REVERTED: Direct execution like original - no shell
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        // Use PowerShell to preserve variable expansion, etc.
-        let escaped_command = escape_powershell_arg(command);
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_powershell_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            format!("& {}", escaped_command)
-        } else {
-            format!("& {} {}", escaped_command, escaped_args.join(" "))
-        };
-
-        Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &full_command])
+        Command::new(command)
+            .args(args)
             .creation_flags(CREATE_NO_WINDOW)
             .output()
     }
@@ -265,23 +122,12 @@ impl CommandExecutor for WindowsExecutor {
     ) -> std::io::Result<Output> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let escaped_command = escape_powershell_arg(command);
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_powershell_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            format!("& {}", escaped_command)
-        } else {
-            format!("& {} {}", escaped_command, escaped_args.join(" "))
-        };
-
-        let mut binding = Command::new("powershell");
-        let mut cmd = binding
-            .args(["-NoProfile", "-NonInteractive", "-Command", &full_command])
-            .creation_flags(CREATE_NO_WINDOW);
+        let mut binding = Command::new(command);
+        let mut command = binding.args(args).creation_flags(CREATE_NO_WINDOW);
         for (key, value) in env {
-            cmd = cmd.env(key, value);
+            command = command.env(key, value);
         }
-        cmd.output()
+        command.output()
     }
 
     fn execute_with_dir(
@@ -292,17 +138,8 @@ impl CommandExecutor for WindowsExecutor {
     ) -> std::io::Result<Output> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let escaped_command = escape_powershell_arg(command);
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_powershell_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            format!("& {}", escaped_command)
-        } else {
-            format!("& {} {}", escaped_command, escaped_args.join(" "))
-        };
-
-        Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &full_command])
+        Command::new(command)
+            .args(args)
             .current_dir(dir)
             .creation_flags(CREATE_NO_WINDOW)
             .output()
@@ -316,25 +153,15 @@ impl CommandExecutor for WindowsExecutor {
     ) -> std::io::Result<Child> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-        let escaped_command = escape_powershell_arg(command);
-        let escaped_args: Vec<String> = args.iter().map(|arg| escape_powershell_arg(arg)).collect();
-        let full_command = if escaped_args.is_empty() {
-            format!("& {}", escaped_command)
-        } else {
-            format!("& {} {}", escaped_command, escaped_args.join(" "))
-        };
-
-        Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &full_command])
+        Command::new(command)
+            .args(args)
             .current_dir(dir)
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
     }
 
-    fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
         const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let ps_version = get_powershell_version()?;
 
         // Generate a unique temp file path with .ps1 extension
         let temp_dir = std::env::temp_dir();
@@ -345,70 +172,15 @@ impl CommandExecutor for WindowsExecutor {
                 .as_nanos());
         let script_path = temp_dir.join(&file_name);
 
-        // Check if script starts with param() block
-        let script_trimmed = script.trim_start();
-        let has_param_block = script_trimmed.starts_with("param");
-
-        // Write the script to the file
-        let bom = b"\xEF\xBB\xBF"; // UTF-8 BOM as bytes
-
-        let script_content = if has_param_block {
-            // If script has param block, don't add anything before it
-            // Just add encoding setup after the param block
-            if ps_version >= 7 {
-                format!(
-                    "{}\n\
-                    $OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    $ProgressPreference = 'SilentlyContinue'\n\
-                    $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
-                    Import-Module Microsoft.PowerShell.Security -Force\n\
-                    Set-ExecutionPolicy Bypass -Scope Process -Force\n\
-                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072",
-                    script
-                )
-            } else {
-                format!(
-                    "{}\n\
-                    $OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-                    script
-                )
-            }
-        } else {
-            // No param block, safe to add setup at the beginning
-            if ps_version >= 7 {
-                format!(
-                    "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    $ProgressPreference = 'SilentlyContinue'\n\
-                    $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\n\
-                    Import-Module Microsoft.PowerShell.Security -Force\n\
-                    Set-ExecutionPolicy Bypass -Scope Process -Force\n\
-                    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\n\
-                    {}",
-                    script
-                )
-            } else {
-                format!(
-                    "$OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n\
-                    {}",
-                    script
-                )
-            }
-        };
-
-        // Create and write the file, then close it immediately
+        // Write the script AS-IS with UTF-8 BOM
         {
             use std::io::Write;
             let mut file = std::fs::File::create(&script_path)?;
-            file.write_all(bom)?;
-            file.write_all(script_content.as_bytes())?;
+            file.write_all(b"\xEF\xBB\xBF")?; // UTF-8 BOM
+            file.write_all(script.as_bytes())?;
             file.flush()?;
-        } // File handle is closed here when it goes out of scope
+        } // File closed here - critical for Windows
 
-        // Now execute PowerShell with the file (file is fully closed)
         let mut child = Command::new("powershell")
             .args([
                 "-NoLogo",
@@ -422,59 +194,16 @@ impl CommandExecutor for WindowsExecutor {
             .creation_flags(CREATE_NO_WINDOW)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
-            .env(
-                "PSModulePath",
-                std::env::var("PSModulePath").unwrap_or_default(),
-            )
             .spawn()?;
 
         let output = child.wait_with_output()?;
 
-        // Clean up the temp file
+        // Clean up
         let _ = std::fs::remove_file(&script_path);
 
         Ok(output)
     }
 
-    fn execute_direct(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        Command::new(command)
-            .args(args)
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-    }
-
-    fn execute_direct_with_env(
-        &self,
-        command: &str,
-        args: &[&str],
-        env: Vec<(&str, &str)>,
-    ) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        let mut binding = Command::new(command);
-        let mut cmd = binding.args(args).creation_flags(CREATE_NO_WINDOW);
-        for (key, value) in env {
-            cmd = cmd.env(key, value);
-        }
-        cmd.output()
-    }
-
-    fn execute_direct_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        Command::new(command)
-            .args(args)
-            .current_dir(dir)
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-    }
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {
@@ -521,8 +250,7 @@ pub fn spawn_with_dir(
 }
 
 pub fn execute_command_direct(command: &str, args: &[&str]) -> std::io::Result<Output> {
-    let executor = get_executor();
-    executor.execute_direct(command, args)
+    execute_command(command, args)
 }
 
 pub fn execute_command_direct_with_env(
@@ -530,8 +258,7 @@ pub fn execute_command_direct_with_env(
     args: &[&str],
     env: Vec<(&str, &str)>,
 ) -> std::io::Result<Output> {
-    let executor = get_executor();
-    executor.execute_direct_with_env(command, args, env)
+    execute_command_with_env(command, &args.to_vec(), env)
 }
 
 pub fn execute_command_direct_with_dir(
@@ -539,9 +266,9 @@ pub fn execute_command_direct_with_dir(
     args: &[&str],
     dir: &str,
 ) -> std::io::Result<Output> {
-    let executor = get_executor();
-    executor.execute_direct_with_dir(command, args, dir)
+    execute_command_with_dir(command, args, dir)
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -735,25 +462,6 @@ mod tests {
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains("content in spaced dir"));
         }
-    }
-
-    #[test]
-    fn test_escape_bash_arg() {
-        assert_eq!(escape_bash_arg("simple"), "simple");
-        assert_eq!(escape_bash_arg("with space"), "'with space'");
-        assert_eq!(escape_bash_arg("with'quote"), "'with'\\''quote'");
-        assert_eq!(escape_bash_arg("with$dollar"), "'with$dollar'");
-        assert_eq!(escape_bash_arg("/path/to/file"), "/path/to/file");
-    }
-
-    #[cfg(target_os = "windows")]
-    #[test]
-    fn test_escape_powershell_arg() {
-        assert_eq!(escape_powershell_arg("simple"), "simple");
-        assert_eq!(escape_powershell_arg("with space"), "\"with space\"");
-        assert_eq!(escape_powershell_arg("with\"quote"), "\"with`\"quote\"");
-        assert_eq!(escape_powershell_arg("with$dollar"), "\"with`$dollar\"");
-        assert_eq!(escape_powershell_arg("with`backtick"), "\"with``backtick\"");
     }
 
     #[test]

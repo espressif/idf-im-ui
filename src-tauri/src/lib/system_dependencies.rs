@@ -490,6 +490,23 @@ pub fn get_scoop_path() -> Option<String> {
     }
 }
 
+/// Returns the path to the Scoop Git binary directory.
+pub fn get_scoop_git_path() -> Option<String> {
+    if std::env::consts::OS == "windows" {
+        let home_dir = match dirs::home_dir() {
+            Some(d) => d,
+            None => {
+                debug!("Could not get home directory");
+                return None;
+            }
+        };
+        let scoop_git_path = home_dir.join("scoop").join("apps").join("git").join("current").join("bin");
+        Some(scoop_git_path.to_string_lossy().to_string())
+    } else {
+        None
+    }
+}
+
 /// Installs the Scoop package manager on Windows.
 ///
 /// This function is only relevant for Windows systems. It sets the execution policy to RemoteSigned,
@@ -509,7 +526,16 @@ fn install_scoop_package_manager() -> Result<(), String> {
                     return Err(String::from("Could not get scoop path"));
                 }
             };
+            let git_scoop_path = match get_scoop_git_path() {
+                Some(s) => s,
+                None => {
+                    debug!("Could not get scoop git path");
+                    return Err(String::from("Could not get scoop git path"));
+                }
+            };
+            let path_with_scoop = format!("{};{}", git_scoop_path, path_with_scoop);
             add_to_path(&path_with_scoop).unwrap();
+
             let scoop_install_cmd = include_str!("../../powershell_scripts/install_scoop.ps1");
             let output = crate::run_powershell_script(scoop_install_cmd);
 
@@ -710,6 +736,14 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                         return Err(String::from("Could not get scoop path"));
                     }
                 };
+                let git_scoop_path = match get_scoop_git_path() {
+                    Some(s) => s,
+                    None => {
+                        debug!("Could not get scoop git path");
+                        return Err(String::from("Could not get scoop git path"));
+                    }
+                };
+                let path_with_scoop = format!("{};{}", git_scoop_path, path_with_scoop);
                 debug!("Installing {} with scoop: {}", package, path_with_scoop);
                 let main_command = get_correct_powershell_command();
                 let ps_command = format!("scoop install {}", package);
