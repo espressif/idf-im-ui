@@ -611,6 +611,12 @@ gui.system_dependencies.error_installing_prerequisites:
 gui.system_dependencies.python_sanity_check_failed:
   en: "Python sanity check failed: %{error}"
   cn: "Python 环境检查失败：%{error}"
+gui.system_dependencies.python_check_failed_label:
+  en: "Python sanity check failed: %{label}"
+  cn: "Python 环境检查失败：%{label}"
+python.sanitycheck.failed.summary:
+  en: "Python sanity check failed. Please fix the issues above and try again."
+  cn: "Python 环境检查未通过。请根据上述提示修复后重试。"
 gui.system_dependencies.error_installing_python:
   en: "Error installing Python: %{error}"
   cn: "安装 Python 时出错：%{error}"

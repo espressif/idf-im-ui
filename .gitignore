@@ -26,3 +26,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+# add the cursor configuration directory and all files there to gitignore
+.cursor/*

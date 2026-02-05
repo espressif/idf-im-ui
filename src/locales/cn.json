@@ -485,15 +485,9 @@
       "recheckInstallation": "重新检查 Python 安装"
     },
     "installNote": "这将安装 Python 及所有必要组件",
-    "manualInstall": {
-      "title": "需要手动安装",
-      "intro": "请安装：",
-      "requirements": {
-        "python": "Python 3.10 或更高版本",
-        "pip": "pip 包管理器",
-        "virtualenv": "virtualenv 模块",
-        "ssl": "SSL 支持"
-      }
+    "failed": {
+      "summary": "以下检查未通过。请修复或安装缺失的组件后重新检查。",
+      "message": "无法验证：%{check}"
     }
   },
   "prerequisitiesCheck": {
