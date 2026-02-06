@@ -12,21 +12,6 @@ use tauri::AppHandle;
 use anyhow::{Result};
 use sysinfo::System;
 
-#[cfg(windows)]
-use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
-#[cfg(windows)]
-use winapi::um::securitybaseapi::GetTokenInformation;
-#[cfg(windows)]
-use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
-#[cfg(windows)]
-use winapi::um::handleapi::CloseHandle;
-#[cfg(windows)]
-use winapi::shared::minwindef::{DWORD, FALSE};
-#[cfg(windows)]
-use std::mem;
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
-
 use crate::gui::ui::send_message;
 
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -273,64 +258,11 @@ pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcom
     }
 }
 
-#[cfg(windows)]
-fn is_elevated() -> Result<bool, Box<dyn std::error::Error>> {
-    unsafe {
-        let process = GetCurrentProcess();
-        let mut token = std::ptr::null_mut();
-
-        // Open process token
-        if OpenProcessToken(process, TOKEN_QUERY, &mut token) == FALSE {
-            return Err("Failed to open process token".into());
-        }
-
-        // Get token elevation information
-        let mut elevation = TOKEN_ELEVATION { TokenIsElevated: 0 };
-        let mut return_length: DWORD = 0;
-
-        let result = GetTokenInformation(
-            token,
-            TokenElevation,
-            &mut elevation as *mut _ as *mut _,
-            mem::size_of::<TOKEN_ELEVATION>() as DWORD,
-            &mut return_length,
-        );
-
-        // Clean up token handle
-        CloseHandle(token);
-
-        if result == FALSE {
-            return Err("Failed to get token information".into());
-        }
-
-        Ok(elevation.TokenIsElevated != 0)
-    }
-}
-
-#[cfg(not(windows))]
-fn is_elevated() -> Result<bool, Box<dyn std::error::Error>> {
-    Ok(false)
-}
-
+/// Check if running with elevated permissions (Administrator on Windows, root on POSIX)
 #[tauri::command]
-pub fn check_elevation() -> Result<bool, String> {
-    match std::env::consts::OS {
-      "windows" => {
-        match is_elevated() {
-          Ok(elevated) => Ok(elevated),
-          Err(err) => {
-            error!("Failed to check elevation: {}", err);
-            Err(format!("Failed to check elevation: {}", err))
-          }
-        }
-      }
-      _ => {
-        // On non-Windows systems, assume no elevation is needed
-        Ok(false)
-      }
-    }
+pub fn check_elevated_permissions() -> Result<bool, String> {
+    Ok(idf_im_lib::utils::is_running_elevated())
 }
-
 
 #[tauri::command]
 pub async fn install_drivers() -> Result<(), String> {

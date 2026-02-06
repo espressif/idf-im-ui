@@ -21,6 +21,16 @@
       "downloadManually": "从发布页面下载最新版本："
     }
   },
+  "warnings": {
+    "elevation": {
+      "title": "检测到提升权限",
+      "posix": "不建议使用提升权限（sudo/root）运行。创建的文件可能会在以后使用 ESP-IDF 时导致权限问题。",
+      "windows": "正在以管理员身份运行。只有在需要安装 USB 驱动程序时才需要此权限。"
+    }
+  },
+  "common": {
+    "dismiss": "关闭"
+  },
   "routes": {
     "welcome": "欢迎",
     "versionManagement": "版本管理",
@@ -247,7 +257,7 @@
       },
       "prerequisites": {
         "checking": "正在检查系统依赖项...",
-        "missing":"缺少先决条件",
+        "missing": "缺少先决条件",
         "installCommand": "安装命令"
       },
       "startButton": "开始安装"
@@ -512,8 +522,8 @@
       "windowsInstall": "点击下方自动安装缺失的组件",
       "manualInstall": "请手动安装以下组件",
       "manualHint": "请安装依赖项后再次运行检查。",
-      "macosHint" : "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
-      "linuxHint" : "你可以使用你的安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
+      "macosHint": "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
+      "linuxHint": "你可以使用你的安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "mirrorSelect": {
@@ -694,9 +704,9 @@
         "docs": "打开文档失败",
         "ide": "请安装带有 ESP-IDF 扩展的 VS Code"
       },
-      "manualHint":" 请安装依赖项后再次运行检查。",
-      "macosHint" : "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
-      "linuxHint" : "你可以使用安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
+      "manualHint": " 请安装依赖项后再次运行检查。",
+      "macosHint": "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
+      "linuxHint": "你可以使用安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`"
     }
   },
   "installationProgress": {
@@ -790,7 +800,7 @@
     "title": "选择 ESP-IDF 功能",
     "description": "选择您希望随 ESP-IDF 一起安装的功能和组件",
     "continueButton": "继续选择工具",
-    "summaryMultiVersion":"{versions} 个版本: {details}",
+    "summaryMultiVersion": "{versions} 个版本: {details}",
     "noDescription": "无可用描述",
     "noFeatures": "无可用功能。请先选择一个 ESP-IDF 版本。",
     "sections": {
@@ -825,7 +835,7 @@
     "features": {
       "selection_unavailable": "功能选择不可用"
     },
-     "tools": {
+    "tools": {
       "no_idf_version_specified": "未指定用于工具选择的 IDF 版本",
       "read_failure": "读取工具配置失败",
       "selection_unavailable": "此版本将无法进行工具选择。",

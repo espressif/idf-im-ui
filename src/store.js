@@ -45,6 +45,12 @@ export const useAppStore = defineStore("app", {
       allOk: false,
       missing: [],
     },
+
+    // Elevation state
+    isElevated: false,
+
+    // Global warnings (for warning banner)
+    warnings: [],
   }),
 
   getters: {
@@ -72,7 +78,47 @@ export const useAppStore = defineStore("app", {
       const eim_version = app_info.version
       const info = { os, arch, cpuCount , additionalSystemInfo , eim_version};
       this.setSystemInfo(info);
+      // Check elevation status for warning banner
+      await this.checkElevatedPermissions();
     },
+
+    async checkElevatedPermissions() {
+      try {
+        const elevated = await invoke('check_elevated_permissions');
+        this.isElevated = elevated;
+        return elevated;
+      } catch (error) {
+        console.error("Failed to check elevated permissions:", error);
+        this.isElevated = false;
+        return false;
+      }
+    },
+
+    // Warning management
+    addWarning(warning) {
+      // Prevent duplicate warnings with same id
+      if (warning.id && this.warnings.some(w => w.id === warning.id)) {
+        return warning.id;
+      }
+      const id = warning.id || Date.now().toString();
+      this.warnings.push({
+        id,
+        type: warning.type || 'warning',
+        title: warning.title,
+        message: warning.message || '',
+        dismissible: warning.dismissible !== false,
+      });
+      return id;
+    },
+
+    removeWarning(id) {
+      this.warnings = this.warnings.filter(w => w.id !== id);
+    },
+
+    clearWarnings() {
+      this.warnings = [];
+    },
+
     setSystemInfo(info) {
       this.os = info.os;
       this.arch = info.arch;
