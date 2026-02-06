@@ -1,4 +1,16 @@
 {
+  "common": {
+    "prerequisites": {
+      "verificationFailedTitle": "无法验证依赖项",
+      "shellFailed": "此系统上基本 Shell 执行失败。",
+      "verificationError": "检查依赖项时发生系统错误。",
+      "verificationFailedHint": "安装程序无法检查依赖项。如果您确定所需工具已安装，可以跳过此检查。",
+      "manualHint": "请安装依赖项后再次运行检查。",
+      "macosHint": "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
+      "linuxHint": "你可以使用安装包管理器安装缺失的依赖项，例如 `sudo apt update && sudo apt install -y {list}`",
+      "skipCheck": "跳过依赖项检查"
+    }
+  },
   "app": {
     "title": "ESP-IDF 安装管理器",
     "settingUp": "正在设置开发环境...",
@@ -688,6 +700,10 @@
       "system": {
         "title": "系统检查失败",
         "message": "验证系统要求失败。"
+      },
+      "versions": {
+        "title": "版本获取失败",
+        "message": "无法获取可用的 ESP-IDF 版本。"
       },
       "start": {
         "title": "启动安装失败"

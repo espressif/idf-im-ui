@@ -47,72 +47,114 @@ pub async fn select_idf_version(
     }
 }
 
-fn check_prerequisites() -> Result<Vec<String>, String> {
-    match system_dependencies::check_prerequisites() {
-        Ok(prerequisites) => {
-            if prerequisites.is_empty() {
-                debug!("{}", t!("prerequisites.ok"));
-                Ok(vec![])
-            } else {
-                info!("{} {:?}", t!("prerequisites.missing"), prerequisites);
-                Ok(prerequisites.into_iter().map(|p| p.to_string()).collect())
-            }
-        }
-        Err(err) => Err(err),
-    }
-}
 pub fn check_and_install_prerequisites(
     non_interactive: bool,
     install_all_prerequisites: bool,
 ) -> Result<(), String> {
-    let unsatisfied_prerequisites = if non_interactive {
-        check_prerequisites()?
+    // Run the prerequisites check
+    let check_result = if non_interactive {
+        system_dependencies::check_prerequisites_with_result()
     } else {
-        run_with_spinner(check_prerequisites)?
+        run_with_spinner(system_dependencies::check_prerequisites_with_result)
     };
-    if !unsatisfied_prerequisites.is_empty() {
-        info!(
-            "{}",
-            t!(
-                "prerequisites.not_ok",
-                l = unsatisfied_prerequisites.join(", ")
-            )
-        );
-        if std::env::consts::OS == "windows" {
-            let res = if !install_all_prerequisites && !non_interactive {
-                generic_confirm("prerequisites.install.prompt")
-            } else if install_all_prerequisites {
-                Ok(true)
-            } else {
-                Ok(false)
-            };
-            if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(unsatisfied_prerequisites)
-                    .map_err(|e| e.to_string())?;
 
-                let remaining_prerequisites = run_with_spinner(check_prerequisites)?;
-                if !remaining_prerequisites.is_empty() {
-                    return Err(format!(
-                        "{}",
-                        t!(
-                            "prerequisites.install.catastrophic",
-                            l = remaining_prerequisites.join(", ")
-                        ),
-                    ));
+    match check_result {
+        Ok(result) => {
+            // Handle verification failures (shell failed or can't verify)
+            if result.shell_failed || !result.can_verify {
+                let message = if result.shell_failed {
+                    t!("prerequisites.shell_failed").to_string()
                 } else {
-                    info!("{}", t!("prerequisites.ok"));
+                    t!("prerequisites.verification_error", error = "unknown").to_string()
+                };
+                info!("{}", message);
+
+                if non_interactive {
+                    // In non-interactive mode, fail with the existing message
+                    return Err(t!("prerequisites.failed").to_string());
+                }
+
+                // Interactive mode: ask user if they want to skip
+                let skip = generic_confirm("prerequisites.skip_prompt")
+                    .map_err(|e| e.to_string())?;
+                if !skip {
+                    return Err(t!("prerequisites.user_cancelled").to_string());
+                }
+                info!("{}", t!("prerequisites.skipping"));
+                return Ok(());
+            }
+
+            // Normal flow: all prerequisites satisfied
+            if result.missing.is_empty() {
+                info!("{}", t!("prerequisites.ok"));
+                return Ok(());
+            }
+
+            // Some prerequisites are missing
+            let unsatisfied_prerequisites: Vec<String> = 
+                result.missing.into_iter().map(|p| p.to_string()).collect();
+
+            info!("{} {:?}", t!("prerequisites.missing"), unsatisfied_prerequisites);
+            info!(
+                "{}",
+                t!(
+                    "prerequisites.not_ok",
+                    l = unsatisfied_prerequisites.join(", ")
+                )
+            );
+
+            if std::env::consts::OS == "windows" {
+                let res = if !install_all_prerequisites && !non_interactive {
+                    generic_confirm("prerequisites.install.prompt")
+                } else if install_all_prerequisites {
+                    Ok(true)
+                } else {
+                    Ok(false)
+                };
+                if res.map_err(|e| e.to_string())? {
+                    system_dependencies::install_prerequisites(unsatisfied_prerequisites)
+                        .map_err(|e| e.to_string())?;
+
+                    // Re-check after installation to verify prerequisites were installed
+                    let recheck_result = run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
+                    if !recheck_result.missing.is_empty() {
+                        return Err(format!(
+                            "{}",
+                            t!(
+                                "prerequisites.install.catastrophic",
+                                l = recheck_result.missing.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ")
+                            ),
+                        ));
+                    } else {
+                        info!("{}", t!("prerequisites.ok"));
+                    }
+                } else {
+                    return Err(t!("prerequisites.install.ask").to_string());
                 }
             } else {
                 return Err(t!("prerequisites.install.ask").to_string());
             }
-        } else {
-            return Err(t!("prerequisites.install.ask").to_string());
-        }
-    } else {
-        info!("{}", t!("prerequisites.ok"))
-    }
 
-    Ok(())
+            Ok(())
+        }
+        Err(err) => {
+            // Error during checking (e.g., unsupported package manager)
+            info!("{}", t!("prerequisites.verification_error", error = err.clone()));
+
+            if non_interactive {
+                return Err(err);
+            }
+
+            // Interactive mode: ask user if they want to skip
+            let skip = generic_confirm("prerequisites.skip_prompt")
+                .map_err(|e| e.to_string())?;
+            if !skip {
+                return Err(t!("prerequisites.user_cancelled").to_string());
+            }
+            info!("{}", t!("prerequisites.skipping"));
+            Ok(())
+        }
+    }
 }
 
 fn python_sanity_check(python: Option<&str>) -> Result<(), String> {

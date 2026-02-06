@@ -7,6 +7,35 @@ use crate::{command_executor, utils::find_by_name_and_extension};
 
 pub const PYTHON_NAME_TO_INSTALL: &str = "python313";
 
+/// Result of a prerequisites check operation.
+///
+/// This struct provides detailed information about the outcome of checking
+/// system prerequisites, including both the list of missing tools and whether
+/// the system was able to run verification commands at all.
+#[derive(Debug, Clone)]
+pub struct PrerequisitesCheckResult {
+    /// List of missing prerequisites that need to be installed.
+    pub missing: Vec<&'static str>,
+    /// Whether the system can actually run verification commands.
+    /// If false, the system may be unable to execute shell commands,
+    /// and the `missing` list may be unreliable.
+    pub can_verify: bool,
+    /// Whether the basic shell execution failed on this system.
+    pub shell_failed: bool,
+}
+
+impl PrerequisitesCheckResult {
+    /// Creates a new PrerequisitesCheckResult with the given missing tools and verification status.
+    pub fn new(missing: Vec<&'static str>, can_verify: bool, shell_failed: bool) -> Self {
+        Self { missing, can_verify, shell_failed }
+    }
+
+    /// Returns true if all prerequisites are satisfied and verification was successful.
+    pub fn is_satisfied(&self) -> bool {
+        self.can_verify && self.missing.is_empty()
+    }
+}
+
 /// Determines the package manager installed on the system.
 ///
 /// This function attempts to identify the package manager by executing each
@@ -36,6 +65,55 @@ fn determine_package_manager() -> Option<&'static str> {
     }
 
     None
+}
+
+/// Verifies that basic shell execution works on the current system.
+///
+/// This function tests whether the system can execute simple shell commands,
+/// which is a prerequisite for checking other system dependencies.
+///
+/// # Platform-specific behavior:
+/// - **Linux**: Executes `sh -c "echo test"`
+/// - **macOS**: Executes `zsh -c "echo test"`
+/// - **Windows**: Executes `cmd /c echo test`
+///
+/// # Returns
+///
+/// * `Some(true)` - If shell execution works correctly
+/// * `Some(false)` - If shell execution fails
+/// * `None` - If the OS is unsupported
+pub fn verify_shell_execution() -> Option<bool> {
+    let result = match std::env::consts::OS {
+        "linux" => {
+            command_executor::execute_command("sh", &["-c", "echo test"])
+        }
+        "macos" => {
+            command_executor::execute_command("zsh", &["-c", "echo test"])
+        }
+        "windows" => {
+            command_executor::execute_command("cmd", &["/c", "echo", "test"])
+        }
+        _ => {
+            debug!("Unsupported OS for shell verification: {}", std::env::consts::OS);
+            return None;
+        }
+    };
+
+    match result {
+        Ok(output) => {
+            if output.status.success() {
+                debug!("Shell execution verification succeeded");
+                Some(true)
+            } else {
+                debug!("Shell execution verification failed with non-zero exit code");
+                Some(false)
+            }
+        }
+        Err(e) => {
+            debug!("Shell execution verification failed with error: {:?}", e);
+            Some(false)
+        }
+    }
 }
 
 /// Returns a hardcoded vector of required tools based on the operating system.
@@ -428,23 +506,42 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
     Ok(unsatisfied)
 }
 
-/// Checks the system for the required tools and returns a list of unsatisfied tools.
+/// Checks the system for the required tools and returns a detailed result.
 ///
 /// This function determines the operating system and package manager, then checks if each required tool is installed.
-/// If a tool is not found, it is added to the `unsatisfied` vector and returned.
-/// The prerequisites are met when empty vector is returned.
+/// If a tool is not found, it is added to the `missing` list in the result.
+///
+/// When an error occurs during prerequisite checking, this function will verify if basic shell
+/// execution works. If shell verification also fails, the result will indicate that the system
+/// cannot verify prerequisites.
 ///
 /// # Returns
 ///
-/// * `Ok(Vec<&'static str>)` - If the function completes successfully, returns a vector of unsatisfied tools.
-/// * `Err(String)` - If an error occurs, returns an error message.
-pub fn check_prerequisites() -> Result<Vec<&'static str>, String> {
+/// * `Ok(PrerequisitesCheckResult)` - A result containing the list of missing prerequisites
+///   and whether verification was possible.
+/// * `Err(String)` - If a critical error occurs that prevents any checking.
+///   The error message will mention `--skip-prerequisites-check` if shell verification fails.
+pub fn check_prerequisites_with_result() -> Result<PrerequisitesCheckResult, String> {
     let mut list_of_required_tools = get_prequisites();
     list_of_required_tools = [list_of_required_tools, get_general_prerequisites_based_on_package_manager()].concat();
-    debug!("Checking for prerequisites...");
+    debug!("Checking for prerequisites with detailed result...");
     debug!("will be checking for : {:?}", list_of_required_tools);
 
-    check_tools_installed(list_of_required_tools)
+    match check_tools_installed(list_of_required_tools) {
+        Ok(missing) => {
+            Ok(PrerequisitesCheckResult::new(missing, true, false))
+        }
+        Err(error_msg) => {
+            debug!("Prerequisites check encountered an error: {}", error_msg);
+            
+            if verify_shell_execution() == Some(false) {
+                debug!("Shell execution verification also failed");
+                Ok(PrerequisitesCheckResult::new(vec![], false, true))
+            } else {
+                Err(error_msg)
+            }
+        }
+    }
 }
 
 /// Checks the system for QEMU-specific dependencies and returns a list of unsatisfied packages.

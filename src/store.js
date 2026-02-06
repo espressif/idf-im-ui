@@ -235,6 +235,8 @@ export const useAppStore = defineStore("app", {
         this.prerequisitesStatus = {
           allOk: result.all_ok,
           missing: result.missing || [],
+          canVerify: result.can_verify !== false,
+          shellFailed: result.shell_failed || false,
         };
 
         this.prerequisitesLastChecked = Date.now();
@@ -249,6 +251,8 @@ export const useAppStore = defineStore("app", {
         this.prerequisitesStatus = {
           allOk: false,
           missing: [],
+          canVerify: false,
+          shellFailed: false,
         };
         return this.prerequisitesStatus;
       } finally {

@@ -22,12 +22,25 @@
         </div>
       </n-card>
       <div v-if="did_the_check_run">
-        <div v-if="missing_prerequisities.length === 0">
+        <!-- Can't verify prerequisites (shell failed or other error) - show warning and skip button -->
+        <div v-if="!can_verify" class="verification-failed-section" data-id="verification-failed-section">
+          <p class="verification-failed-message">
+            {{ shell_failed ? t('common.prerequisites.shellFailed') : t('common.prerequisites.verificationError') }}
+          </p>
+          <p class="hint">{{ t('common.prerequisites.verificationFailedHint') }}</p>
+          <n-button @click="nextstep" type="warning" data-id="skip-prerequisites-button">
+            {{ t('common.prerequisites.skipCheck') }}
+          </n-button>
+        </div>
+
+        <!-- All prerequisites satisfied -->
+        <div v-else-if="missing_prerequisities.length === 0">
           <n-button @click="nextstep" type="error" data-id="continue-button">
             {{ t('prerequisitiesCheck.actions.continue') }}
           </n-button>
         </div>
 
+        <!-- Some prerequisites missing - normal flow -->
         <div v-else>
           <p>{{ os === 'windows' ? t('prerequisitiesCheck.messages.windowsInstall') : t('prerequisitiesCheck.messages.manualInstall') }}</p>
           <div v-if="os === 'windows'" class="windows-install" data-id="windows-install-section">
@@ -37,9 +50,9 @@
             </n-button>
           </div>
           <div v-else class="manual-install" data-id="manual-install-section">
-            <p class="hint" data-id="manual-install-hint">{{ t('prerequisitiesCheck.messages.manualHint') }}</p>
-            <p v-if="os === 'macos'" class="hint" data-id="macos-hint">{{ t('prerequisitiesCheck.messages.macosHint', {list: missing_prerequisities.join(' ')}) }}</p>
-            <p v-if="os === 'linux'" class="hint" data-id="linux-hint">{{ t('prerequisitiesCheck.messages.linuxHint', {list: missing_prerequisities.join(' ')}) }}</p>
+            <p class="hint" data-id="manual-install-hint">{{ t('common.prerequisites.manualHint') }}</p>
+            <p v-if="os === 'macos'" class="hint" data-id="macos-hint">{{ t('common.prerequisites.macosHint', {list: missing_prerequisities.join(' ')}) }}</p>
+            <p v-if="os === 'linux'" class="hint" data-id="linux-hint">{{ t('common.prerequisites.linuxHint', {list: missing_prerequisities.join(' ')}) }}</p>
           </div>
         </div>
       </div>
@@ -76,13 +89,16 @@ export default {
     all_prerequisities: [],
     missing_prerequisities: [],
     display_prerequisities: [],
+    can_verify: true,
+    shell_failed: false,
     os: undefined,
     appStore: useAppStore()
   }),
   watch: {
     missing_prerequisities(newValue) {
-      // Auto-navigate when all prerequisites pass
-      if (this.did_the_check_run && newValue.length === 0 && !this.loading && this.nextstep) {
+      // Auto-navigate when all prerequisites pass AND we were able to verify
+      // Don't auto-navigate if we couldn't verify (shell failed or other error)
+      if (this.did_the_check_run && newValue.length === 0 && !this.loading && this.nextstep && this.can_verify) {
         this.nextstep();
       }
     }
@@ -105,12 +121,23 @@ export default {
       let prerequisitesStatus = this.appStore.prerequisitesStatus;
       console.log("Current prerequisites status from store:", prerequisitesStatus);
       this.missing_prerequisities = prerequisitesStatus.missing || [];
+      this.can_verify = prerequisitesStatus.canVerify !== false;
+      this.shell_failed = prerequisitesStatus.shellFailed || false;
       this.did_the_check_run = this.appStore.prerequisitesLastChecked !== null;
       this.loading = false;
-      this.display_prerequisities = this.display_prerequisities.map(p => ({
-        name: p.name,
-        icon: this.missing_prerequisities.includes(p.name) ? '❌' : '✔',
-      }));
+      
+      // When we can't verify, show question marks
+      if (!this.can_verify) {
+        this.display_prerequisities = this.display_prerequisities.map(p => ({
+          name: p.name,
+          icon: '❓',
+        }));
+      } else {
+        this.display_prerequisities = this.display_prerequisities.map(p => ({
+          name: p.name,
+          icon: this.missing_prerequisities.includes(p.name) ? '❌' : '✔',
+        }));
+      }
       return false;
     },
     install_prerequisites: async function () {
@@ -298,5 +325,25 @@ export default {
 /* When overlay is active, make list items less interactive */
 .items-list.overlay-active {
   pointer-events: none;
+}
+
+/* Verification failed warning styles */
+.verification-failed-section {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-top: 1rem;
+}
+
+.verification-failed-message {
+  color: #856404;
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.verification-failed-section .hint {
+  color: #856404;
+  margin-bottom: 1rem;
 }
 </style>
