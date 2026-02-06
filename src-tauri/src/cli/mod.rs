@@ -16,6 +16,7 @@ use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
+use idf_im_lib::version_manager::run_command_in_context;
 use idf_im_lib::version_manager::select_idf_version;
 use idf_im_lib::logging;
 use log::debug;
@@ -23,6 +24,7 @@ use log::error;
 use log::info;
 use log::warn;
 use log::LevelFilter;
+use semver::Op;
 use serde_json::json;
 use rust_i18n::t;
 
@@ -270,6 +272,28 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     }
                     Err(err) => Err(anyhow::anyhow!(err)),
                 }
+            }
+        }
+        Commands::Run { command, idf } => {
+            let idf_identifier = if let Some(idf_str) = idf {
+                idf_str
+            } else if let Some(selected) = get_selected_version() {
+                info!("{}", t!("run.using_selected", idf = selected.name));
+                selected.id
+            } else {
+                return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")));
+            };
+
+            match run_command_in_context(&idf_identifier, &command) {
+                Ok(output) => {
+                    if output.status.success() {
+                        println!("{}", String::from_utf8_lossy(&output.stdout));
+                    } else {
+                        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                    }
+                    Ok(())
+                }
+                Err(err) => Err(err),
             }
         }
         Commands::Rename { version, new_name } => {

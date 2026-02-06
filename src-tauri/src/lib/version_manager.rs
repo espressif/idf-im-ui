@@ -1,11 +1,13 @@
 use anyhow::anyhow;
 use anyhow::Result;
+use gix::command;
 use log::debug;
 use log::error;
 use log::info;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::Output;
 
 use log::warn;
 use lnk::ShellLink;
@@ -327,6 +329,47 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .cloned()
         .collect()
 }
+
+pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result<Output> {
+    let installation = match list_installed_versions() {
+        Ok(versions) => versions.into_iter().find(|v| v.id == identifier || v.name == identifier || v.path == identifier),
+        Err(e) => {
+            return Err(anyhow!("Failed to list installed versions: {}", e));
+        }
+    };
+
+    let installation = match installation {
+        Some(install) => install,
+        None => {
+            return Err(anyhow!("Version {} not installed", identifier));
+        }
+    };
+
+    let activation_script = &installation.activation_script;
+
+    #[cfg(not(target_os = "windows"))]
+    let script = format!(
+        "source \"{}\"\nshopt -s expand_aliases\n{}",
+        activation_script,
+        command
+    );
+
+    #[cfg(target_os = "windows")]
+    let script = format!(
+        ". \"{}\"\n{}",
+        activation_script,
+        command
+    );
+
+    println!("Running command in context of IDF version {}", identifier);
+
+    let executor = crate::command_executor::get_executor();
+    match executor.run_script_from_string(&script) {
+        Ok(output) => Ok(output),
+        Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+    }
+}
+
 
 pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf) -> anyhow::Result<Settings> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());

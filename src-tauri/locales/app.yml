@@ -494,6 +494,12 @@ drivers.success:
 drivers.windows_only:
   en: Driver installation is only supported on Windows.
   cn: 驱动程序安装仅支持 Windows 系统。
+run.using_selected:
+  en: "Using selected IDF version: %{idf}"
+  cn: "使用已选择的 IDF 版本：%{idf}"
+run.no_idf_specified_no_selected:
+  en: No IDF version specified and no version is selected. Please specify an IDF version to run the command in its context.
+  cn: 未指定 IDF 版本且未选择版本。请指定一个 IDF 版本以在其上下文中运行命令。
 cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令

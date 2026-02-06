@@ -31,6 +31,7 @@ These options can be used with any command:
 | `remove` | Remove a specific ESP-IDF version |
 | `purge` | Purge all ESP-IDF installations |
 | `import` | Import existing ESP-IDF installation using tools_set_config.json |
+| `run` | Run a command in the context of a specific ESP-IDF version |
 | `discover` | Discover available ESP-IDF versions (not implemented yet) |
 | `completions` | Generate shell completion script to stdout |
 
@@ -144,6 +145,38 @@ eim import [PATH]
 
 If `PATH` is not provided, the command will inform you that no config file was specified.
 
+### Run Command
+
+Run a command in the context of a specific ESP-IDF version. This command sources the activation script for the specified IDF version before executing your command, making all IDF tools and environment variables available.
+
+```bash
+eim run <COMMAND> [IDF_VERSION]
+```
+
+Arguments:
+- `COMMAND`: The command to run (required)
+- `IDF_VERSION`: The ID, name, or path of the installed IDF version (optional)
+
+If `IDF_VERSION` is not provided, the command will use the currently selected IDF version (set via `eim select`). If no version is selected and none is specified, an error will be returned.
+
+**Important:** If your command contains special shell characters, you should wrap it in quotes:
+
+```bash
+# Correct - command is quoted
+eim run "espidf.py build"
+
+# On Windows (PowerShell)
+eim run "espidf.py build"
+
+# If you need to use shell features like pipes or redirects, quote the entire command
+eim run "idf.py fullclean > cleanup.log"
+```
+
+The IDF version can be identified by:
+- **ID**: The internal identifier (e.g., `espidf_5.3.2`)
+- **Name**: The display name (e.g., `v5.3.2`)
+- **Path**: The full installation path
+
 ### Discover Command
 
 Discover available ESP-IDF versions (not implemented yet).
@@ -221,6 +254,15 @@ eim purge
 
 # Import from a config file
 eim import /path/to/tools_set_config.json
+
+# Run a command in the context of a specific IDF version
+eim run "idf.py build" v5.3.2
+
+# Run a command using the currently selected IDF version
+eim run "idf.py build"
+
+# Run a command with output redirection (command must be quoted)
+eim run "idf.py size > sizes.txt" v5.4
 ```
 
 ## Per-Version Feature Configuration
