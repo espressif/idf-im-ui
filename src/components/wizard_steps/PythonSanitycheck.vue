@@ -26,16 +26,23 @@
             </template>
           </n-result>
 
-          <div v-if="!python_sane && os !== 'windows'" class="manual-instructions"
-            data-id="manual-install-instructions">
-            <h3 data-id="manual-install-title">{{ t('pythonSanitycheck.manualInstall.title') }}</h3>
-            <p data-id="manual-install-intro">{{ t('pythonSanitycheck.manualInstall.intro') }}</p>
-            <ul data-id="manual-install-requirements">
-              <li data-id="python-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.python') }}</li>
-              <li data-id="pip-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.pip') }}</li>
-              <li data-id="virtualenv-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.virtualenv') }}</li>
-              <li data-id="ssl-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.ssl') }}</li>
-            </ul>
+          <!-- Check Results List -->
+          <div v-if="check_results.length > 0" class="check-results" data-id="check-results">
+            <p v-if="failed_count > 0" class="check-summary" data-id="check-summary">
+              {{ t('pythonSanitycheck.failed.summary') }}
+            </p>
+            <div v-for="result in check_results" :key="result.check_type" 
+                 :class="['check-item', result.passed ? 'check-passed' : 'check-failed']"
+                 :data-id="'check-' + result.check_type">
+              <span class="check-status">{{ result.passed ? '✓' : '✗' }}</span>
+              <span class="check-label">{{ result.label }}</span>
+              <span v-if="!result.passed" class="check-message">
+                {{ t('pythonSanitycheck.failed.message', { check: result.label }) }}
+              </span>
+            </div>
+          </div>
+
+          <div v-if="!python_sane && os !== 'windows'" class="recheck-section" data-id="recheck-section">
             <n-button @click="check_python_sanity" type="error" data-id="recheck-python-button">
               {{ t('pythonSanitycheck.actions.recheckInstallation') }}
             </n-button>
@@ -68,9 +75,15 @@ export default {
     os: undefined,
     loading: true,
     python_sane: false,
+    check_results: [],
     installing_python: false,
     appStore: useAppStore()
   }),
+  computed: {
+    failed_count() {
+      return this.check_results.filter(r => !r.passed).length;
+    }
+  },
   watch: {
     python_sane(newValue) {
       // Auto-navigate when Python check passes
@@ -84,7 +97,9 @@ export default {
   methods: {
     check_python_sanity: async function () {
       this.loading = true;
-      this.python_sane = await invoke("python_sanity_check", {});
+      const response = await invoke("python_sanity_check", {});
+      this.python_sane = response.all_passed;
+      this.check_results = response.results || [];
       this.loading = false;
       return false;
     },
@@ -147,26 +162,65 @@ export default {
   margin-top: 0.5rem;
 }
 
-.manual-instructions {
-  margin-top: 2rem;
-  padding: 1.5rem;
-  background: #fee2e2;
+.check-results {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: #f9fafb;
   border-radius: 0.5rem;
 }
 
-.manual-instructions h3 {
-  color: #991b1b;
-  margin-bottom: 1rem;
-}
-
-.manual-instructions ul {
-  list-style: disc;
-  padding-left: 1.5rem;
+.check-summary {
+  margin: 0 0 1rem 0;
+  font-weight: 500;
   color: #374151;
 }
 
-.manual-instructions li {
-  margin-bottom: 0.5rem;
+.check-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.check-item:last-child {
+  border-bottom: none;
+}
+
+.check-status {
+  width: 1.5rem;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.check-passed .check-status {
+  color: #10b981;
+}
+
+.check-failed .check-status {
+  color: #ef4444;
+}
+
+.check-label {
+  flex: 1;
+  font-weight: 500;
+  color: #374151;
+}
+
+.check-message {
+  width: 100%;
+  margin-top: 0.25rem;
+  margin-left: 1.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.check-failed .check-message {
+  color: #dc2626;
+}
+
+.recheck-section {
+  margin-top: 2rem;
 }
 
 .n-card {

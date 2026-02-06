@@ -5,6 +5,7 @@ use rustpython_vm as vm;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::function::PosArgs;
 use semver::{Version, VersionReq};
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "userustpython")]
 use std::process::ExitCode;
 use std::{
@@ -20,6 +21,28 @@ use vm::{builtins::PyStrRef, Interpreter};
 use crate::{
     command_executor, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{copy_dir_contents, parse_cmake_version, remove_after_second_dot, with_retry}
 };
+
+/// Result of a single Python sanity check.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PythonCheckResult {
+    /// Check identifier (e.g., "version", "pip", "venv", "stdlib", "ctypes", "ssl")
+    pub check_type: String,
+    /// Human-readable label for the check
+    pub label: String,
+    /// Whether the check passed
+    pub passed: bool,
+    /// Error or success message (contains details about what failed or succeeded)
+    pub message: Option<String>,
+}
+
+/// Response containing all Python sanity check results.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PythonSanityCheckResponse {
+    /// Whether all checks passed
+    pub all_passed: bool,
+    /// Individual check results
+    pub results: Vec<PythonCheckResult>,
+}
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
 /// todo: check documentation
@@ -795,29 +818,12 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
     }
 }
 
-/// Performs a series of sanity checks for the Python interpreter.
-///
-/// This function executes various Python scripts and checks for the availability of essential Python modules,
-/// such as pip, venv, and the standard library. It also verifies the functionality of the ctypes module.
-///
-/// # Parameters
-///
-/// * `python` - An optional reference to a string representing the Python interpreter to be used.
-///   If `None`, the function will default to using "python3".
-///
-/// # Returns
-///
-/// * `Vec<Result<String, String>>` - A vector of results. Each result represents the output or error message
-///   of a specific Python script execution. If the script execution is successful, the result will be `Ok`
-///   containing the standard output as a string. If the script execution fails, the result will be `Err`
-///   containing the standard error as a string.
-pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> {
-    let mut outputs = Vec::new();
-    // Check Python version
-    let version_output = command_executor::execute_command(
-        python.unwrap_or("python3"),
-        &["--version"],
-    );
+/// Checks Python version meets requirements.
+fn check_python_version(python: &str) -> PythonCheckResult {
+    let check_type = "version".to_string();
+    let label = "Python Version".to_string();
+
+    let version_output = command_executor::execute_command(python, &["--version"]);
     match version_output {
         Ok(out) if out.status.success() => {
             let version_str = String::from_utf8_lossy(&out.stdout)
@@ -830,62 +836,152 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<Result<String, String>> 
                         _ => VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
                     };
                     if req.matches(&version) {
-                        outputs.push(Ok(format!("Python version {} is supported", version)));
+                        PythonCheckResult {
+                            check_type,
+                            label,
+                            passed: true,
+                            message: Some(format!("Python {} is supported", version)),
+                        }
                     } else {
-                      match std::env::consts::OS {
-                        "windows" => outputs.push(Err(format!(
-                            "Python version {} is not supported. Required: >=3.10.0, <3.14.0",
-                            version
-                        ))),
-                        _ => outputs.push(Err(format!(
-                            "Python version {} is not supported. Required: >=3.10.0, <3.15.0",
-                            version
-                        ))),
-                      }
+                        let required = match std::env::consts::OS {
+                            "windows" => ">=3.10.0, <3.14.0",
+                            _ => ">=3.10.0, <3.15.0",
+                        };
+                        PythonCheckResult {
+                            check_type,
+                            label,
+                            passed: false,
+                            message: Some(format!(
+                                "Python {} is not supported. Required: {}",
+                                version, required
+                            )),
+                        }
                     }
                 }
-                Err(_) => outputs.push(Err("Failed to parse Python version".to_string())),
+                Err(_) => PythonCheckResult {
+                    check_type,
+                    label,
+                    passed: false,
+                    message: Some("Failed to parse Python version".to_string()),
+                },
             }
         }
-        Ok(out) => outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string())),
-        Err(e) => outputs.push(Err(e.to_string())),
+        Ok(out) => PythonCheckResult {
+            check_type,
+            label,
+            passed: false,
+            message: Some(String::from_utf8_lossy(&out.stderr).to_string()),
+        },
+        Err(e) => PythonCheckResult {
+            check_type,
+            label,
+            passed: false,
+            message: Some(e.to_string()),
+        },
     }
-    // check pip
-    let output =
-        command_executor::execute_command(python.unwrap_or("python3"), &["-m", "pip", "--version"]);
+}
+
+/// Checks if a Python module is available.
+fn check_python_module(python: &str, module: &str, args: &[&str], check_type: &str, label: &str) -> PythonCheckResult {
+    let mut cmd_args = vec!["-m", module];
+    cmd_args.extend(args);
+
+    let output = command_executor::execute_command(python, &cmd_args);
     match output {
         Ok(out) => {
             if out.status.success() {
-                outputs.push(Ok(String::from_utf8_lossy(&out.stdout).to_string()));
+                PythonCheckResult {
+                    check_type: check_type.to_string(),
+                    label: label.to_string(),
+                    passed: true,
+                    message: Some(format!("{} is available", label)),
+                }
             } else {
-                outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string()));
+                PythonCheckResult {
+                    check_type: check_type.to_string(),
+                    label: label.to_string(),
+                    passed: false,
+                    message: Some(String::from_utf8_lossy(&out.stderr).to_string()),
+                }
             }
         }
-        Err(e) => outputs.push(Err(e.to_string())),
+        Err(e) => PythonCheckResult {
+            check_type: check_type.to_string(),
+            label: label.to_string(),
+            passed: false,
+            message: Some(e.to_string()),
+        },
     }
-    // check venv
-    let output_2 =
-        command_executor::execute_command(python.unwrap_or("python3"), &["-m", "venv", "-h"]);
-    match output_2 {
-        Ok(out) => {
-            if out.status.success() {
-                outputs.push(Ok(String::from_utf8_lossy(&out.stdout).to_string()));
-            } else {
-                outputs.push(Err(String::from_utf8_lossy(&out.stderr).to_string()));
-            }
-        }
-        Err(e) => outputs.push(Err(e.to_string())),
+}
+
+/// Checks if a Python script executes successfully.
+fn check_python_script(python: &str, script: &str, check_type: &str, label: &str) -> PythonCheckResult {
+    match run_python_script(script, Some(python)) {
+        Ok(output) => PythonCheckResult {
+            check_type: check_type.to_string(),
+            label: label.to_string(),
+            passed: true,
+            message: Some(output),
+        },
+        Err(err) => PythonCheckResult {
+            check_type: check_type.to_string(),
+            label: label.to_string(),
+            passed: false,
+            message: Some(err),
+        },
     }
-    // check standard library
-    let script = include_str!("../../python_scripts/sanity_check/import_standard_library.py");
-    outputs.push(run_python_script(script, python));
-    // check ctypes
-    let script = include_str!("../../python_scripts/sanity_check/ctypes_check.py");
-    outputs.push(run_python_script(script, python));
-    // check https
-    let script = include_str!("../../python_scripts/sanity_check/import_standard_library.py");
-    outputs.push(run_python_script(script, python));
-    outputs
+}
+
+/// Performs a series of sanity checks for the Python interpreter.
+///
+/// This function checks Python version, pip, venv, standard library, ctypes, and SSL/HTTPS support.
+///
+/// # Parameters
+///
+/// * `python` - An optional reference to a string representing the Python interpreter to be used.
+///   If `None`, the function will default to using "python3".
+///
+/// # Returns
+///
+/// * `PythonSanityCheckResponse` - A structured response containing whether all checks passed
+///   and detailed results for each individual check.
+pub fn python_sanity_check(python: Option<&str>) -> PythonSanityCheckResponse {
+    let python = python.unwrap_or("python3");
+    
+    let mut results = vec![
+        // Check Python version
+        check_python_version(python),
+        // Check pip
+        check_python_module(python, "pip", &["--version"], "pip", "pip Package Manager"),
+        // Check venv
+        check_python_module(python, "venv", &["-h"], "venv", "Virtual Environment"),
+        // Check standard library
+        check_python_script(
+            python,
+            include_str!("../../python_scripts/sanity_check/import_standard_library.py"),
+            "stdlib",
+            "Standard Library",
+        ),
+        // Check ctypes
+        check_python_script(
+            python,
+            include_str!("../../python_scripts/sanity_check/ctypes_check.py"),
+            "ctypes",
+            "ctypes Module",
+        ),
+        // Check SSL/HTTPS support
+        check_python_script(
+            python,
+            include_str!("../../python_scripts/sanity_check/try_https.py"),
+            "ssl",
+            "SSL/HTTPS Support",
+        ),
+    ];
+    
+    // temporarily fail the last result in the vector results to test GUI
+    results.last_mut().unwrap().passed = false;
+    let all_passed = results.iter().all(|r| r.passed);
+    PythonSanityCheckResponse { all_passed, results }
 }
 
 #[cfg(feature = "userustpython")]
