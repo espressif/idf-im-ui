@@ -4,6 +4,9 @@
 
 {{env_var_pairs}}
 
+# Capture absolute eim path early (before PATH changes)
+$_EimBinPath = (Get-Command eim -ErrorAction SilentlyContinue).Source
+
 function Parse-CMakeVersion {
     $cmakeFile = "{{idf_path}}\tools\cmake\version.cmake"
 
@@ -92,3 +95,11 @@ New-Alias -Name idf.py -Value Invoke-idfpy -Force -Scope Global -ErrorAction Sil
 . "{{idf_python_env_path}}\Scripts\Activate.ps1"
 
 Write-Host "ESP-IDF environment loaded (v$IdfVersion)" -ForegroundColor Green
+
+# Sync selection with eim_idf.json for IDEs (silent on failure)
+if ($_EimBinPath) {
+    try {
+        & $_EimBinPath select "{{idf_version}}" 2>$null
+        if ($LASTEXITCODE -eq 0) { Write-Host "eim select {{idf_version}}" }
+    } catch {}
+}
