@@ -1352,6 +1352,12 @@ wizard.tools.selection_unavailable:
 wizard.tools.no_tools_available:
   en: "No tools available for any of the selected versions"
   cn: "所选版本中没有可用的工具"
+wizard.tools.cleanup.success:
+  en: "tools installation artifacts cleaned up successfully"
+  cn: "工具安装工件已成功清理"
+wizard.tools.cleanup.failure:
+  en: "failed to clean up tools installation artifacts"
+  cn: "清理工具安装工件失败"
 gui.settings.tools_updated:
   en: "Tool selection has been updated"
   cn: "工具选择已更新"

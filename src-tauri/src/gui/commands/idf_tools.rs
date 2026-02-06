@@ -393,13 +393,14 @@ pub async fn setup_tools(
     };
 
     let tools_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDFTools, settings, is_simple_installation).await;
-
+    let download_folder = PathBuf::from(&tool_setup.download_dir);
+    let install_folder = PathBuf::from(&tool_setup.install_dir);
     // Use the library's setup_tools function
     let installed_tools_list = idf_tools::setup_tools(
         &tools,
         settings.target.clone().unwrap_or_default(),
-        &PathBuf::from(&tool_setup.download_dir),
-        &PathBuf::from(&tool_setup.install_dir),
+        &download_folder,
+        &install_folder,
         Some(&tools_mirror_to_use),
         progress_callback,
     )
@@ -415,9 +416,24 @@ pub async fn setup_tools(
         anyhow!("Failed to setup tools: {}", e)
     })?;
 
-    let tools_install_folder = &PathBuf::from(&tool_setup.install_dir);
+    let tools_install_folder = &install_folder;
 
     info!("Setting up tools... to directory: {}", tools_install_folder.display());
+    if settings.cleanup.unwrap_or(false) {
+        // Cleanup download directory after installation
+        match std::fs::remove_dir_all(&tool_setup.download_dir) {
+            Ok(_) => {
+                info!("Cleaned up tools download directory: {}", tool_setup.download_dir);
+                emit_log_message(app_handle, MessageLevel::Success,
+                    t!("gui.setup_tools.cleanup.success").to_string());
+            }
+            Err(err) => {
+                error!("Failed to clean up tools download directory {}: {}", tool_setup.download_dir, err);
+                emit_log_message(app_handle, MessageLevel::Error,
+                    t!("gui.setup_tools.cleanup.failure").to_string());
+            }
+        }
+    }
 
     // Transition to Python setup phase (90%)
     emit_installation_event(app_handle, InstallationProgress {
