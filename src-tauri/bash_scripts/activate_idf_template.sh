@@ -2,6 +2,9 @@
 
 {{env_var_pairs}}
 
+# --- Capture absolute eim path early (before PATH changes) ---
+_EIM_BIN="$(command -v eim 2>/dev/null || true)"
+
 parse_cmake_version() {
     cmake_file="{{idf_path_escaped}}/tools/cmake/version.cmake"
 
@@ -148,3 +151,8 @@ activate_venv "${IDF_PYTHON_ENV_PATH:-$venv_default}"
 printf '%s\n' "Environment setup complete for the current shell session."
 printf '%s\n' "These changes will be lost when you close this terminal."
 printf '%s\n' "You are now using IDF version $IDF_VERSION."
+
+# Sync selection with eim_idf.json for IDEs (silent on failure)
+if [ -n "$_EIM_BIN" ] && [ -x "$_EIM_BIN" ]; then
+    "$_EIM_BIN" select "{{idf_version}}" >/dev/null 2>&1 && printf '%s\n' "eim select {{idf_version}}"
+fi
