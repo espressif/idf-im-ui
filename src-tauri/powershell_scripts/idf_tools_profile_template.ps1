@@ -3,6 +3,9 @@ param(
     [switch]$e
 )
 
+# Capture absolute eim path early (before PATH changes)
+$_EimBinPath = (Get-Command eim -ErrorAction SilentlyContinue).Source
+
 {{env_var_pairs}}
 
 function Parse-CMakeVersion {
@@ -130,3 +133,11 @@ Write-Host 'parttool.py'
 Write-Host ''
 Write-Host 'Python environment activated.'
 Write-Host 'You can now use IDF commands and Python tools.'
+
+# Sync selection with eim_idf.json for IDEs (silent on failure)
+if ($_EimBinPath) {
+    try {
+        & $_EimBinPath select "{{idf_version}}" 2>$null
+        if ($LASTEXITCODE -eq 0) { Write-Host "eim select {{idf_version}}" }
+    } catch {}
+}
