@@ -1,0 +1,134 @@
+name: Purge Debug Offline Archives
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # Every day at 04:00 UTC
+
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be deleted, don't actually delete"
+        required: false
+        type: boolean
+        default: false
+      max_age_hours:
+        description: "Delete objects older than this many hours (default: 48)"
+        required: false
+        type: number
+        default: 48
+
+permissions:
+  contents: read
+
+jobs:
+  purge-debug:
+    name: Purge debug archives older than ${{ inputs.max_age_hours || 48 }}h
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Purge old debug objects from S3
+        shell: bash
+        env:
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+          MAX_AGE_HOURS: ${{ inputs.max_age_hours || 48 }}
+        run: |
+          set -euo pipefail
+
+          BUCKET="espdldata"
+          PREFIX="dl/eim/debug/"
+          CUTOFF_EPOCH=$(date -d "${MAX_AGE_HOURS} hours ago" +%s)
+          CUTOFF_HUMAN=$(date -d "${MAX_AGE_HOURS} hours ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          echo "=== Purge Debug Offline Archives ==="
+          echo "Bucket:        s3://${BUCKET}"
+          echo "Prefix:        ${PREFIX}"
+          echo "Max age:       ${MAX_AGE_HOURS} hours"
+          echo "Cutoff time:   ${CUTOFF_HUMAN}"
+          echo "Dry run:       ${DRY_RUN}"
+          echo ""
+
+          # List all objects under the debug prefix
+          OBJECTS=$(aws s3api list-objects-v2 \
+            --bucket "${BUCKET}" \
+            --prefix "${PREFIX}" \
+            --query 'Contents[*].[Key,LastModified,Size]' \
+            --output text 2>/dev/null || true)
+
+          if [ -z "${OBJECTS}" ] || [ "${OBJECTS}" = "None" ]; then
+            echo "No objects found under s3://${BUCKET}/${PREFIX}"
+            exit 0
+          fi
+
+          DELETED_COUNT=0
+          DELETED_SIZE=0
+          SKIPPED_COUNT=0
+          TOTAL_COUNT=0
+
+          while IFS=$'\t' read -r key last_modified size; do
+            [ -z "${key}" ] && continue
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+            FILE_EPOCH=$(date -d "${last_modified}" +%s)
+
+            if [ "${FILE_EPOCH}" -lt "${CUTOFF_EPOCH}" ]; then
+              AGE_HOURS=$(( ($(date +%s) - FILE_EPOCH) / 3600 ))
+
+              if [ "${DRY_RUN}" = "true" ]; then
+                echo "[DRY RUN] Would delete: ${key} (age: ${AGE_HOURS}h, size: ${size} bytes)"
+              else
+                echo "Deleting: ${key} (age: ${AGE_HOURS}h, size: ${size} bytes)"
+                aws s3 rm "s3://${BUCKET}/${key}" || echo "::warning::Failed to delete ${key}"
+              fi
+
+              DELETED_COUNT=$((DELETED_COUNT + 1))
+              DELETED_SIZE=$((DELETED_SIZE + size))
+            else
+              SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+            fi
+          done <<< "${OBJECTS}"
+
+          # Convert deleted size to human-readable
+          if [ "${DELETED_SIZE}" -ge 1073741824 ]; then
+            SIZE_HUMAN="$(echo "scale=2; ${DELETED_SIZE}/1073741824" | bc) GB"
+          elif [ "${DELETED_SIZE}" -ge 1048576 ]; then
+            SIZE_HUMAN="$(echo "scale=2; ${DELETED_SIZE}/1048576" | bc) MB"
+          elif [ "${DELETED_SIZE}" -ge 1024 ]; then
+            SIZE_HUMAN="$(echo "scale=2; ${DELETED_SIZE}/1024" | bc) KB"
+          else
+            SIZE_HUMAN="${DELETED_SIZE} bytes"
+          fi
+
+          echo ""
+          echo "=== Summary ==="
+          echo "Total objects scanned: ${TOTAL_COUNT}"
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Objects that would be deleted: ${DELETED_COUNT} (${SIZE_HUMAN})"
+          else
+            echo "Objects deleted: ${DELETED_COUNT} (${SIZE_HUMAN})"
+          fi
+          echo "Objects retained (newer than ${MAX_AGE_HOURS}h): ${SKIPPED_COUNT}"
+
+          # Write to job summary
+          {
+            echo "## Purge Debug Offline Archives"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Prefix | \`s3://${BUCKET}/${PREFIX}\` |"
+            echo "| Max age | ${MAX_AGE_HOURS} hours |"
+            echo "| Cutoff | ${CUTOFF_HUMAN} |"
+            echo "| Dry run | ${DRY_RUN} |"
+            echo "| Total objects | ${TOTAL_COUNT} |"
+            if [ "${DRY_RUN}" = "true" ]; then
+              echo "| Would delete | ${DELETED_COUNT} (${SIZE_HUMAN}) |"
+            else
+              echo "| Deleted | ${DELETED_COUNT} (${SIZE_HUMAN}) |"
+            fi
+            echo "| Retained | ${SKIPPED_COUNT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
