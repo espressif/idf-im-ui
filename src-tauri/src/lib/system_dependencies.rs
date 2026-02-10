@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Context, Result};
 use std::{collections::HashSet, env, fs};
-use anyhow::{anyhow, Result, Context};
 
 use log::{debug, trace, warn};
 
@@ -27,7 +27,11 @@ pub struct PrerequisitesCheckResult {
 impl PrerequisitesCheckResult {
     /// Creates a new PrerequisitesCheckResult with the given missing tools and verification status.
     pub fn new(missing: Vec<&'static str>, can_verify: bool, shell_failed: bool) -> Self {
-        Self { missing, can_verify, shell_failed }
+        Self {
+            missing,
+            can_verify,
+            shell_failed,
+        }
     }
 
     /// Returns true if all prerequisites are satisfied and verification was successful.
@@ -38,9 +42,14 @@ impl PrerequisitesCheckResult {
 
 /// Determines the package manager installed on the system.
 ///
-/// This function attempts to identify the package manager by executing each
-/// listed package manager's version command and checking if the command
-/// execution is successful.
+/// This function first attempts to identify the distribution by reading
+/// `/etc/os-release` and mapping the `ID` or `ID_LIKE` fields to the
+/// appropriate package manager. This avoids false positives caused by
+/// cross-distribution tools being installed (e.g., `dpkg` on Fedora).
+///
+/// If `/etc/os-release` detection fails, it falls back to checking for
+/// package manager binaries (excluding `dpkg`, which is commonly installed
+/// as a standalone tool on non-Debian systems).
 ///
 /// This should be only executed on Linux systems, as package managers on other operating systems
 /// are not supported.
@@ -50,13 +59,23 @@ impl PrerequisitesCheckResult {
 /// * `Some(&'static str)` - If a package manager is found, returns the name of the package manager.
 /// * `None` - If no package manager is found, returns None.
 fn determine_package_manager() -> Option<&'static str> {
-    let package_managers = vec!["apt", "dpkg", "dnf", "pacman", "zypper"];
+    // First, try to detect via /etc/os-release (most reliable)
+    if let Some(pm) = detect_package_manager_from_os_release() {
+        debug!("Package manager detected via /etc/os-release: {}", pm);
+        return Some(pm);
+    }
+
+    // Fallback: probe for package manager binaries (excluding dpkg to avoid
+    // false positives on non-Debian systems where dpkg is installed as a
+    // standalone tool)
+    let package_managers = vec!["apt", "dnf", "pacman", "zypper"];
 
     for manager in package_managers {
         let output = command_executor::execute_command(manager, &["--version"]);
         match output {
             Ok(output) => {
                 if output.status.success() {
+                    debug!("Package manager detected via binary probe: {}", manager);
                     return Some(manager);
                 }
             }
@@ -65,6 +84,72 @@ fn determine_package_manager() -> Option<&'static str> {
     }
 
     None
+}
+
+/// Reads `/etc/os-release` and maps the distro ID to the appropriate package manager.
+///
+/// Checks the `ID` field first, then falls back to `ID_LIKE` for derivative distros
+/// (e.g., Linux Mint has `ID=linuxmint` but `ID_LIKE=ubuntu`).
+///
+/// # Returns
+///
+/// * `Some(&'static str)` - The package manager name if the distro is recognized.
+/// * `None` - If `/etc/os-release` cannot be read or the distro is not recognized.
+fn detect_package_manager_from_os_release() -> Option<&'static str> {
+    let content = match fs::read_to_string("/etc/os-release") {
+        Ok(c) => c,
+        Err(e) => {
+            debug!("Could not read /etc/os-release: {}", e);
+            return None;
+        }
+    };
+
+    let mut id = None;
+    let mut id_like = None;
+
+    for line in content.lines() {
+        if let Some(value) = line.strip_prefix("ID=") {
+            id = Some(value.trim_matches('"').to_lowercase());
+        } else if let Some(value) = line.strip_prefix("ID_LIKE=") {
+            id_like = Some(value.trim_matches('"').to_lowercase());
+        }
+    }
+
+    // Try ID first, then ID_LIKE
+    if let Some(ref distro_id) = id {
+        if let Some(pm) = map_distro_to_package_manager(distro_id) {
+            return Some(pm);
+        }
+    }
+
+    // ID_LIKE can contain multiple space-separated values (e.g., "rhel fedora")
+    if let Some(ref like) = id_like {
+        for token in like.split_whitespace() {
+            if let Some(pm) = map_distro_to_package_manager(token) {
+                return Some(pm);
+            }
+        }
+    }
+
+    debug!("Unrecognized distro: ID={:?}, ID_LIKE={:?}", id, id_like);
+    None
+}
+
+/// Maps a distribution identifier to its native package manager.
+fn map_distro_to_package_manager(distro: &str) -> Option<&'static str> {
+    match distro {
+        // Debian-based
+        "debian" | "ubuntu" | "linuxmint" | "pop" | "elementary" | "zorin" | "kali"
+        | "raspbian" | "neon" | "deepin" | "peppermint" | "bodhi" => Some("apt"),
+        // RPM-based (dnf)
+        "fedora" | "rhel" | "centos" | "rocky" | "alma" | "ol" | "nobara" | "ultramarine"
+        | "mageia" => Some("dnf"),
+        // Arch-based
+        "arch" | "manjaro" | "endeavouros" | "garuda" | "artix" | "cachyos" => Some("pacman"),
+        // SUSE-based
+        "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" | "sled" => Some("zypper"),
+        _ => None,
+    }
 }
 
 /// Verifies that basic shell execution works on the current system.
@@ -84,17 +169,14 @@ fn determine_package_manager() -> Option<&'static str> {
 /// * `None` - If the OS is unsupported
 pub fn verify_shell_execution() -> Option<bool> {
     let result = match std::env::consts::OS {
-        "linux" => {
-            command_executor::execute_command("sh", &["-c", "echo test"])
-        }
-        "macos" => {
-            command_executor::execute_command("zsh", &["-c", "echo test"])
-        }
-        "windows" => {
-            command_executor::execute_command("cmd", &["/c", "echo", "test"])
-        }
+        "linux" => command_executor::execute_command("sh", &["-c", "echo test"]),
+        "macos" => command_executor::execute_command("zsh", &["-c", "echo test"]),
+        "windows" => command_executor::execute_command("cmd", &["/c", "echo", "test"]),
         _ => {
-            debug!("Unsupported OS for shell verification: {}", std::env::consts::OS);
+            debug!(
+                "Unsupported OS for shell verification: {}",
+                std::env::consts::OS
+            );
             return None;
         }
     };
@@ -124,17 +206,10 @@ pub fn verify_shell_execution() -> Option<bool> {
 pub fn get_prequisites() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => vec![
-            "git",
-            "wget",
-            "flex",
-            "bison",
-            "gperf",
-            "ccache",
-            "dfu-util",
-            "cmake",
+            "git", "wget", "flex", "bison", "gperf", "ccache", "dfu-util", "cmake",
         ],
         "windows" => vec!["git"],
-        "macos" => vec!["dfu-util","cmake"],
+        "macos" => vec!["dfu-util", "cmake"],
         _ => vec![],
     }
 }
@@ -159,9 +234,6 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libusb-1.0-0`: Runtime library for USB device access.
 ///   - `libssl-dev`: Development headers for OpenSSL (SSL/TLS cryptography).
 ///
-/// - **dpkg (Debian/Ubuntu fallback):**
-///   - Same as `apt`.
-///
 /// - **dnf (Fedora/RHEL/CentOS):**
 ///   - `libffi-devel`: Development headers for Foreign Function Interface.
 ///   - `libusb`: Runtime library for USB device access.
@@ -183,7 +255,6 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
     match std::env::consts::OS {
         "linux" => match determine_package_manager() {
             Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
-            Some("dpkg") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
             Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel"],
             Some("pacman") => vec!["libusb", "libffi", "openssl"],
             Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel"],
@@ -214,9 +285,6 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
 ///   - `libpixman-1-0`: Runtime library for pixman (QEMU dependency).
 ///   - `libsdl2-2.0-0`: Runtime library for SDL2 (QEMU dependency).
 ///   - `libslirp0`: Runtime library for SLIRP user-mode networking (QEMU dependency).
-///
-/// - **dpkg (Debian/Ubuntu fallback):**
-///   - Same as `apt`.
 ///
 /// - **dnf (Fedora/RHEL/CentOS):**
 ///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
@@ -250,11 +318,23 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
 pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => match determine_package_manager() {
-            Some("apt") => vec!["libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
-            Some("dpkg") => vec!["libgcrypt20", "libglib2.0-0", "libpixman-1-0", "libsdl2-2.0-0", "libslirp0"],
+            Some("apt") => vec![
+                "libgcrypt20",
+                "libglib2.0-0",
+                "libpixman-1-0",
+                "libsdl2-2.0-0",
+                "libslirp0",
+            ],
+
             Some("dnf") => vec!["libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
             Some("pacman") => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
-            Some("zypper") => vec!["libgcrypt20", "glib2", "pixman-1", "libSDL2-2_0-0", "libslirp"],
+            Some("zypper") => vec![
+                "libgcrypt20",
+                "glib2",
+                "pixman-1",
+                "libSDL2-2_0-0",
+                "libslirp",
+            ],
             _ => vec![],
         },
         "macos" => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
@@ -342,27 +422,7 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                         }
                     }
                 }
-                Some("dpkg") => {
-                    for tool in list_of_required_tools {
-                        let output = command_executor::execute_command(
-                            "sh",
-                            &["-c", &format!("dpkg -l | grep {}", tool)],
-                        );
-                        match output {
-                            Ok(o) => {
-                                if o.status.success() {
-                                    debug!("{} is already installed: {:?}", tool, o);
-                                } else {
-                                    debug!("check for {} failed: {:?}", tool, o);
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                            Err(_e) => {
-                                unsatisfied.push(tool);
-                            }
-                        }
-                    }
-                }
+
                 Some("dnf") => {
                     for tool in list_of_required_tools {
                         let output = command_executor::execute_command(
@@ -439,10 +499,8 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
         }
         "macos" => {
             for tool in list_of_required_tools {
-                let output = command_executor::execute_command(
-                    "zsh",
-                    &["-c", &format!("which {}", tool)],
-                );
+                let output =
+                    command_executor::execute_command("zsh", &["-c", &format!("which {}", tool)]);
                 match output {
                     Ok(o) => {
                         if o.status.success() {
@@ -450,10 +508,7 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                         } else {
                             debug!("check for {} failed: {:?}", tool, o);
                             // check if the tool is installed with brew
-                            let output = command_executor::execute_command(
-                                "brew",
-                                &["list", tool],
-                            );
+                            let output = command_executor::execute_command("brew", &["list", tool]);
                             match output {
                                 Ok(o) => {
                                     if o.status.success() {
@@ -523,17 +578,19 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
 ///   The error message will mention `--skip-prerequisites-check` if shell verification fails.
 pub fn check_prerequisites_with_result() -> Result<PrerequisitesCheckResult, String> {
     let mut list_of_required_tools = get_prequisites();
-    list_of_required_tools = [list_of_required_tools, get_general_prerequisites_based_on_package_manager()].concat();
+    list_of_required_tools = [
+        list_of_required_tools,
+        get_general_prerequisites_based_on_package_manager(),
+    ]
+    .concat();
     debug!("Checking for prerequisites with detailed result...");
     debug!("will be checking for : {:?}", list_of_required_tools);
 
     match check_tools_installed(list_of_required_tools) {
-        Ok(missing) => {
-            Ok(PrerequisitesCheckResult::new(missing, true, false))
-        }
+        Ok(missing) => Ok(PrerequisitesCheckResult::new(missing, true, false)),
         Err(error_msg) => {
             debug!("Prerequisites check encountered an error: {}", error_msg);
-            
+
             if verify_shell_execution() == Some(false) {
                 debug!("Shell execution verification also failed");
                 Ok(PrerequisitesCheckResult::new(vec![], false, true))
@@ -618,13 +675,13 @@ fn install_scoop_package_manager() -> Result<(), String> {
                     let output = command_executor::execute_command(
                         "powershell",
                         &[
-                          "-ExecutionPolicy",
-                          "Bypass",
-                          "-Command",
-                          "scoop",
-                          "bucket",
-                          "add",
-                          "versions"
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-Command",
+                            "scoop",
+                            "bucket",
+                            "add",
+                            "versions",
                         ],
                     );
                     match output {
@@ -930,27 +987,27 @@ pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
 /// A `Result` indicating success (`Ok(())`) or an `anyhow::Error` if
 /// an error occurs during file operations or if the file is not found.
 pub fn copy_openocd_rules(tools_path: &str) -> Result<()> {
-  let openocd_rules_path = match std::env::consts::OS {
-    "linux" => "/etc/udev/rules.d/60-openocd.rules",
-    _ => return Ok(()),
-  };
-  let openocd_rules_path = std::path::Path::new(openocd_rules_path);
-  if openocd_rules_path.exists() {
-    debug!("openocd rules file already exists");
-    return Ok(());
-  }
+    let openocd_rules_path = match std::env::consts::OS {
+        "linux" => "/etc/udev/rules.d/60-openocd.rules",
+        _ => return Ok(()),
+    };
+    let openocd_rules_path = std::path::Path::new(openocd_rules_path);
+    if openocd_rules_path.exists() {
+        debug!("openocd rules file already exists");
+        return Ok(());
+    }
 
-  let tools_path = std::path::Path::new(tools_path);
+    let tools_path = std::path::Path::new(tools_path);
 
-  let found_files = find_by_name_and_extension(tools_path, "60-openocd", "rules");
+    let found_files = find_by_name_and_extension(tools_path, "60-openocd", "rules");
 
-  let openocd_rules_source = found_files.first().ok_or_else(|| {
-    anyhow!(
-      "60-openocd.rules file not found in {}",
-      tools_path.display()
-    )
-  })?;
-  fs::copy(openocd_rules_source, openocd_rules_path).with_context(|| {
+    let openocd_rules_source = found_files.first().ok_or_else(|| {
+        anyhow!(
+            "60-openocd.rules file not found in {}",
+            tools_path.display()
+        )
+    })?;
+    fs::copy(openocd_rules_source, openocd_rules_path).with_context(|| {
     format!(
       "Failed to copy {} to {} . Make sure you have the necessary permissions. Now you can copy it manually.",
       openocd_rules_source,
@@ -958,5 +1015,5 @@ pub fn copy_openocd_rules(tools_path: &str) -> Result<()> {
     )
   })?;
 
-  Ok(())
+    Ok(())
 }
