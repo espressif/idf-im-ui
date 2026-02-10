@@ -22,9 +22,13 @@ jobs:
       - name: Determine tag name
         id: tag
         run: |
-          TAG_NAME="${{ github.event.inputs.version }}"
+          TAG_NAME="${{ inputs.version }}"
           if [[ "${TAG_NAME}" == refs/tags/* ]]; then
             TAG_NAME="${TAG_NAME#refs/tags/}"
+          fi
+          if [[ -z "${TAG_NAME}" ]]; then
+            echo "::error::Version input is empty. Cannot publish Homebrew formula with an empty version."
+            exit 1
           fi
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
