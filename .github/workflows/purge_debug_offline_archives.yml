@@ -1,12 +1,6 @@
 name: Purge Debug Offline Archives
 
 on:
-
-  # temporarily added will be removed before final merge to master
-  push:
-    branches:
-      - offline_purging_strategy
-  
   schedule:
     - cron: "0 4 * * *" # Every day at 04:00 UTC
 
@@ -41,7 +35,7 @@ jobs:
       - name: Purge old debug objects from S3
         shell: bash
         env:
-          DRY_RUN: ${{ github.event_name == 'push' || inputs.dry_run || 'false' }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
           MAX_AGE_HOURS: ${{ inputs.max_age_hours || 48 }}
         run: |
           set -euo pipefail
