@@ -6,9 +6,9 @@ import os from "os";
 import path from "path";
 
 
-export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
+export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] }) {
 
-  describe(`${id}- Check for prerequisites |`, function () {
+  describe(`${id}- Check for python installation |`, function () {
     this.timeout(600000);
     let testRunner = null;
 
@@ -55,43 +55,42 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     });
 
     // Linux/MAC Specific Tests
-    // The following test can only be executed if the prerequisites have not been installed in the OS.
-    it("1- Should detect missing requirements", async function () {
+    // The following test can only be executed if python have not been installed in the OS.
+    it("1- Should detect missing python", async function () {
       this.timeout(25000);
       if (os.platform() === "win32") {
         this.skip();
       }
-      logger.info(`Starting test - confirm requirements are missing`);
-      const missingRequisites = await testRunner.waitForOutput(
-        "Please install the missing prerequisites and try again",
+      logger.info(`Starting test - confirm python is missing`);
+      const missingPython = await testRunner.waitForOutput(
+        "Please install python3 with pip, venv and ssl support and try again",
         20000
       );
       expect(
-        missingRequisites,
-        'EIM did not show error message indicating "Please install prerequisites"'
+        missingPython,
+        'EIM did not show error message indicating "Please install python"'
       ).to.be.true;
-      for (const prerequisite of prerequisites) {
-        expect(testRunner.output, `EIM did not list missing prerequisite"${prerequisite}"`).to.include(prerequisite);
-      }
+      expect(testRunner.output, `EIM did not show error message indicating "Python is missing"`
+       ).to.include("Python is missing, or it's not meet the requirements");
     });
 
 
     /** Windows Specific Tests
      * Tests below will only be executed on win32 platform
      */
-    it("1- should offer to install prerequisites and exit upon negative answer", async function () {
+    it("1- should offer to install python and exit upon negative answer", async function () {
       this.timeout(25000);
       if (os.platform() !== "win32") {
         this.skip();
       }
-      logger.info(`Starting test - confirm requirements are missing`);
-      const promptRequisites = await testRunner.waitForOutput(
-        "Do you want to install prerequisites?"
+      logger.info(`Starting test - confirm python is missing`);
+      const promptPython = await testRunner.waitForOutput(
+        "Do you want to install python?"
       );
 
       expect(
         promptRequisites,
-        "EIM did not offer to install the missing prerequisites"
+        "EIM did not offer to install python"
       ).to.be.true;
 
       testRunner.sendInput("n");
