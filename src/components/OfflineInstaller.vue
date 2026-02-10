@@ -49,7 +49,7 @@
             style="margin-top: 0.75rem;margin-bottom: 0.75rem;"
           >
             <strong>{{ $t('offlineInstaller.config.prerequisites.installCommand') }}:</strong>
-            <pre style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">sudo apt-get install -y {{ missing_prerequisities.join(' ') }}</pre>
+            <pre style="margin-top: 0.5rem; padding: 0.5rem; background: #f5f5f5; border-radius: 4px; overflow-x: auto;">{{ $t('offlineInstaller.config.prerequisites.installCommand') }}: {{ missing_prerequisities.join(' ') }}</pre>
           </n-alert>
         </div>
       </n-alert>
