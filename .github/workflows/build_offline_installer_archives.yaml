@@ -412,28 +412,82 @@ jobs:
             echo "[]" > ./offline_archives.json
           fi
 
-      - name: Purge old archives (if release)
-        if: needs.get-versions.outputs.should_purge == 'true'
-        run: |
-          CUTOFF_TIME=$(date -d '24 hours ago' +%s)
-          aws s3api list-objects-v2 \
-            --bucket espdldata \
-            --prefix dl/eim/archive_ \
-            --query 'Contents[?ends_with(Key, `.zst`)].[Key,LastModified]' \
-            --output text | while read -r key last_modified; do
-            FILE_TIME=$(date -d "$last_modified" +%s)
-            if [ $FILE_TIME -lt $CUTOFF_TIME ]; then
-              aws s3 rm "s3://espdldata/$key"
-              basename "$key" >> old_files.txt
-            fi
-          done
-          touch old_files.txt
-
       - name: Download all build infos
         uses: actions/download-artifact@v4
         with:
           pattern: build-info-*
           path: ./all-build-infos/
+
+      - name: Purge unsupported archives from S3
+        if: needs.get-versions.outputs.should_purge == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUCKET="espdldata"
+          PREFIX="dl/eim/archive_"
+
+          # Build allowed set from build-info artifacts (these contain the exact filenames on S3)
+          declare -A ALLOWED
+          while IFS= read -r -d '' info_file; do
+            if [ -f "$info_file" ] && jq empty "$info_file" 2>/dev/null; then
+              filename=$(jq -r '.filename' "$info_file")
+              if [ -n "$filename" ] && [ "$filename" != "null" ]; then
+                ALLOWED["$filename"]=1
+                echo "Allowed: $filename"
+              fi
+            fi
+          done < <(find all-build-infos -name "build-info.json" -type f -print0)
+
+          echo ""
+          echo "Total allowed archives: ${#ALLOWED[@]}"
+          echo ""
+
+          # List all .zst objects under dl/eim/archive_ (excludes debug/ since those are dl/eim/debug/archive_)
+          S3_OBJECTS=$(aws s3api list-objects-v2 \
+            --bucket "${BUCKET}" \
+            --prefix "${PREFIX}" \
+            --query 'Contents[?ends_with(Key, `.zst`)].[Key,Size]' \
+            --output text 2>/dev/null || true)
+
+          touch old_files.txt
+          DELETED_COUNT=0
+          KEPT_COUNT=0
+
+          if [ -n "${S3_OBJECTS}" ] && [ "${S3_OBJECTS}" != "None" ]; then
+            while IFS=$'\t' read -r key size; do
+              [ -z "${key}" ] && continue
+              filename=$(basename "$key")
+
+              if [ -z "${ALLOWED[$filename]+x}" ]; then
+                echo "Deleting unsupported archive: ${key} (${size} bytes)"
+                aws s3 rm "s3://${BUCKET}/${key}" || echo "::warning::Failed to delete ${key}"
+                echo "$filename" >> old_files.txt
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+
+                # Also delete the corresponding .log file if it exists
+                log_key="${key%.zst}.log"
+                aws s3 rm "s3://${BUCKET}/${log_key}" 2>/dev/null || true
+              else
+                echo "Keeping: ${key}"
+                KEPT_COUNT=$((KEPT_COUNT + 1))
+              fi
+            done <<< "${S3_OBJECTS}"
+          fi
+
+          echo ""
+          echo "=== Purge Summary ==="
+          echo "Archives deleted: ${DELETED_COUNT}"
+          echo "Archives kept: ${KEPT_COUNT}"
+
+          {
+            echo "## Purge Unsupported Archives"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Deleted | ${DELETED_COUNT} |"
+            echo "| Kept | ${KEPT_COUNT} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Merge and update JSON
         run: |
