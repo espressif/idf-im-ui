@@ -15,6 +15,10 @@ on:
       - created
   workflow_dispatch:
 
+env:
+  EIM_PR_LINK: ${{ github.event_name == 'pull_request' && format('https://github.com/{0}/pull/{1}', github.repository, github.event.pull_request.number) || '' }}
+  EIM_RUN_URL: ${{ format('{0}/{1}/actions/runs/{2}', github.server_url, github.repository, github.run_id) }}
+
 jobs:
   setup:
     name: Setup and Check merged PRs (schedule only)
