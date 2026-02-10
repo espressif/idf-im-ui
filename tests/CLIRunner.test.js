@@ -29,6 +29,7 @@ import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
 import { runCLICustomInstallTest } from "./scripts/CLICustomInstall.test.js";
 import { runInstallVerification } from "./scripts/installationVerification.test.js";
 import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
+import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import logger from "./classes/logger.class.js";
 import {
@@ -41,6 +42,7 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   runInDebug,
+  PREREQUISITES,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -65,7 +67,15 @@ function testRun(jsonScript) {
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(20000);
 
-        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI });
+        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites: PREREQUISITES });
+      });
+    } else if (test.type === "pythoncheck") {
+      //route for python check tests
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(20000);
+
+        runCLIPythonCheckTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI});
       });
     } else if (test.type === "arguments") {
       //routine for arguments tests
