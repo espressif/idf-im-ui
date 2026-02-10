@@ -53,14 +53,14 @@ jobs:
           echo "Dry run:       ${DRY_RUN}"
           echo ""
 
-          # List all objects under the debug prefix
+          # List all objects under the debug prefix (with --output text, empty string is returned when no objects)
           OBJECTS=$(aws s3api list-objects-v2 \
             --bucket "${BUCKET}" \
             --prefix "${PREFIX}" \
             --query 'Contents[*].[Key,LastModified,Size]' \
-            --output text 2>/dev/null || true)
+            --output text 2>&1) || { echo "::warning::Failed to list S3 objects. Check bucket=${BUCKET} prefix=${PREFIX} and AWS credentials."; exit 0; }
 
-          if [ -z "${OBJECTS}" ] || [ "${OBJECTS}" = "None" ]; then
+          if [ -z "${OBJECTS}" ]; then
             echo "No objects found under s3://${BUCKET}/${PREFIX}"
             exit 0
           fi
@@ -81,13 +81,17 @@ jobs:
 
               if [ "${DRY_RUN}" = "true" ]; then
                 echo "[DRY RUN] Would delete: ${key} (age: ${AGE_HOURS}h, size: ${size} bytes)"
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+                DELETED_SIZE=$((DELETED_SIZE + size))
               else
                 echo "Deleting: ${key} (age: ${AGE_HOURS}h, size: ${size} bytes)"
-                aws s3 rm "s3://${BUCKET}/${key}" || echo "::warning::Failed to delete ${key}"
+                if aws s3 rm "s3://${BUCKET}/${key}"; then
+                  DELETED_COUNT=$((DELETED_COUNT + 1))
+                  DELETED_SIZE=$((DELETED_SIZE + size))
+                else
+                  echo "::warning::Failed to delete ${key}"
+                fi
               fi
-
-              DELETED_COUNT=$((DELETED_COUNT + 1))
-              DELETED_SIZE=$((DELETED_SIZE + size))
             else
               SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
             fi

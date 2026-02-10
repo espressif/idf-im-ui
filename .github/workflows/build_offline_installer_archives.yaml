@@ -444,30 +444,34 @@ jobs:
           echo ""
 
           # List all .zst objects under dl/eim/archive_ (excludes debug/ since those are dl/eim/debug/archive_)
+          # With --output text, empty string is returned when no objects (not "None")
           S3_OBJECTS=$(aws s3api list-objects-v2 \
             --bucket "${BUCKET}" \
             --prefix "${PREFIX}" \
             --query 'Contents[?ends_with(Key, `.zst`)].[Key,Size]' \
-            --output text 2>/dev/null || true)
+            --output text 2>&1) || { echo "::warning::Failed to list S3 objects. Check bucket=${BUCKET} prefix=${PREFIX} and AWS credentials."; S3_OBJECTS=""; touch old_files.txt; }
 
           touch old_files.txt
           DELETED_COUNT=0
           KEPT_COUNT=0
 
-          if [ -n "${S3_OBJECTS}" ] && [ "${S3_OBJECTS}" != "None" ]; then
+          if [ -n "${S3_OBJECTS}" ]; then
             while IFS=$'\t' read -r key size; do
               [ -z "${key}" ] && continue
               filename=$(basename "$key")
 
               if [ -z "${ALLOWED[$filename]+x}" ]; then
                 echo "Deleting unsupported archive: ${key} (${size} bytes)"
-                aws s3 rm "s3://${BUCKET}/${key}" || echo "::warning::Failed to delete ${key}"
-                echo "$filename" >> old_files.txt
-                DELETED_COUNT=$((DELETED_COUNT + 1))
+                if aws s3 rm "s3://${BUCKET}/${key}"; then
+                  echo "$filename" >> old_files.txt
+                  DELETED_COUNT=$((DELETED_COUNT + 1))
 
-                # Also delete the corresponding .log file if it exists
-                log_key="${key%.zst}.log"
-                aws s3 rm "s3://${BUCKET}/${log_key}" 2>/dev/null || true
+                  # Also delete the corresponding .log file if it exists
+                  log_key="${key%.zst}.log"
+                  aws s3 rm "s3://${BUCKET}/${log_key}" 2>/dev/null || echo "::warning::Failed to delete log ${log_key}"
+                else
+                  echo "::warning::Failed to delete ${key}"
+                fi
               else
                 echo "Keeping: ${key}"
                 KEPT_COUNT=$((KEPT_COUNT + 1))
