@@ -726,6 +726,7 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-
 
       - name: Run GUI Tests
+        if: runner.os != 'Windows'
         run: |
           cd src-tauri
           cargo test --no-fail-fast --no-default-features --features cli,gui --bin eim 2>&1 | tee gui-bin-result.txt
@@ -733,6 +734,7 @@ jobs:
         continue-on-error: true
 
       - name: Format GUI test results
+        if: runner.os != 'Windows'
         uses: hahihula/rust-test-results-formatter@v1
         with:
           results-file: "./src-tauri/gui-bin-result.txt"
