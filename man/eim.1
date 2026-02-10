@@ -188,6 +188,22 @@ Import an existing ESP-IDF installation using a tools_set_config.json file.
 
 If PATH is not provided, the command will inform you that no config file was specified.
 
+.SS run
+Run a command in the context of a specific ESP-IDF version. This command sources the activation script for the specified IDF version before executing your command, making all IDF tools and environment variables available.
+
+.B eim run \fICOMMAND\fR [\fIIDF_VERSION\fR]
+
+Arguments:
+\fICOMMAND\fR: The command to run (required)
+\fIIDF_VERSION\fR: The ID, name, or path of the installed IDF version (optional)
+
+If \fIIDF_VERSION\fR is not provided, the command will use the currently selected IDF version (set via \fBeim select\fR). If no version is selected and none is specified, an error will be returned.
+
+.B Note:
+If your command contains special shell characters, you should wrap it in quotes:
+
+.B eim run "idf.py build" v5.3.2
+
 .SS fix
 Fix the ESP-IDF installation by reinstalling the tools and dependencies
 

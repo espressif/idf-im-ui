@@ -91,6 +91,14 @@ pub enum Commands {
         new_name: Option<String>,
     },
 
+    /// Run command in the context of a specific ESP-IDF version
+    Run {
+        #[arg(help = "Command to run")]
+        command: String,
+        #[arg(help = "ID, name or version of idf to run")]
+        idf: Option<String>,
+    },
+
     /// Import existing ESP-IDF installation using tools_set_config.json
     Import {
         #[arg(help = "Import using existing config file")]
