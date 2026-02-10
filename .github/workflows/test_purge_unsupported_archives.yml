@@ -68,7 +68,7 @@ jobs:
 
           for version in $(echo "$VERSIONS_JSON" | jq -r '.[]'); do
             for platform in "${PLATFORMS[@]}"; do
-              filename="archive_${version}_${platform}.zst"
+              filename="archive_v${version}_${platform}.zst"
               echo "$filename" >> allowed_files.txt
             done
           done
