@@ -39,6 +39,7 @@ jobs:
   test:
     name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }})
     runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container || '' }}
     strategy:
       fail-fast: false
       matrix:
@@ -46,6 +47,7 @@ jobs:
           - os: ubuntu-latest
             package_name: linux-x64
             run_on: GitHub
+            container: ubuntu:24.04
           - os: windows-latest
             package_name: windows-x64
             run_on: GitHub
@@ -55,6 +57,7 @@ jobs:
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
             run_on: ExtraRunner
+            container: ubuntu:24.04
           - os: macos-15-intel
             package_name: macos-x64
             run_on: ExtraRunner
@@ -63,17 +66,24 @@ jobs:
             run_on: MirrorRunner
 
     steps:
-      - name: Free Disk Space (Ubuntu)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-        uses: jlumbroso/free-disk-space@v1.3.1
-        with:
-          tool-cache: false
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: true
-          swap-storage: true
+      # - name: Free Disk Space (Ubuntu)
+      #   if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+      #   uses: jlumbroso/free-disk-space@v1.3.1
+      #   with:
+      #     tool-cache: false
+      #     android: true
+      #     dotnet: true
+      #     haskell: true
+      #     large-packages: false
+      #     docker-images: true
+      #     swap-storage: true
+
+      - name: Set up container
+        if: matrix.container
+        run: |
+          apt-get update
+          apt-get install -y ca-certificates curl git
+
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -85,10 +95,6 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13.8"
 
       - name: Download artifacts
         uses: actions/download-artifact@v4
@@ -115,16 +121,46 @@ jobs:
           ls -la ./artifacts/
           chmod +x artifacts/eim
 
-      - name: Install dependencies (Ubuntu)
+      - name: Run prerquisites check (Ubuntu)
+        if: matrix.container == 'ubuntu:24.04'
+        run: |
+          export PREREQUISITES_OS="ubuntu"
+          export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_CLI_PATH="../artifacts/eim"
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
+          cd tests
+          npm ci
+          npm run test-CLI --file=CLI-prerequisites
+        continue-on-error: true
+
+      - name: Install pre-requisites (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0
+          sudo apt-get install -y wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev
 
-      - name: Install dependencies (MacOS)
+      - name: Install pre-requisites (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           brew install dfu-util libgcrypt glib pixman sdl2 libslirp
+
+      - name: Run python check (Ubuntu)
+        if: matrix.container == 'ubuntu:24.04'
+        run: |
+          export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_CLI_PATH="../artifacts/eim"
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
+          cd tests
+          npm ci
+          npm run test-CLI --file=CLI-pythoncheck
+        continue-on-error: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.8"
 
       - name: Run IDF basic install test script (non-Windows)
         if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner'
