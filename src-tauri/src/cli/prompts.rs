@@ -116,23 +116,22 @@ pub fn check_and_install_prerequisites(
 }
 
 fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
-    let response = idf_im_lib::python_utils::python_sanity_check(python);
-
-    for result in &response.results {
-        let status = if result.passed { "OK" } else { "FAIL" };
-        println!("  [{}] {}", status, result.label);
-        if let Some(msg) = &result.message {
-            if !result.passed {
-                println!("       -> {}", msg);
+    let outpusts = idf_im_lib::python_utils::python_sanity_check(python);
+    let mut all_ok = true;
+    for output in outpusts {
+        match output {
+            Ok(_) => {}
+            Err(err) => {
+                all_ok = false;
+                println!("{:?}", err)
             }
         }
     }
-
-    if response.all_passed {
+    if all_ok {
         debug!("{}", t!("debug.python_sanity_check"));
         Ok(())
     } else {
-        Err(t!("python.sanitycheck.failed.summary").to_string())
+        Err(t!("python.sanitycheck.fail").to_string())
     }
 }
 pub fn check_and_install_python(

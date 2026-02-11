@@ -487,9 +487,15 @@
       "recheckInstallation": "Recheck Python Installation"
     },
     "installNote": "This will install Python with all required components",
-    "failed": {
-      "summary": "The following checks failed. Please fix or install the missing components and recheck.",
-      "message": "Failed to verify: %{check}"
+    "manualInstall": {
+      "title": "Manual Installation Required",
+      "intro": "Please install:",
+      "requirements": {
+        "python": "Python 3.10 or later",
+        "pip": "pip package manager",
+        "virtualenv": "virtualenv module",
+        "ssl": "SSL support"
+      }
     }
   },
   "prerequisitiesCheck": {

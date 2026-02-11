@@ -919,7 +919,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     });
 
     // Check for Python
-    let mut python_found = python_sanity_check(app_handle.clone(), None).all_passed;
+    let mut python_found = python_sanity_check(app_handle.clone(), None);
 
     // Install Python on Windows if needed
     if !python_found && os == "windows" {
@@ -942,7 +942,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
         }
 
-        python_found = python_sanity_check(app_handle.clone(), None).all_passed;
+        python_found = python_sanity_check(app_handle.clone(), None);
     }
 
     // Check if Python is still not found
@@ -1555,16 +1555,19 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             }
 
             // Python sanity check
-            let python_response = idf_im_lib::python_utils::python_sanity_check(None);
-            for result in &python_response.results {
-                if !result.passed {
-                    emit_log_message(&app_handle, MessageLevel::Warning,
-                        rust_i18n::t!("gui.offline.python_check_warning", 
-                            error = result.message.as_deref().unwrap_or("Unknown error")).to_string());
-                    warn!("{}: {}", result.label, result.message.as_deref().unwrap_or("Failed"));
+            let mut python_sane = true;
+            for result in idf_im_lib::python_utils::python_sanity_check(None) {
+                match result {
+                    Ok(_) => {}
+                    Err(err) => {
+                        python_sane = false;
+                        emit_log_message(&app_handle, MessageLevel::Warning,
+                            rust_i18n::t!("gui.offline.python_check_warning", error = err.to_string()).to_string());
+                        warn!("{:?}", err);
+                    }
                 }
             }
-            if !python_response.all_passed {
+            if !python_sane {
                 let error_msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,

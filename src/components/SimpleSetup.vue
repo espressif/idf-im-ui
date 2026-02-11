@@ -275,31 +275,23 @@ export default {
           currentState.value = 'error'
           return false
         } // TODO: maybe on windows inform user which prerequisities will be installed
-        let pythonResponse = await invoke("python_sanity_check", {});
-        let python_sane = pythonResponse.all_passed;
+        let python_sane = await invoke("python_sanity_check", {});
         if (!python_sane) {
           if (appStore.os == 'windows') {
             console.log("Python sanity check failed - attempting automatic installation");
             try {
               console.log("Installing Python...");
               await invoke("python_install", {});
-              pythonResponse = await invoke("python_sanity_check", {});
-              python_sane = pythonResponse.all_passed;
+              python_sane = await invoke("python_sanity_check", {});
             } catch (error) {
               console.error('Automatic Python installation failed:', error);
               python_sane = false;
             }
           } else {
             console.log("Python sanity check failed");
-            // Build detailed error message from failed checks
-            const failedCheckMessages = (pythonResponse.results || [])
-              .filter(r => !r.passed)
-              .map(r => t('pythonSanitycheck.failed.message', { check: r.label }));
             errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
             errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-            errorDetails.value = failedCheckMessages.length > 0
-              ? failedCheckMessages.join('\n')
-              : t('simpleSetup.error.prerequisites.python.details')
+            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
             currentState.value = 'error'
             return false
           }

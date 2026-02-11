@@ -1,6 +1,5 @@
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
 use idf_im_lib;
-use idf_im_lib::python_utils::PythonSanityCheckResponse;
 use log::{error, warn};
 use tauri::AppHandle;
 use serde_json::{json, Value};
@@ -105,31 +104,28 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     }
 }
 
-/// Performs a sanity check on the Python installation.
-/// Returns a structured response with detailed results for each check.
+/// Performs a sanity check on the Python installation
 #[tauri::command]
-pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> PythonSanityCheckResponse {
-    let response = idf_im_lib::python_utils::python_sanity_check(python);
+pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
+    let outputs = idf_im_lib::python_utils::python_sanity_check(python);
+    let mut all_ok = true;
 
-    // Log failed checks (English, label + raw details for debugging)
-    for result in &response.results {
-        if !result.passed {
-            warn!(
-                "Python check failed: check_type={}, label={}, details={:?}",
-                result.check_type,
-                result.label,
-                result.message.as_deref()
-            );
-            let warning_msg = t!(
-                "gui.system_dependencies.python_check_failed_label",
-                label = result.label.as_str()
-            )
-            .to_string();
-            send_message(&app_handle, warning_msg, "warning".to_string());
+    for output in outputs {
+        match output {
+            Ok(_) => {}
+            Err(err) => {
+                all_ok = false;
+                let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = err.to_string()).to_string();
+                send_message(
+                    &app_handle,
+                    warning_msg.clone(),
+                    "warning".to_string(),
+                );
+                warn!("{}", warning_msg);
+            }
         }
     }
-
-    response
+    all_ok
 }
 
 /// Installs Python
