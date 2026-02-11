@@ -24,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         (Some(pr), None) => format!("{} (PR: {})", pkg_version, pr),
         (None, _) => pkg_version,
     };
-    println!("cargo:rustc-env=CARGO_PKG_VERSION={}", version_string);
+    println!("cargo:rustc-env=EIM_VERSION_STRING={}", version_string);
     println!("cargo:rerun-if-env-changed=EIM_PR_LINK");
     println!("cargo:rerun-if-env-changed=EIM_RUN_URL");
     #[cfg(feature = "gui")]
