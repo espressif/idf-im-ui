@@ -1,9 +1,9 @@
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
-use idf_im_lib;
+use idf_im_lib::python_utils::SanityCheck;
 use log::{error, warn};
-use tauri::AppHandle;
-use serde_json::{json, Value};
 use rust_i18n::t;
+use serde_json::{json, Value};
+use tauri::AppHandle;
 
 
 /// Gets the list of prerequisites for ESP-IDF
@@ -124,7 +124,41 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     }
 }
 
-/// Performs a sanity check on the Python installation
+/// Translated display name for a sanity check (GUI uses same locale keys as CLI).
+pub fn check_display_name(check: SanityCheck) -> String {
+    match check {
+        SanityCheck::PythonVersion => t!("python.sanitycheck.check.version"),
+        SanityCheck::Pip => t!("python.sanitycheck.check.pip"),
+        SanityCheck::Venv => t!("python.sanitycheck.check.venv"),
+        SanityCheck::StdLib => t!("python.sanitycheck.check.stdlib"),
+        SanityCheck::Ctypes => t!("python.sanitycheck.check.ctypes"),
+        SanityCheck::Ssl => t!("python.sanitycheck.check.ssl"),
+    }
+    .to_string()
+}
+
+/// OS-aware translated hint for a failed sanity check.
+pub fn check_hint(check: SanityCheck) -> String {
+    let os = std::env::consts::OS;
+    match (check, os) {
+        (SanityCheck::PythonVersion, _) => t!("python.sanitycheck.hint.version"),
+        (SanityCheck::Pip, _) => t!("python.sanitycheck.hint.pip"),
+        (SanityCheck::StdLib, _) => t!("python.sanitycheck.hint.stdlib"),
+        (SanityCheck::Venv, "macos") => t!("python.sanitycheck.hint.venv.macos"),
+        (SanityCheck::Venv, "windows") => t!("python.sanitycheck.hint.venv.windows"),
+        (SanityCheck::Venv, _) => t!("python.sanitycheck.hint.venv.linux"),
+        (SanityCheck::Ctypes, "macos") => t!("python.sanitycheck.hint.ctypes.macos"),
+        (SanityCheck::Ctypes, "windows") => t!("python.sanitycheck.hint.ctypes.windows"),
+        (SanityCheck::Ctypes, _) => t!("python.sanitycheck.hint.ctypes.linux"),
+        (SanityCheck::Ssl, "macos") => t!("python.sanitycheck.hint.ssl.macos"),
+        (SanityCheck::Ssl, "windows") => t!("python.sanitycheck.hint.ssl.windows"),
+        (SanityCheck::Ssl, _) => t!("python.sanitycheck.hint.ssl.linux"),
+    }
+    .to_string()
+}
+
+/// Performs a sanity check on the Python installation.
+/// Shows user-friendly check name + hint per failure; raw output is logged only.
 #[tauri::command]
 pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
     let results = idf_im_lib::python_utils::python_sanity_check(python);
@@ -133,14 +167,9 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool 
     for result in &results {
         if !result.passed {
             all_ok = false;
-            let detail = format!("{:?}: {}", result.check, result.message);
-            let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = detail).to_string();
-            send_message(
-                &app_handle,
-                warning_msg.clone(),
-                "warning".to_string(),
-            );
-            warn!("{}", warning_msg);
+            warn!("[FAIL] {}: {}", check_display_name(result.check), result.message);
+            let msg = format!("{} — {}", check_display_name(result.check), check_hint(result.check));
+            send_message(&app_handle, msg, "warning".to_string());
         }
     }
     all_ok

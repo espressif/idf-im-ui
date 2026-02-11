@@ -33,7 +33,10 @@ use crate::gui::{
   },
 };
 
-use super::{prequisites::{install_prerequisites, python_install, python_sanity_check}, settings};
+use super::{
+    prequisites::{check_display_name, check_hint, install_prerequisites, python_install, python_sanity_check},
+    settings,
+};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {
@@ -1630,15 +1633,14 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 return Err(error_msg);
             }
 
-            // Python sanity check
+            // Python sanity check — user sees check name + hint; raw output logged only
             let mut python_sane = true;
             for result in &idf_im_lib::python_utils::python_sanity_check(None) {
                 if !result.passed {
                     python_sane = false;
-                    let detail = format!("{:?}: {}", result.check, result.message);
-                    emit_log_message(&app_handle, MessageLevel::Warning,
-                        rust_i18n::t!("gui.offline.python_check_warning", error = detail).to_string());
-                    warn!("{}", detail);
+                    warn!("[FAIL] {}: {}", check_display_name(result.check), result.message);
+                    let msg = format!("{} — {}", check_display_name(result.check), check_hint(result.check));
+                    emit_log_message(&app_handle, MessageLevel::Warning, msg);
                 }
             }
             if !python_sane {
