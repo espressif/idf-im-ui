@@ -146,15 +146,15 @@ logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`
 
 //Capture list of prerequisites from environment variables
 const preRequisitesList = {
-  ubuntu: ["flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake"],
-  fedore:["wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "libusb"],
-  arch: ["wget", "flex", "bison", "gperf", "ccache", "libffi", "openssl", "dfu-util", "libusb"],
-  opensuse: ["wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "libusb-1_0-0"],
-  macos:["dfu-util"],
+  ubuntu: ["git","flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake"],
+  fedore:["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "libusb", "cmake"],
+  arch: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi", "openssl", "dfu-util", "libusb", "cmake"],
+  opensuse: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "libusb-1_0-0", "cmake"],
+  macos:["dfu-util", "cmake"],
 }
-const PREREQUISITES = process.env.PREREQUISITES_OS?
-  preRequisitesList[process.env.PREREQUISITES_OS] : [];
-logger.info(`Prerequisites set to: ${PREREQUISITES.join(", ")}`);
+const prerequisites = process.env.PREREQUISITES_OS?
+  preRequisitesList[process.env.PREREQUISITES_OS.split(":")[0].toLowerCase()] : [];
+logger.info(`Prerequisites set to: ${prerequisites.join(", ")}`);
 
 export {
   IDFMIRRORS,
@@ -173,5 +173,5 @@ export {
   TOOLSFOLDER,
   runInDebug,
   pythonWheelsVersion,
-  PREREQUISITES,
+  prerequisites,
 };

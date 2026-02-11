@@ -21,7 +21,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
 
     beforeEach(async function () {
       this.timeout(5000);
-      testRunner = new InteractiveCLITestRunner();
+      testRunner = new CLITestRunner();
       try {
         await testRunner.start();
         testRunner.sendInput(`${pathToEIM} wizard`);
@@ -71,7 +71,8 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
         'EIM did not show error message indicating "Please install python"'
       ).to.be.true;
       expect(testRunner.output, `EIM did not show error message indicating "Python is missing"`
-       ).to.include("Python is missing, or it's not meet the requirements");
+       ).to.include("Python is missing, or it does not meet the requirements");
+      logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 
 
