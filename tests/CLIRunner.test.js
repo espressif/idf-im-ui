@@ -42,7 +42,7 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   runInDebug,
-  PREREQUISITES,
+  prerequisites,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -67,7 +67,7 @@ function testRun(jsonScript) {
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(20000);
 
-        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites: PREREQUISITES });
+        runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites });
       });
     } else if (test.type === "pythoncheck") {
       //route for python check tests
