@@ -48,16 +48,16 @@ jobs:
             container: ubuntu:24.04
             node_arch: x64
             distro_name: ubuntu-24.04
-          # - os: ubuntu-24.04-arm
-          #   package_name: linux-aarch64
-          #   container: ubuntu:24.04
-          #   node_arch: aarch64
-          #   distro_name: ubuntu-24.04-arm
-          # - os: ubuntu-latest
-          #   package_name: linux-x64
-          #   container: fedora:42
-          #   node_arch: x64
-          #   distro_name: fedora-42
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            container: ubuntu:24.04
+            node_arch: aarch64
+            distro_name: ubuntu-24.04-arm
+          - os: ubuntu-latest
+            package_name: linux-x64
+            container: fedora:42
+            node_arch: x64
+            distro_name: fedora-42
           # - os: macos-latest
           #   package_name: macos-aarch64
           # - os: macos-15-intel
