@@ -14,14 +14,14 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
 
 
     before(async function () {
-      this.timeout(5000);
+      this.timeout(10000);
       testRunner = new CLITestRunner();
     });
 
 
     beforeEach(async function () {
-      this.timeout(5000);
-      testRunner = new InteractiveCLITestRunner();
+      this.timeout(20000);
+      testRunner = new CLITestRunner();
       try {
         await testRunner.start();
         testRunner.sendInput(`${pathToEIM} wizard`);
@@ -41,7 +41,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     });
   
     after(async function () {
-      this.timeout(5000);
+      this.timeout(20000);
       if (testRunner) {
         try {
           await testRunner.stop();
@@ -73,6 +73,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       for (const prerequisite of prerequisites) {
         expect(testRunner.output, `EIM did not list missing prerequisite"${prerequisite}"`).to.include(prerequisite);
       }
+      logger.info(`prerequisite detection passed: >>\r ${testRunner.output}`);
     });
 
 

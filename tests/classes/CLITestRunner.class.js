@@ -11,7 +11,7 @@ class CLITestRunner {
     this.exitCode = null;
     this.error = null;
     this.lastDataTimestamp = Date.now();
-    this.prompt = os.platform() !== "win32" ? "$" : ">";
+    this.prompt = os.platform() !== "win32" ? ["$", "#"] : [">"];
     this.command = os.platform() !== "win32" ? "bash" : "powershell.exe";
     this.args =
       os.platform() !== "win32"
@@ -132,7 +132,7 @@ class CLITestRunner {
   async waitForPrompt(timeout = 3000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
-      if (this.output.slice(-10).includes(this.prompt)) {
+      if (this.prompt.some(prompt => this.output.slice(-10).includes(prompt))) {
         return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 200));
