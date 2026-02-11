@@ -127,22 +127,20 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
 /// Performs a sanity check on the Python installation
 #[tauri::command]
 pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
-    let outputs = idf_im_lib::python_utils::python_sanity_check(python);
+    let results = idf_im_lib::python_utils::python_sanity_check(python);
     let mut all_ok = true;
 
-    for output in outputs {
-        match output {
-            Ok(_) => {}
-            Err(err) => {
-                all_ok = false;
-                let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = err.to_string()).to_string();
-                send_message(
-                    &app_handle,
-                    warning_msg.clone(),
-                    "warning".to_string(),
-                );
-                warn!("{}", warning_msg);
-            }
+    for result in &results {
+        if !result.passed {
+            all_ok = false;
+            let detail = format!("{:?}: {}", result.check, result.message);
+            let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = detail).to_string();
+            send_message(
+                &app_handle,
+                warning_msg.clone(),
+                "warning".to_string(),
+            );
+            warn!("{}", warning_msg);
         }
     }
     all_ok

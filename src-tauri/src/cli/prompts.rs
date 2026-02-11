@@ -157,22 +157,62 @@ pub fn check_and_install_prerequisites(
     }
 }
 
+/// Returns a translated display name for a sanity check variant.
+fn check_display_name(check: idf_im_lib::python_utils::SanityCheck) -> String {
+    use idf_im_lib::python_utils::SanityCheck;
+    match check {
+        SanityCheck::PythonVersion => t!("python.sanitycheck.check.version"),
+        SanityCheck::Pip           => t!("python.sanitycheck.check.pip"),
+        SanityCheck::Venv          => t!("python.sanitycheck.check.venv"),
+        SanityCheck::StdLib        => t!("python.sanitycheck.check.stdlib"),
+        SanityCheck::Ctypes        => t!("python.sanitycheck.check.ctypes"),
+        SanityCheck::Ssl           => t!("python.sanitycheck.check.ssl"),
+    }
+    .to_string()
+}
+
+/// Returns an OS-aware translated resolution hint for a failed sanity check.
+fn check_hint(check: idf_im_lib::python_utils::SanityCheck) -> String {
+    use idf_im_lib::python_utils::SanityCheck;
+    let os = std::env::consts::OS;
+    match (check, os) {
+        (SanityCheck::PythonVersion, _)  => t!("python.sanitycheck.hint.version"),
+        (SanityCheck::Pip, _)            => t!("python.sanitycheck.hint.pip"),
+        (SanityCheck::StdLib, _)         => t!("python.sanitycheck.hint.stdlib"),
+        (SanityCheck::Venv, "macos")     => t!("python.sanitycheck.hint.venv.macos"),
+        (SanityCheck::Venv, "windows")   => t!("python.sanitycheck.hint.venv.windows"),
+        (SanityCheck::Venv, _)           => t!("python.sanitycheck.hint.venv.linux"),
+        (SanityCheck::Ctypes, "macos")   => t!("python.sanitycheck.hint.ctypes.macos"),
+        (SanityCheck::Ctypes, "windows") => t!("python.sanitycheck.hint.ctypes.windows"),
+        (SanityCheck::Ctypes, _)         => t!("python.sanitycheck.hint.ctypes.linux"),
+        (SanityCheck::Ssl, "macos")      => t!("python.sanitycheck.hint.ssl.macos"),
+        (SanityCheck::Ssl, "windows")    => t!("python.sanitycheck.hint.ssl.windows"),
+        (SanityCheck::Ssl, _)            => t!("python.sanitycheck.hint.ssl.linux"),
+    }
+    .to_string()
+}
+
 fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
-    let outpusts = idf_im_lib::python_utils::python_sanity_check(python);
+    let results = idf_im_lib::python_utils::python_sanity_check(python);
     let mut all_ok = true;
-    for output in outpusts {
-        match output {
-            Ok(_) => {}
-            Err(err) => {
-                all_ok = false;
-                println!("{:?}", err)
-            }
+    for result in &results {
+        let name = check_display_name(result.check);
+        if result.passed {
+            debug!("[PASS] {}: {}", name, result.message);
+            println!("  [PASS] {}", name);
+        } else {
+            all_ok = false;
+            debug!("[FAIL] {}: {}", name, result.message);
+            println!("  [FAIL] {}", name);
+            println!("         Hint: {}", check_hint(result.check));
         }
     }
     if all_ok {
         debug!("{}", t!("debug.python_sanity_check"));
         Ok(())
     } else {
+        // Per-check [FAIL] lines with hints were already printed above.
+        // Return a short error to signal failure without repeating advice.
         Err(t!("python.sanitycheck.fail").to_string())
     }
 }
@@ -187,7 +227,7 @@ pub fn check_and_install_python(
     } else {
         run_with_spinner(|| python_sanity_check(None))
     };
-    if let Err(err) = check_result {
+    if let Err(_err) = check_result {
         if std::env::consts::OS == "windows" {
             let res = if !install_all_prerequisites && !non_interactive {
                 generic_confirm("python.install.prompt")
@@ -223,7 +263,8 @@ pub fn check_and_install_python(
                 return Err(t!("python.install.refuse").to_string());
             }
         } else {
-            return Err(format!("{} {:?}", t!("python.sanitycheck.fail"), err));
+            // Details were already printed per-check — just signal the failure.
+            return Err(t!("python.sanitycheck.fail").to_string());
         }
     } else {
         info!("{}", t!("python.sanitycheck.ok"))

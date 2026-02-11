@@ -1632,15 +1632,13 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
 
             // Python sanity check
             let mut python_sane = true;
-            for result in idf_im_lib::python_utils::python_sanity_check(None) {
-                match result {
-                    Ok(_) => {}
-                    Err(err) => {
-                        python_sane = false;
-                        emit_log_message(&app_handle, MessageLevel::Warning,
-                            rust_i18n::t!("gui.offline.python_check_warning", error = err.to_string()).to_string());
-                        warn!("{:?}", err);
-                    }
+            for result in &idf_im_lib::python_utils::python_sanity_check(None) {
+                if !result.passed {
+                    python_sane = false;
+                    let detail = format!("{:?}: {}", result.check, result.message);
+                    emit_log_message(&app_handle, MessageLevel::Warning,
+                        rust_i18n::t!("gui.offline.python_check_warning", error = detail).to_string());
+                    warn!("{}", detail);
                 }
             }
             if !python_sane {
