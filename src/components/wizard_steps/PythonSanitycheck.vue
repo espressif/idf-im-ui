@@ -1,6 +1,5 @@
 <template>
   <div class="python-check" data-id="python-check">
-
     <n-card class="status-card" data-id="python-status-card">
       <n-spin :show="loading" data-id="python-check-spinner">
         <div v-if="!loading" class="status-content" data-id="python-status-content">
@@ -9,6 +8,15 @@
             :description="python_sane ? t('pythonSanitycheck.status.ready.description') : t('pythonSanitycheck.status.setupRequired.description')"
             data-id="python-check-result">
             <template #footer>
+              <div v-if="checkResults.length" class="check-list" data-id="python-check-list">
+                <div v-for="(item, index) in checkResults" :key="index" class="check-row" :class="{ 'check-failed': !item.passed }">
+                  <span class="check-icon">{{ item.passed ? '✓' : '✗' }}</span>
+                  <div class="check-text">
+                    <span class="check-name">{{ item.display_name }}</span>
+                    <p v-if="item.hint" class="check-hint">{{ item.hint }}</p>
+                  </div>
+                </div>
+              </div>
               <div class="action-buttons" data-id="python-action-buttons">
                 <div v-if="!python_sane && os === 'windows'" class="install-section" data-id="python-install-section">
                   <n-button @click="install_python" type="warning" :loading="installing_python" :disabled="loading"
@@ -17,16 +25,18 @@
                   </n-button>
                   <p class="install-note" data-id="install-python-note">{{ t('pythonSanitycheck.installNote') }}</p>
                 </div>
-
                 <n-button v-if="python_sane" @click="nextstep" type="error" :disabled="loading"
                   data-id="continue-button">
                   {{ t('pythonSanitycheck.actions.continueNext') }}
+                </n-button>
+                <n-button v-if="!python_sane" @click="check_python_sanity" type="error" data-id="recheck-python-button">
+                  {{ t('pythonSanitycheck.actions.recheckInstallation') }}
                 </n-button>
               </div>
             </template>
           </n-result>
 
-          <div v-if="!python_sane && os !== 'windows'" class="manual-instructions"
+          <div v-if="!python_sane && os !== 'windows' && checkResults.length === 0" class="manual-instructions"
             data-id="manual-install-instructions">
             <h3 data-id="manual-install-title">{{ t('pythonSanitycheck.manualInstall.title') }}</h3>
             <p data-id="manual-install-intro">{{ t('pythonSanitycheck.manualInstall.intro') }}</p>
@@ -36,9 +46,6 @@
               <li data-id="virtualenv-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.virtualenv') }}</li>
               <li data-id="ssl-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.ssl') }}</li>
             </ul>
-            <n-button @click="check_python_sanity" type="error" data-id="recheck-python-button">
-              {{ t('pythonSanitycheck.actions.recheckInstallation') }}
-            </n-button>
           </div>
         </div>
       </n-spin>
@@ -68,6 +75,7 @@ export default {
     os: undefined,
     loading: true,
     python_sane: false,
+    checkResults: [],
     installing_python: false,
     appStore: useAppStore()
   }),
@@ -84,7 +92,9 @@ export default {
   methods: {
     check_python_sanity: async function () {
       this.loading = true;
-      this.python_sane = await invoke("python_sanity_check", {});
+      const results = await invoke("python_sanity_check", {});
+      this.checkResults = results || [];
+      this.python_sane = this.checkResults.length > 0 && this.checkResults.every((r) => r.passed);
       this.loading = false;
       return false;
     },
@@ -167,6 +177,64 @@ export default {
 
 .manual-instructions li {
   margin-bottom: 0.5rem;
+}
+
+.check-list {
+  width: 100%;
+  max-width: 560px;
+  margin: 1rem auto;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.check-row:last-child {
+  border-bottom: none;
+}
+
+.check-row.check-failed {
+  background: #fef2f2;
+}
+
+.check-icon {
+  flex-shrink: 0;
+  font-size: 1.125rem;
+  font-weight: bold;
+}
+
+.check-row:not(.check-failed) .check-icon {
+  color: #16a34a;
+}
+
+.check-row.check-failed .check-icon {
+  color: #dc2626;
+}
+
+.check-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.check-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.check-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
 }
 
 .n-card {

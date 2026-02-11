@@ -157,22 +157,39 @@ pub fn check_hint(check: SanityCheck) -> String {
     .to_string()
 }
 
-/// Performs a sanity check on the Python installation.
-/// Shows user-friendly check name + hint per failure; raw output is logged only.
-#[tauri::command]
-pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
-    let results = idf_im_lib::python_utils::python_sanity_check(python);
-    let mut all_ok = true;
+/// One item for the GUI: translated name, pass/fail, and hint when failed.
+#[derive(serde::Serialize)]
+pub struct PythonSanityCheckItem {
+    pub display_name: String,
+    pub passed: bool,
+    pub hint: Option<String>,
+}
 
-    for result in &results {
-        if !result.passed {
-            all_ok = false;
-            warn!("[FAIL] {}: {}", check_display_name(result.check), result.message);
-            let msg = format!("{} — {}", check_display_name(result.check), check_hint(result.check));
-            send_message(&app_handle, msg, "warning".to_string());
-        }
-    }
-    all_ok
+/// Performs a sanity check and returns structured results for the GUI.
+/// Raw command output is logged only; user sees display_name + hint per failure.
+#[tauri::command]
+pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<PythonSanityCheckItem> {
+    let results = idf_im_lib::python_utils::python_sanity_check(python);
+
+    results
+        .iter()
+        .map(|r| {
+            let display_name = check_display_name(r.check);
+            if !r.passed {
+                warn!("[FAIL] {}: {}", display_name, r.message);
+                send_message(
+                    &app_handle,
+                    format!("{} — {}", display_name, check_hint(r.check)),
+                    "warning".to_string(),
+                );
+            }
+            PythonSanityCheckItem {
+                display_name,
+                passed: r.passed,
+                hint: if r.passed { None } else { Some(check_hint(r.check)) },
+            }
+        })
+        .collect()
 }
 
 /// Installs Python

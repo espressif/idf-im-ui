@@ -67,8 +67,8 @@ export default {
   }),
   methods: {
     check_python_sanity: async function () {
-      this.python_sane = await invoke("python_sanity_check", {});;
-
+      const results = await invoke("python_sanity_check", {});
+      this.python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
       return false;
     },
     get_available_targets: async function () {

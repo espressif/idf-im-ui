@@ -135,6 +135,15 @@
             </n-icon>
           </template>
           <template #footer>
+            <div v-if="pythonCheckResults.length > 0" class="python-check-list">
+              <div v-for="(item, index) in pythonCheckResults" :key="index" class="python-check-row" :class="{ 'python-check-failed': !item.passed }">
+                <span class="python-check-icon">{{ item.passed ? '✓' : '✗' }}</span>
+                <div class="python-check-text">
+                  <span class="python-check-name">{{ item.display_name }}</span>
+                  <p v-if="item.hint" class="python-check-hint">{{ item.hint }}</p>
+                </div>
+              </div>
+            </div>
             <div class="error-actions">
               <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
@@ -152,7 +161,7 @@
           </template>
         </n-result>
 
-        <n-alert v-if="errorDetails" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
+        <n-alert v-if="errorDetails && pythonCheckResults.length === 0" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
@@ -233,6 +242,7 @@ export default {
     const errorTitle = ref('Installation Failed')
     const errorMessage = ref('')
     const errorDetails = ref('')
+    const pythonCheckResults = ref([])
     const verificationFailed = ref(false)
 
     // Helper function to fetch settings, versions, and validate installation path
@@ -334,23 +344,26 @@ export default {
           currentState.value = 'error'
           return false
         } // TODO: maybe on windows inform user which prerequisities will be installed
-        let python_sane = await invoke("python_sanity_check", {});
+        let results = await invoke("python_sanity_check", {});
+        let python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
         if (!python_sane) {
           if (appStore.os == 'windows') {
             console.log("Python sanity check failed - attempting automatic installation");
             try {
               console.log("Installing Python...");
               await invoke("python_install", {});
-              python_sane = await invoke("python_sanity_check", {});
+              results = await invoke("python_sanity_check", {});
+              python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
             } catch (error) {
               console.error('Automatic Python installation failed:', error);
               python_sane = false;
             }
-          } else {
-            console.log("Python sanity check failed");
+          }
+          if (!python_sane) {
             errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
             errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
+            pythonCheckResults.value = Array.isArray(results) ? results : []
+            errorDetails.value = ''
             currentState.value = 'error'
             return false
           }
@@ -499,6 +512,7 @@ export default {
       currentState.value = 'checking'
       errorMessage.value = ''
       errorDetails.value = ''
+      pythonCheckResults.value = []
       installationProgress.value = 0
       currentStep.value = 0
       installMessages.value = []
@@ -586,6 +600,7 @@ export default {
       errorTitle,
       errorMessage,
       errorDetails,
+      pythonCheckResults,
       verificationFailed,
       getStatusIcon,
       getStatusIconClass,
@@ -745,6 +760,64 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 2rem;
+}
+
+.python-check-list {
+  width: 100%;
+  max-width: 560px;
+  margin: 1rem auto;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.python-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fafafa;
+}
+
+.python-check-row:last-child {
+  border-bottom: none;
+}
+
+.python-check-row.python-check-failed {
+  background: #fef2f2;
+}
+
+.python-check-icon {
+  flex-shrink: 0;
+  font-size: 1.125rem;
+  font-weight: bold;
+}
+
+.python-check-row:not(.python-check-failed) .python-check-icon {
+  color: #16a34a;
+}
+
+.python-check-row.python-check-failed .python-check-icon {
+  color: #dc2626;
+}
+
+.python-check-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.python-check-name {
+  font-weight: 500;
+  color: #374151;
+}
+
+.python-check-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
 }
 
 .completion-actions,

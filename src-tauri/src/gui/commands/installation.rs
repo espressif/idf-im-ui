@@ -962,7 +962,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     });
 
     // Check for Python
-    let mut python_found = python_sanity_check(app_handle.clone(), None);
+    let mut python_check_results = python_sanity_check(app_handle.clone(), None);
+    let mut python_found = python_check_results.iter().all(|check| check.passed);
 
     // Install Python on Windows if needed
     if !python_found && os == "windows" {
@@ -985,7 +986,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
         }
 
-        python_found = python_sanity_check(app_handle.clone(), None);
+        python_check_results = python_sanity_check(app_handle.clone(), None);
+        python_found = python_check_results.iter().all(|check| check.passed);
     }
 
     // Check if Python is still not found
