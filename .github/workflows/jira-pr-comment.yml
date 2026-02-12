@@ -53,11 +53,24 @@ jobs:
           echo "Adding comment to Jira issue: $ISSUE_KEY"
           echo "PR URL: $PR_URL"
 
+          # Handle JIRA_PASS format - it may have "token:" prefix (per espressif/sync-jira-actions convention)
+          # If prefixed with "token:", use Bearer token auth; otherwise use Basic Auth
+          if [[ "$JIRA_PASS" == token:* ]]; then
+            # Strip "token:" prefix and use Bearer token authentication
+            TOKEN="${JIRA_PASS#token:}"
+            AUTH_HEADER="Authorization: Bearer $TOKEN"
+            echo "Using Bearer token authentication"
+          else
+            # Use Basic Auth with username:password
+            AUTH_HEADER="Authorization: Basic $(echo -n "$JIRA_USER:$JIRA_PASS" | base64)"
+            echo "Using Basic authentication"
+          fi
+
           # Make the API call and capture the response
           HTTP_RESPONSE=$(curl -s -w "\n%{http_code}" \
             -X POST \
             -H "Content-Type: application/json" \
-            -u "$JIRA_USER:$JIRA_PASS" \
+            -H "$AUTH_HEADER" \
             -d "{\"body\": \"PR: $PR_URL\"}" \
             "$JIRA_URL/rest/api/2/issue/$ISSUE_KEY/comment")
 
