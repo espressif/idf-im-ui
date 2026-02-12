@@ -158,8 +158,9 @@ pub fn check_hint(check: SanityCheck) -> String {
 }
 
 /// One item for the GUI: translated name, pass/fail, and hint when failed.
+/// Generic struct that can be reused for other check types (e.g., prerequisites, tool checks).
 #[derive(serde::Serialize)]
-pub struct PythonSanityCheckItem {
+pub struct CheckResultItem {
     pub display_name: String,
     pub passed: bool,
     pub hint: Option<String>,
@@ -168,7 +169,7 @@ pub struct PythonSanityCheckItem {
 /// Performs a sanity check and returns structured results for the GUI.
 /// Raw command output is logged only; user sees display_name + hint per failure.
 #[tauri::command]
-pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<PythonSanityCheckItem> {
+pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<CheckResultItem> {
     let results = idf_im_lib::python_utils::python_sanity_check(python);
 
     results
@@ -183,7 +184,7 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<P
                     "warning".to_string(),
                 );
             }
-            PythonSanityCheckItem {
+            CheckResultItem {
                 display_name,
                 passed: r.passed,
                 hint: if r.passed { None } else { Some(check_hint(r.check)) },

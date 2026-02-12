@@ -17,10 +17,10 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{parse_cmake_version, remove_after_second_dot}
+    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult}
 };
 
-/// Identifies which Python sanity check a [`SanityCheckResult`] belongs to.
+/// Identifies which Python sanity check a [`GenericCheckResult`] belongs to.
 ///
 /// Consumers (CLI, GUI) map these variants to translated display names and
 /// OS-aware resolution hints — the library itself stays i18n-free.
@@ -33,17 +33,6 @@ pub enum SanityCheck {
     StdLib,
     Ctypes,
     Ssl,
-}
-
-/// Result of a single Python sanity check.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SanityCheckResult {
-    /// Which check produced this result.
-    pub check: SanityCheck,
-    /// Whether the check passed.
-    pub passed: bool,
-    /// Raw detail — stdout on success, stderr / error description on failure.
-    pub message: String,
 }
 
 /// Runs a Python script from a specified file with optional arguments and environment variables.
@@ -821,7 +810,7 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
 /// Performs a series of sanity checks for the Python interpreter.
 ///
 /// Runs six checks (version, pip, venv, standard library, ctypes, SSL/HTTPS)
-/// and returns a [`SanityCheckResult`] for each. The library only reports raw
+/// and returns a [`GenericCheckResult`] for each. The library only reports raw
 /// facts — translated display names and resolution hints are the consumer's
 /// responsibility.
 ///
@@ -831,26 +820,26 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
 ///
 /// # Returns
 ///
-/// * `Vec<SanityCheckResult>` — one entry per check, in a fixed order.
-pub fn python_sanity_check(python: Option<&str>) -> Vec<SanityCheckResult> {
+/// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
+pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<SanityCheck>> {
     let py = python.unwrap_or("python3");
     let mut results = Vec::new();
 
     // Helper: build a result from a command execution.
     // Always captures the raw output — consumers decide what to show.
-    let cmd_result = |check: SanityCheck, output: std::io::Result<std::process::Output>| -> SanityCheckResult {
+    let cmd_result = |check: SanityCheck, output: std::io::Result<std::process::Output>| -> GenericCheckResult<SanityCheck> {
         match output {
-            Ok(out) if out.status.success() => SanityCheckResult {
+            Ok(out) if out.status.success() => GenericCheckResult {
                 check,
                 passed: true,
                 message: String::from_utf8_lossy(&out.stdout).trim().to_string(),
             },
-            Ok(out) => SanityCheckResult {
+            Ok(out) => GenericCheckResult {
                 check,
                 passed: false,
                 message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
             },
-            Err(e) => SanityCheckResult {
+            Err(e) => GenericCheckResult {
                 check,
                 passed: false,
                 message: e.to_string(),
@@ -860,10 +849,10 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<SanityCheckResult> {
 
     // Helper: build a result from a python script execution.
     // Always captures the raw output — consumers decide what to show.
-    let script_result = |check: SanityCheck, outcome: Result<String, String>| -> SanityCheckResult {
+    let script_result = |check: SanityCheck, outcome: Result<String, String>| -> GenericCheckResult<SanityCheck> {
         match outcome {
-            Ok(msg) => SanityCheckResult { check, passed: true, message: msg.trim().to_string() },
-            Err(err) => SanityCheckResult { check, passed: false, message: err.trim().to_string() },
+            Ok(msg) => GenericCheckResult { check, passed: true, message: msg.trim().to_string() },
+            Err(err) => GenericCheckResult { check, passed: false, message: err.trim().to_string() },
         }
     };
 
@@ -882,7 +871,7 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<SanityCheckResult> {
                             _ => VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
                         };
                         if req.matches(&version) {
-                            SanityCheckResult {
+                            GenericCheckResult {
                                 check: SanityCheck::PythonVersion,
                                 passed: true,
                                 message: format!("Python {}", version),
@@ -892,7 +881,7 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<SanityCheckResult> {
                                 "windows" => ">=3.10.0, <3.14.0",
                                 _ => ">=3.10.0, <3.15.0",
                             };
-                            SanityCheckResult {
+                            GenericCheckResult {
                                 check: SanityCheck::PythonVersion,
                                 passed: false,
                                 message: format!(
@@ -902,19 +891,19 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<SanityCheckResult> {
                             }
                         }
                     }
-                    Err(_) => SanityCheckResult {
+                    Err(_) => GenericCheckResult {
                         check: SanityCheck::PythonVersion,
                         passed: false,
                         message: format!("Failed to parse Python version: {}", version_str),
                     },
                 }
             }
-            Ok(out) => SanityCheckResult {
+            Ok(out) => GenericCheckResult {
                 check: SanityCheck::PythonVersion,
                 passed: false,
                 message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
             },
-            Err(e) => SanityCheckResult {
+            Err(e) => GenericCheckResult {
                 check: SanityCheck::PythonVersion,
                 passed: false,
                 message: e.to_string(),

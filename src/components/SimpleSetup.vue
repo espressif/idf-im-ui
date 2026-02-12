@@ -135,15 +135,7 @@
             </n-icon>
           </template>
           <template #footer>
-            <div v-if="pythonCheckResults.length > 0" class="python-check-list">
-              <div v-for="(item, index) in pythonCheckResults" :key="index" class="python-check-row" :class="{ 'python-check-failed': !item.passed }">
-                <span class="python-check-icon">{{ item.passed ? '✓' : '✗' }}</span>
-                <div class="python-check-text">
-                  <span class="python-check-name">{{ item.display_name }}</span>
-                  <p v-if="item.hint" class="python-check-hint">{{ item.hint }}</p>
-                </div>
-              </div>
-            </div>
+            <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
               <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
@@ -189,6 +181,7 @@ import {
   ToolOutlined
 } from '@vicons/antd'
 import GlobalProgress from './GlobalProgress.vue'
+import CheckResultsList from './CheckResultsList.vue'
 import { useAppStore } from '../store'
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { app } from '@tauri-apps/api'
@@ -200,7 +193,8 @@ export default {
     NCollapse, NCollapseItem, NScrollbar,
     ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
     LoadingOutlined, DownloadOutlined, ToolOutlined,
-    GlobalProgress
+    GlobalProgress,
+    CheckResultsList
   },
   setup() {
     const router = useRouter()
@@ -760,64 +754,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 2rem;
-}
-
-.python-check-list {
-  width: 100%;
-  max-width: 560px;
-  margin: 1rem auto;
-  text-align: left;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.python-check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
-}
-
-.python-check-row:last-child {
-  border-bottom: none;
-}
-
-.python-check-row.python-check-failed {
-  background: #fef2f2;
-}
-
-.python-check-icon {
-  flex-shrink: 0;
-  font-size: 1.125rem;
-  font-weight: bold;
-}
-
-.python-check-row:not(.python-check-failed) .python-check-icon {
-  color: #16a34a;
-}
-
-.python-check-row.python-check-failed .python-check-icon {
-  color: #dc2626;
-}
-
-.python-check-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.python-check-name {
-  font-weight: 500;
-  color: #374151;
-}
-
-.python-check-hint {
-  margin: 0.25rem 0 0;
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.4;
 }
 
 .completion-actions,

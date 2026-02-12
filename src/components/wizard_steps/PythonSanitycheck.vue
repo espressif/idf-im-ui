@@ -8,15 +8,7 @@
             :description="python_sane ? t('pythonSanitycheck.status.ready.description') : t('pythonSanitycheck.status.setupRequired.description')"
             data-id="python-check-result">
             <template #footer>
-              <div v-if="checkResults.length" class="check-list" data-id="python-check-list">
-                <div v-for="(item, index) in checkResults" :key="index" class="check-row" :class="{ 'check-failed': !item.passed }">
-                  <span class="check-icon">{{ item.passed ? '✓' : '✗' }}</span>
-                  <div class="check-text">
-                    <span class="check-name">{{ item.display_name }}</span>
-                    <p v-if="item.hint" class="check-hint">{{ item.hint }}</p>
-                  </div>
-                </div>
-              </div>
+              <CheckResultsList :items="checkResults" data-id="python-check-list" />
               <div class="action-buttons" data-id="python-action-buttons">
                 <div v-if="!python_sane && os === 'windows'" class="install-section" data-id="python-install-section">
                   <n-button @click="install_python" type="warning" :loading="installing_python" :disabled="loading"
@@ -60,13 +52,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
 import { useAppStore } from '../../store'
+import CheckResultsList from '../CheckResultsList.vue'
 
 export default {
   name: 'PythonSanitycheck',
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin },
+  components: { NButton, NSpin, CheckResultsList },
   setup() {
     const { t } = useI18n()
     return { t }
@@ -177,64 +170,6 @@ export default {
 
 .manual-instructions li {
   margin-bottom: 0.5rem;
-}
-
-.check-list {
-  width: 100%;
-  max-width: 560px;
-  margin: 1rem auto;
-  text-align: left;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-.check-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
-}
-
-.check-row:last-child {
-  border-bottom: none;
-}
-
-.check-row.check-failed {
-  background: #fef2f2;
-}
-
-.check-icon {
-  flex-shrink: 0;
-  font-size: 1.125rem;
-  font-weight: bold;
-}
-
-.check-row:not(.check-failed) .check-icon {
-  color: #16a34a;
-}
-
-.check-row.check-failed .check-icon {
-  color: #dc2626;
-}
-
-.check-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.check-name {
-  font-weight: 500;
-  color: #374151;
-}
-
-.check-hint {
-  margin: 0.25rem 0 0;
-  font-size: 0.875rem;
-  color: #6b7280;
-  line-height: 1.4;
 }
 
 .n-card {

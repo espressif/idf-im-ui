@@ -40,6 +40,14 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 #[cfg(windows)]
 use std::mem;
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GenericCheckResult<T> {
+    pub check: T,
+    pub passed: bool,
+    pub message: String,
+}
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MirrorEntry {
     pub url: String,
