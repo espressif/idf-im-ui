@@ -152,6 +152,7 @@ const preRequisitesList = {
   archlinux: ["git","wget", "flex", "bison", "gperf", "ccache", "dfu-util", "cmake"], //"libffi", "openssl", "libusb" are installed by default
   opensuse: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "cmake"], //"libusb-1_0-0" is installed by default
   macos:["dfu-util", "cmake"],
+  windows: ["git"],
 }
 const prerequisites = process.env.PREREQUISITES_OS?
   preRequisitesList[process.env.PREREQUISITES_OS.split(":")[0].toLowerCase()] || [] : [];

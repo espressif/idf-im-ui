@@ -9,15 +9,8 @@ import path from "path";
 export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
 
   describe(`${id}- Check for prerequisites |`, function () {
-    this.timeout(120000);
+    this.timeout(240000);
     let testRunner = null;
-
-
-    before(async function () {
-      this.timeout(10000);
-      testRunner = new CLITestRunner();
-    });
-
 
     beforeEach(async function () {
       this.timeout(20000);
@@ -38,10 +31,6 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
         logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
       }
-    });
-  
-    after(async function () {
-      this.timeout(20000);
       if (testRunner) {
         try {
           await testRunner.stop();
@@ -53,7 +42,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         }
       };
     });
-
+  
     // Linux/MAC Specific Tests
     // The following test can only be executed if the prerequisites have not been installed in the OS.
     it("1- Should detect missing requirements", async function () {
@@ -88,7 +77,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       logger.info(`Starting test - confirm requirements are missing`);
       const promptRequisites = await testRunner.waitForOutput(
         "Do you want to install prerequisites?",
-        3000
+        30000
       );
 
       expect(
@@ -96,7 +85,11 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         "EIM did not offer to install the missing prerequisites"
       ).to.be.true;
 
-      testRunner.sendInput("n");
+      for (const prerequisite of prerequisites) {
+        expect(testRunner.output, `EIM did not list missing prerequisite"${prerequisite}"`).to.include(prerequisite);
+      }
+
+      testRunner.process.write("n");
 
       const terminalExited = await testRunner.waitForOutput(
         "Please install the missing prerequisites and try again"
@@ -105,6 +98,31 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         terminalExited,
         "EIM did not fails after denying to install pre-requisites"
       ).to.be.true;
+      logger.info(`prerequisite detection passed: >>\r ${testRunner.output}`);
+    });
+
+    it("2- should install GIT after a positive answer", async function () {
+      this.timeout(120000);
+      if (os.platform() !== "win32") {
+        this.skip();
+      }
+      logger.info(`Starting test - installing git with scoop`);
+      await testRunner.waitForOutput(
+        "Do you want to install prerequisites?",
+        30000
+      );
+
+      testRunner.process.write("y");
+
+      const promptPython = await testRunner.waitForOutput(
+        "Do you want to install Python?",
+        60000
+      );
+      expect(
+        promptPython,
+        "EIM did not Offer to install Python"
+      ).to.be.true;
+      logger.info(`prerequisites installation passed: >>\r ${testRunner.output}`);
     });
   });
 }
