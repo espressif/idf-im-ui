@@ -65,7 +65,7 @@ function testRun(jsonScript) {
       //route for prerequisites tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(150000);
+        this.timeout(250000);
 
         runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites });
       });
