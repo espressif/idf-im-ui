@@ -146,14 +146,15 @@ logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`
 
 //Capture list of prerequisites from environment variables
 const preRequisitesList = {
-  ubuntu: ["git","flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake"],
-  fedore:["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "libusb", "cmake"],
-  arch: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi", "openssl", "dfu-util", "libusb", "cmake"],
-  opensuse: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "libusb-1_0-0", "cmake"],
+  ubuntu: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake","libusb-1.0-0"],
+  debian: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake","libusb-1.0-0"],
+  fedora:["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "cmake"], //"libusb1-devel" is installed by default
+  archlinux: ["git","wget", "flex", "bison", "gperf", "ccache", "dfu-util", "cmake"], //"libffi", "openssl", "libusb" are installed by default
+  opensuse: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "cmake"], //"libusb-1_0-0" is installed by default
   macos:["dfu-util", "cmake"],
 }
 const prerequisites = process.env.PREREQUISITES_OS?
-  preRequisitesList[process.env.PREREQUISITES_OS.split(":")[0].toLowerCase()] : [];
+  preRequisitesList[process.env.PREREQUISITES_OS.split(":")[0].toLowerCase()] || [] : [];
 logger.info(`Prerequisites set to: ${prerequisites.join(", ")}`);
 
 export {

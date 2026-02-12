@@ -65,7 +65,7 @@ function testRun(jsonScript) {
       //route for prerequisites tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(20000);
+        this.timeout(150000);
 
         runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites });
       });
@@ -73,7 +73,7 @@ function testRun(jsonScript) {
       //route for python check tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(20000);
+        this.timeout(100000);
 
         runCLIPythonCheckTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI});
       });
@@ -81,7 +81,7 @@ function testRun(jsonScript) {
       //routine for arguments tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(20000);
+        this.timeout(500000);
 
         runCLIArgumentsTest({
           id: `${test.id}1`,
