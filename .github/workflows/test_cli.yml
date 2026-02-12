@@ -79,6 +79,10 @@ jobs:
             package_name: macos-x64
           - os: windows-latest
             package_name: windows-x64
+            distro_name: stock
+          # - os: windows-latest
+          #   package_name: windows-x64
+          #   distro_name: scoop
           - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
             package_name: linux-x64
             run_on: MirrorRunner
@@ -107,6 +111,7 @@ jobs:
           node-version: "20"
 
       - name: Set up Python
+        if: matrix.distro_name != 'scoop'
         uses: actions/setup-python@v6
         with:
           python-version: "3.13.8"
@@ -343,6 +348,44 @@ jobs:
         run: |
           ls ./artifacts/
 
+      - name: Expand node modules (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Set-Location -Path "./tests"
+          Expand-Archive node_modules.zip
+
+      - name: Remove python and git from PATH (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          echo $env:PATH
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\[Gg]it\\' }) -join ';'
+          echo $env:PATH
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Run prerequisites check and install (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"
+          $env:PREREQUISITES_OS="windows"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-CLI-win --file=CLI-prerequisites
+        continue-on-error: true
+
+      - name: Run python check and install (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-CLI-win --file=CLI-pythoncheck
+        continue-on-error: true
+
+
+
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -352,7 +395,6 @@ jobs:
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
-          Expand-Archive node_modules.zip
           npm run test-CLI-win --file=CLI-basic
         continue-on-error: true
 
