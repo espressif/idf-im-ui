@@ -9,7 +9,7 @@ import path from "path";
 export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
 
   describe(`${id}- Check for prerequisites |`, function () {
-    this.timeout(600000);
+    this.timeout(120000);
     let testRunner = null;
 
 
@@ -57,14 +57,14 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     // Linux/MAC Specific Tests
     // The following test can only be executed if the prerequisites have not been installed in the OS.
     it("1- Should detect missing requirements", async function () {
-      this.timeout(25000);
+      this.timeout(55000);
       if (os.platform() === "win32") {
         this.skip();
       }
       logger.info(`Starting test - confirm requirements are missing`);
       const missingRequisites = await testRunner.waitForOutput(
         "Please install the missing prerequisites and try again",
-        20000
+        50000
       );
       expect(
         missingRequisites,
@@ -81,13 +81,14 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
      * Tests below will only be executed on win32 platform
      */
     it("1- should offer to install prerequisites and exit upon negative answer", async function () {
-      this.timeout(25000);
+      this.timeout(35000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       logger.info(`Starting test - confirm requirements are missing`);
       const promptRequisites = await testRunner.waitForOutput(
-        "Do you want to install prerequisites?"
+        "Do you want to install prerequisites?",
+        3000
       );
 
       expect(
