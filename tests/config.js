@@ -151,7 +151,7 @@ const preRequisitesList = {
   fedora:["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "cmake"], //"libusb1-devel" is installed by default
   archlinux: ["git","wget", "flex", "bison", "gperf", "ccache", "dfu-util", "cmake"], //"libffi", "openssl", "libusb" are installed by default
   opensuse: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "libopenssl-devel", "dfu-util", "cmake"], //"libusb-1_0-0" is installed by default
-  macos:["dfu-util", "cmake"],
+  macos:["dfu-util"], //"git" and "cmake" are installed by default
   windows: ["git"],
 }
 const prerequisites = process.env.PREREQUISITES_OS?
