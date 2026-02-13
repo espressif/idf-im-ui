@@ -141,13 +141,13 @@ jobs:
           ls -la ./artifacts/
           chmod +x artifacts/eim
 
-      # Linux steps
       - name: Build node test dependencies on Linux runner (Linux only)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        if: matrix.os != 'windows-latest'
         working-directory: tests
         run: |
           npm ci
 
+      # Linux steps
       - name: Start test container (Linux only)
         if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
         run: |
@@ -218,7 +218,7 @@ jobs:
             "
         continue-on-error: true
 
-      - name: Install python (Linux Only)
+      - name: Install python on container (Linux Only)
         if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
         run: |
           docker exec test-runner \
@@ -262,22 +262,32 @@ jobs:
 
       # MacOS steps
 
+      - name: Run prerequisites check (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
+        run: |
+          export LOG_TO_FILE="true"
+          export PREREQUISITES_OS="macos"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_CLI_PATH="../artifacts/eim"
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"      
+          cd tests
+          npm run test-CLI --file=CLI-prerequisites
+        continue-on-error: true
+
       - name: Install pre-requisites (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
-          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
+          brew install dfu-util
 
       - name: Run IDF basic install test script (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           python3 --version
-          which python3
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
-          npm ci
           npm run test-CLI --file=CLI-basic
         continue-on-error: true
 
