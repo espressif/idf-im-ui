@@ -883,8 +883,8 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
 
 fn create_generic_check_result_from_command_output(check: SanityCheck, output: std::io::Result<std::process::Output>) -> GenericCheckResult<SanityCheck> {
     match output {
-        Ok (out) if out.status.success() => GenericCheckResult { check, passed: true, message: String::from_utf8_lossy(&out.stdout).trim().to_string() },
-        Ok (out) => GenericCheckResult { check, passed: false, message: String::from_utf8_lossy(&out.stderr).trim().to_string() },
+        Ok(out) if out.status.success() => GenericCheckResult { check, passed: true, message: String::from_utf8_lossy(&out.stdout).trim().to_string() },
+        Ok(out) => GenericCheckResult { check, passed: false, message: String::from_utf8_lossy(&out.stderr).trim().to_string() },
         Err(e) => GenericCheckResult { check, passed: false, message: e.to_string() },
     }
 }
@@ -894,19 +894,23 @@ fn detect_default_python() -> &'static str {
         // Check for python.exe first (python.org installs)
         if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
             if out.status.success() {
+                info!("Found python.exe on windows");
                 return "python";
             }
         }
         // Check for python3.exe (Scoop)
         if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
             if out.status.success() {
+                info!("Found python3.exe on windows");
                 return "python3";
             }
         }
 
         // Default to python if neither works, actual function reports any errors
+        warn!("No python.exe or python3.exe found on windows, returning default python");
         "python"
     } else {
+        info!("No windows detected, returning default python3");
         "python3"
     }
 }

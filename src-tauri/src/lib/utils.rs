@@ -40,6 +40,15 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 #[cfg(windows)]
 use std::mem;
 
+/// A generic result structure for representing check outcomes across different check types.
+/// 
+/// # Type Parameters
+/// * `T` - The check identifier type (e.g., `SanityCheck`, `PrerequisiteCheck`)
+/// 
+/// # Fields
+/// * `check` - The specific check that was performed
+/// * `passed` - Whether the check succeeded
+/// * `message` - Raw output or error message from the check
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct GenericCheckResult<T> {
     pub check: T,
