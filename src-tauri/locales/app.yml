@@ -51,11 +51,65 @@ python.sanitycheck.ok:
   en: Your Python meets the requirements
   cn: 你的 python 符合要求
 python.sanitycheck.fail:
-  en: Python is missing, or it does not meet the requirements. Please install python3 with pip, venv and ssl support and try again
-  cn: Python 缺失或不符合要求。请安装支持 pip、venv 和 SSL 的 Python3 并重试
+  en: "Python sanity check failed. See the [FAIL] entries above for details."
+  cn: "Python 环境检查未通过。请查看上方 [FAIL] 条目了解详情。"
 python.sanitycheck.fail_but_will_install:
   en: Python is missing, or it does not meet the requirements. The installer will now install Python for you.
   cn: Python 缺失或不符合要求。安装程序现在将为您安装 Python。
+python.sanitycheck.check.version:
+  en: Python Version
+  cn: Python 版本
+python.sanitycheck.check.pip:
+  en: pip
+  cn: pip
+python.sanitycheck.check.venv:
+  en: venv
+  cn: venv
+python.sanitycheck.check.stdlib:
+  en: Standard Library (json, os, platform)
+  cn: 标准库 (json, os, platform)
+python.sanitycheck.check.ctypes:
+  en: ctypes
+  cn: ctypes
+python.sanitycheck.check.ssl:
+  en: SSL/HTTPS
+  cn: SSL/HTTPS
+python.sanitycheck.hint.version:
+  en: "Install a supported Python version (3.10 to 3.13) from https://www.python.org/downloads/"
+  cn: "请从 https://www.python.org/downloads/ 安装受支持的 Python 版本 (3.10 到 3.13)"
+python.sanitycheck.hint.pip:
+  en: "Ensure pip is installed. Try running: python3 -m ensurepip --upgrade"
+  cn: "请确保已安装 pip。尝试运行：python3 -m ensurepip --upgrade"
+python.sanitycheck.hint.venv.linux:
+  en: "Run: sudo apt install python3-venv (Debian/Ubuntu) or the equivalent for your distro"
+  cn: "运行：sudo apt install python3-venv (Debian/Ubuntu) 或您发行版的等效命令"
+python.sanitycheck.hint.venv.macos:
+  en: "Reinstall Python from python.org — some Homebrew or system Python builds may exclude venv"
+  cn: "请从 python.org 重新安装 Python — 部分 Homebrew 或系统自带 Python 可能不包含 venv"
+python.sanitycheck.hint.venv.windows:
+  en: "Reinstall Python from python.org and ensure 'pip' is checked in the installer options"
+  cn: "请从 python.org 重新安装 Python，并确保安装选项中勾选了 'pip'"
+python.sanitycheck.hint.stdlib:
+  en: "Your Python installation appears incomplete or corrupted. Reinstall Python from https://www.python.org/downloads/"
+  cn: "您的 Python 安装可能不完整或已损坏。请从 https://www.python.org/downloads/ 重新安装"
+python.sanitycheck.hint.ctypes.linux:
+  en: "Install libffi development headers: sudo apt install libffi-dev (Debian/Ubuntu), then reinstall Python"
+  cn: "安装 libffi 开发头文件：sudo apt install libffi-dev (Debian/Ubuntu)，然后重新安装 Python"
+python.sanitycheck.hint.ctypes.macos:
+  en: "Run: xcode-select --install to ensure build tools are available"
+  cn: "运行：xcode-select --install 以确保构建工具可用"
+python.sanitycheck.hint.ctypes.windows:
+  en: "Reinstall Python from python.org"
+  cn: "请从 python.org 重新安装 Python"
+python.sanitycheck.hint.ssl.linux:
+  en: "Install OpenSSL development headers: sudo apt install libssl-dev (Debian/Ubuntu), then reinstall Python"
+  cn: "安装 OpenSSL 开发头文件：sudo apt install libssl-dev (Debian/Ubuntu)，然后重新安装 Python"
+python.sanitycheck.hint.ssl.macos:
+  en: "Run: brew install openssl, then reinstall Python. Ensure Python links against the correct OpenSSL"
+  cn: "运行：brew install openssl，然后重新安装 Python。确保 Python 链接到正确的 OpenSSL"
+python.sanitycheck.hint.ssl.windows:
+  en: "Reinstall Python from python.org — the official installer includes SSL support"
+  cn: "请从 python.org 重新安装 Python — 官方安装程序包含 SSL 支持"
 python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 Python?
@@ -66,8 +120,8 @@ python.install.failure:
   en: Python installation failed
   cn: Python 安装失败
 python.install.refuse:
-  en: Please install Python3 with pip and SSL support and try again
-  cn: 请安装支持 pip 和 SSL 的 Python3 并重试
+  en: Please install Python3 with pip, venv, and SSL support and try again
+  cn: 请安装支持 pip、venv 和 SSL 的 Python3 并重试
 wizard.installation_path.prompt:
   en: Please select the ESP-IDF installation location
   cn: 请选择 ESP-IDF 安装位置
