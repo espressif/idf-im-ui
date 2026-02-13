@@ -18,7 +18,7 @@ use idf_im_lib::tool_selection::{
 use std::collections::HashMap;
 
 use crate::cli::helpers::generic_confirm_with_default;
-
+use crate::shared::python_checks_i18n::{check_display_name, check_hint};
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
@@ -155,41 +155,6 @@ pub fn check_and_install_prerequisites(
             Ok(())
         }
     }
-}
-
-/// Returns a translated display name for a sanity check variant.
-fn check_display_name(check: idf_im_lib::python_utils::SanityCheck) -> String {
-    use idf_im_lib::python_utils::SanityCheck;
-    match check {
-        SanityCheck::PythonVersion => t!("python.sanitycheck.check.version"),
-        SanityCheck::Pip           => t!("python.sanitycheck.check.pip"),
-        SanityCheck::Venv          => t!("python.sanitycheck.check.venv"),
-        SanityCheck::StdLib        => t!("python.sanitycheck.check.stdlib"),
-        SanityCheck::Ctypes        => t!("python.sanitycheck.check.ctypes"),
-        SanityCheck::Ssl           => t!("python.sanitycheck.check.ssl"),
-    }
-    .to_string()
-}
-
-/// Returns an OS-aware translated resolution hint for a failed sanity check.
-fn check_hint(check: idf_im_lib::python_utils::SanityCheck) -> String {
-    use idf_im_lib::python_utils::SanityCheck;
-    let os = std::env::consts::OS;
-    match (check, os) {
-        (SanityCheck::PythonVersion, _)  => t!("python.sanitycheck.hint.version"),
-        (SanityCheck::Pip, _)            => t!("python.sanitycheck.hint.pip"),
-        (SanityCheck::StdLib, _)         => t!("python.sanitycheck.hint.stdlib"),
-        (SanityCheck::Venv, "macos")     => t!("python.sanitycheck.hint.venv.macos"),
-        (SanityCheck::Venv, "windows")   => t!("python.sanitycheck.hint.venv.windows"),
-        (SanityCheck::Venv, _)           => t!("python.sanitycheck.hint.venv.linux"),
-        (SanityCheck::Ctypes, "macos")   => t!("python.sanitycheck.hint.ctypes.macos"),
-        (SanityCheck::Ctypes, "windows") => t!("python.sanitycheck.hint.ctypes.windows"),
-        (SanityCheck::Ctypes, _)         => t!("python.sanitycheck.hint.ctypes.linux"),
-        (SanityCheck::Ssl, "macos")      => t!("python.sanitycheck.hint.ssl.macos"),
-        (SanityCheck::Ssl, "windows")    => t!("python.sanitycheck.hint.ssl.windows"),
-        (SanityCheck::Ssl, _)            => t!("python.sanitycheck.hint.ssl.linux"),
-    }
-    .to_string()
 }
 
 fn python_sanity_check(python: Option<&str>) -> Result<(), String> {

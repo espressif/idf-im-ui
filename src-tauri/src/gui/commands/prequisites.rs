@@ -5,6 +5,7 @@ use rust_i18n::t;
 use serde_json::{json, Value};
 use tauri::AppHandle;
 
+use crate::shared::python_checks_i18n::{check_display_name, check_hint};
 
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
@@ -122,39 +123,6 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
             false
         }
     }
-}
-
-/// Translated display name for a sanity check (GUI uses same locale keys as CLI).
-pub fn check_display_name(check: SanityCheck) -> String {
-    match check {
-        SanityCheck::PythonVersion => t!("python.sanitycheck.check.version"),
-        SanityCheck::Pip => t!("python.sanitycheck.check.pip"),
-        SanityCheck::Venv => t!("python.sanitycheck.check.venv"),
-        SanityCheck::StdLib => t!("python.sanitycheck.check.stdlib"),
-        SanityCheck::Ctypes => t!("python.sanitycheck.check.ctypes"),
-        SanityCheck::Ssl => t!("python.sanitycheck.check.ssl"),
-    }
-    .to_string()
-}
-
-/// OS-aware translated hint for a failed sanity check.
-pub fn check_hint(check: SanityCheck) -> String {
-    let os = std::env::consts::OS;
-    match (check, os) {
-        (SanityCheck::PythonVersion, _) => t!("python.sanitycheck.hint.version"),
-        (SanityCheck::Pip, _) => t!("python.sanitycheck.hint.pip"),
-        (SanityCheck::StdLib, _) => t!("python.sanitycheck.hint.stdlib"),
-        (SanityCheck::Venv, "macos") => t!("python.sanitycheck.hint.venv.macos"),
-        (SanityCheck::Venv, "windows") => t!("python.sanitycheck.hint.venv.windows"),
-        (SanityCheck::Venv, _) => t!("python.sanitycheck.hint.venv.linux"),
-        (SanityCheck::Ctypes, "macos") => t!("python.sanitycheck.hint.ctypes.macos"),
-        (SanityCheck::Ctypes, "windows") => t!("python.sanitycheck.hint.ctypes.windows"),
-        (SanityCheck::Ctypes, _) => t!("python.sanitycheck.hint.ctypes.linux"),
-        (SanityCheck::Ssl, "macos") => t!("python.sanitycheck.hint.ssl.macos"),
-        (SanityCheck::Ssl, "windows") => t!("python.sanitycheck.hint.ssl.windows"),
-        (SanityCheck::Ssl, _) => t!("python.sanitycheck.hint.ssl.linux"),
-    }
-    .to_string()
 }
 
 /// One item for the GUI: translated name, pass/fail, and hint when failed.

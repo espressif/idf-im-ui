@@ -34,9 +34,10 @@ use crate::gui::{
 };
 
 use super::{
-    prequisites::{check_display_name, check_hint, install_prerequisites, python_install, python_sanity_check},
+    prequisites::{install_prerequisites, python_install, python_sanity_check},
     settings,
 };
+use crate::shared::python_checks_i18n::{check_display_name, check_hint};
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {
