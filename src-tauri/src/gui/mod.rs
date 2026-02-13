@@ -238,6 +238,8 @@ pub fn run(log_level_override: Option<log::LevelFilter>) {
         env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
     }
 
+    let _ = setup_gui_logging(log_level_override);
+
     // Workaround for WebKitGTK DMA-BUF renderer crash on Nvidia + Wayland (#421).
     // The GBM buffer allocation fails when using the DMA-BUF renderer with
     // Nvidia's proprietary driver on Wayland, causing the app to crash.
@@ -253,11 +255,10 @@ pub fn run(log_level_override: Option<log::LevelFilter>) {
 
             if is_wayland && has_nvidia {
                 env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+                info!("Nvidia + Wayland detected: disabled WebKitGTK DMA-BUF renderer (WEBKIT_DISABLE_DMABUF_RENDERER=1)");
             }
         }
     }
-
-    let _ = setup_gui_logging(log_level_override);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
