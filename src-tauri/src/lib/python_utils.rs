@@ -781,32 +781,6 @@ fn run_install_python_env_script_with_features(
     output
 }
 
-/// Executes a Python script using the provided Python interpreter and returns the script's output.
-///
-/// # Parameters
-///
-/// * `script` - A reference to a string representing the Python script to be executed.
-/// * `python` - An optional reference to a string representing the Python interpreter to be used.
-///   If `None`, the function will default to using "python3".
-///
-/// # Returns
-///
-/// * `Result<String, String>` - On success, returns a `Result` containing the standard output of the Python script as a string.
-///   On error, returns a `Result` containing the standard error of the Python script as a string.
-pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, String> {
-    let output = command_executor::execute_command_direct(python.unwrap_or("python3"), &["-c", script]);
-    match output {
-        Ok(out) => {
-            if out.status.success() {
-                Ok(String::from_utf8_lossy(&out.stdout).to_string())
-            } else {
-                Err(String::from_utf8_lossy(&out.stderr).to_string())
-            }
-        }
-        Err(e) => Err(e.to_string()),
-    }
-}
-
 /// Performs a series of sanity checks for the Python interpreter.
 ///
 /// Runs six checks (version, pip, venv, standard library, ctypes, SSL/HTTPS)
@@ -822,127 +796,119 @@ pub fn run_python_script(script: &str, python: Option<&str>) -> Result<String, S
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
 pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<SanityCheck>> {
-    let py = python.unwrap_or("python3");
+    let py = python.unwrap_or(detect_default_python());
     let mut results = Vec::new();
 
-    // Helper: build a result from a command execution.
-    // Always captures the raw output — consumers decide what to show.
-    let cmd_result = |check: SanityCheck, output: std::io::Result<std::process::Output>| -> GenericCheckResult<SanityCheck> {
-        match output {
-            Ok(out) if out.status.success() => GenericCheckResult {
-                check,
-                passed: true,
-                message: String::from_utf8_lossy(&out.stdout).trim().to_string(),
-            },
-            Ok(out) => GenericCheckResult {
-                check,
-                passed: false,
-                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-            },
-            Err(e) => GenericCheckResult {
-                check,
-                passed: false,
-                message: e.to_string(),
-            },
-        }
-    };
-
-    // Helper: build a result from a python script execution.
-    // Always captures the raw output — consumers decide what to show.
-    let script_result = |check: SanityCheck, outcome: Result<String, String>| -> GenericCheckResult<SanityCheck> {
-        match outcome {
-            Ok(msg) => GenericCheckResult { check, passed: true, message: msg.trim().to_string() },
-            Err(err) => GenericCheckResult { check, passed: false, message: err.trim().to_string() },
-        }
-    };
-
     // ── 1. Python version ────────────────────────────────────────────
-    {
-        let output = command_executor::execute_command_direct(py, &["--version"]);
-        let result = match output {
-            Ok(out) if out.status.success() => {
-                let version_str = String::from_utf8_lossy(&out.stdout)
-                    .trim()
-                    .replace("Python ", "");
-                match Version::parse(&version_str) {
-                    Ok(version) => {
-                        let req = match std::env::consts::OS {
-                            "windows" => VersionReq::parse(">=3.10.0, <3.14.0").unwrap(),
-                            _ => VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
-                        };
-                        if req.matches(&version) {
-                            GenericCheckResult {
-                                check: SanityCheck::PythonVersion,
-                                passed: true,
-                                message: format!("Python {}", version),
-                            }
-                        } else {
-                            let required = match std::env::consts::OS {
-                                "windows" => ">=3.10.0, <3.14.0",
-                                _ => ">=3.10.0, <3.15.0",
-                            };
-                            GenericCheckResult {
-                                check: SanityCheck::PythonVersion,
-                                passed: false,
-                                message: format!(
-                                    "Python {} is not supported (required: {})",
-                                    version, required
-                                ),
-                            }
-                        }
-                    }
-                    Err(_) => GenericCheckResult {
-                        check: SanityCheck::PythonVersion,
-                        passed: false,
-                        message: format!("Failed to parse Python version: {}", version_str),
-                    },
-                }
-            }
-            Ok(out) => GenericCheckResult {
-                check: SanityCheck::PythonVersion,
-                passed: false,
-                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-            },
-            Err(e) => GenericCheckResult {
-                check: SanityCheck::PythonVersion,
-                passed: false,
-                message: e.to_string(),
-            },
-        };
-        results.push(result);
+    let version_result = check_python_version(py);
+
+    // Early return if Python version check failed - other checks are meaningless
+    if !version_result.passed {
+        results.push(version_result);
+        return results;
     }
+    results.push(version_result);
 
     // ── 2. pip ───────────────────────────────────────────────────────
-    results.push(cmd_result(
-        SanityCheck::Pip,
-        command_executor::execute_command_direct(py, &["-m", "pip", "--version"]),
-    ));
+    let pip_output = command_executor::execute_command_direct(py, &["-m", "pip", "--version"]);
+    results.push(create_generic_check_result_from_command_output(SanityCheck::Pip, pip_output));
 
     // ── 3. venv ──────────────────────────────────────────────────────
-    results.push(cmd_result(
-        SanityCheck::Venv,
-        command_executor::execute_command_direct(py, &["-m", "venv", "-h"]),
-    ));
+    let venv_output = command_executor::execute_command_direct(py, &["-m", "venv", "-h"]);
+    results.push(create_generic_check_result_from_command_output(SanityCheck::Venv, venv_output));
 
     // ── 4. Standard library ──────────────────────────────────────────
-    results.push(script_result(
-        SanityCheck::StdLib,
-        run_python_script(include_str!("../../python_scripts/sanity_check/import_standard_library.py"), python),
-    ));
+    let stdlib_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/import_standard_library.py")]);
+    results.push(create_generic_check_result_from_command_output(SanityCheck::StdLib, stdlib_output));
 
     // ── 5. ctypes ────────────────────────────────────────────────────
-    results.push(script_result(
-        SanityCheck::Ctypes,
-        run_python_script(include_str!("../../python_scripts/sanity_check/ctypes_check.py"), python),
-    ));
+    let ctypes_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/ctypes_check.py")]);
+    results.push(create_generic_check_result_from_command_output(SanityCheck::Ctypes, ctypes_output));
 
     // ── 6. SSL/HTTPS ─────────────────────────────────────────────────
-    results.push(script_result(
-        SanityCheck::Ssl,
-        run_python_script(include_str!("../../python_scripts/sanity_check/try_https.py"), python),
-    ));
+    let ssl_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")]);
+    results.push(create_generic_check_result_from_command_output(SanityCheck::Ssl, ssl_output));
 
     results
+}
+
+fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
+    // 1. Run command - early return on failure
+    let out = match command_executor::execute_command_direct(py, &["--version"]) {
+        Ok(out) if out.status.success() => out,
+        Ok(out) => return GenericCheckResult {
+            check: SanityCheck::PythonVersion,
+            passed: false,
+            message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        },
+        Err(e) => return GenericCheckResult {
+            check: SanityCheck::PythonVersion,
+            passed: false,
+            message: e.to_string(),
+        },
+    };
+
+    // 2. Parse version - early return on failure
+    let version_str = String::from_utf8_lossy(&out.stdout).trim().replace("Python ", "");
+    let version = match Version::parse(&version_str) {
+        Ok(v) => v,
+        Err(_) => return GenericCheckResult {
+            check: SanityCheck::PythonVersion,
+            passed: false,
+            message: format!("Failed to parse Python version: {}", version_str),
+        },
+    };
+
+    // 3. Check version requirement
+    let (req, required_str) = if cfg!(windows) {
+        (VersionReq::parse(">=3.10.0, <3.14.0").unwrap(), ">=3.10.0, <3.14.0")
+    } else {
+        (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0")
+    };
+
+    if req.matches(&version) {
+        GenericCheckResult {
+            check: SanityCheck::PythonVersion,
+            passed: true,
+            message: format!("Python {}", version),
+        }
+    } else {
+        GenericCheckResult {
+            check: SanityCheck::PythonVersion,
+            passed: false,
+            message: format!("Python {} is not supported (required: {})", version, required_str),
+        }
+    }
+}
+
+fn create_generic_check_result_from_command_output(check: SanityCheck, output: std::io::Result<std::process::Output>) -> GenericCheckResult<SanityCheck> {
+    match output {
+        Ok (out) if out.status.success() => GenericCheckResult { check, passed: true, message: String::from_utf8_lossy(&out.stdout).trim().to_string() },
+        Ok (out) => GenericCheckResult { check, passed: false, message: String::from_utf8_lossy(&out.stderr).trim().to_string() },
+        Err(e) => GenericCheckResult { check, passed: false, message: e.to_string() },
+    }
+}
+
+fn detect_default_python() -> &'static str {
+    if cfg!(windows) {
+        // Check for python.exe first (python.org installs)
+        if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
+            if out.status.success() {
+                return "python";
+            }
+        }
+        // Check for python3.exe (Scoop)
+        if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
+            if out.status.success() {
+                return "python3";
+            }
+        }
+
+        // Default to python if neither works, actual function reports any errors
+        "python"
+    } else {
+        "python3"
+    }
 }
 
 #[cfg(feature = "userustpython")]
