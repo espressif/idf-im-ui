@@ -4,7 +4,7 @@ use clap_complete::aot::Shell;
 use idf_im_lib::to_absolute_path;
 use std::path::PathBuf;
 
-const VERSION: &str = env!("CARGO_PKG_VERSION");
+const VERSION: &str = env!("EIM_VERSION_STRING");
 
 fn custom_styles() -> Styles {
     Styles::styled()
