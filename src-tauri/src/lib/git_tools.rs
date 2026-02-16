@@ -958,49 +958,39 @@ fn create_gitlink(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let gitlink_path = submodule_dir.join(".git");
 
-    // Normalize path to forward slashes for consistency
+    // Normalize to forward slashes for consistency in module layout
     let normalized_path = submodule_path.replace('\\', "/");
 
-    // Use PathBuf to correctly handle relative paths
-    let mut relative_path = PathBuf::new();
+    // IMPORTANT: modules dir is relative to the *parent git dir*
+    // For nested submodules, parent_git_dir will be something like:
+    //   <root>/.git/modules/components/cmock/CMock
+    // so nested modules live under:
+    //   <root>/.git/modules/components/cmock/CMock/modules/vendor/c_exception
+    let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
 
-    // Count directory depth
-    let path_components: Vec<&str> = normalized_path.split('/').collect();
-    let depth = path_components.len();
+    // Ensure modules dir exists so later steps can write config/HEAD/etc
+    fs::create_dir_all(&modules_dir)?;
 
-    // Add "../" for each level
-    for _ in 0..depth {
-        relative_path.push("..");
-    }
+    // Write .git file as ABSOLUTE path (avoids needing relative_path_from)
+    let modules_abs = modules_dir
+        .canonicalize()
+        .unwrap_or_else(|_| modules_dir.clone());
 
-    // Add the rest of the path
-    relative_path.push(".git");
-    relative_path.push("modules");
-
-    for component in path_components {
-        relative_path.push(component);
-    }
-
-    // Convert to string with forward slashes for Git compatibility
-    let gitlink_content = format!("gitdir: {}\n", relative_path.display().to_string().replace('\\', "/"));
-    fs::write(&gitlink_path, gitlink_content.clone())?;
-
+    let gitlink_content = format!(
+        "gitdir: {}\n",
+        modules_abs.display().to_string().replace('\\', "/")
+    );
+    fs::write(&gitlink_path, &gitlink_content)?;
     debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
 
-    // Create the reverse link
-    let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
-    let gitdir_file = modules_dir.join("gitdir");
-
-    // Use forward slashes for consistency
-    let workdir_path = submodule_dir
+    // Reverse link: <modules_dir>/gitdir contains absolute worktree path
+    let workdir_abs = submodule_dir
         .canonicalize()
         .unwrap_or_else(|_| submodule_dir.to_path_buf());
-
-    // Convert Windows path to forward slashes for Git compatibility
-    let workdir_str = workdir_path.display().to_string().replace('\\', "/");
-    fs::write(&gitdir_file, format!("{}\n", workdir_str))?;
-
-    debug!("Created gitdir link at {}", gitdir_file.display());
+    fs::write(
+        modules_dir.join("gitdir"),
+        format!("{}\n", workdir_abs.display().to_string().replace('\\', "/")),
+    )?;
 
     Ok(())
 }
@@ -1129,6 +1119,11 @@ fn checkout_submodule_worktree(
     checkout_tree_recursive(&repo, &tree, submodule_workdir)?;
 
     debug!("Checked out files to {}", submodule_workdir.display());
+
+    // Need this to prevent untracked files in the submodule workdir
+    populate_index_from_tree(&repo, &tree)?;
+
+    
     Ok(())
 }
 
@@ -1169,6 +1164,13 @@ fn checkout_tree_recursive(
             let subtree = repo.find_tree(entry_oid)?;
             checkout_tree_recursive(repo, &subtree, &target_path)?;
 
+        } else if entry_mode.is_link() {
+            // info!("********** Symlink entry: {}", entry_name);
+            // Symlink entries store their target path in blob content.
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            write_symlink_from_blob(repo, entry.oid().into(), &target_path)?;
         } else if entry_mode.is_blob() || entry_mode.is_executable() {
             // Ensure parent directory exists
             if let Some(parent) = target_path.parent() {
@@ -1189,6 +1191,39 @@ fn checkout_tree_recursive(
                 fs::set_permissions(&target_path, perms)?;
             }
         }
+    }
+
+    Ok(())
+}
+
+fn write_symlink_from_blob(
+    repo: &gix::Repository,
+    oid: gix::ObjectId,
+    target_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let object = repo.find_object(oid)?;
+    let blob = object.try_into_blob()?;
+    let link_target = std::str::from_utf8(blob.data.as_ref())
+        .map_err(|e| format!("Invalid UTF-8 in symlink target for {}: {}", target_path.display(), e))?
+        .trim_end_matches('\n');
+
+    if target_path.exists() {
+        if target_path.is_dir() {
+            fs::remove_dir_all(target_path)?;
+        } else {
+            fs::remove_file(target_path)?;
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(link_target, target_path)?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        // Fallback for platforms without standard symlink support in this path.
+        fs::write(target_path, link_target.as_bytes())?;
     }
 
     Ok(())
@@ -1657,10 +1692,10 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
 
             // CHECK OUT THE FILES
-            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-                error!("Error checking out files for branch {}: {}", branch, e);
-                anyhow::anyhow!("{}", e)
-            })?
+            // checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+            //     error!("Error checking out files for branch {}: {}", branch, e);
+            //     anyhow::anyhow!("{}", e)
+            // })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
