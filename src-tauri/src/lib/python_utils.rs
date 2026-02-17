@@ -890,28 +890,30 @@ fn create_generic_check_result_from_command_output(check: SanityCheck, output: s
 }
 
 fn detect_default_python() -> &'static str {
-    if cfg!(windows) {
-        // Check for python.exe first (python.org installs)
-        if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
-            if out.status.success() {
-                info!("Found python.exe on windows");
-                return "python";
+    match std::env::consts::OS {
+        "windows" => {
+            // Check for python.exe first (python.org installs)
+            if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
+                if out.status.success() {
+                    info!("Found python.exe on windows");
+                    return "python";
+                }
             }
-        }
-        // Check for python3.exe (Scoop)
-        if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
-            if out.status.success() {
-                info!("Found python3.exe on windows");
-                return "python3";
+            // Check for python3.exe (Scoop)
+            if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
+                if out.status.success() {
+                    info!("Found python3.exe on windows");
+                    return "python3";
+                }
             }
+            // Default to python if neither works, actual function reports any errors
+            warn!("No python.exe or python3.exe found on windows, returning default python");
+            "python"
         }
-
-        // Default to python if neither works, actual function reports any errors
-        warn!("No python.exe or python3.exe found on windows, returning default python");
-        "python"
-    } else {
-        info!("No windows detected, returning default python3");
-        "python3"
+        _ => {
+            info!("No windows detected, returning default python3");
+            "python3"
+        }
     }
 }
 
