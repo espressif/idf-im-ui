@@ -1164,6 +1164,10 @@ fn checkout_tree_recursive(
             let subtree = repo.find_tree(entry_oid)?;
             checkout_tree_recursive(repo, &subtree, &target_path)?;
 
+        } else if entry_mode.is_commit() {
+            // gitlink (submodule): materialize as a directory placeholder
+            // so the superproject doesnot see it as deleted
+            fs::create_dir_all(&target_path)?;
         } else if entry_mode.is_link() {
             // info!("********** Symlink entry: {}", entry_name);
             // Symlink entries store their target path in blob content.
