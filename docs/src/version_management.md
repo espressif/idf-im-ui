@@ -4,6 +4,7 @@ The Version Management dashboard is a new GUI feature that gives you full contro
 
 On this page, you can see a list of all your installed ESP-IDF versions. For each version, you can:
 
+  * **Open IDF Terminal**: Open terminal with the appropriate IDF activated
   * **Rename**: Change the name of the installed version.
   * **Fix/Reinstall**: Rerun the installation process to repair a corrupted environment.
   * **Open Folder**: Open the installation directory in your file explorer.
