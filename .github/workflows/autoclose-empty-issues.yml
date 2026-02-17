@@ -1,0 +1,133 @@
+name: Automatically Close Empty Bug Reports
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  check-issue-content:
+    name: Check if issue body is just the template
+    runs-on: ubuntu-latest
+    # Only run on issues that look like they came from the bug report button
+    if: contains(github.event.issue.title, '[Bug Report]')
+
+    permissions:
+      issues: write
+
+    steps:
+      - name: Check for meaningful content
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = context.payload.issue.body || '';
+            const issueNumber = context.payload.issue.number;
+            const author = context.payload.issue.user.login;
+
+            // ── Helpers ────────────────────────────────────────────────────
+
+            // Strip the structured fields that the app fills in automatically
+            // (OS info, App Version) so we only judge what the *user* wrote.
+            function stripAutoFilledFields(text) {
+              return text
+                .replace(/- \*\*OS info\*\*:.*$/gm, '')
+                .replace(/- \*\*App Version\*\*:.*$/gm, '');
+            }
+
+            // Section headers and placeholder lines from the template
+            const TEMPLATE_LINES = new Set([
+              '## system information',
+              '## description',
+              'please describe the issue you encountered:',
+              '## steps to reproduce',
+              '## expected behavior',
+              '## actual behavior',
+              '## logs',
+              'please attach logs from the app logs folder.',
+              '## additional information',
+            ]);
+
+            // Numbered placeholder lines like "1.", "2.", "3."
+            const STEP_PLACEHOLDER = /^\d+\.$/;
+
+            function isTemplateLine(line) {
+              const normalized = line.trim().toLowerCase();
+              return (
+                normalized === '' ||
+                TEMPLATE_LINES.has(normalized) ||
+                STEP_PLACEHOLDER.test(normalized)
+              );
+            }
+
+            // ── Analysis ───────────────────────────────────────────────────
+
+            const strippedBody = stripAutoFilledFields(body);
+            const lines = strippedBody.split('\n');
+            const meaningfulLines = lines.filter(line => !isTemplateLine(line));
+
+            const hasContent = meaningfulLines.length > 0;
+
+            console.log(`Issue #${issueNumber} by @${author}`);
+            console.log(`Total lines: ${lines.length}`);
+            console.log(`Meaningful lines: ${meaningfulLines.length}`);
+            if (meaningfulLines.length > 0) {
+              console.log('Meaningful content found:', meaningfulLines);
+            }
+
+            if (hasContent) {
+              console.log('✅ Issue has meaningful content — leaving it open.');
+              return;
+            }
+
+            // ── Close the empty issue ──────────────────────────────────────
+
+            console.log('⚠️  Issue appears to be an empty template — closing.');
+
+            const closeComment = `
+            Hi @${author}! 👋
+
+            It looks like this issue was submitted with just the auto-generated template and no additional details filled in — this can happen if the **Report Issue** button is clicked by accident.
+
+            **If it was a misclick**, no worries at all! We're closing this issue automatically. ✅
+
+            **If you actually ran into a problem**, please re-open this issue (or file a new one) and include:
+
+            - 📝 **A description** of what went wrong
+            - 🔁 **Steps to reproduce** the issue
+            - ✅ **Expected** vs ❌ **actual** behavior
+            - 📋 **Logs** from the app's logs folder — these are really helpful for diagnosing installation problems!
+
+            The more detail you can share, the faster we can help. Thanks for using ESP-IDF Installation Manager!
+            `.trim();
+
+            // Post the comment
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: closeComment,
+            });
+
+            // Add a label so these are easy to filter/audit later
+            // (create the label in your repo first if it doesn't exist)
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: ['auto-closed: empty template'],
+              });
+            } catch (labelError) {
+              // Non-fatal — label might not exist yet; log and continue
+              console.warn('Could not add label:', labelError.message);
+            }
+
+            // Close the issue
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              state: 'closed',
+              state_reason: 'not_planned',
+            });
+
+            console.log(`✅ Issue #${issueNumber} closed and commented.`);
