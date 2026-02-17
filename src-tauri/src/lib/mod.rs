@@ -242,10 +242,20 @@ pub fn run_powershell_script(script: &str) -> Result<String, std::io::Error> {
     match std::env::consts::OS {
         "windows" => match command_executor::get_executor().run_script_from_string(script) {
             Ok(output) => {
-                trace!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-                trace!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+              if output.status.success() {
+                  trace!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+                  trace!("stderr: {}", String::from_utf8_lossy(&output.stderr));
                 String::from_utf8(output.stdout)
                     .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+              } else {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                error!("PowerShell script failed with status: {}", output.status);
+                error!("stderr: {}", stderr);
+                Err(std::io::Error::new(
+                  std::io::ErrorKind::Other,
+                  format!("PowerShell script failed: {}", stderr),
+                ))
+              }
             }
             Err(err) => Err(err),
         },
