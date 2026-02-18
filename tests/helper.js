@@ -55,13 +55,13 @@ function getPlatformKey_eim() {
 function getOSName() {
   const platform = os.platform();
   if (platform === "linux") {
-    return "linux";
+    return "Ubuntu";
   }
   if (platform === "darwin") {
-    return "macOS";
+    return "MacOS";
   }
   if (platform === "win32") {
-    return "windows";
+    return "Windows";
   }
   return "Unknown OS";
 }

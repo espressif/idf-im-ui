@@ -31,6 +31,8 @@ import { runInstallVerification } from "./scripts/installationVerification.test.
 import { runGUIAfterInstallTest } from "./scripts/GUIAfterInstall.test.js";
 import { runGUIOfflineInstallTest } from "./scripts/GUIOfflineInstall.test.js";
 import { runGUIVersionManagementTest } from "./scripts/GUIVersionManagement.test.js";
+import { runGUIPrerequisitesTest } from "./scripts/GUIPrerequisite.test.js";
+import { runGUIPythonCheckTest } from "./scripts/GUIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import {
   IDFDefaultVersion,
@@ -38,6 +40,7 @@ import {
   EIMGUIVersion,
   INSTALLFOLDER,
   TOOLSFOLDER,
+  prerequisites,
 } from "./config.js";
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
@@ -64,6 +67,24 @@ function testRun(script) {
           pathToEIM: pathToEIMGUI,
           eimVersion: EIMGUIVersion,
         });
+      });
+    } else if (test.type === "prerequisites") {
+      //routine for prerequisites test
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(60000);
+
+        runGUIPrerequisitesTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMGUI,
+          prerequisites,
+        });
+      });
+    } else if (test.type === "pythoncheck") {
+      //routine for python check test
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(100000);
+
+        runGUIPythonCheckTest({ id: `${test.id}1`, pathToEIM: pathToEIMGUI });
       });
     } else if (test.type === "default") {
       //routine for default simplified installation

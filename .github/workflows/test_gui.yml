@@ -72,11 +72,6 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13.8"
-
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
@@ -87,6 +82,12 @@ jobs:
           run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
+
+      - name: Set up Python
+        if: matrix.os != 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.8"
 
       - name: Get CLI application version number (non-Windows)
         if: matrix.os != 'windows-latest'
@@ -164,11 +165,11 @@ jobs:
         run: |
           ls ./artifacts/
 
-      - name: Update Python (Windows)
+      - name: Setup Python (Windows)
         if: matrix.os == 'windows-latest'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
@@ -241,13 +242,16 @@ jobs:
         include:
           - os: ubuntu-latest
             package_name: linux-x64
-            run_on: GitHub
-          - os: windows-latest
-            package_name: windows-x64
-            run_on: GitHub
+            distro_name: ubuntu
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
-            run_on: ExtraRunner
+            distro_name: ubuntu
+          - os: windows-latest
+            package_name: windows-x64
+            distro_name: stock
+          # - os: windows-latest
+          #   package_name: windows-x64
+          #   distro_name: scoop
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -272,11 +276,6 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.13.8"
-
       - name: Install Tauri-Driver
         run: |
           cargo install tauri-driver
@@ -291,6 +290,12 @@ jobs:
           run-id: ${{ inputs.run_id }}
 
       # Non-Windows steps
+
+      - name: Set up Python
+        if: matrix.os != 'windows-latest'
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13.8"
 
       - name: Get GUI application version number (non-Windows)
         if: matrix.os != 'windows-latest'
@@ -311,13 +316,49 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 webkit2gtk-driver xvfb
+          sudo apt-get install -y webkit2gtk-driver xvfb
 
       - name: Start XVFB (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo Xvfb :99 -ac -screen 0 1920x1080x24 &
           echo "DISPLAY=:99" >> $GITHUB_ENV
+
+      - name: Run prerequisites check (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |    
+          export LOG_TO_FILE="true"
+          export PREREQUISITES_OS="${{ matrix.distro_name || 'ubuntu:24.04' }}"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_GUI_PATH="../artifacts/eim"
+          export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
+          cd tests
+          npm ci
+          npm run test-GUI --file=GUI-prerequisites
+        continue-on-error: true
+
+      - name: Install dependencies (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev
+
+      - name: Run python check (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+        run: |
+          export PATH=$(echo "$PATH" | tr ':' '\n' | grep -iv 'python' | tr '\n' ':' | sed 's/:$//')
+          sudo mv /usr/bin/python3 /usr/bin/python3.bak 2>/dev/null || true
+          sudo mv /bin/python3 /bin/python3.bak 2>/dev/null || true
+          which -a python3 || echo "Python not found in PATH"
+          export LOG_TO_FILE="true"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_GUI_PATH="../artifacts/eim"
+          export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
+          cd tests
+          npm run test-GUI --file=GUI-pythoncheck
+          sudo mv /usr/bin/python3.bak /usr/bin/python3 2>/dev/null || true
+          sudo mv /bin/python3.bak /bin/python3 2>/dev/null || true
+        continue-on-error: true
 
       - name: Run IDF basic install test script using GUI (non-Windows)
         if: matrix.os != 'windows-latest'
@@ -328,7 +369,6 @@ jobs:
           export EIM_GUI_PATH="../artifacts/eim"
           export EIM_GUI_VERSION="${{ env.GUI_TAG }}"
           cd tests
-          npm ci
           npm run test-GUI --file=GUI-basic
         continue-on-error: true
 
@@ -360,17 +400,52 @@ jobs:
         run: |
           ls ./artifacts/
 
-      - name: Update Python (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Setup Python (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name != 'scoop'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       - name: Update WebView2 Runtime
         if: matrix.os == 'windows-latest'
         run: |
           Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
           Start-Process -FilePath setup.exe -Verb RunAs -Wait
+
+      - name: Setup node modules (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Set-Location -Path "./tests"
+          Expand-Archive node_modules.zip
+
+      - name: Remove python and git from PATH (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\[Gg]it\\' }) -join ';'
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Run prerequisites check (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"   
+          $env:PREREQUISITES_OS="${{ matrix.distro_name || 'windows' }}"
+          $env:PACKAGE_NAME="${{ matrix.package_name }}"
+          $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-GUI-win --file=GUI-prerequisites
+        continue-on-error: true
+
+      - name: Run python check (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"        
+          $env:PACKAGE_NAME="${{ matrix.package_name }}"
+          $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-GUI-win --file=GUI-pythoncheck
 
       - name: Run IDF basic install test script using GUI (Windows)
         if: matrix.os == 'windows-latest'
@@ -381,7 +456,6 @@ jobs:
           $env:EIM_GUI_PATH = "..\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          Expand-Archive node_modules.zip
           npm run test-GUI-win --file=GUI-basic
         continue-on-error: true
 
