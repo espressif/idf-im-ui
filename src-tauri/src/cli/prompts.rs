@@ -18,7 +18,7 @@ use idf_im_lib::tool_selection::{
 use std::collections::HashMap;
 
 use crate::cli::helpers::generic_confirm_with_default;
-use crate::shared::python_checks_i18n::{check_display_name, check_hint};
+use idf_im_lib::python_utils::SanityCheckLocale;
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
@@ -161,7 +161,7 @@ fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
     let results = idf_im_lib::python_utils::python_sanity_check(python);
     let mut all_ok = true;
     for result in &results {
-        let name = check_display_name(result.check);
+        let name = t!(result.check.display_key()).to_string();
         if result.passed {
             debug!("[PASS] {}: {}", name, result.message);
             println!("  [PASS] {}", name);
@@ -169,7 +169,7 @@ fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
             all_ok = false;
             debug!("[FAIL] {}: {}", name, result.message);
             println!("  [FAIL] {}", name);
-            println!("         Hint: {}", check_hint(result.check));
+            println!("         Hint: {}", t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string());
         }
     }
     if all_ok {

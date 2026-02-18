@@ -1,11 +1,9 @@
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
-use idf_im_lib::python_utils::SanityCheck;
+use idf_im_lib::python_utils::SanityCheckLocale;
 use log::{error, warn};
 use rust_i18n::t;
 use serde_json::{json, Value};
 use tauri::AppHandle;
-
-use crate::shared::python_checks_i18n::{check_display_name, check_hint};
 
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
@@ -143,19 +141,20 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<C
     results
         .iter()
         .map(|r| {
-            let display_name = check_display_name(r.check);
+            let display_name = t!(r.check.display_key()).to_string();
+            let hint = t!(r.check.hint_key_for_os(std::env::consts::OS)).to_string();
             if !r.passed {
                 warn!("[FAIL] {}: {}", display_name, r.message);
                 send_message(
                     &app_handle,
-                    format!("{} — {}", display_name, check_hint(r.check)),
+                    format!("{} — {}", display_name, hint),
                     "warning".to_string(),
                 );
             }
             CheckResultItem {
                 display_name,
                 passed: r.passed,
-                hint: if r.passed { None } else { Some(check_hint(r.check)) },
+                hint: if r.passed { None } else { Some(hint) },
             }
         })
         .collect()

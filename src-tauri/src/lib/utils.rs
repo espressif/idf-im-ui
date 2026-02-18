@@ -56,6 +56,31 @@ pub struct GenericCheckResult<T> {
     pub message: String,
 }
 
+impl<T> GenericCheckResult<T> {
+    /// Builds a `GenericCheckResult` from the outcome of a command execution.
+    pub fn from_command_output(
+        check: T,
+        result: std::io::Result<std::process::Output>,
+    ) -> Self {
+        match result {
+            Ok(out) if out.status.success() => GenericCheckResult {
+                check,
+                passed: true,
+                message: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+            },
+            Ok(out) => GenericCheckResult {
+                check,
+                passed: false,
+                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            },
+            Err(e) => GenericCheckResult {
+                check,
+                passed: false,
+                message: e.to_string(),
+            },
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MirrorEntry {

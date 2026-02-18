@@ -35,6 +35,45 @@ pub enum SanityCheck {
     Ssl,
 }
 
+/// Trait for mapping a sanity check to its i18n locale keys (dynamic key generation).
+/// Translation is done by the app (CLI/GUI); the library stays i18n-free.
+pub trait SanityCheckLocale {
+    /// Locale key for the check's display name (e.g. `python.sanitycheck.check.version`).
+    fn display_key(&self) -> &'static str;
+    /// Locale key for the check's resolution hint for the given OS.
+    fn hint_key_for_os(&self, os: &str) -> &'static str;
+}
+
+impl SanityCheckLocale for SanityCheck {
+    fn display_key(&self) -> &'static str {
+        match self {
+            SanityCheck::PythonVersion => "python.sanitycheck.check.version",
+            SanityCheck::Pip => "python.sanitycheck.check.pip",
+            SanityCheck::Venv => "python.sanitycheck.check.venv",
+            SanityCheck::StdLib => "python.sanitycheck.check.stdlib",
+            SanityCheck::Ctypes => "python.sanitycheck.check.ctypes",
+            SanityCheck::Ssl => "python.sanitycheck.check.ssl",
+        }
+    }
+
+    fn hint_key_for_os(&self, os: &str) -> &'static str {
+        match (self, os) {
+            (SanityCheck::PythonVersion, _) => "python.sanitycheck.hint.version",
+            (SanityCheck::Pip, _) => "python.sanitycheck.hint.pip",
+            (SanityCheck::StdLib, _) => "python.sanitycheck.hint.stdlib",
+            (SanityCheck::Venv, "macos") => "python.sanitycheck.hint.venv.macos",
+            (SanityCheck::Venv, "windows") => "python.sanitycheck.hint.venv.windows",
+            (SanityCheck::Venv, _) => "python.sanitycheck.hint.venv.linux",
+            (SanityCheck::Ctypes, "macos") => "python.sanitycheck.hint.ctypes.macos",
+            (SanityCheck::Ctypes, "windows") => "python.sanitycheck.hint.ctypes.windows",
+            (SanityCheck::Ctypes, _) => "python.sanitycheck.hint.ctypes.linux",
+            (SanityCheck::Ssl, "macos") => "python.sanitycheck.hint.ssl.macos",
+            (SanityCheck::Ssl, "windows") => "python.sanitycheck.hint.ssl.windows",
+            (SanityCheck::Ssl, _) => "python.sanitycheck.hint.ssl.linux",
+        }
+    }
+}
+
 /// Runs a Python script from a specified file with optional arguments and environment variables.
 /// todo: check documentation
 /// # Parameters
@@ -811,23 +850,23 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<Sanit
 
     // ── 2. pip ───────────────────────────────────────────────────────
     let pip_output = command_executor::execute_command_direct(py, &["-m", "pip", "--version"]);
-    results.push(create_generic_check_result_from_command_output(SanityCheck::Pip, pip_output));
+    results.push(GenericCheckResult::from_command_output(SanityCheck::Pip, pip_output));
 
     // ── 3. venv ──────────────────────────────────────────────────────
     let venv_output = command_executor::execute_command_direct(py, &["-m", "venv", "-h"]);
-    results.push(create_generic_check_result_from_command_output(SanityCheck::Venv, venv_output));
+    results.push(GenericCheckResult::from_command_output(SanityCheck::Venv, venv_output));
 
     // ── 4. Standard library ──────────────────────────────────────────
     let stdlib_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/import_standard_library.py")]);
-    results.push(create_generic_check_result_from_command_output(SanityCheck::StdLib, stdlib_output));
+    results.push(GenericCheckResult::from_command_output(SanityCheck::StdLib, stdlib_output));
 
     // ── 5. ctypes ────────────────────────────────────────────────────
     let ctypes_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/ctypes_check.py")]);
-    results.push(create_generic_check_result_from_command_output(SanityCheck::Ctypes, ctypes_output));
+    results.push(GenericCheckResult::from_command_output(SanityCheck::Ctypes, ctypes_output));
 
     // ── 6. SSL/HTTPS ─────────────────────────────────────────────────
     let ssl_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")]);
-    results.push(create_generic_check_result_from_command_output(SanityCheck::Ssl, ssl_output));
+    results.push(GenericCheckResult::from_command_output(SanityCheck::Ssl, ssl_output));
 
     results
 }
@@ -860,10 +899,9 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     };
 
     // 3. Check version requirement
-    let (req, required_str) = if cfg!(windows) {
-        (VersionReq::parse(">=3.10.0, <3.14.0").unwrap(), ">=3.10.0, <3.14.0")
-    } else {
-        (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0")
+    let (req, required_str) = match std::env::consts::OS {
+        "windows" => (VersionReq::parse(">=3.10.0, <3.14.0").unwrap(), ">=3.10.0, <3.14.0"),
+        _ => (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0"),
     };
 
     if req.matches(&version) {
@@ -878,14 +916,6 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
             passed: false,
             message: format!("Python {} is not supported (required: {})", version, required_str),
         }
-    }
-}
-
-fn create_generic_check_result_from_command_output(check: SanityCheck, output: std::io::Result<std::process::Output>) -> GenericCheckResult<SanityCheck> {
-    match output {
-        Ok(out) if out.status.success() => GenericCheckResult { check, passed: true, message: String::from_utf8_lossy(&out.stdout).trim().to_string() },
-        Ok(out) => GenericCheckResult { check, passed: false, message: String::from_utf8_lossy(&out.stderr).trim().to_string() },
-        Err(e) => GenericCheckResult { check, passed: false, message: e.to_string() },
     }
 }
 

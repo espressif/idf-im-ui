@@ -15,9 +15,6 @@ use log::{debug, info};
 #[cfg(feature = "cli")]
 pub mod cli;
 
-#[cfg(any(feature = "cli", feature = "gui"))]
-pub mod shared;
-
 rust_i18n::i18n!("locales", fallback = "en");
 
 fn set_locale(locale: &Option<String>) {

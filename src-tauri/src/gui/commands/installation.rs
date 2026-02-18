@@ -37,7 +37,7 @@ use super::{
     prequisites::{install_prerequisites, python_install, python_sanity_check},
     settings,
 };
-use crate::shared::python_checks_i18n::{check_display_name, check_hint};
+use idf_im_lib::python_utils::SanityCheckLocale;
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {
@@ -1641,8 +1641,10 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             for result in &idf_im_lib::python_utils::python_sanity_check(None) {
                 if !result.passed {
                     python_sane = false;
-                    warn!("[FAIL] {}: {}", check_display_name(result.check), result.message);
-                    let msg = format!("{} — {}", check_display_name(result.check), check_hint(result.check));
+                    let name = rust_i18n::t!(result.check.display_key()).to_string();
+                    let hint = rust_i18n::t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string();
+                    warn!("[FAIL] {}: {}", name, result.message);
+                    let msg = format!("{} — {}", name, hint);
                     emit_log_message(&app_handle, MessageLevel::Warning, msg);
                 }
             }
