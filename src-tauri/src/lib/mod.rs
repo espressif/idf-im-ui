@@ -1328,39 +1328,17 @@ fn decompress_tar_xz(
 ) -> Result<(), DecompressionError> {
     let file = File::open(archive_path)?;
 
-    info!("Decompressing {} to {}", archive_path.display(), destination_path.display());
+    info!(
+        "Streaming tar.xz decompression: {} -> {}",
+        archive_path.display(),
+        destination_path.display()
+    );
 
     let decoder = XzDecoder::new(BufReader::new(file));
     let mut archive = Archive::new(decoder);
+    archive.unpack(destination_path)?;
 
-    let mut files: u64 = 0;
-    let mut dirs: u64 = 0;
-    let mut total_bytes: u64 = 0;
-
-    for entry_res in archive.entries()? {
-        let mut entry = entry_res?;
-        let path_for_log = entry.path().map(|p| p.into_owned()).ok();
-        let is_dir = entry.header().entry_type().is_dir();
-        let size = entry.size();
-        let kind = if is_dir { "directory" } else { "file" };
-
-        if let Some(p) = &path_for_log {
-            debug!("Extracting {}: '{}' ({} bytes)", kind, p.display(), size);
-        } else {
-            debug!("Extracting {}: <unprintable path> ({} bytes)", kind, size);
-        }
-
-        entry.unpack_in(destination_path)?;
-
-        if is_dir {
-            dirs += 1;
-        } else {
-            files += 1;
-            total_bytes = total_bytes.saturating_add(size);
-        }
-    }
-
-    info!("Extraction complete: {} files, {} dirs, {} bytes written", files, dirs, total_bytes);
+    info!("Extraction of {} complete", archive_path.display());
 
     Ok(())
 }
