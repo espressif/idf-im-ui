@@ -1158,6 +1158,7 @@ fn checkout_tree_recursive(
         let target_path = target_dir.join(entry_name.to_path_lossy().as_ref());
 
         if entry_mode.is_tree() {
+            debug!("Tree entry: {}", entry_name);
             // Create directory and recurse
             fs::create_dir_all(&target_path)?;
 
@@ -1165,17 +1166,19 @@ fn checkout_tree_recursive(
             checkout_tree_recursive(repo, &subtree, &target_path)?;
 
         } else if entry_mode.is_commit() {
+            debug!("Commit entry: {}", entry_name);
             // gitlink (submodule): materialize as a directory placeholder
             // so the superproject doesnot see it as deleted
             fs::create_dir_all(&target_path)?;
         } else if entry_mode.is_link() {
-            // info!("********** Symlink entry: {}", entry_name);
+            debug!("Symlink entry: {}", entry_name);
             // Symlink entries store their target path in blob content.
             if let Some(parent) = target_path.parent() {
                 fs::create_dir_all(parent)?;
             }
             write_symlink_from_blob(repo, entry.oid().into(), &target_path)?;
         } else if entry_mode.is_blob() || entry_mode.is_executable() {
+            debug!("Blob entry: {}", entry_name);
             // Ensure parent directory exists
             if let Some(parent) = target_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -1694,12 +1697,6 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             // Set HEAD
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
-
-            // CHECK OUT THE FILES
-            // checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-            //     error!("Error checking out files for branch {}: {}", branch, e);
-            //     anyhow::anyhow!("{}", e)
-            // })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
