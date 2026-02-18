@@ -378,19 +378,25 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                 }
             };
 
-            // check with which command
+            // Check if tools are available using "command -v" via shell.
+            // We use "command -v" instead of "which" because "which" is an external
+            // binary that may not be installed on minimal Linux distributions
+            // (e.g. Fedora containers).
             list_of_required_tools.retain(|&tool| {
-                match command_executor::execute_command("which", &["-a", tool]) {
+                match command_executor::execute_command(
+                    "sh",
+                    &["-c", &format!("command -v {}", tool)],
+                ) {
                     Ok(o) if o.status.success() => {
                         debug!("{} is already installed: {:?}", tool, o);
                         false // Tool found, so remove it from the list (don't retain).
                     }
                     Ok(o) => {
-                        debug!("'which' check for {} failed: {:?}", tool, o);
+                        debug!("'command -v' check for {} failed: {:?}", tool, o);
                         true
                     }
                     Err(e) => {
-                        debug!("'which' check for {} failed with error: {:?}", tool, e);
+                        debug!("'command -v' check for {} failed with error: {:?}", tool, e);
                         true
                     }
                 }
@@ -499,8 +505,10 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
         }
         "macos" => {
             for tool in list_of_required_tools {
-                let output =
-                    command_executor::execute_command("zsh", &["-c", &format!("which {}", tool)]);
+                let output = command_executor::execute_command(
+                    "zsh",
+                    &["-c", &format!("command -v {}", tool)],
+                );
                 match output {
                     Ok(o) => {
                         if o.status.success() {

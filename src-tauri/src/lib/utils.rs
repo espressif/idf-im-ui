@@ -79,19 +79,30 @@ impl Ord for MirrorEntry {
 /// - `Ok(String)`: If the git executable is found, the function returns a `Result` containing the path to the git executable as a `String`.
 /// - `Err(String)`: If the git executable is not found or an error occurs during the process of locating the git executable, the function returns a `Result` containing an error message as a `String`.
 pub fn get_git_path() -> Result<String, String> {
-    let cmd = match std::env::consts::OS {
-        "windows" => "where",
-        _ => "which",
+    let output = match std::env::consts::OS {
+        "windows" => execute_command("where", &["git"]),
+        // Use "command -v" via shell instead of "which" since "which" may not be
+        // installed on minimal Linux distributions (e.g. Fedora containers).
+        _ => execute_command("sh", &["-c", "command -v git"]),
     };
 
-    let output = execute_command(cmd, &["git"]).expect("failed to execute process");
-
-    if output.status.success() {
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.trim().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        Err(stderr.trim().to_string())
+    match output {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            Ok(stdout.trim().to_string())
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!(
+                "git not found: {}",
+                if stderr.is_empty() {
+                    "not installed or not in PATH".to_string()
+                } else {
+                    stderr.trim().to_string()
+                }
+            ))
+        }
+        Err(e) => Err(format!("failed to check for git: {}", e)),
     }
 }
 
