@@ -7,6 +7,7 @@ use log::info;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
+use std::process::ExitStatus;
 use std::process::Output;
 
 use log::warn;
@@ -330,7 +331,7 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result<Output> {
+pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result<ExitStatus> {
     let installation = match list_installed_versions() {
         Ok(versions) => versions.into_iter().find(|v| v.id == identifier || v.name == identifier || v.path == identifier),
         Err(e) => {
@@ -364,8 +365,8 @@ pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result
     println!("Running command in context of IDF version {}", identifier);
 
     let executor = crate::command_executor::get_executor();
-    match executor.run_script_from_string(&script) {
-        Ok(output) => Ok(output),
+    match executor.run_script_from_string_streaming(&script) {
+        Ok(status) => Ok(status),
         Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
     }
 }

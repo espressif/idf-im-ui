@@ -500,6 +500,9 @@ run.using_selected:
 run.no_idf_specified_no_selected:
   en: No IDF version specified and no version is selected. Please specify an IDF version to run the command in its context.
   cn: 未指定 IDF 版本且未选择版本。请指定一个 IDF 版本以在其上下文中运行命令。
+run.command_failed:
+  en: Command failed to execute
+  cn: 命令执行失败
 cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
