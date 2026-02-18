@@ -199,11 +199,11 @@ jobs:
               elif command -v yum &>/dev/null; then
                 yum install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
               elif command -v pacman &>/dev/null; then
-                pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb
+                pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb libxml2-legacy
               elif command -v zypper &>/dev/null; then
                 pkill -9 zypper 2>/dev/null || true
                 rm -f /run/zypp.pid 2>/dev/null || true
-                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0
+                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel
               else
                 echo 'Unknown package manager' && exit 1
               fi

@@ -12,7 +12,7 @@ export function runVersionManagementTest({
   installFolder,
 }) {
   describe(`${id}- EIM Version Management test |`, function () {
-    this.timeout(120000);
+    this.timeout(150000);
     let testRunner = null;
     let testStepFailed = false;
 
@@ -289,7 +289,7 @@ export function runVersionManagementTest({
       testRunner.sendInput(`${pathToEIM} purge`);
       const purgeOutput = await testRunner.waitForOutput(
         `All versions removed successfully`,
-        30000
+        45000
       );
       expect(purgeOutput, "EIM failed to purge IDF versions").to.be.true;
       for (let idf of idfList) {

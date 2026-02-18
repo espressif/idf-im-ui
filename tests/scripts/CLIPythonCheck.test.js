@@ -70,7 +70,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
     /** Windows Specific Tests
      * Tests below will only be executed on win32 platform
      */
-    it("1- should offer to install python and exit upon negative answer", async function () {
+    it("2- should offer to install python and exit upon negative answer", async function () {
       this.timeout(25000);
       if (os.platform() !== "win32") {
         this.skip();
@@ -97,7 +97,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 
-    it("1- should install python after a positive answer", async function () {
+    it("3- should install python after a positive answer", async function () {
       this.timeout(120000);
       if (os.platform() !== "win32") {
         this.skip();
