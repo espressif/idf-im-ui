@@ -156,7 +156,7 @@ jobs:
             -w /workspace/tests \
             -e LOG_TO_FILE=true \
             -e PACKAGE_NAME=${{ matrix.package_name }} \
-            -e PREREQUISITES_OS="${{ matrix.distro_name || 'ubuntu:24.04' }}" \
+            -e PREREQUISITES_OS="${{ matrix.distro_name || 'ubuntu' }}" \
             -e EIM_CLI_PATH=/workspace/artifacts/eim \
             -e EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}" \
             ${{ matrix.container || 'ubuntu:24.04' }} \
@@ -393,8 +393,6 @@ jobs:
           Set-Location -Path "./tests"
           npm run test-CLI-win --file=CLI-pythoncheck
         continue-on-error: true
-
-
 
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'

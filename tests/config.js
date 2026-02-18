@@ -155,7 +155,7 @@ const preRequisitesList = {
   windows: ["git"],
 }
 const prerequisites = process.env.PREREQUISITES_OS?
-  preRequisitesList[process.env.PREREQUISITES_OS.split(":")[0].toLowerCase()] || [] : [];
+  preRequisitesList[process.env.PREREQUISITES_OS.toLowerCase()] || [] : [];
 logger.info(`Prerequisites set to: ${prerequisites.join(", ")}`);
 
 export {
