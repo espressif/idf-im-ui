@@ -8,7 +8,9 @@
       "manualHint": "请安装依赖项后再次运行检查。",
       "macosHint": "你可以使用 Homebrew 安装缺失的依赖项，例如 `brew install {list}`",
       "linuxHint": "你可以使用包管理器安装缺失的依赖项（例如 Debian/Ubuntu: `sudo apt install -y {list}`，Fedora: `sudo dnf install -y {list}`）",
-      "skipCheck": "跳过依赖项检查"
+      "windowsHint": "点击\"自动安装依赖项\"按钮安装缺失的依赖项：{list}",
+      "skipCheck": "跳过依赖项检查",
+      "dismiss": "关闭"
     }
   },
   "app": {
@@ -39,9 +41,6 @@
       "posix": "不建议使用提升权限（sudo/root）运行。创建的文件可能会在以后使用 ESP-IDF 时导致权限问题。",
       "windows": "正在以管理员身份运行。只有在需要安装 USB 驱动程序时才需要此权限。"
     }
-  },
-  "common": {
-    "dismiss": "关闭"
   },
   "routes": {
     "welcome": "欢迎",
@@ -180,7 +179,9 @@
       "checkingPrerequisites": "正在检查安装依赖项...",
       "detectingOS": "正在检测操作系统...",
       "scanningArchives": "正在扫描离线存档...",
-      "verifyingPaths": "正在验证安装路径..."
+      "verifyingPaths": "正在验证安装路径...",
+      "installingPrerequisites": "正在安装依赖项",
+      "pleaseWait": "请稍候，正在安装依赖项..."
     },
     "prerequisites": {
       "header": "缺少安装依赖项",
@@ -686,6 +687,7 @@
       "prerequisites": {
         "title": "缺少依赖项",
         "message": "未安装部分必要的依赖项。",
+        "windowsHint": "点击下方按钮自动安装依赖项。",
         "python": {
           "title": "Python 配置不正确",
           "message": "缺少可用的 Python >= 3.10 < 3.14，以及 pip、virtualenv 和 SSL。",

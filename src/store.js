@@ -120,11 +120,23 @@ export const useAppStore = defineStore("app", {
     },
 
     setSystemInfo(info) {
-      this.os = info.os;
+      // Normalize OS name to handle variations like "Windows Server", "windows", etc.
+      const normalizedOs = this.normalizeOs(info.os);
+      this.os = normalizedOs;
       this.arch = info.arch;
       this.cpuCount = info.cpuCount;
       this.additionalSystemInfo = info.additionalSystemInfo;
       this.eim_version = info.eim_version;
+    },
+
+    // Normalize OS name to handle variations from Rust (e.g., "Windows Server" -> "windows")
+    normalizeOs(os) {
+      if (!os) return 'unknown';
+      const lower = os.toLowerCase();
+      if (lower.includes('windows') || lower === 'win') return 'windows';
+      if (lower.includes('mac') || lower.includes('darwin')) return 'macos';
+      if (lower.includes('linux')) return 'linux';
+      return 'unknown';
     },
 
     setInstalledVersions(versions) {
@@ -214,18 +226,9 @@ export const useAppStore = defineStore("app", {
     },
     async checkPrerequisites(force = false) {
 
-      // Skip if already checking or recently checked (unless forced)
       if (this.prerequisitesChecking) {
         return this.prerequisitesStatus;
       }
-
-      // if (!force && this.prerequisitesLastChecked) {
-      //   const timeSinceLastCheck = Date.now() - this.prerequisitesLastChecked;
-      //   // Skip if checked within last 1 minute
-      //   if (timeSinceLastCheck < 1 * 60 * 1000) {
-      //     return this.prerequisitesStatus;
-      //   }
-      // }
 
       this.prerequisitesChecking = true;
 
@@ -239,11 +242,6 @@ export const useAppStore = defineStore("app", {
           shellFailed: result.shell_failed || false,
         };
 
-        this.prerequisitesLastChecked = Date.now();
-
-        // // Update the old format for backward compatibility
-        // this.prerequisitesInstalled = result.all_ok;
-        // this.missingPrerequisites = result.missing || [];
 
         return this.prerequisitesStatus;
       } catch (error) {
@@ -256,6 +254,7 @@ export const useAppStore = defineStore("app", {
         };
         return this.prerequisitesStatus;
       } finally {
+        this.prerequisitesLastChecked = Date.now();
         this.prerequisitesChecking = false;
       }
     },

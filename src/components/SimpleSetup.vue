@@ -137,16 +137,19 @@
           <template #footer>
             <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
-              <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
+              <n-button v-if="verificationFailed && appStore.os === 'windows' && !isInstallingPrerequisites" @click="installPrerequisites" type="primary" size="large" data-id="install-prerequisites-button">
+                {{ $t('basicInstaller.prerequisites.installButton') }}
+              </n-button>
+              <n-button v-if="verificationFailed" :disabled="isInstallingPrerequisites" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
               </n-button>
-              <n-button @click="viewLogs" type="info" size="large">
+              <n-button :disabled="isInstallingPrerequisites" @click="viewLogs" type="info" size="large">
                 {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
-              <n-button @click="retry" type="warning" size="large">
+              <n-button :disabled="isInstallingPrerequisites" @click="retry" type="warning" size="large">
                 {{ $t('simpleSetup.error.retry') }}
               </n-button>
-              <n-button @click="useWizard" type="info" size="large">
+              <n-button :disabled="isInstallingPrerequisites" @click="useWizard" type="info" size="large">
                 {{ $t('simpleSetup.error.wizard') }}
               </n-button>
             </div>
@@ -157,6 +160,15 @@
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
+      </div>
+    </n-card>
+
+    <!-- Installing Prerequisites Loading State -->
+    <n-card v-if="isInstallingPrerequisites" class="status-card">
+      <div class="checking-status">
+        <n-spin size="large" />
+        <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
+        <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
       </div>
     </n-card>
   </div>
@@ -208,6 +220,7 @@ export default {
     const installPath = ref('')
     const currentStep = ref(0)
     const timeStarted = ref(null)
+    const isInstallingPrerequisites = ref(false)
 
 
     // Installation progress
@@ -310,7 +323,7 @@ export default {
         }
         // Check prerequisites
         let prereqResult = appStore.prerequisitesStatus;
-        
+
         // Check if verification itself failed (shell or other error)
         if (!prereqResult.canVerify) {
           verificationFailed.value = true
@@ -324,20 +337,31 @@ export default {
           currentState.value = 'error'
           return false
         }
-        
-        if (!prereqResult.allOk && appStore.os !== 'windows') {
-          errorTitle.value = t('simpleSetup.error.prerequisites.title')
-          errorMessage.value = t('simpleSetup.error.prerequisites.message')
-          if (appStore.os === 'macos') {
-            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.macosHint', { list: prereqResult.missing.join(' ') })
-          } else if (appStore.os === 'linux') {
-            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.linuxHint', { list: prereqResult.missing.join(' ') })
+
+        if (!prereqResult.allOk) {
+          if (appStore.os === 'windows') {
+            // On Windows, show prerequisites info and offer to install
+            errorTitle.value = t('simpleSetup.error.prerequisites.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.message')
+            errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' + t('common.prerequisites.windowsHint', { list: prereqResult.missing.join(', ') })
+            currentState.value = 'error'
+            verificationFailed.value = true // Use this to show the install button
+            return false
           } else {
-            errorDetails.value = t('common.prerequisites.manualHint') + '\n' + prereqResult.missing.join(', ')
+            // On macOS/Linux, show error and manual install instructions
+            errorTitle.value = t('simpleSetup.error.prerequisites.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.message')
+            if (appStore.os === 'macos') {
+              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.macosHint', { list: prereqResult.missing.join(' ') })
+            } else if (appStore.os === 'linux') {
+              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.linuxHint', { list: prereqResult.missing.join(' ') })
+            } else {
+              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + prereqResult.missing.join(', ')
+            }
+            currentState.value = 'error'
+            return false
           }
-          currentState.value = 'error'
-          return false
-        } // TODO: maybe on windows inform user which prerequisities will be installed
+        }
         let results = await invoke("python_sanity_check", {});
         let python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
         if (!python_sane) {
@@ -364,8 +388,7 @@ export default {
         } else {
           console.log("Python sanity check passed");
         }
-        
-        // Fetch settings, versions, and validate installation path
+
         return await prepareForInstallation()
       } catch (error) {
         console.error('Failed to check prerequisites:', error)
@@ -374,6 +397,71 @@ export default {
         errorDetails.value = error.toString()
         currentState.value = 'error'
         return false
+      }
+    }
+
+    const installPrerequisites = async () => {
+      const store = appStore
+      let unlistenFn = null
+      try {
+        isInstallingPrerequisites.value = true
+        message.info(t('basicInstaller.messages.startingPrerequisites'))
+
+        const eventPromise = new Promise(async (resolve) => {
+          let isResolved = false
+          const doResolve = () => {
+            if (!isResolved) {
+              isResolved = true
+              resolve()
+            }
+          }
+
+          unlistenFn = await listen('prerequisites-install-complete', async (event) => {
+            console.log('Event received:', event.payload)
+            try {
+              await store.checkPrerequisites(true)
+            } catch (e) {
+              console.error('Error:', e)
+            }
+            doResolve()
+          })
+
+          // Timeout after 5 minutes
+          setTimeout(() => {
+            console.log('Timeout - resolving anyway')
+            doResolve()
+          }, 300000)
+        })
+
+        await invoke('install_prerequisites')
+
+        await eventPromise
+
+        if (unlistenFn) {
+          unlistenFn()
+        }
+
+        await new Promise(r => setTimeout(r, 200))
+
+        isInstallingPrerequisites.value = false
+
+        const prereqResult = store.prerequisitesStatus
+        console.log('Final result:', prereqResult)
+
+        if (prereqResult.allOk) {
+          await prepareForInstallation()
+        } else {
+          errorTitle.value = t('simpleSetup.error.prerequisites.title')
+          errorMessage.value = t('simpleSetup.error.prerequisites.message')
+          errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' + t('common.prerequisites.windowsHint', { list: prereqResult.missing.join(', ') })
+          currentState.value = 'error'
+          verificationFailed.value = true
+        }
+      } catch (error) {
+        console.error('Error:', error)
+        if (unlistenFn) unlistenFn()
+        isInstallingPrerequisites.value = false
+        message.error(t('basicInstaller.messages.errors.prerequisites'))
       }
     }
 
@@ -392,14 +480,12 @@ export default {
       }
 
       try {
-        // Set up event listeners
         unlistenProgress = await listen('installation-progress', async (event) => {
           const { stage, percentage, message, detail, version } = event.payload;
 
           installationProgress.value = percentage;
           installationMessage.value = message;
 
-          // Update progress with smooth transitions
           if (percentage !== undefined) {
             // Ensure progress only moves forward (avoid jumping backwards)
             if (percentage >= installationProgress.value) {
@@ -523,7 +609,7 @@ export default {
       errorMessage.value = ''
       errorDetails.value = ''
       currentState.value = 'checking'
-      
+
       // Fetch settings, versions, and validate installation path
       await prepareForInstallation()
     }
@@ -596,10 +682,12 @@ export default {
       errorDetails,
       pythonCheckResults,
       verificationFailed,
+      isInstallingPrerequisites,
       getStatusIcon,
       getStatusIconClass,
       getProgressColorScheme,
       startInstallation,
+      installPrerequisites,
       retry,
       skipAndContinue,
       viewLogs,

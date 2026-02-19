@@ -30,7 +30,7 @@
 
     <!-- Prerequisites Alert -->
     <n-alert
-      v-if="!isLoading && !prerequisitesOk && os !== 'unknown'"
+      v-if="!isLoading && !prerequisitesOk && os !== 'unknown' && !isInstallingPrerequisites"
       :type="os === 'windows' ? 'warning' : 'error'"
       class="prerequisites-alert"
       data-id="prerequisites-alert"
@@ -56,6 +56,17 @@
         {{ $t('basicInstaller.prerequisites.manualInstall') }}
       </p>
     </n-alert>
+
+    <!-- Installing Prerequisites Loading State -->
+    <div v-if="isInstallingPrerequisites" class="loading-container" data-id="installing-prerequisites-container">
+      <n-card class="loading-card">
+        <div class="loading-content">
+          <n-spin size="large" />
+          <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
+          <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
+        </div>
+      </n-card>
+    </div>
 
     <!-- Installation Options -->
     <transition name="fade-in" mode="out-in">
@@ -139,10 +150,11 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NAlert, NModal, NUpload,
@@ -175,6 +187,7 @@ export default {
 
     // Loading state
     const isLoading = ref(false)
+    const isInstallingPrerequisites = ref(false)
     const loadingMessage = ref('Checking prerequisites...')
     const loadingProgress = ref(0)
 
@@ -185,6 +198,9 @@ export default {
     // Input elements for external tests
     const offlineInputCITests = ref(null);
     const configInputCITests = ref(null);
+
+    // Event listener for prerequisites installation complete
+    const unlistenInstallComplete = ref(null);
 
     const appStore = useAppStore()
 
@@ -231,11 +247,50 @@ export default {
     }
 
     const installPrerequisites = async () => {
+      let unlistenFn = null
       try {
-        message.info(t('basicInstaller.messages.startingPrerequisites'))
+        isInstallingPrerequisites.value = true
+        loadingMessage.value = t('basicInstaller.loading.installingPrerequisites')
+        loadingProgress.value = 0
+
+        const eventPromise = new Promise(async (resolve) => {
+          let isResolved = false
+          const doResolve = () => {
+            if (!isResolved) {
+              isResolved = true
+              resolve()
+            }
+          }
+
+          unlistenFn = await listen('prerequisites-install-complete', async (event) => {
+            console.log('Event received:', event.payload)
+            try {
+              await checkPrerequisites()
+            } catch (e) {
+              console.error('Error:', e)
+            }
+            doResolve()
+          })
+
+          // Timeout after 5 minutes
+          setTimeout(() => {
+            console.log('Timeout - resolving anyway')
+            doResolve()
+          }, 300000)
+        })
+
         await invoke('install_prerequisites')
-        setTimeout(() => checkPrerequisites(), 3000)
+
+        await eventPromise
+
+        if (unlistenFn) {
+          unlistenFn()
+        }
+
+        isInstallingPrerequisites.value = false
       } catch (error) {
+        if (unlistenFn) unlistenFn()
+        isInstallingPrerequisites.value = false
         message.error(t('basicInstaller.messages.errors.prerequisites'))
       }
     }
@@ -315,12 +370,18 @@ export default {
       router.push('/version-management')
     }
 
-    onMounted(() => {
-      // nextTick(() => {
-      //   setTimeout(() => {
-      //     checkPrerequisites();
-      //   }, 300);
-      // });
+    onMounted(async () => {
+      unlistenInstallComplete.value = await listen('prerequisites-install-complete', async () => {
+        await checkPrerequisites();
+      });
+
+      await checkPrerequisites();
+    })
+
+    onUnmounted(() => {
+      if (unlistenInstallComplete.value) {
+        unlistenInstallComplete.value();
+      }
     })
 
     const easyFeatures = [
@@ -337,6 +398,7 @@ export default {
 
     return {
       isLoading,
+      isInstallingPrerequisites,
       loadingMessage,
       loadingProgress,
       os,
