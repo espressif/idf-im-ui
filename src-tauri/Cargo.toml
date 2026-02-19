@@ -114,7 +114,7 @@ rust_search = "2.1.0"
 flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
 tar = { version = "0.4", default-features = false }
 zip = { version = "2.2.2", default-features = true }
-lzma-rs = "0.3.0"
+xz2 = { version = "0.1.6", features = ["static"] }
 thiserror = "1.0"
 rust-i18n = "3.0.1"
 tokio = { version = "1.41.0", features = ["full"] }

@@ -2,7 +2,7 @@ use flate2::read::GzDecoder;
 use std::hash::{DefaultHasher, Hash,Hasher};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
-use log::{error, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
@@ -39,6 +39,8 @@ use std::{
     path::{Path, PathBuf},
     sync::mpsc::Sender,
 };
+
+use xz2::read::XzDecoder;
 
 /// Creates an executable shell script with the given content and file path.
 ///
@@ -1307,32 +1309,37 @@ fn decompress_tar_gz(
     Ok(())
 }
 
-/// Decompresses a TAR.XZ archive into the specified destination directory.
+/// Decompresses a TAR.XZ archive into the specified destination directory
+/// using streaming decompression to avoid loading the entire archive into memory.
 ///
 /// # Parameters
 ///
 /// * `archive_path`: A reference to a `Path` representing the path to the TAR.XZ archive.
-/// * `destination_path`: A reference to a `Path` representing the destination directory where the archive should be decompressed.
+/// * `destination_path`: A reference to a `Path` representing the destination directory
+///    where the archive should be decompressed.
 ///
-/// # Returns
+/// # Return Value
 ///
-/// * `Result<(), DecompressionError>`: On success, returns `Ok(())`. On error, returns a `DecompressionError` indicating the cause of the error.
+/// * `Result<(), DecompressionError>`: On success, returns `Ok(())`.
+///   On error, returns a `DecompressionError` indicating the cause of the error.
 fn decompress_tar_xz(
     archive_path: &Path,
     destination_path: &Path,
 ) -> Result<(), DecompressionError> {
     let file = File::open(archive_path)?;
-    let mut reader = BufReader::new(file);
-    let mut decompressed_data = Vec::new();
 
-    // First decompress the XZ data
-    lzma_rs::xz_decompress(&mut reader, &mut decompressed_data)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    info!(
+        "Streaming tar.xz decompression: {} -> {}",
+        archive_path.display(),
+        destination_path.display()
+    );
 
-    // Then process the tar archive from the decompressed data
-    let cursor = std::io::Cursor::new(decompressed_data);
-    let mut archive = Archive::new(cursor);
+    let decoder = XzDecoder::new(BufReader::new(file));
+    let mut archive = Archive::new(decoder);
     archive.unpack(destination_path)?;
+
+    info!("Extraction of {} complete", archive_path.display());
+
     Ok(())
 }
 
