@@ -18,7 +18,7 @@ Before using the `offline-installer-builder`, ensure the following is installed:
 
 > 💡 The builder does **not** bundle `uv` — you must install it separately.
 
-> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, and 3.13. Python 3.14 and later are not supported. When building an offline archive, you can specify which Python versions to include wheels for. See the `--python-version` and `--wheel-python-versions` options for more details.
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Python 3.14 is supported on Linux and macOS only; Windows does not support Python 3.14 because ESP-IDF dependencies do not yet support it. When building an offline archive, you can specify which Python versions to include wheels for. See the `--python-version` and `--wheel-python-versions` options for more details.
 
 ---
 
@@ -82,7 +82,7 @@ tools_json_file = "tools/tools.json"
 | `-c` | `--create-from-config <CONFIG>` | Create archive from TOML config. Use `"default"` for defaults. |
 | `-a` | `--archive <FILE>` | Extract a `.zst` archive for inspection. |
 | `-p` | `--python-version <VERSION>` | Python version to bundle (default: `3.11`). |
-| `--wheel-python-versions <V1,V2,...>` | Comma-separated Python versions for which to download wheels (e.g., `3.10,3.11,3.12`). Defaults to all supported on POSIX, single version on Windows. |
+| `--wheel-python-versions <V1,V2,...>` | Comma-separated Python versions for which to download wheels (e.g., `3.11,3.12,3.14`). Defaults to all supported on POSIX, single version on Windows. |
 | `--idf-version-override <VERSION>` | Build archive for **only** this IDF version (e.g., `v5.1.2`). |
 | `--build-all-versions` | Build **separate archives for all** supported IDF versions. |
 | `-v` | `--verbose` | Increase log verbosity (use `-vv` or `-vvv` for more detail). |
@@ -146,10 +146,10 @@ Each platform (Linux, Windows, macOS) must run the builder separately — archiv
 By default, the builder downloads wheels for multiple Python versions to maximize compatibility. You can override this:
 
 ```bash
-./offline_installer_builder -c default --idf-version-override v5.1.2 --wheel-python-versions 3.11,3.12
+./offline_installer_builder -c default --idf-version-override v5.1.2 --wheel-python-versions 3.11,3.12,3.14
 ```
 
-This ensures the archive includes wheels compatible with Python 3.11 and 3.12.
+This ensures the archive includes wheels compatible with Python 3.11, 3.12, and 3.14 on Linux and macOS.
 
 ---
 
