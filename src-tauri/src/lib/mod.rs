@@ -1,4 +1,5 @@
 use flate2::read::GzDecoder;
+use gix::validate::path::component;
 use std::hash::{DefaultHasher, Hash,Hasher};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
@@ -881,6 +882,7 @@ pub fn setup_environment_variables(
 
     let instal_dir_string = tool_install_directory.to_str().unwrap().to_string();
     env_vars.push(("IDF_TOOLS_PATH".to_string(), instal_dir_string));
+    env_vars.push(("IDF_COMPONENT_LOCAL_STORAGE_URL".to_string(), format!("file://{}", tool_install_directory.to_str().unwrap())));
     let idf_path_string = idf_path.to_str().unwrap().to_string();
     env_vars.push(("IDF_PATH".to_string(), idf_path_string));
     env_vars.push((
@@ -1704,6 +1706,7 @@ pub fn get_idf_tools_mirrors_list() -> &'static [&'static str] {
 
 pub fn get_pypi_mirrors_list() -> &'static [&'static str] {
     &[
+        "https://dl.espressif.com/pypi/",
         "https://pypi.org/simple",
         "https://mirrors.aliyun.com/pypi/simple",
         "https://pypi.tuna.tsinghua.edu.cn/simple",
