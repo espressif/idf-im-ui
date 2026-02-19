@@ -200,7 +200,7 @@
       },
       "custom": {
         "title": "自定义安装",
-        "description": "完全控制安装设置，适用于高级用户。",
+        "description": "完全控制安装设置，适用于进阶用户。",
         "feature1": "选择 ESP-IDF 版本",
         "feature2": "自定义安装路径",
         "feature3": "高级选项",
@@ -437,7 +437,7 @@
     }
   },
   "wizardStep": {
-    "title": "高级用户安装步骤",
+    "title": "进阶安装步骤",
     "stepIndicator": "步骤 {step}",
     "steps": {
       "prerequisitesCheck": "检查依赖项",
@@ -465,7 +465,7 @@
       },
       "development": {
         "title": "开发分支",
-        "warningTitle": "⚠️ 仅限高级用户使用",
+        "warningTitle": "⚠️ 仅限进阶用户使用",
         "description": "主分支（master）包含最新的开发代码，稳定性极低。仅当您是 ESP-IDF 开发者、需要测试未发布功能，或必须使用最新更改时，才应安装此分支。该分支可能存在破坏性变更，不适用于生产环境。"
       }
     },
