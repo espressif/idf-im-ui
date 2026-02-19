@@ -1,0 +1,228 @@
+name: "[TEST] Dry-Run Purge Unsupported Archives"
+
+# TEMPORARY workflow for testing the purge logic on a feature branch.
+# DELETE THIS FILE before merging to master.
+
+on:
+  push:
+    branches:
+      - offline_purging_strategy
+
+  workflow_dispatch:
+    inputs:
+      versions_override:
+        description: "Comma-separated list of versions to treat as 'supported' (e.g. v5.1.5,v5.2.3). Leave empty to fetch from idf_versions.json."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  dry-run-purge:
+    name: Dry-run purge of unsupported archives
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up AWS CLI
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Get supported IDF versions
+        id: get-versions
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.versions_override }}" ]; then
+            # Use manually provided versions
+            VERSIONS=$(echo "${{ inputs.versions_override }}" | tr ',' '\n' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+            echo "Using manually provided versions: $VERSIONS"
+          else
+            # Fetch from the public idf_versions.json (same source as offline_installer_builder --list-versions)
+            echo "Fetching supported versions from idf_versions.json..."
+            curl -fsSL -o idf_versions.json https://dl.espressif.com/dl/esp-idf/idf_versions.json
+
+            # Extract stable versions: not end_of_life, not old, not pre_release, not "latest"
+            VERSIONS=$(jq -c '[.VERSIONS[] | select(.end_of_life != true and .old != true and .pre_release != true and .name != "latest") | .name]' idf_versions.json)
+            echo "Supported versions from idf_versions.json: $VERSIONS"
+          fi
+
+          echo "versions=$VERSIONS" >> "$GITHUB_OUTPUT"
+
+      - name: Build allowed filenames set
+        id: build-allowed
+        shell: bash
+        env:
+          VERSIONS_JSON: ${{ steps.get-versions.outputs.versions }}
+        run: |
+          PLATFORMS=("linux-x64" "linux-aarch64" "windows-x64" "macos-aarch64" "macos-x64")
+
+          echo "=== Building allowed filenames set ==="
+          echo ""
+
+          > allowed_files.txt
+
+          for version in $(echo "$VERSIONS_JSON" | jq -r '.[]'); do
+            for platform in "${PLATFORMS[@]}"; do
+              filename="archive_v${version}_${platform}.zst"
+              echo "$filename" >> allowed_files.txt
+            done
+          done
+
+          TOTAL=$(wc -l < allowed_files.txt | tr -d ' ')
+          echo "Total allowed filenames: $TOTAL"
+          echo ""
+          echo "--- Allowed filenames ---"
+          cat allowed_files.txt
+          echo "-------------------------"
+
+      - name: List S3 archives and compute dry-run purge
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BUCKET="espdldata"
+          PREFIX="dl/eim/archive_"
+
+          echo "=== Dry-Run Purge of Unsupported Archives ==="
+          echo "Bucket:  s3://${BUCKET}"
+          echo "Prefix:  ${PREFIX}"
+          echo ""
+
+          # List all .zst objects under dl/eim/archive_ (excludes debug/ because debug objects are dl/eim/debug/archive_)
+          S3_OBJECTS=$(aws s3api list-objects-v2 \
+            --bucket "${BUCKET}" \
+            --prefix "${PREFIX}" \
+            --query 'Contents[?ends_with(Key, `.zst`)].[Key,LastModified,Size]' \
+            --output text 2>/dev/null || true)
+
+          if [ -z "${S3_OBJECTS}" ] || [ "${S3_OBJECTS}" = "None" ]; then
+            echo "No .zst objects found under s3://${BUCKET}/${PREFIX}"
+            echo "## Dry-Run Purge: No archives found" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # Load allowed set
+          declare -A ALLOWED
+          while IFS= read -r fname; do
+            [ -z "$fname" ] && continue
+            ALLOWED["$fname"]=1
+          done < allowed_files.txt
+
+          WOULD_DELETE_COUNT=0
+          WOULD_DELETE_SIZE=0
+          KEEP_COUNT=0
+          KEEP_SIZE=0
+          TOTAL_COUNT=0
+
+          WOULD_DELETE_LIST=""
+          KEEP_LIST=""
+
+          while IFS=$'\t' read -r key last_modified size; do
+            [ -z "${key}" ] && continue
+            TOTAL_COUNT=$((TOTAL_COUNT + 1))
+
+            filename=$(basename "$key")
+
+            if [ -z "${ALLOWED[$filename]+x}" ]; then
+              # NOT in allowed set -> would be deleted
+              WOULD_DELETE_COUNT=$((WOULD_DELETE_COUNT + 1))
+              WOULD_DELETE_SIZE=$((WOULD_DELETE_SIZE + size))
+              WOULD_DELETE_LIST="${WOULD_DELETE_LIST}| \`${filename}\` | ${last_modified} | ${size} |\n"
+              echo "[WOULD DELETE] ${key} (uploaded: ${last_modified}, size: ${size} bytes)"
+            else
+              # In allowed set -> keep
+              KEEP_COUNT=$((KEEP_COUNT + 1))
+              KEEP_SIZE=$((KEEP_SIZE + size))
+              KEEP_LIST="${KEEP_LIST}| \`${filename}\` | ${last_modified} | ${size} |\n"
+              echo "[KEEP]         ${key} (uploaded: ${last_modified}, size: ${size} bytes)"
+            fi
+          done <<< "${S3_OBJECTS}"
+
+          # Also check for orphaned .log files
+          LOG_OBJECTS=$(aws s3api list-objects-v2 \
+            --bucket "${BUCKET}" \
+            --prefix "${PREFIX}" \
+            --query 'Contents[?ends_with(Key, `.log`)].[Key,LastModified,Size]' \
+            --output text 2>/dev/null || true)
+
+          ORPHAN_LOG_COUNT=0
+          ORPHAN_LOG_LIST=""
+
+          if [ -n "${LOG_OBJECTS}" ] && [ "${LOG_OBJECTS}" != "None" ]; then
+            while IFS=$'\t' read -r key last_modified size; do
+              [ -z "${key}" ] && continue
+              log_filename=$(basename "$key")
+              # Derive the corresponding .zst filename
+              zst_filename="${log_filename%.log}.zst"
+              if [ -z "${ALLOWED[$zst_filename]+x}" ]; then
+                ORPHAN_LOG_COUNT=$((ORPHAN_LOG_COUNT + 1))
+                ORPHAN_LOG_LIST="${ORPHAN_LOG_LIST}| \`${log_filename}\` | ${last_modified} | ${size} |\n"
+                echo "[WOULD DELETE LOG] ${key}"
+              fi
+            done <<< "${LOG_OBJECTS}"
+          fi
+
+          # Human-readable sizes
+          human_size() {
+            local bytes=$1
+            if [ "$bytes" -ge 1073741824 ]; then
+              echo "$(echo "scale=2; $bytes/1073741824" | bc) GB"
+            elif [ "$bytes" -ge 1048576 ]; then
+              echo "$(echo "scale=2; $bytes/1048576" | bc) MB"
+            elif [ "$bytes" -ge 1024 ]; then
+              echo "$(echo "scale=2; $bytes/1024" | bc) KB"
+            else
+              echo "$bytes bytes"
+            fi
+          }
+
+          echo ""
+          echo "=== Summary ==="
+          echo "Total .zst archives on S3: ${TOTAL_COUNT}"
+          echo "Would DELETE: ${WOULD_DELETE_COUNT} ($(human_size $WOULD_DELETE_SIZE))"
+          echo "Would KEEP:   ${KEEP_COUNT} ($(human_size $KEEP_SIZE))"
+          echo "Orphaned .log files to delete: ${ORPHAN_LOG_COUNT}"
+
+          # Write GitHub Step Summary
+          {
+            echo "## Dry-Run Purge of Unsupported Archives"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|--------|-------|"
+            echo "| Total .zst on S3 | ${TOTAL_COUNT} |"
+            echo "| Would delete | ${WOULD_DELETE_COUNT} ($(human_size $WOULD_DELETE_SIZE)) |"
+            echo "| Would keep | ${KEEP_COUNT} ($(human_size $KEEP_SIZE)) |"
+            echo "| Orphaned logs | ${ORPHAN_LOG_COUNT} |"
+            echo ""
+
+            if [ "$WOULD_DELETE_COUNT" -gt 0 ]; then
+              echo "### Archives that WOULD be deleted"
+              echo ""
+              echo "| Filename | Last Modified | Size (bytes) |"
+              echo "|----------|---------------|-------------|"
+              echo -e "$WOULD_DELETE_LIST"
+              echo ""
+            fi
+
+            if [ "$ORPHAN_LOG_COUNT" -gt 0 ]; then
+              echo "### Orphaned logs that WOULD be deleted"
+              echo ""
+              echo "| Filename | Last Modified | Size (bytes) |"
+              echo "|----------|---------------|-------------|"
+              echo -e "$ORPHAN_LOG_LIST"
+              echo ""
+            fi
+
+            if [ "$KEEP_COUNT" -gt 0 ]; then
+              echo "### Archives that WOULD be kept"
+              echo ""
+              echo "| Filename | Last Modified | Size (bytes) |"
+              echo "|----------|---------------|-------------|"
+              echo -e "$KEEP_LIST"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
