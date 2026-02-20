@@ -125,7 +125,7 @@ export default {
       this.shell_failed = prerequisitesStatus.shellFailed || false;
       this.did_the_check_run = this.appStore.prerequisitesLastChecked !== null;
       this.loading = false;
-      
+
       // When we can't verify, show question marks
       if (!this.can_verify) {
         this.display_prerequisities = this.display_prerequisities.map(p => ({
@@ -143,7 +143,7 @@ export default {
     install_prerequisites: async function () {
       this.installing_prerequisities = true;
       await invoke("install_prerequisites", {});
-      this.check_prerequisites();
+      await this.check_prerequisites();
       this.installing_prerequisities = false;
       return false;
     },
