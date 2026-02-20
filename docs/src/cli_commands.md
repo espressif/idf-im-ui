@@ -41,7 +41,7 @@ These options can be used with any command:
 
 Non-interactive installation of ESP-IDF versions. This command runs in non-interactive mode by default.
 
-> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Python 3.14 is supported on Linux and macOS only; Windows does not support Python 3.14 because ESP-IDF dependencies do not yet support it. Please ensure you have a compatible version installed. Offline installations have stricter requirements, see the `--use-local-archive` option for details.
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Note that Python 3.14 is supported on Linux and macOS only; Windows does not support Python 3.14 because ESP-IDF dependencies do not yet support it. Please ensure you have a compatible version installed. Offline installations have stricter requirements, see the `--use-local-archive` option for details.
 
 ```bash
 eim install [OPTIONS]
