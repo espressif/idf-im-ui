@@ -26,19 +26,5 @@
     },
     "deleteAfterTest": true,
     "testProxyMode": false
-  },
-  {
-    "id": 3,
-    "type": "custom",
-    "name": "GUI Expert v5.1.6",
-    "data": {
-      "targetList": "All",
-      "idfList": "v5.1.6",
-      "installFolder": ".espext3",
-      "idfMirror": "github",
-      "toolsMirror": "github"
-    },
-    "deleteAfterTest": true,
-    "testProxyMode": false
   }
 ]

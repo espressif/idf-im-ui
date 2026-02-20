@@ -329,14 +329,15 @@ export function runInstallVerification({
               if (entry.install && entry.platforms.includes(platformKey)) {
                 if (
                   entry.install === "always" ||
-                  entry.name.startsWith("esp-clang")
+                  entry.name.startsWith("esp-clang") ||
+                  entry.name.startsWith("ninja")
                 ) {
                   return true;
                 }
               }
             }
           }
-          if (tool.install === "always" || tool.name.startsWith("esp-clang")) {
+          if ((tool.install === "always" || tool.name.startsWith("esp-clang") || tool.name.startsWith("ninja"))&& Object.keys(tool.versions[0]).includes(platformKey)) {
             return true;
           }
           return false;
