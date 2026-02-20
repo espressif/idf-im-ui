@@ -113,8 +113,6 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 #[cfg(target_os = "windows")]
 impl WindowsExecutor {
     fn prepare_powershell_script(&self, script: &str) -> std::io::Result<(std::path::PathBuf, Command)> {
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-
         let temp_dir = std::env::temp_dir();
         let script_path = temp_dir.join(format!("idf_script_{}.ps1", std::process::id()));
 
@@ -142,8 +140,7 @@ impl WindowsExecutor {
             "Bypass",
             "-File",
             script_path.to_str().unwrap(),
-        ])
-        .creation_flags(CREATE_NO_WINDOW);
+        ]);
 
         Ok((script_path, cmd))
     }
@@ -207,9 +204,13 @@ impl CommandExecutor for WindowsExecutor {
     }
 
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+      use std::os::windows::process::CommandExt;
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+
       let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
       let output = cmd
+          .creation_flags(CREATE_NO_WINDOW)
           .stdout(std::process::Stdio::piped())
           .stderr(std::process::Stdio::piped())
           .spawn()?
@@ -231,6 +232,7 @@ impl CommandExecutor for WindowsExecutor {
       let _ = std::fs::remove_file(&script_path);
       status
   }
+
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {
