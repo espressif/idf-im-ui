@@ -41,7 +41,7 @@ These options can be used with any command:
 
 Non-interactive installation of ESP-IDF versions. This command runs in non-interactive mode by default.
 
-> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, and 3.13. Python 3.14 and later are not supported. Please ensure you have a compatible version installed. Offline installations have stricter requirements, see the `--use-local-archive` option for details.
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Note that Python 3.14 is supported on Linux and macOS only; Windows does not support Python 3.14 because ESP-IDF dependencies do not yet support it. Please ensure you have a compatible version installed. Offline installations have stricter requirements, see the `--use-local-archive` option for details.
 
 ```bash
 eim install [OPTIONS]
@@ -69,7 +69,7 @@ Options:
 - `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.
 - `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
 - `--cleanup`: If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
-- `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.13.
+- `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.14 on Linux and macOS.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
 - `--idf-tools <IDF_TOOLS>`: Comma separated list of tools to be installed with ESP-IDF. When installing multiple versions, these tools are applied to all versions. For per-version tool configuration, use a configuration file with the `idf_tools_per_version` option.
 
