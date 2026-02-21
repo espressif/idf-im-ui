@@ -1,6 +1,5 @@
 <template>
   <div class="python-check" data-id="python-check">
-
     <n-card class="status-card" data-id="python-status-card">
       <n-spin :show="loading" data-id="python-check-spinner">
         <div v-if="!loading" class="status-content" data-id="python-status-content">
@@ -9,6 +8,7 @@
             :description="python_sane ? t('pythonSanitycheck.status.ready.description') : t('pythonSanitycheck.status.setupRequired.description')"
             data-id="python-check-result">
             <template #footer>
+              <CheckResultsList :items="checkResults" data-id="python-check-list" />
               <div class="action-buttons" data-id="python-action-buttons">
                 <div v-if="!python_sane && os === 'windows'" class="install-section" data-id="python-install-section">
                   <n-button @click="install_python" type="warning" :loading="installing_python" :disabled="loading"
@@ -17,16 +17,18 @@
                   </n-button>
                   <p class="install-note" data-id="install-python-note">{{ t('pythonSanitycheck.installNote') }}</p>
                 </div>
-
                 <n-button v-if="python_sane" @click="nextstep" type="error" :disabled="loading"
                   data-id="continue-button">
                   {{ t('pythonSanitycheck.actions.continueNext') }}
+                </n-button>
+                <n-button v-if="!python_sane" @click="check_python_sanity" type="error" data-id="recheck-python-button">
+                  {{ t('pythonSanitycheck.actions.recheckInstallation') }}
                 </n-button>
               </div>
             </template>
           </n-result>
 
-          <div v-if="!python_sane && os !== 'windows'" class="manual-instructions"
+          <div v-if="!python_sane && os !== 'windows' && checkResults.length === 0" class="manual-instructions"
             data-id="manual-install-instructions">
             <h3 data-id="manual-install-title">{{ t('pythonSanitycheck.manualInstall.title') }}</h3>
             <p data-id="manual-install-intro">{{ t('pythonSanitycheck.manualInstall.intro') }}</p>
@@ -36,9 +38,6 @@
               <li data-id="virtualenv-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.virtualenv') }}</li>
               <li data-id="ssl-requirement">{{ t('pythonSanitycheck.manualInstall.requirements.ssl') }}</li>
             </ul>
-            <n-button @click="check_python_sanity" type="error" data-id="recheck-python-button">
-              {{ t('pythonSanitycheck.actions.recheckInstallation') }}
-            </n-button>
           </div>
         </div>
       </n-spin>
@@ -53,13 +52,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { NButton, NSpin } from 'naive-ui'
 import loading from "naive-ui/es/_internal/loading";
 import { useAppStore } from '../../store'
+import CheckResultsList from '../CheckResultsList.vue'
 
 export default {
   name: 'PythonSanitycheck',
   props: {
     nextstep: Function
   },
-  components: { NButton, NSpin },
+  components: { NButton, NSpin, CheckResultsList },
   setup() {
     const { t } = useI18n()
     return { t }
@@ -68,6 +68,7 @@ export default {
     os: undefined,
     loading: true,
     python_sane: false,
+    checkResults: [],
     installing_python: false,
     appStore: useAppStore()
   }),
@@ -84,7 +85,9 @@ export default {
   methods: {
     check_python_sanity: async function () {
       this.loading = true;
-      this.python_sane = await invoke("python_sanity_check", {});
+      const results = await invoke("python_sanity_check", {});
+      this.checkResults = results || [];
+      this.python_sane = this.checkResults.length > 0 && this.checkResults.every((r) => r.passed);
       this.loading = false;
       return false;
     },
