@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
+use anyhow::anyhow;
 use cli_args::Cli;
 use cli_args::Commands;
 use clap::CommandFactory;
@@ -287,11 +288,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             };
 
             match run_command_in_context(&idf_identifier, &command) {
-                Ok(output) => {
-                    if output.status.success() {
-                        println!("{}", String::from_utf8_lossy(&output.stdout));
-                    } else {
-                        eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                Ok(status) => {
+                    if !status.success() {
+                        return Err(anyhow::anyhow!(t!("run.command_failed")));
                     }
                     Ok(())
                 }

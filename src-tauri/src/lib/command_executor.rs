@@ -27,6 +27,7 @@ pub trait CommandExecutor: Send {
         dir: &str,
     ) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
+    fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
 }
 
 struct DefaultExecutor;
@@ -75,6 +76,14 @@ impl CommandExecutor for DefaultExecutor {
             .args(["-c", script])
             .output()
     }
+    fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
+      Command::new("bash")
+        .args(["-c", script])
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .stdin(std::process::Stdio::inherit())
+        .status()
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -99,6 +108,42 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
         .unwrap_or(5);
 
     Ok(version)
+}
+
+#[cfg(target_os = "windows")]
+impl WindowsExecutor {
+    fn prepare_powershell_script(&self, script: &str) -> std::io::Result<(std::path::PathBuf, Command)> {
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("idf_script_{}.ps1", std::process::id()));
+
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let script_content = format!(
+            "$ProgressPreference = 'SilentlyContinue'\r\n\
+             $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\r\n\
+             Import-Module Microsoft.PowerShell.Security -Force\r\n\
+             Set-ExecutionPolicy Bypass -Scope Process -Force\r\n\
+             [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\r\n\
+             $env:PATH = \"{};\" + $env:PATH\r\n\
+             {}",
+            current_path.replace('"', "`\""),
+            script
+        );
+
+        std::fs::write(&script_path, script_content.as_bytes())?;
+
+        let mut cmd = Command::new("powershell");
+        cmd.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            script_path.to_str().unwrap(),
+        ]);
+
+        Ok((script_path, cmd))
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -159,49 +204,35 @@ impl CommandExecutor for WindowsExecutor {
     }
 
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+      use std::os::windows::process::CommandExt;
       const CREATE_NO_WINDOW: u32 = 0x08000000;
 
-      let temp_dir = std::env::temp_dir();
-      let script_path = temp_dir.join(format!("idf_script_{}.ps1", std::process::id()));
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-      let current_path = std::env::var("PATH").unwrap_or_default();
-      let script_content = format!(
-          "$ProgressPreference = 'SilentlyContinue'\r\n\
-          $env:PSModulePath = [System.Environment]::GetEnvironmentVariable('PSModulePath', 'Machine')\r\n\
-          Import-Module Microsoft.PowerShell.Security -Force\r\n\
-          Set-ExecutionPolicy Bypass -Scope Process -Force\r\n\
-          [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072\r\n\
-          $env:PATH = \"{};\" + $env:PATH\r\n\
-          {}",
-          current_path.replace('"', "`\""),
-          script
-      );
-
-      // Write and immediately close the file handle
-      std::fs::write(&script_path, script_content.as_bytes())?;
-
-      let mut child = Command::new("powershell")
-          .args([
-              "-NoLogo",
-              "-NoProfile",
-              "-NonInteractive",
-              "-ExecutionPolicy",
-              "Bypass",
-              "-File",
-              script_path.to_str().unwrap(),
-          ])
+      let output = cmd
           .creation_flags(CREATE_NO_WINDOW)
           .stdout(std::process::Stdio::piped())
           .stderr(std::process::Stdio::piped())
-          .spawn()?;
+          .spawn()?
+          .wait_with_output();
 
-      let output = child.wait_with_output()?;
-
-      // Clean up
       let _ = std::fs::remove_file(&script_path);
-
-      Ok(output)
+      output
   }
+
+  fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+
+      let status = cmd
+          .stdout(std::process::Stdio::inherit())
+          .stderr(std::process::Stdio::inherit())
+          .stdin(std::process::Stdio::inherit())
+          .status();
+
+      let _ = std::fs::remove_file(&script_path);
+      status
+  }
+
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {
