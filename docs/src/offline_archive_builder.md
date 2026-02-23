@@ -82,7 +82,7 @@ tools_json_file = "tools/tools.json"
 | `-c` | `--create-from-config <CONFIG>` | Create archive from TOML config. Use `"default"` for defaults. |
 | `-a` | `--archive <FILE>` | Extract a `.zst` archive for inspection. |
 | `-p` | `--python-version <VERSION>` | Python version to bundle (default: `3.11`). |
-| `--wheel-python-versions <V1,V2,...>` | Comma-separated Python versions for which to download wheels (e.g., `3.11,3.12,3.14`). Defaults to all supported on POSIX, single version on Windows. |
+| `--wheel-python-versions <V1,V2,...>` | Comma-separated Python versions for which to download wheels (e.g., `3.10,3.11,3.12,3.14`). Defaults to all supported on POSIX, single version on Windows. |
 | `--idf-version-override <VERSION>` | Build archive for **only** this IDF version (e.g., `v5.1.2`). |
 | `--build-all-versions` | Build **separate archives for all** supported IDF versions. |
 | `-v` | `--verbose` | Increase log verbosity (use `-vv` or `-vvv` for more detail). |
