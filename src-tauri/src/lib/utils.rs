@@ -40,6 +40,48 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 #[cfg(windows)]
 use std::mem;
 
+/// A generic result structure for representing check outcomes across different check types.
+/// 
+/// # Type Parameters
+/// * `T` - The check identifier type (e.g., `SanityCheck`, `PrerequisiteCheck`)
+/// 
+/// # Fields
+/// * `check` - The specific check that was performed
+/// * `passed` - Whether the check succeeded
+/// * `message` - Raw output or error message from the check
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct GenericCheckResult<T> {
+    pub check: T,
+    pub passed: bool,
+    pub message: String,
+}
+
+impl<T> GenericCheckResult<T> {
+    /// Builds a `GenericCheckResult` from the outcome of a command execution.
+    pub fn from_command_output(
+        check: T,
+        result: std::io::Result<std::process::Output>,
+    ) -> Self {
+        match result {
+            Ok(out) if out.status.success() => GenericCheckResult {
+                check,
+                passed: true,
+                message: String::from_utf8_lossy(&out.stdout).trim().to_string(),
+            },
+            Ok(out) => GenericCheckResult {
+                check,
+                passed: false,
+                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            },
+            Err(e) => GenericCheckResult {
+                check,
+                passed: false,
+                message: e.to_string(),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MirrorEntry {
     pub url: String,

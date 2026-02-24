@@ -33,7 +33,11 @@ use crate::gui::{
   },
 };
 
-use super::{prequisites::{install_prerequisites, python_install, python_sanity_check}, settings};
+use super::{
+    prequisites::{install_prerequisites, python_install, python_sanity_check},
+    settings,
+};
+
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {
@@ -959,7 +963,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     });
 
     // Check for Python
-    let mut python_found = python_sanity_check(app_handle.clone(), None);
+    let mut python_check_results = python_sanity_check(app_handle.clone(), None);
+    let mut python_found = python_check_results.iter().all(|check| check.passed);
 
     // Install Python on Windows if needed
     if !python_found && os == "windows" {
@@ -982,7 +987,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
         }
 
-        python_found = python_sanity_check(app_handle.clone(), None);
+        python_check_results = python_sanity_check(app_handle.clone(), None);
+        python_found = python_check_results.iter().all(|check| check.passed);
     }
 
     // Check if Python is still not found
@@ -1630,17 +1636,16 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 return Err(error_msg);
             }
 
-            // Python sanity check
+            // Python sanity check — user sees check name + hint; raw output logged only
             let mut python_sane = true;
-            for result in idf_im_lib::python_utils::python_sanity_check(None) {
-                match result {
-                    Ok(_) => {}
-                    Err(err) => {
-                        python_sane = false;
-                        emit_log_message(&app_handle, MessageLevel::Warning,
-                            rust_i18n::t!("gui.offline.python_check_warning", error = err.to_string()).to_string());
-                        warn!("{:?}", err);
-                    }
+            for result in &idf_im_lib::python_utils::python_sanity_check(None) {
+                if !result.passed {
+                    python_sane = false;
+                    let name = rust_i18n::t!(result.check.display_key()).to_string();
+                    let hint = rust_i18n::t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string();
+                    warn!("[FAIL] {}: {}", name, result.message);
+                    let msg = format!("{} — {}", name, hint);
+                    emit_log_message(&app_handle, MessageLevel::Warning, msg);
                 }
             }
             if !python_sane {

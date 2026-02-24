@@ -135,6 +135,7 @@
             </n-icon>
           </template>
           <template #footer>
+            <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
               <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
@@ -152,7 +153,7 @@
           </template>
         </n-result>
 
-        <n-alert v-if="errorDetails" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
+        <n-alert v-if="errorDetails && pythonCheckResults.length === 0" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
@@ -180,6 +181,7 @@ import {
   ToolOutlined
 } from '@vicons/antd'
 import GlobalProgress from './GlobalProgress.vue'
+import CheckResultsList from './CheckResultsList.vue'
 import { useAppStore } from '../store'
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { app } from '@tauri-apps/api'
@@ -191,7 +193,8 @@ export default {
     NCollapse, NCollapseItem, NScrollbar,
     ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
     LoadingOutlined, DownloadOutlined, ToolOutlined,
-    GlobalProgress
+    GlobalProgress,
+    CheckResultsList
   },
   setup() {
     const router = useRouter()
@@ -233,6 +236,7 @@ export default {
     const errorTitle = ref('Installation Failed')
     const errorMessage = ref('')
     const errorDetails = ref('')
+    const pythonCheckResults = ref([])
     const verificationFailed = ref(false)
 
     // Helper function to fetch settings, versions, and validate installation path
@@ -334,23 +338,26 @@ export default {
           currentState.value = 'error'
           return false
         } // TODO: maybe on windows inform user which prerequisities will be installed
-        let python_sane = await invoke("python_sanity_check", {});
+        let results = await invoke("python_sanity_check", {});
+        let python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
         if (!python_sane) {
           if (appStore.os == 'windows') {
             console.log("Python sanity check failed - attempting automatic installation");
             try {
               console.log("Installing Python...");
               await invoke("python_install", {});
-              python_sane = await invoke("python_sanity_check", {});
+              results = await invoke("python_sanity_check", {});
+              python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
             } catch (error) {
               console.error('Automatic Python installation failed:', error);
               python_sane = false;
             }
-          } else {
-            console.log("Python sanity check failed");
+          }
+          if (!python_sane) {
             errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
             errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-            errorDetails.value = t('simpleSetup.error.prerequisites.python.details')
+            pythonCheckResults.value = Array.isArray(results) ? results : []
+            errorDetails.value = ''
             currentState.value = 'error'
             return false
           }
@@ -499,6 +506,7 @@ export default {
       currentState.value = 'checking'
       errorMessage.value = ''
       errorDetails.value = ''
+      pythonCheckResults.value = []
       installationProgress.value = 0
       currentStep.value = 0
       installMessages.value = []
@@ -586,6 +594,7 @@ export default {
       errorTitle,
       errorMessage,
       errorDetails,
+      pythonCheckResults,
       verificationFailed,
       getStatusIcon,
       getStatusIconClass,

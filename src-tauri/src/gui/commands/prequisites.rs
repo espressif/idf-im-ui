@@ -1,10 +1,8 @@
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
-use idf_im_lib;
 use log::{error, warn};
-use tauri::AppHandle;
-use serde_json::{json, Value};
 use rust_i18n::t;
-
+use serde_json::{json, Value};
+use tauri::AppHandle;
 
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
@@ -124,28 +122,44 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     }
 }
 
-/// Performs a sanity check on the Python installation
-#[tauri::command]
-pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> bool {
-    let outputs = idf_im_lib::python_utils::python_sanity_check(python);
-    let mut all_ok = true;
+/// GUI presentation DTO serialized to the Vue frontend.
+///
+/// Not a duplicate of [`GenericCheckResult<T>`](idf_im_lib::utils::GenericCheckResult):
+/// that struct carries the raw enum variant + raw command output and lives in the
+/// i18n-free library, whereas this struct carries translated strings ready for display.
+#[derive(serde::Serialize)]
+pub struct CheckResultItem {
+    pub display_name: String,
+    pub passed: bool,
+    pub hint: Option<String>,
+}
 
-    for output in outputs {
-        match output {
-            Ok(_) => {}
-            Err(err) => {
-                all_ok = false;
-                let warning_msg = t!("gui.system_dependencies.python_sanity_check_failed", error = err.to_string()).to_string();
+/// Performs a sanity check and returns structured results for the GUI.
+/// Raw command output is logged only; user sees display_name + hint per failure.
+#[tauri::command]
+pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<CheckResultItem> {
+    let results = idf_im_lib::python_utils::python_sanity_check(python);
+
+    results
+        .iter()
+        .map(|r| {
+            let display_name = t!(r.check.display_key()).to_string();
+            let hint = t!(r.check.hint_key_for_os(std::env::consts::OS)).to_string();
+            if !r.passed {
+                warn!("[FAIL] {}: {}", display_name, r.message);
                 send_message(
                     &app_handle,
-                    warning_msg.clone(),
+                    format!("{} — {}", display_name, hint),
                     "warning".to_string(),
                 );
-                warn!("{}", warning_msg);
             }
-        }
-    }
-    all_ok
+            CheckResultItem {
+                display_name,
+                passed: r.passed,
+                hint: if r.passed { None } else { Some(hint) },
+            }
+        })
+        .collect()
 }
 
 /// Installs Python

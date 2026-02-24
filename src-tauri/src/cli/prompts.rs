@@ -19,7 +19,6 @@ use std::collections::HashMap;
 
 use crate::cli::helpers::generic_confirm_with_default;
 
-
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
     available_targets.insert(0, "all".to_string());
@@ -158,21 +157,26 @@ pub fn check_and_install_prerequisites(
 }
 
 fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
-    let outpusts = idf_im_lib::python_utils::python_sanity_check(python);
+    let results = idf_im_lib::python_utils::python_sanity_check(python);
     let mut all_ok = true;
-    for output in outpusts {
-        match output {
-            Ok(_) => {}
-            Err(err) => {
-                all_ok = false;
-                println!("{:?}", err)
-            }
+    for result in &results {
+        let name = t!(result.check.display_key()).to_string();
+        if result.passed {
+            debug!("[PASS] {}: {}", name, result.message);
+            println!("  [PASS] {}", name);
+        } else {
+            all_ok = false;
+            debug!("[FAIL] {}: {}", name, result.message);
+            println!("  [FAIL] {}", name);
+            println!("         Hint: {}", t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string());
         }
     }
     if all_ok {
         debug!("{}", t!("debug.python_sanity_check"));
         Ok(())
     } else {
+        // Per-check [FAIL] lines with hints were already printed above.
+        // Return a short error to signal failure without repeating advice.
         Err(t!("python.sanitycheck.fail").to_string())
     }
 }
@@ -187,7 +191,7 @@ pub fn check_and_install_python(
     } else {
         run_with_spinner(|| python_sanity_check(None))
     };
-    if let Err(err) = check_result {
+    if let Err(_err) = check_result {
         if std::env::consts::OS == "windows" {
             let res = if !install_all_prerequisites && !non_interactive {
                 generic_confirm("python.install.prompt")
@@ -223,7 +227,8 @@ pub fn check_and_install_python(
                 return Err(t!("python.install.refuse").to_string());
             }
         } else {
-            return Err(format!("{} {:?}", t!("python.sanitycheck.fail"), err));
+            // Details were already printed per-check — just signal the failure.
+            return Err(t!("python.sanitycheck.fail").to_string());
         }
     } else {
         info!("{}", t!("python.sanitycheck.ok"))
