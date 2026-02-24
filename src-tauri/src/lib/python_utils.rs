@@ -835,7 +835,7 @@ fn run_install_python_env_script_with_features(
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
 pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<SanityCheck>> {
-    let py = python.unwrap_or(detect_default_python());
+    let py = python.unwrap_or_else(|| detect_default_python());
     let mut results = Vec::new();
 
     // ── 1. Python version ────────────────────────────────────────────
