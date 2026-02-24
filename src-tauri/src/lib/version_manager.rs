@@ -248,10 +248,28 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
             )
         })?;
         if !keep_idf_folder {
-            match remove_directory_all(installation_folder) {
+            // First remove the installation folder itself (e.g., esp-idf)
+            match remove_directory_all(&installation_folder_path) {
                 Ok(_) => {}
                 Err(e) => {
                     return Err(anyhow!("Failed to remove installation folder: {}", e));
+                }
+            }
+
+            // Only remove the parent folder if it's empty
+            match fs::read_dir(installation_folder) {
+                Ok(mut entries) => {
+                    if entries.next().is_none() {
+                        // Directory is empty, remove it
+                        if let Err(e) = remove_directory_all(installation_folder) {
+                            warn!("Failed to remove empty parent directory: {}", e);
+                        }
+                    }
+                    // Directory is not empty, keep it
+                }
+                Err(e) => {
+                    // Directory might not exist or other error
+                    warn!("Could not check or remove parent directory: {}", e);
                 }
             }
         }
