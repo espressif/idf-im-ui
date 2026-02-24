@@ -350,6 +350,238 @@ jobs:
           asset_path: rpm_output/*.rpm
           asset_name: eim-cli-${{ matrix.package_name }}.rpm
 
+  build-cli-linux-armv7:
+    name: Build CLI (Linux - linux-armv7)
+    needs: [setup, build-test-lib, build-cli-linux]
+    if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped') && (needs.build-cli-linux.result == 'success')
+    runs-on: ubuntu-latest
+    env:
+      CROSS_TARGET: armv7-unknown-linux-musleabihf
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: armv7-unknown-linux-musleabihf
+
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross --tag v0.2.5
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: linux-armv7-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: linux-armv7-cargo-
+
+      - name: Build CLI
+        env:
+          LIBZ_SYS_STATIC: 1
+          ZLIB_STATIC: 1
+          LZMA_API_STATIC: 1
+          APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+        run: |
+          cd src-tauri
+          cross build --release --no-default-features --features cli --target ${{ env.CROSS_TARGET }}
+        shell: bash
+
+      - name: Create release directory
+        run: mkdir -p release_cli/linux-armv7
+
+      - name: Copy binary
+        run: |
+          cp src-tauri/target/${{ env.CROSS_TARGET }}/release/eim release_cli/linux-armv7/eim
+          chmod +x release_cli/linux-armv7/eim
+          cd release_cli/linux-armv7
+          zip -r eim.zip eim
+        shell: bash
+
+      - name: Download completions from linux-x64 build
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: /tmp/x64-cli-artifact/
+
+      - name: Generate Completions from x64 binary
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Completions are architecture-independent (just text from clap),
+          # so we reuse the x64 binary to generate them.
+          X64_BIN="/tmp/x64-cli-artifact/eim"
+          chmod +x "$X64_BIN"
+
+          cd src-tauri
+          OUTDIR="target/${{ env.CROSS_TARGET }}/release/completions"
+          mkdir -p "$OUTDIR"
+
+          "$X64_BIN" completions zsh    > "$OUTDIR/_eim"
+          "$X64_BIN" completions bash   > "$OUTDIR/eim.bash"
+          "$X64_BIN" completions fish   > "$OUTDIR/eim.fish"
+          "$X64_BIN" completions elvish > "$OUTDIR/eim.elv"
+
+          mkdir -p target/release/completions
+          cp -a "$OUTDIR"/. target/release/completions/
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: release_cli/linux-armv7/eim
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/linux-armv7/eim.zip
+          asset_name: eim-cli-linux-armv7.zip
+
+      # offline installer
+      - name: Build offline_installer_builder
+        env:
+          LIBZ_SYS_STATIC: 1
+          ZLIB_STATIC: 1
+          LZMA_API_STATIC: 1
+        run: |
+          cd src-tauri
+          cross build --release --no-default-features --features offline --bin offline_installer_builder --target ${{ env.CROSS_TARGET }}
+        shell: bash
+
+      - name: Copy offline_installer_builder binary
+        run: |
+          cp src-tauri/target/${{ env.CROSS_TARGET }}/release/offline_installer_builder release_cli/linux-armv7/offline_installer_builder
+          chmod +x release_cli/linux-armv7/offline_installer_builder
+          cd release_cli/linux-armv7
+          zip -r offline_installer_builder.zip offline_installer_builder
+        shell: bash
+
+      - name: Upload offline_installer_builder artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline_installer_builder-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: release_cli/linux-armv7/offline_installer_builder
+
+      - name: Upload offline_installer_builder Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: release_cli/linux-armv7/offline_installer_builder.zip
+          asset_name: offline_installer_builder-linux-armv7.zip
+
+      # .deb package
+      - name: Prepare manpage for deb package
+        if: github.event_name == 'release' && github.event.action == 'created'
+        run: |
+          mkdir -p src-tauri/man
+          cp man/eim.1 src-tauri/man/
+        shell: bash
+
+      - name: Build CLI .deb package
+        run: |
+          cd src-tauri
+          cargo install cargo-deb || true
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-${GITHUB_SHA:0:7}"
+          fi
+
+          echo "Using version: $VERSION"
+
+          cargo deb --no-build --no-strip --no-default-features --features cli \
+            --target ${{ env.CROSS_TARGET }} \
+            --deb-version $VERSION
+        shell: bash
+
+      - name: Upload CLI .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
+          path: src-tauri/target/debian/eim*.deb
+          if-no-files-found: warn
+
+      - name: Upload CLI .deb Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: src-tauri/target/debian/eim*.deb
+          asset_name: eim-cli-linux-armv7.deb
+
+      # .rpm package
+      - name: Build CLI .rpm package
+        run: |
+          cd src-tauri
+          cargo install cargo-generate-rpm || true
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0-${GITHUB_SHA:0:7}"
+          fi
+
+          echo "Using version: $VERSION"
+
+          mkdir -p ~/.rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+
+          cargo generate-rpm \
+            --target ${{ env.CROSS_TARGET }} \
+            --payload-compress gzip \
+
+          echo "Generated RPM files:"
+          find target -name "*.rpm" -type f
+        shell: bash
+
+      - name: Find and upload RPM artifacts
+        id: find-rpms
+        run: |
+          RPM_DIR="rpm_output"
+          mkdir -p "$RPM_DIR"
+          find src-tauri/target -name "*.rpm" -type f -exec cp {} "$RPM_DIR/" \;
+
+          echo "Contents of $RPM_DIR:"
+          ls -la "$RPM_DIR"/
+
+          if [ -d "$RPM_DIR" ] && [ "$(ls -A $RPM_DIR)" ]; then
+            echo "rpm_files_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "rpm_files_found=false" >> $GITHUB_OUTPUT
+            echo "No RPM files found!" >&2
+            exit 1
+          fi
+
+      - name: Upload RPM artifacts
+        if: steps.find-rpms.outputs.rpm_files_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          path: rpm_output/*.rpm
+          if-no-files-found: warn
+
+      - name: Upload CLI .rpm Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
+        uses: shogo82148/actions-upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: rpm_output/*.rpm
+          asset_name: eim-cli-linux-armv7.rpm
+
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -667,8 +899,8 @@ jobs:
 
   build-offline-archives:
     name: Build Offline Archives
-    needs: [build-cli, build-cli-linux]
-    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && github.event_name == 'release'
+    needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
+    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && (needs.build-cli-linux-armv7.result == 'success' || needs.build-cli-linux-armv7.result == 'skipped') && github.event_name == 'release'
     uses: ./.github/workflows/build_offline_installer_archives.yaml
     with:
       ref: ${{ github.ref }}
@@ -1042,7 +1274,7 @@ jobs:
 
   Autotest-CLI:
     name: Autotest CLI
-    needs: [build-cli, build-cli-linux]
+    needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
     if: needs.build-cli.result == 'success' && needs.build-cli-linux.result == 'success'
     uses: ./.github/workflows/test_cli.yml
     with:
@@ -1063,7 +1295,7 @@ jobs:
 
   update-release-info:
     name: Update Release Information
-    needs: [build-cli, build-cli-linux, build-gui]
+    needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     steps:
@@ -1082,7 +1314,7 @@ jobs:
 
   update-homebrew:
     name: Update Homebrew Formula and Cask
-    needs: [build-cli, build-cli-linux, build-gui, update-release-info]
+    needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
     uses: ./.github/workflows/update-homebrew.yml
     with:
       version: ${{ github.ref_name }}
@@ -1091,7 +1323,7 @@ jobs:
 
   update-linux-repos:
     name: Update APT and RPM Repositories
-    needs: [build-cli-linux, build-gui, update-release-info]
+    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
     uses: ./.github/workflows/update-linux-repos.yml
     if: github.event_name == 'release' && github.event.action == 'created'
     with:
