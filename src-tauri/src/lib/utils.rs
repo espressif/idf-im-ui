@@ -306,6 +306,23 @@ fn filter_subpaths(paths: Vec<String>) -> Vec<String> {
     filtered
 }
 
+/// Normalizes a path for comparison by expanding ~, converting to absolute, and removing trailing slashes.
+///
+/// This function is useful for comparing paths that may differ in formatting but point to the same location.
+/// Returns None if the path cannot be canonicalized.
+///
+/// # Parameters
+///
+/// - `path`: A string slice representing the path to normalize.
+///
+/// # Return Value
+///
+/// - `Option<String>`: The normalized path as a string, or None if canonicalization fails.
+pub fn normalize_path_for_comparison(path: &str) -> Option<String> {
+    let expanded = crate::expand_tilde(Path::new(path));
+    expanded.canonicalize().ok().map(|p| p.to_string_lossy().trim_end_matches('/').trim_end_matches('\\').to_string())
+}
+
 /// Removes a directory and all its contents recursively.
 ///
 /// This function attempts to remove a directory and all its contents, including subdirectories and files.

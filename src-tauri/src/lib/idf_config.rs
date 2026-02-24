@@ -202,11 +202,12 @@ impl IdfConfig {
     /// Selects an IDF installation in the configuration.
     ///
     /// This function searches for an installation matching the given identifier
-    /// (either by ID or name) and sets it as the selected installation.
+    /// (by ID, name, or path) and sets it as the selected installation.
+    /// Path matching supports expansion of ~ and converts to absolute paths for comparison.
     ///
     /// # Arguments
     ///
-    /// * `identifier` - A string slice that holds the ID or name of the installation to select.
+    /// * `identifier` - A string slice that holds the ID, name, or path of the installation to select.
     ///
     /// # Returns
     ///
@@ -217,7 +218,13 @@ impl IdfConfig {
         if let Some(installation) = self
             .idf_installed
             .iter()
-            .find(|install| install.id == identifier || install.name == identifier)
+            .find(|install| {
+                install.id == identifier
+                    || install.name == identifier
+                    || { let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
+                     normalized_identifier.is_some() && normalized_identifier == crate::utils::normalize_path_for_comparison(&install.path)
+                }
+            })
         {
             self.idf_selected_id = installation.id.clone();
             true
