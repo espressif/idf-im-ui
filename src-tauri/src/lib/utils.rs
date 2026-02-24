@@ -999,6 +999,39 @@ pub fn is_running_elevated() -> bool {
     unsafe { libc::geteuid() == 0 }
 }
 
+/// Checks whether a file is a Windows App Execution Alias (reparse point
+/// with tag `IO_REPARSE_TAG_APPEXECLINK`).  These are zero-byte stubs
+/// placed in `%LOCALAPPDATA%\Microsoft\WindowsApps` that redirect to
+/// Microsoft Store apps — or open the Store page if the app is not installed.
+#[cfg(windows)]
+pub fn is_app_execution_alias(path: &std::path::Path) -> bool {
+    use std::os::windows::ffi::OsStrExt;
+    use winapi::um::fileapi::{FindClose, FindFirstFileW, GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
+    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
+    use winapi::um::minwinbase::WIN32_FIND_DATAW;
+
+    const FILE_ATTRIBUTE_REPARSE_POINT: DWORD = 0x0400;
+    const IO_REPARSE_TAG_APPEXECLINK: DWORD = 0x8000_001B;
+
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+
+    unsafe {
+        let attrs = GetFileAttributesW(wide.as_ptr());
+        if attrs == INVALID_FILE_ATTRIBUTES || attrs & FILE_ATTRIBUTE_REPARSE_POINT == 0 {
+            return false;
+        }
+
+        let mut find_data: WIN32_FIND_DATAW = std::mem::zeroed();
+        let handle = FindFirstFileW(wide.as_ptr(), &mut find_data);
+        if handle == INVALID_HANDLE_VALUE {
+            return false;
+        }
+        FindClose(handle);
+
+        find_data.dwReserved0 == IO_REPARSE_TAG_APPEXECLINK
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
