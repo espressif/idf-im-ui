@@ -37,7 +37,7 @@ use super::{
     prequisites::{install_prerequisites, python_install, python_sanity_check},
     settings,
 };
-use idf_im_lib::python_utils::SanityCheckLocale;
+
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct InstallationPlan {

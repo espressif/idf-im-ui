@@ -1,5 +1,4 @@
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
-use idf_im_lib::python_utils::SanityCheckLocale;
 use log::{error, warn};
 use rust_i18n::t;
 use serde_json::{json, Value};
@@ -123,8 +122,11 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     }
 }
 
-/// One item for the GUI: translated name, pass/fail, and hint when failed.
-/// Generic struct that can be reused for other check types (e.g., prerequisites, tool checks).
+/// GUI presentation DTO serialized to the Vue frontend.
+///
+/// Not a duplicate of [`GenericCheckResult<T>`](idf_im_lib::utils::GenericCheckResult):
+/// that struct carries the raw enum variant + raw command output and lives in the
+/// i18n-free library, whereas this struct carries translated strings ready for display.
 #[derive(serde::Serialize)]
 pub struct CheckResultItem {
     pub display_name: String,

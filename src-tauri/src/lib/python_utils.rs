@@ -35,42 +35,30 @@ pub enum SanityCheck {
     Ssl,
 }
 
-/// Trait for mapping a sanity check to its i18n locale keys (dynamic key generation).
-/// Translation is done by the app (CLI/GUI); the library stays i18n-free.
-pub trait SanityCheckLocale {
-    /// Locale key for the check's display name (e.g. `python.sanitycheck.check.version`).
-    fn display_key(&self) -> &'static str;
-    /// Locale key for the check's resolution hint for the given OS.
-    fn hint_key_for_os(&self, os: &str) -> &'static str;
-}
-
-impl SanityCheckLocale for SanityCheck {
-    fn display_key(&self) -> &'static str {
+impl SanityCheck {
+    fn key_name(&self) -> &'static str {
         match self {
-            SanityCheck::PythonVersion => "python.sanitycheck.check.version",
-            SanityCheck::Pip => "python.sanitycheck.check.pip",
-            SanityCheck::Venv => "python.sanitycheck.check.venv",
-            SanityCheck::StdLib => "python.sanitycheck.check.stdlib",
-            SanityCheck::Ctypes => "python.sanitycheck.check.ctypes",
-            SanityCheck::Ssl => "python.sanitycheck.check.ssl",
+            SanityCheck::PythonVersion => "version",
+            SanityCheck::Pip => "pip",
+            SanityCheck::Venv => "venv",
+            SanityCheck::StdLib => "stdlib",
+            SanityCheck::Ctypes => "ctypes",
+            SanityCheck::Ssl => "ssl",
         }
     }
 
-    fn hint_key_for_os(&self, os: &str) -> &'static str {
-        match (self, os) {
-            (SanityCheck::PythonVersion, _) => "python.sanitycheck.hint.version",
-            (SanityCheck::Pip, _) => "python.sanitycheck.hint.pip",
-            (SanityCheck::StdLib, _) => "python.sanitycheck.hint.stdlib",
-            (SanityCheck::Venv, "macos") => "python.sanitycheck.hint.venv.macos",
-            (SanityCheck::Venv, "windows") => "python.sanitycheck.hint.venv.windows",
-            (SanityCheck::Venv, _) => "python.sanitycheck.hint.venv.linux",
-            (SanityCheck::Ctypes, "macos") => "python.sanitycheck.hint.ctypes.macos",
-            (SanityCheck::Ctypes, "windows") => "python.sanitycheck.hint.ctypes.windows",
-            (SanityCheck::Ctypes, _) => "python.sanitycheck.hint.ctypes.linux",
-            (SanityCheck::Ssl, "macos") => "python.sanitycheck.hint.ssl.macos",
-            (SanityCheck::Ssl, "windows") => "python.sanitycheck.hint.ssl.windows",
-            (SanityCheck::Ssl, _) => "python.sanitycheck.hint.ssl.linux",
-        }
+    pub fn display_key(&self) -> String {
+        format!("python.sanitycheck.check.{}", self.key_name())
+    }
+
+    pub fn hint_key_for_os(&self, os: &str) -> String {
+        let os_suffix = match (self, os) {
+            (SanityCheck::Venv | SanityCheck::Ctypes | SanityCheck::Ssl, "macos") => ".macos",
+            (SanityCheck::Venv | SanityCheck::Ctypes | SanityCheck::Ssl, "windows") => ".windows",
+            (SanityCheck::Venv | SanityCheck::Ctypes | SanityCheck::Ssl, _) => ".linux",
+            _ => "",
+        };
+        format!("python.sanitycheck.hint.{}{}", self.key_name(), os_suffix)
     }
 }
 

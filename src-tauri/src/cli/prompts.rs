@@ -18,7 +18,6 @@ use idf_im_lib::tool_selection::{
 use std::collections::HashMap;
 
 use crate::cli::helpers::generic_confirm_with_default;
-use idf_im_lib::python_utils::SanityCheckLocale;
 
 pub async fn select_target() -> Result<Vec<String>, String> {
     let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
