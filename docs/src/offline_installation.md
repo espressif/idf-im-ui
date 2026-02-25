@@ -41,7 +41,7 @@ eim install --use-local-archive PATH_TO_ARCHIVE
 On Windows, the offline installer will automatically install the necessary prerequisites (Git and Python) if they are not found. On macOS and Linux, you must have the required prerequisites installed on your system before running the offline installer.
 
 > **Important Note on Python Version**
-> While ESP-IDF generally supports Python versions 3.10, 3.11, 3.12, and 3.13, the offline installation currently has a stricter requirement and **only supports Python 3.11 to 3.13**. Python 3.14 and later are not supported. Please ensure you have a compatible Python version installed and available in your system's PATH before starting the installation.
+> While ESP-IDF generally supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14, the offline installation currently has a stricter requirement and **only supports Python 3.11 to 3.14** on Linux and macOS. Python 3.14 is not supported on Windows for offline installations because ESP-IDF dependencies do not yet support it. Please ensure you have a compatible Python version installed and available in your system's PATH before starting the installation.
 
 ## Creating Your Own Offline Archive
 

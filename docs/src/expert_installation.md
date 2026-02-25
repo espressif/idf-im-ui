@@ -18,7 +18,7 @@ After configuring the installation options, you can start the process. The new i
 4.  **Submodules**: Submodules are downloaded.
 5.  **Tools Selection**: Select which development tools to install for each ESP-IDF version. Required tools are pre-selected and cannot be deselected. Tools already present on your system will be reused.
 6.  **Tools**: Development tools are installed.
-7.  **Python**: The Python environment is set up. ESP-IDF supports Python versions 3.10, 3.11, 3.12, and 3.13. Python 3.14 and later are not supported.
+7.  **Python**: The Python environment is set up. ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Note that Python 3.14 is supported on Linux and macOS only; Windows does not support Python 3.14 because ESP-IDF dependencies do not yet support it.
 8.  **Configure**: Final configuration is completed.
 9.  **Complete**: The installation is finished.
 
