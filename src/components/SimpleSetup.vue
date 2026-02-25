@@ -419,7 +419,8 @@ export default {
           unlistenFn = await listen('prerequisites-install-complete', async (event) => {
             console.log('Event received:', event.payload)
             try {
-              await store.checkPrerequisites(true)
+              // Use local function to properly update UI state
+              await checkPrerequisites(true)
             } catch (e) {
               console.error('Error:', e)
             }

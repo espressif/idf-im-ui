@@ -28,46 +28,6 @@
       </n-card>
     </div>
 
-    <!-- Prerequisites Alert -->
-    <n-alert
-      v-if="!isLoading && !prerequisitesOk && os !== 'unknown' && !isInstallingPrerequisites"
-      :type="os === 'windows' ? 'warning' : 'error'"
-      class="prerequisites-alert"
-      data-id="prerequisites-alert"
-    >
-      <template #header>{{ $t('basicInstaller.prerequisites.header') }}</template>
-      <div v-if="missingPrerequisites.length > 0">
-        <p>{{ $t('basicInstaller.prerequisites.message') }}</p>
-        <ul>
-          <li v-for="prereq in missingPrerequisites" :key="prereq">{{ prereq }}</li>
-        </ul>
-      </div>
-      <n-button
-        v-if="os === 'windows'"
-        @click="installPrerequisites"
-        size="small"
-        type="warning"
-        style="margin-top: 10px;"
-        data-id="install-prerequisites-button"
-      >
-        {{ $t('basicInstaller.prerequisites.installButton') }}
-      </n-button>
-      <p v-else style="margin-top: 10px;">
-        {{ $t('basicInstaller.prerequisites.manualInstall') }}
-      </p>
-    </n-alert>
-
-    <!-- Installing Prerequisites Loading State -->
-    <div v-if="isInstallingPrerequisites" class="loading-container" data-id="installing-prerequisites-container">
-      <n-card class="loading-card">
-        <div class="loading-content">
-          <n-spin size="large" />
-          <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
-          <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
-        </div>
-      </n-card>
-    </div>
-
     <!-- Installation Options -->
     <transition name="fade-in" mode="out-in">
       <div v-if="!isLoading" class="installation-options" data-id="installation-options">
