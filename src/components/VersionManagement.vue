@@ -244,10 +244,11 @@
 </template>
 
 <script>
-import { ref, onMounted, version } from 'vue'
+import { ref, onMounted, onUnmounted, version } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import {
   NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
   NCheckbox, NAlert, NTooltip, useMessage
@@ -284,6 +285,9 @@ export default {
     const os = ref('unknown')
     const prerequisitesInstalled = ref(true)
     const checkingUpdates = ref(false)
+
+    // Event listener for prerequisites installation complete
+    const unlistenInstallComplete = ref(null)
 
     // Modal states
     const showRenameModal = ref(false)
@@ -450,8 +454,18 @@ export default {
       try {
         await invoke('install_prerequisites')
         message.success(t('versionManagement.messages.success.prerequisitesStarted'))
+        // Recheck will happen automatically via event listener when installation completes
       } catch (error) {
         message.error(t('versionManagement.messages.error.prerequisites', { error }))
+      }
+    }
+
+    // Recheck prerequisites status
+    const recheckPrerequisites = async () => {
+      try {
+        prerequisitesInstalled.value = await invoke('check_prerequisites')
+      } catch (error) {
+        console.error('Failed to recheck prerequisites:', error)
       }
     }
 
@@ -476,9 +490,19 @@ export default {
       router.push('/basic-installer')
     }
 
-    onMounted(() => {
+    onMounted(async () => {
+      unlistenInstallComplete.value = await listen('prerequisites-install-complete', async () => {
+        await recheckPrerequisites();
+      });
+
       checkOS()
       loadInstalledVersions()
+    })
+
+    onUnmounted(() => {
+      if (unlistenInstallComplete.value) {
+        unlistenInstallComplete.value();
+      }
     })
 
     return {
@@ -506,6 +530,7 @@ export default {
       purgeAll,
       confirmPurge,
       installPrerequisites,
+      recheckPrerequisites,
       installDrivers,
       goToBasicInstaller,
       t

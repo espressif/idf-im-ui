@@ -2,7 +2,7 @@
   <div class="basic-installer" data-id="basic-installer-container">
     <div class="installer-header">
       <h1 class="title" data-id="basic-installer-title">{{ $t('basicInstaller.title') }}</h1>
-      <n-button @click="goBack" quaternary :disabled="isLoading" data-id="back-button">
+      <n-button @click="goBack" quaternary :disabled="isLoading || isInstallingPrerequisites" data-id="back-button">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -28,9 +28,20 @@
       </n-card>
     </div>
 
+    <!-- Prerequisites Installation Overlay -->
+    <div v-if="isInstallingPrerequisites" class="prerequisites-loading-overlay">
+      <n-card class="prerequisites-loading-card">
+        <div class="loading-content">
+          <n-spin size="large" />
+          <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
+          <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
+        </div>
+      </n-card>
+    </div>
+
     <!-- Prerequisites Alert -->
     <n-alert
-      v-if="!isLoading && !prerequisitesOk && os !== 'unknown'"
+      v-if="!isLoading && !isInstallingPrerequisites && !prerequisitesOk && os !== 'unknown'"
       :type="os === 'windows' ? 'warning' : 'error'"
       class="prerequisites-alert"
       data-id="prerequisites-alert"
@@ -139,14 +150,16 @@
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NAlert, NModal, NUpload,
-  NUploadDragger, NText, NP, NTag, NSpin, NProgress, useMessage
+  NUploadDragger, NText, NP, NTag, NSpin, NProgress, useMessage,
+  c
 } from 'naive-ui'
 import {
   ArrowLeftOutlined,
@@ -175,6 +188,7 @@ export default {
 
     // Loading state
     const isLoading = ref(false)
+    const isInstallingPrerequisites = ref(false)
     const loadingMessage = ref('Checking prerequisites...')
     const loadingProgress = ref(0)
 
@@ -186,9 +200,12 @@ export default {
     const offlineInputCITests = ref(null);
     const configInputCITests = ref(null);
 
+    // Event listener for prerequisites installation complete
+    const unlistenInstallComplete = ref(null);
+
     const appStore = useAppStore()
 
-    const checkPrerequisites = async () => {
+    const checkPrerequisites = async (force = false) => {
       try {
         isLoading.value = false
         loadingProgress.value = 20
@@ -200,11 +217,12 @@ export default {
         loadingProgress.value = 40
 
         loadingMessage.value = t('basicInstaller.loading.checkingPrerequisites')
+        // Force fresh check when force=true or no previous check exists
         let prerequisitesStatus = null;
-        if (appStore.prerequisitesLastChecked !== null) {
+        if (!force && appStore.prerequisitesLastChecked !== null) {
           prerequisitesStatus = appStore.prerequisitesStatus;
         } else {
-          prerequisitesStatus = await appStore.checkPrerequisites();
+          prerequisitesStatus = await appStore.checkPrerequisites(force);
         }
         prerequisitesOk.value = prerequisitesStatus.allOk
         missingPrerequisites.value = prerequisitesStatus.missing || []
@@ -231,28 +249,66 @@ export default {
     }
 
     const installPrerequisites = async () => {
+      let unlistenFn = null
       try {
-        message.info(t('basicInstaller.messages.startingPrerequisites'))
+        isInstallingPrerequisites.value = true
+        loadingMessage.value = t('basicInstaller.loading.installingPrerequisites')
+        loadingProgress.value = 0
+
+        const eventPromise = new Promise(async (resolve) => {
+          let isResolved = false
+          const doResolve = () => {
+            if (!isResolved) {
+              isResolved = true
+              resolve()
+            }
+          }
+
+          unlistenFn = await listen('prerequisites-install-complete', async (event) => {
+            console.log('Event received:', event.payload)
+            try {
+              // Force fresh check after installation completes
+              await checkPrerequisites(true)
+            } catch (e) {
+              console.error('Error:', e)
+            }
+            doResolve()
+          })
+
+          // Timeout after 5 minutes
+          setTimeout(() => {
+            console.log('Timeout - resolving anyway')
+            doResolve()
+          }, 300000)
+        })
+
         await invoke('install_prerequisites')
-        setTimeout(() => checkPrerequisites(), 3000)
+
+        await eventPromise
+
       } catch (error) {
         message.error(t('basicInstaller.messages.errors.prerequisites'))
+      } finally {
+        // Force fresh check to update store and UI
+        await checkPrerequisites(true)
+        if (unlistenFn) unlistenFn()
+        isInstallingPrerequisites.value = false
       }
     }
 
     const startEasyMode = async () => {
-      if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning(t('basicInstaller.prerequisites.warning'))
-        return
-      }
+      // if (!prerequisitesOk.value && os.value !== 'windows') {
+      //   message.warning(t('basicInstaller.prerequisites.warning'))
+      //   return
+      // }
       router.push('/simple-setup')
     }
 
     const startWizard = () => {
-      if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning(t('basicInstaller.prerequisites.warning'))
-        return
-      }
+      // if (!prerequisitesOk.value && os.value !== 'windows') {
+      //   message.warning(t('basicInstaller.prerequisites.warning'))
+      //   return
+      // }
       router.push('/wizard/1')
     }
 
@@ -315,12 +371,18 @@ export default {
       router.push('/version-management')
     }
 
-    onMounted(() => {
-      // nextTick(() => {
-      //   setTimeout(() => {
-      //     checkPrerequisites();
-      //   }, 300);
-      // });
+    onMounted(async () => {
+      unlistenInstallComplete.value = await listen('prerequisites-install-complete', async () => {
+        await checkPrerequisites();
+      });
+
+      await checkPrerequisites();
+    })
+
+    onUnmounted(() => {
+      if (unlistenInstallComplete.value) {
+        unlistenInstallComplete.value();
+      }
     })
 
     const easyFeatures = [
@@ -337,6 +399,7 @@ export default {
 
     return {
       isLoading,
+      isInstallingPrerequisites,
       loadingMessage,
       loadingProgress,
       os,
@@ -432,6 +495,27 @@ export default {
 .loading-content .n-progress {
   width: 100%;
   max-width: 300px;
+}
+
+/* Prerequisites Loading Overlay */
+.prerequisites-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.prerequisites-loading-card {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border: 1px solid #e5e7eb;
 }
 
 /* Installation Options */

@@ -68,6 +68,7 @@
 
 <script>
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useI18n } from 'vue-i18n';
 import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
 import { useAppStore } from '../../store'
@@ -92,7 +93,8 @@ export default {
     can_verify: true,
     shell_failed: false,
     os: undefined,
-    appStore: useAppStore()
+    appStore: useAppStore(),
+    unlistenInstallComplete: null
   }),
   watch: {
     missing_prerequisities(newValue) {
@@ -115,9 +117,7 @@ export default {
     check_prerequisites: async function (force) {
       this.loading = true;
       await this.get_prerequisities_list();
-      if (force) {
-        await this.appStore.checkPrerequisites(force);
-      }
+      await this.appStore.checkPrerequisites(force);
       let prerequisitesStatus = this.appStore.prerequisitesStatus;
       console.log("Current prerequisites status from store:", prerequisitesStatus);
       this.missing_prerequisities = prerequisitesStatus.missing || [];
@@ -125,7 +125,7 @@ export default {
       this.shell_failed = prerequisitesStatus.shellFailed || false;
       this.did_the_check_run = this.appStore.prerequisitesLastChecked !== null;
       this.loading = false;
-      
+
       // When we can't verify, show question marks
       if (!this.can_verify) {
         this.display_prerequisities = this.display_prerequisities.map(p => ({
@@ -143,8 +143,6 @@ export default {
     install_prerequisites: async function () {
       this.installing_prerequisities = true;
       await invoke("install_prerequisites", {});
-      this.check_prerequisites();
-      this.installing_prerequisities = false;
       return false;
     },
     get_os: async function () {
@@ -157,9 +155,21 @@ export default {
       return Math.ceil(this.all_prerequisities.length === 0 ? 0 : ((this.all_prerequisities.length - this.missing_prerequisities.length) / this.all_prerequisities.length) * 100);
     }
   },
-  mounted() {
-    this.get_os();
-    this.check_prerequisites();
+  async mounted() {
+    // Listen for installation completion event
+    this.unlistenInstallComplete = await listen('prerequisites-install-complete', async (event) => {
+      this.installing_prerequisities = false;
+      // Recheck prerequisites after installation completes
+      await this.check_prerequisites();
+    });
+
+    await this.get_os();
+    await this.check_prerequisites();
+  },
+  unmounted() {
+    if (this.unlistenInstallComplete) {
+      this.unlistenInstallComplete();
+    }
   }
 }
 </script>

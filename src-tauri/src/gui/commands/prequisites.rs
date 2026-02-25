@@ -2,7 +2,9 @@ use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
 use log::{error, warn};
 use rust_i18n::t;
 use serde_json::{json, Value};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
+use tokio::task;
+
 
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
@@ -86,7 +88,7 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
     }
 }
 
-/// Installs missing prerequisites
+/// Installs missing prerequisites (non-blocking - runs in tokio background task)
 #[tauri::command]
 pub fn install_prerequisites(app_handle: AppHandle) -> bool {
     let unsatisfied_prerequisites = match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
@@ -107,19 +109,35 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
         }
     };
 
-    match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
-        Ok(_) => true,
-        Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_installing_prerequisites", error = err.to_string()).to_string();
-            send_message(
-                &app_handle,
-                error_msg.clone(),
-                "error".to_string(),
-            );
-            error!("{}", error_msg);
-            false
+    // Spawn tokio task to avoid blocking the UI
+    let app_handle_clone = app_handle.clone();
+    task::spawn_blocking(move || {
+        match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
+            Ok(_) => {
+                // Emit event to notify frontend that installation is complete
+                let _ = app_handle_clone.emit("prerequisites-install-complete", json!({
+                    "success": true
+                }));
+            }
+            Err(err) => {
+                let error_msg = t!("gui.system_dependencies.error_installing_prerequisites", error = err.to_string()).to_string();
+                send_message(
+                    &app_handle_clone,
+                    error_msg.clone(),
+                    "error".to_string(),
+                );
+                error!("{}", error_msg);
+                // Emit failure event
+                let _ = app_handle_clone.emit("prerequisites-install-complete", json!({
+                    "success": false,
+                    "error": err.to_string()
+                }));
+            }
         }
-    }
+    });
+
+    // Return immediately - installation runs in background
+    true
 }
 
 /// GUI presentation DTO serialized to the Vue frontend.
