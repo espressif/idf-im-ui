@@ -2,7 +2,7 @@
   <div class="basic-installer" data-id="basic-installer-container">
     <div class="installer-header">
       <h1 class="title" data-id="basic-installer-title">{{ $t('basicInstaller.title') }}</h1>
-      <n-button @click="goBack" quaternary :disabled="isLoading" data-id="back-button">
+      <n-button @click="goBack" quaternary :disabled="isLoading || isInstallingPrerequisites" data-id="back-button">
         <template #icon>
           <n-icon><ArrowLeftOutlined /></n-icon>
         </template>
@@ -27,6 +27,46 @@
         </div>
       </n-card>
     </div>
+
+    <!-- Prerequisites Installation Overlay -->
+    <div v-if="isInstallingPrerequisites" class="prerequisites-loading-overlay">
+      <n-card class="prerequisites-loading-card">
+        <div class="loading-content">
+          <n-spin size="large" />
+          <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
+          <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
+        </div>
+      </n-card>
+    </div>
+
+    <!-- Prerequisites Alert -->
+    <n-alert
+      v-if="!isLoading && !isInstallingPrerequisites && !prerequisitesOk && os !== 'unknown'"
+      :type="os === 'windows' ? 'warning' : 'error'"
+      class="prerequisites-alert"
+      data-id="prerequisites-alert"
+    >
+      <template #header>{{ $t('basicInstaller.prerequisites.header') }}</template>
+      <div v-if="missingPrerequisites.length > 0">
+        <p>{{ $t('basicInstaller.prerequisites.message') }}</p>
+        <ul>
+          <li v-for="prereq in missingPrerequisites" :key="prereq">{{ prereq }}</li>
+        </ul>
+      </div>
+      <n-button
+        v-if="os === 'windows'"
+        @click="installPrerequisites"
+        size="small"
+        type="warning"
+        style="margin-top: 10px;"
+        data-id="install-prerequisites-button"
+      >
+        {{ $t('basicInstaller.prerequisites.installButton') }}
+      </n-button>
+      <p v-else style="margin-top: 10px;">
+        {{ $t('basicInstaller.prerequisites.manualInstall') }}
+      </p>
+    </n-alert>
 
     <!-- Installation Options -->
     <transition name="fade-in" mode="out-in">
@@ -118,7 +158,8 @@ import { listen } from '@tauri-apps/api/event'
 import { open } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NAlert, NModal, NUpload,
-  NUploadDragger, NText, NP, NTag, NSpin, NProgress, useMessage
+  NUploadDragger, NText, NP, NTag, NSpin, NProgress, useMessage,
+  c
 } from 'naive-ui'
 import {
   ArrowLeftOutlined,
@@ -164,7 +205,7 @@ export default {
 
     const appStore = useAppStore()
 
-    const checkPrerequisites = async () => {
+    const checkPrerequisites = async (force = false) => {
       try {
         isLoading.value = false
         loadingProgress.value = 20
@@ -176,11 +217,12 @@ export default {
         loadingProgress.value = 40
 
         loadingMessage.value = t('basicInstaller.loading.checkingPrerequisites')
+        // Force fresh check when force=true or no previous check exists
         let prerequisitesStatus = null;
-        if (appStore.prerequisitesLastChecked !== null) {
+        if (!force && appStore.prerequisitesLastChecked !== null) {
           prerequisitesStatus = appStore.prerequisitesStatus;
         } else {
-          prerequisitesStatus = await appStore.checkPrerequisites();
+          prerequisitesStatus = await appStore.checkPrerequisites(force);
         }
         prerequisitesOk.value = prerequisitesStatus.allOk
         missingPrerequisites.value = prerequisitesStatus.missing || []
@@ -225,7 +267,8 @@ export default {
           unlistenFn = await listen('prerequisites-install-complete', async (event) => {
             console.log('Event received:', event.payload)
             try {
-              await checkPrerequisites()
+              // Force fresh check after installation completes
+              await checkPrerequisites(true)
             } catch (e) {
               console.error('Error:', e)
             }
@@ -243,31 +286,29 @@ export default {
 
         await eventPromise
 
-        if (unlistenFn) {
-          unlistenFn()
-        }
-
-        isInstallingPrerequisites.value = false
       } catch (error) {
+        message.error(t('basicInstaller.messages.errors.prerequisites'))
+      } finally {
+        // Force fresh check to update store and UI
+        await checkPrerequisites(true)
         if (unlistenFn) unlistenFn()
         isInstallingPrerequisites.value = false
-        message.error(t('basicInstaller.messages.errors.prerequisites'))
       }
     }
 
     const startEasyMode = async () => {
-      if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning(t('basicInstaller.prerequisites.warning'))
-        return
-      }
+      // if (!prerequisitesOk.value && os.value !== 'windows') {
+      //   message.warning(t('basicInstaller.prerequisites.warning'))
+      //   return
+      // }
       router.push('/simple-setup')
     }
 
     const startWizard = () => {
-      if (!prerequisitesOk.value && os.value !== 'windows') {
-        message.warning(t('basicInstaller.prerequisites.warning'))
-        return
-      }
+      // if (!prerequisitesOk.value && os.value !== 'windows') {
+      //   message.warning(t('basicInstaller.prerequisites.warning'))
+      //   return
+      // }
       router.push('/wizard/1')
     }
 
@@ -454,6 +495,27 @@ export default {
 .loading-content .n-progress {
   width: 100%;
   max-width: 300px;
+}
+
+/* Prerequisites Loading Overlay */
+.prerequisites-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.prerequisites-loading-card {
+  width: 100%;
+  max-width: 400px;
+  background: white;
+  border: 1px solid #e5e7eb;
 }
 
 /* Installation Options */
