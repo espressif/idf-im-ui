@@ -8,3 +8,13 @@ Clicking the **Report Issue** button will open a modal window displaying your sy
 
 > **Note**
 > You will still need to manually attach the log files and describe the issue you encountered in the GitHub issue page before submitting. The log files can be accessed via the **Logs** button in the footer.
+
+## Log File Locations
+
+If you need to manually access the log files, they are stored in the following locations depending on your operating system:
+
+| Platform | Log Directory |
+|----------|---------------|
+| Linux | `$XDG_DATA_HOME/eim/logs` or `$HOME/.local/share/eim/logs` |
+| macOS | `$HOME/Library/Application Support/eim/logs` |
+| Windows | `{FOLDERID_LocalAppData}\eim\logs` (typically `C:\Users\<username>\AppData\Local\eim\logs`) |
