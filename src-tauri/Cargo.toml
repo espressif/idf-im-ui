@@ -124,6 +124,7 @@ struct_iterable = "0.1.1"
 regex = "1.11.1"
 shlex = "1.3.0"
 zstd = "0.13.3"
+pathdiff = "0.2"
 chrono = { version = "0.4.42", default-features = false, features = ["serde", "clock"] }
 once_cell = "1.21.3"
 idf-env = { git = "https://github.com/espressif/idf-env", rev="fd69ab4f550ef35647bb32d1584caa6623cbfc4e" }

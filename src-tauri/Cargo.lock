@@ -1621,6 +1621,7 @@ dependencies = [
  "lzma-rs",
  "once_cell",
  "openssl-sys",
+ "pathdiff",
  "regex",
  "reqwest 0.12.22",
  "rust-i18n",

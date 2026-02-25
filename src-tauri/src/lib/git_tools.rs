@@ -958,38 +958,41 @@ fn create_gitlink(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let gitlink_path = submodule_dir.join(".git");
 
-    // Normalize to forward slashes for consistency in module layout
     let normalized_path = submodule_path.replace('\\', "/");
 
-    // IMPORTANT: modules dir is relative to the *parent git dir*
+    // modules dir is relative to the *parent git dir*.
     // For nested submodules, parent_git_dir will be something like:
     //   <root>/.git/modules/components/cmock/CMock
     // so nested modules live under:
     //   <root>/.git/modules/components/cmock/CMock/modules/vendor/c_exception
     let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
 
-    // Ensure modules dir exists so later steps can write config/HEAD/etc
     fs::create_dir_all(&modules_dir)?;
 
-    // Write .git file as ABSOLUTE path (avoids needing relative_path_from)
+    // Canonicalize so diff_paths works reliably across symlinks / .. segments
     let modules_abs = modules_dir
         .canonicalize()
         .unwrap_or_else(|_| modules_dir.clone());
+    let workdir_abs = submodule_dir
+        .canonicalize()
+        .unwrap_or_else(|_| submodule_dir.to_path_buf());
 
+    // .git file: relative path from submodule worktree -> modules dir
+    let rel_to_modules = pathdiff::diff_paths(&modules_abs, &workdir_abs)
+        .ok_or("Failed to compute relative path from worktree to modules dir")?;
     let gitlink_content = format!(
         "gitdir: {}\n",
-        modules_abs.display().to_string().replace('\\', "/")
+        rel_to_modules.display().to_string().replace('\\', "/")
     );
     fs::write(&gitlink_path, &gitlink_content)?;
     debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
 
-    // Reverse link: <modules_dir>/gitdir contains absolute worktree path
-    let workdir_abs = submodule_dir
-        .canonicalize()
-        .unwrap_or_else(|_| submodule_dir.to_path_buf());
+    // Reverse link: relative path from modules dir -> submodule worktree
+    let rel_to_workdir = pathdiff::diff_paths(&workdir_abs, &modules_abs)
+        .ok_or("Failed to compute relative path from modules dir to worktree")?;
     fs::write(
         modules_dir.join("gitdir"),
-        format!("{}\n", workdir_abs.display().to_string().replace('\\', "/")),
+        format!("{}\n", rel_to_workdir.display().to_string().replace('\\', "/")),
     )?;
 
     Ok(())
