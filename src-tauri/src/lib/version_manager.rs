@@ -351,7 +351,13 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
 
 pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result<ExitStatus> {
     let installation = match list_installed_versions() {
-        Ok(versions) => versions.into_iter().find(|v| v.id == identifier || v.name == identifier || v.path == identifier),
+        Ok(versions) => versions.into_iter().find(|v| {
+            v.id == identifier
+                || v.name == identifier
+                || { let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
+                     normalized_identifier.is_some() && normalized_identifier == crate::utils::normalize_path_for_comparison(&v.path)
+                }
+        }),
         Err(e) => {
             return Err(anyhow!("Failed to list installed versions: {}", e));
         }
