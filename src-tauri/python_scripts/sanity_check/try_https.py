@@ -1,6 +1,6 @@
 import urllib.request
 
-url = 'https://official-joke-api.appspot.com/random_joke'
+url = 'https://dl.espressif.com/'
 response = urllib.request.urlopen(url)
 
 if response.getcode() == 200:

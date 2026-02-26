@@ -90,7 +90,7 @@ pub fn check_and_install_prerequisites(
             }
 
             // Some prerequisites are missing
-            let unsatisfied_prerequisites: Vec<String> = 
+            let unsatisfied_prerequisites: Vec<String> =
                 result.missing.into_iter().map(|p| p.to_string()).collect();
 
             info!("{} {:?}", t!("prerequisites.missing"), unsatisfied_prerequisites);
@@ -156,8 +156,8 @@ pub fn check_and_install_prerequisites(
     }
 }
 
-fn python_sanity_check(python: Option<&str>) -> Result<(), String> {
-    let results = idf_im_lib::python_utils::python_sanity_check(python);
+fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String> {
+    let results = idf_im_lib::python_utils::python_sanity_check(python, offline);
     let mut all_ok = true;
     for result in &results {
         let name = t!(result.check.display_key()).to_string();
@@ -184,12 +184,13 @@ pub fn check_and_install_python(
     non_interactive: bool,
     install_all_prerequisites: bool,
     python_version_override: Option<String>,
+    offline: bool
 ) -> Result<(), String> {
     info!("{}", t!("python.sanitycheck.info"));
     let check_result = if non_interactive {
-        python_sanity_check(None)
+        python_sanity_check(None, offline)
     } else {
-        run_with_spinner(|| python_sanity_check(None))
+        run_with_spinner(|| python_sanity_check(None, offline))
     };
     if let Err(_err) = check_result {
         if std::env::consts::OS == "windows" {
@@ -219,7 +220,7 @@ pub fn check_and_install_python(
                     None => "python3.exe".to_string(),
                 };
                 debug!("{}", t!("debug.using_python", path = usable_python));
-                match run_with_spinner(|| python_sanity_check(Some(&usable_python))) {
+                match run_with_spinner(|| python_sanity_check(Some(&usable_python), offline)) {
                     Ok(_) => info!("{}", t!("python.install.success")),
                     Err(err) => return Err(format!("{} {:?}", t!("python.install.failure"), err)),
                 }

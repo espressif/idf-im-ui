@@ -1638,7 +1638,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
 
             // Python sanity check — user sees check name + hint; raw output logged only
             let mut python_sane = true;
-            for result in &idf_im_lib::python_utils::python_sanity_check(None) {
+            for result in &idf_im_lib::python_utils::python_sanity_check(None, true) {
                 if !result.passed {
                     python_sane = false;
                     let name = rust_i18n::t!(result.check.display_key()).to_string();

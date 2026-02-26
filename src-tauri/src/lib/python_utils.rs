@@ -822,7 +822,7 @@ fn run_install_python_env_script_with_features(
 /// # Returns
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
-pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<SanityCheck>> {
+pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCheckResult<SanityCheck>> {
     let py = python.unwrap_or_else(|| detect_default_python());
     let mut results = Vec::new();
 
@@ -853,8 +853,43 @@ pub fn python_sanity_check(python: Option<&str>) -> Vec<GenericCheckResult<Sanit
     results.push(GenericCheckResult::from_command_output(SanityCheck::Ctypes, ctypes_output));
 
     // ── 6. SSL/HTTPS ─────────────────────────────────────────────────
-    let ssl_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")]);
-    results.push(GenericCheckResult::from_command_output(SanityCheck::Ssl, ssl_output));
+    if !offline {
+      let connectivity_check = {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = std::net::ToSocketAddrs::to_socket_addrs(&("dl.espressif.com", 443))
+                .ok()
+                .and_then(|mut addrs| addrs.next())
+                .map(|addr| {
+                    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(3)).is_ok()
+                })
+                .unwrap_or(false);
+            let _ = tx.send(result);
+        });
+        rx.recv_timeout(std::time::Duration::from_secs(5))
+      };
+
+      let ssl_result = match connectivity_check {
+          Ok(true) => {
+              let ssl_output = command_executor::execute_command_direct(
+                  py,
+                  &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")],
+              );
+              GenericCheckResult::from_command_output(SanityCheck::Ssl, ssl_output)
+          }
+          Ok(false) => GenericCheckResult {
+              check: SanityCheck::Ssl,
+              passed: false,
+              message: "Failed: cannot reach dl.espressif.com (connection refused or DNS resolution failed)".to_string(),
+          },
+          Err(_) => GenericCheckResult {
+              check: SanityCheck::Ssl,
+              passed: false,
+              message: "Failed: connectivity check timed out after 5 seconds".to_string(),
+          },
+      };
+      results.push(ssl_result);
+    }
 
     results
 }
