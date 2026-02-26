@@ -48,6 +48,7 @@ assets = [
     { source = "target/release/completions/eim.elv", dest = "/usr/share/elvish/site-functions/eim.elv", mode = "644" },
 
 ]
+auto-req = "no"
 
 [package.metadata.generate-rpm.requires]
 git = "*"
