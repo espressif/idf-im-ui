@@ -441,6 +441,22 @@ pub fn clone_repository(
             }
         };
 
+    // On Windows, disable symlinks so Git does not report typechanges
+    #[cfg(windows)]
+    {
+        let config_path = repo.git_dir().join("config");
+        if let Ok(mut config) = fs::read_to_string(&config_path) {
+            if !config.contains("symlinks") {
+                if let Some(pos) = config.find("[core]") {
+                    if let Some(end_pos) = config[pos..].find('\n') {
+                        config.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
+                        let _ = fs::write(&config_path, config);
+                    }
+                }
+            }
+        }
+    }
+
     // Checkout specific reference
     match checkout_reference(&repo, &options.reference) {
         Ok(_) => {
@@ -904,15 +920,18 @@ fn initialize_modules_repo(
         config_content = config_content.replace("bare = true", "bare = false");
     }
 
-    // Add worktree
+    // Add worktree (and symlinks=false on Windows)
     if !config_content.contains("worktree") {
         if let Some(pos) = config_content.find("[core]") {
             if let Some(end_pos) = config_content[pos..].find('\n') {
                 let insert_pos = pos + end_pos + 1;
-                config_content.insert_str(
-                    insert_pos,
-                    &format!("\tworktree = {}\n", rel_worktree.display().to_string().replace('\\', "/"))
+                let mut core_additions = format!(
+                    "\tworktree = {}\n",
+                    rel_worktree.display().to_string().replace('\\', "/")
                 );
+                #[cfg(windows)]
+                core_additions.push_str("\tsymlinks = false\n");
+                config_content.insert_str(insert_pos, &core_additions);
             }
         }
     }
