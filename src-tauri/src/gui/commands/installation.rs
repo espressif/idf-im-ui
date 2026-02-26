@@ -219,13 +219,14 @@ pub async fn install_single_version(
   let export_vars = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
 
   idf_im_lib::single_version_post_install(
-      &paths.activation_script_path.to_str().unwrap(),
-      paths.idf_path.to_str().unwrap(),
+      &paths.activation_script_path.to_string_lossy().to_string(),
+      &paths.idf_path.to_string_lossy().to_string(),
       &paths.actual_version,
-      paths.tool_install_directory.to_str().unwrap(),
+      &paths.tool_install_directory.to_string_lossy().to_string(),
       export_vars,
       paths.python_venv_path.to_str(),
       None, // env_vars
+      &paths.python_path.to_string_lossy().to_string(),
   );
 
   Ok(())
@@ -1807,13 +1808,14 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
             });
 
             idf_im_lib::single_version_post_install(
-                &paths.activation_script_path.to_str().unwrap(),
-                paths.idf_path.to_str().unwrap(),
+                &paths.activation_script_path.to_string_lossy().to_string(),
+                &paths.idf_path.to_string_lossy().to_string(),
                 &paths.actual_version,
-                paths.tool_install_directory.to_str().unwrap(),
+                &paths.tool_install_directory.to_string_lossy().to_string(),
                 export_vars,
                 paths.python_venv_path.to_str(),
                 None,
+                &paths.python_path.to_string_lossy().to_string()
             );
 
             emit_log_message(&app_handle, MessageLevel::Success,

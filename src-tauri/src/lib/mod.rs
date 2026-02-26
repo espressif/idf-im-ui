@@ -134,6 +134,7 @@ pub fn create_activation_shell_script(
     idf_version: &str,
     export_paths: Vec<String>,
     env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str,
 ) -> Result<(), String> {
     ensure_path(file_path).map_err(|e| e.to_string())?;
     let mut filename = PathBuf::from(file_path);
@@ -161,6 +162,7 @@ pub fn create_activation_shell_script(
     context.insert("idf_version", &idf_version);
     context.insert("addition_to_path", &export_paths.join(":"));
     context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
+    context.insert("python_bin_path", &python_bin_path);
 
     if let Some(idf_python_env_path) = idf_python_env_path {
         context.insert("idf_python_env_path", &idf_python_env_path);
@@ -563,6 +565,7 @@ pub fn create_windows_terminal_idf_profile(
     export_paths: Vec<String>,
     env_var_pairs: Vec<(String, String)>,
     icon_path: Option<&str>,
+    python_bin_path: &str,
 ) -> Result<String, std::io::Error> {
     // First create the PowerShell profile script
     // (reuse your existing create_powershell_profile function)
@@ -574,6 +577,7 @@ pub fn create_windows_terminal_idf_profile(
         idf_version,
         export_paths,
         env_var_pairs,
+        python_bin_path,
     )?;
 
     // Then add it to Windows Terminal
@@ -610,6 +614,7 @@ fn create_powershell_profile(
     idf_version: &str,
     export_paths: Vec<String>,
     env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str,
 ) -> Result<String, std::io::Error> {
     let profile_template = include_str!("../../powershell_scripts/idf_tools_profile_template.ps1");
 
@@ -648,6 +653,7 @@ fn create_powershell_profile(
     }
     context.insert("add_paths_extras", &export_paths.join(";"));
     context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
+    context.insert("python_bin_path", &replace_unescaped_spaces_win(python_bin_path));
     let mut rendered = match tera.render("powershell_profile", &context) {
         Err(e) => {
             error!("Failed to render template: {}", e);
@@ -687,6 +693,7 @@ pub fn create_desktop_shortcut(
     idf_python_env_path: Option<&str>,
     export_paths: Vec<String>,
     env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str
 ) -> Result<String, std::io::Error> {
     match std::env::consts::OS {
         "windows" => {
@@ -698,6 +705,7 @@ pub fn create_desktop_shortcut(
                 idf_version,
                 export_paths,
                 env_var_pairs,
+                python_bin_path
             ) {
                 Ok(filename) => filename,
                 Err(err) => {
@@ -764,6 +772,7 @@ pub fn create_desktop_shortcut_and_terminal_profile(
     idf_python_env_path: Option<&str>,
     export_paths: Vec<String>,
     env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str,
 ) -> Result<String, std::io::Error> {
     // Create desktop shortcut (your existing code)
     let shortcut_result = create_desktop_shortcut(
@@ -774,6 +783,7 @@ pub fn create_desktop_shortcut_and_terminal_profile(
         idf_python_env_path.clone(),
         export_paths.clone(),
         env_var_pairs.clone(),
+        python_bin_path,
     )?;
 
     // Get icon path
@@ -791,6 +801,7 @@ pub fn create_desktop_shortcut_and_terminal_profile(
         export_paths,
         env_var_pairs,
         Some(icon_path.to_str().unwrap()),
+        python_bin_path,
     )?;
 
     Ok(format!("{}\n\n{}", shortcut_result, terminal_result))
@@ -1577,7 +1588,8 @@ pub fn single_version_post_install(
     tool_install_directory: &str,
     export_paths: Vec<String>,
     idf_python_env_path: Option<&str>,
-    env_vars: Option<Vec<(String, String)>>
+    env_vars: Option<Vec<(String, String)>>,
+    python_bin_path: &str,
 ) {
     let mut env_vars = match env_vars {
         Some(vars) => vars,
@@ -1598,12 +1610,12 @@ pub fn single_version_post_install(
 
 
     let mut export_paths = export_paths.clone();
-    let python_bin_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
+    let python_env_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
     match std::env::consts::OS {
         "windows" => {
             // On Windows, we need to add the Python Scripts directory to the PATH
-            if python_bin_path.exists() {
-                let scripts_path = python_bin_path.join("Scripts");
+            if python_env_path.exists() {
+                let scripts_path = python_env_path.join("Scripts");
                 if scripts_path.exists() {
                     export_paths.push(scripts_path.to_string_lossy().to_string());
                 }
@@ -1611,7 +1623,7 @@ pub fn single_version_post_install(
         }
         _ => {
             // On Unix-like systems, we can add the Python bin directory to the PATH
-            let scripts_path = python_bin_path.join("bin");
+            let scripts_path = python_env_path.join("bin");
             if scripts_path.exists() {
                 export_paths.push(scripts_path.to_string_lossy().to_string());
             }
@@ -1628,6 +1640,7 @@ pub fn single_version_post_install(
                 idf_python_env_path,
                 export_paths,
                 env_vars,
+                python_bin_path,
             ) {
                 error!(
                     "{} {:?}",
@@ -1647,6 +1660,7 @@ pub fn single_version_post_install(
               idf_version,
               export_paths,
               env_vars,
+              python_bin_path,
             ) {
               Ok(_) => info!("Activation shell script created successfully"),
               Err(err) => error!(
