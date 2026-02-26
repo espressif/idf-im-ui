@@ -911,7 +911,7 @@ fn initialize_modules_repo(
                 let insert_pos = pos + end_pos + 1;
                 config_content.insert_str(
                     insert_pos,
-                    &format!("\tworktree = {}\n", workdir_abs.display())
+                    &format!("\tworktree = {}\n", workdir_abs.display().to_string().replace('\\', "/"))
                 );
             }
         }
