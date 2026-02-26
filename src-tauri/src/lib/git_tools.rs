@@ -886,14 +886,14 @@ fn initialize_modules_repo(
         return Err(format!("Config file not found at {}", config_path.display()).into());
     }
 
-    // Get absolute path to workdir
-    let workdir_abs = if submodule_workdir.is_absolute() {
-        submodule_workdir.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_default()
-            .join(submodule_workdir)
-    };
+    // Compute relative worktree path from modules_dir (matches standard Git behavior)
+    fs::create_dir_all(submodule_workdir)?;
+    let modules_canon = modules_dir.canonicalize()
+        .unwrap_or_else(|_| modules_dir.to_path_buf());
+    let workdir_canon = submodule_workdir.canonicalize()
+        .unwrap_or_else(|_| submodule_workdir.to_path_buf());
+    let rel_worktree = pathdiff::diff_paths(&workdir_canon, &modules_canon)
+        .ok_or("Failed to compute relative worktree path")?;
 
     // Read and update config
     let mut config_content = fs::read_to_string(&config_path)
@@ -911,7 +911,7 @@ fn initialize_modules_repo(
                 let insert_pos = pos + end_pos + 1;
                 config_content.insert_str(
                     insert_pos,
-                    &format!("\tworktree = {}\n", workdir_abs.display().to_string().replace('\\', "/"))
+                    &format!("\tworktree = {}\n", rel_worktree.display().to_string().replace('\\', "/"))
                 );
             }
         }
