@@ -446,7 +446,10 @@ pub fn clone_repository(
     {
         let config_path = repo.git_dir().join("config");
         if let Ok(mut config) = fs::read_to_string(&config_path) {
-            if !config.contains("symlinks") {
+            if config.contains("symlinks = true") {
+                config = config.replace("symlinks = true", "symlinks = false");
+                let _ = fs::write(&config_path, config);
+            } else if !config.contains("symlinks") {
                 if let Some(pos) = config.find("[core]") {
                     if let Some(end_pos) = config[pos..].find('\n') {
                         config.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
@@ -920,18 +923,27 @@ fn initialize_modules_repo(
         config_content = config_content.replace("bare = true", "bare = false");
     }
 
-    // Add worktree (and symlinks=false on Windows)
+    // Add worktree
     if !config_content.contains("worktree") {
         if let Some(pos) = config_content.find("[core]") {
             if let Some(end_pos) = config_content[pos..].find('\n') {
                 let insert_pos = pos + end_pos + 1;
-                let mut core_additions = format!(
-                    "\tworktree = {}\n",
-                    rel_worktree.display().to_string().replace('\\', "/")
+                config_content.insert_str(
+                    insert_pos,
+                    &format!("\tworktree = {}\n", rel_worktree.display().to_string().replace('\\', "/"))
                 );
-                #[cfg(windows)]
-                core_additions.push_str("\tsymlinks = false\n");
-                config_content.insert_str(insert_pos, &core_additions);
+            }
+        }
+    }
+
+    // On Windows, ensure symlinks = false
+    #[cfg(windows)]
+    if config_content.contains("symlinks = true") {
+        config_content = config_content.replace("symlinks = true", "symlinks = false");
+    } else if !config_content.contains("symlinks") {
+        if let Some(pos) = config_content.find("[core]") {
+            if let Some(end_pos) = config_content[pos..].find('\n') {
+                config_content.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
             }
         }
     }
