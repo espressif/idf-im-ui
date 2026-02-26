@@ -130,12 +130,13 @@ export const useAppStore = defineStore("app", {
     },
 
     // Normalize OS name to handle variations from Rust (e.g., "Windows Server" -> "windows")
+    // Also handles Linux distro format from Rust (e.g., "linux-ubuntu" -> "linux")
     normalizeOs(os) {
       if (!os) return 'unknown';
       const lower = os.toLowerCase();
       if (lower.includes('windows') || lower === 'win') return 'windows';
       if (lower.includes('mac') || lower.includes('darwin')) return 'macos';
-      if (lower.includes('linux')) return 'linux';
+      if (lower.startsWith('linux')) return 'linux';
       return 'unknown';
     },
 
