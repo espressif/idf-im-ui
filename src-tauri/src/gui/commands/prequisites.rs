@@ -156,7 +156,7 @@ pub struct CheckResultItem {
 /// Raw command output is logged only; user sees display_name + hint per failure.
 #[tauri::command]
 pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<CheckResultItem> {
-    let results = idf_im_lib::python_utils::python_sanity_check(python);
+    let results = idf_im_lib::python_utils::python_sanity_check(python, false);
 
     results
         .iter()
