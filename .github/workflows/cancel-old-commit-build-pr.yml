@@ -1,0 +1,120 @@
+# Cancel in-progress and queued build runs for the same PR when a new commit is pushed,
+# so only the latest commit is built. Opt out by including "no-cancel-pipeline" in the commit message.
+name: Cancel old commit build (PR)
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+    branches:
+      - master
+    paths-ignore:
+      - "dl_page/**"
+      - "docs/**"
+      - ".github/workflows/dl_page.yml"
+      - ".github/workflows/docs_build.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-old-builds:
+    name: Cancel outdated build runs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get head commit message
+        id: commit_msg
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha
+            });
+            const message = (data.commit?.message || '').replace(/\n/g, ' ').toLowerCase();
+            core.setOutput('message', message);
+            core.info(`Head commit message (first 200 chars): ${message.slice(0, 200)}`);
+
+      - name: Skip cancel when commit has no-cancel-pipeline
+        if: contains(steps.commit_msg.outputs.message, 'no-cancel-pipeline')
+        run: |
+          echo "Commit message contains 'no-cancel-pipeline'; skipping cancellation."
+          exit 0
+
+      - name: Cancel older build runs for this PR
+        if: ${{ !contains(steps.commit_msg.outputs.message, 'no-cancel-pipeline') }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const prHeadBranch = context.payload.pull_request.head.ref;
+            const prNumber = context.payload.pull_request.number;
+
+            core.info(`PR #${prNumber}, head branch: ${prHeadBranch}`);
+
+            // Find "Unified Build Workflow" (build.yaml)
+            const { data: workflows } = await github.rest.actions.listRepoWorkflows({
+              owner,
+              repo,
+              per_page: 100
+            });
+            const buildWorkflow = workflows.workflows.find(
+              w => w.path === '.github/workflows/build.yaml' || w.name === 'Unified Build Workflow'
+            );
+            if (!buildWorkflow) {
+              core.warning('Unified Build Workflow not found; skipping cancel.');
+              return;
+            }
+
+            const workflowId = buildWorkflow.id;
+            const runsToCancel = [];
+
+            for (const status of ['in_progress', 'queued', 'waiting', 'pending', 'requested']) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: workflowId,
+                branch: prHeadBranch,
+                event: 'pull_request',
+                status,
+                per_page: 100
+              });
+              runsToCancel.push(...data.workflow_runs);
+            }
+
+            // Keep only runs that belong to this PR
+            const prRuns = runsToCancel.filter(r =>
+              r.pull_requests && r.pull_requests.some(pr => pr.number === prNumber)
+            );
+
+            // Dedupe by run id and sort by run_number descending (newest first)
+            const byId = new Map(prRuns.map(r => [r.id, r]));
+            const sorted = [...byId.values()].sort((a, b) => b.run_number - a.run_number);
+
+            if (sorted.length === 0) {
+              core.info('No active build runs to cancel.');
+              return;
+            }
+
+            // Keep the newest run (highest run_number), cancel the rest
+            const toCancel = sorted.slice(1);
+            core.info(`Keeping run #${sorted[0].run_number} (id ${sorted[0].id}); cancelling ${toCancel.length} older run(s).`);
+
+            for (const run of toCancel) {
+              try {
+                await github.rest.actions.cancelWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id
+                });
+                core.info(`Cancelled run #${run.run_number} (id ${run.id}).`);
+              } catch (err) {
+                if (err.status === 409) {
+                  core.info(`Run #${run.run_number} (id ${run.id}) already completed; skipping.`);
+                } else {
+                  throw err;
+                }
+              }
+            }
