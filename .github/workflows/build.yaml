@@ -1040,6 +1040,16 @@ jobs:
           asset_path: src-tauri/target/release/bundle/dmg/*.dmg
           asset_name: eim-gui-${{ matrix.package_name }}.dmg
 
+  jira-build-artifacts-comment:
+    name: Post build artifacts comment on Jira
+    needs: [build-cli, build-cli-linux, build-gui]
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/jira-build-artifacts-comment.yml
+    with:
+      run_id: ${{ github.run_id }}
+      pr_title: ${{ github.event.pull_request.title }}
+    secrets: inherit
+
   Autotest-CLI:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux]

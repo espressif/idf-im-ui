@@ -3,7 +3,12 @@
 #
 # When the Unified Build Workflow completes for a PR, this workflow posts or updates
 # a single Jira comment with the latest build artifacts and a link to the CI run.
+# Runs only for pull_request-triggered builds, and runs whether the build succeeded or failed.
 # Uses the same Jira key detection as jira-pr-comment.yml (PR title: EIM-12345: description).
+#
+# Can be triggered in two ways:
+# 1. workflow_run: after Unified Build completes (only works when this file is on default branch).
+# 2. workflow_call: from build.yaml after artifact jobs finish (works on PR branch so you can test before merge).
 #
 # Ensures only one "Build Artifacts (CI)" comment per Jira issue: finds it by marker
 # and updates it, or creates a new comment if none exists.
@@ -11,48 +16,81 @@
 name: Build Artifacts Comment on Jira
 
 run-name: >
-  Build Artifacts on Jira - Run #${{ github.event.workflow_run.run_number }}
+  Build Artifacts on Jira -
+  ${{ github.event_name == 'workflow_run' && format('Run #{0}', github.event.workflow_run.run_number) || format('Run #{0}', github.run_id) }}
 
 on:
   workflow_run:
     workflows: ["Unified Build Workflow"]
+    # completed = run finished (success, failure, or cancelled); we run regardless of result
     types: [completed]
+  workflow_call:
+    inputs:
+      run_id:
+        description: "Workflow run ID (e.g. github.run_id from caller)"
+        required: true
+        type: string
+      pr_title:
+        description: "Pull request title (for Jira key extraction)"
+        required: true
+        type: string
 
 jobs:
   jira-artifacts-comment:
     name: Post or update artifacts comment on Jira
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.event == 'pull_request'
+    # workflow_run: only when the build was triggered by a PR
+    # workflow_call: caller (build.yaml) only calls us for pull_request
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.event == 'pull_request') ||
+      github.event_name == 'workflow_call'
     steps:
       - name: Get PR and extract Jira key
         id: pr
         uses: actions/github-script@v7
         with:
           script: |
-            const run = context.payload.workflow_run;
-            const runId = run.id;
-            let prNumber, prTitle;
+            const eventName = context.eventName;
+            let runId, prNumber, prTitle;
 
-            if (run.pull_requests && run.pull_requests.length > 0) {
-              prNumber = run.pull_requests[0].number;
-              prTitle = run.pull_requests[0].title;
+            if (eventName === 'workflow_run') {
+              const run = context.payload.workflow_run;
+              runId = run.id;
+              if (run.pull_requests && run.pull_requests.length > 0) {
+                prNumber = run.pull_requests[0].number;
+                prTitle = run.pull_requests[0].title;
+              } else {
+                const head = `${run.head_repository.owner.login}:${run.head_branch}`;
+                const { data: pulls } = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  head
+                });
+                if (!pulls.length) {
+                  core.info('No PR found for this run. Skipping.');
+                  core.setOutput('found', 'false');
+                  return;
+                }
+                prNumber = pulls[0].number;
+                prTitle = pulls[0].title;
+              }
             } else {
-              const owner = run.head_repository.owner.login;
-              const repo = run.head_repository.name;
-              const head = `${owner}:${run.head_branch}`;
-              const { data: pulls } = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head
-              });
-              if (!pulls.length) {
-                core.info('No PR found for this run. Skipping.');
+              // workflow_call: PR info passed as inputs by caller (build.yaml)
+              runId = context.payload.inputs.run_id;
+              prTitle = context.payload.inputs.pr_title;
+              const match = prTitle.match(/^(EIM-[0-9]+):/);
+              if (!match) {
+                core.info('No Jira issue key in PR title. Skipping.');
                 core.setOutput('found', 'false');
                 return;
               }
-              prNumber = pulls[0].number;
-              prTitle = pulls[0].title;
+              core.setOutput('found', 'true');
+              core.setOutput('issue_key', match[1]);
+              core.setOutput('pr_number', ''); // not needed for Jira comment
+              core.setOutput('pr_title', prTitle);
+              core.setOutput('run_id', String(runId));
+              return;
             }
 
             const match = prTitle.match(/^(EIM-[0-9]+):/);
@@ -72,9 +110,11 @@ jobs:
         if: steps.pr.outputs.found == 'true'
         id: artifacts
         uses: actions/github-script@v7
+        env:
+          RUN_ID: ${{ steps.pr.outputs.run_id }}
         with:
           script: |
-            const runId = context.payload.workflow_run.id;
+            const runId = parseInt(process.env.RUN_ID, 10);
             const { data } = await github.rest.actions.listWorkflowRunArtifacts({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -100,7 +140,7 @@ jobs:
           ISSUE_KEY: ${{ steps.pr.outputs.issue_key }}
           RUN_ID: ${{ steps.pr.outputs.run_id }}
           NAMES_JSON: ${{ steps.artifacts.outputs.names_json }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ steps.pr.outputs.run_id }}
         run: |
           set -euo pipefail
           MARKER="Build Artifacts (CI)"
