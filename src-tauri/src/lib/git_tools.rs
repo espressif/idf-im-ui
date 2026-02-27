@@ -1560,9 +1560,20 @@ fn populate_index_from_tree(
     repo: &gix::Repository,
     tree: &gix::Tree,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let workdir = repo.work_dir()
+        .ok_or("Repository has no working directory")?;
+
     // Collect all entries from the tree
     let mut entries = Vec::new();
     collect_tree_entries(tree, "", &mut entries, repo)?;
+
+    // Populate real stat data so git status doesn't need to refresh the index
+    for entry in &mut entries {
+        let file_path = workdir.join(entry.path.to_str_lossy().as_ref());
+        if let Ok(metadata) = fs::symlink_metadata(&file_path) {
+            entry.stat = stat_from_metadata(&metadata);
+        }
+    }
 
     // Sort entries by path (required by git index format)
     entries.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1654,6 +1665,36 @@ struct IndexEntryData {
     flags: gix::index::entry::Flags,
     mode: gix::objs::tree::EntryMode,
     path: gix::bstr::BString,
+}
+
+fn stat_from_metadata(metadata: &std::fs::Metadata) -> gix::index::entry::Stat {
+    use std::time::UNIX_EPOCH;
+
+    let mtime = metadata.modified().unwrap_or(UNIX_EPOCH);
+    let mtime_dur = mtime.duration_since(UNIX_EPOCH).unwrap_or_default();
+
+    let ctime = metadata.created()
+        .or_else(|_| metadata.modified())
+        .unwrap_or(UNIX_EPOCH);
+    let ctime_dur = ctime.duration_since(UNIX_EPOCH).unwrap_or_default();
+
+    let mut stat = gix::index::entry::Stat::default();
+    stat.mtime.secs = mtime_dur.as_secs() as u32;
+    stat.mtime.nsecs = mtime_dur.subsec_nanos();
+    stat.ctime.secs = ctime_dur.as_secs() as u32;
+    stat.ctime.nsecs = ctime_dur.subsec_nanos();
+    stat.size = metadata.len() as u32;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        stat.dev = metadata.dev() as u32;
+        stat.ino = metadata.ino() as u32;
+        stat.uid = metadata.uid();
+        stat.gid = metadata.gid();
+    }
+
+    stat
 }
 
 /// Defines the type of Git reference to be checked out.
