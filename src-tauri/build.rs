@@ -15,6 +15,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("cargo:rustc-env=CACHED_IDF_VERSIONS={{}}");
         }
     }
+    // Version string: add PR link and run link when EIM_PR_LINK is set (CI PR builds only)
+    let pkg_version = std::env::var("CARGO_PKG_VERSION").unwrap();
+    let pr_link = std::env::var("EIM_PR_LINK").ok().filter(|s| !s.is_empty());
+    let run_url = std::env::var("EIM_RUN_URL").ok().filter(|s| !s.is_empty());
+    let version_string = match (pr_link, run_url) {
+        (Some(pr), Some(run)) => format!("{} (PR: {}, Run: {})", pkg_version, pr, run),
+        (Some(pr), None) => format!("{} (PR: {})", pkg_version, pr),
+        (None, _) => pkg_version,
+    };
+    println!("cargo:rustc-env=EIM_VERSION_STRING={}", version_string);
+    println!("cargo:rerun-if-env-changed=EIM_PR_LINK");
+    println!("cargo:rerun-if-env-changed=EIM_RUN_URL");
     #[cfg(feature = "gui")]
     {
     tauri_build::build()

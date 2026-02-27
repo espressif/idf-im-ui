@@ -14,7 +14,7 @@ use sysinfo::System;
 
 use crate::gui::ui::send_message;
 
-const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
+const EIM_VERSION: &str = env!("EIM_VERSION_STRING");
 
 #[tauri::command]
 pub async fn fetch_json_from_url(url: String) -> Result<Value, String> {
