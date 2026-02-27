@@ -3,6 +3,11 @@ name: Unified Build Workflow
 on:
   schedule: [cron: "0 02 * * *"]
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     branches:
       - master
     paths-ignore:
@@ -17,7 +22,8 @@ on:
 
 jobs:
   setup:
-    name: Setup and Check merged PRs (schedule only)
+    name: Setup and Check merged PRs
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
@@ -62,7 +68,7 @@ jobs:
   build-test-lib:
     name: Build and Test Library (${{ matrix.package_name }})
     needs: setup
-    if: github.event_name != 'schedule' || needs.setup.outputs.should_run == 'true'
+    if: (github.event_name != 'schedule' || needs.setup.outputs.should_run == 'true') && !contains(github.event.pull_request.labels.*.name, 'STOP_CI')
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

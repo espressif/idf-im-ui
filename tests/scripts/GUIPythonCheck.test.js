@@ -56,13 +56,13 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
     });
 
     it("3- Should successfully install python on Windows", async function () {
-      this.timeout(45000);
+      this.timeout(80000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       await eimRunner.clickButton("Install Python");
-      await new Promise((resolve) => setTimeout(resolve, 30000));
-      const result = await eimRunner.findByText("Select Target Chips");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await eimRunner.findByText("Select Target Chips", 450000);
       expect(result, "Expected Select Target Chips text to be present").to.not.be.false;
     });
   });

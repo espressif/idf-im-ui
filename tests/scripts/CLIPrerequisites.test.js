@@ -69,7 +69,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     /** Windows Specific Tests
      * Tests below will only be executed on win32 platform
      */
-    it("1- should offer to install prerequisites and exit upon negative answer", async function () {
+    it("2- should offer to install prerequisites and exit upon negative answer", async function () {
       this.timeout(35000);
       if (os.platform() !== "win32") {
         this.skip();
@@ -101,7 +101,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       logger.info(`prerequisite detection passed: >>\r ${testRunner.output}`);
     });
 
-    it("2- should install GIT after a positive answer", async function () {
+    it("3- should install GIT after a positive answer", async function () {
       this.timeout(120000);
       if (os.platform() !== "win32") {
         this.skip();
@@ -122,6 +122,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         promptPython,
         "EIM did not Offer to install Python"
       ).to.be.true;
+      testRunner.process.write("n");
       logger.info(`prerequisites installation passed: >>\r ${testRunner.output}`);
     });
   });

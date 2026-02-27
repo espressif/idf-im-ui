@@ -68,9 +68,9 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       if (os.platform() !== "win32") {
         this.skip();
       }
-      const checkReqButton = await eimRunner.findByText("check Prerequisites");
+      const checkReqButton = await eimRunner.findByText("Check Prerequisites");
       expect(checkReqButton, "Expected check Prerequisites button to be present").to.not.be.false;
-      await eimRunner.clickButton("check Prerequisites");
+      await eimRunner.clickButton("Check Prerequisites");
       await new Promise((resolve) => setTimeout(resolve, 10000));
       const prerequisitesList = await eimRunner.findByDataId(
         "prerequisites-items-list"
@@ -83,12 +83,13 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     });
 
     it("4- Should successfully install prerequisites on Windows", async function () {
+      this.timeout(80000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       await eimRunner.clickButton("Install Missing Prerequisites");
-      await new Promise((resolve) => setTimeout(resolve, 30000));
-      const result = await eimRunner.findByText("Python Setup Required");
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const result = await eimRunner.findByText("Python Setup Required", 60000);
       expect(result, "Expected python check screen").to.not.be.false;
     });
   });

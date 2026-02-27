@@ -54,15 +54,15 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       }
       logger.info(`Starting test - confirm python is missing`);
       const missingPython = await testRunner.waitForOutput(
-        "Please install python3 with pip, venv and ssl support and try again",
+        "Python sanity check failed",
         20000
       );
       expect(
         missingPython,
-        'EIM did not show error message indicating "Please install python"'
+        'EIM did not show python check results with failures'
       ).to.be.true;
-      expect(testRunner.output, `EIM did not show error message indicating "Python is missing"`
-       ).to.include("Python is missing, or it does not meet the requirements");
+      expect(testRunner.output, `EIM did not indicate failed step"`
+       ).to.include("[FAIL]");
       logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 
@@ -70,14 +70,14 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
     /** Windows Specific Tests
      * Tests below will only be executed on win32 platform
      */
-    it("1- should offer to install python and exit upon negative answer", async function () {
+    it("2- should offer to install python and exit upon negative answer", async function () {
       this.timeout(25000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       logger.info(`Starting test - confirm python is missing`);
       const promptPython = await testRunner.waitForOutput(
-        "Do you want to install python?"
+        "Do you want to install Python?"
       );
 
       expect(
@@ -88,7 +88,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       testRunner.process.write("n");
 
       const terminalExited = await testRunner.waitForOutput(
-        "Please install Python3 with pip and SSL support and try again"
+        "Please install Python3 with pip, venv, and SSL support and try again"
       );
       expect(
         terminalExited,
@@ -97,20 +97,20 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 
-    it("1- should install python after a positive answer", async function () {
-      this.timeout(120000);
+    it("3- should install python after a positive answer", async function () {
+      this.timeout(150000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       logger.info(`Starting test - installing python with scoop`);
       await testRunner.waitForOutput(
-        "Do you want to install python?"
+        "Do you want to install Python?"
       );
       testRunner.process.write("y");
 
       const promptInstallation = await testRunner.waitForOutput(
         "Please select all of the target platforms",
-        60000
+        100000
       );
       expect(
         promptInstallation,

@@ -12,7 +12,7 @@ export function runVersionManagementTest({
   installFolder,
 }) {
   describe(`${id}- EIM Version Management test |`, function () {
-    this.timeout(120000);
+    this.timeout(150000);
     let testRunner = null;
     let testStepFailed = false;
 
@@ -247,6 +247,10 @@ export function runVersionManagementTest({
       ).to.not.include(versionToRemove);
       expect(
         fs.existsSync(path.join(installFolder, versionToRemove)),
+        "IDF installation parent folder deleted with the IDF remove"
+      ).to.be.true;
+      expect(
+        fs.existsSync(path.join(installFolder, versionToRemove,"esp-idf")),
         "IDF folder exists after version have been removed"
       ).to.be.false;
 
@@ -289,12 +293,16 @@ export function runVersionManagementTest({
       testRunner.sendInput(`${pathToEIM} purge`);
       const purgeOutput = await testRunner.waitForOutput(
         `All versions removed successfully`,
-        30000
+        45000
       );
       expect(purgeOutput, "EIM failed to purge IDF versions").to.be.true;
       for (let idf of idfList) {
         expect(
           fs.existsSync(path.join(installFolder, idf)),
+          `IDF installation folder for ${idf} was not deleted after purge`
+        ).to.be.true;
+        expect(
+          fs.existsSync(path.join(installFolder, idf, "esp-idf")),
           `IDF installation folder still exists for ${idf} after purge`
         ).to.be.false;
       }

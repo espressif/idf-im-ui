@@ -145,7 +145,7 @@ if (os.platform() !== "win32") {
 logger.info(`Python wheels versions included: ${pythonWheelsVersion.join(", ")}`)
 
 //Capture list of prerequisites from environment variables
-const preRequisitesList = {
+const prerequisitesList = {
   ubuntu: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake","libusb-1.0-0"],
   debian: ["git","wget", "flex", "bison", "gperf", "ccache", "libffi-dev", "libssl-dev", "dfu-util", "cmake","libusb-1.0-0"],
   fedora:["git","wget", "flex", "bison", "gperf", "ccache", "libffi-devel", "openssl-devel", "dfu-util", "cmake"], //"libusb1-devel" is installed by default
@@ -155,7 +155,7 @@ const preRequisitesList = {
   windows: ["git"],
 }
 const prerequisites = process.env.PREREQUISITES_OS?
-  preRequisitesList[process.env.PREREQUISITES_OS.toLowerCase()] || [] : [];
+  prerequisitesList[process.env.PREREQUISITES_OS.toLowerCase()] || [] : [];
 logger.info(`Prerequisites set to: ${prerequisites.join(", ")}`);
 
 export {

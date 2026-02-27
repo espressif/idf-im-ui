@@ -80,12 +80,12 @@ jobs:
           - os: windows-latest
             package_name: windows-x64
             distro_name: stock
-          # - os: windows-latest
-          #   package_name: windows-x64
-          #   distro_name: scoop
-          - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
-            package_name: linux-x64
-            run_on: MirrorRunner
+          - os: windows-latest
+            package_name: windows-x64
+            distro_name: scoop
+          # - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+          #   package_name: linux-x64
+          #   run_on: MirrorRunner
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -199,11 +199,11 @@ jobs:
               elif command -v yum &>/dev/null; then
                 yum install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
               elif command -v pacman &>/dev/null; then
-                pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb
+                pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb libxml2-legacy
               elif command -v zypper &>/dev/null; then
                 pkill -9 zypper 2>/dev/null || true
                 rm -f /run/zypp.pid 2>/dev/null || true
-                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0
+                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel
               else
                 echo 'Unknown package manager' && exit 1
               fi
@@ -368,10 +368,12 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
         run: |
           echo $env:PATH
+          $env:backup_path = $env:PATH
           $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
           $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\[Gg]it\\' }) -join ';'
           echo $env:PATH
           echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+          echo "backup_path=$env:backup_path" >> $env:GITHUB_ENV
 
       - name: Run prerequisites check and install (Windows)
         if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
@@ -418,6 +420,12 @@ jobs:
           npm run test-CLI-win --file=CLI-extended
         continue-on-error: true
 
+      - name: Restore PATH (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:PATH = $env:backup_path
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
       # Copy eim log files to standard location for easier access
 
       - name: Copy EIM logs from container (Linux only)
@@ -448,7 +456,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}${{matrix.distro_name || ''}}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}-${{matrix.distro_name || ''}}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -457,7 +465,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}
+          name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -474,7 +482,7 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: CLI-Autotests-${{ matrix.package_name }}
+          name: CLI-Autotests-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json
