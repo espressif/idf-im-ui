@@ -75,18 +75,30 @@ fn parse_connection_string() -> (String, String) {
 }
 
 pub fn get_system_info() -> String {
-    let mut sys = System::new_all();
-    sys.refresh_all();
+    let os_name = System::name()
+        .filter(|s| !s.is_empty() && s != "Unknown")
+        .unwrap_or_else(|| get_linux_os_name());
 
-    let os_name = System::name().unwrap_or_else(|| "Unknown".to_string());
     let os_version = System::os_version().unwrap_or_else(|| "Unknown".to_string());
     let kernel_version = System::kernel_version().unwrap_or_else(|| "Unknown".to_string());
     let arch = System::cpu_arch();
 
     format!("OS: {} {} | Architecture: {} | Kernel: {}",
-        os_name,
-        os_version,
-        arch,
-        kernel_version
-    )
+        os_name, os_version, arch, kernel_version)
+}
+
+pub fn get_linux_os_name() -> String {
+  if std::env::consts::OS == "linux" {
+    if let Ok(content) = std::fs::read_to_string("/etc/os-release") {
+      for line in content.lines() {
+        if let Some(name) = line.strip_prefix("ID=") {
+          let distro = name.trim_matches('"').to_lowercase();
+          return format!("linux-{}", distro);
+        }
+      }
+    }
+    // Fallback to generic linux if ID not found
+    return "linux".to_string();
+  }
+  "Unknown".to_string()
 }

@@ -1,5 +1,5 @@
 use idf_im_lib::{self, ensure_path};
-use idf_im_lib::telemetry::track_event;
+use idf_im_lib::telemetry::{get_linux_os_name, track_event};
 use log::{error, info};
 use serde_json::{json,Value};
 use tauri_plugin_store::StoreExt;
@@ -58,7 +58,9 @@ pub fn get_operating_system() -> String {
     let mut sys = System::new_all();
     sys.refresh_all();
 
-    System::name().unwrap_or_else(|| std::env::consts::OS.to_string())
+    System::name()
+        .filter(|s| !s.is_empty() && s != "Unknown")
+        .unwrap_or_else(|| get_linux_os_name())
 }
 
 #[tauri::command]
