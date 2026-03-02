@@ -1534,6 +1534,7 @@ name = "eim"
 version = "0.8.2"
 dependencies = [
  "anyhow",
+ "bytes",
  "chrono",
  "clap 4.5.60",
  "clap_complete",
@@ -1558,7 +1559,6 @@ dependencies = [
  "once_cell",
  "openssl-sys",
  "regex",
- "reqwest 0.12.28",
  "reqwest 0.13.2",
  "rust-i18n",
  "rust_search",
@@ -2286,9 +2286,9 @@ dependencies = [
 
 [[package]]
 name = "git2"
-version = "0.19.0"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b903b73e45dc0c6c596f2d37eccece7c1c8bb6e4407b001096387c63d0d93724"
+checksum = "7b88256088d75a56f8ecfa070513a775dd9107f6530ef14919dac831af9cfe2b"
 dependencies = [
  "bitflags 2.11.0",
  "libc",
@@ -3658,25 +3658,25 @@ checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 [[package]]
 name = "idf-env"
 version = "1.2.32"
-source = "git+https://github.com/espressif/idf-env?rev=fd69ab4f550ef35647bb32d1584caa6623cbfc4e#fd69ab4f550ef35647bb32d1584caa6623cbfc4e"
+source = "git+https://github.com/espressif/idf-env?rev=cc4b7c3fb309b93fc3828b29553bddcd19fe41bd#cc4b7c3fb309b93fc3828b29553bddcd19fe41bd"
 dependencies = [
  "anyhow",
  "clap 2.34.0",
  "clap-nested",
- "dirs 6.0.0",
+ "dirs 4.0.0",
  "flate2",
  "git2",
  "guess_host_triple",
  "json",
  "md5",
  "num_cpus",
- "reqwest 0.13.2",
+ "reqwest 0.12.28",
  "tar",
  "tokio",
  "walkdir",
  "widestring",
  "winapi",
- "winreg 0.10.1",
+ "winreg 0.55.0",
  "wmi",
  "xz2",
  "zip",
@@ -4133,9 +4133,9 @@ checksum = "6800badb6cb2082ffd7b6a67e6125bb39f18782f793520caee8cb8846be06112"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.17.0+1.8.1"
+version = "0.18.3+1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10472326a8a6477c3c20a64547b0059e4b0d086869eee31e6d7da728a8eb7224"
+checksum = "c9b3acc4b91781bb0b3386669d325163746af5f6e4f73e6d2d630e09a35f3487"
 dependencies = [
  "cc",
  "libc",
@@ -6040,15 +6040,19 @@ checksum = "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "encoding_rs",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "http-body-util",
  "hyper",
+ "hyper-rustls",
  "hyper-tls",
  "hyper-util",
  "js-sys",
  "log",
+ "mime",
  "native-tls",
  "percent-encoding",
  "pin-project-lite",
@@ -9813,15 +9817,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a5364e9d77fcdeeaa6062ced926ee3381faa2ee02d3eb83a5c27a8825540829"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "winreg"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
-dependencies = [
- "winapi",
 ]
 
 [[package]]

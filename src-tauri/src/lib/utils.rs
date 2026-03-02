@@ -22,7 +22,7 @@ use std::{
     cmp::Ordering,
 };
 
-use gix::prelude::*;
+use gix::{filter::plumbing::driver::process::server::Request, prelude::*};
 use std::sync::atomic::AtomicBool;
 use regex::Regex;
 use url::Url;
@@ -41,10 +41,10 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 use std::mem;
 
 /// A generic result structure for representing check outcomes across different check types.
-/// 
+///
 /// # Type Parameters
 /// * `T` - The check identifier type (e.g., `SanityCheck`, `PrerequisiteCheck`)
-/// 
+///
 /// # Fields
 /// * `check` - The specific check that was performed
 /// * `passed` - Whether the check succeeded
@@ -890,7 +890,7 @@ pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Result<u32,
     if base_url.is_none() {
         return Err(anyhow!("Invalid base URL: {}", url));
     }
-    
+
     match client.unwrap().head(&base_url.unwrap()).send().await {
         Ok(resp) if resp.status().is_success() => {
             return Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
@@ -917,10 +917,10 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
 
     let start_get = Instant::now();
     match client.get(&base_url).send().await {
-        Ok(resp) if resp.status().is_success() => {
+        Ok(resp @ reqwest::Response { .. }) if resp.status().is_success() => {
             return Some(start_get.elapsed().as_millis() as u32);
         }
-        Ok(resp) => {
+        Ok(resp @ reqwest::Response { .. }) => {
             warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
         }
         Err(e) => {

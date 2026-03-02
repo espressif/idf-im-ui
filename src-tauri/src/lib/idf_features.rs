@@ -66,25 +66,25 @@ impl RequirementsMetadata {
     /// Parse from a URL
     pub fn from_url(url: &str) -> Result<Self, ParseError> {
         let response = reqwest::blocking::get(url)
-            .map_err(|e| ParseError::HttpError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
         let text = response
             .text()
-            .map_err(|e| ParseError::HttpError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
         Self::from_str(&text)
     }
 
     /// Parse from a URL (async version)
     pub async fn from_url_async(url: &str) -> Result<Self, ParseError> {
-        let response = reqwest::get(url)
+        let response: reqwest::Response = reqwest::get(url)
             .await
-            .map_err(|e| ParseError::HttpError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
-        let text = response
+        let text:String = response
             .text()
             .await
-            .map_err(|e| ParseError::HttpError(e.to_string()))?;
+            .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
         Self::from_str(&text)
     }
