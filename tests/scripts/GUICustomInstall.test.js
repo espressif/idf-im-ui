@@ -464,7 +464,7 @@ export function runGUICustomInstallTest({
         const completeToolsList =
           await eimRunner.findByDataId("tools-sections");
         const completeToolsListText = await completeToolsList.getText();
-        const expectedToolsAll = await getAvailableTools(version);
+        const expectedToolsAll = await getAvailableTools(version, targetList);
 
         for (let tool of expectedToolsAll) {
           expect(

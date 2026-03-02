@@ -55,10 +55,11 @@ function getPlatformKey_eim() {
 function getOSName() {
   const platform = os.platform();
   if (platform === "linux") {
-    return "linux";
+    return "Ubuntu";
+    // TODO: Add support for other Linux distributions - Only needed for GUI tests when expanding to other Linux distributions
   }
   if (platform === "darwin") {
-    return "macOS";
+    return "macos";
   }
   if (platform === "win32") {
     return "windows";
@@ -173,7 +174,7 @@ const getAvailableFeatures = async (idfVersion = IDFDefaultVersion) => {
 // function to get the list of available tools for a given IDF version
 // If IDF version is not provided, it will use the default version
 // and return array of all tools available for that version, including required and optional
-const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
+const getAvailableTools = async (idfVersion = IDFDefaultVersion, targetList = ["all"]) => {
   const toolsFileURL = `https://github.com/espressif/esp-idf/raw/${idfVersion.replace("release-","release/")}/tools/tools.json`;
   try {
     const res = await fetch(toolsFileURL);
@@ -210,6 +211,20 @@ const getAvailableTools = async (idfVersion = IDFDefaultVersion) => {
         }
         return false;
       });
+      // Filter out tools that are not applicable for selected targets
+      if (!targetList.some(target => target.toLowerCase() === "all")) {
+        const targetFilteredTools = platformAvailableTools.filter((tool) => {
+          for (let target of targetList) {
+            if (tool.supported_targets) {
+              if (tool.supported_targets.includes(target) || tool.supported_targets.includes("all")) {
+                return true;
+              }
+            }
+          }
+          return false;
+        });
+        platformAvailableTools = targetFilteredTools;
+      }
       const tools = platformAvailableTools.map((tool) => tool.name);
       logger.info(
         `available tools for IDF version ${idfVersion}: ${tools.join(", ")}`,

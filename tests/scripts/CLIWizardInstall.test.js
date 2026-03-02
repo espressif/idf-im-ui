@@ -91,6 +91,12 @@ export function runCLIWizardInstallTest({
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
       testRunner.sendInput(`${pathToEIM} ${runInDebug ? "-vvv " : ""}wizard`);
+      if (os.platform() === "win32") {
+        if(await testRunner.waitForOutput("Do you want to install Python?", 15000)) {
+          testRunner.process.write("y");
+          logger.error("EIM not supposed to ask for python installation")
+        }
+      }
       const selectTargetQuestion = await testRunner.waitForOutput(
         "Please select all of the target platforms",
         30000,

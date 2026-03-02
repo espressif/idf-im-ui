@@ -37,7 +37,7 @@ on:
 
 jobs:
   test:
-    name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }})
+    name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}) ${{ matrix.distro_name || '' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -45,22 +45,47 @@ jobs:
         include:
           - os: ubuntu-latest
             package_name: linux-x64
-            run_on: GitHub
-          - os: windows-latest
-            package_name: windows-x64
-            run_on: GitHub
-          - os: macos-latest
-            package_name: macos-aarch64
-            run_on: GitHub
+            container: ubuntu:latest
+            node_arch: x64
+            distro_name: ubuntu
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
-            run_on: ExtraRunner
+            container: ubuntu:latest
+            node_arch: arm64
+            distro_name: ubuntu
+          - os: ubuntu-latest
+            package_name: linux-x64
+            container: debian:latest
+            node_arch: x64
+            distro_name: debian
+          - os: ubuntu-latest
+            package_name: linux-x64
+            container: fedora:latest
+            node_arch: x64
+            distro_name: fedora
+          - os: ubuntu-latest
+            package_name: linux-x64
+            container: opensuse/tumbleweed:latest
+            node_arch: x64
+            distro_name: opensuse
+          - os: ubuntu-latest
+            package_name: linux-x64
+            container: archlinux:base
+            node_arch: x64
+            distro_name: archlinux
+          - os: macos-latest
+            package_name: macos-aarch64
           - os: macos-15-intel
             package_name: macos-x64
-            run_on: ExtraRunner
-          - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
-            package_name: linux-x64
-            run_on: MirrorRunner
+          - os: windows-latest
+            package_name: windows-x64
+            distro_name: stock
+          - os: windows-latest
+            package_name: windows-x64
+            distro_name: scoop
+          # - os: ${{ inputs.run_self_hosted == 'true' && 'self-hosted' || 'ubuntu-latest' }}
+          #   package_name: linux-x64
+          #   run_on: MirrorRunner
 
     steps:
       - name: Free Disk Space (Ubuntu)
@@ -72,7 +97,7 @@ jobs:
           dotnet: true
           haskell: true
           large-packages: false
-          docker-images: true
+          docker-images: false
           swap-storage: true
 
       - name: Checkout repository
@@ -86,6 +111,7 @@ jobs:
           node-version: "20"
 
       - name: Set up Python
+        if: matrix.distro_name != 'scoop'
         uses: actions/setup-python@v6
         with:
           python-version: "3.13.8"
@@ -115,33 +141,158 @@ jobs:
           ls -la ./artifacts/
           chmod +x artifacts/eim
 
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
+      - name: Build node test dependencies on Linux runner (Linux only)
+        if: matrix.os != 'windows-latest'
+        working-directory: tests
         run: |
-          sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0
+          npm ci
 
-      - name: Install dependencies (MacOS)
+      # Linux steps
+      - name: Start test container (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker create --name test-runner \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            -e LOG_TO_FILE=true \
+            -e PACKAGE_NAME=${{ matrix.package_name }} \
+            -e PREREQUISITES_OS="${{ matrix.distro_name || 'ubuntu' }}" \
+            -e EIM_CLI_PATH=/workspace/artifacts/eim \
+            -e EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}" \
+            ${{ matrix.container || 'ubuntu:24.04' }} \
+            sleep infinity
+          docker start test-runner
+          docker exec test-runner bash -c "
+            if command -v apt-get &>/dev/null; then
+              apt-get update && apt-get install -y curl ca-certificates which
+            elif command -v dnf &>/dev/null; then
+              dnf install -y curl ca-certificates which tar gzip
+            elif command -v pacman &>/dev/null; then
+              pacman -Syu --noconfirm curl ca-certificates which
+            elif command -v zypper &>/dev/null; then
+              zypper install -y curl ca-certificates which tar gzip
+            else
+              echo 'No supported package manager found' && exit 1
+            fi
+            curl -fsSL https://nodejs.org/dist/v20.20.0/node-v20.20.0-linux-${{matrix.node_arch}}.tar.gz | tar -xz -C /usr/local --strip-components=1
+            node --version
+            npm --version
+            cat /etc/os-release
+          "
+
+      - name: Run prerequisites check (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker exec test-runner npm run test-CLI --file=CLI-prerequisites
+        continue-on-error: true
+
+      - name: Install pre-requisites (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker exec test-runner \
+            bash -c "
+              if command -v apt-get &>/dev/null; then
+                apt-get update
+                apt-get install -y git cmake wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev
+              elif command -v dnf &>/dev/null; then
+                dnf install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
+              elif command -v yum &>/dev/null; then
+                yum install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
+              elif command -v pacman &>/dev/null; then
+                pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb libxml2-legacy
+              elif command -v zypper &>/dev/null; then
+                pkill -9 zypper 2>/dev/null || true
+                rm -f /run/zypp.pid 2>/dev/null || true
+                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel
+              else
+                echo 'Unknown package manager' && exit 1
+              fi
+            "
+
+      - name: Run python check (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker exec test-runner \
+            bash -c "
+              npm run test-CLI --file=CLI-pythoncheck
+            "
+        continue-on-error: true
+
+      - name: Install python on container (Linux Only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker exec test-runner \
+            bash -c "
+              if command -v apt-get &>/dev/null; then
+                apt-get install -y python3 python3-pip python3-venv
+              elif command -v dnf &>/dev/null; then
+                dnf install -y python3 python3-pip
+              elif command -v yum &>/dev/null; then
+                yum install -y python3 python3-pip
+              elif command -v pacman &>/dev/null; then
+                pacman -S --noconfirm python python-pip
+              elif command -v zypper &>/dev/null; then
+                pkill -9 zypper 2>/dev/null || true
+                rm -f /run/zypp.pid 2>/dev/null || true                
+                zypper install -y python3 python3-pip
+              else
+                echo 'Unknown package manager' && exit 1
+              fi
+            "
+
+      - name: Run IDF basic install test script (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker exec test-runner \
+            bash -c "
+              python3 --version
+              npm run test-CLI --file=CLI-basic
+            "
+        continue-on-error: true
+
+      - name: Run IDF extended install test script (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner' && inputs.run_extended == 'true'
+        run: |
+          docker exec test-runner \
+            bash -c "
+              python3 --version
+              npm run test-CLI --file=CLI-extended
+            "
+        continue-on-error: true
+
+      # MacOS steps
+
+      - name: Run prerequisites check (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
-          brew install dfu-util libgcrypt glib pixman sdl2 libslirp
+          export LOG_TO_FILE="true"
+          export PREREQUISITES_OS="macos"
+          export PACKAGE_NAME="${{ matrix.package_name }}"
+          export EIM_CLI_PATH="../artifacts/eim"
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"      
+          cd tests
+          npm run test-CLI --file=CLI-prerequisites
+        continue-on-error: true
 
-      - name: Run IDF basic install test script (non-Windows)
-        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner'
+      - name: Install pre-requisites (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
+        run: |
+          brew install dfu-util
+
+      - name: Run IDF basic install test script (MacOS)
+        if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
           python3 --version
-          which python3
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
-          npm ci
           npm run test-CLI --file=CLI-basic
         continue-on-error: true
 
-      - name: Run IDF extended install test script (non-Windows)
-        if: matrix.os != 'windows-latest' && matrix.run_on != 'MirrorRunner' && matrix.run_on !='ExtraRunner' && inputs.run_extended == 'true'
+      - name: Run IDF extended install test script (MacOS)
+        if: matrix.os == 'macos-latest' && inputs.run_extended == 'true'
         run: |
           python3 --version
           export LOG_TO_FILE="true"
@@ -150,6 +301,15 @@ jobs:
           export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-extended
+        continue-on-error: true
+
+      # MirrorRunner
+
+      - name: Install pre-requisites (MirrorRunner)
+        if: matrix.run_on == 'MirrorRunner' && inputs.run_self_hosted == 'false'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git cmake wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev python3 python3-pip python3-venv
         continue-on-error: true
 
       - name: Run mirrors basic test script (MirrorRunner)
@@ -180,6 +340,11 @@ jobs:
 
       # Windows steps
 
+      - name: Exclude workspace from Defender (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
       - name: Get CLI application version number (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -193,11 +358,43 @@ jobs:
         run: |
           ls ./artifacts/
 
-      - name: Update Python (Windows)
+      - name: Expand node modules (Windows)
         if: matrix.os == 'windows-latest'
-        uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
+        run: |
+          Set-Location -Path "./tests"
+          Expand-Archive node_modules.zip
+
+      - name: Remove python and git from PATH (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          echo $env:PATH
+          $env:backup_path = $env:PATH
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\[Gg]it\\' }) -join ';'
+          echo $env:PATH
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+          echo "backup_path=$env:backup_path" >> $env:GITHUB_ENV
+
+      - name: Run prerequisites check and install (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"
+          $env:PREREQUISITES_OS="windows"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-CLI-win --file=CLI-prerequisites
+        continue-on-error: true
+
+      - name: Run python check and install (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:LOG_TO_FILE="true"
+          $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
+          $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
+          Set-Location -Path "./tests"
+          npm run test-CLI-win --file=CLI-pythoncheck
+        continue-on-error: true
 
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
@@ -208,7 +405,6 @@ jobs:
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:EIM_CLI_VERSION = "eim ${{ env.CLI_TAG }}"
           Set-Location -Path "./tests"
-          Expand-Archive node_modules.zip
           npm run test-CLI-win --file=CLI-basic
         continue-on-error: true
 
@@ -224,9 +420,21 @@ jobs:
           npm run test-CLI-win --file=CLI-extended
         continue-on-error: true
 
+      - name: Restore PATH (Windows)
+        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        run: |
+          $env:PATH = $env:backup_path
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
       # Copy eim log files to standard location for easier access
-      - name: Copy EIM Log files (ubuntu)
-        if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm' || matrix.os == 'self-hosted'
+
+      - name: Copy EIM logs from container (Linux only)
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
+        run: |
+          docker cp test-runner:/root/.local/share/eim/logs/. ./tests/ 2>/dev/null || true
+
+      - name: Copy EIM Log files (MirrorRnner & self hosted)
+        if: matrix.run_on == 'MirrorRunner'
         run: |
           cp ~/.local/share/eim/logs/*.log ./tests/
         continue-on-error: true
@@ -248,7 +456,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os != 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}
+          name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}-${{matrix.distro_name || ''}}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -257,7 +465,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: matrix.os == 'windows-latest'
         with:
-          name: autotest-CLI-results-${{ matrix.package_name }}
+          name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: |
             ./tests/results-*.json
             ./tests/*.log
@@ -274,8 +482,15 @@ jobs:
         uses: dorny/test-reporter@v2
         if: always()
         with:
-          name: CLI-Autotests-${{ matrix.package_name }}
+          name: CLI-Autotests-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: ./tests/results-*.json
           path-replace-backslashes: "false"
           reporter: mocha-json
           fail-on-empty: true
+
+      # Clean up Container
+      - name: Stop test container
+        if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm')
+        run: |
+          docker stop test-runner
+          docker rm test-runner
