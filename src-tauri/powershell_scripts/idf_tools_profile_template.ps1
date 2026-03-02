@@ -86,27 +86,27 @@ $env:PATH = "{{add_paths_extras}};$env:PATH"
 
 # Define the Invoke-idfpy function
 function global:Invoke-idfpy {
-    {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\tools\idf.py @args
+    {{python_bin_path}} {{idf_path}}\tools\idf.py @args
 }
 
 function global:esptool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\esptool.py @args
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py @args
 }
 
 function global:espefuse.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
 }
 
 function global:espsecure.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
 }
 
 function global:otatool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\app_update\otatool.py @args
+  {{python_bin_path}} {{idf_path}}\components\app_update\otatool.py @args
 }
 
 function global:parttool.py {
-  {{idf_python_env_path}}\Scripts\python.exe {{idf_path}}\components\partition_table\parttool.py @args
+  {{python_bin_path}} {{idf_path}}\components\partition_table\parttool.py @args
 }
 
 # Create an alias for the function

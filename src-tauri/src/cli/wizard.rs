@@ -827,6 +827,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             export_paths,
             paths.python_venv_path.to_str(),
             None, // env_vars
+            &paths.python_path.to_string_lossy().to_string()
         )
     }
     save_config_if_desired(&config)?;

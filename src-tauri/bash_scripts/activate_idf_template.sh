@@ -127,17 +127,17 @@ else
     fi
 fi
 
-alias idf.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/tools/idf.py"
+alias idf.py="{{python_bin_path}} {{idf_path_escaped}}/tools/idf.py"
 
-alias esptool.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+alias esptool.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
 
-alias espefuse.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+alias espefuse.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
 
-alias espsecure.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+alias espsecure.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
 
-alias otatool.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/components/app_update/otatool.py"
+alias otatool.py="{{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py"
 
-alias parttool.py="{{idf_python_env_path_escaped}}/bin/python3 {{idf_path_escaped}}/components/partition_table/parttool.py"
+alias parttool.py="{{python_bin_path}} {{idf_path_escaped}}/components/partition_table/parttool.py"
 
 
 # Main execution
