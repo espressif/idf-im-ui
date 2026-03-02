@@ -27,6 +27,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SanityCheck {
+    AppExecutionAlias,
     PythonVersion,
     Pip,
     Venv,
@@ -38,6 +39,7 @@ pub enum SanityCheck {
 impl SanityCheck {
     fn key_name(&self) -> &'static str {
         match self {
+            SanityCheck::AppExecutionAlias => "app_alias",
             SanityCheck::PythonVersion => "version",
             SanityCheck::Pip => "pip",
             SanityCheck::Venv => "venv",
@@ -59,6 +61,11 @@ impl SanityCheck {
             _ => "",
         };
         format!("python.sanitycheck.hint.{}{}", self.key_name(), os_suffix)
+    }
+
+    /// Returns `true` for checks that only apply on Windows.
+    pub fn is_windows_only(&self) -> bool {
+        matches!(self, SanityCheck::AppExecutionAlias)
     }
 }
 
@@ -585,25 +592,28 @@ pub async fn install_python_env(
         debug!("No offline archive directory provided, skipping copying contents.");
     }
 
-    let python_executable = match std::env::consts::OS {
-            "windows" => {
-              if let Some(scoop_shims_path) = get_scoop_path() {
-                // Use the Scoop shims path for the Python executable
+    let python_executable = {
+        #[cfg(windows)]
+        {
+            if let Some(scoop_shims_path) = get_scoop_path() {
                 let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
                 match python_executable_path.try_exists() {
                     Ok(true) => python_executable_path.to_string_lossy().into_owned(),
-                    Ok(false) => "python3.exe".to_string(),
+                    Ok(false) => resolve_python_fallback_windows(),
                     Err(e) => {
                         warn!("Failed to check if Python executable exists: {}", e);
-                        "python3.exe".to_string()
+                        resolve_python_fallback_windows()
                     }
                 }
-              } else {
-                "python3.exe".to_string()
-              }
-            },
-            _ => "python3".to_string(),
-        };
+            } else {
+                resolve_python_fallback_windows()
+            }
+        }
+        #[cfg(not(windows))]
+        {
+            "python3".to_string()
+        }
+    };
 
     // create the venv
     match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
@@ -826,6 +836,33 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
     let py = python.unwrap_or_else(|| detect_default_python());
     let mut results = Vec::new();
 
+    // ── 0. App Execution Alias check (Windows only) ──────────────────
+    #[cfg(windows)]
+    {
+        let alias_detected = if python.is_some() {
+            // Caller supplied an explicit path; check that specific binary.
+            crate::utils::is_app_execution_alias(Path::new(py))
+        } else {
+            // detect_default_python already skips aliases, but warn
+            // if the plain names still resolve only to aliases.
+            is_only_app_alias("python") || is_only_app_alias("python3")
+        };
+
+        results.push(GenericCheckResult {
+            check: SanityCheck::AppExecutionAlias,
+            passed: !alias_detected,
+            message: if alias_detected {
+                "Python resolves to a Windows App Execution Alias (Microsoft Store stub)".to_string()
+            } else {
+                "No App Execution Alias conflict detected".to_string()
+            },
+        });
+
+        if alias_detected {
+            warn!("Python is an App Execution Alias — remaining checks will likely fail");
+        }
+    }
+
     // ── 1. Python version ────────────────────────────────────────────
     let version_result = check_python_version(py);
 
@@ -942,31 +979,92 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     }
 }
 
+/// Resolves an executable name (e.g. `"python"`) to the first real path on
+/// the system PATH that is **not** a Windows App Execution Alias.
+///
+/// Uses `where.exe` to enumerate all candidates, then filters out any that
+/// are reparse points with `IO_REPARSE_TAG_APPEXECLINK`.  Returns `None`
+/// when every candidate is an alias or `where` finds nothing.
+#[cfg(windows)]
+fn resolve_python_path(name: &str) -> Option<PathBuf> {
+    let output = std::process::Command::new("where").arg(name).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let candidate = PathBuf::from(line.trim());
+        if !candidate.exists() {
+            continue;
+        }
+        if crate::utils::is_app_execution_alias(&candidate) {
+            info!("Skipping App Execution Alias: {}", candidate.display());
+            continue;
+        }
+        return Some(candidate);
+    }
+    None
+}
+
+/// Fallback for Windows when Scoop is not available: tries to find a real
+/// python3.exe or python.exe via `resolve_python_path`, skipping aliases.
+#[cfg(windows)]
+fn resolve_python_fallback_windows() -> String {
+    if let Some(path) = resolve_python_path("python3") {
+        return path.to_string_lossy().into_owned();
+    }
+    if let Some(path) = resolve_python_path("python") {
+        return path.to_string_lossy().into_owned();
+    }
+    warn!("No alias-free Python found on PATH, falling back to python3.exe");
+    "python3.exe".to_string()
+}
+
+/// Returns `true` if the given executable name resolves exclusively to
+/// App Execution Aliases (i.e. every `where` hit is an alias).
+#[cfg(windows)]
+fn is_only_app_alias(name: &str) -> bool {
+    let output = match std::process::Command::new("where").arg(name).output() {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let candidates: Vec<PathBuf> = stdout.lines()
+        .map(|l| PathBuf::from(l.trim()))
+        .filter(|p| p.exists())
+        .collect();
+    !candidates.is_empty() && candidates.iter().all(|p| crate::utils::is_app_execution_alias(p))
+}
+
 fn detect_default_python() -> &'static str {
-    match std::env::consts::OS {
-        "windows" => {
-            // Check for python.exe first (python.org installs)
-            if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
+    #[cfg(windows)]
+    {
+        if let Some(path) = resolve_python_path("python") {
+            let path_str = path.to_string_lossy().into_owned();
+            info!("Found real python.exe at: {}", path_str);
+            if let Ok(out) = command_executor::execute_command_direct(&path_str, &["--version"]) {
                 if out.status.success() {
-                    info!("Found python.exe on windows");
-                    return "python";
+                    return Box::leak(path_str.into_boxed_str());
                 }
             }
-            // Check for python3.exe (Scoop)
-            if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
+        }
+        if let Some(path) = resolve_python_path("python3") {
+            let path_str = path.to_string_lossy().into_owned();
+            info!("Found real python3.exe at: {}", path_str);
+            if let Ok(out) = command_executor::execute_command_direct(&path_str, &["--version"]) {
                 if out.status.success() {
-                    info!("Found python3.exe on windows");
-                    return "python3";
+                    return Box::leak(path_str.into_boxed_str());
                 }
             }
-            // Default to python if neither works, actual function reports any errors
-            warn!("No python.exe or python3.exe found on windows, returning default python");
-            "python"
         }
-        _ => {
-            info!("No windows detected, returning default python3");
-            "python3"
-        }
+        warn!("No real python found (all candidates may be App Execution Aliases)");
+        return "python";
+    }
+
+    #[cfg(not(windows))]
+    {
+        info!("Non-windows platform, returning default python3");
+        "python3"
     }
 }
 

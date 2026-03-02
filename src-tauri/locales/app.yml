@@ -74,6 +74,12 @@ python.sanitycheck.check.ctypes:
 python.sanitycheck.check.ssl:
   en: SSL/HTTPS
   cn: SSL/HTTPS
+python.sanitycheck.check.app_alias:
+  en: App Execution Alias
+  cn: 应用执行别名
+python.sanitycheck.hint.app_alias:
+  en: "The detected Python is a Windows App Execution Alias (Microsoft Store stub). Install Python from https://www.python.org/downloads/ or disable the alias in Settings > Apps > Advanced app settings > App execution aliases."
+  cn: "检测到的 Python 是 Windows 应用执行别名（Microsoft Store 存根）。请从 https://www.python.org/downloads/ 安装 Python，或在 设置 > 应用 > 高级应用设置 > 应用执行别名 中禁用该别名。"
 python.sanitycheck.hint.version:
   en: "Install a supported Python version (3.10 to 3.13) from https://www.python.org/downloads/"
   cn: "请从 https://www.python.org/downloads/ 安装受支持的 Python 版本 (3.10 到 3.13)"
