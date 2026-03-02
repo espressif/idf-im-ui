@@ -592,14 +592,14 @@ pub async fn install_python_env(
                 let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
                 match python_executable_path.try_exists() {
                     Ok(true) => python_executable_path.to_string_lossy().into_owned(),
-                    Ok(false) => "python3.exe".to_string(),
+                    Ok(false) => detect_default_python().to_string(),
                     Err(e) => {
                         warn!("Failed to check if Python executable exists: {}", e);
-                        "python3.exe".to_string()
+                        detect_default_python().to_string()
                     }
                 }
               } else {
-                "python3.exe".to_string()
+                detect_default_python().to_string()
               }
             },
             _ => "python3".to_string(),
