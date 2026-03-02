@@ -441,6 +441,25 @@ pub fn clone_repository(
             }
         };
 
+    // On Windows, disable symlinks so Git does not report typechanges
+    #[cfg(windows)]
+    {
+        let config_path = repo.git_dir().join("config");
+        if let Ok(mut config) = fs::read_to_string(&config_path) {
+            if config.contains("symlinks = true") {
+                config = config.replace("symlinks = true", "symlinks = false");
+                let _ = fs::write(&config_path, config);
+            } else if !config.contains("symlinks") {
+                if let Some(pos) = config.find("[core]") {
+                    if let Some(end_pos) = config[pos..].find('\n') {
+                        config.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
+                        let _ = fs::write(&config_path, config);
+                    }
+                }
+            }
+        }
+    }
+
     // Checkout specific reference
     match checkout_reference(&repo, &options.reference) {
         Ok(_) => {
@@ -886,14 +905,14 @@ fn initialize_modules_repo(
         return Err(format!("Config file not found at {}", config_path.display()).into());
     }
 
-    // Get absolute path to workdir
-    let workdir_abs = if submodule_workdir.is_absolute() {
-        submodule_workdir.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .unwrap_or_default()
-            .join(submodule_workdir)
-    };
+    // Compute relative worktree path from modules_dir (matches standard Git behavior)
+    fs::create_dir_all(submodule_workdir)?;
+    let modules_canon = modules_dir.canonicalize()
+        .unwrap_or_else(|_| modules_dir.to_path_buf());
+    let workdir_canon = submodule_workdir.canonicalize()
+        .unwrap_or_else(|_| submodule_workdir.to_path_buf());
+    let rel_worktree = pathdiff::diff_paths(&workdir_canon, &modules_canon)
+        .ok_or("Failed to compute relative worktree path")?;
 
     // Read and update config
     let mut config_content = fs::read_to_string(&config_path)
@@ -911,8 +930,20 @@ fn initialize_modules_repo(
                 let insert_pos = pos + end_pos + 1;
                 config_content.insert_str(
                     insert_pos,
-                    &format!("\tworktree = {}\n", workdir_abs.display())
+                    &format!("\tworktree = {}\n", rel_worktree.display().to_string().replace('\\', "/"))
                 );
+            }
+        }
+    }
+
+    // On Windows, ensure symlinks = false
+    #[cfg(windows)]
+    if config_content.contains("symlinks = true") {
+        config_content = config_content.replace("symlinks = true", "symlinks = false");
+    } else if !config_content.contains("symlinks") {
+        if let Some(pos) = config_content.find("[core]") {
+            if let Some(end_pos) = config_content[pos..].find('\n') {
+                config_content.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
             }
         }
     }
@@ -958,49 +989,42 @@ fn create_gitlink(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let gitlink_path = submodule_dir.join(".git");
 
-    // Normalize path to forward slashes for consistency
     let normalized_path = submodule_path.replace('\\', "/");
 
-    // Use PathBuf to correctly handle relative paths
-    let mut relative_path = PathBuf::new();
-
-    // Count directory depth
-    let path_components: Vec<&str> = normalized_path.split('/').collect();
-    let depth = path_components.len();
-
-    // Add "../" for each level
-    for _ in 0..depth {
-        relative_path.push("..");
-    }
-
-    // Add the rest of the path
-    relative_path.push(".git");
-    relative_path.push("modules");
-
-    for component in path_components {
-        relative_path.push(component);
-    }
-
-    // Convert to string with forward slashes for Git compatibility
-    let gitlink_content = format!("gitdir: {}\n", relative_path.display().to_string().replace('\\', "/"));
-    fs::write(&gitlink_path, gitlink_content.clone())?;
-
-    debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
-
-    // Create the reverse link
+    // modules dir is relative to the *parent git dir*.
+    // For nested submodules, parent_git_dir will be something like:
+    //   <root>/.git/modules/components/cmock/CMock
+    // so nested modules live under:
+    //   <root>/.git/modules/components/cmock/CMock/modules/vendor/c_exception
     let modules_dir = parent_git_dir.join("modules").join(&normalized_path);
-    let gitdir_file = modules_dir.join("gitdir");
 
-    // Use forward slashes for consistency
-    let workdir_path = submodule_dir
+    fs::create_dir_all(&modules_dir)?;
+
+    // Canonicalize so diff_paths works reliably across symlinks / .. segments
+    let modules_abs = modules_dir
+        .canonicalize()
+        .unwrap_or_else(|_| modules_dir.clone());
+    let workdir_abs = submodule_dir
         .canonicalize()
         .unwrap_or_else(|_| submodule_dir.to_path_buf());
 
-    // Convert Windows path to forward slashes for Git compatibility
-    let workdir_str = workdir_path.display().to_string().replace('\\', "/");
-    fs::write(&gitdir_file, format!("{}\n", workdir_str))?;
+    // .git file: relative path from submodule worktree -> modules dir
+    let rel_to_modules = pathdiff::diff_paths(&modules_abs, &workdir_abs)
+        .ok_or("Failed to compute relative path from worktree to modules dir")?;
+    let gitlink_content = format!(
+        "gitdir: {}\n",
+        rel_to_modules.display().to_string().replace('\\', "/")
+    );
+    fs::write(&gitlink_path, &gitlink_content)?;
+    debug!("Created gitlink at {}: {}", gitlink_path.display(), gitlink_content.trim());
 
-    debug!("Created gitdir link at {}", gitdir_file.display());
+    // Reverse link: relative path from modules dir -> submodule worktree
+    let rel_to_workdir = pathdiff::diff_paths(&workdir_abs, &modules_abs)
+        .ok_or("Failed to compute relative path from modules dir to worktree")?;
+    fs::write(
+        modules_dir.join("gitdir"),
+        format!("{}\n", rel_to_workdir.display().to_string().replace('\\', "/")),
+    )?;
 
     Ok(())
 }
@@ -1129,6 +1153,11 @@ fn checkout_submodule_worktree(
     checkout_tree_recursive(&repo, &tree, submodule_workdir)?;
 
     debug!("Checked out files to {}", submodule_workdir.display());
+
+    // Need this to prevent untracked files in the submodule workdir
+    populate_index_from_tree(&repo, &tree)?;
+
+    
     Ok(())
 }
 
@@ -1163,13 +1192,27 @@ fn checkout_tree_recursive(
         let target_path = target_dir.join(entry_name.to_path_lossy().as_ref());
 
         if entry_mode.is_tree() {
+            debug!("Tree entry: {}", entry_name);
             // Create directory and recurse
             fs::create_dir_all(&target_path)?;
 
             let subtree = repo.find_tree(entry_oid)?;
             checkout_tree_recursive(repo, &subtree, &target_path)?;
 
+        } else if entry_mode.is_commit() {
+            debug!("Commit entry: {}", entry_name);
+            // gitlink (submodule): materialize as a directory placeholder
+            // so the superproject doesnot see it as deleted
+            fs::create_dir_all(&target_path)?;
+        } else if entry_mode.is_link() {
+            debug!("Symlink entry: {}", entry_name);
+            // Symlink entries store their target path in blob content.
+            if let Some(parent) = target_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            write_symlink_from_blob(repo, entry.oid().into(), &target_path)?;
         } else if entry_mode.is_blob() || entry_mode.is_executable() {
+            debug!("Blob entry: {}", entry_name);
             // Ensure parent directory exists
             if let Some(parent) = target_path.parent() {
                 fs::create_dir_all(parent)?;
@@ -1189,6 +1232,39 @@ fn checkout_tree_recursive(
                 fs::set_permissions(&target_path, perms)?;
             }
         }
+    }
+
+    Ok(())
+}
+
+fn write_symlink_from_blob(
+    repo: &gix::Repository,
+    oid: gix::ObjectId,
+    target_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let object = repo.find_object(oid)?;
+    let blob = object.try_into_blob()?;
+    let link_target = std::str::from_utf8(blob.data.as_ref())
+        .map_err(|e| format!("Invalid UTF-8 in symlink target for {}: {}", target_path.display(), e))?
+        .trim_end_matches('\n');
+
+    if target_path.exists() {
+        if target_path.is_dir() {
+            fs::remove_dir_all(target_path)?;
+        } else {
+            fs::remove_file(target_path)?;
+        }
+    }
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(link_target, target_path)?;
+    }
+
+    #[cfg(not(unix))]
+    {
+        // Fallback for platforms without standard symlink support in this path.
+        fs::write(target_path, link_target.as_bytes())?;
     }
 
     Ok(())
@@ -1484,9 +1560,20 @@ fn populate_index_from_tree(
     repo: &gix::Repository,
     tree: &gix::Tree,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let workdir = repo.work_dir()
+        .ok_or("Repository has no working directory")?;
+
     // Collect all entries from the tree
     let mut entries = Vec::new();
     collect_tree_entries(tree, "", &mut entries, repo)?;
+
+    // Populate real stat data so git status doesn't need to refresh the index
+    for entry in &mut entries {
+        let file_path = workdir.join(entry.path.to_str_lossy().as_ref());
+        if let Ok(metadata) = fs::symlink_metadata(&file_path) {
+            entry.stat = stat_from_metadata(&metadata);
+        }
+    }
 
     // Sort entries by path (required by git index format)
     entries.sort_by(|a, b| a.path.cmp(&b.path));
@@ -1580,6 +1667,36 @@ struct IndexEntryData {
     path: gix::bstr::BString,
 }
 
+fn stat_from_metadata(metadata: &std::fs::Metadata) -> gix::index::entry::Stat {
+    use std::time::UNIX_EPOCH;
+
+    let mtime = metadata.modified().unwrap_or(UNIX_EPOCH);
+    let mtime_dur = mtime.duration_since(UNIX_EPOCH).unwrap_or_default();
+
+    let ctime = metadata.created()
+        .or_else(|_| metadata.modified())
+        .unwrap_or(UNIX_EPOCH);
+    let ctime_dur = ctime.duration_since(UNIX_EPOCH).unwrap_or_default();
+
+    let mut stat = gix::index::entry::Stat::default();
+    stat.mtime.secs = mtime_dur.as_secs() as u32;
+    stat.mtime.nsecs = mtime_dur.subsec_nanos();
+    stat.ctime.secs = ctime_dur.as_secs() as u32;
+    stat.ctime.nsecs = ctime_dur.subsec_nanos();
+    stat.size = metadata.len() as u32;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        stat.dev = metadata.dev() as u32;
+        stat.ino = metadata.ino() as u32;
+        stat.uid = metadata.uid();
+        stat.gid = metadata.gid();
+    }
+
+    stat
+}
+
 /// Defines the type of Git reference to be checked out.
 #[derive(Debug)]
 pub enum GitReference {
@@ -1655,12 +1772,6 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             // Set HEAD
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
-
-            // CHECK OUT THE FILES
-            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-                error!("Error checking out files for branch {}: {}", branch, e);
-                anyhow::anyhow!("{}", e)
-            })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
