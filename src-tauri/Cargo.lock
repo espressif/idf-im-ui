@@ -1618,7 +1618,6 @@ dependencies = [
  "lnk",
  "log",
  "log4rs",
- "lzma-rs",
  "once_cell",
  "openssl-sys",
  "regex",
@@ -1651,6 +1650,7 @@ dependencies = [
  "url",
  "uuid",
  "winapi",
+ "xz2",
  "zip",
  "zstd",
 ]
