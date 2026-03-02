@@ -1,4 +1,3 @@
-use console::Style;
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 use idf_im_lib::{settings::Settings, telemetry::track_event};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
@@ -31,7 +30,7 @@ where
 
 pub fn create_theme() -> ColorfulTheme {
     ColorfulTheme {
-        values_style: Style::new().yellow().dim(),
+        values_style: dialoguer::console::Style::new().yellow().dim(),
         ..ColorfulTheme::default()
     }
 }
