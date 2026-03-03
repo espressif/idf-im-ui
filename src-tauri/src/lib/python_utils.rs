@@ -244,6 +244,7 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
 /// - The `python -m venv` command itself encounters an error (e.g., invalid path).
 fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String, String> {
     info!("Creating Python virtual environment at: {}", venv_path);
+    debug!("Using Python executable: {}", python_executable);
 
     let output = command_executor::execute_command_direct(
         python_executable,
@@ -257,9 +258,11 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
                     .unwrap_or("Success (non-UTF8 output)")
                     .to_string())
             } else {
-                Err(std::str::from_utf8(&out.stderr)
-                    .unwrap_or("Error (non-UTF8 output)")
-                    .to_string())
+                debug!("Failed to create Python virtual environment. stderr: {} \n stdout: {}", std::str::from_utf8(&out.stderr).unwrap_or("Error (non-UTF8 output)"), std::str::from_utf8(&out.stdout).unwrap_or("Error (non-UTF8 output)"));
+                let stderr_str = String::from_utf8_lossy(&out.stderr);
+                let stdout_str = String::from_utf8_lossy(&out.stdout);
+                debug!("Failed to create Python virtual environment. stderr: {} \n stdout: {}", stderr_str, stdout_str);
+                Err(stderr_str.into_owned())
             }
         }
         Err(e) => Err(e.to_string()),
@@ -841,8 +844,25 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
     results.push(GenericCheckResult::from_command_output(SanityCheck::Pip, pip_output));
 
     // ── 3. venv ──────────────────────────────────────────────────────
-    let venv_output = command_executor::execute_command_direct(py, &["-m", "venv", "-h"]);
-    results.push(GenericCheckResult::from_command_output(SanityCheck::Venv, venv_output));
+    let venv_result = {
+      match tempfile::TempDir::new() {
+        Err(e) => GenericCheckResult {
+          check: SanityCheck::Venv,
+          passed: false,
+          message: format!("Failed: could not create temp directory: {e}"),
+        },
+        Ok(tmp_dir) => {
+          let venv_path = tmp_dir.path().join("probe");
+          let venv_output = command_executor::execute_command_direct(
+              py,
+              &["-m", "venv", venv_path.to_str().unwrap()],
+          );
+          GenericCheckResult::from_command_output(SanityCheck::Venv, venv_output)
+        }
+      }
+    };
+    results.push(venv_result);
+
 
     // ── 4. Standard library ──────────────────────────────────────────
     let stdlib_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/import_standard_library.py")]);
