@@ -468,6 +468,7 @@ pub fn clone_repository(
         Err(e) => {
             let _ = tx.send(ProgressMessage::Finish);
             error!("Failed to checkout reference: {}", e);
+            return Err(anyhow!("Failed to checkout reference: {}", e).into());
         }
     }
 
@@ -479,10 +480,15 @@ pub fn clone_repository(
         info!("Recurse submodules is TRUE");
         match update_submodules_shallow(&repo, tx.clone()) {
             Ok(_) => info!("Submodules updated successfully"),
-            Err(e) => error!("Submodule update failed: {}", e),
+            Err(e) => {
+                let _ = tx.send(ProgressMessage::Finish);
+                error!("Submodule update failed: {}", e);
+                return Err(anyhow!("Submodule update failed: {}", e).into());
+            }
         }
     }
 
+    let _ = tx.send(ProgressMessage::Finish);
     Ok(dest_path)
 }
 
