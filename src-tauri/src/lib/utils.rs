@@ -41,10 +41,10 @@ use winapi::shared::minwindef::{DWORD, FALSE};
 use std::mem;
 
 /// A generic result structure for representing check outcomes across different check types.
-/// 
+///
 /// # Type Parameters
 /// * `T` - The check identifier type (e.g., `SanityCheck`, `PrerequisiteCheck`)
-/// 
+///
 /// # Fields
 /// * `check` - The specific check that was performed
 /// * `passed` - Whether the check succeeded
@@ -536,20 +536,15 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             new_export_paths,
             idf_python_env_path.as_deref(),
             Some(env_vars_vec),
+            &paths.python_path.to_string_lossy().to_string(),
         );
 
-        let python = match std::env::consts::OS {
-            "windows" => PathBuf::from(idf_python_env_path.unwrap()).join("Scripts").join("python.exe"),
-            _ => PathBuf::from(idf_python_env_path.unwrap()).join("bin").join("python"),
-        };
         let installation = IdfInstallation {
             id: tool_set.id.to_string(),
             activation_script: paths.activation_script.to_string_lossy().into_owned(),
             path: tool_set.idf_location,
             name: tool_set.idf_version,
-            python: python.to_str()
-                .unwrap()
-                .to_string(),
+            python: paths.python_path.to_string_lossy().into_owned(),
             idf_tools_path: new_idf_tools_path,
         };
 
@@ -890,7 +885,7 @@ pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Result<u32,
     if base_url.is_none() {
         return Err(anyhow!("Invalid base URL: {}", url));
     }
-    
+
     match client.unwrap().head(&base_url.unwrap()).send().await {
         Ok(resp) if resp.status().is_success() => {
             return Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
