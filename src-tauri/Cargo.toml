@@ -66,8 +66,8 @@ python3 = ">= 3.10"
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
-gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-log", "dep:tauri-plugin-store", "dep:tauri-plugin-opener"]
-cli = ["dep:clap", "dep:clap_complete", "dep:dialoguer", "dep:indicatif", "dep:console", "vendored-openssl"]
+gui = ["dep:tauri", "dep:tauri-build", "dep:tauri-plugin-shell", "dep:tauri-plugin-dialog", "dep:tauri-plugin-store", "dep:tauri-plugin-opener"]
+cli = ["dep:clap", "dep:clap_complete", "dep:dialoguer", "dep:indicatif", "vendored-openssl"]
 offline = ["cli", "dep:fs_extra"]
 userustpython = ["dep:rustpython-vm", "dep:rustpython-stdlib"]
 vendored-openssl = ["openssl-sys/vendored", "reqwest/native-tls-vendored"]
@@ -119,7 +119,6 @@ lzma-rs = "0.3.0"
 thiserror = "2.0"
 rust-i18n = "3.0.1"
 tokio = { version = "1.49", features = ["full"] }
-deranged = "0.5"
 struct_iterable = "0.1.1"
 regex = "1.11.1"
 shlex = "1.3.0"
@@ -140,7 +139,6 @@ bytes = "1.11.1"
 tauri = { version = "2.10.2", features = [], optional = true }
 tauri-plugin-shell = { version = "2.3.5", optional = true }
 tauri-plugin-dialog = { version = "2.6.0", optional = true }
-tauri-plugin-log = { version = "2.8.0", optional = true }
 tauri-plugin-store = { version="2.4.2", optional = true }
 tauri-plugin-opener = { version="2.5.3", optional = true }
 
@@ -149,17 +147,10 @@ clap = {version = "4.5", features = ["cargo", "derive", "color"], optional = tru
 clap_complete = {version = "4.5.58", optional = true}
 dialoguer = { git = "https://github.com/Hahihula/dialoguer.git", branch = "folder-select", features = ["folder-select"], optional = true }
 indicatif = { version = "0.18", optional = true }
-console = { version = "0.16", optional = true }
-log4rs = { version = "1.3.0", optional = true }
-
 
 # userustpython feature dependencies
 rustpython-vm = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["freeze-stdlib"], optional = true }
 rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["ssl-vendor"], optional = true }
-
-
-
-
 
 # OS-specific dependency
 [target.'cfg(target_os = "linux")'.dependencies]
@@ -167,10 +158,6 @@ fork = "0.1"
 
 [dependencies.openssl-sys]
 version = "0.9.0"
-
-[dependencies.libz-sys]
-version = "1.1"
-features = ["static"]
 
 [target.'cfg(target_os = "windows")'.dependencies.openssl-sys]
 version = "0.9.0"
