@@ -55,15 +55,15 @@ pub fn get_tools_json_url(
 
 /// Fetch tools.json from URL (blocking)
 pub fn fetch_tools_file(url: &str) -> Result<ToolsFile, ToolSelectionError> {
-    let response = reqwest::blocking::get(url)
-        .map_err(|e| ToolSelectionError::HttpError(e.to_string()))?;
+    let response: reqwest::blocking::Response = reqwest::blocking::get(url)
+        .map_err(|e: reqwest::Error| ToolSelectionError::HttpError(e.to_string()))?;
 
     let text = response
         .text()
-        .map_err(|e| ToolSelectionError::HttpError(e.to_string()))?;
+        .map_err(|e: reqwest::Error| ToolSelectionError::HttpError(e.to_string()))?;
 
     let tools_file: ToolsFile = serde_json::from_str(&text)
-        .map_err(|e| ToolSelectionError::JsonError(e.to_string()))?;
+        .map_err(|e: serde_json::Error| ToolSelectionError::JsonError(e.to_string()))?;
 
     let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
 
@@ -72,17 +72,17 @@ pub fn fetch_tools_file(url: &str) -> Result<ToolsFile, ToolSelectionError> {
 
 /// Fetch tools.json from URL (async)
 pub async fn fetch_tools_file_async(url: &str) -> Result<ToolsFile, ToolSelectionError> {
-    let response = reqwest::get(url)
+    let response:reqwest::Response = reqwest::get(url)
         .await
-        .map_err(|e| ToolSelectionError::HttpError(e.to_string()))?;
+        .map_err(|e: reqwest::Error| ToolSelectionError::HttpError(e.to_string()))?;
 
-    let text = response
+    let text: String = response
         .text()
         .await
-        .map_err(|e| ToolSelectionError::HttpError(e.to_string()))?;
+        .map_err(|e: reqwest::Error| ToolSelectionError::HttpError(e.to_string()))?;
 
     let tools_file: ToolsFile = serde_json::from_str(&text)
-        .map_err(|e| ToolSelectionError::JsonError(e.to_string()))?;
+        .map_err(|e: serde_json::Error| ToolSelectionError::JsonError(e.to_string()))?;
 
     let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
 

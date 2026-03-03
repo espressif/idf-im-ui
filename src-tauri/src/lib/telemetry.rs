@@ -27,7 +27,7 @@ struct TelemetryItem {
 }
 
 pub async fn track_event(name: &str, properties: serde_json::Value) {
-    let client = match &*CLIENT {
+    let client: &reqwest::Client = match &*CLIENT {
         Some(c) => c,
         None => return,
     };

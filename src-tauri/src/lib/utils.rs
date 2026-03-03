@@ -22,7 +22,7 @@ use std::{
     cmp::Ordering,
 };
 
-use gix::prelude::*;
+use gix::{filter::plumbing::driver::process::server::Request, prelude::*};
 use std::sync::atomic::AtomicBool;
 use regex::Regex;
 use url::Url;
@@ -912,10 +912,10 @@ pub async fn measure_url_score_get(url: &str, timeout: Duration) -> Option<u32> 
 
     let start_get = Instant::now();
     match client.get(&base_url).send().await {
-        Ok(resp) if resp.status().is_success() => {
+        Ok(resp @ reqwest::Response { .. }) if resp.status().is_success() => {
             return Some(start_get.elapsed().as_millis() as u32);
         }
-        Ok(resp) => {
+        Ok(resp @ reqwest::Response { .. }) => {
             warn!("Mirror ping failed for {}: {:?}", base_url, resp.status());
         }
         Err(e) => {

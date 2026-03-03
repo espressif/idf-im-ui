@@ -155,8 +155,8 @@ pub async fn download_idf_versions() -> Result<Releases, Box<dyn std::error::Err
     let client = reqwest::Client::builder()
         .user_agent("esp-idf-installer")
         .build()?;
-    let response = client.get(&url).send().await?;
-    let json_versions_file = response.text().await?;
+    let response: reqwest::Response = client.get(&url).send().await?;
+    let json_versions_file: String = response.text().await?;
     let versions: Releases = serde_json::from_str(&json_versions_file)?;
 
     Ok(versions)

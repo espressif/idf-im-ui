@@ -1005,71 +1005,64 @@ pub async fn download_file_and_rename(
     progress_sender: Option<Sender<DownloadProgress>>,
     new_name: Option<&str>,
 ) -> Result<(), std::io::Error> {
-    // Create a new HTTP client
-    let client = Client::new();
+    let client:reqwest::Client = reqwest::Client::new();
 
-    // Send a GET request to the specified URL
-    let mut response = client
+    let mut response: reqwest::Response = client
         .get(url)
         .send()
         .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(|e: reqwest::Error| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
     if !response.status().is_success() {
-      if let Some(sender) = &progress_sender {
-        let _ = sender.send(DownloadProgress::Error(format!(
-          "HTTP error: {}",
-          response.status()
-        )));
-      }
-      return Err(std::io::Error::new(
-        std::io::ErrorKind::Other,
-        format!("HTTP error: {}", response.status()),
-      ));
+        if let Some(sender) = &progress_sender {
+            let _ = sender.send(DownloadProgress::Error(format!(
+                "HTTP error: {}",
+                response.status()
+            )));
+        }
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("HTTP error: {}", response.status()),
+        ));
     }
 
-    // Get the total size of the file being downloaded
     let total_size = response.content_length().ok_or_else(|| {
-      if let Some(sender) = &progress_sender {
-        let _ = sender.send(DownloadProgress::Error(
-          "Failed to get content length".into(),
-        ));
-      }
-      std::io::Error::new(std::io::ErrorKind::Other, "Failed to get content length")
+        if let Some(sender) = &progress_sender {
+            let _ = sender.send(DownloadProgress::Error(
+                "Failed to get content length".into(),
+            ));
+        }
+        std::io::Error::new(std::io::ErrorKind::Other, "Failed to get content length")
     })?;
+
     log::debug!("Downloading {} to {}", url, destination_path);
 
     let filename = if let Some(new_name) = new_name {
-      new_name.to_string()
+        new_name.to_string()
     } else {
-      // Use the last part of the URL as the filename
-      Path::new(&url).file_name().unwrap().to_str().unwrap().to_string()
+        Path::new(&url).file_name().unwrap().to_str().unwrap().to_string()
     };
+
     log::debug!(
         "Filename: {} and destination: {}",
         &filename,
         destination_path
     );
-    // Create a new file at the specified destination path
+
     let mut file = File::create(Path::new(&destination_path).join(Path::new(&filename)))?;
     log::debug!("Created file at {}", destination_path);
 
-    // Initialize the amount downloaded
     let mut downloaded: u64 = 0;
 
-    // Download the file in chunks
     while let Some(chunk) = response
         .chunk()
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
     {
-        // Update the amount downloaded
+        let chunk: bytes::Bytes = chunk;
         downloaded += chunk.len() as u64;
-
-        // Write the chunk to the file
         file.write_all(&chunk)?;
 
-        // Call the progress callback function
         if let Some(sender) = &progress_sender {
             if let Err(e) = sender.send(DownloadProgress::Progress(downloaded, total_size)) {
                 return Err(std::io::Error::new(
@@ -1079,16 +1072,16 @@ pub async fn download_file_and_rename(
             }
         }
     }
+
     if let Some(sender) = &progress_sender {
-        // Send a completion message
         if let Err(e) = sender.send(DownloadProgress::Complete) {
             warn!("Failed to send completion: {}", e);
         }
     }
 
-    // Return Ok(()) if the download was successful
     Ok(())
 }
+
 
 #[derive(Error, Debug)]
 pub enum DecompressionError {
@@ -1470,10 +1463,10 @@ pub fn get_rustpython_fork(
     }
 }
 
-// kept for pure reference how the IDF tools shouldc be runned using rustpython
+// kept for pure reference how the IDF tools shouldc be ran using rustpython
 pub fn run_idf_tools_using_rustpython(custom_path: &str) -> Result<String, std::io::Error> {
     let script_path = "esp-idf/tools/idf_tools.py";
-    // env::set_var("RUSTPYTHONPATH", "/tmp/test-directory/RustPython/Lib"); // this is not needed as the standart library is bakend into the binary
+    // env::set_var("RUSTPYTHONPATH", "/tmp/test-directory/RustPython/Lib"); // this is not needed as the standard library is bakend into the binary
     let output = std::process::Command::new("rustpython") // this works only on my machine (needs to point to the rustpython executable)
         .current_dir(custom_path)
         .arg(script_path)
