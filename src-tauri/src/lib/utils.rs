@@ -71,7 +71,15 @@ impl<T> GenericCheckResult<T> {
             Ok(out) => GenericCheckResult {
                 check,
                 passed: false,
-                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+                message: {
+                    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    match (stderr.is_empty(), stdout.is_empty()) {
+                        (false, false) => format!("{stderr}\n{stdout}"),
+                        (true, _) => stdout,
+                        (_, true) => stderr,
+                    }
+                },
             },
             Err(e) => GenericCheckResult {
                 check,
