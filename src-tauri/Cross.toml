@@ -1,0 +1,9 @@
+[target.armv7-unknown-linux-musleabihf]
+
+[target.armv7-unknown-linux-musleabihf.env]
+passthrough = [
+    "LIBZ_SYS_STATIC",
+    "ZLIB_STATIC",
+    "LZMA_API_STATIC",
+    "APP_INSIGHTS_CONNECTION_STRING",
+]

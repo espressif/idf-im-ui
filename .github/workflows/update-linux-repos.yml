@@ -60,12 +60,20 @@ jobs:
           path: new-debs/
         continue-on-error: true
 
+      - name: Download CLI linux-armv7 .deb artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ inputs.version }}-deb
+          path: new-debs/
+        continue-on-error: true
+
       - name: Create proper APT repository structure
         run: |
-          # Create proper directory structure
+          # Create proper directory structure (now includes armhf)
           mkdir -p apt-repo/pool/main
           mkdir -p apt-repo/dists/stable/main/binary-amd64
           mkdir -p apt-repo/dists/stable/main/binary-arm64
+          mkdir -p apt-repo/dists/stable/main/binary-armhf
 
           # Sync existing .deb files from S3 pool
           aws s3 sync s3://espdldata/dl/eim/apt/pool/main/ apt-repo/pool/main/ --exclude "*" --include "*.deb" || echo "No existing pool found"
@@ -89,14 +97,18 @@ jobs:
           dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages
           gzip -k -f dists/stable/main/binary-arm64/Packages
 
-          # Generate Release file
+          # ARMHF packages
+          dpkg-scanpackages --arch armhf pool/main > dists/stable/main/binary-armhf/Packages
+          gzip -k -f dists/stable/main/binary-armhf/Packages
+
+          # Generate Release file (now includes armhf)
           cd dists/stable
           cat > Release << EOF
           Origin: Espressif Systems
           Label: ESP-IDF Installation Manager
           Suite: stable
           Codename: stable
-          Architectures: amd64 arm64
+          Architectures: amd64 arm64 armhf
           Components: main
           Description: ESP-IDF Installation Manager packages
           Date: $(date -Ru)
@@ -156,6 +168,13 @@ jobs:
           path: new-rpms/
         continue-on-error: true
 
+      - name: Download CLI linux-armv7 .rpm artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ inputs.version }}-rpm
+          path: new-rpms/
+        continue-on-error: true
+
       - name: Download GUI linux-x64 .rpm artifact
         uses: actions/download-artifact@v4
         with:
@@ -172,20 +191,21 @@ jobs:
 
       - name: Create RPM repository structure
         run: |
-          # Create directory structure
+          # Create directory structure (now includes armv7hl)
           mkdir -p rpm-repo/x86_64
           mkdir -p rpm-repo/aarch64
+          mkdir -p rpm-repo/armv7hl
 
           # Sync existing .rpm files from S3
           aws s3 sync s3://espdldata/dl/eim/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
           aws s3 sync s3://espdldata/dl/eim/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
+          aws s3 sync s3://espdldata/dl/eim/rpm/armv7hl/ rpm-repo/armv7hl/ --exclude "*" --include "*.rpm" || echo "No existing armv7hl RPMs found"
 
           # Debug: Show contents of downloaded RPMs
           echo "Downloaded RPM artifacts:"
           find new-rpms -type f -name "*.rpm" -exec ls -la {} \;
 
           # Copy new .rpm files to appropriate architecture directories
-          # Improved file discovery logic
           if [ -d "new-rpms" ] && [ "$(ls -A new-rpms)" ]; then
             # Copy x86_64 RPMs
             find new-rpms -type f \( -name "*x86_64*.rpm" -o -name "*amd64*.rpm" -o -name "*linux-x64*.rpm" \) -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
@@ -193,11 +213,16 @@ jobs:
             # Copy aarch64 RPMs
             find new-rpms -type f \( -name "*aarch64*.rpm" -o -name "*arm64*.rpm" -o -name "*linux-aarch64*.rpm" \) -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
 
+            # Copy armv7hl RPMs
+            find new-rpms -type f \( -name "*armv7*.rpm" -o -name "*armhf*.rpm" -o -name "*linux-armv7*.rpm" \) -exec cp {} rpm-repo/armv7hl/ \; || echo "No armv7hl RPMs to copy"
+
             echo "Copied RPM files:"
             echo "x86_64 RPMs:"
             ls -la rpm-repo/x86_64/ || echo "No x86_64 RPMs"
             echo "aarch64 RPMs:"
             ls -la rpm-repo/aarch64/ || echo "No aarch64 RPMs"
+            echo "armv7hl RPMs:"
+            ls -la rpm-repo/armv7hl/ || echo "No armv7hl RPMs"
           else
             echo "No RPM artifacts downloaded"
           fi
@@ -221,6 +246,15 @@ jobs:
             echo "aarch64 metadata generated successfully"
           else
             echo "No aarch64 RPMs found, skipping metadata generation"
+          fi
+
+          # Generate metadata for armv7hl
+          if [ -d "armv7hl" ] && [ "$(ls -A armv7hl/*.rpm 2>/dev/null)" ]; then
+            echo "Generating metadata for armv7hl RPMs..."
+            createrepo_c armv7hl/ --update
+            echo "armv7hl metadata generated successfully"
+          else
+            echo "No armv7hl RPMs found, skipping metadata generation"
           fi
 
       - name: Create repo file
