@@ -16,6 +16,22 @@
           type="stable"
         />
 
+        <!-- Old Stable Versions Section -->
+        <div v-if="oldStableVersions.length > 0" class="old-stable-toggle">
+          <n-checkbox v-model:checked="showOldStable">
+            {{ t('versionSelect.sections.oldStable.showCheckbox') }}
+          </n-checkbox>
+        </div>
+        <version-section
+          v-if="oldStableVersions.length > 0 && showOldStable"
+          :title="t('versionSelect.sections.oldStable.title')"
+          :description="t('versionSelect.sections.oldStable.description')"
+          :versions="oldStableVersions"
+          :selected="selected_versions"
+          @toggle="toggleVersion"
+          type="stable"
+        />
+
         <!-- Pre-release Versions Section -->
         <version-section
           v-if="preReleaseVersions.length > 0"
@@ -97,11 +113,15 @@ export default {
   data: () => ({
     loading: true,
     versions: [],
-    selected_versions: []
+    selected_versions: [],
+    showOldStable: false
   }),
   computed: {
     stableVersions() {
-      return this.versions.filter(v => v.category === 'stable' && !v.is_master);
+      return this.versions.filter(v => v.category === 'stable' && !v.is_master && !v.old);
+    },
+    oldStableVersions() {
+      return this.versions.filter(v => v.category === 'stable' && !v.is_master && v.old);
     },
     preReleaseVersions() {
       return this.versions.filter(v => v.category === 'pre_release' && !v.is_master);

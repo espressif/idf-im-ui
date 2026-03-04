@@ -462,6 +462,11 @@
         "title": "Stable Releases",
         "description": "Production-ready versions recommended for most projects. These versions are thoroughly tested and suitable for commercial and production environments."
       },
+      "oldStable": {
+        "title": "Old Stable Releases",
+        "description": "Older stable versions that are no longer supported but may be needed for legacy projects.",
+        "showCheckbox": "Show old stable versions"
+      },
       "preRelease": {
         "title": "Pre-Release Versions",
         "description": "If a required feature is not yet available in a stable release, but you do not want to use the master branch, it is possible to check out a pre-release version or a release branch."
