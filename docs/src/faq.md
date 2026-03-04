@@ -27,6 +27,49 @@ For more details, see the "Privacy and Data Collection" section in our documenta
 ### Should I run the installer 'as admin'?
 No, the installer does not require elevated rights and should **not** be run as an administrator. Running the installer with admin privileges is unnecessary and could lead to unintended permission issues.
 
+### Does EIM support Windows on ARM?
+
+No, EIM does not currently support Windows on ARM. This is because ESP-IDF itself does not support Windows ARM, so there is no ARM-native version of ESP-IDF available.
+
+**Workaround**: You can run the Linux ARM64 version of EIM inside WSL (Windows Subsystem for Linux). We recommend using the CLI variant for this setup, as running the GUI from WSL adds complexity.
+
+On Ubuntu-based WSL (which is the most common), you can install EIM CLI via APT:
+
+```bash
+# Add the Espressif APT repository
+echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
+
+# Update package lists
+sudo apt update
+
+# Install EIM CLI
+sudo apt install eim-cli
+
+# Install IDF itself (with defaults)
+eim install
+```
+
+With this setup, ESP-IDF must be used from inside WSL.
+
+### Can I install ESP-IDF to a custom location or a different hard drive?
+
+Yes, you can install ESP-IDF to any location where you have full write permissions, including a different hard drive. However, on Windows (especially corporate machines with restricted permissions), simply using the `-p` parameter may not be enough.
+
+EIM writes to multiple directories beyond just the IDF path. If any of these directories point to locations where you don't have full write permissions, the installation will fail with an "Access is denied" error.
+
+To install to a completely custom location, configure **all** relevant paths:
+
+```bash
+eim install -p D:\YourCustomPath\.espressif \
+  --tool-install-folder-name D:\YourCustomPath\tools \
+  --tool-download-folder-name D:\YourCustomPath\dist \
+  --activation-script-path-override D:\YourCustomPath\tools
+```
+
+For a full list of configurable paths, see the [CLI Configuration](./cli_configuration.md) documentation.
+
+> **Note:** If you change the location of the `eim_idf.json` configuration file, you may lose automatic IDE integration. Both VS Code and Espressif IDE expect this file to be in a known default location.
+
 ### Can I use an existing ESP-IDF Git repository with EIM?
 Yes, simply run:
 ```bash
