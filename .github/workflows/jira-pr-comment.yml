@@ -9,7 +9,7 @@
 # - If the Jira issue doesn't exist or API fails, the workflow logs a warning but doesn't fail
 # - This ensures developers are never blocked by Jira integration issues
 
-name: 🔗 Add PR Link to Jira
+name: Add PR Link to Jira
 
 run-name: >
   Add PR Link to Jira - PR #${{ github.event.pull_request.number }}
