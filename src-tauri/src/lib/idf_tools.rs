@@ -818,33 +818,51 @@ pub async fn setup_tools(
         }
       });
 
-      // Download the file
-      match download_file(&download_link.url, download_dir.to_str().unwrap(), Some(tx)).await {
-        Ok(_) => {
-          // Verify downloaded file
-          if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())? {
-            progress_callback(DownloadProgress::Verified(download_link.url.clone()));
-            // Extract the archive
+      // Download the file with retry (3 attempts)
+      let mut download_success = false;
+      let mut last_download_error = None;
 
-            decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
-
-            // Post-extraction operations
-            if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
-              post_extract_operations(tool_name, tool, &this_install_dir)?;
+      for attempt in 1..=3 {
+        match download_file(&download_link.url, download_dir.to_str().unwrap(), Some(tx.clone())).await {
+          Ok(_) => {
+            download_success = true;
+            break;
+          }
+          Err(e) => {
+            log::warn!("Download attempt {}/3 failed for '{}': {}", attempt, tool_name, e);
+            last_download_error = Some(e);
+            if attempt < 3 {
+              // Wait a bit before retrying
+              tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
             }
-
-            progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
-            progress_callback(DownloadProgress::Complete);
-          } else {
-            // Remove corrupted file
-            std::fs::remove_file(&full_file_path)?;
-            return Err(anyhow::anyhow!("Downloaded file is corrupted"));
           }
         }
-        Err(e) => {
-          progress_callback(DownloadProgress::Error(e.to_string()));
-          return Err(anyhow::anyhow!("Download failed: {}", e));
+      }
+
+      if !download_success {
+        let err = last_download_error.unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "Unknown download error"));
+        progress_callback(DownloadProgress::Error(err.to_string()));
+        return Err(anyhow::anyhow!("Download failed after 3 attempts: {}", err));
+      }
+
+      // Verify downloaded file
+      if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())? {
+        progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+        // Extract the archive
+
+        decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+
+        // Post-extraction operations
+        if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
+          post_extract_operations(tool_name, tool, &this_install_dir)?;
         }
+
+        progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
+        progress_callback(DownloadProgress::Complete);
+      } else {
+        // Remove corrupted file
+        std::fs::remove_file(&full_file_path)?;
+        return Err(anyhow::anyhow!("Downloaded file is corrupted"));
       }
     }
 
