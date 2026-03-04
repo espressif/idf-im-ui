@@ -62,7 +62,6 @@ libffi-devel = "*"
 openssl-devel = "*"
 dfu-util = "*"
 libusb = "*"
-python3 = ">= 3.10"
 
 [features]
 default = ["gui", "cli", "vendored-openssl"]
