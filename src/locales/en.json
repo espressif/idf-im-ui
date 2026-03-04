@@ -464,7 +464,7 @@
       },
       "oldStable": {
         "title": "Old Stable Releases",
-        "description": "Older stable versions that are no longer supported but may be needed for legacy projects.",
+        "description": "Older stable versions that may be needed for legacy projects.",
         "showCheckbox": "Show old stable versions"
       },
       "preRelease": {

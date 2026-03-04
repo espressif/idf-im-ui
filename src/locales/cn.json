@@ -462,7 +462,7 @@
       },
       "oldStable": {
         "title": "旧稳定版",
-        "description": "不再受支持的较旧稳定版本，但可能需要用于遗留项目。",
+        "description": "旧版本，稳定可靠，可能适用于遗留项目。",
         "showCheckbox": "显示旧稳定版本"
       },
       "preRelease": {
