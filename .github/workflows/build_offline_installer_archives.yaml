@@ -531,7 +531,7 @@ jobs:
   autotest:
     name: Autotest Offline Archives Installation
     needs: [build-and-upload]
-    if: always()
+    if: (!cancelled())
     uses: ./.github/workflows/test_offline.yml
     with:
       ref: ${{ inputs.ref || github.ref }}
