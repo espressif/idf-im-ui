@@ -81,10 +81,18 @@ pub fn run_python_script_from_file(
     python: Option<&str>,
     envs: Option<&Vec<(String, String)>>,
 ) -> Result<String, String> {
-    let callable = if let Some(args) = args {
-        format!("{} {} {}", python.unwrap_or("python3"), path, args)
-    } else {
-        format!("{} {}", python.unwrap_or("python3"), path)
+    let detected;
+    let python_cmd = match python {
+        Some(p) => p,
+        None => {
+            detected = detect_default_python();
+            &detected
+        }
+    };
+
+    let callable = match args {
+        Some(args) => format!("{} {} {}", python_cmd, path, args),
+        None => format!("{} {}", python_cmd, path),
     };
     let executor = command_executor::get_executor();
 
@@ -100,7 +108,7 @@ pub fn run_python_script_from_file(
                     "powershell",
                     &[
                         "-Command",
-                        python.unwrap_or("python3.exe"),
+                        python_cmd,
                         path,
                         args.unwrap_or(""),
                     ],
@@ -114,7 +122,7 @@ pub fn run_python_script_from_file(
                 "powershell",
                 &[
                     "-Command",
-                    python.unwrap_or("python3.exe"),
+                    python_cmd,
                     path,
                     args.unwrap_or(""),
                 ],
@@ -588,25 +596,7 @@ pub async fn install_python_env(
         debug!("No offline archive directory provided, skipping copying contents.");
     }
 
-    let python_executable = match std::env::consts::OS {
-            "windows" => {
-              if let Some(scoop_shims_path) = get_scoop_path() {
-                // Use the Scoop shims path for the Python executable
-                let python_executable_path = PathBuf::from(scoop_shims_path).join("python3.exe");
-                match python_executable_path.try_exists() {
-                    Ok(true) => python_executable_path.to_string_lossy().into_owned(),
-                    Ok(false) => detect_default_python().to_string(),
-                    Err(e) => {
-                        warn!("Failed to check if Python executable exists: {}", e);
-                        detect_default_python().to_string()
-                    }
-                }
-              } else {
-                detect_default_python().to_string()
-              }
-            },
-            _ => "python3".to_string(),
-        };
+    let python_executable = detect_default_python();
 
     // create the venv
     match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
@@ -826,7 +816,14 @@ fn run_install_python_env_script_with_features(
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
 pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCheckResult<SanityCheck>> {
-    let py = python.unwrap_or_else(|| detect_default_python());
+    let detected;
+    let py = match python {
+        Some(p) => p,
+        None => {
+            detected = detect_default_python();
+            &detected
+        }
+    };
     let mut results = Vec::new();
 
     // ── 1. Python version ────────────────────────────────────────────
@@ -962,31 +959,109 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     }
 }
 
-fn detect_default_python() -> &'static str {
+/// Detects the best available Python 3 interpreter on the system.
+///
+/// Search order:
+/// - **Windows**: Scoop shims (`python3.exe`, `python.exe`), then generic
+///   names on PATH (`python3`, `python`, `python3.exe`, `python.exe`) —
+///   each verified to be a real Python 3.x (not the Microsoft Store stub).
+/// - **Linux/macOS**: `python3` first, then `python` (only accepted if it
+///   reports a 3.x version, since on some distros `python` is still 2.7).
+///
+/// Returns the command/path string for the first working Python 3 it finds,
+/// or a sensible default (`"python3"` on Unix, `"python"` on Windows) so
+/// callers get a clear error downstream rather than a panic.
+fn detect_default_python() -> String {
     match std::env::consts::OS {
         "windows" => {
-            // Check for python.exe first (python.org installs)
-            if let Ok(out) = command_executor::execute_command_direct("python", &["--version"]) {
-                if out.status.success() {
-                    info!("Found python.exe on windows");
-                    return "python";
+            // 1. Scoop shims (highest priority on Windows)
+            if let Some(scoop_shims) = get_scoop_path() {
+                let scoop_dir = PathBuf::from(&scoop_shims);
+                for name in &["python3.exe", "python.exe"] {
+                    let candidate = scoop_dir.join(name);
+                    let candidate_str = candidate.to_string_lossy();
+                    if is_python3(&candidate_str) {
+                        info!("Using Scoop {}: {}", name, candidate.display());
+                        return candidate_str.into_owned();
+                    }
                 }
             }
-            // Check for python3.exe (Scoop)
-            if let Ok(out) = command_executor::execute_command_direct("python3", &["--version"]) {
-                if out.status.success() {
-                    info!("Found python3.exe on windows");
-                    return "python3";
+
+            // 2. Generic names on PATH
+            for candidate in &["python3", "python", "python3.exe", "python.exe"] {
+                if is_python3(candidate) {
+                    info!("Found {} on Windows PATH", candidate);
+                    return candidate.to_string();
                 }
             }
-            // Default to python if neither works, actual function reports any errors
-            warn!("No python.exe or python3.exe found on windows, returning default python");
-            "python"
+
+            warn!("No working Python 3 found on Windows, falling back to \"python\"");
+            "python".to_string()
         }
         _ => {
-            info!("No windows detected, returning default python3");
-            "python3"
+            // Unix: prefer python3
+            if is_python3("python3") {
+                info!("Found python3");
+                return "python3".to_string();
+            }
+            // Fallback: bare `python`, but only if it's actually 3.x
+            if is_python3("python") {
+                info!("Found python (verified 3.x)");
+                return "python".to_string();
+            }
+
+            warn!("No working Python 3 found, falling back to \"python3\"");
+            "python3".to_string()
         }
+    }
+}
+
+/// Returns `true` if `cmd` is a real, working Python 3.x interpreter.
+///
+/// Checks three things:
+/// 1. `cmd --version` succeeds and reports a `3.x` major version.
+/// 2. The output does not contain "Microsoft Store" (Windows ships a stub
+///    `python3.exe` that prints a version-like banner but just opens the Store).
+/// 3. A trivial script can actually execute, catching broken pyenv/asdf shims
+///    or other non-functional wrappers.
+fn is_python3(cmd: &str) -> bool {
+    // 1. Version check
+    let version_output = match command_executor::execute_command_direct(cmd, &["--version"]) {
+        Ok(out) => {
+            let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+            let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+            // Some builds print to stderr instead of stdout
+            if stdout.contains("Python") {
+                stdout
+            } else {
+                stderr
+            }
+        }
+        Err(_) => return false,
+    };
+
+    // 2. Must be Python 3.x
+    let is_v3 = version_output
+        .split_whitespace()
+        .nth(1)
+        .and_then(|v| v.split('.').next())
+        .map(|major| major == "3")
+        .unwrap_or(false);
+
+    if !is_v3 {
+        return false;
+    }
+
+    // 3. Reject the Microsoft Store stub
+    if version_output.contains("Microsoft Store") {
+        debug!("{} appears to be a Microsoft Store stub, skipping", cmd);
+        return false;
+    }
+
+    // 4. Can it actually run a trivial script?
+    match command_executor::execute_command_direct(cmd, &["-c", "import sys; sys.exit(0)"]) {
+        Ok(out) => out.status.success(),
+        Err(_) => false,
     }
 }
 
