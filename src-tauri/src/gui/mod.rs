@@ -240,22 +240,18 @@ pub fn run(log_level_override: Option<log::LevelFilter>) {
 
     let _ = setup_gui_logging(log_level_override);
 
-    // Workaround for WebKitGTK DMA-BUF renderer crash on Nvidia + Wayland (#421).
-    // The GBM buffer allocation fails when using the DMA-BUF renderer with
-    // Nvidia's proprietary driver on Wayland, causing the app to crash.
+    // Workaround for WebKitGTK DMA-BUF renderer issues on Nvidia (#421, #523).
+    // GBM buffer allocation fails when using the DMA-BUF renderer with
+    // Nvidia's proprietary driver, causing a blank window or crash.
+    // This affects both Wayland and X11 sessions.
     #[cfg(target_os = "linux")]
     {
         if env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-            let is_wayland = env::var("XDG_SESSION_TYPE")
-                .map(|v| v.eq_ignore_ascii_case("wayland"))
-                .unwrap_or(false)
-                || env::var_os("WAYLAND_DISPLAY").is_some();
-
             let has_nvidia = Path::new("/proc/driver/nvidia/version").exists();
 
-            if is_wayland && has_nvidia {
+            if has_nvidia {
                 env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                info!("Nvidia + Wayland detected: disabled WebKitGTK DMA-BUF renderer (WEBKIT_DISABLE_DMABUF_RENDERER=1)");
+                info!("Nvidia detected: disabled WebKitGTK DMA-BUF renderer (WEBKIT_DISABLE_DMABUF_RENDERER=1)");
             }
         }
     }
