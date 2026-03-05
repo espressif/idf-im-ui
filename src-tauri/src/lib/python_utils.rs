@@ -371,14 +371,15 @@ pub fn pip_install_requirements(
                 )
             } {
                 Ok(out) => {
-                    if out.status.success() {
-                        Ok(())
-                    } else {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
-                        ))
-                    }
+                  if out.status.success() {
+                    Ok(())
+                  } else {
+                    let error_msg = String::from_utf8_lossy(&out.stderr).to_string();
+                    Err(std::io::Error::new(
+                      std::io::ErrorKind::Other,
+                      error_msg,
+                    ))
+                  }
                 }
                 Err(e) => Err(e),
             }
