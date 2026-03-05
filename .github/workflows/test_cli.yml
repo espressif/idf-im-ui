@@ -203,7 +203,7 @@ jobs:
               elif command -v zypper &>/dev/null; then
                 pkill -9 zypper 2>/dev/null || true
                 rm -f /run/zypp.pid 2>/dev/null || true
-                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel
+                zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel libxml2-tools
               else
                 echo 'Unknown package manager' && exit 1
               fi

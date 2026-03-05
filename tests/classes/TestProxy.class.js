@@ -115,6 +115,9 @@ class TestProxy {
 
       if (this.mode === "block") {
         logger.debug("HTTPS Connection blocked");
+        clientSocket.on("error", (err) => {
+          logger.debug(`Blocked client socket error (${err.code}), ignoring`);
+        });
         clientSocket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
         clientSocket.end();
         return;
@@ -125,6 +128,9 @@ class TestProxy {
       if (this.mode === "block-list" && this.matchesBlocked(host)) {
         this.attempts.push({ type: "https", host, blocked: true });
         logger.info(`HTTPS Connection to ${host} blocked by domain list`);
+        clientSocket.on("error", (err) => {
+          logger.debug(`Blocked client socket error (${err.code}), ignoring`);
+        });
         clientSocket.write("HTTP/1.1 503 Service Unavailable\r\n\r\n");
         clientSocket.end();
         return;
