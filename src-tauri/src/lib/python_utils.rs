@@ -217,6 +217,18 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
         }
     }
 
+    // Remove lines containing "esp-docs" from the constraints file
+    if let Ok(content) = fs::read_to_string(&constraint_path) {
+        let filtered_content: String = content
+            .lines()
+            .filter(|line| !line.contains("esp-docs"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        fs::write(&constraint_path, filtered_content)?;
+        info!("Removed esp-docs lines from constraints file");
+    }
+
     info!(
         "Downloaded constraints file to {}",
         constraint_path.display()
