@@ -1051,10 +1051,12 @@ fn detect_default_python() -> String {
             "python".to_string()
         }
         _ => {
+            // Unix: prefer python3
             if is_python3("python3") {
                 info!("Found python3");
                 return "python3".to_string();
             }
+            // Fallback: bare `python`, but only if it's actually 3.x
             if is_python3("python") {
                 info!("Found python (verified 3.x)");
                 return "python".to_string();
