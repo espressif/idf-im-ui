@@ -67,9 +67,9 @@ jobs:
           linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
 
           # Linux ARM64 CLI
-          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-arm64.zip") | .browser_download_url')
-          wget -q "$linux_arm64_url" -O eim-cli-linux-arm64.zip
-          linux_arm64_sha=$(sha256sum eim-cli-linux-arm64.zip | cut -d' ' -f1)
+          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-aarch64.zip") | .browser_download_url')
+          wget -q "$linux_arm64_url" -O eim-cli-linux-aarch64.zip
+          linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)
 
           echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
           echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
