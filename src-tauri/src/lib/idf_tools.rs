@@ -335,6 +335,7 @@ pub fn get_platform_identification() -> Result<String, String> {
     platform_from_name.insert("linux-x86_64", "linux-amd64");
     platform_from_name.insert("linux-aarch64", "linux-arm64");
     platform_from_name.insert("linux-arm", "linux-armel");
+    platform_from_name.insert("linux-armv7", "linux-armhf");
 
     // FreeBSD identifiers
     platform_from_name.insert("freebsd-x86_64", "linux-amd64");
@@ -414,11 +415,30 @@ fn get_arch_name() -> String {
         } else if arch_lower.contains("i686") || arch_lower.contains("x86") && !arch_lower.contains("x86_64") {
             return "x86".to_string();
         } else if arch_lower.contains("arm") && !arch_lower.contains("aarch64") {
+            // Check for hard-float (armhf) vs soft-float (armel)
+            #[cfg(target_arch = "arm")]
+            {
+                // For ARM, check target features or target string for hard-float
+                // armv7-unknown-linux-musleabihf uses hard-float ABI
+                if cfg!(target_feature = "vfp") || cfg!(target_feature = "vfpv3") || cfg!(target_feature = "vfpv4") {
+                    return "armv7".to_string();
+                }
+            }
             return "arm".to_string();
         }
     }
 
-    // Fallback to compile-time constant
+    // For cross-compilation, check target to distinguish armhf from armel
+    #[cfg(target_arch = "arm")]
+    {
+        if cfg!(any(target_os = "linux", target_os = "nuttx")) {
+            let target = option_env!("TARGET").unwrap_or("");
+            if target.contains("eabihf") || target.contains("gnueabihf") {
+                return "armv7".to_string();
+            }
+        }
+    }
+
     std::env::consts::ARCH.to_string()
 }
 
@@ -1481,7 +1501,7 @@ mod tests {
         // Should be one of the known platforms
         let valid_platforms = vec![
             "win32", "win64", "macos", "macos-arm64",
-            "linux-i686", "linux-amd64", "linux-arm64", "linux-armel"
+            "linux-i686", "linux-amd64", "linux-arm64", "linux-armel", "linux-armhf"
         ];
         assert!(valid_platforms.contains(&platform.as_str()));
     }
