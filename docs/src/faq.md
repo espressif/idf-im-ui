@@ -159,6 +159,26 @@ For GitHub Actions, use the [install-esp-idf-action](https://github.com/espressi
 
 If you downloaded the CLI-only version (e.g., `eim-cli-*.exe`) and double-clicked the executable, this behavior is expected. CLI releases must be run from a terminal/command prompt rather than double-clicking. When you double-click the executable, it opens a terminal window briefly, displays help information, and then closes immediately, which may appear as if the installer crashed. Instead, open PowerShell or Command Prompt, navigate to the file location, and run it with `.\eim-cli-*.exe --help`.
 
+### What shells are supported for activation scripts?
+
+On Linux and macOS, EIM creates activation scripts for both **Bash** and **Fish** shells:
+- **Bash**: `activate_idf_{version}.sh` - works in Sh, Bash, Dash and Zsh
+- **Fish**: `activate_idf_{version}.fish` - for Fish shell users
+
+On Windows, EIM creates a **PowerShell** profile script (`Microsoft.{version}.PowerShell_profile.ps1`). Additionally, you can optionally create a CMD batch file by setting `create_bat_activation_script = true` in your configuration.
+
+### Should I use CMD (Command Prompt) batch files?
+
+**No.** We strongly recommend using **PowerShell** instead of CMD (Command Prompt) on Windows. The batch file (`.bat`) support exists only for backward compatibility and will be abandoned in a future release.
+
+Reasons to use PowerShell:
+- Better environment variable handling
+- More modern syntax and features
+- Active development and support
+- Required for many modern tools
+
+To use PowerShell, simply run the generated PowerShell profile script - it is created automatically during installation.
+
 ## More Questions?
 
 If you have additional questions, you can:

@@ -71,6 +71,7 @@ Options:
 - `--cleanup`: If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.14 on Linux and macOS.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
+- `--create-bat-activation-script`: Optional flag to create a CMD batch activation script in addition to PowerShell profile. This is for backward compatibility only - PowerShell is recommended and batch support will be abandoned in a future release.
 - `--idf-tools <IDF_TOOLS>`: Comma separated list of tools to be installed with ESP-IDF. When installing multiple versions, these tools are applied to all versions. For per-version tool configuration, use a configuration file with the `idf_tools_per_version` option.
 
 ### Wizard Command
