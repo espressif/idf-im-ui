@@ -830,17 +830,7 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
 
     // ── 0. App Execution Alias check (Windows only) ──────────────────
     if std::env::consts::OS == "windows" {
-        let alias_detected = if python.is_some() {
-            crate::utils::is_app_execution_alias(Path::new(py))
-        } else {
-            // detect_default_python already skips aliases, but warn if the
-            // plain names resolve *only* to aliases (no real Python at all).
-            let only_alias = |name| {
-                let (real, has_any) = where_python_candidates(name);
-                has_any && real.is_none()
-            };
-            only_alias("python") || only_alias("python3")
-        };
+        let alias_detected = crate::utils::is_app_execution_alias(Path::new(py));
 
         results.push(GenericCheckResult {
             check: SanityCheck::AppExecutionAlias,
@@ -990,43 +980,32 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     }
 }
 
-/// Queries `where.exe` for all PATH candidates of `name` and partitions
-/// them into alias vs real executables.
+/// Returns the first real (non-alias) executable for `name` on the system PATH.
 ///
-/// Returns `(first_non_alias, has_any_candidates)`:
-/// - `first_non_alias` — the first PATH hit that is **not** an App Execution Alias,
-///   or `None` if every candidate is an alias (or `where` found nothing).
-/// - `has_any_candidates` — `true` when `where` returned at least one existing path.
-///
-/// On non-Windows this always returns `(None, false)` because App Execution
-/// Aliases are a Windows-only concept.
-fn where_python_candidates(name: &str) -> (Option<PathBuf>, bool) {
+/// On Windows, runs `where.exe` and skips any App Execution Alias stubs.
+/// On other platforms, always returns `None` (aliases don't exist there).
+fn where_non_alias(name: &str) -> Option<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
             let output = match std::process::Command::new("where").arg(name).output() {
                 Ok(o) if o.status.success() => o,
-                _ => return (None, false),
+                _ => return None,
             };
             let stdout = String::from_utf8_lossy(&output.stdout);
-            let mut first_real: Option<PathBuf> = None;
-            let mut has_any = false;
             for line in stdout.lines() {
                 let candidate = PathBuf::from(line.trim());
                 if !candidate.exists() {
                     continue;
                 }
-                has_any = true;
                 if crate::utils::is_app_execution_alias(&candidate) {
                     info!("Skipping App Execution Alias: {}", candidate.display());
                     continue;
                 }
-                if first_real.is_none() {
-                    first_real = Some(candidate);
-                }
+                return Some(candidate);
             }
-            (first_real, has_any)
+            None
         }
-        _ => (None, false),
+        _ => None,
     }
 }
 
@@ -1059,7 +1038,7 @@ fn detect_default_python() -> String {
 
             // 2. Generic names on PATH — skip App Execution Aliases
             for name in ["python3", "python"] {
-                if let (Some(path), _) = where_python_candidates(name) {
+                if let Some(path) = where_non_alias(name) {
                     let s = path.to_string_lossy().into_owned();
                     if is_python3(&s) {
                         info!("Found {} on Windows PATH (alias-free): {}", name, s);
