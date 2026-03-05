@@ -34,11 +34,17 @@ use winapi::um::securitybaseapi::GetTokenInformation;
 #[cfg(windows)]
 use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 #[cfg(windows)]
-use winapi::um::handleapi::CloseHandle;
+use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
 #[cfg(windows)]
 use winapi::shared::minwindef::{DWORD, FALSE};
 #[cfg(windows)]
 use std::mem;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use winapi::um::fileapi::{FindClose, FindFirstFileW, GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
+#[cfg(windows)]
+use winapi::um::minwinbase::WIN32_FIND_DATAW;
 
 /// A generic result structure for representing check outcomes across different check types.
 ///
@@ -1025,11 +1031,6 @@ pub fn is_running_elevated() -> bool {
 /// Microsoft Store apps — or open the Store page if the app is not installed.
 #[cfg(windows)]
 pub fn is_app_execution_alias(path: &std::path::Path) -> bool {
-    use std::os::windows::ffi::OsStrExt;
-    use winapi::um::fileapi::{FindClose, FindFirstFileW, GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
-    use winapi::um::handleapi::INVALID_HANDLE_VALUE;
-    use winapi::um::minwinbase::WIN32_FIND_DATAW;
-
     const FILE_ATTRIBUTE_REPARSE_POINT: DWORD = 0x0400;
     const IO_REPARSE_TAG_APPEXECLINK: DWORD = 0x8000_001B;
 

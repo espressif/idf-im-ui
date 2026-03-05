@@ -1024,16 +1024,12 @@ fn resolve_python_path(name: &str) -> Option<PathBuf> {
 /// python3.exe or python.exe via `resolve_python_path`, skipping aliases.
 #[cfg(windows)]
 fn resolve_python_fallback_windows() -> String {
-    if let Some(path) = resolve_python_path("python3") {
-        let s = path.to_string_lossy().into_owned();
-        if is_python3(&s) {
-            return s;
-        }
-    }
-    if let Some(path) = resolve_python_path("python") {
-        let s = path.to_string_lossy().into_owned();
-        if is_python3(&s) {
-            return s;
+    for name in ["python3", "python"] {
+        if let Some(path) = resolve_python_path(name) {
+            let s = path.to_string_lossy().into_owned();
+            if is_python3(&s) {
+                return s;
+            }
         }
     }
     warn!("No alias-free Python found on PATH, falling back to python3.exe");
@@ -1084,18 +1080,13 @@ fn detect_default_python() -> String {
         }
 
         // 2. Generic names on PATH — skip App Execution Aliases, then verify with is_python3
-        if let Some(path) = resolve_python_path("python3") {
-            let s = path.to_string_lossy().into_owned();
-            if is_python3(&s) {
-                info!("Found python3 on Windows PATH (alias-free): {}", s);
-                return s;
-            }
-        }
-        if let Some(path) = resolve_python_path("python") {
-            let s = path.to_string_lossy().into_owned();
-            if is_python3(&s) {
-                info!("Found python on Windows PATH (alias-free): {}", s);
-                return s;
+        for name in ["python3", "python"] {
+            if let Some(path) = resolve_python_path(name) {
+                let s = path.to_string_lossy().into_owned();
+                if is_python3(&s) {
+                    info!("Found {} on Windows PATH (alias-free): {}", name, s);
+                    return s;
+                }
             }
         }
 
