@@ -1,9 +1,7 @@
 use crate::{
-    command_executor::execute_command,
+    command_executor::{CommandExecutor, get_executor},
     idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file,
-    single_version_post_install,
-    version_manager::get_default_config_path,
+    idf_tools::read_and_parse_tools_file, single_version_post_install, system_dependencies::{get_scoop_git_path, get_scoop_path}, version_manager::get_default_config_path
 };
 use anyhow::{anyhow, Result, Error};
 use log::{debug, error, info, warn};
@@ -117,42 +115,117 @@ impl Ord for MirrorEntry {
 ///
 /// # Purpose
 ///
-/// The function attempts to locate the git executable by checking the system's PATH environment variable.
-/// It uses the appropriate command ("where" on Windows, "which" on Unix-like systems) to find the git executable.
-///
-/// # Parameters
-///
-/// There are no parameters for this function.
+/// The function attempts to locate the git executable by:
+/// 1. Checking Scoop shims directory first on Windows (highest priority)
+/// 2. Searching the system PATH using appropriate commands via CommandExecutor
 ///
 /// # Return Value
 ///
-/// - `Ok(String)`: If the git executable is found, the function returns a `Result` containing the path to the git executable as a `String`.
-/// - `Err(String)`: If the git executable is not found or an error occurs during the process of locating the git executable, the function returns a `Result` containing an error message as a `String`.
+/// - `Ok(String)`: If a working git executable is found, returns its path as a `String`.
+/// - `Err(String)`: If git is not found or validation fails, returns an error message.
 pub fn get_git_path() -> Result<String, String> {
-    let output = match std::env::consts::OS {
-        "windows" => execute_command("where", &["git"]),
-        // Use "command -v" via shell instead of "which" since "which" may not be
-        // installed on minimal Linux distributions (e.g. Fedora containers).
-        _ => execute_command("sh", &["-c", "command -v git"]),
-    };
 
-    match output {
-        Ok(output) if output.status.success() => {
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            Ok(stdout.trim().to_string())
-        }
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            Err(format!(
-                "git not found: {}",
-                if stderr.is_empty() {
-                    "not installed or not in PATH".to_string()
-                } else {
-                    stderr.trim().to_string()
+    let executor = get_executor();
+
+    if std::env::consts::OS == "windows" {
+        // Scoop shims (highest priority) - check exact path first
+        if let Some(scoop_shims) = get_scoop_path() {
+            let scoop_git = std::path::PathBuf::from(&scoop_shims).join("git.exe");
+            if scoop_git.exists() {
+                let path_str = scoop_git.to_string_lossy().to_string();
+                if verify_git(&*executor, &path_str) {
+                    info!("Using Scoop git: {}", scoop_git.display());
+                    return Ok(path_str);
                 }
-            ))
+            }
         }
-        Err(e) => Err(format!("failed to check for git: {}", e)),
+
+        // Scoop shims (highest priority) - check exact path first
+        if let Some(scoop_bins) = get_scoop_git_path() {
+            let scoop_git = std::path::PathBuf::from(&scoop_bins).join("git.exe");
+            if scoop_git.exists() {
+                let path_str = scoop_git.to_string_lossy().to_string();
+                if verify_git(&*executor, &path_str) {
+                    info!("Using Scoop git: {}", scoop_git.display());
+                    return Ok(path_str);
+                }
+            }
+        }
+
+
+
+        // Search PATH via `where` command
+        match executor.execute("where", &["git"]) {
+            Ok(output) if output.status.success() => {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let candidate = line.trim();
+                    if candidate.is_empty() { continue; }
+
+                    // Verify it actually works
+                    if verify_git(&*executor, candidate) {
+                        info!("Found working git on PATH: {}", candidate);
+                        return Ok(candidate.to_string());
+                    }
+                }
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.trim().is_empty() {
+                    debug!("where git failed: {}", stderr.trim());
+                }
+            }
+            Err(e) => debug!("failed to execute where git: {}", e),
+        }
+
+        // Fallback: try direct execution of generic names (bypasses PATH lookup issues)
+        for candidate in &["git.exe", "git", "git.cmd", "git.shim"] {
+            if verify_git(&*executor, candidate) {
+                debug!("Found working git via fallback: {}", candidate);
+                return Ok(candidate.to_string());
+            }
+        }
+
+        Err("git not found: not installed, not in PATH,".to_string())
+
+    } else {
+        // Unix: use `command -v` for portability via shell executor
+        match executor.execute("sh", &["-c", "command -v git"]) {
+            Ok(output) if output.status.success() => {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !path.is_empty() && verify_git(&*executor, &path) {
+                    info!("Found git: {}", path);
+                    return Ok(path);
+                }
+            }
+            Ok(output) => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.trim().is_empty() {
+                    debug!("command -v git failed: {}", stderr.trim());
+                }
+            }
+            Err(e) => debug!("failed to execute command -v git: {}", e),
+        }
+
+        // Fallback: try direct execution
+        if verify_git(&*executor, "git") {
+            info!("Found git via direct execution fallback");
+            return Ok("git".to_string());
+        }
+
+        Err("git not found: not installed or not in PATH".to_string())
+    }
+}
+
+// Helper: verify executable actually works by running `git --version` via executor
+fn verify_git(executor: &dyn CommandExecutor, executable: &str) -> bool {
+    // Use direct execution to avoid shell expansion issues
+    match executor.execute(executable, &["--version"]) {
+        Ok(output) => {
+            output.status.success()
+                && String::from_utf8_lossy(&output.stdout).contains("git version")
+        }
+        Err(_) => false,
     }
 }
 
