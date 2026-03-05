@@ -104,7 +104,6 @@ gix = { version = "0.80", default-features = false, features = [
 sha2 = "0.10.8"
 log = "0.4.21"
 dirs = "6.0.0"
-tera = "1.20.0"
 config = "0.15.13"
 toml = "0.9.8"
 uuid = {version="1.10.0", features = ["v4"] }

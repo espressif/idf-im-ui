@@ -294,6 +294,12 @@ pub struct InstallArgs {
         value_parser = is_valid_python_version
     )]
     pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
+
+    #[arg(
+        long,
+        help = "Whether to create a .bat activation script on Windows. This is useful for users who want to activate the ESP-IDF environment using a batch file instead of PowerShell. Default is false. This is for legacy compatibility reasons as the default activation method on Windows is now PowerShell script.",
+    )]
+    pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
 }
 
 impl IntoIterator for InstallArgs {
@@ -400,6 +406,10 @@ impl IntoIterator for InstallArgs {
             (
                 "python_version_override".to_string(),
                 self.python_version_override.map(Into::into),
+            ),
+            (
+                "create_bat_activation_script".to_string(),
+                self.create_bat_activation_script.map(Into::into),
             ),
         ]
         .into_iter()
