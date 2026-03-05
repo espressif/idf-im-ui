@@ -1053,6 +1053,12 @@ pub fn is_app_execution_alias(path: &std::path::Path) -> bool {
     }
 }
 
+/// Always returns `false` on non-Windows platforms.
+#[cfg(not(windows))]
+pub fn is_app_execution_alias(_path: &std::path::Path) -> bool {
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
