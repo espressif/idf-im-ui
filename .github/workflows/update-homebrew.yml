@@ -61,10 +61,24 @@ jobs:
           wget -q "$macos_arm64_url" -O eim-cli-macos-aarch64.zip
           macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
 
+          # Linux x64 CLI
+          linux_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-x64.zip") | .browser_download_url')
+          wget -q "$linux_x64_url" -O eim-cli-linux-x64.zip
+          linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
+
+          # Linux ARM64 CLI
+          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-arm64.zip") | .browser_download_url')
+          wget -q "$linux_arm64_url" -O eim-cli-linux-arm64.zip
+          linux_arm64_sha=$(sha256sum eim-cli-linux-arm64.zip | cut -d' ' -f1)
+
           echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
           echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
           echo "macos_arm64_url=$macos_arm64_url" >> $GITHUB_OUTPUT
           echo "macos_arm64_sha=$macos_arm64_sha" >> $GITHUB_OUTPUT
+          echo "linux_x64_url=$linux_x64_url" >> $GITHUB_OUTPUT
+          echo "linux_x64_sha=$linux_x64_sha" >> $GITHUB_OUTPUT
+          echo "linux_arm64_url=$linux_arm64_url" >> $GITHUB_OUTPUT
+          echo "linux_arm64_sha=$linux_arm64_sha" >> $GITHUB_OUTPUT
 
       - name: Download and calculate checksums for GUI
         id: gui-checksums
@@ -93,6 +107,10 @@ jobs:
           MACOS_X64_SHA: ${{ steps.cli-checksums.outputs.macos_x64_sha }}
           MACOS_ARM64_URL: ${{ steps.cli-checksums.outputs.macos_arm64_url }}
           MACOS_ARM64_SHA: ${{ steps.cli-checksums.outputs.macos_arm64_sha }}
+          LINUX_X64_URL: ${{ steps.cli-checksums.outputs.linux_x64_url }}
+          LINUX_X64_SHA: ${{ steps.cli-checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_URL: ${{ steps.cli-checksums.outputs.linux_arm64_url }}
+          LINUX_ARM64_SHA: ${{ steps.cli-checksums.outputs.linux_arm64_sha }}
         run: |
           mkdir -p homebrew-repo/Formula
 
@@ -123,6 +141,18 @@ jobs:
               end
             end
 
+            on_linux do
+              on_intel do
+                url "${LINUX_X64_URL}"
+                sha256 "${LINUX_X64_SHA}"
+              end
+              on_arm do
+                url "${LINUX_ARM64_URL}"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+              # Homebrew on Linux (Linuxbrew) doesn't support ARMv7 at all, so ARMv7 is not considered here
+            end
+
             # DFU utility for flashing
             depends_on "dfu-util"
 
@@ -132,7 +162,7 @@ jobs:
 
             def install
               bin.install "eim"
-              (zsh_completion/"_eim").write Utils.safe_popen_read("#{bin}/eim", "completions", "zsh")
+              generate_completions_from_executable(bin/"eim", "completions")
             end
 
             def caveats
@@ -142,10 +172,10 @@ jobs:
                 Python 3.12 was installed as a dependency (ESP-IDF requires Python 3.9-3.13).
                 Python 3.14+ is not yet supported.
 
-                Zsh completions have been installed.
+                Shell completions have been installed.
                 They will be available in new terminal sessions.
-                If they don't work immediately, restart your shell:
-                  exec zsh
+                If they don't work immediately, restart your shell, e.g.:
+                  exec zsh # in zsh
 
                 Run 'eim' to install ESP-IDF.
               EOS
