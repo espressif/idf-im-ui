@@ -156,7 +156,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 install_args.config.clone(),
                 install_args.clone().into_iter(),
             );
-            info!("Returned settings: {:?}", settings);
+            debug!("Returned settings: {:?}", settings);
             match settings {
                 Ok(mut settings) => {
                   debug!("Settings before adjustments: {:?}", settings);
@@ -169,17 +169,17 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       match idf_im_lib::version_manager::list_installed_versions() {
                           Ok(versions) => {
                             debug!("Checking provided path against installed versions. Provided path: '{}'", path.display());
-                              let provided_path = idf_im_lib::utils::normalize_path_for_comparison(&path.to_string_lossy());
-                              for version in versions {
-                                  let version_path = idf_im_lib::utils::normalize_path_for_comparison(&version.path);
-                                  debug!("Normalized version_path for '{}': {:?}", version.path, version_path);
-                                  if let (Some(p), Some(v)) = (&provided_path, &version_path) {
-                                      if p == v {
-                                          info!("{}", t!("install.already_installed", path = path.display()));
-                                          return Ok(());
-                                      }
-                                  }
+                            if let Some(provided_path) = idf_im_lib::utils::normalize_path_for_comparison(&path.to_string_lossy()) {
+                              if versions.iter().any(|version| {
+                                let version_path = idf_im_lib::utils::normalize_path_for_comparison(&version.path);
+                                debug!("Normalized version_path for '{}': {:?}", version.path, version_path);
+                                version_path.map_or(false, |p| p == provided_path)
+                              }) {
+                                info!("{}", t!("install.already_installed", path = path.display()));
+                                info!("{}", t!("install.use_fix_command"));
+                                return Ok(());
                               }
+                            }
                           }
                           Err(err) => {
                               debug!("Could not list installed versions: {}", err);
