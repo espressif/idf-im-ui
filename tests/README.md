@@ -4,11 +4,11 @@
 
 The EMI application should have a test structure that would allow validation of customer use cases on the final artifacts. The automated tests intends to execute basic validation, with additional specific tests executed manually. The roadmap includes automating most tests possible to reduce manual testing workload
 
-All tests are developed in Node.js using Chai and Mocha as test libraries in combination with Node-PTY for terminal emulation. It is required to install node on the test runner machine.
+All tests are developed in Node.js using Chai and Mocha as test libraries in combination with Node-PTY for terminal emulation. It is required to install node on the machine used for the tests.
 
-The GUI tests uses Selenium webdriver in combination with tauri-driver to validate the interface user experience. Although the install procedure backend is the same for both CLI and GUI, the tests implement full IDF installation for both artifacts.
+The GUI tests uses Selenium webdriver in combination with tauri-driver to validate the interface user experience. Although the install procedure backend is the same for both CLI and GUI, the tests implement full IDF installation for both artifacts, including CLI commands to the GUI binary
 
-## Environment Setup
+## Local Environment Setup
 
 On the test machine, the first step is to copy the testing artifacts. The location of the artifacts can be set using environment variable, or the test will look for the `eim` file in the default location:
 
@@ -142,12 +142,13 @@ The test runs are split into multiple files, each of them with an associated JSO
 The tests relies on environmental variables for the information below, the test scripts also have default values associated to this variables in case
 environmental variables are not found.
 
-EIM_FILE_PATH -> Specify the path to the EIM application -> default value Windows: `$USERPROFILE\eim-cli\` Linux/MacOS: `$HOME/eim-cli/`
-EIM_VERSION -> Version of the EIM application being tested -> default value "eim 0.2.0"
-IDF_VERSION -> The latest released version of ESP-IDF, used on express installation by EIM -> default "v5.4.1"
+EIM_CLI_PATH -> Specify the path to the EIM application -> default values defined on the config.js file
+EIM_CLI_VERSION -> Version of the EIM application being tested -> default values defined on the config.js file
+PREREQUISITES_OS -> Only for prerequisites tests, required to identify the current OS the test is running.
+BUILD_INFO_PATH -> The path for the offline archive information file when launching offline installation.
 
-EIM_GUI_PATH -> Specify the path to the EIM application -> default value Windows: `$USERPROFILE\eim-gui\` Linux/MacOS: `$HOME/eim-gui/`
-EIM_GUI_VERSION -> Version of the EIM application being tested -> default value "0.2.0"
+EIM_GUI_PATH -> Specify the path to the EIM application -> default values defined on the config.js file
+EIM_GUI_VERSION -> Version of the EIM application being tested -> default values defined on the config.js file
 
 Option variables
 
@@ -170,138 +171,6 @@ The test for prerequisites test can be executed to check the detection of missin
 
 `npm run test-CLI --file=CLI-prerequisites`
 
-# Installation Manager Usage
-
-## Commands
-
-```
-Commands:
-  install   Install ESP-IDF versions
-  list      List installed ESP-IDF versions
-  select    Select an ESP-IDF version as active
-  discover  Discover available ESP-IDF versions (not implemented yet)
-  remove    Remove specific ESP-IDF version
-  rename    Rename specific ESP-IDF version
-  import    Import existing ESP-IDF installation using tools_set_config.json
-  purge     Purge all ESP-IDF installations
-  wizard    Run the ESP-IDF Installer Wizard
-  help      Print this message or the help of the given subcommand(s)
-
-Options:
-  -l, --locale <LOCALE>      Set the language for the wizard (en, cn)
-  -v, --verbose...           Increase verbosity level (can be used multiple times)
-      --log-file <LOG_FILE>  file in which logs will be stored (default: eim.log)
-  -h, --help                 Print help (see more with '--help')
-  -V, --version              Print version
-```
-
-## install arguments
-
-```
-Options:
-  -p, --path <PATH>
-          Base Path to which all the files and folder will be installed
-      --esp-idf-json-path <ESP_IDF_JSON_PATH>
-          Absolute path to save esp_idf.json file. Default is $HOME/.esp_installation_manager/esp_idf.json
-  -c, --config <FILE>
-  -t, --target <TARGET>
-          You can provide multiple targets separated by comma
-  -i, --idf-versions <IDF_VERSIONS>
-          you can provide multiple versions of ESP-IDF separated by comma
-      --tool-download-folder-name <TOOL_DOWNLOAD_FOLDER_NAME>
-      --tool-install-folder-name <TOOL_INSTALL_FOLDER_NAME>
-      --idf-tools-path <IDF_TOOLS_PATH>
-          Path to tools.json file relative from ESP-IDF installation folder
-      --tools-json-file <TOOLS_JSON_FILE>
-          Path to idf_tools.py file relative from ESP-IDF installation folder
-  -n, --non-interactive <NON_INTERACTIVE>
-          [possible values: true, false]
-  -m, --mirror <MIRROR>
-          url for download mirror to use instead of github.com
-      --idf-mirror <IDF_MIRROR>
-          url for download mirror to use instead of github.com for downloading esp-idf
-  -v, --verbose...
-          Increase verbosity level (can be used multiple times)
-  -l, --locale <LOCALE>
-          Set the language for the wizard (en, cn)
-      --log-file <LOG_FILE>
-          file in which logs will be stored (default: eim.log)
-  -r, --recurse-submodules <RECURSE_SUBMODULES>
-          Should the installer recurse into submodules of the ESP-IDF repository (default true)
-          [possible values: true, false]
-  -a, --install-all-prerequisites <INSTALL_ALL_PREREQUISITES>
-          Should the installer attempt to install all missing prerequisites (default false). This flag only affects Windows platforms as we do not offer prerequisites for other platforms.
-          [possible values: true, false]
-      --config-file-save-path <CONFIG_FILE_SAVE_PATH>
-          if set, the installer will as it's very last move save the configuration to the specified file path. This file can than be used to repeat the installation with the same settings.
-  -h, --help
-          Print help (see a summary with '-h')
-  -V, --version
-          Print version
-```
-
-## Example config file
-
-file config.toml (Linux)
-
-```
-path = "/home/virtual/.esp"
-idf_path = "/home/virtual/.esp/v5.3.1/esp-idf"
-tool_download_folder_name = "dist"
-tool_install_folder_name = "tools"
-target = ["all"]
-idf_versions = ["v5.3.1"]
-tools_json_file = "tools/tools.json"
-idf_tools_path = "./tools/idf_tools.py"
-mirror = "https://github.com"
-idf_mirror = "https://github.com"
-```
-
-file config.toml (Windows)
-
-```
-path = 'C:\esp\'
-idf_path = 'C:\esp\v5.3.1\esp-idf'
-tool_download_folder_name = "dist"
-tool_install_folder_name = "tools"
-target = ["all"]
-idf_versions = ["v5.3.1"]
-tools_json_file = "tools/tools.json"
-idf_tools_path = "./tools/idf_tools.py"
-mirror = "https://github.com"
-idf_mirror = "https://github.com"
-```
-
-## Full arguments
-
-#### Windows:
-
-`.\eim.exe install -p c:\espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
-
-`.\eim.exe install -c config.toml`
-
-`.\eim.exe install --log-file InstManager.log`
-
-#### Linux & MacOS
-
-`./eim install -p ~/.espressif -t all -i v5.3.1 --tool-download-folder-name dist --tool-install-folder-name tools --idf-tools-path ./tools/idf_tools.py --tools-json-file tools/tools.json -m https://github.com --idf-mirror https://github.com -r true`
-
-`./eim install -c config.toml`
-
-`./eim install --log-file InstManager.log`
-
-## References
-
-Alternative Mirrors:
-
-IDF:
-https://github.com
-https://jihulab.com/esp-mirror
-
-Tools:
-https://github.com
-https://dl.espressif.com/github_assets
-https://dl.espressif.cn/github_assets
 
 Packages required by EIM:
 
@@ -309,9 +178,129 @@ Windows:
 `eim should be able to perform all requirements installation`
 
 Linux:
-`sudo apt install git cmake ninja-build wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-dev python3 python3-venv python3-pip`
+`sudo apt install git cmake wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-dev python3 python3-venv python3-pip`
 
 MacOS:
 Install homebrew and load the application to the terminal profile
 `/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"`
-Then run: `brew install dfu-util cmake ninja python3`
+Then run: `brew install dfu-util cmake python3`
+
+
+## Running from the terminal
+
+The classes can be controlled from node running in the terminal.
+To use it start a terminal instance on the "test" folder and launch node.
+
+### CLI class control
+
+The basic methods and configurations can be imported by using:
+
+````
+const {default:os} = await import("os");
+const {default:path} = await import("path");
+const {default:fs} = await import("fs");
+const {default:CLITestRunner} = await import("./classes/CLITestRunner.class.js");
+const {default:TestProxy} = await import("./classes/TestProxy.class.js");
+let proxy = new TestProxy({ mode: "log" });
+await proxy.start();
+let eimRunner = new CLITestRunner()
+await eimRunner.start();
+````
+
+The proxy settings above can be replaced by:
+`let proxy = new TestProxy({ mode: "block" });`
+or
+```
+const list = ["github.com"];
+let proxy = new TestProxy({ mode: "block-list", blockedDomains: list });
+```
+
+Once started commands can be sent to the terminal by using:
+
+`await eimRunner.sendInput(path.join(os.homedir(), "eim-cli", "eim") + " wizard");`
+
+The terminal output can be read using
+
+`eimRunner.output`
+
+Some additional commands:
+```
+eimRunner.process.write("\x1b[B"); // down arrow
+eimRunner.process.write(" "); // spacebar
+eimRunner.process.write("\x03"); // ctrl + C
+```
+
+### GUI class control
+
+The GUI application can be launched from a node running in the terminal. Note that the actual GUI should be rendered in the machine and commands send on teh node terminal are visible on the interface.
+
+````
+const {default:os} = await import("os");
+const {default:path} = await import("path");
+const {default:fs} = await import("fs");
+const {expect} = await import("chai");
+const {Builder, By, Key, until} = await import("selenium-webdriver");
+const {default:logger} = await import("./classes/logger.class.js");
+const {getOSName, getArchitecture, downloadOfflineArchive} = await import("./helper.js");
+const {default:GUITestRunner} = await import("./classes/GUITestRunner.class.js");
+const {default:TestProxy} = await import("./classes/TestProxy.class.js");
+let eimRunner = new GUITestRunner(path.join(os.homedir(), "eim-gui", "eim"));
+let proxy = new TestProxy({ mode: "log" });
+await proxy.start();
+await eimRunner.start();
+````
+
+The proxy settings above can be replaced by:
+`let proxy = new TestProxy({ mode: "block" });`
+or
+```
+const list = ["github.com"];
+let proxy = new TestProxy({ mode: "block-list", blockedDomains: list });
+```
+
+Elements selection can be done using the object methods:
+```
+test = await cards[1].findElement(By.className("version-info"));
+let test = await eimRunner.findByDataId("optional-group");
+````
+
+Or using Selenium selector:
+`let element = await eimRunner.driver.wait(until.elementLocated(By.css(`[data-id="${dataId}"]`)),timeout,`Element with test ID ${dataId} not found`);`
+
+Clicks can be requested using:
+`await eimRunner.driver.executeScript("arguments[0].click();", purgeAllButton);`
+
+
+### Additional notes
+
+Configurations and helper functions can be imported using:
+
+const {
+  IDFMIRRORS,
+  TOOLSMIRRORS,
+  PYPIMIRRORS,
+  IDFDefaultVersion,
+  IDFDefaultVersionIndex,
+  IDFAvailableVersions,
+  availableTargets,
+  pathToEIMCLI,
+  pathToEIMGUI,
+  pathToBuildInfo,
+  EIMGUIVersion,
+  EIMCLIVersion,
+  INSTALLFOLDER,
+  TOOLSFOLDER,
+  runInDebug,
+  pythonWheelsVersion,
+  prerequisites,
+} = await import("./config.js");
+
+const {
+  getPlatformKey,
+  getPlatformKey_eim,
+  getOSName,
+  getArchitecture,
+  downloadOfflineArchive,
+  getAvailableFeatures,
+  getAvailableTools,
+} = await import("./helper.js");

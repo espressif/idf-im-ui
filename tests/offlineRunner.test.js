@@ -25,6 +25,8 @@ import { getPlatformKey_eim } from "./helper.js";
 import path from "path";
 import fs from "fs";
 
+// Read the offline archive information file from the build info folder
+
 let buildInfo = [];
 
 if (fs.existsSync(pathToBuildInfo)) {
@@ -58,6 +60,7 @@ if (fs.existsSync(pathToBuildInfo)) {
 
 logger.info("Running test script:", buildInfo);
 
+// Run the tests
 testRun(buildInfo);
 
 function testRun(archiveInfo) {

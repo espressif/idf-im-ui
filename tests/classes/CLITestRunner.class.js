@@ -1,3 +1,13 @@
+
+/**
+ * This class is used to run a terminal emulator for the CLI tests.
+ * 
+ * The terminal emulation is done using node-pty.
+ * Several methods are provided to allow better control of the input and output of the terminal process.
+ * 
+ * 
+ * The temrinal process is started and keep running until the stop process is called, or any error occurs.
+ */
 import pty from "node-pty";
 import os from "os";
 import logger from "./logger.class.js";
@@ -19,6 +29,7 @@ class CLITestRunner {
         : ["-ExecutionPolicy", "Bypass", "-NoProfile"];
   }
 
+  // Function to start a terminal instance and load EIM activation script, the script path should be provided as argument
   async runIDFTerminal(loadScript, timeout = 5000) {
     try {
       await this.start();
@@ -43,6 +54,7 @@ class CLITestRunner {
     }
   }
 
+  // Function to start a terminal instance, The process will be kep running in he background.
   async start({ command = this.command, fullArgs = this.args } = {}) {
     logger.debug(
       `Starting terminal emulator ${this.command} with args ${this.args}`
@@ -99,6 +111,7 @@ class CLITestRunner {
     }
   }
 
+  // method to send a string to teh terminal, return character is added to any string provided
   sendInput(input) {
     logger.debug(`Attempting to send ${input.replace(/\r$/, "")} to terminal`);
     if (this.process && !this.exited) {
@@ -115,6 +128,8 @@ class CLITestRunner {
     }
   }
 
+  // method to wait for a specific output to be present in the terminal output, timeout is set to 10 seconds by default
+  // One strategy is to send the command as `command ; echo "output" ; echo "done"` and then wait for "outputdone" to be printed in the terminal
   async waitForOutput(expectedOutput, timeout = 10000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
@@ -129,6 +144,8 @@ class CLITestRunner {
     return false;
   }
 
+  // method to wait for the terminal prompt to be present in the terminal output, timeout is set to 3 seconds by default
+  // Although this method may be brittle, it works for simple outputs printed in the terminal, not recommended for complex outputs like project builds
   async waitForPrompt(timeout = 3000) {
     const startTime = Date.now();
     while (Date.now() - startTime < timeout) {
@@ -140,6 +157,7 @@ class CLITestRunner {
     return false;
   }
 
+  // method to stop the terminal process, timeout is set to 3 seconds by default
   async stop(timeout = 3000) {
     if (this.process && !this.exited) {
       try {
