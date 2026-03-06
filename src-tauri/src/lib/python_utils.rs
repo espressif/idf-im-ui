@@ -27,6 +27,7 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SanityCheck {
+    AppExecutionAlias,
     PythonVersion,
     Pip,
     Venv,
@@ -38,6 +39,7 @@ pub enum SanityCheck {
 impl SanityCheck {
     fn key_name(&self) -> &'static str {
         match self {
+            SanityCheck::AppExecutionAlias => "app_alias",
             SanityCheck::PythonVersion => "version",
             SanityCheck::Pip => "pip",
             SanityCheck::Venv => "venv",
@@ -827,6 +829,25 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
     };
     let mut results = Vec::new();
 
+    // ── 0. App Execution Alias check (Windows only) ──────────────────
+    if std::env::consts::OS == "windows" {
+        let alias_detected = crate::utils::is_app_execution_alias(Path::new(py));
+
+        results.push(GenericCheckResult {
+            check: SanityCheck::AppExecutionAlias,
+            passed: !alias_detected,
+            message: if alias_detected {
+                "Python resolves to a Windows App Execution Alias (Microsoft Store stub)".to_string()
+            } else {
+                "No App Execution Alias conflict detected".to_string()
+            },
+        });
+
+        if alias_detected {
+            warn!("Python is an App Execution Alias — remaining checks will likely fail");
+        }
+    }
+
     // ── 1. Python version ────────────────────────────────────────────
     let version_result = check_python_version(py);
 
@@ -960,18 +981,46 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     }
 }
 
+/// Returns the first real (non-alias) executable for `name` on the system PATH.
+///
+/// On Windows, runs `where.exe` and skips any App Execution Alias stubs.
+/// On other platforms, always returns `None` (aliases don't exist there).
+fn where_non_alias(name: &str) -> Option<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            let output = match std::process::Command::new("where").arg(name).output() {
+                Ok(o) if o.status.success() => o,
+                _ => return None,
+            };
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            for line in stdout.lines() {
+                let candidate = PathBuf::from(line.trim());
+                if !candidate.exists() {
+                    continue;
+                }
+                if crate::utils::is_app_execution_alias(&candidate) {
+                    info!("Skipping App Execution Alias: {}", candidate.display());
+                    continue;
+                }
+                return Some(candidate);
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
 /// Detects the best available Python 3 interpreter on the system.
 ///
 /// Search order:
 /// - **Windows**: Scoop shims (`python3.exe`, `python.exe`), then generic
-///   names on PATH (`python3`, `python`, `python3.exe`, `python.exe`) —
-///   each verified to be a real Python 3.x (not the Microsoft Store stub).
+///   names on PATH while skipping App Execution Aliases — each verified
+///   with [`is_python3`].
 /// - **Linux/macOS**: `python3` first, then `python` (only accepted if it
 ///   reports a 3.x version, since on some distros `python` is still 2.7).
 ///
 /// Returns the command/path string for the first working Python 3 it finds,
-/// or a sensible default (`"python3"` on Unix, `"python"` on Windows) so
-/// callers get a clear error downstream rather than a panic.
+/// or a sensible default so callers get a clear error downstream rather than a panic.
 fn detect_default_python() -> String {
     match std::env::consts::OS {
         "windows" => {
@@ -988,11 +1037,14 @@ fn detect_default_python() -> String {
                 }
             }
 
-            // 2. Generic names on PATH
-            for candidate in &["python3", "python", "python3.exe", "python.exe"] {
-                if is_python3(candidate) {
-                    info!("Found {} on Windows PATH", candidate);
-                    return candidate.to_string();
+            // 2. Generic names on PATH — skip App Execution Aliases
+            for name in ["python3", "python"] {
+                if let Some(path) = where_non_alias(name) {
+                    let s = path.to_string_lossy().into_owned();
+                    if is_python3(&s) {
+                        info!("Found {} on Windows PATH (alias-free): {}", name, s);
+                        return s;
+                    }
                 }
             }
 
