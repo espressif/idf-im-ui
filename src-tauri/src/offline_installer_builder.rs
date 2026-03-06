@@ -763,7 +763,7 @@ async fn main() {
 
             for (link, name) in scoop_list {
                 info!("Downloading Scoop prereq: {} as {}", link, name);
-                match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name)).await {
+                match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name), 3).await {
                     Ok(_) => info!("Downloaded: {}", name),
                     Err(err) => {
                         error!("Failed to download {}: {}", name, err);

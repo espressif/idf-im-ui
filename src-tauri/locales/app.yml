@@ -242,6 +242,9 @@ wizard.idf_path_exists.prompt:
 wizard.tools_download.progress:
   en: Downloading tools to
   cn: 下载工具至
+wizard.tools_download.downloading:
+  en: Downloading
+  cn: 正在下载
 wizard.tool_download.progress:
   en: Downloading tool
   cn: 下载工具
@@ -599,6 +602,9 @@ gui.setup_tools.preparing_tools:
 gui.setup_tools.downloading:
   en: "Downloading: %{tool_name}"
   cn: "正在下载：%{tool_name}"
+gui.setup_tools.tool_progress_indeterminate:
+  en: "Downloading %{bytes} of unknown size..."
+  cn: "正在下载 %{bytes}，总大小未知..."
 gui.setup_tools.tool_progress:
   en: "Tool %{current}/%{total} - %{percentage}%"
   cn: "工具 %{current}/%{total} - %{percentage}%"

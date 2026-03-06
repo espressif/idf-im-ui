@@ -1,4 +1,5 @@
 use flate2::read::GzDecoder;
+use std::ffi::OsStr;
 use std::hash::{DefaultHasher, Hash,Hasher};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
@@ -983,6 +984,7 @@ pub enum DownloadProgress {
     Downloaded(String),
     Verified(String),
     Extracted(String, String), // (url, destination_path)
+    Indeterminate(u64), // downloaded
     Complete,
     Error(String),
 }
@@ -996,6 +998,7 @@ pub async fn download_file(
         destination_path,
         progress_sender,
         None, // No new name provided
+        3,
     ).await
 }
 
@@ -1004,9 +1007,77 @@ pub async fn download_file_and_rename(
     destination_path: &str,
     progress_sender: Option<Sender<DownloadProgress>>,
     new_name: Option<&str>,
+    max_retries: u32,
 ) -> Result<(), std::io::Error> {
-    let client:reqwest::Client = reqwest::Client::new();
+    let client: reqwest::Client = reqwest::Client::new();
+    let retries = max_retries.max(1); // At least one attempt
 
+    let filename = if let Some(new_name) = new_name {
+        new_name.to_string()
+    } else {
+        Path::new(&url)
+            .file_name()
+            .and_then(OsStr::to_str)
+            .unwrap_or("file")
+            .to_string()
+    };
+
+    let file_path = Path::new(destination_path).join(&filename);
+
+    for attempt in 1..=retries {
+        if attempt > 1 {
+            let delay = std::time::Duration::from_secs(2u64.pow(attempt - 1)); // 2s, 4s, 8s, 16s...
+            log::info!(
+                "Retry {}/{} for {} in {:.1}s",
+                attempt,
+                retries,
+                url,
+                delay.as_secs_f64()
+            );
+            tokio::time::sleep(delay).await;
+        }
+
+        let result = attempt_download(
+            &client,
+            url,
+            &file_path,
+            &progress_sender,
+        )
+        .await;
+
+        match result {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                log::warn!(
+                    "Download attempt {}/{} failed for {}: {}",
+                    attempt,
+                    retries,
+                    url,
+                    e
+                );
+
+                if attempt == retries {
+                    if let Some(sender) = &progress_sender {
+                        let _ = sender.send(DownloadProgress::Error(format!(
+                            "All {} attempts failed for {}: {}",
+                            retries, url, e
+                        )));
+                    }
+                    return Err(e);
+                }
+            }
+        }
+    }
+
+    unreachable!()
+}
+
+async fn attempt_download(
+    client: &reqwest::Client,
+    url: &str,
+    file_path: &Path,
+    progress_sender: &Option<Sender<DownloadProgress>>,
+) -> Result<(), std::io::Error> {
     let mut response: reqwest::Response = client
         .get(url)
         .send()
@@ -1014,43 +1085,24 @@ pub async fn download_file_and_rename(
         .map_err(|e: reqwest::Error| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
     if !response.status().is_success() {
-        if let Some(sender) = &progress_sender {
-            let _ = sender.send(DownloadProgress::Error(format!(
-                "HTTP error: {}",
-                response.status()
-            )));
-        }
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("HTTP error: {}", response.status()),
         ));
     }
 
-    let total_size = response.content_length().ok_or_else(|| {
-        if let Some(sender) = &progress_sender {
-            let _ = sender.send(DownloadProgress::Error(
-                "Failed to get content length".into(),
-            ));
-        }
-        std::io::Error::new(std::io::ErrorKind::Other, "Failed to get content length")
-    })?;
+    let total_size = response.content_length();
 
-    log::debug!("Downloading {} to {}", url, destination_path);
+    if total_size.is_none() {
+        log::debug!(
+            "No Content-Length header for {}; progress will be indeterminate",
+            url
+        );
+    }
 
-    let filename = if let Some(new_name) = new_name {
-        new_name.to_string()
-    } else {
-        Path::new(&url).file_name().unwrap().to_str().unwrap().to_string()
-    };
+    log::debug!("Downloading {} to {}", url, file_path.display());
 
-    log::debug!(
-        "Filename: {} and destination: {}",
-        &filename,
-        destination_path
-    );
-
-    let mut file = File::create(Path::new(&destination_path).join(Path::new(&filename)))?;
-    log::debug!("Created file at {}", destination_path);
+    let mut file = File::create(file_path)?;
 
     let mut downloaded: u64 = 0;
 
@@ -1059,12 +1111,16 @@ pub async fn download_file_and_rename(
         .await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
     {
-        let chunk: bytes::Bytes = chunk;
         downloaded += chunk.len() as u64;
         file.write_all(&chunk)?;
 
-        if let Some(sender) = &progress_sender {
-            if let Err(e) = sender.send(DownloadProgress::Progress(downloaded, total_size)) {
+        if let Some(sender) = progress_sender {
+            let progress = if let Some(total) = total_size {
+                DownloadProgress::Progress(downloaded, total)
+            } else {
+                DownloadProgress::Indeterminate(downloaded)
+            };
+            if let Err(e) = sender.send(progress) {
                 return Err(std::io::Error::new(
                     std::io::ErrorKind::Other,
                     format!("Failed to send progress: {}", e),
@@ -1073,9 +1129,9 @@ pub async fn download_file_and_rename(
         }
     }
 
-    if let Some(sender) = &progress_sender {
+    if let Some(sender) = progress_sender {
         if let Err(e) = sender.send(DownloadProgress::Complete) {
-            warn!("Failed to send completion: {}", e);
+            log::warn!("Failed to send completion: {}", e);
         }
     }
 
