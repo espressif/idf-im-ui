@@ -7,6 +7,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 
+// This function verifies the installation of IDF using EIM
 export function runInstallVerification({
   id = 0,
   installFolder,
@@ -21,6 +22,7 @@ export function runInstallVerification({
 
     const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
 
+    // The beforeEach function should skip the next tests if the previous test failed
     beforeEach(async function () {
       this.timeout(10000);
       if (verificationStepFailed) {
@@ -29,6 +31,8 @@ export function runInstallVerification({
       }
     });
 
+    // The afterEach function should log the terminal output on failure
+    // It the test failed and left the terminal running, it should be stopped
     afterEach(async function () {
       this.timeout(20000);
       if (this.currentTest.state === "failed") {

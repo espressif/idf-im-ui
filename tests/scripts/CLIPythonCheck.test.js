@@ -6,6 +6,8 @@ import os from "os";
 import path from "path";
 
 
+// This function verifies the presence of python in the system
+// On Windows, the python is installed as part of the test.
 export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] }) {
 
   describe(`${id}- Check for python installation |`, function () {
@@ -97,6 +99,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 
+    // This test installs python and confirms successful installation
     it("3- should install python after a positive answer", async function () {
       this.timeout(150000);
       if (os.platform() !== "win32") {

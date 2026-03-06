@@ -5,7 +5,8 @@ import logger from "../classes/logger.class.js";
 import os from "os";
 import path from "path";
 
-
+// This function verifies the presence of the prerequisites in the system
+// On Windows, the prerequisites are installed as part of the test.
 export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
 
   describe(`${id}- Check for prerequisites |`, function () {
@@ -101,6 +102,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       logger.info(`prerequisite detection passed: >>\r ${testRunner.output}`);
     });
 
+    // This test installs git and confirms successful installation
     it("3- should install GIT after a positive answer", async function () {
       this.timeout(120000);
       if (os.platform() !== "win32") {

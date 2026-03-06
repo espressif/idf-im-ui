@@ -69,6 +69,8 @@ class CLITestRunner {
     });
     this.exited = false;
 
+    // Stream function to capture the terminal output
+    // Note the variable lastDataTimestamp is updated to the current time to allow checking for idle terminal
     this.process.onData((data) => {
       let cleanData = stripAnsi(data);
       cleanData = cleanData.replace(/\\[\r\n]+/g, "");
