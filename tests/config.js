@@ -25,11 +25,11 @@ let availableTargets = [
   "esp32p4",
 ];
 
-// Replace default values with Espressif server data.
 
 // IDF versions are provided by json file available at https://dl.espressif.com/dl/esp-idf/idf_versions.json
 const url = "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
 
+// Replace default values with Espressif server data.
 try {
   const res = await fetch(url);
   if (res.ok) {
@@ -77,15 +77,20 @@ try {
   logger.error(`Error fetching IDF versions file: ${error.message}`);
 }
 
+// List mirrors available for IDF installation
 const IDFMIRRORS = {
   github: "https://github.com",
   jihulab: "https://jihulab.com/esp-mirror",
 };
+
+// List mirrors available for IDF tools installation
 const TOOLSMIRRORS = {
   github: "https://github.com",
   dl_com: "https://dl.espressif.com/github_assets",
   dl_cn: "https://dl.espressif.cn/github_assets",
 };
+
+// List mirrors available for PyPI installation
 const PYPIMIRRORS = {
   pypi_org: "https://pypi.org/simple",
   pypi_aliyun: "https://mirrors.aliyun.com/pypi/simple",
@@ -94,15 +99,14 @@ const PYPIMIRRORS = {
 };
 
 // Default versions for EIM CLI and GUI for offline testing
-const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.5.0";
-const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.5.0";
+const EIMCLIVersion = process.env.EIM_CLI_VERSION || "eim 0.8.5";
+const EIMGUIVersion = process.env.EIM_GUI_VERSION || "0.8.5";
 logger.info(
   `EIM CLI version set to: ${EIMCLIVersion} and GUI to: ${EIMGUIVersion}`
 );
 
 // Default path to EIM CLI and GUI executables for offline testing
 //Should use path provided by environment variables or default to home directory
-
 const getEIMPath = (pathFromCI, defaultFolder) =>
   pathFromCI ||
   path.join(

@@ -15,6 +15,7 @@ import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
+// This function executed the wizard installation functionality of the EIM CLI
 export function runCLIWizardInstallTest({
   id = 0,
   pathToEIM,
@@ -26,6 +27,7 @@ export function runCLIWizardInstallTest({
     let installationFailed = false;
     let proxy = null;
 
+    // The setup function should start the proxy server if enabled and start the terminal
     before(async function () {
       logger.debug(`Starting installation wizard with default options`);
       this.timeout(5000);
@@ -50,6 +52,7 @@ export function runCLIWizardInstallTest({
       }
     });
 
+    // The afterEach function should log the terminal output on failure
     afterEach(function () {
       if (this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
@@ -59,6 +62,7 @@ export function runCLIWizardInstallTest({
       }
     });
 
+    // The tear down function should stop the terminal and proxy server if enabled
     after(async function () {
       logger.info("Installation wizard test cleanup");
       this.timeout(20000);

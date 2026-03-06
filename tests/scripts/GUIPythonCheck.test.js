@@ -4,10 +4,15 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
+// This function verifies the EIM GUI properly lists the missing python installation
+// On Windows, the python is installed as part of the test.
+
 export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
   
   describe(`${id}- Python check |`, () => {
     let eimRunner = null;
+
+    
     before(async function () {
       this.timeout(100000);
       eimRunner = new GUITestRunner(pathToEIM);

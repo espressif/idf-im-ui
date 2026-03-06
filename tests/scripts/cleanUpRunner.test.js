@@ -12,6 +12,7 @@ export function runCleanUp({
   describe(`${id}- Clean up EIM folders from Runner |`, function () {
     this.timeout(120000);
 
+    // Function to clean up the installation and tools folders after the test
     after(function () {
       if (deleteAfterTest) {
         logger.info(
@@ -33,6 +34,7 @@ export function runCleanUp({
       }
     });
 
+    // Test to validate the installation and tools folders exist before deleting
     it("1- Install and Tools folder should exist", async function () {
       logger.info("Validating folders exist before deleting");
       if (installFolder) {

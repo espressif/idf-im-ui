@@ -4,6 +4,7 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { By } from "selenium-webdriver";
 
+// This function verifies the presence of the installed IDF versions in the dashboard
 export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
   
   describe(`${id}- EIM GUI After Install |`, () => {

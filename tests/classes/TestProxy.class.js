@@ -1,3 +1,17 @@
+/**
+ * This proxy object allows intercepting all network communications from the terminal instance where this proxy is launched.
+ * 
+ * It can be secuted in 3 modes: "log", "block" or "block-list"
+ * "log": logs all network communications to the console
+ * "block": blocks all network communications
+ * "block-list": blocks all network communications except for the domains in the blockedDomains list e.g. ["github.com", "dl.espressif.com"]
+ * 
+ * The blockedDomains list is a list of domains to block.
+ * 
+ * The proxy is configured to listen on port 8888 and host 127.0.0.1.
+ * Environmental variables are added to the shell where this was started to redirect communication through the proxy.
+ * 
+ */
 import logger from "./logger.class.js";
 import http from "http";
 import net from "net";
@@ -13,6 +27,7 @@ class TestProxy {
     this.blockedDomains = blockedDomains.map((domain) => domain.toLowerCase());
   }
 
+  // helper function to check if a hostname matches a blocked domain
   matchesBlocked(hostname) {
     if (!hostname) return false;
     const host = hostname.toLowerCase();
@@ -21,6 +36,7 @@ class TestProxy {
     );
   }
 
+  // function to set the proxy environment variables in the shell where this was started
   setEnvironment() {
     logger.info("Setting proxy environment variables");
     const proxyUrl = "http://127.0.0.1:8888";
@@ -40,6 +56,7 @@ class TestProxy {
     process.env.PIP_PROXY = proxyUrl;
   }
 
+  // function to start the proxy server
   async start() {
     if (this.server) {
       logger.info("Proxy server already running");
