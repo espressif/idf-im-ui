@@ -156,7 +156,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 install_args.config.clone(),
                 install_args.clone().into_iter(),
             );
-            info!("Returned settings: {:?}", settings);
+            debug!("Returned settings: {:?}", settings);
             match settings {
                 Ok(mut settings) => {
                   debug!("Settings before adjustments: {:?}", settings);
@@ -164,6 +164,30 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
                   }
                   debug!("Settings after adjustments: {:?}", settings);
+                  // Check if the provided path is already an installed IDF
+                  if let Some(ref path) = settings.path {
+                      match idf_im_lib::version_manager::list_installed_versions() {
+                          Ok(versions) => {
+                            debug!("Checking provided path against installed versions. Provided path: '{}'", path.display());
+                            if let Some(provided_path) = idf_im_lib::utils::normalize_path_for_comparison(&path.to_string_lossy()) {
+                              if versions.iter().any(|version| {
+                                let version_path = idf_im_lib::utils::normalize_path_for_comparison(&version.path);
+                                debug!("Normalized version_path for '{}': {:?}", version.path, version_path);
+                                version_path.map_or(false, |p| p == provided_path)
+                              }) {
+                                info!("{}", t!("install.already_installed", path = path.display()));
+                                info!("{}", t!("install.use_fix_command"));
+                                return Ok(());
+                              }
+                            }
+                          }
+                          Err(err) => {
+                              debug!("Could not list installed versions: {}", err);
+                          }
+                      }
+                  } else {
+                      debug!("No path provided in settings, skipping installed version check");
+                  }
                   let time = std::time::SystemTime::now();
                   if !do_not_track {
                       track_cli_event("CLI installation started", Some(json!({
