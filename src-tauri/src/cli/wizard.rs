@@ -279,6 +279,10 @@ async fn download_and_extract_tools(
             progress_bar.set_length(total);
             progress_bar.set_position(current);
         }
+        DownloadProgress::Indeterminate(current) => {
+            progress_bar.set_length(current * 2); // Set a length to allow the bar to move
+            progress_bar.set_position(current);
+        }
         DownloadProgress::Complete => {
             progress_bar.finish();
         }

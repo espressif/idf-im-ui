@@ -257,6 +257,27 @@ pub async fn setup_tools(
                 }
             }
 
+            DownloadProgress::Indeterminate(current) => {
+                let completed = *completed_tools_clone.lock().unwrap();
+                let tool_name = current_tool_name_clone.lock().unwrap().clone();
+
+                let overall_tool_progress = (completed as f32 / total_tools) * tools_range as f32;
+
+                emit_installation_event(&app_handle_clone, InstallationProgress {
+                    stage: InstallationStage::Tools,
+                    percentage: overall_tool_progress as u32,
+                    message: t!("gui.setup_tools.downloading",
+                        tool_name = tool_name.split('/').last()
+                            .unwrap_or(&tool_name)
+                            .replace("-", " ")
+                    ).to_string(),
+                    detail: Some(t!("gui.setup_tools.tool_progress_indeterminate",
+                        bytes = current,
+                    ).to_string()),
+                    version: Some(idf_version_clone.clone()),
+                });
+            }
+
             DownloadProgress::Start(url) => {
                 // Extract tool name from URL
                 let tool_name = if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
