@@ -14,7 +14,7 @@ import { getAvailableFeatures, getAvailableTools } from "../helper.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-// This function executed the expert installation functionality of the EIM GUI
+// This function executes the expert installation functionality of the EIM GUI
 // Parameters are selected according to the arguments passed to the function, missing arguments sets the default value
 export function runGUICustomInstallTest({
   id = 0,

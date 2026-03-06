@@ -96,7 +96,7 @@ function testRun(script) {
     } else if (test.type === "default") {
       //routine for default simplified installation
 
-      //set teh default values for the test
+      //set the default values for the test
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
       const proxyBlockList = test.proxyBlockList ?? [];

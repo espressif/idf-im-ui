@@ -6,7 +6,7 @@
  * Several methods are provided to allow better control of the input and output of the terminal process.
  * 
  * 
- * The temrinal process is started and keep running until the stop process is called, or any error occurs.
+ * The terminal process is started and keep running until the stop process is called, or any error occurs.
  */
 import pty from "node-pty";
 import os from "os";
@@ -54,7 +54,7 @@ class CLITestRunner {
     }
   }
 
-  // Function to start a terminal instance, The process will be kep running in he background.
+  // Function to start a terminal instance, The process will be kept running in the background.
   async start({ command = this.command, fullArgs = this.args } = {}) {
     logger.debug(
       `Starting terminal emulator ${this.command} with args ${this.args}`

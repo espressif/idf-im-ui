@@ -4,7 +4,7 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-// This function verifies the EIM GUI properly lists the missing prerequistes
+// This function verifies the EIM GUI properly lists the missing prerequisites
 // On Windows, the prerequisites are installed as part of the test.
 export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
   

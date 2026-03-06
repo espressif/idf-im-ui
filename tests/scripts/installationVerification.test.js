@@ -32,7 +32,7 @@ export function runInstallVerification({
     });
 
     // The afterEach function should log the terminal output on failure
-    // It the test failed and left the terminal running, it should be stopped
+    // If the test failed and left the terminal running, it should be stopped
     afterEach(async function () {
       this.timeout(20000);
       if (this.currentTest.state === "failed") {

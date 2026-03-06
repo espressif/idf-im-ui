@@ -4,7 +4,7 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 
-// This function executed the simplified installation functionality of the EIM GUI
+// This function executes the simplified installation functionality of the EIM GUI
 // No parameter is changed as part of this test
 export function runGUISimplifiedInstallTest({
   id = 0,

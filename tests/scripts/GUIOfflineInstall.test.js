@@ -9,7 +9,7 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 
-// This function executed the offline installation functionality of the EIM GUI
+// This function executes the offline installation functionality of the EIM GUI
 // Offline version to be installed are provided by arguments
 export function runGUIOfflineInstallTest({
   id = 0,
