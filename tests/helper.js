@@ -55,7 +55,7 @@ function getPlatformKey_eim() {
 function getOSName() {
   const platform = os.platform();
   if (platform === "linux") {
-    return "Ubuntu";
+    return "linux";
     // TODO: Add support for other Linux distributions - Only needed for GUI tests when expanding to other Linux distributions
   }
   if (platform === "darwin") {

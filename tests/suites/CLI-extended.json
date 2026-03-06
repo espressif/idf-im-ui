@@ -32,20 +32,5 @@
     },
     "deleteAfterTest": true,
     "testProxyMode": false
-  },
-  {
-    "id": 3,
-    "type": "custom",
-    "name": "CLI Non-Interactive v5.1.6",
-    "data": {
-      "idfList": "v5.1.6",
-      "installFolder": ".esprext3",
-      "idfMirror": "github",
-      "toolsMirror": "github",
-      "recursive": true,
-      "nonInteractive": true
-    },
-    "deleteAfterTest": true,
-    "testProxyMode": false
   }
 ]

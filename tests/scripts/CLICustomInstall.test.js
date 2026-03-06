@@ -58,9 +58,9 @@ export function runCLICustomInstallTest({
         args.push(`--use-local-archive "${pathToOfflineArchive}"`);
         testRunner.sendInput(`mkdir ${archiveDir}`);
         testRunner.sendInput(
-          `tar -xf ${pathToOfflineArchive} -C ${archiveDir}`,
+          `tar -xf ${pathToOfflineArchive} -C ${archiveDir} ; echo "Job" ; echo "Completed"`,
         );
-        await new Promise((resolve) => setTimeout(resolve, 20000));
+        await testRunner.waitForOutput("JobCompleted", 60000);
       }
       if (offlineIDFVersion && !pathToOfflineArchive) {
         logger.info(">>>>>>> Offline archive not found, skipping this test");

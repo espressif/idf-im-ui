@@ -31,7 +31,7 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
       await testRunner.start();
       testRunner.sendInput(`${pathToEIM} -V`);
       const meetVersion = await testRunner.waitForOutput(eimVersion, 15000);
-      expect(meetVersion, "EIM showing incorrect version number").to.be.true;
+      expect(meetVersion, `EIM showing incorrect version number, expected: ${eimVersion}, actual: ${testRunner.output}`).to.be.true;
     });
 
     it("2- should show help with --help argument", async function () {

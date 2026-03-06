@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         version: [3.11, 3.14]
         include:
           - os: ubuntu-latest
@@ -43,6 +43,10 @@ jobs:
             package_name: macos-aarch64
           - os: windows-latest
             package_name: windows-x64
+            version: 3.11
+          - os: windows-latest
+            package_name: windows-x64
+            version: scoop
           - os: ubuntu-24.04-arm
             package_name: linux-aarch64
             version: 3.11
@@ -62,6 +66,7 @@ jobs:
           node-version: "20"
 
       - name: Set up Python
+        if: matrix.version != 'scoop'
         uses: actions/setup-python@v6.1.0
         with:
           python-version: ${{ matrix.version }}
@@ -151,10 +156,21 @@ jobs:
           $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}.exe" } | Select-Object -ExpandProperty browser_download_url
           Invoke-WebRequest -Uri $eim_cli_url -OutFile ".\artifacts\eim.exe"
 
+      - name: Remove python and git from PATH (Windows)
+        if: matrix.version == 'scoop'
+        run: |
+          echo $env:PATH
+          $env:backup_path = $env:PATH
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\[Gg]it\\' }) -join ';'
+          echo $env:PATH
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+          echo "backup_path=$env:backup_path" >> $env:GITHUB_ENV
+
       - name: Run IDF offline installation (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python3 --version
+          python --version 2>$null
           $env:LOG_TO_FILE="true"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
           $env:BUILD_INFO_PATH = "..\artifacts"
@@ -162,6 +178,12 @@ jobs:
           Expand-Archive node_modules.zip
           npm run test-offline
         continue-on-error: true
+
+      - name: Restore PATH (Windows)
+        if: matrix.version == 'scoop'
+        run: |
+          $env:PATH = $env:backup_path
+          echo "PATH=$env:PATH" >> $env:GITHUB_ENV
 
       # Copy eim log files to standard location for easier access
       - name: Copy EIM Log files (ubuntu)

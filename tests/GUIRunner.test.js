@@ -213,6 +213,12 @@ function testRun(script) {
         runCleanUp({
           id: `${test.id}4`,
           installFolder,
+          deleteAfterTest,
+        });
+
+        runCleanUp({
+          id: `${test.id}5`,
+          installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
         });
