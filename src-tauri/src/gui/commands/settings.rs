@@ -184,7 +184,7 @@ pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> 
     .iter()
     .filter(|v| {
       // Filter out end_of_life and old versions
-      if v.end_of_life || v.old || v.name == "latest" {
+      if v.end_of_life || v.name == "latest" {
         return false;
       }
       // Filter out pre-release if not requested
