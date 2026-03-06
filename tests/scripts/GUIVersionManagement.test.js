@@ -7,6 +7,8 @@ import fs from "fs";
 import path from "path";
 import { Key, until } from "selenium-webdriver";
 
+
+// This function verifies the version management functionality of the EIM GUI
 export function runGUIVersionManagementTest({
   id = 0,
   pathToEIM,
@@ -17,6 +19,8 @@ export function runGUIVersionManagementTest({
     let eimRunner = null;
     let totalInstallations = 0;
     let testStepFailed = false;
+
+    // The setup function should start the EIM application GUI
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -28,6 +32,7 @@ export function runGUIVersionManagementTest({
       }
     });
 
+    // The beforeEach function should skip the next tests if the previous test failed
     beforeEach(async function () {
       this.timeout(10000);
       if (testStepFailed) {
@@ -36,6 +41,7 @@ export function runGUIVersionManagementTest({
       }
     });
 
+    // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
       if (this.currentTest.state === "failed") {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
@@ -44,6 +50,7 @@ export function runGUIVersionManagementTest({
       }
     });
 
+    // The tear down function should stop the EIM application GUI
     after(async function () {
       this.timeout(5000);
       try {
