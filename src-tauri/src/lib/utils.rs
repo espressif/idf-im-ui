@@ -618,6 +618,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             idf_python_env_path.as_deref(),
             Some(env_vars_vec),
             &paths.python_path.to_string_lossy().to_string(),
+            false, // create_cmd_bat
         );
 
         let installation = IdfInstallation {

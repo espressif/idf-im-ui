@@ -12,10 +12,20 @@ use sha2::{Digest, Sha256};
 use system_dependencies::copy_openocd_rules;
 use tempfile::TempDir;
 use tar::Archive;
-use tera::{Context, Tera};
 use thiserror::Error;
 use utils::{find_directories_by_name};
 use zip::ZipArchive;
+
+/// Simple template renderer - replaces {{variable}} placeholders with values
+/// This is a lightweight replacement for tera, using only std library
+pub fn render_template(template: &str, variables: &[(&str, String)]) -> String {
+    let mut result = template.to_string();
+    for (key, value) in variables {
+        let placeholder = format!("{{{{{}}}}}", key);
+        result = result.replace(&placeholder, value);
+    }
+    result
+}
 
 pub mod command_executor;
 pub mod git_tools;
@@ -95,6 +105,16 @@ EOF
 }}", formatted_pairs.join("\n"))
 }
 
+/// Formats a vector of key-value pairs into a fish shell-compatible format for environment variables.
+fn format_fish_env_pairs(pairs: &[(String, String)]) -> String {
+    // Fish uses semicolon-separated list for easy parsing
+    pairs
+        .iter()
+        .map(|(key, value)| format!("{}:{}", key, value))
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
 /// Formats a vector of key-value pairs into a PowerShell-compatible format for environment variables.
 ///
 /// # Parameters
@@ -114,6 +134,92 @@ fn format_powershell_env_pairs(pairs: &[(String, String)]) -> String {
     format!("$env_var_pairs = @{{\n{}\n}}", formatted_pairs.join("\n"))
 }
 
+/// Formats a vector of key-value pairs into a batch file-compatible format for environment variables.
+/// Common parameters for profile script creation
+struct ProfileParams<'a> {
+    pub idf_path: &'a str,
+    pub idf_tools_path: &'a str,
+    pub idf_python_env_path: Option<&'a str>,
+    pub idf_version: &'a str,
+    pub export_paths: Vec<String>,
+    pub env_var_pairs: Vec<(String, String)>,
+    pub python_bin_path: &'a str,
+}
+
+/// Builds the template variables for batch profile
+fn build_batch_variables(params: &ProfileParams) -> Vec<(&'static str, String)> {
+    vec![
+        ("idf_path", replace_unescaped_spaces_win(params.idf_path)),
+        ("idf_version", params.idf_version.to_string()),
+        ("env_var_pairs", format_batch_env_pairs(&params.env_var_pairs)),
+        ("env_var_pairs_print", format_batch_env_pairs_print(&params.env_var_pairs)),
+        ("idf_tools_path", replace_unescaped_spaces_win(params.idf_tools_path)),
+        ("idf_python_env_path", replace_unescaped_spaces_win(
+            params.idf_python_env_path.unwrap_or(&format!("{}\\python", params.idf_tools_path))
+        )),
+        ("add_paths_extras", params.export_paths.join(";")),
+        ("current_system_path", env::var("PATH").unwrap_or_default()),
+        ("python_bin_path", replace_unescaped_spaces_win(params.python_bin_path)),
+    ]
+}
+
+/// Builds the template variables for PowerShell profile
+fn build_powershell_variables(params: &ProfileParams) -> Vec<(&'static str, String)> {
+    vec![
+        ("idf_path", replace_unescaped_spaces_win(params.idf_path)),
+        ("idf_version", params.idf_version.to_string()),
+        ("env_var_pairs", format_powershell_env_pairs(&params.env_var_pairs)),
+        ("idf_tools_path", replace_unescaped_spaces_win(params.idf_tools_path)),
+        ("idf_python_env_path", replace_unescaped_spaces_win(
+            params.idf_python_env_path.unwrap_or(&format!("{}\\python", params.idf_tools_path))
+        )),
+        ("add_paths_extras", params.export_paths.join(";")),
+        ("current_system_path", env::var("PATH").unwrap_or_default()),
+        ("python_bin_path", replace_unescaped_spaces_win(params.python_bin_path)),
+    ]
+}
+
+/// Renders a profile template and writes it to a file
+fn render_and_write_profile(
+    profile_path: &str,
+    _template_name: &str,
+    template_content: &str,
+    variables: Vec<(&str, String)>,
+    filename: &str,
+) -> Result<String, std::io::Error> {
+    ensure_path(profile_path).expect("Unable to create directory");
+
+    let mut rendered = render_template(template_content, &variables);
+
+    if std::env::consts::OS == "windows" {
+        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n");
+    }
+
+    let mut filepath = PathBuf::from(profile_path);
+    filepath.push(filename);
+    fs::write(&filepath, rendered).expect("Unable to write file");
+    Ok(filepath.display().to_string())
+}
+
+fn format_batch_env_pairs(pairs: &[(String, String)]) -> String {
+    let formatted_pairs: Vec<String> = pairs
+        .iter()
+        .map(|(key, value)| format!("set {}={}", key, value))
+        .collect();
+
+    formatted_pairs.join("\n")
+}
+
+/// Formats env var pairs for printing in batch file -e mode
+fn format_batch_env_pairs_print(pairs: &[(String, String)]) -> String {
+    let formatted_pairs: Vec<String> = pairs
+        .iter()
+        .map(|(key, value)| format!("echo {}={}", key, value))
+        .collect();
+
+    formatted_pairs.join("\n")
+}
+
 /// Creates an activation shell script for the ESP-IDF toolchain.
 ///
 /// # Parameters
@@ -127,6 +233,46 @@ fn format_powershell_env_pairs(pairs: &[(String, String)]) -> String {
 /// # Return
 ///
 /// * `Result<(), String>`: On success, returns `Ok(())`. On error, returns `Err(String)` containing the error message.
+/// Common parameters for Unix shell activation scripts
+struct UnixShellParams<'a> {
+    pub idf_path: &'a str,
+    pub idf_tools_path: &'a str,
+    pub idf_python_env_path: Option<&'a str>,
+    pub idf_version: &'a str,
+    pub export_paths: Vec<String>,
+    pub env_var_pairs: Vec<(String, String)>,
+    pub python_bin_path: &'a str,
+}
+
+/// Builds template variables for Unix shell scripts (bash/fish)
+fn build_unix_shell_variables(params: &UnixShellParams) -> Vec<(&'static str, String)> {
+    let env_var_pairs_str = format_bash_env_pairs(&params.env_var_pairs);
+    let fish_env_var_pairs_str = format_fish_env_pairs(&params.env_var_pairs);
+    let idf_python_env_path_val = match params.idf_python_env_path {
+        Some(path) => path.to_string(),
+        None => format!("{}/python", params.idf_tools_path),
+    };
+
+    let addition_to_path = params.export_paths.join(":");
+    let current_system_path = env::var("PATH").unwrap_or_default();
+
+    vec![
+        ("env_var_pairs", env_var_pairs_str),
+        ("fish_env_var_pairs", fish_env_var_pairs_str),
+        ("idf_path", params.idf_path.to_string()),
+        ("idf_path_escaped", replace_unescaped_spaces_posix(params.idf_path)),
+        ("idf_tools_path", params.idf_tools_path.to_string()),
+        ("idf_tools_path_escaped", replace_unescaped_spaces_posix(params.idf_tools_path)),
+        ("idf_version", params.idf_version.to_string()),
+        ("addition_to_path", addition_to_path),
+        ("current_system_path", current_system_path),
+        ("python_bin_path", params.python_bin_path.to_string()),
+        ("idf_python_env_path", idf_python_env_path_val.clone()),
+        ("idf_python_env_path_escaped", replace_unescaped_spaces_posix(&idf_python_env_path_val)),
+    ]
+}
+
+/// Creates a bash shell activation script for the ESP-IDF toolchain.
 pub fn create_activation_shell_script(
     file_path: &str,
     idf_path: &str,
@@ -141,50 +287,50 @@ pub fn create_activation_shell_script(
     let mut filename = PathBuf::from(file_path);
     filename.push(format!("activate_idf_{}.sh", idf_version));
     let template = include_str!("../../bash_scripts/activate_idf_template.sh");
-    let mut tera = Tera::default();
-    if let Err(e) = tera.add_raw_template("activate_idf_template", template) {
-        error!("Failed to add template: {}", e);
-        return Err(e.to_string());
-    }
-    let mut context = Context::new();
-    let env_var_pairs_str = format_bash_env_pairs(&env_var_pairs);
-    context.insert("env_var_pairs", &env_var_pairs_str);
-    context.insert("idf_path", &idf_path);
-    context.insert(
-        "idf_path_escaped",
-        &replace_unescaped_spaces_posix(idf_path),
-    );
 
-    context.insert("idf_tools_path", &idf_tools_path);
-    context.insert(
-        "idf_tools_path_escaped",
-        &replace_unescaped_spaces_posix(idf_tools_path),
-    );
-    context.insert("idf_version", &idf_version);
-    context.insert("addition_to_path", &export_paths.join(":"));
-    context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
-    context.insert("python_bin_path", &python_bin_path);
-
-    if let Some(idf_python_env_path) = idf_python_env_path {
-        context.insert("idf_python_env_path", &idf_python_env_path);
-        context.insert(
-            "idf_python_env_path_escaped",
-            &replace_unescaped_spaces_posix(idf_python_env_path),
-        );
-    } else {
-        context.insert("idf_python_env_path", &format!("{}/python", idf_tools_path));
-        context.insert(
-            "idf_python_env_path_escaped",
-            &replace_unescaped_spaces_posix(&format!("{}/python", idf_tools_path)),
-        );
-    }
-    let rendered = match tera.render("activate_idf_template", &context) {
-        Err(e) => {
-            error!("Failed to render template: {}", e);
-            return Err(e.to_string());
-        }
-        Ok(text) => text,
+    let params = UnixShellParams {
+        idf_path,
+        idf_tools_path,
+        idf_python_env_path,
+        idf_version,
+        export_paths,
+        env_var_pairs,
+        python_bin_path,
     };
+    let variables = build_unix_shell_variables(&params);
+    let rendered = render_template(template, &variables);
+
+    create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
+    Ok(())
+}
+
+/// Creates a fish shell activation script for the ESP-IDF toolchain.
+pub fn create_fish_script(
+    file_path: &str,
+    idf_path: &str,
+    idf_tools_path: &str,
+    idf_python_env_path: Option<&str>,
+    idf_version: &str,
+    export_paths: Vec<String>,
+    env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str,
+) -> Result<(), String> {
+    ensure_path(file_path).map_err(|e| e.to_string())?;
+    let mut filename = PathBuf::from(file_path);
+    filename.push(format!("activate_idf_{}.fish", idf_version));
+    let template = include_str!("../../bash_scripts/activate_idf_template.fish");
+
+    let params = UnixShellParams {
+        idf_path,
+        idf_tools_path,
+        idf_python_env_path,
+        idf_version,
+        export_paths,
+        env_var_pairs,
+        python_bin_path,
+    };
+    let variables = build_unix_shell_variables(&params);
+    let rendered = render_template(template, &variables);
 
     create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
     Ok(())
@@ -618,61 +764,65 @@ fn create_powershell_profile(
     python_bin_path: &str,
 ) -> Result<String, std::io::Error> {
     let profile_template = include_str!("../../powershell_scripts/idf_tools_profile_template.ps1");
-
-    let mut tera = Tera::default();
-    if let Err(e) = tera.add_raw_template("powershell_profile", profile_template) {
-        error!("Failed to add template: {}", e);
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            "Failed to add template",
-        ));
-    }
-    ensure_path(profile_path).expect("Unable to create directory");
-    let mut context = Context::new();
-    println!("idf_path: {}", replace_unescaped_spaces_win(idf_path));
-    context.insert("idf_path", &replace_unescaped_spaces_win(idf_path));
-    context.insert("idf_version", &idf_version);
-    context.insert(
-        "env_var_pairs",
-        &format_powershell_env_pairs(&env_var_pairs),
-    );
-
-    context.insert(
-        "idf_tools_path",
-        &replace_unescaped_spaces_win(idf_tools_path),
-    );
-    if let Some(idf_python_env_path) = idf_python_env_path {
-        context.insert(
-            "idf_python_env_path",
-            &replace_unescaped_spaces_win(idf_python_env_path),
-        );
-    } else {
-        context.insert(
-            "idf_python_env_path",
-            &replace_unescaped_spaces_win(&format!("{}\\python", idf_tools_path)),
-        );
-    }
-    context.insert("add_paths_extras", &export_paths.join(";"));
-    context.insert("current_system_path", &env::var("PATH").unwrap_or_default());
-    context.insert("python_bin_path", &replace_unescaped_spaces_win(python_bin_path));
-    let mut rendered = match tera.render("powershell_profile", &context) {
-        Err(e) => {
-            error!("Failed to render template: {}", e);
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                "Failed to render template",
-            ));
-        }
-        Ok(text) => text,
+    let params = ProfileParams {
+        idf_path,
+        idf_tools_path,
+        idf_python_env_path,
+        idf_version,
+        export_paths,
+        env_var_pairs,
+        python_bin_path,
     };
+    let variables = build_powershell_variables(&params);
+    render_and_write_profile(
+        profile_path,
+        "powershell_profile",
+        profile_template,
+        variables,
+        &format!("Microsoft.{}.PowerShell_profile.ps1", idf_version),
+    )
+}
 
-    if std::env::consts::OS == "windows" {
-        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n");
-    }
-    let mut filename = PathBuf::from(profile_path);
-    filename.push(format!("Microsoft.{}.PowerShell_profile.ps1", idf_version));
-    fs::write(&filename, rendered).expect("Unable to write file");
-    Ok(filename.display().to_string())
+/// Creates a batch file profile script for the ESP-IDF tools.
+///
+/// # Parameters
+///
+/// * `profile_path` - A string representing the path where the batch profile script should be created.
+/// * `idf_path` - A string representing the path to the ESP-IDF repository.
+/// * `idf_tools_path` - A string representing the path to the ESP-IDF tools directory.
+///
+/// # Returns
+///
+/// * `Result<String, std::io::Error>` - On success, returns the path to the created batch profile script.
+///   On error, returns an `std::io::Error` indicating the cause of the error.
+fn create_batch_profile(
+    profile_path: &str,
+    idf_path: &str,
+    idf_tools_path: &str,
+    idf_python_env_path: Option<&str>,
+    idf_version: &str,
+    export_paths: Vec<String>,
+    env_var_pairs: Vec<(String, String)>,
+    python_bin_path: &str,
+) -> Result<String, std::io::Error> {
+    let profile_template = include_str!("../../powershell_scripts/idf_tools_profile_template.bat");
+    let params = ProfileParams {
+        idf_path,
+        idf_tools_path,
+        idf_python_env_path,
+        idf_version,
+        export_paths,
+        env_var_pairs,
+        python_bin_path,
+    };
+    let variables = build_batch_variables(&params);
+    render_and_write_profile(
+        profile_path,
+        "batch_profile",
+        profile_template,
+        variables,
+        &format!("Microsoft.{}_profile.bat", idf_version),
+    )
 }
 
 /// Creates a desktop shortcut for the IDF tools using PowerShell on Windows.
@@ -722,28 +872,12 @@ pub fn create_desktop_shortcut(
             fs::write(&home, icon).expect("Unable to write file");
             let powershell_script_template =
                 include_str!("../../powershell_scripts/create_desktop_shortcut_template.ps1");
-            // Create a new Tera instance
-            let mut tera = Tera::default();
-            if let Err(e) = tera.add_raw_template("powershell_script", powershell_script_template) {
-                error!("Failed to add template: {}", e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "Failed to add template",
-                ));
-            }
-            let mut context = Context::new();
-            context.insert("custom_profile_filename", &filename);
-            context.insert("name", &idf_version);
-            let rendered = match tera.render("powershell_script", &context) {
-                Err(e) => {
-                    error!("Failed to render template: {}", e);
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to render template",
-                    ));
-                }
-                Ok(text) => text,
-            };
+
+            let variables = vec![
+                ("custom_profile_filename", filename.clone()),
+                ("name", idf_version.to_string()),
+            ];
+            let rendered = render_template(powershell_script_template, &variables);
 
             let output = match run_powershell_script(&rendered) {
                 Ok(o) => o,
@@ -1639,6 +1773,7 @@ pub fn single_version_post_install(
     idf_python_env_path: Option<&str>,
     env_vars: Option<Vec<(String, String)>>,
     python_bin_path: &str,
+    create_cmd_bat: bool,
 ) {
     let mut env_vars = match env_vars {
         Some(vars) => vars,
@@ -1687,8 +1822,8 @@ pub fn single_version_post_install(
                 idf_version,
                 tool_install_directory,
                 idf_python_env_path,
-                export_paths,
-                env_vars,
+                export_paths.clone(),
+                env_vars.clone(),
                 python_bin_path,
             ) {
                 error!(
@@ -1699,9 +1834,51 @@ pub fn single_version_post_install(
             } else {
                 info!("Desktop shortcut created successfully")
             }
+
+            // Also create CMD batch file if requested
+            if create_cmd_bat {
+                if let Err(err) = create_batch_profile(
+                    activation_script_path,
+                    idf_path,
+                    tool_install_directory,
+                    idf_python_env_path,
+                    idf_version,
+                    export_paths,
+                    env_vars,
+                    python_bin_path,
+                ) {
+                    error!(
+                        "{} {:?}",
+                        "Failed to create CMD batch profile",
+                        err.to_string()
+                    )
+                } else {
+                    info!("CMD batch profile created successfully")
+                }
+            }
         }
         _ => {
+            // Create bash activation script
             match create_activation_shell_script(
+              activation_script_path,
+              idf_path,
+              tool_install_directory,
+              idf_python_env_path,
+              idf_version,
+              export_paths.clone(),
+              env_vars.clone(),
+              python_bin_path,
+            ) {
+              Ok(_) => info!("Bash activation script created successfully"),
+              Err(err) => error!(
+                  "{} {:?}",
+                  "Failed to create activation shell script",
+                  err.to_string()
+              ),
+            };
+
+            // Create fish shell activation script (always)
+            match create_fish_script(
               activation_script_path,
               idf_path,
               tool_install_directory,
@@ -1711,13 +1888,14 @@ pub fn single_version_post_install(
               env_vars,
               python_bin_path,
             ) {
-              Ok(_) => info!("Activation shell script created successfully"),
+              Ok(_) => info!("Fish shell activation script created successfully"),
               Err(err) => error!(
                   "{} {:?}",
-                  "Failed to create activation shell script",
+                  "Failed to create fish shell script",
                   err.to_string()
               ),
             };
+
             // copy openocd rules (it's noop on macOs)
             match copy_openocd_rules(tool_install_directory) {
                 Ok(_) => info!("OpenOCD rules copied successfully"),

@@ -54,6 +54,7 @@ pub struct Settings {
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
     pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
+    pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +132,7 @@ impl Default for Settings {
             use_local_archive: None,
             activation_script_path_override: Some(default_activation_script_path_override),
             python_version_override: Some(PYTHON_NAME_TO_INSTALL.to_string()),
+            create_bat_activation_script: Some(false),
         }
     }
 }
@@ -217,7 +219,8 @@ impl Settings {
             python_env_folder_name,
             use_local_archive,
             activation_script_path_override,
-            python_version_override
+            python_version_override,
+            create_bat_activation_script
           );
         }
 
@@ -301,7 +304,8 @@ impl Settings {
             python_env_folder_name,
             use_local_archive,
             activation_script_path_override,
-            python_version_override
+            python_version_override,
+            create_bat_activation_script
         );
     }
 
