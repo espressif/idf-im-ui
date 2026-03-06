@@ -5,6 +5,12 @@ on:
     # Run daily at 9:00 UTC
     - cron: '0 6 * * *'
   workflow_dispatch: # Allow manual trigger
+    inputs:
+      max_age_days:
+        description: "Close stale issues older than this many days (default: 7)"
+        required: false
+        type: number
+        default: 7
 
 jobs:
   close-stale-issues:
@@ -17,7 +23,7 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const STALE_DAYS = 14;
+            const STALE_DAYS = ${{ inputs.max_age_days || 7 }};
             const STALE_MS = STALE_DAYS * 24 * 60 * 60 * 1000;
             const now = Date.now();
 

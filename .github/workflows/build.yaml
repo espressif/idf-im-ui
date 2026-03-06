@@ -306,18 +306,6 @@ jobs:
           # Find the generated RPM and add python3 dependency with correct RPM syntax
           RPM_FILE=$(find target -name "*.rpm" -print -quit)
           echo "Generated RPM: $RPM_FILE"
-
-          # Use rpmdeps/rpmrebuild to inject the proper dependency
-          sudo apt-get update && sudo apt-get install -y rpm librpmio9t64
-
-          # Extract, patch, and repack the RPM
-          mkdir -p rpm-work
-          cd rpm-work
-          rpm2cpio "../$RPM_FILE" | cpio -idmv
-
-          # Get the original spec-like info and rebuild with correct deps
-          cd ..
-
         shell: bash
 
       - name: Find and upload RPM artifacts
