@@ -77,7 +77,7 @@ class CLITestRunner {
       cleanData = cleanData.replace(/[\r\n]+/g, "");
       this.output += cleanData;
       this.lastDataTimestamp = Date.now();
-      if (process.env.SHOW_EIM_OUTPUT === "1") {
+      if (process.env.SHOW_RUNNER_OUTPUT === "1") {
         process.stdout.write(data);
       }
     });
