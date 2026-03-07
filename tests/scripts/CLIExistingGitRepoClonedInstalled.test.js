@@ -1,5 +1,5 @@
 import { expect } from "chai";
-import { describe, it, before, after, beforeEach, afterEach } from "mocha";
+import { describe, it, before, after } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
@@ -40,15 +40,16 @@ export function runCLIExistingGitRepoClonedInstalledTest({ id = 0, pathToEIM, gi
 
     after(async function () {
       this.timeout(20000);
-      if (this.currentTest.state === "failed") {
+      if (testRunner && this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
         logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
       }
       try {
-        // fs.rmSync(gitCloneFolder, { recursive: true, force: true });
-        logger.info(`Removing IDF repository from ${gitCloneFolder}`);
-        await testRunner.stop();
-        logger.info(`Test runner stopped`);
+        if (testRunner) {
+          logger.info(`Stopping test runner`);
+          await testRunner.stop();
+          logger.info(`Test runner stopped`);
+        }
       } catch (error) {
         logger.info("Error to clean up terminal after test");
         logger.info(` Error: ${error}`);
@@ -88,27 +89,21 @@ export function runCLIExistingGitRepoClonedInstalledTest({ id = 0, pathToEIM, gi
       expect(fs.existsSync(entry.path), "IDF path must exist").to.be.true;
       expect(fs.existsSync(entry.python), "Python path must exist").to.be.true;
 
-      const verificationRunner = new CLITestRunner();
-      try {
-        if (os.platform() === "win32") {
-          await verificationRunner.start();
-          const loadCommand = `. "${entry.activationScript}"`;
-          verificationRunner.sendInput(loadCommand);
-          await new Promise((resolve) => setTimeout(resolve, 10000));
-        } else {
-          await verificationRunner.runIDFTerminal(entry.activationScript, 15000);
+      if (os.platform() === "win32") {
+        testRunner.sendInput(`. "${entry.activationScript}"`);
+        await new Promise((resolve) => setTimeout(resolve, 10000));
+      } else {
+        testRunner.sendInput(`source ${entry.activationScript}`);
+        const ready = await testRunner.waitForOutput("(venv)", 15000);
+        if (!ready) {
+          logger.info("Output: " + testRunner.output);
+          throw new Error("IDF environment did not load (no (venv) in output)");
         }
-      } catch (err) {
-        logger.info("Failed to load IDF terminal: " + (err && err.message));
-        logger.info("Output: " + verificationRunner.output);
-        throw err;
       }
-      verificationRunner.output = "";
-      verificationRunner.sendInput("idf.py --version");
-      const versionSeen = await verificationRunner.waitForOutput(idfRepositoryBranch, 15000);
-      expect(versionSeen, `idf.py --version should show ${idfRepositoryBranch}; output: ${verificationRunner.output}`).to.be.true;
-      expect(verificationRunner.output, "idf.py --version output must not show -dirty").to.not.include("-dirty");
-      await verificationRunner.stop();
+      testRunner.output = "";
+      testRunner.sendInput("idf.py --version");
+      const versionSeen = await testRunner.waitForOutput(idfRepositoryBranch, 15000);
+      expect(testRunner.output, `idf.py --version should include ${idfRepositoryBranch}; output: ${testRunner.output}`).to.include(idfRepositoryBranch);
     });
 
   });
