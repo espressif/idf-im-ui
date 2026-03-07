@@ -11,7 +11,7 @@
             "installFolder": "<folder>" // Folder name to install idf (inside USER folder)
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
             "toolsMirror": "github",    // Mirror to download tools "github", "dl_com" or "dl_cn"
-            "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"            
+            "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"
             "recursive": false,         // Whether to prevent downloading submodules (set to true if omitted)
             "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
@@ -31,6 +31,7 @@ import { runInstallVerification } from "./scripts/installationVerification.test.
 import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
 import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
+import { runCLIExistingGitRepoClonedInstalledTest } from "./scripts/CLIExistingGitRepoClonedInstalled.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -278,6 +279,21 @@ function testRun(jsonScript) {
           installFolder: INSTALLFOLDER,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
+        });
+      });
+    } else if (test.type === "existing-git-repo-cloned-installed") {
+      const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
+      const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.3";
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runCLIExistingGitRepoClonedInstalledTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMCLI,
+          gitRepoUrl,
+          gitRepoBranch,
+          toolsFolder: TOOLSFOLDER,
         });
       });
     } else {
