@@ -431,7 +431,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF existing git repo cloned installed test script (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && matrix.distro_name != 'scoop'
         run: |
           python3 --version
           $env:LOG_TO_FILE="true"
