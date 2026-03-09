@@ -382,7 +382,7 @@ export default {
 
 .welcome-card {
   background: white;
-  padding: 3rem 4rem;
+  padding: 3rem 4rem 0.25rem;
   border-radius: 12px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   width: 100%;
