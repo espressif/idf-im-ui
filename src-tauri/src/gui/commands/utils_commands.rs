@@ -307,13 +307,14 @@ pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_da
     return Ok(());
   }
   let system_info = get_system_info();
+  let data = additional_data.unwrap_or(serde_json::Value::Null);
   log::debug!("System info: {}", system_info);
   log::debug!("Track event called with name: {}", name);
   track_event("GUI event", serde_json::json!({
     "event_name": name,
     "system_info": system_info,
     "eim_version": EIM_VERSION,
-    "additional_data": additional_data
+    "additional_data": data.to_string(),
   })).await;
   Ok(())
 }
