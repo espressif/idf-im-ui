@@ -416,6 +416,12 @@ install.success:
 install.ready:
   en: Now you can start using IDF tools
   cn: 现在可以开始使用 IDF 工具了
+install.already_installed:
+  en: "The IDF at path '%{path}' is already installed. If you need to reinstall or fix it, please use the 'fix' command."
+  cn: "路径 '%{path}' 处的 IDF 已安装。如果您需要重新安装或修复它，请使用 'fix' 命令。"
+install.use_fix_command:
+  en: "To fix the installation, run: eim fix --path <path>"
+  cn: "要修复安装，请运行: eim fix --path <path>"
 list.title:
   en: Listing installed versions...
   cn: 正在列出已安装的版本...
