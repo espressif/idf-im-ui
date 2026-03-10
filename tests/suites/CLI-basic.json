@@ -39,13 +39,6 @@
   },
   {
     "id": 6,
-    "type": "offline",
-    "name": "CLI Offline Installation",
-    "deleteAfterTest": true,
-    "testProxyMode": "block"
-  },
-  {
-    "id": 7,
     "type": "existing-git-clone",
     "name": "Install over existing git cloned repo folder",
     "data": {
@@ -55,5 +48,12 @@
     },
     "deleteAfterTest": true,
     "testProxyMode": false
+  },
+  {
+    "id": 7,
+    "type": "offline",
+    "name": "CLI Offline Installation",
+    "deleteAfterTest": true,
+    "testProxyMode": "block"
   }
 ]
