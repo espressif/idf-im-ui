@@ -31,7 +31,7 @@ import { runInstallVerification } from "./scripts/installationVerification.test.
 import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
 import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
-import { runCLIExistingGitRepoClonedInstalledTest } from "./scripts/CLIExistingGitRepoClonedInstalled.test.js";
+import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -267,19 +267,57 @@ function testRun(jsonScript) {
           deleteAfterTest,
         });
       });
-    } else if (test.type === "existing-git-repo-cloned-installed") {
+    } else if (test.type === "existing-git-clone") {
       const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
       const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.3";
+      const installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      const installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      installArgs.push(
+        os.platform() === "win32" ? `-p "${installFolder}"` : `-p ${installFolder}`
+      );
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
 
-        runCLIExistingGitRepoClonedInstalledTest({
+        runCLIClonedIDFRepo({
           id: `${test.id}1`,
-          pathToEIM: pathToEIMCLI,
+          path: installFolder,
           gitRepoUrl,
           gitRepoBranch,
+        });
+
+        runCLICustomInstallTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+          testProxyMode,
+          proxyBlockList,
+        });
+
+        runInstallVerification({
+          id: `${test.id}3`,
+          installFolder,
+          idfList: [gitRepoBranch],
+          targetList,
           toolsFolder: TOOLSFOLDER,
+          existingGitClone: true,
+        });
+
+        runCleanUp({
+          id: `${test.id}4`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
         });
       });
     }

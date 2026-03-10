@@ -43,5 +43,17 @@
     "name": "CLI Offline Installation",
     "deleteAfterTest": true,
     "testProxyMode": "block"
+  },
+  {
+    "id": 7,
+    "type": "existing-git-clone",
+    "name": "Install over existing git cloned repo folder",
+    "data": {
+      "installFolder": ".espext1",
+      "gitRepoUrl": "https://github.com/espressif/esp-idf.git",
+      "gitRepoBranch": "v5.5.3"
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
   }
 ]
