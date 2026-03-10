@@ -233,7 +233,7 @@ jobs:
                 pacman -S --noconfirm python python-pip
               elif command -v zypper &>/dev/null; then
                 pkill -9 zypper 2>/dev/null || true
-                rm -f /run/zypp.pid 2>/dev/null || true                
+                rm -f /run/zypp.pid 2>/dev/null || true
                 zypper install -y python3 python3-pip
               else
                 echo 'Unknown package manager' && exit 1
@@ -269,7 +269,7 @@ jobs:
           export PREREQUISITES_OS="macos"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
-          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"      
+          export EIM_CLI_VERSION="eim ${{ env.CLI_TAG }}"
           cd tests
           npm run test-CLI --file=CLI-prerequisites
         continue-on-error: true
@@ -328,7 +328,7 @@ jobs:
       - name: Run mirrors extended test script (MirrorRunner)
         if: matrix.run_on == 'MirrorRunner' && inputs.run_extended == 'true'
         run: |
-          python3 --version        
+          python3 --version
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
@@ -399,7 +399,7 @@ jobs:
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python3 --version        
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
@@ -411,7 +411,7 @@ jobs:
       - name: Run IDF extended install test script (Windows)
         if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
         run: |
-          python3 --version        
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
