@@ -9,6 +9,7 @@ use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
 use zstd::{decode_all, Decoder};
+use filetime::{FileTime, set_file_mtime};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
@@ -859,6 +860,37 @@ pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(),
 
 pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
     copy_dir_contents_with_retries(src, dst, 3, std::time::Duration::from_millis(100))
+}
+
+/// Copies directory contents while preserving file modification times.
+/// This prevents `git status` from reporting a dirty working tree after
+/// offline IDF installation.
+pub fn copy_dir_contents_preserving_mtime(src: &Path, dst: &Path) -> io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = path.file_name().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid file name for path: {:?}", path),
+            )
+        })?;
+        let dest_path = dst.join(file_name);
+
+        if path.is_dir() {
+            copy_dir_contents_preserving_mtime(&path, &dest_path)?;
+        } else {
+            let metadata = fs::metadata(&path)?;
+            let mtime = FileTime::from_last_modification_time(&metadata);
+            fs::copy(&path, &dest_path)?;
+            set_file_mtime(&dest_path, mtime)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn copy_dir_contents_with_retries(

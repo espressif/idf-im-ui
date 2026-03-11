@@ -4,7 +4,7 @@ use log::{debug, error, info, warn};
 use tempfile::TempDir;
 use tera::{Context, Tera};
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::{copy_dir_contents, extract_zst_archive}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::{copy_dir_contents_preserving_mtime, extract_zst_archive}};
 
 /// Structure to define package information with compile-time template content.
 ///
@@ -526,62 +526,84 @@ pub fn install_prerequisites_offline(
 pub fn copy_idf_from_offline_archive(
     archive_dir: &TempDir,
     config: &Settings
-)-> Result<(), String> {
-  let mut everything_copied = true;
-  for archive_version in config.clone().idf_versions.unwrap() {
-    match std::env::consts::OS {
-      "windows" => {
-        // As on windows the IDF contains too long paths, we need to copy the content from the offline archive to the IDF path
-        // using windows powershell command
-        let mut main_command = get_correct_powershell_command();
+) -> Result<(), String> {
+    let mut everything_copied = true;
+    for archive_version in config.clone().idf_versions.unwrap() {
+        let src_path = archive_dir.path().join(&archive_version);
+        let dst_path = config.clone().path.unwrap().join(&archive_version);
 
-        let output_cp = command_executor::execute_command(
-            &main_command,
-            &vec![
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                "cp",
-                "-r",
-                &archive_dir.path().join(&archive_version).to_str().unwrap(),
-                &config.clone().path.unwrap().join(&archive_version).to_str().unwrap(),
-            ],
-        );
-        match output_cp {
-            Ok(out) => {
-                if out.status.success() {
-                    info!("Successfully copied content from offline archive to IDF path");
-                } else {
-                    error!("Failed to copy content from offline archive: {:?} | {:?}", out.stdout, out.stderr);
+        if let Some(parent) = dst_path.parent() {
+            if !parent.exists() {
+                if let Err(e) = fs::create_dir_all(parent) {
+                    error!("Failed to create destination directory: {}", e);
                     everything_copied = false;
+                    continue;
                 }
             }
-            Err(err) => {
-                error!("Failed to copy content from offline archive: {}", err);
-                everything_copied = false;
-            }
         }
 
-      },
-      _ => {
-        debug!("Copying IDF version: {}", archive_version);
-        match copy_dir_contents(&archive_dir.path().join(&archive_version), &config.clone().path.unwrap().join(&archive_version)) {
-          Ok(_) => {
-            info!("Successfully copied IDF version: {}", archive_version);
-          }
-          Err(err) => {
-            error!("Failed to copy IDF version {}: {}", archive_version, err);
-            everything_copied = false;
-          }
+        match std::env::consts::OS {
+            "windows" => {
+                // robocopy handles long paths (no MAX_PATH limit) and preserves timestamps
+                // via /COPY:DAT (Data, Attributes, Timestamps). Exit codes 0-7 are success.
+                let output = command_executor::execute_command(
+                    "robocopy",
+                    &[
+                        src_path.to_str().unwrap(),
+                        dst_path.to_str().unwrap(),
+                        "/E",
+                        "/COPY:DAT",
+                        "/R:3",
+                        "/W:1",
+                        "/NP",
+                        "/NFL",
+                        "/NDL",
+                    ],
+                );
+                match output {
+                    Ok(out) => {
+                        let exit_code = out.status.code().unwrap_or(-1);
+                        if exit_code <= 7 {
+                            info!("Successfully copied IDF version {} (robocopy exit code: {})", archive_version, exit_code);
+                        } else {
+                            error!("robocopy failed for version {} with exit code {}: {:?} | {:?}",
+                                archive_version, exit_code, out.stdout, out.stderr);
+                            everything_copied = false;
+                        }
+                    }
+                    Err(err) => {
+                        error!("Failed to execute robocopy for version {}: {}", archive_version, err);
+                        everything_copied = false;
+                    }
+                }
+            },
+            _ => {
+                debug!("Moving IDF version: {}", archive_version);
+                match fs::rename(&src_path, &dst_path) {
+                    Ok(_) => {
+                        info!("Successfully moved IDF version: {}", archive_version);
+                    }
+                    Err(rename_err) => {
+                        debug!("fs::rename failed (likely cross-filesystem): {}, falling back to mtime-preserving copy", rename_err);
+                        match copy_dir_contents_preserving_mtime(&src_path, &dst_path) {
+                            Ok(_) => {
+                                info!("Successfully copied IDF version with preserved timestamps: {}", archive_version);
+                            }
+                            Err(err) => {
+                                error!("Failed to copy IDF version {}: {}", archive_version, err);
+                                everything_copied = false;
+                            }
+                        }
+                    }
+                }
+            }
         }
-      }
     }
-  }
-  if everything_copied {
-    Ok(())
-  } else {
-    Err("Failed to copy some IDF versions".into())
-  }
+    if everything_copied {
+        Ok(())
+    } else {
+        Err("Failed to copy some IDF versions".into())
+    }
 }
 
 pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {

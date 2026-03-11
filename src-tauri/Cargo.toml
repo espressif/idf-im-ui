@@ -113,6 +113,7 @@ anyhow = "^1.0"
 rust_search = "2.1.0"
 flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
 tar = { version = "0.4", default-features = false }
+filetime = "0.2"
 zip = { version = "8.1", default-features = true }
 lzma-rs = "0.3.0"
 thiserror = "2.0"
