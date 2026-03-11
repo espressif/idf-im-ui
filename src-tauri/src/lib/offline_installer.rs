@@ -549,8 +549,8 @@ pub fn copy_idf_from_offline_archive(
                 let output = command_executor::execute_command(
                     "robocopy",
                     &[
-                        src_path.to_str().unwrap(),
-                        dst_path.to_str().unwrap(),
+                        src_path.to_string_lossy().as_ref(),
+                        dst_path.to_string_lossy().as_ref(),
                         "/E",
                         "/COPY:DAT",
                         "/R:3",
