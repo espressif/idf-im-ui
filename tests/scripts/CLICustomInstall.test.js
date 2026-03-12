@@ -9,7 +9,7 @@ import path from "path";
 import os from "os";
 
 
-// This function executed a unattended IDF installation based on the args provided. If no args are provided, the test will use the default arguments.
+// This function executes an unattended IDF installation based on the args provided. If no args are provided, the test will use the default arguments.
 export function runCLICustomInstallTest({
   id = 0,
   pathToEIM,

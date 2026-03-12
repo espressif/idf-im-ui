@@ -1,7 +1,7 @@
 /**
  * This proxy object allows intercepting all network communications from the terminal instance where this proxy is launched.
  * 
- * It can be secuted in 3 modes: "log", "block" or "block-list"
+ * It can be executed in 3 modes: "log", "block" or "block-list"
  * "log": logs all network communications to the console
  * "block": blocks all network communications
  * "block-list": blocks all network communications except for the domains in the blockedDomains list e.g. ["github.com", "dl.espressif.com"]

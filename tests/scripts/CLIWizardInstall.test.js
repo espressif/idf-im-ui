@@ -15,7 +15,7 @@ import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
-// This function executed the wizard installation functionality of the EIM CLI
+// This function executes the wizard installation functionality of the EIM CLI
 export function runCLIWizardInstallTest({
   id = 0,
   pathToEIM,
