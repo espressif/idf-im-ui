@@ -9,6 +9,7 @@ use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
 use zstd::{decode_all, Decoder};
+use filetime::{FileTime, set_file_mtime};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
@@ -859,6 +860,103 @@ pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(),
 
 pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
     copy_dir_contents_with_retries(src, dst, 3, std::time::Duration::from_millis(100))
+}
+
+/// Copies directory contents while preserving file modification times and symlinks.
+/// This prevents `git status` from reporting a dirty working tree after
+/// offline IDF installation.
+pub fn copy_dir_contents_preserving_mtime(src: &Path, dst: &Path) -> io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_name = path.file_name().ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("Invalid file name for path: {:?}", path),
+            )
+        })?;
+        let dest_path = dst.join(file_name);
+
+        let meta = fs::symlink_metadata(&path)?;
+        if meta.file_type().is_symlink() {
+            debug!("Symlink entry: {:?} -> {:?}", path, dest_path);
+            create_symlink_rewritten(&path, &dest_path, src, dst)?;
+            debug!("Symlink entry rewritten: {:?} -> {:?}", path, dest_path);
+            set_file_mtime(&dest_path, FileTime::from_last_modification_time(&meta))?;
+        } else if meta.is_dir() {
+            debug!("Directory entry: {:?} -> {:?}", path, dest_path);
+            copy_dir_contents_preserving_mtime(&path, &dest_path)?;
+        } else {
+            let mtime = FileTime::from_last_modification_time(&meta);
+            fs::copy(&path, &dest_path)?;
+            set_file_mtime(&dest_path, mtime)?;
+        }
+    }
+    Ok(())
+}
+
+pub fn create_symlink_rewritten(
+    src_link_path: &Path,
+    dest_link_path: &Path,
+    src_root: &Path,
+    dst_root: &Path,
+) -> io::Result<()> {
+    if dest_link_path.exists() {
+        let meta = fs::symlink_metadata(dest_link_path)?;
+        if meta.file_type().is_dir() {
+            fs::remove_dir_all(dest_link_path)?;
+        } else {
+            fs::remove_file(dest_link_path)?;
+        }
+    }
+
+    let raw_target = fs::read_link(src_link_path)?;
+
+    // Decide final target for the new symlink
+    let final_target: PathBuf = if raw_target.is_absolute() {
+        // If the absolute link points inside the source tree,
+        // rewrite it to point inside the destination tree.
+        if let Ok(rel_inside_src) = raw_target.strip_prefix(src_root) {
+            let new_abs_target = dst_root.join(rel_inside_src);
+
+            // Convert to relative path from the new link location
+            let parent = dest_link_path.parent().ok_or_else(|| {
+                io::Error::new(io::ErrorKind::Other, "Destination symlink has no parent")
+            })?;
+
+            pathdiff::diff_paths(&new_abs_target, parent).unwrap_or(new_abs_target)
+        } else {
+            // Absolute link outside copied tree — preserve as-is
+            raw_target.clone()
+        }
+    } else {
+        // Relative symlink — preserve as-is
+        raw_target.clone()
+    };
+
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(&final_target, dest_link_path)?;
+    }
+
+    #[cfg(windows)]
+    {
+        let is_dir = fs::metadata(src_link_path)
+            .map(|m| m.is_dir())
+            .unwrap_or(false);
+
+        if is_dir {
+            std::os::windows::fs::symlink_dir(&final_target, dest_link_path)?;
+        } else {
+            std::os::windows::fs::symlink_file(&final_target, dest_link_path)?;
+        }
+    }
+
+    Ok(())
 }
 
 pub fn copy_dir_contents_with_retries(

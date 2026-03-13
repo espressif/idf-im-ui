@@ -982,6 +982,7 @@ async fn main() {
 
             // Tar + Zstd compress
             let mut tar = TarBuilder::new(Vec::new());
+            tar.follow_symlinks(false);
             if let Err(e) = tar.append_dir_all(".", archive_dir.path()) {
                 error!("Failed to create tar for {}: {}", idf_version, e);
                 build_summaries.push(summary);

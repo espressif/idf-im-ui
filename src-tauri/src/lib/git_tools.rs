@@ -1157,7 +1157,7 @@ fn checkout_submodule_worktree(
     // Need this to prevent untracked files in the submodule workdir
     populate_index_from_tree(&repo, &tree)?;
 
-    
+
     Ok(())
 }
 
@@ -1772,6 +1772,11 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 
             // Set HEAD
             set_head_to_ref(repo, &local_refname, &format!("checkout: moving to {}", branch))?;
+            // CHECK OUT THE FILES
+            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
+              error!("Error checking out files for branch {}: {}", branch, e);
+              anyhow::anyhow!("{}", e)
+          })?
         }
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);

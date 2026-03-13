@@ -1417,6 +1417,7 @@ dependencies = [
  "dialoguer",
  "dirs 6.0.0",
  "fern",
+ "filetime",
  "flate2",
  "fork",
  "fs_extra",
