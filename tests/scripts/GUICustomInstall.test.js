@@ -14,6 +14,8 @@ import { getAvailableFeatures, getAvailableTools } from "../helper.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
+// This function executes the expert installation functionality of the EIM GUI
+// Parameters are selected according to the arguments passed to the function, missing arguments sets the default value
 export function runGUICustomInstallTest({
   id = 0,
   pathToEIM,
@@ -31,6 +33,7 @@ export function runGUICustomInstallTest({
     let customInstallFailed = false;
     let proxy = null;
 
+    // The setup function should start the proxy server if enabled and start the EIM application GUI
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -53,6 +56,7 @@ export function runGUICustomInstallTest({
       }
     });
 
+    // The beforeEach function should skip the next tests if the previous test failed
     beforeEach(async function () {
       if (customInstallFailed) {
         logger.info("Test failed, skipping next tests");
@@ -60,6 +64,7 @@ export function runGUICustomInstallTest({
       }
     });
 
+    // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
       this.timeout(10000);
       if (this.currentTest.state === "failed") {
@@ -68,7 +73,8 @@ export function runGUICustomInstallTest({
         customInstallFailed = true;
       }
     });
-
+    
+    // The tear down function should stop the EIM application GUI and proxy server if enabled
     after(async function () {
       this.timeout(5000);
       try {

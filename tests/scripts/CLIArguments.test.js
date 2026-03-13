@@ -26,6 +26,7 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
       testRunner = null;
     });
 
+    // Test to validate the EIM version number is correct
     it("1- should show correct version number", async function () {
       logger.info(`Starting test - show correct version`);
       await testRunner.start();
@@ -34,6 +35,8 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
       expect(meetVersion, `EIM showing incorrect version number, expected: ${eimVersion}, actual: ${testRunner.output}`).to.be.true;
     });
 
+    // Test to validate the EIM help options are correct
+    // The test only checks for basic elements to validate that the help was printed. This can be improved by checking for specific options and their descriptions.
     it("2- should show help with --help argument", async function () {
       logger.info(`Starting test - show help`);
       await testRunner.start();
@@ -45,6 +48,7 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
       );
     });
 
+    // Test to validate the EIM handles invalid arguments correctly
     it("3- should handle invalid arguments", async function () {
       logger.info(`Starting test - invalid argument`);
       await testRunner.start();

@@ -4,6 +4,8 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { getOSName, getArchitecture } from "../helper.js";
 
+// This function verifies the EIM GUI properly starts and displays the welcome page
+
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
   
   describe(`${id}- EIM startup |`, () => {

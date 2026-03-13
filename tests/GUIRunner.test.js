@@ -45,6 +45,7 @@ import {
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
 
+// Read the test script file from the suites folder
 const jsonFilePath = path.join(
   import.meta.dirname,
   "suites",
@@ -53,12 +54,16 @@ const jsonFilePath = path.join(
 const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
 logger.info(`Running test script: ${jsonFilePath}`);
 
+// Run the tests
 testRun(testScript);
 
+
 function testRun(script) {
+  // Test Runs
   script.forEach((test) => {
     if (test.type === "startup") {
-      //routine for startup test script
+      //routine for startup test
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
@@ -70,6 +75,7 @@ function testRun(script) {
       });
     } else if (test.type === "prerequisites") {
       //routine for prerequisites test
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
 
@@ -81,6 +87,7 @@ function testRun(script) {
       });
     } else if (test.type === "pythoncheck") {
       //routine for python check test
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(100000);
 
@@ -89,6 +96,7 @@ function testRun(script) {
     } else if (test.type === "default") {
       //routine for default simplified installation
 
+      //set the default values for the test
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
       const proxyBlockList = test.proxyBlockList ?? [];
@@ -124,6 +132,7 @@ function testRun(script) {
     } else if (test.type === "custom") {
       //routine for expert install with custom settings
 
+      //set the default values for the test
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
@@ -187,6 +196,8 @@ function testRun(script) {
       });
     } else if (test.type === "version-management") {
       //routine for version management tests
+
+      //set the default values for the test
       const idfVersionList = test.data.idfList
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
@@ -226,6 +237,7 @@ function testRun(script) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
+      //set the default values for the test
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
@@ -266,6 +278,7 @@ function testRun(script) {
         });
       });
     } else {
+      //log an error if the test type is unknown
       logger.error(`Unknown test type: ${test.type}`);
     }
   });

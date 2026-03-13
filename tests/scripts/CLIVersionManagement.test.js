@@ -5,6 +5,7 @@ import logger from "../classes/logger.class.js";
 import path from "path";
 import fs from "fs";
 
+// This function verifies the version management functionality of the EIM
 export function runVersionManagementTest({
   id = 0,
   pathToEIM,

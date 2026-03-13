@@ -4,6 +4,8 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
 
+// This function executes the simplified installation functionality of the EIM GUI
+// No parameter is changed as part of this test
 export function runGUISimplifiedInstallTest({
   id = 0,
   pathToEIM,
@@ -15,6 +17,7 @@ export function runGUISimplifiedInstallTest({
     let simplifiedInstallFailed = false;
     let proxy = null;
 
+    // The setup function should start the proxy server if enabled and start the EIM application GUI
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -37,6 +40,7 @@ export function runGUISimplifiedInstallTest({
       }
     });
 
+    // The beforeEach function should skip the next tests if the previous test failed
     beforeEach(async function () {
       if (simplifiedInstallFailed) {
         logger.info("Test failed, skipping next tests");
@@ -44,6 +48,7 @@ export function runGUISimplifiedInstallTest({
       }
     });
 
+    // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
       if (this.currentTest.state === "failed") {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
@@ -52,6 +57,7 @@ export function runGUISimplifiedInstallTest({
       }
     });
 
+    // The tear down function should stop the EIM application GUI and proxy server if enabled
     after(async function () {
       this.timeout(5000);
       try {

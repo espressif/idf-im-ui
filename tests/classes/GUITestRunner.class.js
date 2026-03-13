@@ -1,3 +1,14 @@
+/**
+ * This class is used to run a GUI application for the GUI tests.
+ * The GUI application is launched using selenium webdriver tauri-driver.
+ * Several methods are provided to allow better control of the GUI application.
+ * Alternatively pure selenium webdriver commands can be used to control the GUI application.
+ * 
+ * The GUI application is started and keep running until the stop process is called, or any error occurs.
+ * 
+ */
+
+
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -17,6 +28,7 @@ class GUITestRunner {
     this.capabilities.setBrowserName("wry");
   }
 
+  // Function to launch the GUI application
   async start() {
     logger.info("Lauching Tauri Driver");
     try {
@@ -44,6 +56,7 @@ class GUITestRunner {
     }
   }
 
+  // Function to stop the GUI application
   async stop() {
     if (this.driver) {
       try {
@@ -61,6 +74,7 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its HTML id attribute
   async findById(id, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -76,6 +90,8 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its HTML class attribute
+  // if more than one element exists it will only capture the first one
   async findByClass(className, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -91,6 +107,8 @@ class GUITestRunner {
     }
   }
 
+  // method to find multiple elements by their HTML class attribute
+  // If only one element exists it will still return an array with a single element
   async findMultipleByClass(className, timeout = 5000) {
     try {
       const elements = await this.driver.wait(
@@ -106,6 +124,7 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its HTML CSS attribute
   async findByCSS(cssAttribute, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -121,6 +140,8 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its HTML data-id attribute
+  // Data-id names were conveniently added to several objects to allow easier identification in the GUI tests
   async findByDataId(dataId, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -136,6 +157,7 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its text content
   async findByText(text, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -151,6 +173,9 @@ class GUITestRunner {
     }
   }
 
+  // method to find an element by its relation to another element
+  // Use this method to select an element upstream or downstream to a known element. Relation and tag refers to the element you want to find.
+  // text is the text content of the reference element.
   async findByRelation(relation, tag, text, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -168,6 +193,7 @@ class GUITestRunner {
     }
   }
 
+  // method to click a button by its text content
   async clickButton(text, timeout = 5000) {
     try {
       const button = await this.driver.wait(
@@ -188,6 +214,7 @@ class GUITestRunner {
     }
   }
 
+  // method to click any element by its text content
   async clickElement(text, timeout = 5000) {
     try {
       const element = await this.driver.wait(
@@ -205,6 +232,8 @@ class GUITestRunner {
     }
   }
 
+  // Method to take a screenshot of the current GUI state
+  // Thsi is mostly used for debug
   async takeScreenshot(filename) {
     try {
       const screenshot = await this.driver.takeScreenshot();

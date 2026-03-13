@@ -48,6 +48,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 
+// Read the test script file from the suites folder
 const jsonFilePath = path.join(
   import.meta.dirname,
   "suites",
@@ -56,21 +57,23 @@ const jsonFilePath = path.join(
 const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
 logger.info(`Running test script: ${jsonFilePath}`);
 
+// Run the tests
 testRun(testScript);
 
 function testRun(jsonScript) {
   // Test Runs
   jsonScript.forEach((test) => {
     if (test.type === "prerequisites") {
-      //route for prerequisites tests
+      //routine for prerequisites tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(250000);
 
         runCLIPrerequisitesTest({ id: `${test.id}1`, pathToEIM: pathToEIMCLI, prerequisites });
       });
+
     } else if (test.type === "pythoncheck") {
-      //route for python check tests
+      //routine for python check tests
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(100000);
@@ -92,6 +95,7 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
+      //set the default values for the test
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? false;
       const proxyBlockList = test.proxyBlockList ?? [];
@@ -122,6 +126,13 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
+
+      //set the default values for the test
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
@@ -138,6 +149,7 @@ function testRun(jsonScript) {
         idf === "default" ? IDFDefaultVersion : idf
       );
 
+      // set the arguments for unattended test
       let installArgs = [];
 
       runInDebug && installArgs.push("-vvv");
@@ -172,9 +184,6 @@ function testRun(jsonScript) {
       test.data.nonInteractive &&
         installArgs.push(`-n ${test.data.nonInteractive}`);
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -204,6 +213,10 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "version-management") {
       //routine for version management tests
+
+      //set the default values for the test
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
       const idfVersionList = test.data.idfList
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
@@ -216,7 +229,6 @@ function testRun(jsonScript) {
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
@@ -237,6 +249,8 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "offline") {
       //routine for offline installation test
+
+      //set the default values for the test
       const deleteAfterTest = test.deleteAfterTest ?? true;
       const testProxyMode = test.testProxyMode ?? "block";
       const proxyBlockList = test.proxyBlockList ?? [];
@@ -267,6 +281,7 @@ function testRun(jsonScript) {
         });
       });
     } else {
+      //log an error if the test type is unknown
       logger.error(`Unknown test type: ${test.type}`);
     }
   });

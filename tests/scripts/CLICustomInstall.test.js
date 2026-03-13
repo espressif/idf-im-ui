@@ -8,6 +8,8 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+
+// This function executes an unattended IDF installation based on the args provided. If no args are provided, the test will use the default arguments.
 export function runCLICustomInstallTest({
   id = 0,
   pathToEIM,
@@ -24,6 +26,8 @@ export function runCLICustomInstallTest({
     let pathToOfflineArchive = null;
     const archiveDir = path.join(os.homedir(), "archive");
 
+    // The setup function should start the proxy server if enabled, download the offline archive if provided and start the terminal
+    // If the offline archive is provided the file will be extracted in a folder to validate its contents
     before(async function () {
       logger.debug(
         `Installing custom IDF version with parameters ${args.join(" ")}`,
@@ -68,6 +72,7 @@ export function runCLICustomInstallTest({
       }
     });
 
+    // The afterEach function should log the terminal output on failure
     afterEach(function () {
       if (this.currentTest.state === "failed") {
         logger.info(`Test failed: ${this.currentTest.title}`);
@@ -76,6 +81,8 @@ export function runCLICustomInstallTest({
       }
     });
 
+    // The tear down function should stop the terminal and proxy server if enabled
+    // The offline archive should be removed to save space in the runner
     after(async function () {
       logger.info("Custom installation routine completed");
       this.timeout(50000);
@@ -107,6 +114,8 @@ export function runCLICustomInstallTest({
       }
     });
 
+    // This test verifies the presence of the wheels for the python versions provided in the offline archive
+    // The test will skip if no offline archive is provided
     for (let pythonVersion of pythonWheelsVersion) {
       it(`0- Should verify wheels for python${pythonVersion} on offline archive`, function () {
         this.timeout(20000);
@@ -149,6 +158,7 @@ export function runCLICustomInstallTest({
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
+          // Add a scape in case the rust application panics
           if (await testRunner.waitForOutput("panicked", 1000)) {
             logger.info(">>>>>>>Rust App failure!!!!");
             break;

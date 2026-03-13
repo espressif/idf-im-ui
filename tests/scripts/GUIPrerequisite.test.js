@@ -4,10 +4,15 @@ import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
+// This function verifies the EIM GUI properly lists the missing prerequisites
+// On Windows, the prerequisites are installed as part of the test.
 export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] }) {
   
   describe(`${id}- Prerequisites check |`, () => {
     let eimRunner = null;
+
+
+    // The setup function should start the EIM application GUI
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
@@ -18,6 +23,7 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       }
     });
 
+    // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
       if (this.currentTest.state === "failed") {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
@@ -25,6 +31,7 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       }
     });
 
+    // The tear down function should stop the EIM application GUI
     after(async function () {
       this.timeout(5000);
 
