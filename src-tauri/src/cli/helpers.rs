@@ -125,12 +125,13 @@ pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
 const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub async fn track_cli_event(event_name: &str, additional_data: Option<serde_json::Value>) {
+  let data = additional_data.unwrap_or(serde_json::Value::Null);
   let system_info = idf_im_lib::telemetry::get_system_info();
     track_event("CLI event", serde_json::json!({
       "event_name": event_name,
       "system_info": system_info,
       "eim_version": EIM_VERSION,
-      "additional_data": additional_data
+      "additional_data": data.to_string(),
     })).await;
 }
 
