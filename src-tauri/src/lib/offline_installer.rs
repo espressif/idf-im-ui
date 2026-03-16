@@ -2,9 +2,8 @@ use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
-use tera::{Context, Tera};
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::{copy_dir_contents_preserving_mtime, extract_zst_archive}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command, get_scoop_path}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
 
 /// Structure to define package information with compile-time template content.
 ///
@@ -22,60 +21,40 @@ pub struct ScoopPackage {
     pub test_command: &'static str,
 }
 
-/// Creates and writes a Scoop manifest file for a given package.
+/// Creates a Scoop package manifest file with templated content.
 ///
-/// This function takes a package definition, renders its template with the provided context,
-/// normalizes line endings for Windows compatibility, and writes the resulting manifest
-/// to the specified Scoop directory.
+/// This function renders a package manifest template by substituting variables,
+/// normalizes line endings to Windows format (CRLF), and writes the result to disk.
 ///
 /// # Arguments
 ///
-/// * `package` - The package definition containing template content and metadata
-/// * `context` - Tera template context with variables for rendering
-/// * `scoop_path` - Path to the Scoop directory where the manifest will be written
-/// * `tera` - Mutable reference to the Tera template engine
+/// * `package` - The Scoop package metadata containing the template content and desired filename
+/// * `variables` - A vector of (name, value) pairs to substitute in the template
+/// * `scoop_path` - The directory path where the manifest file will be written
 ///
 /// # Returns
 ///
-/// * `Ok(PathBuf)` - Path to the created manifest file on success
-/// * `Err(String)` - Error message if template rendering or file writing fails
+/// * `Ok(PathBuf)` - The full path to the created manifest file
+/// * `Err(String)` - An error message if template rendering or file writing fails
 ///
-/// # Examples
+/// # Errors
 ///
-/// ```rust
-/// let package = ScoopPackage { /* ... */ };
-/// let mut context = Context::new();
-/// let mut tera = Tera::default();
-/// let manifest_path = create_manifest(&package, &context, &scoop_path, &mut tera)?;
-/// ```
+/// Returns an error if:
+/// - The manifest file cannot be written to the filesystem
 fn create_manifest(
     package: &ScoopPackage,
-    context: &Context,
+    variables: Vec<(&str, String)>,
     scoop_path: &Path,
-    tera: &mut Tera,
 ) -> Result<PathBuf, String> {
-    // Add template to Tera
-    let template_name = format!("{}_manifest", package.name);
-    if let Err(e) = tera.add_raw_template(&template_name, package.template_content) {
-        error!("Failed to add {} template: {}", package.name, e);
-        return Err(format!("Failed to add {} template", package.name));
-    }
-
-    // Render the template
-    let mut rendered_manifest = match tera.render(&template_name, context) {
-        Err(e) => {
-            error!("Failed to render {} template: {}", package.name, e);
-            return Err(format!("Failed to render {} template", package.name));
-        }
-        Ok(text) => text,
-    };
+    // Render the template using simple template renderer
+    let rendered_manifest = render_template(package.template_content, &variables);
 
     // Normalize line endings
-    rendered_manifest = rendered_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
+    let rendered_manifest = rendered_manifest.replace("\r\n", "\n").replace("\n", "\r\n");
 
     // Write manifest to file
     let manifest_path = scoop_path.join(package.manifest_filename);
-    if let Err(e) = fs::write(&manifest_path, rendered_manifest) {
+    if let Err(e) = fs::write(&manifest_path, &rendered_manifest) {
         error!("Failed to write {} manifest: {}", package.name, e);
         return Err(format!("Failed to write {} manifest", package.name));
     }
@@ -311,9 +290,11 @@ fn test_package_installation(test_command: &str, main_command: &str, path_with_s
 /// setup_scoop_packages(&scoop_path, &scoop_command)?;
 /// ```
 fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), String> {
-    // Create Tera context
-    let mut context = Context::new();
-    context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap().replace("\\", "/"));
+    // Create template variables
+    let offline_dir = scoop_path.to_str().unwrap().replace("\\", "/");
+    let variables = vec![
+        ("offline_archive_scoop_dir", offline_dir),
+    ];
 
     // Define packages to install with compile-time template content
     let packages = [
@@ -344,11 +325,10 @@ fn setup_scoop_packages(scoop_path: &Path, scoop_command: &Path) -> Result<(), S
     ];
 
     // Create all manifests
-    let mut tera = Tera::default();
     let mut manifest_paths = Vec::new();
 
     for package in &packages {
-        let manifest_path = create_manifest(package, &context, scoop_path, &mut tera)?;
+        let manifest_path = create_manifest(package, variables.clone(), scoop_path)?;
         manifest_paths.push((manifest_path, package.name));
     }
 

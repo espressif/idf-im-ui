@@ -21,6 +21,36 @@ use crate::{
     settings::Settings,
 };
 
+/// Removes activation scripts (sh, fish, ps1, bat) for a given version from the activation script directory
+fn remove_activation_scripts(activation_script_path: &str, idf_version: &str) -> Result<(), String> {
+    let path = PathBuf::from(activation_script_path);
+    let parent_dir = path.parent().ok_or("No parent directory")?;
+
+    // Define all possible activation script names for this version
+    let scripts_to_remove = match std::env::consts::OS {
+        "windows" => vec![
+            format!("Microsoft.{}.PowerShell_profile.ps1", idf_version),
+            format!("Microsoft.{}_profile.bat", idf_version),
+        ],
+        _ => vec![
+            format!("activate_idf_{}.sh", idf_version),
+            format!("activate_idf_{}.fish", idf_version),
+        ],
+    };
+
+    for script_name in scripts_to_remove {
+        let script_path = parent_dir.join(&script_name);
+        if script_path.exists() {
+            match fs::remove_file(&script_path) {
+                Ok(_) => info!("Removed activation script: {}", script_path.display()),
+                Err(e) => warn!("Failed to remove {}: {}", script_path.display(), e),
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Returns the default path to the ESP-IDF configuration file.
 ///
 /// The default path is constructed by joining the `esp_idf_json_path` setting from the `Settings` struct
@@ -280,6 +310,12 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Res
                 return Err(anyhow!("Failed to remove activation script: {}", e));
             }
         }
+
+        // Also remove fish/bat activation scripts
+        if let Err(e) = remove_activation_scripts(&installation.clone().activation_script, &installation.name) {
+            warn!("Failed to remove additional activation scripts: {}", e);
+        }
+
         if ide_config.remove_installation(identifier) {
             debug!("Removed installation from config file");
         } else {
