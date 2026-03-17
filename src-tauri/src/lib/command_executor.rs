@@ -28,6 +28,8 @@ pub trait CommandExecutor: Send {
     ) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
     fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output>;
+    fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus>;
 }
 
 struct DefaultExecutor;
@@ -83,6 +85,21 @@ impl CommandExecutor for DefaultExecutor {
         .stderr(std::process::Stdio::inherit())
         .stdin(std::process::Stdio::inherit())
         .status()
+    }
+    fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
+        Command::new("bash")
+            .args(["-c", script])
+            .current_dir(dir)
+            .output()
+    }
+    fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+        Command::new("bash")
+            .args(["-c", script])
+            .current_dir(dir)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status()
     }
 }
 
@@ -233,6 +250,38 @@ impl CommandExecutor for WindowsExecutor {
       status
   }
 
+  fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
+      use std::os::windows::process::CommandExt;
+      const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+
+      let output = cmd
+          .current_dir(dir)
+          .creation_flags(CREATE_NO_WINDOW)
+          .stdout(std::process::Stdio::piped())
+          .stderr(std::process::Stdio::piped())
+          .spawn()?
+          .wait_with_output();
+
+      let _ = std::fs::remove_file(&script_path);
+      output
+  }
+
+  fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+
+      let status = cmd
+          .current_dir(dir)
+          .stdout(std::process::Stdio::inherit())
+          .stderr(std::process::Stdio::inherit())
+          .stdin(std::process::Stdio::inherit())
+          .status();
+
+      let _ = std::fs::remove_file(&script_path);
+      status
+  }
+
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {
@@ -276,6 +325,22 @@ pub fn spawn_with_dir(
 ) -> std::io::Result<Child> {
     let executor = get_executor();
     executor.spawn_with_dir(command, args, dir)
+}
+
+pub fn run_script_from_string_with_dir(
+    script: &str,
+    dir: &str,
+) -> std::io::Result<Output> {
+    let executor = get_executor();
+    executor.run_script_from_string_with_dir(script, dir)
+}
+
+pub fn run_script_from_string_streaming_with_dir(
+    script: &str,
+    dir: &str,
+) -> std::io::Result<std::process::ExitStatus> {
+    let executor = get_executor();
+    executor.run_script_from_string_streaming_with_dir(script, dir)
 }
 
 pub fn execute_command_direct(command: &str, args: &[&str]) -> std::io::Result<Output> {

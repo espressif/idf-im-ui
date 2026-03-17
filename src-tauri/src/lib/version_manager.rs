@@ -4,6 +4,7 @@ use gix::command;
 use log::debug;
 use log::error;
 use log::info;
+use semver::Op;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
@@ -408,10 +409,10 @@ pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result
 
     let activation_script = &installation.activation_script;
 
-    run_comman_using_activation_script(activation_script, command)
+    run_comman_using_activation_script(activation_script, command, None)
 }
 
-pub fn run_comman_using_activation_script(activation_script: &str, command: &str) -> anyhow::Result<ExitStatus> {
+pub fn run_comman_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
     #[cfg(not(target_os = "windows"))]
     let script = format!(
         "source \"{}\"\nshopt -s expand_aliases\n{}",
@@ -429,9 +430,17 @@ pub fn run_comman_using_activation_script(activation_script: &str, command: &str
     debug!("Running command using activation script {}", activation_script);
 
     let executor = crate::command_executor::get_executor();
-    match executor.run_script_from_string_streaming(&script) {
+    if dir.is_some() {
+        debug!("Running command in directory {}", dir.unwrap());
+        match executor.run_script_from_string_streaming_with_dir(&script, dir.unwrap()) {
+          Ok(status) => Ok(status),
+          Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+        }
+    } else {
+      match executor.run_script_from_string_streaming(&script) {
         Ok(status) => Ok(status),
         Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+      }
     }
   }
 
@@ -506,6 +515,7 @@ mod tests {
         let result = run_comman_using_activation_script(
             script_path.to_str().unwrap(),
             command,
+            None,
         );
 
         // This should succeed (may fail on Windows without cmd.exe, but that's okay)
