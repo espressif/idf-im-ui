@@ -409,10 +409,10 @@ pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result
 
     let activation_script = &installation.activation_script;
 
-    run_comman_using_activation_script(activation_script, command, None)
+    run_command_using_activation_script(activation_script, command, None)
 }
 
-pub fn run_comman_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+pub fn run_command_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
     #[cfg(not(target_os = "windows"))]
     let script = format!(
         "source \"{}\"\nshopt -s expand_aliases\n{}",
@@ -512,7 +512,7 @@ mod tests {
         #[cfg(not(target_os = "windows"))]
         let command = "echo $TEST_VAR";
 
-        let result = run_comman_using_activation_script(
+        let result = run_command_using_activation_script(
             script_path.to_str().unwrap(),
             command,
             None,

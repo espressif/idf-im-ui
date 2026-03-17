@@ -390,7 +390,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // copy IDFs
         copy_idf_from_offline_archive(archive_dir, &config)?;
         let compoments_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
-        copy_components_from_offline_archive(archive_dir, &compoments_dir)?;
+        match copy_components_from_offline_archive(archive_dir, &compoments_dir) {
+            Ok(_) => {
+                info!("{}", t!("wizard.components_copy.success"));
+            }
+            Err(err) => {
+                warn!("{}: {}", t!("wizard.components_copy.failure"), err);
+                // The component will be donwloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
+            }
+        }
     }
 
     // select target & idf version
@@ -861,13 +869,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             return Err(err.to_string());
         }
     };
-    for idf_version in config.idf_versions.clone().unwrap() {
-      let paths = config.get_version_paths(&idf_version).map_err(|err| {
-        error!("Failed to get version paths: {}", err);
-        err.to_string()
-      })?;
-      idf_im_lib::utils::synchronize_component_manager(&paths.tool_install_directory.to_string_lossy(), &paths.idf_path.to_string_lossy());
-    }
 
     match std::env::consts::OS {
         "windows" => {

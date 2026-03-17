@@ -1,6 +1,5 @@
 use flate2::read::GzDecoder;
 use std::ffi::OsStr;
-use gix::validate::path::component;
 use std::hash::{DefaultHasher, Hash,Hasher};
 use anyhow::{anyhow, Result};
 use idf_env::driver;
@@ -51,6 +50,8 @@ use std::{
     path::{Path, PathBuf},
     sync::mpsc::Sender,
 };
+
+use crate::version_manager::{run_command_using_activation_script};
 
 /// Creates an executable shell script with the given content and file path.
 ///
@@ -1907,6 +1908,24 @@ pub fn single_version_post_install(
         }
     }
 
+    let activation_script_fullname = match std::env::consts::OS {
+        "windows" => format!("{}\\Microsoft.{}.PowerShell_profile.ps1", activation_script_path, idf_version),
+        _ => format!("{}/activate_idf_{}.sh", activation_script_path, idf_version),
+    };
+    let command = format!(
+      "compote registry sync --resolution=latest --recursive {}",
+      tool_install_directory
+    );
+    match run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path)) {
+        Ok(output) => {
+            if output.success() {
+                info!("Components registry synchronized successfully");
+            } else {
+                warn!("Failed to synchronize components.");
+            }
+        }
+        Err(err) => warn!("Error running command to synchronize components registry: {:?}", err),
+    }
 }
 
 /// Returns a list of available IDF mirrors.
