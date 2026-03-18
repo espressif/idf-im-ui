@@ -187,7 +187,7 @@ export default {
       if (os.includes('linux')) {
         return 'sudo apt update && sudo apt upgrade eim'
       } else if (os.includes('darwin') || os.includes('macos')) {
-        return 'brew update && brew upgrade eim'
+        return 'brew update && brew upgrade eim-gui'
       } else if (os.includes('windows')) {
         return 'winget upgrade Espressif.eim'
       }
