@@ -586,6 +586,21 @@ pub fn copy_idf_from_offline_archive(
     }
 }
 
+pub fn copy_components_from_offline_archive(
+    archive_dir: &TempDir,
+    target_dir: &Path,
+) -> Result<(), String> {
+    match crate::utils::copy_dir_contents(&archive_dir.path().join("components"), target_dir) {
+        Ok(_) => {
+            info!("Successfully copied components from offline archive to: {}", target_dir.display());
+            Ok(())
+        }
+        Err(err) => {
+            Err(format!("Failed to copy components from offline archive: {}", err))
+        }
+    }
+}
+
 pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {
     debug!("Using offline archive: {:?}", config.use_local_archive);
     if !config.use_local_archive.as_ref().unwrap().exists() {
@@ -681,4 +696,59 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     info!("Successfully merged requirements files to: {}", output_file_path.display());
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_copy_components_from_offline_archive_success() {
+        // Create a temporary archive directory with components
+        let archive_dir = TempDir::new().unwrap();
+        let target_dir = TempDir::new().unwrap();
+
+        // Create a components directory in the archive
+        let components_src = archive_dir.path().join("components");
+        fs::create_dir_all(&components_src).unwrap();
+
+        // Add some test files
+        let test_component = components_src.join("test_component");
+        fs::create_dir_all(&test_component).unwrap();
+        fs::write(test_component.join("test.txt"), "test content").unwrap();
+
+        // Call the function
+        let result = copy_components_from_offline_archive(
+            &archive_dir,
+            target_dir.path(),
+        );
+
+        // Verify success
+        assert!(result.is_ok());
+
+        // Verify files were copied
+        let copied_component = target_dir.path().join("test_component");
+        assert!(copied_component.exists());
+        assert!(copied_component.join("test.txt").exists());
+    }
+
+    #[test]
+    fn test_copy_components_from_offline_archive_no_components_dir() {
+        // Create a temporary archive directory without components
+        let archive_dir = TempDir::new().unwrap();
+        let target_dir = TempDir::new().unwrap();
+
+        // Don't create components directory
+
+        // Call the function - should fail
+        let result = copy_components_from_offline_archive(
+            &archive_dir,
+            target_dir.path(),
+        );
+
+        // Verify failure
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to copy"));
+    }
 }

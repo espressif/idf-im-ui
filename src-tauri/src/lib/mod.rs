@@ -51,6 +51,8 @@ use std::{
     sync::mpsc::Sender,
 };
 
+use crate::version_manager::{run_command_using_activation_script};
+
 /// Creates an executable shell script with the given content and file path.
 ///
 /// # Parameters
@@ -1027,6 +1029,7 @@ pub fn setup_environment_variables(
 
     let instal_dir_string = tool_install_directory.to_str().unwrap().to_string();
     env_vars.push(("IDF_TOOLS_PATH".to_string(), instal_dir_string));
+    env_vars.push(("IDF_COMPONENT_LOCAL_STORAGE_URL".to_string(), format!("file://{}", tool_install_directory.to_str().unwrap())));
     let idf_path_string = idf_path.to_str().unwrap().to_string();
     env_vars.push(("IDF_PATH".to_string(), idf_path_string));
     env_vars.push((
@@ -1813,6 +1816,7 @@ pub fn single_version_post_install(
             }
         }
     }
+
     match std::env::consts::OS {
         "windows" => {
             // Creating desktop shortcut
@@ -1902,6 +1906,25 @@ pub fn single_version_post_install(
                 Err(err) => error!("Failed to copy OpenOCD rules: {:?}", err),
             }
         }
+    }
+
+    let activation_script_fullname = match std::env::consts::OS {
+        "windows" => format!("{}\\Microsoft.{}.PowerShell_profile.ps1", activation_script_path, idf_version),
+        _ => format!("{}/activate_idf_{}.sh", activation_script_path, idf_version),
+    };
+    let command = format!(
+      "compote registry sync --resolution=latest --recursive {}",
+      tool_install_directory
+    );
+    match run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path)) {
+        Ok(output) => {
+            if output.success() {
+                info!("Components registry synchronized successfully");
+            } else {
+                warn!("Failed to synchronize components.");
+            }
+        }
+        Err(err) => warn!("Error running command to synchronize components registry: {:?}", err),
     }
 }
 

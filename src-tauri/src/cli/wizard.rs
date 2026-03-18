@@ -6,6 +6,7 @@ use idf_im_lib::idf_features::get_requirements_json_url;
 use idf_im_lib::idf_features::RequirementsMetadata;
 use idf_im_lib::idf_tools::Tool;
 use idf_im_lib::idf_tools::ToolsFile;
+use idf_im_lib::offline_installer::copy_components_from_offline_archive;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
 use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::offline_installer::merge_requirements_files;
@@ -388,6 +389,16 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let archive_dir = offline_archive_dir.as_ref().unwrap();
         // copy IDFs
         copy_idf_from_offline_archive(archive_dir, &config)?;
+        let compoments_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+        match copy_components_from_offline_archive(archive_dir, &compoments_dir) {
+            Ok(_) => {
+                info!("{}", t!("wizard.components_copy.success"));
+            }
+            Err(err) => {
+                warn!("{}: {}", t!("wizard.components_copy.failure"), err);
+                // The component will be donwloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
+            }
+        }
     }
 
     // select target & idf version

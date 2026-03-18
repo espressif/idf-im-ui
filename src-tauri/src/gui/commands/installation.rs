@@ -1273,10 +1273,10 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     })?;
 
     // Debug: Check what config_path contains
-    info!("Config path for IDE JSON: {}", config_path.display());
-    info!("Config path exists: {}", config_path.exists());
-    info!("Config path is file: {}", config_path.is_file());
-    info!("Config path is dir: {}", config_path.is_dir());
+    debug!("Config path for IDE JSON: {}", config_path.display());
+    debug!("Config path exists: {}", config_path.exists());
+    debug!("Config path is file: {}", config_path.is_file());
+    debug!("Config path is dir: {}", config_path.is_dir());
 
     // Create a properly configured Settings object for IDE JSON saving
     let mut updated_settings = settings.clone();
