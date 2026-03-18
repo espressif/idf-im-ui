@@ -156,7 +156,7 @@ jobs:
             # DFU utility for flashing
             depends_on "dfu-util"
 
-            # ESP-IDF requires Python 3.9-3.13. We install python@3.12 as default.
+            # ESP-IDF requires Python 3.9-3.14. We install python@3.12 as default.
             # If user already has python@3.12, Homebrew won't reinstall it.
             depends_on "python@3.12"
 
@@ -169,8 +169,8 @@ jobs:
               <<~EOS
                 ESP-IDF Installation Manager (EIM) has been installed.
 
-                Python 3.12 was installed as a dependency (ESP-IDF requires Python 3.9-3.13).
-                Python 3.14+ is not yet supported.
+                Python 3.12 was installed as a dependency (ESP-IDF requires Python 3.9-3.14).
+                Python > 3.14 is not yet supported.
 
                 Shell completions have been installed.
                 They will be available in new terminal sessions.
@@ -225,8 +225,8 @@ jobs:
             caveats <<~EOS
               ESP-IDF Installation Manager (EIM) has been installed.
 
-              IMPORTANT: ESP-IDF requires Python 3.9, 3.10, 3.11, 3.12, or 3.13.
-              Python 3.14+ is not yet supported.
+              IMPORTANT: ESP-IDF requires Python 3.9, 3.10, 3.11, 3.12, 3.13 or 3.14.
+              Python > 3.14 is not yet supported.
 
               If you don't have a compatible Python version, install one with:
                 brew install python@3.12
