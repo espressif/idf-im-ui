@@ -19,6 +19,12 @@ chmod +x ./eim
 ./eim --help
 ```
 
+Alternatively, on macOS or Linux you can install EIM via [Homebrew](https://brew.sh/):
+```bash
+brew tap espressif/eim
+brew install eim
+```
+
 ## Installation Methods
 
 ### Interactive Wizard

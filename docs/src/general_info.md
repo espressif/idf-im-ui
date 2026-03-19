@@ -9,6 +9,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 > |----------|-------------------|
 > | **Windows** | [WinGet](#windows-installation) |
 > | **macOS** | [Homebrew](#macos-installation-via-homebrew) |
+> | **Linux (Homebrew)** | [Homebrew](#linux-installation-via-homebrew) |
 > | **Linux (Debian/Ubuntu)** | [APT](#debian-based-linux-installation-via-apt-repository) |
 > | **Linux (Fedora/RHEL)** | [RPM](#rpm-based-linux-installation-via-dnf-repository) |
 >
@@ -125,6 +126,42 @@ brew upgrade --cask eim-gui
 > 🧩 **Alternative:**
 > You can also download macOS `.dmg` or `.zip` installers from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
 > This page contains versions for **Windows, macOS, and Linux**, as well as **all supported ESP-IDF releases** — useful if you prefer manual setup or offline installation.
+
+---
+
+### Linux Installation (via Homebrew)
+
+<a id="linux-installation-via-homebrew"></a>
+
+EIM can also be installed on **Linux** using [Homebrew](https://brew.sh/). This method works on most Linux distributions and is a good alternative if you prefer Homebrew over system package managers.
+
+First, install Homebrew if you haven't already:
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+```
+
+Then add the Espressif tap and install EIM:
+
+```bash
+# Add the Espressif tap
+brew tap espressif/eim
+
+# Install CLI only
+brew install eim
+
+# Or install GUI (includes CLI)
+brew install --cask eim-gui
+```
+
+To update EIM later:
+```bash
+brew upgrade eim
+# or
+brew upgrade --cask eim-gui
+```
+
+> **Note:** The GUI version requires a graphical environment and may have additional dependencies depending on your Linux distribution.
 
 ---
 
