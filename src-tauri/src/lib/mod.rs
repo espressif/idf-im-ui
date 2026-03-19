@@ -1520,16 +1520,23 @@ fn decompress_tar_xz(
 ) -> Result<(), DecompressionError> {
     let file = File::open(archive_path)?;
     let mut reader = BufReader::new(file);
-    let mut decompressed_data = Vec::new();
 
-    // First decompress the XZ data
-    lzma_rs::xz_decompress(&mut reader, &mut decompressed_data)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let (pipe_reader, mut pipe_writer) = os_pipe::pipe()?;
 
-    // Then process the tar archive from the decompressed data
-    let cursor = std::io::Cursor::new(decompressed_data);
-    let mut archive = Archive::new(cursor);
-    archive.unpack(destination_path)?;
+    let decompress_thread = std::thread::spawn(move || {
+        lzma_rs::xz_decompress(&mut reader, &mut pipe_writer)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    });
+
+    let mut archive = Archive::new(pipe_reader);
+    let unpack_result = archive.unpack(destination_path);
+
+    let decompress_result = decompress_thread
+        .join()
+        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "decompressor thread panicked"))?;
+
+    unpack_result?;
+    decompress_result?;
     Ok(())
 }
 
