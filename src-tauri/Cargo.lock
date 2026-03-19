@@ -1402,6 +1402,7 @@ dependencies = [
  "lzma-rs",
  "once_cell",
  "openssl-sys",
+ "os_pipe",
  "pathdiff",
  "regex",
  "reqwest 0.13.2",

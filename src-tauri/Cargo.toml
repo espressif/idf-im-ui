@@ -151,6 +151,7 @@ indicatif = { version = "0.18", optional = true }
 # userustpython feature dependencies
 rustpython-vm = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["freeze-stdlib"], optional = true }
 rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch = "test-rust-build", features = ["ssl-vendor"], optional = true }
+os_pipe = "1.2.3"
 
 # OS-specific dependency
 [target.'cfg(target_os = "linux")'.dependencies]
