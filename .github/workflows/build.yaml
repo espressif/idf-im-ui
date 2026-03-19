@@ -29,6 +29,9 @@ jobs:
     name: Setup and Check merged PRs
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       should_run: ${{ steps.check.outputs.should_run }}
       matrix: ${{ steps.set-matrix.outputs.matrix }}
@@ -74,6 +77,8 @@ jobs:
     needs: setup
     if: (github.event_name != 'schedule' || needs.setup.outputs.should_run == 'true') && !contains(github.event.pull_request.labels.*.name, 'STOP_CI')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
@@ -128,6 +133,8 @@ jobs:
     needs: [setup, build-test-lib]
     if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -359,6 +366,8 @@ jobs:
     needs: [setup, build-test-lib, build-cli-linux]
     if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped') && (needs.build-cli-linux.result == 'success')
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       CROSS_TARGET: armv7-unknown-linux-musleabihf
     steps:
@@ -591,6 +600,8 @@ jobs:
     needs: [setup, build-test-lib]
     if: (needs.build-test-lib.result == 'success' || needs.build-test-lib.result == 'skipped')
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -905,6 +916,8 @@ jobs:
     name: Build Offline Archives
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
     if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && (needs.build-cli-linux-armv7.result == 'success' || needs.build-cli-linux-armv7.result == 'skipped') && github.event_name == 'release'
+    permissions:
+      contents: write
     uses: ./.github/workflows/build_offline_installer_archives.yaml
     with:
       ref: ${{ github.ref }}
@@ -1280,6 +1293,8 @@ jobs:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
     if: needs.build-cli.result == 'success' && needs.build-cli-linux.result == 'success'
+    permissions:
+      contents: read
     uses: ./.github/workflows/test_cli.yml
     with:
       run_id: ${{ github.run_id }}
@@ -1291,6 +1306,8 @@ jobs:
     name: Autotest GUI
     needs: [build-gui]
     if: needs.build-gui.result == 'success'
+    permissions:
+      contents: read
     uses: ./.github/workflows/test_gui.yml
     with:
       run_id: ${{ github.run_id }}
@@ -1302,6 +1319,8 @@ jobs:
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui]
     runs-on: ubuntu-latest
     if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
     steps:
       - name: Fetch latest release info
         env:
@@ -1319,6 +1338,8 @@ jobs:
   update-homebrew:
     name: Update Homebrew Formula and Cask
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
+    permissions:
+      contents: write
     uses: ./.github/workflows/update-homebrew.yml
     with:
       version: ${{ github.ref_name }}
@@ -1328,6 +1349,8 @@ jobs:
   update-linux-repos:
     name: Update APT and RPM Repositories
     needs: [build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
+    permissions:
+      contents: write
     uses: ./.github/workflows/update-linux-repos.yml
     if: github.event_name == 'release' && github.event.action == 'created'
     with:
@@ -1337,6 +1360,8 @@ jobs:
   update-windows-packages:
     name: Generate Windows Packages and Publish to WinGet
     needs: [build-cli, build-gui, update-release-info]
+    permissions:
+      contents: write
     uses: ./.github/workflows/update-windows-packages.yml
     if: github.event_name == 'release' && github.event.action == 'created'
     with:
