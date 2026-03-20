@@ -1158,6 +1158,7 @@ jobs:
 
       - name: Upload Release Assets (Linux - .rpm)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1218,6 +1219,7 @@ jobs:
 
       - name: Upload Release Assets (Windows msi)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1233,6 +1235,7 @@ jobs:
 
       - name: Upload Release Assets (Linux - .deb)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1241,6 +1244,7 @@ jobs:
 
       - name: Upload Release Assets (Linux - .AppImage)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -1256,6 +1260,7 @@ jobs:
 
       - name: Upload Release Assets (macOS - dmg)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
