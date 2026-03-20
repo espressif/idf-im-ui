@@ -214,13 +214,9 @@ jobs:
 
       - name: Upload Release Asset - Unix
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/eim.zip
-          asset_name: eim-cli-${{ matrix.package_name }}.zip
+        run: |
+          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
+          gh release upload "${{ github.event.release.upload_url }}" eim-cli-${{ matrix.package_name }}.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -245,13 +241,9 @@ jobs:
 
       - name: Upload offline_installer_builder Release Asset - Unix
         if: github.event_name == 'release' && github.event.action == 'created'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.zip
-          asset_name: offline_installer_builder-${{ matrix.package_name }}.zip
+        run: |
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}.zip
+          gh release upload "${{ github.event.release.upload_url }}" offline_installer_builder-${{ matrix.package_name }}.zip --clobber
 
       - name: Prepare manpage for deb package
         if: github.event_name == 'release' && github.event.action == 'created'
@@ -289,13 +281,9 @@ jobs:
 
       - name: Upload CLI .deb Release Asset
         if: github.event_name == 'release' && github.event.action == 'created'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/debian/eim*.deb
-          asset_name: eim-cli-${{ matrix.package_name }}.deb
+        run: |
+          DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$DEB_FILE" --clobber
 
       - name: Build CLI .rpm package
         run: |
@@ -353,13 +341,9 @@ jobs:
 
       - name: Upload CLI .rpm Release Assets
         if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: rpm_output/*.rpm
-          asset_name: eim-cli-${{ matrix.package_name }}.rpm
+        run: |
+          RPM_FILE=$(ls rpm_output/*.rpm | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$RPM_FILE" --clobber
 
   build-cli-linux-armv7:
     name: Build CLI (Linux - linux-armv7)
@@ -449,13 +433,9 @@ jobs:
 
       - name: Upload Release Asset
         if: github.event_name == 'release' && github.event.action == 'created'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/linux-armv7/eim.zip
-          asset_name: eim-cli-linux-armv7.zip
+        run: |
+          cp release_cli/linux-armv7/eim.zip eim-cli-linux-armv7.zip
+          gh release upload "${{ github.event.release.upload_url }}" eim-cli-linux-armv7.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -484,13 +464,9 @@ jobs:
 
       - name: Upload offline_installer_builder Release Asset
         if: github.event_name == 'release' && github.event.action == 'created'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/linux-armv7/offline_installer_builder.zip
-          asset_name: offline_installer_builder-linux-armv7.zip
+        run: |
+          cp release_cli/linux-armv7/offline_installer_builder.zip offline_installer_builder-linux-armv7.zip
+          gh release upload "${{ github.event.release.upload_url }}" offline_installer_builder-linux-armv7.zip --clobber
 
       # .deb package
       - name: Prepare manpage for deb package
@@ -527,13 +503,9 @@ jobs:
 
       - name: Upload CLI .deb Release Asset
         if: github.event_name == 'release' && github.event.action == 'created'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/debian/eim*.deb
-          asset_name: eim-cli-linux-armv7.deb
+        run: |
+          DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$DEB_FILE" --clobber
 
       # .rpm package
       - name: Build CLI .rpm package
@@ -587,13 +559,9 @@ jobs:
 
       - name: Upload CLI .rpm Release Asset
         if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: rpm_output/*.rpm
-          asset_name: eim-cli-linux-armv7.rpm
+        run: |
+          RPM_FILE=$(ls rpm_output/*.rpm | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$RPM_FILE" --clobber
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -789,23 +757,14 @@ jobs:
 
       - name: Upload Release Asset - MacOs
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/eim.zip
-          asset_name: eim-cli-${{ matrix.package_name }}.zip
+        run: |
+          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
+          gh release upload "${{ github.event.release.upload_url }}" eim-cli-${{ matrix.package_name }}.zip --clobber
 
       - name: Upload Release Asset (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/eim.exe
-          asset_name: eim-cli-${{ matrix.package_name }}.exe
+        run: |
+          gh release upload "${{ github.event.release.upload_url }}" release_cli/${{ matrix.package_name }}/eim.exe --clobber
 
       - name: Build offline_installer_builder (Windows)
         if: runner.os == 'Windows'
@@ -894,23 +853,14 @@ jobs:
 
       - name: Upload offline_installer_builder Release Asset - MacOs
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.zip
-          asset_name: offline_installer_builder-${{ matrix.package_name }}.zip
+        run: |
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}.zip
+          gh release upload "${{ github.event.release.upload_url }}" offline_installer_builder-${{ matrix.package_name }}.zip --clobber
 
       - name: Upload offline_installer_builder Release Asset (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: release_cli/${{ matrix.package_name }}/offline_installer_builder.exe
-          asset_name: offline_installer_builder-${{ matrix.package_name }}.exe
+        run: |
+          gh release upload "${{ github.event.release.upload_url }}" release_cli/${{ matrix.package_name }}/offline_installer_builder.exe --clobber
 
   build-offline-archives:
     name: Build Offline Archives
@@ -1163,13 +1113,9 @@ jobs:
 
       - name: Upload Release Assets (Linux - .rpm)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: gui_rpm_output/*.rpm
-          asset_name: eim-gui-${{ matrix.package_name }}.rpm
+        run: |
+          RPM_FILE=$(ls gui_rpm_output/*.rpm | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$RPM_FILE" --clobber
 
       - name: Upload Linux artifacts - .AppImage
         if: startsWith(matrix.os, 'ubuntu')
@@ -1221,73 +1167,42 @@ jobs:
 
       - name: Upload Release Assets (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/eim.exe
-          asset_name: eim-gui-${{ matrix.package_name }}.exe
+        run: |
+          gh release upload "${{ github.event.release.upload_url }}" src-tauri/target/release/eim.exe --clobber
 
       - name: Upload Release Assets (Windows msi)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/msi/*.msi
-          asset_name: eim-gui-${{ matrix.package_name }}.msi
+        run: |
+          MSI_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$MSI_FILE" --clobber
 
       - name: Upload Release Assets (Linux)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/eim.zip
-          asset_name: eim-gui-${{ matrix.package_name }}.zip
+        run: |
+          gh release upload "${{ github.event.release.upload_url }}" src-tauri/target/release/eim.zip --clobber
 
       - name: Upload Release Assets (Linux - .deb)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/deb/*.deb
-          asset_name: eim-gui-${{ matrix.package_name }}.deb
+        run: |
+          DEB_FILE=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$DEB_FILE" --clobber
 
       - name: Upload Release Assets (Linux - .AppImage)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/deb/*.AppImage
-          asset_name: eim-gui-${{ matrix.package_name }}.AppImage
+        run: |
+          APPIMAGE_FILE=$(ls src-tauri/target/release/bundle/deb/*.AppImage | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$APPIMAGE_FILE" --clobber
 
       - name: Upload Release Assets (macOS)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/macos/eim.zip
-          asset_name: eim-gui-${{ matrix.package_name }}.zip
+        run: |
+          gh release upload "${{ github.event.release.upload_url }}" src-tauri/target/release/bundle/macos/eim.zip --clobber
 
       - name: Upload Release Assets (macOS - dmg)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
-        uses: shogo82148/actions-upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: src-tauri/target/release/bundle/dmg/*.dmg
-          asset_name: eim-gui-${{ matrix.package_name }}.dmg
+        run: |
+          DMG_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          gh release upload "${{ github.event.release.upload_url }}" "$DMG_FILE" --clobber
 
   Autotest-CLI:
     name: Autotest CLI
