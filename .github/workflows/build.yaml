@@ -292,7 +292,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$DEB_FILE" --clobber
+          cp "$DEB_FILE" "eim-cli-${{ matrix.package_name }}.deb"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.deb" --clobber
 
       - name: Build CLI .rpm package
         run: |
@@ -354,7 +355,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RPM_FILE=$(ls rpm_output/*.rpm | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$RPM_FILE" --clobber
+          cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --clobber
 
   build-cli-linux-armv7:
     name: Build CLI (Linux - linux-armv7)
@@ -527,7 +529,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$DEB_FILE" --clobber
+          cp "$DEB_FILE" "eim-cli-linux-armv7.deb"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-linux-armv7.deb" --clobber
 
       # .rpm package
       - name: Build CLI .rpm package
@@ -585,7 +588,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RPM_FILE=$(ls rpm_output/*.rpm | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$RPM_FILE" --clobber
+          cp "$RPM_FILE" "eim-cli-linux-armv7.rpm"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-linux-armv7.rpm" --clobber
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -803,7 +807,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" release_cli/${{ matrix.package_name }}/eim.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.exe --clobber
 
       - name: Build offline_installer_builder (Windows)
         if: runner.os == 'Windows'
@@ -902,7 +907,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" release_cli/${{ matrix.package_name }}/offline_installer_builder.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.exe --clobber
 
   build-offline-archives:
     name: Build Offline Archives
@@ -1163,7 +1169,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RPM_FILE=$(ls gui_rpm_output/*.rpm | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$RPM_FILE" --clobber
+          cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --clobber
 
       - name: Upload Linux artifacts - .AppImage
         if: startsWith(matrix.os, 'ubuntu')
@@ -1215,7 +1222,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" src-tauri/target/release/eim.exe --clobber
+          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}.exe"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.exe" --clobber
 
       - name: Upload Release Assets (Windows msi)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
@@ -1224,14 +1232,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           MSI_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$MSI_FILE" --clobber
+          cp "$MSI_FILE" "eim-gui-${{ matrix.package_name }}.msi"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.msi" --clobber
 
       - name: Upload Release Assets (Linux)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" src-tauri/target/release/eim.zip --clobber
+          cp src-tauri/target/release/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
 
       - name: Upload Release Assets (Linux - .deb)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
@@ -1240,7 +1250,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DEB_FILE=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$DEB_FILE" --clobber
+          cp "$DEB_FILE" "eim-gui-${{ matrix.package_name }}.deb"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.deb" --clobber
 
       - name: Upload Release Assets (Linux - .AppImage)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
@@ -1249,14 +1260,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           APPIMAGE_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$APPIMAGE_FILE" --clobber
+          cp "$APPIMAGE_FILE" "eim-gui-${{ matrix.package_name }}.AppImage"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.AppImage" --clobber
 
       - name: Upload Release Assets (macOS)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" src-tauri/target/release/bundle/macos/eim.zip --clobber
+          cp src-tauri/target/release/bundle/macos/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
 
       - name: Upload Release Assets (macOS - dmg)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
@@ -1265,7 +1278,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DMG_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
-          gh release upload "${{ github.event.release.tag_name }}" "$DMG_FILE" --clobber
+          cp "$DMG_FILE" "eim-gui-${{ matrix.package_name }}.dmg"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.dmg" --clobber
 
   Autotest-CLI:
     name: Autotest CLI
