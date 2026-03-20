@@ -154,7 +154,7 @@ jobs:
       - name: Install dependencies
         run: |
           apt-get update
-          apt-get install -y libssl-dev patchelf zip xdg-utils
+          apt-get install -y libssl-dev patchelf zip xdg-utils gh
 
       - name: Build CLI
         env:
@@ -357,6 +357,11 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          apt-get update
+          apt-get install -y gh
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -755,6 +760,11 @@ jobs:
           name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
 
+      - name: Install gh (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install gh
+
       - name: Upload Release Asset - MacOs
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
         run: |
@@ -912,7 +922,12 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf xdg-utils
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev patchelf xdg-utils gh
+
+      - name: Install gh (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install gh
 
       - name: Cache cargo
         uses: actions/cache@v4
