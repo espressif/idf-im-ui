@@ -15,6 +15,7 @@ use tar::Archive;
 use thiserror::Error;
 use utils::{find_directories_by_name};
 use zip::ZipArchive;
+use std::io::Seek;
 
 /// Simple template renderer - replaces {{variable}} placeholders with values
 /// This is a lightweight replacement for tera, using only std library
@@ -1521,22 +1522,14 @@ fn decompress_tar_xz(
     let file = File::open(archive_path)?;
     let mut reader = BufReader::new(file);
 
-    let (pipe_reader, mut pipe_writer) = os_pipe::pipe()?;
+    let mut temp = tempfile::tempfile()?;
+    lzma_rs::xz_decompress(&mut reader, &mut temp)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
 
-    let decompress_thread = std::thread::spawn(move || {
-        lzma_rs::xz_decompress(&mut reader, &mut pipe_writer)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-    });
+    temp.seek(std::io::SeekFrom::Start(0))?;
+    let mut archive = Archive::new(BufReader::new(temp));
+    archive.unpack(destination_path)?;
 
-    let mut archive = Archive::new(pipe_reader);
-    let unpack_result = archive.unpack(destination_path);
-
-    let decompress_result = decompress_thread
-        .join()
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "decompressor thread panicked"))?;
-
-    unpack_result?;
-    decompress_result?;
     Ok(())
 }
 
