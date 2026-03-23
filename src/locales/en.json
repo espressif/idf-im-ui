@@ -505,7 +505,7 @@
       },
       "setupRequired": {
         "title": "Python Setup Required",
-        "description": "Python >= 3.10 < 3.14 with pip, virtualenv, and SSL support is required"
+        "description": "Python >= 3.10 < 3.14 with pip, venv, and SSL support is required"
       }
     },
     "actions": {
@@ -521,7 +521,7 @@
       "requirements": {
         "python": "Python 3.10 or later",
         "pip": "pip package manager",
-        "virtualenv": "virtualenv module",
+        "virtualenv": "venv module",
         "ssl": "SSL support"
       }
     }
