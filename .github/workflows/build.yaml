@@ -615,8 +615,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Rust (nightly for macos-latest)
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Set up Rust (stable for macos-latest)
+        uses: dtolnay/rust-toolchain@stable
         if: matrix.os == 'macos-latest'
         with:
           targets: ${{ matrix.target }}
@@ -824,9 +824,13 @@ jobs:
 
       - name: Build offline_installer_builder (macOS)
         if: startsWith(matrix.os, 'macos')
+        env:
+          LIBZ_SYS_STATIC: 1
+          ZLIB_STATIC: 1
+          LZMA_API_STATIC: 1
         run: |
           cd src-tauri
-          cargo build --release --no-default-features --features offline --bin offline_installer_builder ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
+          unset PKG_CONFIG_PATH && cargo build --release --no-default-features --features offline --bin offline_installer_builder ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
         shell: bash
 
       - name: Copy offline_installer_builder binary (Windows)
