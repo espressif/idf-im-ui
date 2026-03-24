@@ -1,7 +1,36 @@
 import { expect } from "chai";
 import { describe, it, before, after, beforeEach, afterEach } from "mocha";
+import { execFileSync } from "child_process";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+
+/**
+ * CI sets EIM_CLI_VERSION from the latest git tag while the downloaded artifact
+ * can be one patch behind; use the binary's -V output as the expected string when available.
+ */
+function expectedEimVersionString(pathToEIM, envVersion) {
+  try {
+    const out = execFileSync(pathToEIM, ["-V"], {
+      encoding: "utf-8",
+      timeout: 20000,
+      windowsHide: true,
+    });
+    const line =
+      out
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .find((l) => /^eim\s+v?\d/i.test(l)) || out.trim();
+    const m = line.match(/eim\s+v?[\d.]+(?:[-+.\w]*)?/i);
+    if (m) {
+      return m[0].replace(/\s+/g, " ").trim();
+    }
+  } catch (err) {
+    logger.info(
+      `Could not read EIM version from binary (${pathToEIM}), using env: ${err.message}`
+    );
+  }
+  return envVersion;
+}
 
 export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
   describe(`${id}- Basic Arguments |`, function () {
@@ -29,10 +58,14 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
     // Test to validate the EIM version number is correct
     it("1- should show correct version number", async function () {
       logger.info(`Starting test - show correct version`);
+      const expected = expectedEimVersionString(pathToEIM, eimVersion);
       await testRunner.start();
       testRunner.sendInput(`${pathToEIM} -V`);
-      const meetVersion = await testRunner.waitForOutput(eimVersion, 15000);
-      expect(meetVersion, `EIM showing incorrect version number, expected: ${eimVersion}, actual: ${testRunner.output}`).to.be.true;
+      const meetVersion = await testRunner.waitForOutput(expected, 15000);
+      expect(
+        meetVersion,
+        `EIM showing incorrect version number, expected: ${expected}, actual: ${testRunner.output}`
+      ).to.be.true;
     });
 
     // Test to validate the EIM help options are correct

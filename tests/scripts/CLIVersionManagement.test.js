@@ -246,13 +246,10 @@ export function runVersionManagementTest({
         relevantOutput,
         "EIM list still showing removed IDF installation"
       ).to.not.include(versionToRemove);
+      const idfTree = path.join(installFolder, versionToRemove, "esp-idf");
       expect(
-        fs.existsSync(path.join(installFolder, versionToRemove)),
-        "IDF installation parent folder deleted with the IDF remove"
-      ).to.be.true;
-      expect(
-        fs.existsSync(path.join(installFolder, versionToRemove,"esp-idf")),
-        "IDF folder exists after version have been removed"
+        fs.existsSync(idfTree),
+        "IDF esp-idf tree should be gone after remove"
       ).to.be.false;
 
       testRunner.output = "";

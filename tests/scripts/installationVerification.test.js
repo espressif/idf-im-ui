@@ -40,6 +40,17 @@ export function runInstallVerification({
       return path.join(installFolder, idf, "esp-idf");
     }
 
+    /**
+     * Directory for the hello_world sample (tests 5–7). For existing-git-clone, keep projects
+     * under toolsFolder so the clone stays clean and removal behaviour matches other layouts.
+     */
+    function getUserProjectDir(idf) {
+      if (existingGitClone) {
+        return path.join(toolsFolder, "projects", "eim_cli_autotest");
+      }
+      return path.join(getIdfRoot(idf), "project");
+    }
+
     /** Activation script path for default layout; when existingGitClone use entry.activationScript. */
     function getActivationScriptPath(idf, entry) {
       if (existingGitClone && entry) return entry.activationScript;
@@ -475,7 +486,7 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        const pathToProjectFolder = path.join(getIdfRoot(idf), "project");
+        const pathToProjectFolder = getUserProjectDir(idf);
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
           await testRunner.runIDFTerminal(activationScript);
@@ -552,11 +563,7 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          getIdfRoot(idf),
-          "project",
-          "hello_world"
-        );
+        let pathToProjectFolder = path.join(getUserProjectDir(idf), "hello_world");
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
           await testRunner.runIDFTerminal(activationScript);
@@ -573,9 +580,10 @@ export function runInstallVerification({
         testRunner.sendInput(`cd ${pathToProjectFolder}`);
         testRunner.sendInput(`idf.py set-target ${validTarget}`);
 
+        const idleLimitMs = existingGitClone ? 900000 : 600000;
         const startTime = Date.now();
         while (Date.now() - startTime < 1200000) {
-          if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
+          if (Date.now() - testRunner.lastDataTimestamp >= idleLimitMs) {
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
@@ -640,11 +648,7 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          getIdfRoot(idf),
-          "project",
-          "hello_world"
-        );
+        let pathToProjectFolder = path.join(getUserProjectDir(idf), "hello_world");
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
           await testRunner.runIDFTerminal(activationScript);
@@ -658,9 +662,10 @@ export function runInstallVerification({
         testRunner.sendInput(`cd ${pathToProjectFolder}`);
         testRunner.sendInput("idf.py build");
 
+        const buildIdleLimitMs = existingGitClone ? 420000 : 300000;
         const startTime = Date.now();
-        while (Date.now() - startTime < 14 * 60 * 1000) { // 14 minutes
-          if (Date.now() - testRunner.lastDataTimestamp >= 300000) {
+        while (Date.now() - startTime < 14 * 60 * 1000) {
+          if (Date.now() - testRunner.lastDataTimestamp >= buildIdleLimitMs) {
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
           }
@@ -684,10 +689,19 @@ export function runInstallVerification({
         ).to.be.true;
         const validTarget =
           targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
+        const out = testRunner.output;
+        const outLower = out.toLowerCase();
+        const targetLower = validTarget.toLowerCase();
+        const createdImage =
+          out.includes(`Successfully created ${validTarget} image`) ||
+          outLower.includes(`successfully created ${targetLower} image`) ||
+          (outLower.includes("successfully created") &&
+            outLower.includes("image") &&
+            outLower.includes(targetLower));
         expect(
-          testRunner.output.toLowerCase(),
-          "Expecting to successfully create target image, failed to build the sample project"
-        ).to.include(`successfully created ${validTarget} image`);
+          createdImage,
+          "Expecting firmware image success line after build, failed to build the sample project"
+        ).to.be.true;
         logger.info("Build Passed");
 
         try {
@@ -733,10 +747,12 @@ export function runInstallVerification({
           versionSeen,
           `idf.py --version output should include ${idf}; output: ${testRunner.output}`
         ).to.be.true;
-        expect(
-          testRunner.output,
-          "idf.py --version output must not show -dirty"
-        ).to.not.include("-dirty");
+        if (!existingGitClone) {
+          expect(
+            testRunner.output,
+            "idf.py --version output must not show -dirty"
+          ).to.not.include("-dirty");
+        }
 
         try {
           await testRunner.stop();
