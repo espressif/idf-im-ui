@@ -491,14 +491,12 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                 }
                 None => {
                     return Err(format!(
-                        "Unsupported package manager - {}",
-                        package_manager.unwrap()
+                        "Unsupported package manager",
                     ));
                 }
                 _ => {
                     return Err(format!(
-                        "Unsupported package manager - {}",
-                        package_manager.unwrap()
+                        "Unsupported package manager",
                     ));
                 }
             }
@@ -841,8 +839,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 _ => {
                     return Err(format!(
-                        "Unsupported package manager - {}",
-                        package_manager.unwrap()
+                        "Unsupported package manager"
                     ));
                 }
             }
