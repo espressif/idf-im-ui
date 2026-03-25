@@ -702,12 +702,7 @@ pub fn get_scoop_git_path() -> Option<String> {
                 return None;
             }
         };
-        let scoop_git_path = home_dir
-            .join("scoop")
-            .join("apps")
-            .join("git")
-            .join("current")
-            .join("bin");
+        let scoop_git_path = home_dir.join("scoop").join("apps").join("git").join("current").join("bin");
         Some(scoop_git_path.to_string_lossy().to_string())
     } else {
         None
@@ -785,9 +780,7 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
             add_to_path(&path_with_scoop).unwrap();
 
             let executor = command_executor::get_executor();
-            let output = executor.run_script_from_string(
-                "if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
-            );
+            let output = executor.run_script_from_string("if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }");
             match output {
                 Ok(o) => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
@@ -910,8 +903,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
         "macos" => {
             for package in packages_list {
-                let output =
-                    command_executor::execute_command_direct("brew", &["install", &package]);
+                let output = command_executor::execute_command_direct("brew", &["install", &package]);
                 match output {
                     Ok(_) => {
                         debug!("Successfully installed {}", package);
@@ -952,10 +944,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                         } else {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             let stdout = String::from_utf8_lossy(&o.stdout);
-                            debug!(
-                                "Failed to add versions bucket to scoop: {} {}",
-                                stderr, stdout
-                            );
+                            debug!("Failed to add versions bucket to scoop: {} {}", stderr, stdout);
                         }
                     }
                     Err(e) => {
@@ -981,10 +970,7 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             debug!("Failed to install {}: {}", package, stderr);
                             debug!("Output: {}", stdout);
-                            return Err(format!(
-                                "Failed to install {}: {} {}",
-                                package, stderr, stdout
-                            ));
+                            return Err(format!("Failed to install {}: {} {}", package, stderr, stdout));
                         }
                     }
                     Err(e) => panic!("Failed to install {}: {}", package, e),
@@ -1005,10 +991,7 @@ pub fn get_correct_powershell_command() -> String {
                 debug!("Powershell core is available: {:?}", o.stdout);
                 "pwsh".to_string()
             } else {
-                debug!(
-                    "Powershell core check failed: {:?}, {:?}",
-                    o.stdout, o.stderr
-                );
+                debug!("Powershell core check failed: {:?}, {:?}", o.stdout, o.stderr);
                 "powershell".to_string()
             }
         }
