@@ -68,7 +68,7 @@ fn determine_package_manager() -> Option<&'static str> {
     // Fallback: probe for package manager binaries (excluding dpkg to avoid
     // false positives on non-Debian systems where dpkg is installed as a
     // standalone tool)
-    let package_managers = vec!["apt", "dnf", "pacman", "zypper"];
+    let package_managers = vec!["apt", "dnf", "emerge", "pacman", "zypper"];
 
     for manager in package_managers {
         let output = command_executor::execute_command(manager, &["--version"]);
@@ -148,6 +148,8 @@ fn map_distro_to_package_manager(distro: &str) -> Option<&'static str> {
         "arch" | "manjaro" | "endeavouros" | "garuda" | "artix" | "cachyos" => Some("pacman"),
         // SUSE-based
         "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" | "sled" => Some("zypper"),
+        // Portage-based (emerge)
+        "gentoo" => Some("emerge"),
         _ => None,
     }
 }
@@ -239,6 +241,11 @@ pub fn get_prequisites() -> Vec<&'static str> {
 ///   - `libusb`: Runtime library for USB device access.
 ///   - `openssl-devel`: Development headers for OpenSSL.
 ///
+/// - **emerge (Gentoo Linux):**
+///   - `dev-libs/libffi`: Development headers for Foreign Function Interface.
+///   - `dev-libs/libusb`: Runtime library for USB device access.
+///   - `dev-libs/openssl`: Includes both runtime and development files for OpenSSL.
+///
 /// - **pacman (Arch Linux):**
 ///   - `libusb`: Includes both runtime and development files for USB access.
 ///   - `libffi`: Includes both runtime and development files for Foreign Function Interface.
@@ -256,6 +263,7 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
         "linux" => match determine_package_manager() {
             Some("apt") => vec!["libffi-dev", "libusb-1.0-0", "libssl-dev"],
             Some("dnf") => vec!["libffi-devel", "libusb", "openssl-devel"],
+            Some("emerge") => vec!["dev-libs/libffi", "dev-libs/libusb", "dev-libs/openssl"],
             Some("pacman") => vec!["libusb", "libffi", "openssl"],
             Some("zypper") => vec!["libusb-1_0-0", "libffi-devel", "libopenssl-devel"],
             _ => vec![],
@@ -293,6 +301,13 @@ pub fn get_general_prerequisites_based_on_package_manager() -> Vec<&'static str>
 ///   - `SDL2`: Runtime library for SDL2 (QEMU dependency).
 ///   - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 ///
+/// - **emerge (Gentoo Linux):**
+///   - `dev-libs/libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
+///   - `dev-libs/glib`: Runtime library for GLib (QEMU dependency).
+///   - `x11-libs/pixman`: Runtime library for pixman (QEMU dependency).
+///   - `media-libs/libsdl2`: Runtime library for SDL2 (QEMU dependency).
+///   - `net-libs/libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
+///
 /// - **pacman (Arch Linux):**
 ///   - `libgcrypt`: Runtime library for cryptographic functions (QEMU dependency).
 ///   - `glib`: Runtime library for GLib (QEMU dependency).
@@ -325,8 +340,14 @@ pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
                 "libsdl2-2.0-0",
                 "libslirp0",
             ],
-
             Some("dnf") => vec!["libgcrypt", "glib2", "pixman", "SDL2", "libslirp"],
+            Some("emerge") => vec![
+                "dev-libs/libgcrypt",
+                "dev-libs/glib",
+                "x11-libs/pixman",
+                "media-libs/libsdl2",
+                "net-libs/libslirp",
+            ],
             Some("pacman") => vec!["libgcrypt", "glib", "pixman", "sdl2", "libslirp"],
             Some("zypper") => vec![
                 "libgcrypt20",
@@ -428,12 +449,31 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                         }
                     }
                 }
-
                 Some("dnf") => {
                     for tool in list_of_required_tools {
                         let output = command_executor::execute_command(
                             "sh",
                             &["-c", &format!("rpm -qa | grep -i {}", tool)],
+                        );
+                        match output {
+                            Ok(o) => {
+                                if o.status.success() {
+                                    debug!("{} is already installed: {:?}", tool, o);
+                                } else {
+                                    unsatisfied.push(tool);
+                                }
+                            }
+                            Err(_e) => {
+                                unsatisfied.push(tool);
+                            }
+                        }
+                    }
+                }
+                Some("emerge") => {
+                    for tool in list_of_required_tools {
+                        let output = command_executor::execute_command(
+                            "sh",
+                            &["-c", &format!("emerge --info {0} | grep \".*{0}.* was built with the following:\"", tool)],
                         );
                         match output {
                             Ok(o) => {
@@ -662,7 +702,12 @@ pub fn get_scoop_git_path() -> Option<String> {
                 return None;
             }
         };
-        let scoop_git_path = home_dir.join("scoop").join("apps").join("git").join("current").join("bin");
+        let scoop_git_path = home_dir
+            .join("scoop")
+            .join("apps")
+            .join("git")
+            .join("current")
+            .join("bin");
         Some(scoop_git_path.to_string_lossy().to_string())
     } else {
         None
@@ -740,7 +785,9 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
             add_to_path(&path_with_scoop).unwrap();
 
             let executor = command_executor::get_executor();
-            let output = executor.run_script_from_string("if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }");
+            let output = executor.run_script_from_string(
+                "if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }",
+            );
             match output {
                 Ok(o) => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
@@ -811,6 +858,20 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                         }
                     }
                 }
+                Some("emerge") => {
+                    for package in packages_list {
+                        let output = command_executor::execute_command_direct(
+                            "sudo",
+                            &["emerge", "--verbose", &package],
+                        );
+                        match output {
+                            Ok(_) => {
+                                debug!("Successfully installed {}", package);
+                            }
+                            Err(e) => panic!("Failed to install {}: {}", package, e),
+                        }
+                    }
+                }
                 Some("pacman") => {
                     for package in packages_list {
                         let output = command_executor::execute_command_direct(
@@ -849,7 +910,8 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
         "macos" => {
             for package in packages_list {
-                let output = command_executor::execute_command_direct("brew", &["install", &package]);
+                let output =
+                    command_executor::execute_command_direct("brew", &["install", &package]);
                 match output {
                     Ok(_) => {
                         debug!("Successfully installed {}", package);
@@ -890,7 +952,10 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                         } else {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             let stdout = String::from_utf8_lossy(&o.stdout);
-                            debug!("Failed to add versions bucket to scoop: {} {}", stderr, stdout);
+                            debug!(
+                                "Failed to add versions bucket to scoop: {} {}",
+                                stderr, stdout
+                            );
                         }
                     }
                     Err(e) => {
@@ -916,7 +981,10 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                             let stderr = String::from_utf8_lossy(&o.stderr);
                             debug!("Failed to install {}: {}", package, stderr);
                             debug!("Output: {}", stdout);
-                            return Err(format!("Failed to install {}: {} {}", package, stderr, stdout));
+                            return Err(format!(
+                                "Failed to install {}: {} {}",
+                                package, stderr, stdout
+                            ));
                         }
                     }
                     Err(e) => panic!("Failed to install {}: {}", package, e),
@@ -933,13 +1001,16 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
 pub fn get_correct_powershell_command() -> String {
     match command_executor::execute_command_direct("pwsh", &["--version"]) {
         Ok(o) => {
-          if (o.status.success()) {
-            debug!("Powershell core is available: {:?}", o.stdout);
-            "pwsh".to_string()
-          } else {
-            debug!("Powershell core check failed: {:?}, {:?}", o.stdout, o.stderr);
-            "powershell".to_string()
-          }
+            if (o.status.success()) {
+                debug!("Powershell core is available: {:?}", o.stdout);
+                "pwsh".to_string()
+            } else {
+                debug!(
+                    "Powershell core check failed: {:?}, {:?}",
+                    o.stdout, o.stderr
+                );
+                "powershell".to_string()
+            }
         }
         Err(_) => {
             debug!("Powershell core not found, using powershell");
