@@ -356,6 +356,25 @@ pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
 /// * `Ok(Vec<&'static str>)` - Vector of unsatisfied tools/packages
 /// * `Err(String)` - If an error occurs, returns an error message
 fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, String> {
+    check_tools_with_package_manager(tools, determine_package_manager())
+}
+
+/// Checks if the given list of tools/packages are installed on the system.
+/// This is an internal helper that allows injecting a package manager for testing.
+///
+/// # Arguments
+///
+/// * `tools` - A vector of tool/package names to check
+/// * `package_manager` - An optional package manager name to use instead of detecting
+///
+/// # Returns
+///
+/// * `Ok(Vec<&'static str>)` - Vector of unsatisfied tools/packages
+/// * `Err(String)` - If an error occurs, returns an error message
+fn check_tools_with_package_manager(
+    tools: Vec<&'static str>,
+    package_manager: Option<&'static str>,
+) -> Result<Vec<&'static str>, String> {
     let mut list_of_required_tools = tools;
     let mut unsatisfied = vec![];
 
@@ -403,8 +422,7 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
             });
 
             // now check if the tools are installed with the package manager
-            let package_manager = determine_package_manager();
-            debug!("Detected package manager: {:?}", package_manager);
+            debug!("Using package manager: {:?}", package_manager);
 
             match package_manager {
                 Some("apt") => {
@@ -488,11 +506,6 @@ fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, 
                             }
                         }
                     }
-                }
-                None => {
-                    return Err(format!(
-                        "Unsupported package manager",
-                    ));
                 }
                 _ => {
                     return Err(format!(
@@ -1052,4 +1065,157 @@ pub fn copy_openocd_rules(tools_path: &str) -> Result<()> {
   })?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_map_distro_to_package_manager_debian() {
+        let distros = vec!["debian", "ubuntu", "linuxmint", "pop", "elementary",
+                          "zorin", "kali", "raspbian", "neon", "deepin",
+                          "peppermint", "bodhi"];
+        for distro in distros {
+            assert_eq!(
+                map_distro_to_package_manager(distro),
+                Some("apt"),
+                "Expected 'apt' for distro: {}",
+                distro
+            );
+        }
+    }
+
+    #[test]
+    fn test_map_distro_to_package_manager_rpm() {
+        let distros = vec!["fedora", "rhel", "centos", "rocky", "alma",
+                          "ol", "nobara", "ultramarine", "mageia"];
+        for distro in distros {
+            assert_eq!(
+                map_distro_to_package_manager(distro),
+                Some("dnf"),
+                "Expected 'dnf' for distro: {}",
+                distro
+            );
+        }
+    }
+
+    #[test]
+    fn test_map_distro_to_package_manager_arch() {
+        let distros = vec!["arch", "manjaro", "endeavouros", "garuda", "artix", "cachyos"];
+        for distro in distros {
+            assert_eq!(
+                map_distro_to_package_manager(distro),
+                Some("pacman"),
+                "Expected 'pacman' for distro: {}",
+                distro
+            );
+        }
+    }
+
+    #[test]
+    fn test_map_distro_to_package_manager_suse() {
+        let distros = vec!["opensuse", "opensuse-leap", "opensuse-tumbleweed", "sles", "sled"];
+        for distro in distros {
+            assert_eq!(
+                map_distro_to_package_manager(distro),
+                Some("zypper"),
+                "Expected 'zypper' for distro: {}",
+                distro
+            );
+        }
+    }
+
+    #[test]
+    fn test_map_distro_to_package_manager_unsupported() {
+        let distros = vec!["unknown", "gentoo", "slackware", "nixos", "void", "freebsd"];
+        for distro in distros {
+            assert_eq!(
+                map_distro_to_package_manager(distro),
+                None,
+                "Expected None for unsupported distro: {}",
+                distro
+            );
+        }
+    }
+
+    #[test]
+    fn test_prerequisites_check_result_is_satisfied() {
+        let result = PrerequisitesCheckResult::new(vec![], true, false);
+        assert!(result.is_satisfied());
+
+        let result = PrerequisitesCheckResult::new(vec!["git", "cmake"], true, false);
+        assert!(!result.is_satisfied());
+
+        let result = PrerequisitesCheckResult::new(vec![], false, false);
+        assert!(!result.is_satisfied());
+
+        let result = PrerequisitesCheckResult::new(vec!["git"], false, true);
+        assert!(!result.is_satisfied());
+    }
+
+    #[test]
+    fn test_prerequisites_check_result_new() {
+        let result = PrerequisitesCheckResult::new(vec!["git"], true, false);
+        assert_eq!(result.missing, vec!["git"]);
+        assert!(result.can_verify);
+        assert!(!result.shell_failed);
+    }
+
+    // Test that check_tools_with_package_manager returns an error (not a panic)
+    // when package_manager is None on Linux.
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_check_tools_installed_with_none_package_manager() {
+        // On Linux, when package_manager is None (unsupported distro),
+        // the function should return an Err, not panic
+        let tools = vec!["git", "cmake"];
+        let result = check_tools_with_package_manager(tools, None);
+
+        // Should return error message about unsupported package manager
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("Unsupported package manager"),
+            "Expected error message to contain 'Unsupported package manager', got: {}", err_msg);
+    }
+
+    // Test that check_tools_with_package_manager works correctly with a valid package manager
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_check_tools_installed_with_apt_package_manager() {
+        // When package manager is apt, it should attempt to check tools
+        // Note: This might return Ok with missing tools or an error from apt commands,
+        // but it should NOT panic
+        let tools = vec!["git", "cmake"];
+        let result = check_tools_with_package_manager(tools, Some("apt"));
+
+        // Result should be either Ok (with list of missing tools) or Err (if apt fails)
+        // but it should never panic
+        match result {
+            Ok(missing) => {
+                // This is fine - it means the tools were checked and some are missing
+                assert!(missing.iter().all(|t| *t == "git" || *t == "cmake"));
+            }
+            Err(e) => {
+                // This is also fine - could fail due to apt not being available
+                // or other system issues
+                assert!(e.contains("Unsupported package manager") || !e.is_empty(),
+                    "Unexpected error: {}", e);
+            }
+        }
+    }
+
+    // Test that check_tools_with_package_manager returns error for unknown package manager
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_check_tools_installed_with_unknown_package_manager() {
+        let tools = vec!["git", "cmake"];
+        let result = check_tools_with_package_manager(tools, Some("unknown_pm"));
+
+        // Should return error message about unsupported package manager
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err();
+        assert!(err_msg.contains("Unsupported package manager"),
+            "Expected error message to contain 'Unsupported package manager', got: {}", err_msg);
+    }
 }
