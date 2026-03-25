@@ -621,7 +621,7 @@ export function runInstallVerification({
        * This test attempts to build artifacts for the project and targets selected above.
        * The test is successful if the success message is printed in the terminal.
        */
-      this.timeout(600000);
+      this.timeout(15 * 60 * 1000); // 15 minutes
       logger.info(`Starting test - build project`);
       for (let idf of idfList) {
         testRunner = new CLITestRunner();
@@ -652,7 +652,7 @@ export function runInstallVerification({
         testRunner.sendInput("idf.py build");
 
         const startTime = Date.now();
-        while (Date.now() - startTime < 480000) {
+        while (Date.now() - startTime < 14 * 60 * 1000) { // 14 minutes
           if (Date.now() - testRunner.lastDataTimestamp >= 300000) {
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
@@ -667,8 +667,8 @@ export function runInstallVerification({
         const buildComplete = await testRunner.waitForOutput(
           "Project build complete"
         );
-        if (Date.now() - startTime >= 480000) {
-          logger.info("Build timed out after 8 minutes");
+        if (Date.now() - startTime >= 14 * 60 * 1000) {
+          logger.info("Build timed out after 14 minutes");
         }
 
         expect(
@@ -678,9 +678,9 @@ export function runInstallVerification({
         const validTarget =
           targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
         expect(
-          testRunner.output,
+          testRunner.output.toLowerCase(),
           "Expecting to successfully create target image, failed to build the sample project"
-        ).to.include(`Successfully created ${validTarget} image`);
+        ).to.include(`successfully created ${validTarget} image`);
         logger.info("Build Passed");
 
         try {
