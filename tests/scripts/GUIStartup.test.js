@@ -1,13 +1,45 @@
 import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
+import { execFileSync } from "child_process";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { getOSName, getArchitecture } from "../helper.js";
 
+/**
+ * CI may set EIM_GUI_VERSION from git tag while the GUI artifact is one patch behind.
+ * Prefer the semver reported by the same binary used in tests (`eim -V`).
+ */
+function expectedGuiSemver(pathToEIM, envVersion) {
+  try {
+    const out = execFileSync(pathToEIM, ["-V"], {
+      encoding: "utf-8",
+      timeout: 20000,
+      windowsHide: true,
+    });
+    const line =
+      out
+        .split(/\r?\n/)
+        .map((l) => l.trim())
+        .find((l) => /^eim\s+v?\d/i.test(l)) || out.trim();
+    const m = line.match(/eim\s+v?([\d.]+(?:[-+.\w]*)?)/i);
+    if (m) {
+      return m[1].trim();
+    }
+  } catch (err) {
+    logger.info(
+      `Could not read EIM version from GUI binary (${pathToEIM}), using env: ${err.message}`
+    );
+  }
+  return String(envVersion)
+    .replace(/^eim\s+v?/i, "")
+    .replace(/^v/, "")
+    .trim();
+}
+
 // This function verifies the EIM GUI properly starts and displays the welcome page
 
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
-  
+
   describe(`${id}- EIM startup |`, () => {
     let eimRunner = null;
     before(async function () {
@@ -49,10 +81,11 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
     });
 
     it("2- Should show correct version number", async function () {
+      const expectedVer = expectedGuiSemver(pathToEIM, eimVersion);
       const footer = await eimRunner.findByClass("app-footer");
       const text = await footer.getText();
       expect(text, "Expected correct version shown on page").to.include(
-        `ESP-IDF Installation Manager v${eimVersion}`
+        `ESP-IDF Installation Manager v${expectedVer}`
       );
     });
 
@@ -125,6 +158,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
 
     it("6 - Should allow reporting an issue from the footer link and attach OS information", async function () {
       this.timeout(10000);
+      const expectedVer = expectedGuiSemver(pathToEIM, eimVersion);
       await eimRunner.clickButton("Report Issue");
       await new Promise((resolve) => setTimeout(resolve, 3000));
       const OSData = await eimRunner.findByRelation("parent", "div", "OS");
@@ -153,7 +187,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       expect(
         appVersionText,
         "Expected App Version information to be present"
-      ).to.include(eimVersion);
+      ).to.include(expectedVer);
       await eimRunner.clickButton("Cancel");
       await new Promise((resolve) => setTimeout(resolve, 1000));
       const generateButton = await eimRunner.findByText("Generate Report");
