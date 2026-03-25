@@ -295,68 +295,16 @@ jobs:
           cp "$DEB_FILE" "eim-cli-${{ matrix.package_name }}.deb"
           gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.deb" --clobber
 
-      - name: Build CLI .rpm package
-        run: |
-          cd src-tauri
-          cargo install cargo-generate-rpm || true
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="0.0.0-${GITHUB_SHA:0:7}"
-          fi
-          echo "Using version: $VERSION"
-          mkdir -p ~/.rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-
-          cargo generate-rpm \
-            --target ${{ matrix.target || 'x86_64-unknown-linux-musl' }} \
-            --payload-compress gzip \
-            --set-metadata 'requires = {git = "*", wget = "*", flex = "*", cmake = "*", bison = "*", gperf = "*", ccache = "*", libffi-devel = "*", openssl-devel = "*", dfu-util = "*", libusb = "*"}'
-
-          # Find the generated RPM and add python3 dependency with correct RPM syntax
-          RPM_FILE=$(find target -name "*.rpm" -print -quit)
-          echo "Generated RPM: $RPM_FILE"
-        shell: bash
-
-      - name: Find and upload RPM artifacts
-        id: find-rpms
-        run: |
-          # Find all RPM files and copy them to a known location
-          RPM_DIR="rpm_output"
-          mkdir -p "$RPM_DIR"
-
-          # Search for RPM files in all possible locations
-          find src-tauri/target -name "*.rpm" -type f -exec cp {} "$RPM_DIR/" \;
-
-          echo "Contents of $RPM_DIR:"
-          ls -la "$RPM_DIR"/
-
-          # List all found RPM files
-          if [ -d "$RPM_DIR" ] && [ "$(ls -A $RPM_DIR)" ]; then
-            echo "rpm_files_found=true" >> $GITHUB_OUTPUT
-            echo "rpm_count=$(ls $RPM_DIR/*.rpm 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
-            echo "rpm_dir=$RPM_DIR" >> $GITHUB_OUTPUT
-          else
-            echo "rpm_files_found=false" >> $GITHUB_OUTPUT
-            echo "No RPM files found!" >&2
-            exit 1
-          fi
-
-      - name: Upload RPM artifacts to workflow
-        if: steps.find-rpms.outputs.rpm_files_found == 'true'
+      # Upload the built binary + Cargo.toml for the Fedora RPM job
+      - name: Upload source and binary for RPM build
         uses: actions/upload-artifact@v4
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
-          path: rpm_output/*.rpm
-          if-no-files-found: warn
-
-      - name: Upload CLI .rpm Release Assets
-        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RPM_FILE=$(ls rpm_output/*.rpm | head -1)
-          cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --clobber
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: |
+            release_cli/${{ matrix.package_name }}/eim
+            src-tauri/Cargo.toml
+            src-tauri/target/${{ matrix.target || 'x86_64-unknown-linux-musl' }}/release/eim
+            src-tauri/target/release/completions/
 
   build-cli-linux-armv7:
     name: Build CLI (Linux - linux-armv7)
@@ -532,31 +480,126 @@ jobs:
           cp "$DEB_FILE" "eim-cli-linux-armv7.deb"
           gh release upload "${{ github.event.release.tag_name }}" "eim-cli-linux-armv7.deb" --clobber
 
-      # .rpm package
-      - name: Build CLI .rpm package
-        run: |
-          cd src-tauri
-          cargo install cargo-generate-rpm || true
+      # Upload the built binary + Cargo.toml for the Fedora RPM job
+      - name: Upload source and binary for RPM build
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-build-input-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: |
+            release_cli/linux-armv7/eim
+            src-tauri/Cargo.toml
+            src-tauri/target/${{ env.CROSS_TARGET }}/release/eim
+            src-tauri/target/release/completions/
 
+  # ============================================================
+  # Build CLI RPM packages inside Fedora container
+  # ============================================================
+  build-cli-rpm:
+    name: Build CLI RPM (${{ matrix.package_name }})
+    needs: [build-cli-linux, build-cli-linux-armv7]
+    if: needs.build-cli-linux.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: fedora:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            target: "x86_64-unknown-linux-musl"
+            rpm_arch: x86_64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            target: "aarch64-unknown-linux-musl"
+            rpm_arch: aarch64
+          - os: ubuntu-latest
+            package_name: linux-armv7
+            target: "armv7-unknown-linux-musleabihf"
+            rpm_arch: armv7hl
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Fedora dependencies
+        run: |
+          dnf install -y rpm-build rpmdevtools gcc curl gh git zip
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install cargo-generate-rpm
+        run: |
+          source "$HOME/.cargo/env"
+          cargo install cargo-generate-rpm
+
+      - name: Download built binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: rpm-input/
+
+      - name: Prepare build tree for cargo-generate-rpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+
+          # cargo-generate-rpm expects to find the binary under src-tauri/target/<triple>/release/
+          # and reads metadata from src-tauri/Cargo.toml
+          TARGET="${{ matrix.target }}"
+          RELEASE_DIR="src-tauri/target/${TARGET}/release"
+          mkdir -p "$RELEASE_DIR"
+
+          # Copy binary from the downloaded artifact into the expected location
+          cp rpm-input/release_cli/${{ matrix.package_name }}/eim "$RELEASE_DIR/eim"
+          chmod +x "$RELEASE_DIR/eim"
+
+          # Copy completions if present
+          if [ -d "rpm-input/src-tauri/target/release/completions" ]; then
+            mkdir -p src-tauri/target/release/completions
+            cp -a rpm-input/src-tauri/target/release/completions/. src-tauri/target/release/completions/
+            mkdir -p "$RELEASE_DIR/completions"
+            cp -a rpm-input/src-tauri/target/release/completions/. "$RELEASE_DIR/completions/"
+          fi
+
+          echo "Build tree prepared:"
+          find "$RELEASE_DIR" -type f
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0-${GITHUB_SHA:0:7}"
           fi
-
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Using version: $VERSION"
+
+      - name: Build CLI .rpm package
+        shell: bash
+        run: |
+          source "$HOME/.cargo/env"
+          cd src-tauri
 
           mkdir -p ~/.rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
           cargo generate-rpm \
-            --target ${{ env.CROSS_TARGET }} \
-            --payload-compress gzip
+            --target ${{ matrix.target }} \
+            --payload-compress gzip \
+            --set-metadata 'requires = {git = "*", wget = "*", flex = "*", cmake = "*", bison = "*", gperf = "*", ccache = "*", libffi-devel = "*", openssl-devel = "*", dfu-util = "*", libusb = "*"}'
 
           echo "Generated RPM files:"
           find target -name "*.rpm" -type f
-        shell: bash
 
-      - name: Find and upload RPM artifacts
+      - name: Collect RPM artifacts
         id: find-rpms
         run: |
           RPM_DIR="rpm_output"
@@ -578,18 +621,18 @@ jobs:
         if: steps.find-rpms.outputs.rpm_files_found == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
           path: rpm_output/*.rpm
           if-no-files-found: warn
 
-      - name: Upload CLI .rpm Release Asset
+      - name: Upload CLI .rpm Release Assets
         if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           RPM_FILE=$(ls rpm_output/*.rpm | head -1)
-          cp "$RPM_FILE" "eim-cli-linux-armv7.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-linux-armv7.rpm" --clobber
+          cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --clobber
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -1132,45 +1175,15 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: warn
 
-      - name: Find and upload Linux RPM artifacts
-        if: startsWith(matrix.os, 'ubuntu')
-        id: find-gui-rpms
-        run: |
-          RPM_DIR="gui_rpm_output"
-          mkdir -p "$RPM_DIR"
-
-          # Find RPM files in GUI build output
-          find src-tauri/target/release/bundle -name "*.rpm" -type f -exec cp {} "$RPM_DIR/" \;
-
-          echo "Contents of $RPM_DIR:"
-          ls -la "$RPM_DIR"/
-
-          if [ -d "$RPM_DIR" ] && [ "$(ls -A $RPM_DIR)" ]; then
-            echo "gui_rpm_files_found=true" >> $GITHUB_OUTPUT
-            echo "gui_rpm_count=$(ls $RPM_DIR/*.rpm 2>/dev/null | wc -l)" >> $GITHUB_OUTPUT
-            echo "gui_rpm_dir=$RPM_DIR" >> $GITHUB_OUTPUT
-          else
-            echo "gui_rpm_files_found=false" >> $GITHUB_OUTPUT
-            echo "No GUI RPM files found!" >&2
-          fi
-
-      - name: Upload Linux artifacts - .rpm
+      - name: Upload GUI RPM for Fedora repackage
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v4
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
-          path: gui_rpm_output/*.rpm
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: |
+            src-tauri/target/release/bundle/rpm/*.rpm
+            src-tauri/target/release/eim
           if-no-files-found: warn
-
-      - name: Upload Release Assets (Linux - .rpm)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu') && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RPM_FILE=$(ls gui_rpm_output/*.rpm | head -1)
-          cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --clobber
 
       - name: Upload Linux artifacts - .AppImage
         if: startsWith(matrix.os, 'ubuntu')
@@ -1281,6 +1294,181 @@ jobs:
           cp "$DMG_FILE" "eim-gui-${{ matrix.package_name }}.dmg"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.dmg" --clobber
 
+  # ============================================================
+  # Repackage GUI RPMs inside Fedora container
+  # ============================================================
+  build-gui-rpm:
+    name: Repackage GUI RPM (${{ matrix.package_name }})
+    needs: [build-gui]
+    if: needs.build-gui.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: fedora:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-22.04-arm
+            package_name: linux-aarch64
+    steps:
+      - name: Install Fedora dependencies
+        run: |
+          dnf install -y rpm-build rpmdevtools rpm-sign gh git
+
+      - name: Download Tauri-generated RPM
+        uses: actions/download-artifact@v4
+        with:
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: gui-rpm-input/
+
+      - name: Repackage RPM without python upper bound
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Find the original RPM from the Tauri build
+          ORIG_RPM=$(find gui-rpm-input -name "*.rpm" -type f -print -quit)
+
+          if [ -z "$ORIG_RPM" ]; then
+            echo "No GUI RPM found in artifacts, skipping repackage"
+            echo "gui_rpm_available=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          ORIG_RPM="$(realpath "$ORIG_RPM")"
+          echo "Original RPM: $ORIG_RPM"
+          echo "Original dependencies:"
+          rpm -qpR "$ORIG_RPM" || true
+
+          # Check if the RPM actually has the python upper bound issue
+          if ! rpm -qpR "$ORIG_RPM" 2>/dev/null | grep -i "python.*<"; then
+            echo "RPM does not have python upper bound issue, using as-is"
+            mkdir -p "$GITHUB_WORKSPACE/gui_rpm_output"
+            cp "$ORIG_RPM" "$GITHUB_WORKSPACE/gui_rpm_output/"
+            echo "gui_rpm_available=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          echo "Found python upper bound in RPM, repackaging..."
+
+          # Extract RPM contents into a staging directory
+          WORK_DIR=$(mktemp -d)
+          cd "$WORK_DIR"
+          rpm2cpio "$ORIG_RPM" | cpio -idmv
+
+          # Helper: read an RPM tag, return a fallback if the value is empty or "(none)"
+          rpm_tag() {
+            local val
+            val=$(rpm -qp --queryformat "%{$1}" "$ORIG_RPM" 2>/dev/null || true)
+            if [ -z "$val" ] || [ "$val" = "(none)" ]; then
+              echo "$2"   # fallback
+            else
+              echo "$val"
+            fi
+          }
+
+          NAME=$(rpm_tag NAME "eim")
+          VERSION=$(rpm_tag VERSION "0.0.0")
+          RELEASE=$(rpm_tag RELEASE "1")
+          SUMMARY=$(rpm_tag SUMMARY "Espressif IDF Installation Manager")
+          LICENSE=$(rpm_tag LICENSE "MIT")
+          ARCH=$(rpm_tag ARCH "x86_64")
+          DESCRIPTION=$(rpm_tag DESCRIPTION "Espressif IDF Installation Manager GUI application")
+
+          # Collect dependencies, filtering out python upper bounds and rpmlib() auto-deps
+          mapfile -t REQ_LINES < <(
+            rpm -qpR "$ORIG_RPM" 2>/dev/null \
+              | grep -v "python.*<" \
+              | grep -v "^rpmlib(" \
+              | sort -u
+          )
+
+          # Build the spec file
+          rpmdev-setuptree
+          SPEC_FILE="$HOME/rpmbuild/SPECS/eim-gui.spec"
+
+          {
+            echo "Name:           ${NAME}"
+            echo "Version:        ${VERSION}"
+            echo "Release:        ${RELEASE}"
+            echo "Summary:        ${SUMMARY}"
+            echo "License:        ${LICENSE}"
+            echo "AutoReqProv:    no"
+            echo ""
+            # Write each cleaned-up Requires line
+            for req in "${REQ_LINES[@]}"; do
+              req=$(echo "$req" | xargs)  # trim whitespace
+              [ -n "$req" ] && echo "Requires:       ${req}"
+            done
+            echo ""
+            echo "%description"
+            echo "${DESCRIPTION}"
+            echo ""
+            echo "%install"
+            echo "cp -a ${WORK_DIR}/* %{buildroot}/"
+            echo ""
+            echo "%files"
+            # List every file and symlink
+            find . -type f -o -type l | sed 's|^\./|/|'
+            # List directories (excluding root)
+            find . -mindepth 1 -type d | sed 's|^\./|%dir /|'
+          } > "$SPEC_FILE"
+
+          echo "=== Generated spec file ==="
+          cat "$SPEC_FILE"
+          echo "==========================="
+
+          mkdir -p "$GITHUB_WORKSPACE/gui_rpm_output"
+
+          # Build the new RPM
+          rpmbuild -bb "$SPEC_FILE" \
+            --define "_rpmdir $GITHUB_WORKSPACE/gui_rpm_output" \
+            --target "$ARCH"
+
+          echo "Repackaged RPM dependencies:"
+          NEWRPM=$(find "$GITHUB_WORKSPACE/gui_rpm_output" -name "*.rpm" -type f -print -quit)
+          rpm -qpR "$NEWRPM" || true
+
+          echo "gui_rpm_available=true" >> $GITHUB_OUTPUT
+
+      - name: Collect GUI RPM artifacts
+        id: find-gui-rpms
+        run: |
+          mkdir -p gui_rpm_output
+          # Move RPMs from arch subdirectories to flat dir
+          find gui_rpm_output -name "*.rpm" -type f -exec mv {} gui_rpm_output/ \; 2>/dev/null || true
+
+          echo "Contents of gui_rpm_output:"
+          ls -la gui_rpm_output/
+
+          if [ "$(ls gui_rpm_output/*.rpm 2>/dev/null | wc -l)" -gt 0 ]; then
+            echo "gui_rpm_files_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "gui_rpm_files_found=false" >> $GITHUB_OUTPUT
+            echo "No GUI RPM files found"
+          fi
+
+      - name: Upload GUI RPM artifacts
+        if: steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          path: gui_rpm_output/*.rpm
+          if-no-files-found: warn
+
+      - name: Upload GUI RPM Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RPM_FILE=$(ls gui_rpm_output/*.rpm | head -1)
+          cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
+
   Autotest-CLI:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
@@ -1340,7 +1528,7 @@ jobs:
 
   update-linux-repos:
     name: Update APT and RPM Repositories
-    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
+    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, update-release-info]
     permissions:
       contents: write
     uses: ./.github/workflows/update-linux-repos.yml
