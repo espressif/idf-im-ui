@@ -632,7 +632,7 @@ jobs:
         run: |
           RPM_FILE=$(ls rpm_output/*.rpm | head -1)
           cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --clobber
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -1319,6 +1319,9 @@ jobs:
           - os: ubuntu-22.04-arm
             package_name: linux-aarch64
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Install Fedora dependencies
         run: |
           dnf install -y rpm-build rpmdevtools rpm-sign gh git
