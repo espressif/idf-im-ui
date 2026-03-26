@@ -702,11 +702,7 @@ async fn main() {
         let wheel_python_versions: Vec<String> = if let Some(versions) = args.wheel_python_versions {
             versions
         } else {
-            // Default behavior: for Windows, use single version; for POSIX, use all supported
-            match std::env::consts::OS {
-                "windows" => vec![global_python_version.clone()],
-                _ => SUPPORTED_PYTHON_VERSIONS.iter().map(|s| s.to_string()).collect(),
-            }
+            SUPPORTED_PYTHON_VERSIONS.iter().map(|s| s.to_string()).collect()
         };
 
         info!("Will download wheels for Python versions: {:?}", wheel_python_versions);

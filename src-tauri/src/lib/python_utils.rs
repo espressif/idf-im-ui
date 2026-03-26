@@ -961,10 +961,7 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     };
 
     // 3. Check version requirement
-    let (req, required_str) = match std::env::consts::OS {
-        "windows" => (VersionReq::parse(">=3.10.0, <3.14.0").unwrap(), ">=3.10.0, <3.14.0"),
-        _ => (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0"),
-    };
+    let (req, required_str) = (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0");
 
     if req.matches(&version) {
         GenericCheckResult {
