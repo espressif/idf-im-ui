@@ -30,7 +30,7 @@ on:
     inputs:
       run_id:
         description: "The run id from which to take binaries"
-        required: true
+        required: false
         type: string
       idf_version:
         description: "Specific IDF version to build (e.g., v5.1.2). Leave empty to build all."
@@ -58,13 +58,49 @@ jobs:
   get-versions:
     name: Get IDF Versions to Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     outputs:
       versions: ${{ steps.get-versions.outputs.versions }}
       should_purge: ${{ steps.get-versions.outputs.should_purge }}
       debug: ${{ steps.get-versions.outputs.debug }}
+      resolved_run_id: ${{ steps.resolve-run-id.outputs.run_id }}
     steps:
       - name: Checkout (for scripts if needed)
         uses: actions/checkout@v4
+
+      - name: Resolve run_id
+        id: resolve-run-id
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: false
+        run: |
+          if [ -n "${{ inputs.run_id }}" ]; then
+            echo "run_id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
+            echo "Using provided run_id: ${{ inputs.run_id }}"
+          else
+            echo "No run_id provided — looking up latest successful release run of 'Unified Build Workflow'..."
+
+            WORKFLOW_ID=$(gh api \
+              "/repos/${{ github.repository }}/actions/workflows" \
+              --jq '.workflows[] | select(.name == "Unified Build Workflow") | .id')
+
+            echo "Found workflow ID: $WORKFLOW_ID"
+
+            RUN_ID=$(gh api \
+              "/repos/${{ github.repository }}/actions/workflows/${WORKFLOW_ID}/runs?event=release&status=completed&per_page=10" \
+              --jq '[.workflow_runs[] | select(.display_title | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | first | .id')
+
+            echo "Found run ID: $RUN_ID"
+
+            if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+              echo "::error::Could not find a successful release run of 'Unified Build Workflow'"
+              exit 1
+            fi
+
+            echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          fi
 
       - name: Download offline_installer_builder artifact
         uses: actions/download-artifact@v5
@@ -73,7 +109,7 @@ jobs:
           merge-multiple: true
           path: ./
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.run_id || github.run_id }}
+          run-id: ${{ steps.resolve-run-id.outputs.run_id }}
 
       - name: Make binary executable
         run: chmod +x ./offline_installer_builder
@@ -173,7 +209,7 @@ jobs:
           merge-multiple: true
           path: ./
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.run_id || github.run_id }}
+          run-id: ${{ needs.get-versions.outputs.resolved_run_id }}
 
       - name: Make binary executable (Unix)
         if: runner.os != 'Windows'
@@ -536,4 +572,4 @@ jobs:
     with:
       ref: ${{ inputs.ref || github.ref }}
       build_info_run_id: ${{ github.run_id }}
-      eim_cli_run_id: ${{ inputs.run_id }}
+      eim_cli_run_id: ${{ needs.get-versions.outputs.resolved_run_id }}
