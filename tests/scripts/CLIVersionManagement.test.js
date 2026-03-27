@@ -295,13 +295,14 @@ export function runVersionManagementTest({
       );
       expect(purgeOutput, "EIM failed to purge IDF versions").to.be.true;
       for (let idf of idfList) {
-        const espIdfPath = path.join(installFolder, idf, "esp-idf");
         expect(
-          fs.existsSync(espIdfPath),
-          `IDF clone (esp-idf) should be removed for ${idf} after purge`
+          fs.existsSync(path.join(installFolder, idf)),
+          `IDF installation folder for ${idf} was not deleted after purge`
+        ).to.be.true;
+        expect(
+          fs.existsSync(path.join(installFolder, idf, "esp-idf")),
+          `IDF installation folder still exists for ${idf} after purge`
         ).to.be.false;
-        // EIM-536: empty version directory is removed after esp-idf is deleted; do not require
-        // installFolder/<idf> to remain on disk.
       }
     });
   });
