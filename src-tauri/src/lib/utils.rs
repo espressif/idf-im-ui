@@ -9,7 +9,7 @@ use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
 use tar::Archive;
 use zstd::{decode_all, Decoder};
-use filetime::{FileTime, set_file_mtime};
+use filetime::{FileTime, set_file_mtime, set_symlink_file_times};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
@@ -893,7 +893,11 @@ pub fn copy_dir_contents_preserving_mtime(src: &Path, dst: &Path) -> io::Result<
             debug!("Symlink entry: {:?} -> {:?}", path, dest_path);
             create_symlink_rewritten(&path, &dest_path, src, dst)?;
             debug!("Symlink entry rewritten: {:?} -> {:?}", path, dest_path);
-            set_file_mtime(&dest_path, FileTime::from_last_modification_time(&meta))?;
+            set_symlink_file_times(
+                &dest_path,
+                FileTime::now(),
+                FileTime::from_last_modification_time(&meta)
+            )?;
         } else if meta.is_dir() {
             debug!("Directory entry: {:?} -> {:?}", path, dest_path);
             copy_dir_contents_preserving_mtime(&path, &dest_path)?;
