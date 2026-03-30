@@ -685,9 +685,9 @@ export function runInstallVerification({
         const validTarget =
           targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
         expect(
-          testRunner.output,
+          testRunner.output.toLowerCase(),
           "Expecting to successfully create target image, failed to build the sample project"
-        ).to.include(`Successfully created ${validTarget} image`);
+        ).to.include(`successfully created ${validTarget} image`);
         logger.info("Build Passed");
 
         try {
