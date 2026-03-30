@@ -339,10 +339,13 @@ pub fn pip_install_requirements(
         None => "",
     };
 
+    const ESPRESSIF_PYPI: &str = "https://dl.espressif.com/pypi/";
+
     match std::env::consts::OS {
         "windows" => {
-            match if let Some(wheel_dir) = wheel_dir { // offline mode
-                let mut args = vec![
+            match if let Some(wheel_dir) = wheel_dir {
+                // Offline mode — local wheels only, no indexes needed
+                let args = vec![
                     "-m", "pip", "install", "-r",
                     requirements_file.to_str().unwrap(),
                     "--upgrade", "--constraint", constrain_path,
@@ -355,15 +358,20 @@ pub fn pip_install_requirements(
                 )
             } else {
                 let mut args = vec![
-                    "-m", "pip", "install", "-r",
-                    requirements_file.to_str().unwrap(),
-                    "--upgrade", "--constraint", constrain_path
+                  "-m", "pip", "install", "-r",
+                  requirements_file.to_str().unwrap(),
+                  "--upgrade", "--constraint", constrain_path,
+                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
                 ];
 
-                // Add PyPI mirror if specified
                 if let Some(mirror_url) = pypi_mirror {
-                    args.push("--index-url");
-                    args.push(mirror_url.as_str());
+                  args.push("--index-url");
+                  args.push(ESPRESSIF_PYPI);
+                  args.push("--extra-index-url");
+                  args.push(mirror_url.as_str());
+                } else {
+                  args.push("--index-url");
+                  args.push(ESPRESSIF_PYPI);
                 }
 
                 command_executor::execute_command_direct_with_env(
@@ -388,6 +396,7 @@ pub fn pip_install_requirements(
         }
         _ => {
             match if let Some(wheel_dir) = wheel_dir {
+                // Offline mode — local wheels only
                 command_executor::execute_command_direct_with_env(
                   "bash",
                   &vec![
@@ -403,17 +412,24 @@ pub fn pip_install_requirements(
                   vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
                 )
             } else {
-                let mut cmd = format!(
-                    "{} -m pip install -r {} --upgrade --constraint {}",
+                let cmd = if let Some(mirror_url) = pypi_mirror {
+                  format!(
+                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
                     shlex::quote(python_location.to_str().unwrap()),
                     shlex::quote(requirements_file.to_str().unwrap()),
-                    shlex::quote(constrain_path)
-                );
-
-                // Add PyPI mirror if specified
-                if let Some(mirror_url) = pypi_mirror {
-                    cmd.push_str(&format!(" --index-url {}", shlex::quote(mirror_url)));
-                }
+                    shlex::quote(constrain_path),
+                    shlex::quote(ESPRESSIF_PYPI),
+                    shlex::quote(mirror_url),
+                  )
+                } else {
+                  format!(
+                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {}",
+                    shlex::quote(python_location.to_str().unwrap()),
+                    shlex::quote(requirements_file.to_str().unwrap()),
+                    shlex::quote(constrain_path),
+                    shlex::quote(ESPRESSIF_PYPI),
+                  )
+                };
 
                 command_executor::execute_command_direct_with_env(
                     "bash",
