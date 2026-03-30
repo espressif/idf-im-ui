@@ -566,7 +566,7 @@ jobs:
 
   autotest:
     name: Autotest Offline Archives Installation
-    needs: [build-and-upload]
+    needs: [get-versions, build-and-upload]
     if: (!cancelled())
     uses: ./.github/workflows/test_offline.yml
     with:
