@@ -988,7 +988,7 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
 fn where_non_alias(name: &str) -> Option<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            let output = match std::process::Command::new("where").arg(name).output() {
+            let output = match command_executor::execute_command_direct("where", &[name]) {
                 Ok(o) if o.status.success() => o,
                 _ => return None,
             };
