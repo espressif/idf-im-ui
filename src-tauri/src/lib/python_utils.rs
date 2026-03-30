@@ -900,13 +900,13 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
                 .ok()
                 .and_then(|mut addrs| addrs.next())
                 .map(|addr| {
-                    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(3)).is_ok()
+                    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(30)).is_ok()
                 })
                 .unwrap_or(false);
             let _ = tx.send(result);
         });
-        rx.recv_timeout(std::time::Duration::from_secs(5))
-      };
+        rx.recv_timeout(std::time::Duration::from_secs(32))
+    };
 
       let ssl_result = match connectivity_check {
           Ok(true) => {
