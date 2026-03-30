@@ -40,6 +40,17 @@ export function runInstallVerification({
       return path.join(installFolder, idf, "esp-idf");
     }
 
+    /**
+     * Sample projects live beside the esp-idf tree, not under it (avoids dirty git, empty dirs after eim remove).
+     * Default: installFolder/idf/projects. Existing-clone: sibling projects/ next to the clone root.
+     */
+    function getProjectsDir(idf) {
+      if (existingGitClone) {
+        return path.join(path.dirname(installFolderResolved), "projects");
+      }
+      return path.join(installFolder, idf, "projects");
+    }
+
     /** Activation script path for default layout; when existingGitClone use entry.activationScript. */
     function getActivationScriptPath(idf, entry) {
       if (existingGitClone && entry) return entry.activationScript;
@@ -475,7 +486,8 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        const pathToProjectFolder = path.join(getIdfRoot(idf), "project");
+        const projectsDir = getProjectsDir(idf);
+        const pathToProjectFolder = projectsDir;
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
           await testRunner.runIDFTerminal(activationScript);
@@ -552,9 +564,8 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          getIdfRoot(idf),
-          "project",
+        const pathToProjectFolder = path.join(
+          getProjectsDir(idf),
           "hello_world"
         );
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
@@ -640,9 +651,8 @@ export function runInstallVerification({
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
 
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          getIdfRoot(idf),
-          "project",
+        const pathToProjectFolder = path.join(
+          getProjectsDir(idf),
           "hello_world"
         );
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
