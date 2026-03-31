@@ -164,25 +164,6 @@ impl ToolSetup {
     }
 }
 
-// Helper function to check if a process is running on Windows
-#[cfg(target_os = "windows")]
-fn is_process_running(pid: u32) -> bool {
-    use std::process::Command;
-
-    // Check if process exists using tasklist
-    let output = Command::new("tasklist")
-        .args(["/FI", &format!("PID eq {}", pid), "/NH"])
-        .output();
-
-    match output {
-        Ok(output) => {
-            let output_str = String::from_utf8_lossy(&output.stdout);
-            output_str.contains(&pid.to_string())
-        },
-        Err(_) => false
-    }
-}
-
 /// Setup logging for the GUI application.
 ///
 /// # Arguments
