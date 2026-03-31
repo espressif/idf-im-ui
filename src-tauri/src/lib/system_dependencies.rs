@@ -356,7 +356,10 @@ pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
 /// * `Ok(Vec<&'static str>)` - Vector of unsatisfied tools/packages
 /// * `Err(String)` - If an error occurs, returns an error message
 fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, String> {
-    check_tools_with_package_manager(tools, determine_package_manager())
+  match std::env::consts::OS {
+    "linux" => check_tools_with_package_manager(tools, determine_package_manager()),
+    _ => check_tools_with_package_manager(tools,None),
+  }
 }
 
 /// Checks if the given list of tools/packages are installed on the system.
