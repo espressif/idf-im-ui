@@ -604,7 +604,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           Ok(())
         }
         #[cfg(feature = "gui")]
-        Commands::Gui(_install_args) => {
+        Commands::Gui(install_args) => {
             #[cfg(not(feature = "gui"))]
             unimplemented!("GUI not present in this type of build");
             let log_level = match cli.verbose {
@@ -612,7 +612,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 1 => LevelFilter::Debug,
                 _ => LevelFilter::Trace,
             };
-            gui::run(Some(log_level));
+            let do_not_track = cli.do_not_track;
+            let settings = match Settings::new(
+                install_args.config.clone(),
+                install_args.clone().into_iter(),
+            ) {
+              Ok(settings) => Some(settings),
+              Err(_) => None
+            };
+            gui::run(settings, Some(log_level), do_not_track);
             Ok(())
         }
         Commands::InstallDrivers => {
