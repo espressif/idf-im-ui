@@ -11,7 +11,7 @@
             "installFolder": "<folder>" // Folder name to install idf (inside USER folder)
             "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
             "toolsMirror": "github",    // Mirror to download tools "github", "dl_com" or "dl_cn"
-            "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"            
+            "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"
             "recursive": false,         // Whether to prevent downloading submodules (set to true if omitted)
             "nonInteractive": false     // Whether to prevent running in non-interactive mode (set to true if omitted)
         },
@@ -31,6 +31,7 @@ import { runInstallVerification } from "./scripts/installationVerification.test.
 import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js";
 import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
+import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -276,6 +277,59 @@ function testRun(jsonScript) {
         runCleanUp({
           id: `${test.id}3`,
           installFolder: INSTALLFOLDER,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "existing-git-clone") {
+      const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
+      const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.3";
+      const installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      const installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      installArgs.push(
+        os.platform() === "win32" ? `-p "${installFolder}"` : `-p ${installFolder}`
+      );
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runCLIClonedIDFRepo({
+          id: `${test.id}1`,
+          path: installFolder,
+          gitRepoUrl,
+          gitRepoBranch,
+        });
+
+        runCLICustomInstallTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+          testProxyMode,
+          proxyBlockList,
+        });
+
+        runInstallVerification({
+          id: `${test.id}3`,
+          installFolder,
+          idfList: [gitRepoBranch],
+          targetList,
+          toolsFolder: TOOLSFOLDER,
+          existingGitClone: true,
+        });
+
+        runCleanUp({
+          id: `${test.id}4`,
+          installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
         });

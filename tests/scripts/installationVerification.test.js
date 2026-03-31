@@ -14,6 +14,7 @@ export function runInstallVerification({
   idfList,
   targetList = ["esp32"],
   toolsFolder,
+  existingGitClone = false,
 }) {
   describe(`${id}- Installation verification test |`, function () {
     this.timeout(600000);
@@ -21,6 +22,42 @@ export function runInstallVerification({
     let verificationStepFailed = false;
 
     const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
+    const installFolderResolved = path.resolve(installFolder);
+
+    /** Returns the eim_idf entry for the given idf (name or, when existingGitClone, by path). */
+    function getEntryForIdf(eimJsonContent, idf) {
+      if (existingGitClone) {
+        return eimJsonContent.idfInstalled.find(
+          (e) => path.resolve(e.path) === installFolderResolved
+        );
+      }
+      return eimJsonContent.idfInstalled.find((e) => e.name === idf) || null;
+    }
+
+    /** Path to IDF root for this idf (installFolder when existingGitClone, else installFolder/idf/esp-idf). */
+    function getIdfRoot(idf) {
+      if (existingGitClone) return installFolder;
+      return path.join(installFolder, idf, "esp-idf");
+    }
+
+    /**
+     * Sample projects live beside the esp-idf tree, not under it (avoids dirty git, empty dirs after eim remove).
+     * Default: installFolder/idf/projects. Existing-clone: sibling projects/ next to the clone root.
+     */
+    function getProjectsDir(idf) {
+      if (existingGitClone) {
+        return path.join(path.dirname(installFolderResolved), "projects");
+      }
+      return path.join(installFolder, idf, "projects");
+    }
+
+    /** Activation script path for default layout; when existingGitClone use entry.activationScript. */
+    function getActivationScriptPath(idf, entry) {
+      if (existingGitClone && entry) return entry.activationScript;
+      return os.platform() !== "win32"
+        ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
+        : path.join(toolsFolder, "tools", `Microsoft.${idf}.PowerShell_profile.ps1`);
+    }
 
     // The beforeEach function should skip the next tests if the previous test failed
     beforeEach(async function () {
@@ -169,35 +206,27 @@ export function runInstallVerification({
       logger.debug("EIM Json file content: ", eimJsonContent);
 
       for (let idf of idfList) {
-        let eimJsonEntry = null;
-
-        for (let entry of eimJsonContent.idfInstalled) {
-          if (entry.name === idf) {
-            eimJsonEntry = entry;
-            break;
-          }
-        }
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
         logger.debug(`EIM Json entry for IDF ${idf}: `, eimJsonEntry);
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
           .be.null;
 
-        const pathToIDFScript =
-          os.platform() !== "win32"
-            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-            : path.join(
-                toolsFolder,
-                "tools",
-                `Microsoft.${idf}.PowerShell_profile.ps1`
-              );
-
-        expect(
-          eimJsonEntry.activationScript,
-          `Activation script on eim_idf.json not matching expected path for IDF ${idf}`
-        ).to.equal(pathToIDFScript);
-        expect(
-          eimJsonEntry.path,
-          `IDF path on eim_idf.json not matching expected path for IDF ${idf}`
-        ).to.equal(path.join(installFolder, idf, "esp-idf"));
+        if (!existingGitClone) {
+          const pathToIDFScript = getActivationScriptPath(idf, eimJsonEntry);
+          expect(
+            eimJsonEntry.activationScript,
+            `Activation script on eim_idf.json not matching expected path for IDF ${idf}`
+          ).to.equal(pathToIDFScript);
+          expect(
+            eimJsonEntry.path,
+            `IDF path on eim_idf.json not matching expected path for IDF ${idf}`
+          ).to.equal(path.join(installFolder, idf, "esp-idf"));
+        } else {
+          expect(
+            path.resolve(eimJsonEntry.path),
+            `IDF path on eim_idf.json should match install folder for existing-git-clone`
+          ).to.equal(installFolderResolved);
+        }
 
         expect(
           fs.existsSync(eimJsonEntry.python),
@@ -216,34 +245,28 @@ export function runInstallVerification({
       );
 
       for (let idf of idfList) {
-        let eimJsonEntry = null;
-
-        for (let entry of eimJsonContent.idfInstalled) {
-          if (entry.name === idf) {
-            eimJsonEntry = entry;
-            break;
-          }
-        }
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
         expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
           .be.null;
 
         testRunner = new CLITestRunner();
 
+        const idfRoot = eimJsonEntry.path;
         let pythonRequirementPath = fs.existsSync(
           path.join(
-            eimJsonEntry.path,
+            idfRoot,
             "tools",
             "requirements",
             "requirements.core.txt"
           )
         )
           ? path.join(
-              eimJsonEntry.path,
+              idfRoot,
               "tools",
               "requirements",
               "requirements.core.txt"
             )
-          : path.join(eimJsonEntry.path, "requirements.txt");
+          : path.join(idfRoot, "requirements.txt");
 
         expect(
           fs.existsSync(pythonRequirementPath),
@@ -261,7 +284,7 @@ export function runInstallVerification({
 
         testRunner.sendInput(
           `${eimJsonEntry.python} ${path.join(
-            eimJsonEntry.path,
+            idfRoot,
             "tools",
             "check_python_dependencies.py"
           )} -r ${pythonRequirementPath}`
@@ -289,18 +312,17 @@ export function runInstallVerification({
        *
        */
       logger.info(`Validating tools versions installed on path`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
       for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+
         testRunner = new CLITestRunner();
-        let pathToIDFScript =
-          os.platform() !== "win32"
-            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-            : path.join(
-                toolsFolder,
-                "tools",
-                `Microsoft.${idf}.PowerShell_profile.ps1`
-              );
+        const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
-          await testRunner.runIDFTerminal(pathToIDFScript);
+          await testRunner.runIDFTerminal(activationScript);
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
@@ -308,9 +330,10 @@ export function runInstallVerification({
           throw new Error("Error starting IDF Terminal");
         }
 
+        const idfRoot = getIdfRoot(idf);
         let toolsIndexFile = JSON.parse(
           fs.readFileSync(
-            path.join(installFolder, idf, "esp-idf", "tools", "tools.json"),
+            path.join(idfRoot, "tools", "tools.json"),
             "utf-8"
           )
         );
@@ -455,19 +478,19 @@ export function runInstallVerification({
        * The assert is based on the existence of the project files in the expected folder.
        */
       logger.info(`Starting test - create new project`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
       for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(installFolder, idf, "project");
-        const pathToIDFScript =
-          os.platform() !== "win32"
-            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-            : path.join(
-                toolsFolder,
-                "tools",
-                `Microsoft.${idf}.PowerShell_profile.ps1`
-              );
+        const projectsDir = getProjectsDir(idf);
+        const pathToProjectFolder = projectsDir;
+        const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
-          await testRunner.runIDFTerminal(pathToIDFScript);
+          await testRunner.runIDFTerminal(activationScript);
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
@@ -492,7 +515,6 @@ export function runInstallVerification({
         }
 
         testRunner.output = "";
-        2;
         testRunner.sendInput("cd hello_world");
         await new Promise((resolve) => setTimeout(resolve, 500));
         testRunner.sendInput("ls");
@@ -533,25 +555,22 @@ export function runInstallVerification({
        */
       this.timeout(750000);
       logger.info(`Starting test - set target`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
 
       for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          installFolder,
-          idf,
-          "project",
+        const pathToProjectFolder = path.join(
+          getProjectsDir(idf),
           "hello_world"
         );
-        const pathToIDFScript =
-          os.platform() !== "win32"
-            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-            : path.join(
-                toolsFolder,
-                "tools",
-                `Microsoft.${idf}.PowerShell_profile.ps1`
-              );
+        const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
-          await testRunner.runIDFTerminal(pathToIDFScript);
+          await testRunner.runIDFTerminal(activationScript);
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
@@ -623,24 +642,22 @@ export function runInstallVerification({
        */
       this.timeout(15 * 60 * 1000); // 15 minutes
       logger.info(`Starting test - build project`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
+
       for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+
         testRunner = new CLITestRunner();
-        let pathToProjectFolder = path.join(
-          installFolder,
-          idf,
-          "project",
+        const pathToProjectFolder = path.join(
+          getProjectsDir(idf),
           "hello_world"
         );
-        const pathToIDFScript =
-          os.platform() !== "win32"
-            ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-            : path.join(
-                toolsFolder,
-                "tools",
-                `Microsoft.${idf}.PowerShell_profile.ps1`
-              );
+        const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         try {
-          await testRunner.runIDFTerminal(pathToIDFScript);
+          await testRunner.runIDFTerminal(activationScript);
         } catch (error) {
           logger.info("Error to start IDF terminal");
           logger.info(testRunner.output);
@@ -652,7 +669,8 @@ export function runInstallVerification({
         testRunner.sendInput("idf.py build");
 
         const startTime = Date.now();
-        while (Date.now() - startTime < 14 * 60 * 1000) { // 14 minutes
+        while (Date.now() - startTime < 14 * 60 * 1000) {
+          // 14 minutes
           if (Date.now() - testRunner.lastDataTimestamp >= 300000) {
             logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
             break;
@@ -682,6 +700,54 @@ export function runInstallVerification({
           "Expecting to successfully create target image, failed to build the sample project"
         ).to.include(`successfully created ${validTarget} image`);
         logger.info("Build Passed");
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
+      }
+    });
+
+    it("8- Should report correct idf.py version", async function () {
+      /**
+       * Runs idf.py --version and asserts the output includes the expected IDF version (e.g. branch/tag).
+       * Used for normal and existing-git-clone installs; expected version comes from idfList.
+       */
+      this.timeout(60000);
+      logger.info(`Validating idf.py --version`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
+
+      for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+
+        testRunner = new CLITestRunner();
+        try {
+          await testRunner.runIDFTerminal(eimJsonEntry.activationScript);
+        } catch (error) {
+          logger.info("Error to start IDF terminal");
+          logger.info(testRunner.output);
+          logger.info(` Error: ${error}`);
+          throw new Error("Error starting IDF Terminal");
+        }
+
+        testRunner.output = "";
+        testRunner.sendInput("idf.py --version");
+        const versionSeen = await testRunner.waitForOutput(idf, 15000);
+        expect(
+          versionSeen,
+          `idf.py --version output should include ${idf}; output: ${testRunner.output}`
+        ).to.be.true;
+        expect(
+          testRunner.output,
+          "idf.py --version output must not show -dirty"
+        ).to.not.include("-dirty");
 
         try {
           await testRunner.stop();
