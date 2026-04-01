@@ -71,7 +71,7 @@ eim install --use-local-archive path/to/your/archive.zst
 
 > **Important:**
 > - Do **not** unpack the `.zst` archive file; the installer uses it directly.
-> - The offline installation currently only supports **Python 3.11** to **3.14** on Linux and macOS. Python 3.14 is not supported on Windows for offline installations.
+> - The offline installation currently only supports **Python 3.11** to **3.14** on Linux, macOS, and Windows. Python 3.14 is now fully supported on all platforms for offline installations.
 > - On macOS and Linux, you must install all [prerequisites](./prerequisites.md) manually before running the installer.
 
 For a complete guide, please see the [Offline Installation](./offline_installation.md) page.
