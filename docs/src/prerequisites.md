@@ -7,7 +7,7 @@ Below are the minimum requirements for running the ESP-IDF. The Installation Man
 ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, **3.13**, and **3.14**.
 
 > **Important**
-> Python 3.14 is supported on **Linux and macOS** only. On **Windows**, Python 3.14 is not supported because ESP-IDF dependencies do not yet support it. Please ensure you have a compatible Python version installed.
+> Python 3.14 is now fully supported on **Linux**, **macOS**, and **Windows**.
 
 ## Windows
 
