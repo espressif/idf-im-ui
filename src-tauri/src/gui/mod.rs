@@ -26,6 +26,8 @@ pub mod utils;
 use app_state::{AppState};
 use ui::{send_message, ProgressBar};
 use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*, version_management::*};
+use tauri_plugin_store::StoreExt;
+use serde_json::Value;
 
 fn prepare_installation_directories(
     app_handle: AppHandle,
@@ -212,7 +214,7 @@ pub fn setup_gui_logging(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(log_level_override: Option<log::LevelFilter>) {
+pub fn run(settings: Option<Settings>, log_level_override: Option<log::LevelFilter>, do_not_track: bool) {
     // this is here because macos bundled .app does not inherit path
     #[cfg(target_os = "macos")]
     {
@@ -237,13 +239,38 @@ pub fn run(log_level_override: Option<log::LevelFilter>) {
         }
     }
 
+    // Create owned copies before the closure to avoid borrow issues
+    let do_not_track_value = do_not_track;
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .setup(|app| {
-            let app_state = AppState::default();
-            app.manage(app_state);
-            Ok(())
+        .setup(move |app| {
+          let app_state = match settings {
+            Some(s) => AppState {
+              settings: Mutex::new(s),
+              ..Default::default()
+            },
+            None => AppState::default()
+          };
+          app.manage(app_state);
+
+          // Set usage_statistics based on do_not_track
+          let config_dir = dirs::config_dir()
+            .ok_or("Failed to get config directory")?
+            .join("eim");
+          let config_file = config_dir.join("eim.json");
+          if let Err(e) = std::fs::create_dir_all(&config_dir) {
+            log::error!("Failed to create config directory: {}", e);
+          } else if let Ok(store) = app.handle().store_builder(config_file).build() {
+            // If do_not_track is true, set usage_statistics to false
+            store.set("usage_statistics".to_string(), Value::Bool(!do_not_track_value));
+            if let Err(e) = store.save() {
+                log::error!("Failed to save usage_statistics setting: {}", e);
+            }
+          }
+
+          Ok(())
         })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())

@@ -55,6 +55,7 @@ pub struct Cli {
         long,
         help = "If set to true, the installer will not send any usage data. Default is false.",
         default_value_t = false,
+        global = true,
         action = clap::ArgAction::Set
     )]
     pub do_not_track: bool,

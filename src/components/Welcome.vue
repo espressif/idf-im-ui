@@ -182,6 +182,7 @@ export default {
         console.log(`App settings: ${JSON.stringify(settings)}`)
         isFirstRun.value = settings?.first_run !== false
         dontShowAgain.value = settings?.skip_welcome === true
+        allowUsageTracking.value = settings?.usage_statistics === true
 
         // Auto-navigate based on status
         setTimeout(() => {
