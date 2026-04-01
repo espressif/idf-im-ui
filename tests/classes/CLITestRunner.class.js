@@ -116,7 +116,15 @@ class CLITestRunner {
     }
   }
 
-  // method to send a string to teh terminal, return character is added to any string provided
+  // method to call EIM binary on specific path with the specified arguments
+  callEIM(eimCliPath, args = []) {
+    args = ["--do-not-track", "true", ...args];
+    logger.debug(`Calling EIM from path ${eimCliPath} with arguments ${args}`);
+    this.sendInput(`${eimCliPath} ${args.join(" ")}`);
+  }
+
+  // method to send a string to the terminal, return character is added to any string provided
+  // This method should not be use to call EIM binary, use callEIM method instead.
   sendInput(input) {
     logger.debug(`Attempting to send ${input.replace(/\r$/, "")} to terminal`);
     if (this.process && !this.exited) {

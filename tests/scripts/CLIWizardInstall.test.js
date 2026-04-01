@@ -94,7 +94,10 @@ export function runCLIWizardInstallTest({
     it("1- Should install IDF using wizard and default values", async function () {
       logger.info(`Starting test - IDF installation wizard`);
       this.timeout(3660000);
-      testRunner.sendInput(`${pathToEIM} ${runInDebug ? "-vvv " : ""}wizard`);
+      testRunner.callEIM(
+        pathToEIM,
+        runInDebug ? ["-vvv", "wizard"] : ["wizard"],
+      );
       if (os.platform() === "win32") {
         if(await testRunner.waitForOutput("Do you want to install Python?", 15000)) {
           testRunner.process.write("y");

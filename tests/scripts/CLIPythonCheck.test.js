@@ -20,7 +20,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       testRunner = new CLITestRunner();
       try {
         await testRunner.start();
-        testRunner.sendInput(`${pathToEIM} wizard`);
+        testRunner.callEIM(pathToEIM, ["wizard"]);
       } catch (error) {
         logger.info(`Error starting process: ${error}`);
         logger.debug(` Error: ${error}`);

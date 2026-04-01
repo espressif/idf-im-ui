@@ -18,7 +18,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       testRunner = new CLITestRunner();
       try {
         await testRunner.start();
-        testRunner.sendInput(`${pathToEIM} wizard`);
+        testRunner.callEIM(pathToEIM, ["wizard"]);
       } catch (error) {
         logger.info(`Error starting process: ${error}`);
         logger.debug(` Error: ${error}`);
@@ -43,7 +43,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         }
       };
     });
-  
+
     // Linux/MAC Specific Tests
     // The following test can only be executed if the prerequisites have not been installed in the OS.
     it("1- Should detect missing requirements", async function () {

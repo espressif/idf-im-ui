@@ -149,7 +149,7 @@ export function runCLICustomInstallTest({
 
     it("1- Should install IDF using specified parameters", async function () {
       logger.info(`Starting test - IDF custom installation`);
-      testRunner.sendInput(`${pathToEIM} install ${args.join(" ")}`);
+      testRunner.callEIM(pathToEIM, ["install", ...args]);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (args.includes("-n false")) {
         const startTime = Date.now();
