@@ -114,7 +114,8 @@ flate2 = { version = "1.0", default-features = false, features = ["rust_backend"
 tar = { version = "0.4", default-features = false }
 filetime = "0.2"
 zip = { version = "8.1", default-features = true }
-lzma-rs = "0.3.0"
+lzma-rs = { git = "https://github.com/Hahihula/lzma-rs", rev="e6336615af1dcc28276dbcfa4ab0c2d0917ada0a" }
+
 thiserror = "2.0"
 rust-i18n = "3.0.1"
 tokio = { version = "1.49", features = ["full"] }
