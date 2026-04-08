@@ -7,7 +7,7 @@ import { getOSName, getArchitecture } from "../helper.js";
 // This function verifies the EIM GUI properly starts and displays the welcome page
 
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
-  
+
   describe(`${id}- EIM startup |`, () => {
     let eimRunner = null;
     before(async function () {
@@ -73,22 +73,20 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       );
     });
 
-    it("4- Should show option to block sending usage statistics", async function () {
+    it("4- Should show usage statistics opt-in (off with do-not-track)", async function () {
       const allowStatistics = await eimRunner.findByText(
         "Allow sending usage statistics"
       );
       const isDisplayed = await allowStatistics.isDisplayed();
       expect(isDisplayed, "Expected option to allow sending usage statistics")
         .to.be.true;
-      const checkBox = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        "Allow sending usage statistics"
+      const checkBox = await eimRunner.findByDataId(
+        "allow-usage-tracking-checkbox"
       );
+      expect(checkBox, "Expected usage statistics checkbox").to.not.be.false;
       const checked = await checkBox.getAttribute("class");
-      expect(checked, "Expected checkbox to be unchecked").to.include(
-        "checked"
-      );
+      expect(checked, "Expected usage statistics opt-in off under do-not-track").to
+        .not.include("checked");
     });
 
     it("5- Should show navigation options in the app footer", async function () {
