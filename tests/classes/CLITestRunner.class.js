@@ -1,11 +1,11 @@
 
 /**
  * This class is used to run a terminal emulator for the CLI tests.
- * 
+ *
  * The terminal emulation is done using node-pty.
  * Several methods are provided to allow better control of the input and output of the terminal process.
- * 
- * 
+ *
+ *
  * The terminal process is started and keep running until the stop process is called, or any error occurs.
  */
 import pty from "node-pty";
@@ -118,9 +118,11 @@ class CLITestRunner {
 
   // method to call EIM binary on specific path with the specified arguments
   callEIM(eimCliPath, args = []) {
-    args = ["--do-not-track", "true", ...args];
-    logger.debug(`Calling EIM from path ${eimCliPath} with arguments ${args}`);
-    this.sendInput(`${eimCliPath} ${args.join(" ")}`);
+    const fullArgs = ["--do-not-track", "true", ...args];
+    logger.debug(
+      `Calling EIM from path ${eimCliPath} with arguments ${fullArgs.join(" ")}`
+    );
+    this.sendInput(`"${eimCliPath}" ${fullArgs.join(" ")}`);
   }
 
   // method to send a string to the terminal, return character is added to any string provided
