@@ -119,10 +119,20 @@ class CLITestRunner {
   // method to call EIM binary on specific path with the specified arguments
   callEIM(eimCliPath, args = []) {
     const fullArgs = ["--do-not-track", "true", ...args];
+    const argLine = fullArgs.join(" ");
     logger.debug(
-      `Calling EIM from path ${eimCliPath} with arguments ${fullArgs.join(" ")}`
+      `Calling EIM from path ${eimCliPath} with arguments ${argLine}`
     );
-    this.sendInput(`"${eimCliPath}" ${fullArgs.join(" ")}`);
+    // PowerShell parses "path" --flag as an error; use the call operator &.
+    // Bash treats a leading & as background — only use & on Windows.
+    if (os.platform() === "win32") {
+      this.sendInput(`& "${eimCliPath}" ${argLine}`);
+    } else {
+      const quoted = /\s/.test(eimCliPath)
+        ? `"${eimCliPath.replace(/"/g, '\\"')}"`
+        : eimCliPath;
+      this.sendInput(`${quoted} ${argLine}`);
+    }
   }
 
   // method to send a string to the terminal, return character is added to any string provided
