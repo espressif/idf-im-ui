@@ -102,7 +102,8 @@ export function runGUIOfflineInstallTest({
       this.timeout(25000);
       // Wait for the header to be present
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("welcome-header", 25000);
+      expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
         "Welcome to ESP-IDF Installation Manager",

@@ -41,7 +41,8 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       this.timeout(20000);
       // Wait for the header to be present
       await new Promise((resolve) => setTimeout(resolve, 15000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("welcome-header", 25000);
+      expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
         "Welcome to ESP-IDF Installation Manager"
@@ -60,6 +61,8 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const hideWelcome = await eimRunner.findByText(
         "show this welcome screen again"
       );
+      expect(hideWelcome, "Expected option to hide welcome page").to.not.be
+        .false;
       const isDisplayed = await hideWelcome.isDisplayed();
       expect(isDisplayed, "Expected option to hide welcome page").to.be.true;
       const checkBox = await eimRunner.findByRelation(
@@ -77,6 +80,10 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const allowStatistics = await eimRunner.findByText(
         "Allow sending usage statistics"
       );
+      expect(
+        allowStatistics,
+        "Expected option to allow sending usage statistics"
+      ).to.not.be.false;
       const isDisplayed = await allowStatistics.isDisplayed();
       expect(isDisplayed, "Expected option to allow sending usage statistics")
         .to.be.true;
