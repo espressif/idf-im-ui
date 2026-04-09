@@ -22,6 +22,7 @@ class GUITestRunner {
     logger.debug(`Starting EIM from path ${application} with arguments ${args}`);
 
     this.application = application;
+    this.args = args;
     this.capabilities = new Capabilities();
 
     this.capabilities.set("tauri:options", {
@@ -34,9 +35,15 @@ class GUITestRunner {
   // Function to launch the GUI application
   async start() {
     logger.info("Lauching Tauri Driver");
+    const tauriDriverPath = path.resolve(
+      os.homedir(),
+      ".cargo",
+      "bin",
+      "tauri-driver"
+    );
     try {
       this.tauriDriver = spawn(
-        path.resolve(os.homedir(), ".cargo", "bin", "tauri-driver"),
+        tauriDriverPath,
         [],
         { stdio: [null, process.stdout, process.stderr] }
       );
@@ -45,18 +52,54 @@ class GUITestRunner {
       throw error;
     }
 
-    // Wait for tauri-driver to start
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    try {
-      this.driver = await new Builder()
-        .withCapabilities(this.capabilities)
-        .usingServer("http://127.0.0.1:4444")
-        .build();
-    } catch (error) {
-      logger.info("Error building driver:", error);
-      throw error;
+    // Wait for tauri-driver to start listening before creating session
+    const tauriReady = await this.waitForTauriDriver();
+    if (!tauriReady) {
+      throw new Error(
+        `tauri-driver did not become ready in time (path: ${tauriDriverPath})`
+      );
     }
+
+    // Retry session creation once to reduce transient startup flakiness.
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        this.driver = await new Builder()
+          .withCapabilities(this.capabilities)
+          .usingServer("http://127.0.0.1:4444")
+          .build();
+        return;
+      } catch (error) {
+        logger.info(
+          `Error building driver (attempt ${attempt}/2) for ${this.application} with args ${this.args}:`,
+          error
+        );
+        if (attempt === 2) {
+          throw error;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+  }
+
+  async waitForTauriDriver(timeout = 10000) {
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+      if (this.tauriDriver && this.tauriDriver.exitCode !== null) {
+        return false;
+      }
+      try {
+        const response = await fetch("http://127.0.0.1:4444/status");
+        if (response.ok) {
+          return true;
+        }
+      } catch {
+        // Keep polling until timeout.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    return false;
   }
 
   // Function to stop the GUI application
