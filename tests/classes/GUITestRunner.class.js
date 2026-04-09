@@ -3,9 +3,9 @@
  * The GUI application is launched using selenium webdriver tauri-driver.
  * Several methods are provided to allow better control of the GUI application.
  * Alternatively pure selenium webdriver commands can be used to control the GUI application.
- *
+ * 
  * The GUI application is started and keep running until the stop process is called, or any error occurs.
- *
+ * 
  */
 
 
@@ -17,16 +17,13 @@ import { spawn } from "child_process";
 import { Builder, By, Capabilities, until } from "selenium-webdriver";
 
 class GUITestRunner {
-  constructor(application, args = []) {
-    args = ["--do-not-track", "true", ...args];
-    logger.debug(`Starting EIM from path ${application} with arguments ${args}`);
-
+  constructor(application) {
+    logger.debug(`Starting EIM from path ${application}`);
     this.application = application;
     this.capabilities = new Capabilities();
 
     this.capabilities.set("tauri:options", {
       application,
-      args,
     });
     this.capabilities.setBrowserName("wry");
   }
