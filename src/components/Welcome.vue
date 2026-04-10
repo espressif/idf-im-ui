@@ -242,7 +242,7 @@ export default {
         try {
           await invoke('save_app_settings', {
             firstRun: false,
-            skipWelcome: true,
+            skipWelcome: dontShowAgain.value,
             usageStatistics: allowUsageTracking.value
           })
         } catch (error) {
