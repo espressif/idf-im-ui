@@ -47,6 +47,7 @@ export function runGUIOfflineInstallTest({
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
       if (!pathToOfflineArchive) {
         logger.info(">>>>>>> Offline archive not found, skipping this test");
@@ -64,11 +65,11 @@ export function runGUIOfflineInstallTest({
 
     // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-        offlineInstallFailed = true;
       }
+      if (this.currentTest.state === "failed") offlineInstallFailed = true;
     });
 
     // The tear down function should stop the EIM application GUI and proxy server if enabled
@@ -99,7 +100,7 @@ export function runGUIOfflineInstallTest({
     });
 
     it("1- Should show welcome page", async function () {
-      this.timeout(25000);
+      this.timeout(45000);
       // Wait for the header to be present
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const header = await eimRunner.findByDataId("welcome-header", 25000);

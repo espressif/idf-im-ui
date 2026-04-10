@@ -278,7 +278,7 @@ jobs:
 
       - name: Install Tauri-Driver
         run: |
-          cargo install tauri-driver
+          cargo install tauri-driver --locked
 
       - name: Download artifacts
         uses: actions/download-artifact@v4

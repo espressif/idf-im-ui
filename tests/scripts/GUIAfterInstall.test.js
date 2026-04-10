@@ -19,6 +19,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
@@ -30,11 +31,11 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
     });
 
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-        afterInstallFailed = true;
       }
+      if (this.currentTest.state === "failed") afterInstallFailed = true;
     });
 
     after(async function () {
@@ -48,7 +49,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
     });
 
     it("1- Should show welcome page", async function () {
-      this.timeout(25000);
+      this.timeout(45000);
       // Wait for the header to be present231e
       await new Promise((resolve) => setTimeout(resolve, 10000));
       const header = await eimRunner.findByDataId("welcome-header", 25000);

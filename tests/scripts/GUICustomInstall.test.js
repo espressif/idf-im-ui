@@ -53,6 +53,7 @@ export function runGUICustomInstallTest({
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
@@ -67,11 +68,11 @@ export function runGUICustomInstallTest({
     // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
       this.timeout(10000);
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-        customInstallFailed = true;
       }
+      if (this.currentTest.state === "failed") customInstallFailed = true;
     });
     
     // The tear down function should stop the EIM application GUI and proxy server if enabled
@@ -94,7 +95,7 @@ export function runGUICustomInstallTest({
     });
 
     it("01- Should show welcome page", async function () {
-      this.timeout(25000);
+      this.timeout(45000);
       // Wait for the header to be present
       await new Promise((resolve) => setTimeout(resolve, 10000));
       const header = await eimRunner.findByDataId("welcome-header", 25000);
