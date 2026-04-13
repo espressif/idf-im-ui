@@ -108,14 +108,14 @@ python.sanitycheck.hint.ctypes.windows:
   en: "Reinstall Python from python.org"
   cn: "请从 python.org 重新安装 Python"
 python.sanitycheck.hint.ssl.linux:
-  en: "Install OpenSSL development headers: sudo apt install libssl-dev (Debian/Ubuntu), then reinstall Python"
-  cn: "安装 OpenSSL 开发头文件：sudo apt install libssl-dev (Debian/Ubuntu)，然后重新安装 Python"
+  en: "Check your network and proxy settings, or try to install OpenSSL development headers: sudo apt install libssl-dev (Debian/Ubuntu), then reinstall Python"
+  cn: "请检查您的网络和代理设置，或尝试安装 OpenSSL 开发头文件：sudo apt install libssl-dev (Debian/Ubuntu)，然后重新安装 Python"
 python.sanitycheck.hint.ssl.macos:
-  en: "Run: brew install openssl, then reinstall Python. Ensure Python links against the correct OpenSSL"
-  cn: "运行：brew install openssl，然后重新安装 Python。确保 Python 链接到正确的 OpenSSL"
+  en: "Check your network and proxy settings, or try to run: brew install openssl, then reinstall Python. Ensure Python links against the correct OpenSSL"
+  cn: "请检查您的网络和代理设置，或尝试运行：brew install openssl，然后重新安装 Python。确保 Python 链接到正确的 OpenSSL"
 python.sanitycheck.hint.ssl.windows:
-  en: "Reinstall Python from python.org — the official installer includes SSL support"
-  cn: "请从 python.org 重新安装 Python — 官方安装程序包含 SSL 支持"
+  en: "Check your network and proxy settings, or try to reinstall Python from python.org (the official installer includes SSL support)"
+  cn: "请检查您的网络和代理设置，或尝试从 python.org 重新安装 Python（官方安装程序包含 SSL 支持）"
 python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 Python?
