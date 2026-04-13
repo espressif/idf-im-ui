@@ -249,6 +249,9 @@ jobs:
           - os: windows-latest
             package_name: windows-x64
             distro_name: stock
+          - os: windows-2022
+            package_name: windows-x64
+            distro_name: stock-2022
           - os: windows-latest
             package_name: windows-x64
             distro_name: scoop
@@ -292,13 +295,13 @@ jobs:
       # Non-Windows steps
 
       - name: Set up Python
-        if: matrix.os != 'windows-latest'
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.13.8"
 
       - name: Get GUI application version number (non-Windows)
-        if: matrix.os != 'windows-latest'
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           git fetch --tags
           LATEST_TAG=$(git tag --sort=-creatordate | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1)
@@ -307,7 +310,7 @@ jobs:
           echo "Latest GUI tag to validate: $GUI_TAG"
 
       - name: Check artifact and make it executable (non-Windows)
-        if: matrix.os != 'windows-latest'
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           ls -la ./artifacts/
           chmod +x ./artifacts/eim
@@ -361,7 +364,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF basic install test script using GUI (non-Windows)
-        if: matrix.os != 'windows-latest'
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         run: |
           python3 --version        
           export LOG_TO_FILE="true"
@@ -373,7 +376,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (non-Windows)
-        if: matrix.os != 'windows-latest' && inputs.run_extended == 'true'
+        if: ${{ !startsWith(matrix.os, 'windows') && inputs.run_extended == 'true' }}
         run: |
           python3 --version        
           export LOG_TO_FILE="true"
@@ -387,7 +390,7 @@ jobs:
       # Windows steps
 
       - name: Get GUI application version number (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           git fetch --tags
           $LATEST_TAG = (git tag --sort=-creatordate | Where-Object { $_ -match '^v[0-9]+\.[0-9]+\.[0-9]+$' } | Select-Object -First 1)
@@ -396,30 +399,83 @@ jobs:
           echo "Latest GUI tag to validate: $GUI_TAG"
 
       - name: Check artifact (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           ls ./artifacts/
 
       - name: Setup Python (Windows)
-        if: matrix.os == 'windows-latest' && matrix.distro_name != 'scoop'
+        if: ${{ startsWith(matrix.os, 'windows') && matrix.distro_name != 'scoop' }}
         uses: actions/setup-python@v6
         with:
           python-version: "3.13"
 
       - name: Update WebView2 Runtime
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
           Start-Process -FilePath setup.exe -Verb RunAs -Wait
 
       - name: Setup node modules (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           Set-Location -Path "./tests"
           Expand-Archive node_modules.zip
 
+      - name: Collect Windows GUI environment diagnostics
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        run: |
+          $envReport = Join-Path $env:GITHUB_WORKSPACE "tests\windows-gui-environment.txt"
+          $eimPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\eim.exe"
+          "Timestamp (UTC): $([DateTime]::UtcNow.ToString('o'))" | Out-File -FilePath $envReport -Encoding utf8
+          "Runner OS: $env:RUNNER_OS" | Add-Content -Path $envReport
+          "PATH: $env:PATH" | Add-Content -Path $envReport
+          "" | Add-Content -Path $envReport
+          "=== EIM binary details ===" | Add-Content -Path $envReport
+          if (Test-Path $eimPath) {
+            Get-Item $eimPath | Format-List FullName, Length, LastWriteTime | Out-String | Add-Content -Path $envReport
+            Get-FileHash -Path $eimPath -Algorithm SHA256 | Format-List | Out-String | Add-Content -Path $envReport
+          } else {
+            "EIM binary not found at: $eimPath" | Add-Content -Path $envReport
+          }
+          "" | Add-Content -Path $envReport
+          "=== Edge / driver details ===" | Add-Content -Path $envReport
+          where.exe msedgedriver 2>&1 | Out-String | Add-Content -Path $envReport
+          Get-Command msedgedriver -ErrorAction SilentlyContinue | Format-List * | Out-String | Add-Content -Path $envReport
+          where.exe msedge 2>&1 | Out-String | Add-Content -Path $envReport
+          $edgeVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Edge\BLBeacon" -ErrorAction SilentlyContinue).version
+          "Edge version (registry): $edgeVersion" | Add-Content -Path $envReport
+          $webView2Version = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F1E7C13C-35E0-4A95-A444-73F3E6172E42}" -ErrorAction SilentlyContinue).pv
+          "WebView2 Runtime version (registry): $webView2Version" | Add-Content -Path $envReport
+
+      - name: Windows GUI preflight launch probe
+        if: ${{ startsWith(matrix.os, 'windows') }}
+        run: |
+          $eimPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\eim.exe"
+          $stdoutPath = Join-Path $env:GITHUB_WORKSPACE "tests\eim-preflight-stdout.log"
+          $stderrPath = Join-Path $env:GITHUB_WORKSPACE "tests\eim-preflight-stderr.log"
+          $summaryPath = Join-Path $env:GITHUB_WORKSPACE "tests\eim-preflight-summary.log"
+
+          "Timestamp (UTC): $([DateTime]::UtcNow.ToString('o'))" | Out-File -FilePath $summaryPath -Encoding utf8
+          "EIM path: $eimPath" | Add-Content -Path $summaryPath
+
+          if (-not (Test-Path $eimPath)) {
+            "Preflight skipped: binary not found" | Add-Content -Path $summaryPath
+            exit 0
+          }
+
+          $probe = Start-Process -FilePath $eimPath -ArgumentList "--do-not-track","true" -PassThru -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath
+          Start-Sleep -Seconds 15
+
+          $stillRunning = Get-Process -Id $probe.Id -ErrorAction SilentlyContinue
+          if ($stillRunning) {
+            "Preflight result: process is still running after 15s (pid=$($probe.Id))" | Add-Content -Path $summaryPath
+            Stop-Process -Id $probe.Id -Force -ErrorAction SilentlyContinue
+          } else {
+            "Preflight result: process exited early (pid=$($probe.Id), exit_code=$($probe.ExitCode))" | Add-Content -Path $summaryPath
+          }
+
       - name: Remove python and git from PATH (Windows)
-        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        if: ${{ startsWith(matrix.os, 'windows') && matrix.distro_name == 'scoop' }}
         run: |
           $env:backup_path = $env:PATH
           $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '[Pp]ython' }) -join ';'
@@ -428,7 +484,7 @@ jobs:
           echo "backup_path=$env:backup_path" >> $env:GITHUB_ENV
 
       - name: Run prerequisites check (Windows)
-        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        if: ${{ startsWith(matrix.os, 'windows') && matrix.distro_name == 'scoop' }}
         run: |
           $env:LOG_TO_FILE="true"   
           $env:PREREQUISITES_OS="windows"
@@ -440,7 +496,7 @@ jobs:
         continue-on-error: true
 
       - name: Run python check (Windows)
-        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        if: ${{ startsWith(matrix.os, 'windows') && matrix.distro_name == 'scoop' }}
         run: |
           $env:LOG_TO_FILE="true"        
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
@@ -456,7 +512,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF basic install test script using GUI (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
           python3 --version        
           $env:LOG_TO_FILE="true"
@@ -468,7 +524,7 @@ jobs:
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (Windows)
-        if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
+        if: ${{ startsWith(matrix.os, 'windows') && inputs.run_extended == 'true' }}
         run: |
           python3 --version        
           $env:LOG_TO_FILE="true"
@@ -480,10 +536,51 @@ jobs:
         continue-on-error: true
 
       - name: Restore PATH (Windows)
-        if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
+        if: ${{ startsWith(matrix.os, 'windows') && matrix.distro_name == 'scoop' }}
         run: |
           $env:PATH = $env:backup_path
           echo "PATH=$env:PATH" >> $env:GITHUB_ENV
+
+      - name: Collect Windows crash diagnostics
+        if: ${{ startsWith(matrix.os, 'windows') && always() }}
+        run: |
+          $diagRoot = Join-Path $env:GITHUB_WORKSPACE "tests\windows-crash-diagnostics"
+          New-Item -ItemType Directory -Path $diagRoot -Force | Out-Null
+
+          $appEvents = Join-Path $diagRoot "eventlog-application.txt"
+          $sysEvents = Join-Path $diagRoot "eventlog-system.txt"
+          $startTime = (Get-Date).AddHours(-2)
+
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=$startTime} -ErrorAction SilentlyContinue |
+            Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
+            Format-List | Out-File -FilePath $appEvents -Encoding utf8
+
+          Get-WinEvent -FilterHashtable @{LogName='System'; StartTime=$startTime} -ErrorAction SilentlyContinue |
+            Select-Object TimeCreated, Id, LevelDisplayName, ProviderName, Message |
+            Format-List | Out-File -FilePath $sysEvents -Encoding utf8
+
+          $werReport = Join-Path $diagRoot "wer-paths.txt"
+          $werPaths = @(
+            "$env:LOCALAPPDATA\CrashDumps",
+            "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportArchive",
+            "$env:LOCALAPPDATA\Microsoft\Windows\WER\ReportQueue",
+            "$env:PROGRAMDATA\Microsoft\Windows\WER\ReportArchive",
+            "$env:PROGRAMDATA\Microsoft\Windows\WER\ReportQueue"
+          )
+          $werPaths | Out-File -FilePath $werReport -Encoding utf8
+
+          foreach ($path in $werPaths) {
+            if (Test-Path $path) {
+              $safeName = ($path -replace "[:\\ ]", "_")
+              $target = Join-Path $diagRoot $safeName
+              New-Item -ItemType Directory -Path $target -Force | Out-Null
+              Get-ChildItem -Path $path -Recurse -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending |
+                Select-Object -First 50 FullName, LastWriteTime, Length |
+                Format-Table -AutoSize | Out-String |
+                Out-File -FilePath (Join-Path $target "listing.txt") -Encoding utf8
+            }
+          }
 
       # Copy eim log files to standard location for easier access
       - name: Copy EIM Log files (ubuntu)
@@ -493,15 +590,41 @@ jobs:
         continue-on-error: true
 
       - name: Copy EIM Log files (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         run: |
-          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+          $destination = Join-Path $env:GITHUB_WORKSPACE "tests"
+          $eimRoot = Join-Path $env:LOCALAPPDATA "eim"
+          $eimLogs = Join-Path $eimRoot "logs"
+          $copyReport = Join-Path $destination "windows-eim-log-copy-report.txt"
+
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          "Timestamp (UTC): $([DateTime]::UtcNow.ToString('o'))" | Out-File -FilePath $copyReport -Encoding utf8
+          "EIM root: $eimRoot" | Add-Content -Path $copyReport
+          "EIM logs: $eimLogs" | Add-Content -Path $copyReport
+
+          if (Test-Path $eimRoot) {
+            "=== eim directory listing ===" | Add-Content -Path $copyReport
+            Get-ChildItem -Path $eimRoot -Recurse -ErrorAction SilentlyContinue |
+              Select-Object FullName, LastWriteTime, Length |
+              Format-Table -AutoSize | Out-String |
+              Add-Content -Path $copyReport
+          } else {
+            "EIM root does not exist." | Add-Content -Path $copyReport
+          }
+
+          if (Test-Path $eimLogs) {
+            Copy-Item -Path "$eimLogs\*" -Destination $destination -Force -ErrorAction Continue
+            "Copied logs from $eimLogs to $destination" | Add-Content -Path $copyReport
+          } else {
+            "No logs directory found at $eimLogs" | Add-Content -Path $copyReport
+            Write-Warning "No EIM logs directory found: $eimLogs"
+          }
         continue-on-error: true
 
       # Upload test results
       - name: Upload test results (non-Windows)
         uses: actions/upload-artifact@v4
-        if: matrix.os != 'windows-latest'
+        if: ${{ !startsWith(matrix.os, 'windows') }}
         with:
           name: autotest-GUI-results-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: |
@@ -511,7 +634,7 @@ jobs:
 
       - name: Upload test results (Windows)
         uses: actions/upload-artifact@v4
-        if: matrix.os == 'windows-latest'
+        if: ${{ startsWith(matrix.os, 'windows') }}
         with:
           name: autotest-GUI-results-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
           path: |

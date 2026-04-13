@@ -20,6 +20,9 @@ class GUITestRunner {
   constructor(application, args = []) {
     args = ["--do-not-track", "true", ...args];
     logger.debug(`Starting EIM from path ${application} with arguments ${args}`);
+    logger.info(
+      `Configured GUI launch command: application="${application}" args="${args.join(" ")}"`
+    );
 
     this.application = application;
     this.capabilities = new Capabilities();
@@ -44,6 +47,12 @@ class GUITestRunner {
       this.tauriDriver = spawn(tauriDriverPath, [], {
         stdio: [null, process.stdout, process.stderr],
       });
+      this.tauriDriver.on("error", (error) => {
+        logger.info("tauri-driver process error:", error);
+      });
+      this.tauriDriver.on("exit", (code, signal) => {
+        logger.info(`tauri-driver process exited (code=${code}, signal=${signal})`);
+      });
     } catch (error) {
       logger.info("Error launching Tauri driver:", error);
       throw error;
@@ -56,6 +65,7 @@ class GUITestRunner {
         `tauri-driver did not become ready in time (path: ${tauriDriverPath})`
       );
     }
+    logger.info(`tauri-driver ready on http://127.0.0.1:4444/status at ${new Date().toISOString()}`);
 
     const maxSessionAttempts = 3;
     for (let attempt = 1; attempt <= maxSessionAttempts; attempt++) {
