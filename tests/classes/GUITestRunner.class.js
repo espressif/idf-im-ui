@@ -18,7 +18,7 @@ import { Builder, By, Capabilities, until } from "selenium-webdriver";
 
 class GUITestRunner {
   constructor(application, args = []) {
-    args = ["--do-not-track", "true", ...args];
+    args = ["--do-not-track=true", ...args];
     logger.debug(`Starting EIM from path ${application} with arguments ${args}`);
 
     this.application = application;
