@@ -423,7 +423,9 @@ jobs:
 
       - name: Collect Windows GUI environment diagnostics
         if: ${{ startsWith(matrix.os, 'windows') }}
+        continue-on-error: true
         run: |
+          $ErrorActionPreference = 'Continue'
           $envReport = Join-Path $env:GITHUB_WORKSPACE "tests\windows-gui-environment.txt"
           $eimPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\eim.exe"
           "Timestamp (UTC): $([DateTime]::UtcNow.ToString('o'))" | Out-File -FilePath $envReport -Encoding utf8
@@ -439,16 +441,18 @@ jobs:
           }
           "" | Add-Content -Path $envReport
           "=== Edge / driver details ===" | Add-Content -Path $envReport
-          where.exe msedgedriver 2>&1 | Out-String | Add-Content -Path $envReport
+          $msedgeDriverLoc = & where.exe msedgedriver 2>&1; "msedgedriver location: $msedgeDriverLoc" | Add-Content -Path $envReport
           Get-Command msedgedriver -ErrorAction SilentlyContinue | Format-List * | Out-String | Add-Content -Path $envReport
-          where.exe msedge 2>&1 | Out-String | Add-Content -Path $envReport
+          $msedgeLoc = & where.exe msedge 2>&1; "msedge location: $msedgeLoc" | Add-Content -Path $envReport
           $edgeVersion = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Edge\BLBeacon" -ErrorAction SilentlyContinue).version
           "Edge version (registry): $edgeVersion" | Add-Content -Path $envReport
           $webView2Version = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F1E7C13C-35E0-4A95-A444-73F3E6172E42}" -ErrorAction SilentlyContinue).pv
           "WebView2 Runtime version (registry): $webView2Version" | Add-Content -Path $envReport
+          exit 0
 
       - name: Windows GUI preflight launch probe
         if: ${{ startsWith(matrix.os, 'windows') }}
+        continue-on-error: true
         run: |
           $eimPath = Join-Path $env:GITHUB_WORKSPACE "artifacts\eim.exe"
           $stdoutPath = Join-Path $env:GITHUB_WORKSPACE "tests\eim-preflight-stdout.log"
@@ -543,6 +547,7 @@ jobs:
 
       - name: Collect Windows crash diagnostics
         if: ${{ startsWith(matrix.os, 'windows') && always() }}
+        continue-on-error: true
         run: |
           $diagRoot = Join-Path $env:GITHUB_WORKSPACE "tests\windows-crash-diagnostics"
           New-Item -ItemType Directory -Path $diagRoot -Force | Out-Null
