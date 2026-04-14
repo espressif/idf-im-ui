@@ -69,11 +69,23 @@ function global:esptool.py {
     & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\esptool.py" @args
 }
 
+function global:esptool {
+    & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\esptool.py" @args
+}
+
 function global:espefuse.py {
     & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\espefuse.py" @args
 }
 
+function global:espefuse {
+    & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\espefuse.py" @args
+}
+
 function global:espsecure.py {
+    & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\espsecure.py" @args
+}
+
+function global:espsecure {
     & "{{idf_python_env_path}}\Scripts\python.exe" "{{idf_path}}\components\esptool_py\esptool\espsecure.py" @args
 }
 

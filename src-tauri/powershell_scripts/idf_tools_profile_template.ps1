@@ -93,11 +93,23 @@ function global:esptool.py {
   {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py @args
 }
 
+function global:esptool {
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py @args
+}
+
 function global:espefuse.py {
   {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
 }
 
+function global:espefuse {
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
+}
+
 function global:espsecure.py {
+  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
+}
+
+function global:espsecure {
   {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
 }
 

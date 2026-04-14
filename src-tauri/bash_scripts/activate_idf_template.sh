@@ -131,9 +131,15 @@ alias idf.py="{{python_bin_path}} {{idf_path_escaped}}/tools/idf.py"
 
 alias esptool.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
 
+alias esptool="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+
 alias espefuse.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
 
+alias espefuse="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+
 alias espsecure.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+
+alias espsecure="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
 
 alias otatool.py="{{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py"
 
