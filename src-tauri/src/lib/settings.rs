@@ -350,6 +350,10 @@ impl Settings {
     pub fn save_esp_ide_json(&self) -> Result<()> {
         let mut idf_installations = Vec::new();
 
+        // Serialize the Settings itself to binary using bincode for installation_config
+        let settings_binary = bincode::serialize(self)
+            .map_err(|e| anyhow!("Failed to serialize settings: {}", e))?;
+
         if let Some(versions) = &self.idf_versions {
 
             for version in versions {
@@ -363,6 +367,7 @@ impl Settings {
                 python: paths.python_path.to_string_lossy().into_owned(),
                 idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
                 activation_script: paths.activation_script.to_string_lossy().into_owned(),
+                installation_config: Some(settings_binary.clone()),
               });
             }
         }

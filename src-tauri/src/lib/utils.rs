@@ -635,6 +635,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             name: tool_set.idf_version,
             python: paths.python_path.to_string_lossy().into_owned(),
             idf_tools_path: new_idf_tools_path,
+            installation_config: None,
         };
 
         current_config.idf_installed.push(installation);
