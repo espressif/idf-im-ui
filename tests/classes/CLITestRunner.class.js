@@ -1,11 +1,11 @@
 
 /**
  * This class is used to run a terminal emulator for the CLI tests.
- * 
+ *
  * The terminal emulation is done using node-pty.
  * Several methods are provided to allow better control of the input and output of the terminal process.
- * 
- * 
+ *
+ *
  * The terminal process is started and keep running until the stop process is called, or any error occurs.
  */
 import pty from "node-pty";
@@ -116,7 +116,27 @@ class CLITestRunner {
     }
   }
 
-  // method to send a string to teh terminal, return character is added to any string provided
+  // method to call EIM binary on specific path with the specified arguments
+  callEIM(eimCliPath, args = []) {
+    const fullArgs = ["--do-not-track", "true", ...args];
+    const argLine = fullArgs.join(" ");
+    logger.debug(
+      `Calling EIM from path ${eimCliPath} with arguments ${argLine}`
+    );
+    // PowerShell parses "path" --flag as an error; use the call operator &.
+    // Bash treats a leading & as background — only use & on Windows.
+    if (os.platform() === "win32") {
+      this.sendInput(`& "${eimCliPath}" ${argLine}`);
+    } else {
+      const quoted = /\s/.test(eimCliPath)
+        ? `"${eimCliPath.replace(/"/g, '\\"')}"`
+        : eimCliPath;
+      this.sendInput(`${quoted} ${argLine}`);
+    }
+  }
+
+  // method to send a string to the terminal, return character is added to any string provided
+  // This method should not be use to call EIM binary, use callEIM method instead.
   sendInput(input) {
     logger.debug(`Attempting to send ${input.replace(/\r$/, "")} to terminal`);
     if (this.process && !this.exited) {

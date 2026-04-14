@@ -29,6 +29,7 @@ export function runGUIVersionManagementTest({
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
@@ -43,11 +44,11 @@ export function runGUIVersionManagementTest({
 
     // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-        testStepFailed = true;
       }
+      if (this.currentTest.state === "failed") testStepFailed = true;
     });
 
     // The tear down function should stop the EIM application GUI
@@ -62,10 +63,11 @@ export function runGUIVersionManagementTest({
     });
 
     it("1- Should show welcome page", async function () {
-      this.timeout(25000);
+      this.timeout(45000);
       // Wait for the header to be presented
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("welcome-header", 25000);
+      expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
         "Welcome to ESP-IDF Installation Manager"

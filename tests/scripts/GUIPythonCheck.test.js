@@ -20,11 +20,12 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
       }

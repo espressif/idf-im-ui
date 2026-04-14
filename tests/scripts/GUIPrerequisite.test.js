@@ -20,12 +20,13 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
     // The afterEach function should log the EIM application GUI screenshot on failure
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
       }

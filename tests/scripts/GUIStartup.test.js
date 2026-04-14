@@ -7,7 +7,7 @@ import { getOSName, getArchitecture } from "../helper.js";
 // This function verifies the EIM GUI properly starts and displays the welcome page
 
 export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
-  
+
   describe(`${id}- EIM startup |`, () => {
     let eimRunner = null;
     before(async function () {
@@ -17,11 +17,12 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
         await eimRunner.start();
       } catch (err) {
         logger.info("Error starting EIM application");
+        throw err;
       }
     });
 
     afterEach(async function () {
-      if (this.currentTest.state === "failed") {
+      if (this.currentTest.state === "failed" && eimRunner?.driver) {
         await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
         logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
       }
@@ -38,10 +39,11 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
     });
 
     it("1- Should show welcome page", async function () {
-      this.timeout(20000);
+      this.timeout(45000);
       // Wait for the header to be present
       await new Promise((resolve) => setTimeout(resolve, 15000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("welcome-header", 25000);
+      expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
         "Welcome to ESP-IDF Installation Manager"
@@ -58,8 +60,11 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
 
     it("3- Should show option to hide welcome page", async function () {
       const hideWelcome = await eimRunner.findByText(
-        "show this welcome screen again"
+        "show this welcome screen again",
+        20000
       );
+      expect(hideWelcome, "Expected option to hide welcome page").to.not.be
+        .false;
       const isDisplayed = await hideWelcome.isDisplayed();
       expect(isDisplayed, "Expected option to hide welcome page").to.be.true;
       const checkBox = await eimRunner.findByRelation(
@@ -73,22 +78,25 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       );
     });
 
-    it("4- Should show option to block sending usage statistics", async function () {
+    it("4- Should show usage statistics opt-in (off with do-not-track)", async function () {
       const allowStatistics = await eimRunner.findByText(
-        "Allow sending usage statistics"
+        "Allow sending usage statistics",
+        20000
       );
+      expect(
+        allowStatistics,
+        "Expected option to allow sending usage statistics"
+      ).to.not.be.false;
       const isDisplayed = await allowStatistics.isDisplayed();
       expect(isDisplayed, "Expected option to allow sending usage statistics")
         .to.be.true;
-      const checkBox = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        "Allow sending usage statistics"
+      const checkBox = await eimRunner.findByDataId(
+        "allow-usage-tracking-checkbox"
       );
+      expect(checkBox, "Expected usage statistics checkbox").to.not.be.false;
       const checked = await checkBox.getAttribute("class");
-      expect(checked, "Expected checkbox to be unchecked").to.include(
-        "checked"
-      );
+      expect(checked, "Expected usage statistics opt-in off under do-not-track").to
+        .not.include("checked");
     });
 
     it("5- Should show navigation options in the app footer", async function () {
