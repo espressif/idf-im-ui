@@ -446,7 +446,7 @@ pub fn run_command_using_activation_script(activation_script: &str, command: &st
 
 pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf) -> anyhow::Result<Settings> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
-    // The fix logic is just instalation with use of existing repository
+    // The fix logic is just installation with use of existing repository
     let mut version_name = None;
     match list_installed_versions() {
         Ok(versions) => {

@@ -324,7 +324,7 @@ async fn download_and_extract_tools(
     .await
 }
 
-pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
+pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
     debug!(
         "{}",
         t!(
@@ -389,14 +389,14 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let archive_dir = offline_archive_dir.as_ref().unwrap();
         // copy IDFs
         copy_idf_from_offline_archive(archive_dir, &config)?;
-        let compoments_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
-        match copy_components_from_offline_archive(archive_dir, &compoments_dir) {
+        let components_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+        match copy_components_from_offline_archive(archive_dir, &components_dir) {
             Ok(_) => {
                 info!("{}", t!("wizard.components_copy.success"));
             }
             Err(err) => {
                 warn!("{}: {}", t!("wizard.components_copy.failure"), err);
-                // The component will be donwloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
+                // The component will be downloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
             }
         }
     }
@@ -453,7 +453,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 Ok(files) => files,
                 Err(err) => {
                   warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
-                  // Missing option for feature selction should not block installation
+                  // Missing option for feature selection should not block installation
                   // This is exceptionally important for headless run against private repos
                   RequirementsMetadata {
                     version: 1,

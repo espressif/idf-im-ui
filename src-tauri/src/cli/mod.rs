@@ -198,7 +198,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         "versions": format!("{:?}", settings.idf_versions),
                       }))).await;
                   }
-                    let result = wizard::run_wizzard_run(settings).await;
+                    let result = wizard::run_wizard_run(settings).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result", r = "Ok".to_string()));
@@ -526,7 +526,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     if !do_not_track {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
                     }
-                    let result = wizard::run_wizzard_run(settings).await;
+                    let result = wizard::run_wizard_run(settings).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result"));
@@ -591,9 +591,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
           };
           info!("{}", t!("fix.fixing", path = path_to_fix.display()));
-          // The fix logic is just instalation with use of existing repository
+          // The fix logic is just installation with use of existing repository
           let settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone()).await?;
-          let result = wizard::run_wizzard_run(settings).await;
+          let result = wizard::run_wizard_run(settings).await;
           match result {
             Ok(r) => {
               info!("{}", t!("fix.result"));
