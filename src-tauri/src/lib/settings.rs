@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use struct_iterable::Iterable;
 use uuid::Uuid;
 
-use crate::idf_config::{IdfConfig, IdfInstallation, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
+use crate::idf_config::{Base64Bytes, IdfConfig, IdfInstallation, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
 use crate::system_dependencies::PYTHON_NAME_TO_INSTALL;
 use crate::utils::{get_git_path, is_valid_idf_directory};
 
@@ -367,7 +367,7 @@ impl Settings {
                 python: paths.python_path.to_string_lossy().into_owned(),
                 idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
                 activation_script: paths.activation_script.to_string_lossy().into_owned(),
-                installation_config: Some(settings_binary.clone()),
+                installation_config: Some(Base64Bytes::new(settings_binary.clone())),
               });
             }
         }

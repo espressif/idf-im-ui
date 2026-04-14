@@ -1,12 +1,64 @@
 use anyhow::{anyhow, Context, Result};
+use base64::Engine;
 use log::debug;
-use serde::{de, Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::Error as DeError;
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
 
 use crate::ensure_path;
+
+#[derive(Debug, Clone)]
+pub struct Base64Bytes(pub Vec<u8>);
+
+impl Base64Bytes {
+    pub fn new(data: Vec<u8>) -> Self {
+        Base64Bytes(data)
+    }
+
+    pub fn into_inner(self) -> Vec<u8> {
+        self.0
+    }
+
+    pub fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl Serialize for Base64Bytes {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let encoded = base64::engine::general_purpose::STANDARD.encode(&self.0);
+        serializer.serialize_str(&encoded)
+    }
+}
+
+/// Deserialize Base64Bytes from either a base64 string OR a sequence of integers
+pub fn deserialize_base64_bytes<'de, D>(deserializer: D) -> Result<Option<Base64Bytes>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Use serde_json::Value to handle both formats flexibly
+    let value = serde_json::Value::deserialize(deserializer)?;
+
+    match value {
+        // New format: base64 string
+        serde_json::Value::String(s) => {
+            base64::engine::general_purpose::STANDARD
+                .decode(&s)
+                .map(|v| Some(Base64Bytes(v)))
+                .map_err(|e| DeError::custom(format!("Invalid base64: {}", e)))
+        }
+        // Null or missing
+        serde_json::Value::Null => Ok(None),
+        // Unexpected type
+        _ => Err(DeError::custom("Expected base64 string or array of integers")),
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdfInstallation {
@@ -18,8 +70,8 @@ pub struct IdfInstallation {
     pub name: String,
     pub path: String,
     pub python: String,
-    #[serde(rename = "installationConfig", skip_serializing_if = "Option::is_none")]
-    pub installation_config: Option<Vec<u8>>,
+    #[serde(rename = "installationConfig", default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_base64_bytes")]
+    pub installation_config: Option<Base64Bytes>,
 }
 
 pub const IDF_CONFIG_FILE_NAME: &str = "eim_idf.json";
@@ -331,7 +383,7 @@ mod tests {
                     name: String::from("ESP-IDF v5.4"),
                     path: String::from("/tmp/esp-new/v5.4/esp-idf"),
                     python: String::from("/tmp/esp-new/v5.4/tools/python/bin/python3"),
-                    installation_config: Some(settings_binary.clone()),
+                    installation_config: Some(Base64Bytes::new(settings_binary.clone())),
                 },
                 IdfInstallation {
                     activation_script: String::from("/tmp/esp-new/activate_idf_v5.1.5.sh"),
@@ -340,7 +392,7 @@ mod tests {
                     name: String::from("v5.1.5"),
                     path: String::from("/tmp/esp-new/v5.1.5/esp-idf"),
                     python: String::from("/tmp/esp-new/v5.1.5/tools/python/bin/python3"),
-                    installation_config: Some(settings_binary),
+                    installation_config: Some(Base64Bytes::new(settings_binary)),
                 },
             ],
             idf_selected_id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
@@ -627,7 +679,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
 
       // Verify we can deserialize the binary data back to Settings
       let settings_bytes = installation.installation_config.as_ref().unwrap();
-      let settings: crate::settings::Settings = bincode::deserialize(settings_bytes)?;
+      let settings: crate::settings::Settings = bincode::deserialize(settings_bytes.as_slice())?;
       assert!(settings.path.is_some());
     }
 
