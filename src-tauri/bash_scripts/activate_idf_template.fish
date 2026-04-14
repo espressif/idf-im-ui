@@ -123,11 +123,23 @@ function esptool.py
     {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py $argv
 end
 
+function esptool
+    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py $argv
+end
+
 function espefuse.py
     {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py $argv
 end
 
+function espefuse
+    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py $argv
+end
+
 function espsecure.py
+    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py $argv
+end
+
+function espsecure
     {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py $argv
 end
 

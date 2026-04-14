@@ -33,8 +33,11 @@ set PATH={{add_paths_extras}};{{idf_path}}\tools;%PATH%
 REM Create command aliases (CMD equivalent of PowerShell functions)
 doskey idf.py={{python_bin_path}} {{idf_path}}\tools\idf.py $*
 doskey esptool.py={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py $*
+doskey esptool={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py $*
 doskey espefuse.py={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py $*
+doskey espefuse={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py $*
 doskey espsecure.py={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py $*
+doskey espsecure={{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py $*
 doskey otatool.py={{python_bin_path}} {{idf_path}}\components\app_update\otatool.py $*
 doskey parttool.py={{python_bin_path}} {{idf_path}}\components\partition_table\parttool.py $*
 
