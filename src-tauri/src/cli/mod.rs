@@ -117,6 +117,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
     }
     #[cfg(not(feature = "gui"))]
     let command = cli.clone().command.unwrap();
+    // Handle completions first, before any logging or output setup.
+    // This ensures shell completion scripts are pure without any log messages.
+    if let Commands::Completions { shell } = &command {
+        let mut cmd = Cli::command();
+        let bin_name = env!("CARGO_PKG_NAME");
+        generate(*shell, &mut cmd, bin_name, &mut std::io::stdout());
+        return Ok(());
+    }
+
     match command {
         #[cfg(feature = "gui")]
         Commands::Gui(_) => {
@@ -145,12 +154,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }))).await;
     }
     match command {
-        Commands::Completions { shell } => {
-            let mut cmd = Cli::command();
-            let bin_name = env!("CARGO_PKG_NAME");
-            generate(shell, &mut cmd, bin_name, &mut std::io::stdout());
-            return Ok(());
-        }
+        Commands::Completions { .. } => unreachable!(),
         Commands::Install(install_args) => {
             let settings = Settings::new(
                 install_args.config.clone(),
