@@ -80,6 +80,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `pixman`: Runtime library for pixman (QEMU dependency).
 - `sdl2`: Runtime library for SDL2 (QEMU dependency).
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
+- `webkit2gtk-4.1`: library needed for rendering the Ui for the GUI not needed for CLI
 
 #### openSUSE/SUSE Linux Enterprise
 
