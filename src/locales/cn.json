@@ -369,7 +369,8 @@
         "fix": "修复/重新安装",
         "openFolder": "打开文件夹",
         "openTerminal": "打开 IDF 终端",
-        "remove": "移除"
+        "remove": "移除",
+        "exportConfig": "导出配置"
       }
     },
     "quickActions": {
@@ -417,7 +418,8 @@
         "driversInstalled": "成功安装驱动程序。",
         "latestVersion": "当前已经是最新版本",
         "updateAvailable": "有新版本可用！",
-        "openTerminal": "启用 IDF 终端"
+        "openTerminal": "启用 IDF 终端",
+        "configExported": "配置导出成功"
       },
       "error": {
         "loadVersions": "加载已安装版本失败",
@@ -430,7 +432,9 @@
         "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。",
         "drivers": "安装驱动程序失败：{error}",
         "checkUpdates": "检查更新失败",
-        "openTerminal": "无法打开 IDF 终端"
+        "openTerminal": "无法打开 IDF 终端",
+        "exportConfig": "导出配置失败",
+        "noConfigToExport": "没有可导出的配置"
       },
       "warning": {
         "confirmAction": "请确认操作"

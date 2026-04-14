@@ -415,3 +415,12 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
 
     Ok(true)
 }
+
+/// Writes content to a text file at the given path
+#[tauri::command]
+pub fn write_text_file(path: String, content: String) -> Result<(), String> {
+    fs::write(&path, &content)
+        .map_err(|e| format!("Failed to write to file {}: {}", path, e))?;
+    info!("Successfully wrote to file: {}", path);
+    Ok(())
+}

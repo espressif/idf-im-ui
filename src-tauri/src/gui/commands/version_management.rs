@@ -1,4 +1,5 @@
 use idf_im_lib::idf_config::IdfInstallation;
+use idf_im_lib::settings::Settings;
 use log::{debug, error, info};
 
 
@@ -90,5 +91,53 @@ pub fn purge_all_installations() -> bool {
         error!("Failed to list installed versions: {}", err);
         false
       }
+  }
+}
+
+#[tauri::command]
+pub fn generate_installation_config_for_version(id: String) -> Option<String> {
+  debug!("Generating installation config for id {}", id);
+
+  match idf_im_lib::version_manager::get_esp_ide_config() {
+    Ok(config) => {
+      // Find the installation with the given id
+      let installation = config.idf_installed.iter().find(|i| i.id == id);
+
+      if let Some(install) = installation {
+        // Check if installation_config is present
+        if let Some(ref config_bytes) = install.installation_config {
+          // Deserialize binary data back to Settings
+          match bincode::deserialize::<Settings>(config_bytes) {
+            Ok(settings) => {
+              // Serialize Settings to TOML string
+              match toml::to_string(&settings) {
+                Ok(toml_string) => {
+                  debug!("Successfully generated config for id {}", id);
+                  Some(toml_string)
+                }
+                Err(e) => {
+                  error!("Failed to serialize settings to TOML: {}", e);
+                  None
+                }
+              }
+            }
+            Err(e) => {
+              error!("Failed to deserialize settings from binary: {}", e);
+              None
+            }
+          }
+        } else {
+          debug!("No installation_config found for id {}", id);
+          None
+        }
+      } else {
+        error!("Installation with id {} not found", id);
+        None
+      }
+    }
+    Err(err) => {
+      error!("Failed to get ESP ide config: {}", err);
+      None
+    }
   }
 }

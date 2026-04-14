@@ -334,6 +334,8 @@ pub fn run(settings: Option<Settings>, log_level_override: Option<log::LevelFilt
             get_tools_list_all_versions,
             set_selected_tools_per_version,
             get_selected_tools_per_version,
+            generate_installation_config_for_version,
+            write_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
