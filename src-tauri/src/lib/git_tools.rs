@@ -416,17 +416,22 @@ pub fn clone_repository(
         }
     }
 
-    // Fetch
     info!("Cloning repository from {:?}", options);
-    let (mut checkout, _) = match prepare
-        .fetch_then_checkout(gix::progress::Discard, should_interrupt){
-            Ok(res) => res,
-            Err(e) => {
-                let _ = tx.send(ProgressMessage::Finish);
-                error!("Failed to fetch repository: {}", e);
-                return Err(Box::new(e));
-            }
-        };
+    let mut prepare_mut = prepare;
+    let fetch_result = crate::utils::with_retry_exponential(
+        || prepare_mut.fetch_then_checkout(gix::progress::Discard, should_interrupt),
+        3, // max_retries
+        std::time::Duration::from_millis(500), // base_delay
+    );
+
+    let (mut checkout, _) = match fetch_result {
+        Ok(res) => res,
+        Err(e) => {
+            let _ = tx.send(ProgressMessage::Finish);
+            error!("Failed to fetch repository: {}", e);
+            return Err(Box::new(e));
+        }
+    };
 
     let _ = tx.send(ProgressMessage::Update(50));
 
@@ -1098,20 +1103,30 @@ fn fetch_single_commit_to_modules(
         )
         .map_err(|e| format!("Failed to set refspec: {}", e))?;
 
-    let connection = remote
-        .connect(gix::remote::Direction::Fetch)
-        .map_err(|e| format!("Failed to connect: {}", e))?;
-
     send_progress(&tx, submodule_name, 40);
 
     let shallow = gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap());
 
-    let _outcome = connection
-        .prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
-        .map_err(|e| format!("Failed to prepare fetch: {}", e))?
-        .with_shallow(shallow)
-        .receive(gix::progress::Discard, &AtomicBool::new(false))
-        .map_err(|e| format!("Failed to receive: {}", e))?;
+    let _outcome = crate::utils::with_retry_exponential(
+        || {
+            let mut conn = remote
+                .connect(gix::remote::Direction::Fetch)
+                .map_err(|e| format!("Failed to connect: {}", e))?;
+
+            conn.prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
+                .map_err(|e| format!("Failed to prepare fetch: {}", e))?
+                .with_shallow(shallow.clone())
+                .receive(gix::progress::Discard, &AtomicBool::new(false))
+                .map_err(|e| format!("Failed to receive: {}", e))
+        },
+        3,
+        std::time::Duration::from_millis(500),
+    ).map_err(|e| {
+        format!(
+            "fetch_single_commit_to_modules failed after 3 attempts: {}",
+            e
+        )
+    })?;
 
     send_progress(&tx, submodule_name, 70);
 
@@ -1468,11 +1483,6 @@ fn fetch_single_commit_gix(
         )
         .map_err(|e| format!("Failed to set refspec: {}", e))?;
 
-    // Connect to the remote
-    let connection = remote
-        .connect(gix::remote::Direction::Fetch)
-        .map_err(|e| format!("Failed to connect: {}", e))?;
-
     send_progress(tx, submodule_name, 20);
 
     // Configure shallow fetch
@@ -1480,13 +1490,26 @@ fn fetch_single_commit_gix(
         NonZeroU32::new(1).unwrap()
     );
 
-    // Prepare and execute the fetch
-    let outcome = connection
-        .prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
-        .map_err(|e| format!("Failed to prepare fetch: {}", e))?
-        .with_shallow(shallow)
-        .receive(gix::progress::Discard, should_interrupt)
-        .map_err(|e| format!("Failed to receive: {}", e))?;
+    let outcome = crate::utils::with_retry_exponential(
+        || {
+            let mut conn = remote
+                .connect(gix::remote::Direction::Fetch)
+                .map_err(|e| format!("Failed to connect: {}", e))?;
+
+            conn.prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
+                .map_err(|e| format!("Failed to prepare fetch: {}", e))?
+                .with_shallow(shallow.clone())
+                .receive(gix::progress::Discard, should_interrupt)
+                .map_err(|e| format!("Failed to receive: {}", e))
+        },
+        3,
+        std::time::Duration::from_millis(500),
+    ).map_err(|e| {
+        format!(
+            "fetch_single_commit_gix failed after 3 attempts: {}",
+            e
+        )
+    })?;
 
     send_progress(tx, submodule_name, 80);
 
