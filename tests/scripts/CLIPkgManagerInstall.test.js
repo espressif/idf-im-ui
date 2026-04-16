@@ -74,7 +74,7 @@ export function runCLIPkgManagerInstallTest({
         logger.info(`Running repo setup: ${cmd}`);
         testRunner.output = "";
         testRunner.sendInput(cmd);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await testRunner.waitForPrompt(30000);
       }
     });
 
@@ -97,7 +97,7 @@ export function runCLIPkgManagerInstallTest({
           logger.info(`Uninstalling ${packageName} via ${packageManager}`);
           testRunner.output = "";
           testRunner.sendInput(uninstallFn(packageName));
-          await new Promise((resolve) => setTimeout(resolve, 30000));
+          await testRunner.waitForPrompt(60000);
         }
       }
 
