@@ -31,42 +31,34 @@ on:
         default: 'nightly'
 
 jobs:
+  setup-matrix:
+    name: Build test matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        shell: bash
+        run: |
+          MATRIX='{"include":['
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","suite_file":"CLI-pkg-deb","container":"ubuntu:latest","node_arch":"x64","distro_name":"ubuntu"},'
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","suite_file":"CLI-pkg-deb","container":"debian:latest","node_arch":"x64","distro_name":"debian"},'
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","suite_file":"CLI-pkg-rpm","container":"fedora:latest","node_arch":"x64","distro_name":"fedora"},'
+          MATRIX+='{"os":"macos-latest","pkg_manager":"brew","suite_file":"CLI-pkg-brew"},'
+          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","suite_file":"CLI-pkg-scoop"}'
+          if [[ "${{ inputs.run_mode }}" != "release" ]]; then
+            MATRIX+=',{"os":"windows-latest","pkg_manager":"winget","suite_file":"CLI-pkg-winget"}'
+          fi
+          MATRIX+=']}'
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
   test:
     name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name || '' }}
+    needs: setup-matrix
     runs-on: ${{ matrix.os }}
-    if: >-
-      !( matrix.pkg_manager == 'winget' && inputs.run_mode == 'release' )
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            pkg_manager: apt
-            suite_file: CLI-pkg-deb
-            container: ubuntu:latest
-            node_arch: x64
-            distro_name: ubuntu
-          - os: ubuntu-latest
-            pkg_manager: apt
-            suite_file: CLI-pkg-deb
-            container: debian:latest
-            node_arch: x64
-            distro_name: debian
-          - os: ubuntu-latest
-            pkg_manager: dnf
-            suite_file: CLI-pkg-rpm
-            container: fedora:latest
-            node_arch: x64
-            distro_name: fedora
-          - os: macos-latest
-            pkg_manager: brew
-            suite_file: CLI-pkg-brew
-          - os: windows-latest
-            pkg_manager: scoop
-            suite_file: CLI-pkg-scoop
-          - os: windows-latest
-            pkg_manager: winget
-            suite_file: CLI-pkg-winget
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
 
     steps:
       - name: Checkout repository
