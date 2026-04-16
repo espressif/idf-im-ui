@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "type": "package-manager",
+    "name": "Install EIM CLI via Scoop",
+    "data": {
+      "packageManager": "scoop",
+      "packageName": "eim-cli"
+    },
+    "deleteAfterTest": true
+  }
+]

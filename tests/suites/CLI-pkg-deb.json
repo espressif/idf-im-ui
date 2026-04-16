@@ -1,0 +1,15 @@
+[
+  {
+    "id": 1,
+    "type": "package-manager",
+    "name": "Install EIM CLI via APT (deb)",
+    "data": {
+      "packageManager": "apt",
+      "packageName": "eim-cli",
+      "repoSetupCommands": [
+        "echo 'deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main' | sudo tee /etc/apt/sources.list.d/eim.list"
+      ]
+    },
+    "deleteAfterTest": true
+  }
+]

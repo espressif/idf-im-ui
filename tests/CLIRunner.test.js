@@ -3,7 +3,7 @@
  * Entries should follow this format:
  *     {
         "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom" or "offline"
+        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom", "offline", "existing-git-clone" or "package-manager"
         "name": "<name>",               // A name for the test to correlate to logs and report
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
@@ -32,6 +32,7 @@ import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js
 import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
+import { runCLIPkgManagerInstallTest } from "./scripts/CLIPkgManagerInstall.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -331,6 +332,21 @@ function testRun(jsonScript) {
           id: `${test.id}4`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "package-manager") {
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(600000);
+
+        runCLIPkgManagerInstallTest({
+          id: `${test.id}1`,
+          packageManager: test.data.packageManager,
+          packageName: test.data.packageName,
+          repoSetupCommands: test.data.repoSetupCommands || [],
+          expectedVersion: EIMCLIVersion,
           deleteAfterTest,
         });
       });

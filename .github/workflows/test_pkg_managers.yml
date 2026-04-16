@@ -1,0 +1,256 @@
+name: Autotest Package Manager Installation
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'Release tag to test (empty = version-agnostic nightly mode)'
+        required: false
+        type: string
+        default: ''
+      ref:
+        required: false
+        type: string
+        default: ''
+      run_mode:
+        description: '"release" for post-release, "nightly" for scheduled'
+        required: false
+        type: string
+        default: 'nightly'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag to test (empty = version-agnostic nightly mode)'
+        required: false
+        type: string
+        default: ''
+      run_mode:
+        description: '"release" for post-release, "nightly" for scheduled'
+        required: false
+        type: string
+        default: 'nightly'
+
+jobs:
+  test:
+    name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name || '' }}
+    runs-on: ${{ matrix.os }}
+    if: >-
+      !( matrix.pkg_manager == 'winget' && inputs.run_mode == 'release' )
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            pkg_manager: apt
+            suite_file: CLI-pkg-deb
+            container: ubuntu:latest
+            node_arch: x64
+            distro_name: ubuntu
+          - os: ubuntu-latest
+            pkg_manager: apt
+            suite_file: CLI-pkg-deb
+            container: debian:latest
+            node_arch: x64
+            distro_name: debian
+          - os: ubuntu-latest
+            pkg_manager: dnf
+            suite_file: CLI-pkg-rpm
+            container: fedora:latest
+            node_arch: x64
+            distro_name: fedora
+          - os: macos-latest
+            pkg_manager: brew
+            suite_file: CLI-pkg-brew
+          - os: windows-latest
+            pkg_manager: scoop
+            suite_file: CLI-pkg-scoop
+          - os: windows-latest
+            pkg_manager: winget
+            suite_file: CLI-pkg-winget
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Derive version string
+        id: version
+        shell: bash
+        run: |
+          TAG="${{ inputs.version }}"
+          if [ -n "$TAG" ]; then
+            STRIPPED="${TAG#v}"
+            echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
+            echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
+          else
+            echo "cli_version=" >> $GITHUB_OUTPUT
+            echo "stripped=" >> $GITHUB_OUTPUT
+          fi
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      # Linux (Docker container)
+
+      - name: Set up Node.js (Linux host)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build node test dependencies (Linux host)
+        if: matrix.os == 'ubuntu-latest'
+        working-directory: tests
+        run: npm ci
+
+      - name: Start test container (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker create --name test-runner \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            -e LOG_TO_FILE=true \
+            -e EIM_CLI_PATH=/usr/bin/eim \
+            -e EIM_CLI_VERSION="${{ steps.version.outputs.cli_version }}" \
+            ${{ matrix.container }} \
+            sleep infinity
+          docker start test-runner
+
+          docker exec test-runner bash -c "
+            if command -v apt-get &>/dev/null; then
+              apt-get update && apt-get install -y curl ca-certificates sudo
+            elif command -v dnf &>/dev/null; then
+              dnf install -y curl ca-certificates sudo tar gzip
+            fi
+            curl -fsSL https://nodejs.org/dist/v20.20.0/node-v20.20.0-linux-${{ matrix.node_arch }}.tar.gz \
+              | tar -xz -C /usr/local --strip-components=1
+            node --version
+            npm --version
+          "
+
+      - name: Wait for package version availability (Linux, release mode)
+        if: matrix.os == 'ubuntu-latest' && inputs.run_mode == 'release' && steps.version.outputs.stripped != ''
+        run: |
+          EXPECTED_VERSION="${{ steps.version.outputs.stripped }}"
+          echo "Waiting for version ${EXPECTED_VERSION} to appear in package repo..."
+          docker exec test-runner bash -c "
+            for i in \$(seq 1 10); do
+              if command -v apt-get &>/dev/null; then
+                apt-get update -qq 2>/dev/null
+                if apt-cache show eim-cli 2>/dev/null | grep -q \"Version:.*${EXPECTED_VERSION}\"; then
+                  echo \"Version ${EXPECTED_VERSION} found in APT repo on attempt \$i\"
+                  exit 0
+                fi
+              elif command -v dnf &>/dev/null; then
+                dnf makecache -q 2>/dev/null
+                if dnf info eim-cli 2>/dev/null | grep -q \"${EXPECTED_VERSION}\"; then
+                  echo \"Version ${EXPECTED_VERSION} found in RPM repo on attempt \$i\"
+                  exit 0
+                fi
+              fi
+              echo \"Retry \$i/10: version ${EXPECTED_VERSION} not yet available, waiting 60s...\"
+              sleep 60
+            done
+            echo \"WARNING: Version ${EXPECTED_VERSION} not found after 10 retries, proceeding anyway\"
+          "
+        continue-on-error: true
+
+      - name: Run package manager tests (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker exec test-runner npm run test-CLI --file=${{ matrix.suite_file }}
+        continue-on-error: true
+
+      - name: Copy EIM logs from container (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker cp test-runner:/root/.local/share/eim/logs/. ./tests/ 2>/dev/null || true
+
+      - name: Stop test container (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          docker stop test-runner
+          docker rm test-runner
+
+      # macOS (Homebrew)
+
+      - name: Set up Node.js (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build node test dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        working-directory: tests
+        run: npm ci
+
+      - name: Run package manager tests (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          export LOG_TO_FILE="true"
+          export EIM_CLI_PATH="$(brew --prefix)/bin/eim"
+          export EIM_CLI_VERSION="${{ steps.version.outputs.cli_version }}"
+          cd tests
+          npm run test-CLI --file=${{ matrix.suite_file }}
+        continue-on-error: true
+
+      - name: Copy EIM logs (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/ 2>/dev/null || true
+        continue-on-error: true
+
+      # Windows (Scoop / WinGet)
+
+      - name: Set up Node.js (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Expand node modules (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Set-Location -Path "./tests"
+          if (Test-Path node_modules.zip) { Expand-Archive node_modules.zip } else { npm ci }
+
+      - name: Exclude workspace from Defender (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
+      - name: Run package manager tests (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $env:LOG_TO_FILE = "true"
+          $env:EIM_CLI_VERSION = "${{ steps.version.outputs.cli_version }}"
+          Set-Location -Path "./tests"
+          npm run test-CLI-win --file=${{ matrix.suite_file }}
+        continue-on-error: true
+
+      - name: Copy EIM logs (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
+        continue-on-error: true
+
+      # Upload results & report
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: autotest-pkg-manager-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
+          path: |
+            ./tests/results-*.json
+            ./tests/*.log
+
+      - name: Publish Test Results
+        uses: dorny/test-reporter@v2
+        if: always()
+        with:
+          name: PkgMgr-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
+          path: ./tests/results-*.json
+          path-replace-backslashes: "false"
+          reporter: mocha-json
+          fail-on-empty: true

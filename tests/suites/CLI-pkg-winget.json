@@ -1,0 +1,12 @@
+[
+  {
+    "id": 1,
+    "type": "package-manager",
+    "name": "Install EIM CLI via WinGet",
+    "data": {
+      "packageManager": "winget",
+      "packageName": "Espressif.EIM-CLI"
+    },
+    "deleteAfterTest": true
+  }
+]
