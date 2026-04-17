@@ -42,7 +42,6 @@ jobs:
       matrix: ${{ steps.set.outputs.matrix }}
       resolved_version: ${{ steps.resolve.outputs.cli_version }}
       resolved_stripped: ${{ steps.resolve.outputs.stripped }}
-      winget_version_available: ${{ steps.winget-check.outputs.available }}
     steps:
       - name: Resolve version from latest release (nightly / PR)
         id: resolve
@@ -68,26 +67,6 @@ jobs:
               echo "stripped=" >> $GITHUB_OUTPUT
               echo "WARNING: Could not resolve latest release, running version-agnostic"
             fi
-          fi
-
-      - name: Check WinGet manifest availability (Option A)
-        id: winget-check
-        shell: bash
-        run: |
-          STRIPPED="${{ steps.resolve.outputs.stripped }}"
-          if [ -z "$STRIPPED" ]; then
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "No version to check, skipping WinGet manifest lookup"
-            exit 0
-          fi
-          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/e/Espressif/EIM-CLI/${STRIPPED}/Espressif.EIM-CLI.yaml")
-          if [ "$HTTP_CODE" = "200" ]; then
-            echo "available=true" >> $GITHUB_OUTPUT
-            echo "WinGet manifest for ${STRIPPED} found (HTTP $HTTP_CODE)"
-          else
-            echo "available=false" >> $GITHUB_OUTPUT
-            echo "WinGet manifest for ${STRIPPED} not found (HTTP $HTTP_CODE), version assertion will be skipped for WinGet"
           fi
 
       - name: Build matrix
@@ -127,16 +106,7 @@ jobs:
         id: version
         shell: bash
         run: |
-          CLI_VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          PKG_MANAGER="${{ matrix.pkg_manager }}"
-          WINGET_AVAILABLE="${{ needs.setup-matrix.outputs.winget_version_available }}"
-
-          if [[ "$PKG_MANAGER" == "winget" && "$WINGET_AVAILABLE" != "true" ]]; then
-            echo "WinGet manifest not yet merged — skipping version assertion"
-            CLI_VERSION=""
-          fi
-
-          echo "expected_version=${CLI_VERSION}" >> $GITHUB_OUTPUT
+          echo "expected_version=${{ needs.setup-matrix.outputs.resolved_stripped }}" >> $GITHUB_OUTPUT
 
       # ── Linux (Docker container) ──
 
@@ -410,7 +380,6 @@ jobs:
         run: |
           TEST_RESULT="${{ needs.test.result }}"
           VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          WINGET_AVAILABLE="${{ needs.setup-matrix.outputs.winget_version_available }}"
           RUN_MODE="${{ inputs.run_mode }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BRANCH="${{ github.head_ref || github.ref_name }}"
@@ -433,8 +402,6 @@ jobs:
           import json, os
 
           jobs = json.loads(os.environ['JOBS_JSON'])
-          winget_available = os.environ.get('WINGET_AVAILABLE', 'false')
-          version = os.environ.get('VERSION', 'latest')
 
           rows = []
           for job in sorted(jobs, key=lambda j: j['name']):
@@ -453,15 +420,8 @@ jobs:
               else:
                   status = f':grey_question: {conclusion}'
 
-              note = ''
-              if 'winget' in name.lower():
-                  if winget_available != 'true':
-                      note = ' _(manifest not in index yet — version-agnostic)_'
-                  elif conclusion == 'success':
-                      note = f' _(v{version} confirmed)_'
-
               link = f'[{name}]({url})' if url else name
-              rows.append(f'| {link} | {status}{note} |')
+              rows.append(f'| {link} | {status} |')
 
           table = '| Job | Result |\n|:---|:---|\n' + '\n'.join(rows)
           print(table)
