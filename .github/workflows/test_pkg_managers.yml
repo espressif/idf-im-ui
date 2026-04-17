@@ -99,7 +99,13 @@ jobs:
           MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","container":"debian:latest","node_arch":"x64","distro_name":"debian","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
           MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","container":"fedora:latest","node_arch":"x64","distro_name":"fedora","package_name":"eim-cli","install_cmd":"dnf install -y eim-cli","uninstall_cmd":"dnf remove -y eim-cli","meta_cmd":"rpm -qi eim-cli","repo_setup":"curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo"},'
           MATRIX+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"},'
-          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","install_cmd":"scoop install eim-cli","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
+          STRIPPED="${{ steps.resolve.outputs.stripped }}"
+          if [ -n "$STRIPPED" ]; then
+            SCOOP_URL="https://github.com/${{ github.repository }}/releases/download/v${STRIPPED}/eim-cli.json"
+          else
+            SCOOP_URL="https://github.com/${{ github.repository }}/releases/latest/download/eim-cli.json"
+          fi
+          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","install_cmd":"scoop install '"${SCOOP_URL}"'","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
           RUN_MODE="${{ inputs.run_mode }}"
           if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
           if [[ "$RUN_MODE" != "release" ]]; then
@@ -271,7 +277,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
-      - name: Verify WinGet version on runner (Option C)
+      - name: Verify WinGet version on runner
         if: matrix.pkg_manager == 'winget' && steps.version.outputs.expected_version != ''
         id: winget-runner-verify
         shell: pwsh
@@ -371,16 +377,29 @@ jobs:
   notify:
     name: Notify Mattermost
     needs: [setup-matrix, test]
-    if: always() && github.event_name != 'pull_request'
+    if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Fetch per-job results
+        id: results
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JOBS_JSON=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --paginate --jq '[.jobs[] | select(.name | startswith("PkgMgr"))]')
+          echo "jobs<<JOBS_EOF" >> $GITHUB_OUTPUT
+          echo "$JOBS_JSON" >> $GITHUB_OUTPUT
+          echo "JOBS_EOF" >> $GITHUB_OUTPUT
+
       - name: Send Mattermost notification
         shell: bash
         env:
           HOOK_URL: ${{ secrets.MATTERMOST_CI_HOOK }}
+          JOBS_JSON: ${{ steps.results.outputs.jobs }}
         run: |
           TEST_RESULT="${{ needs.test.result }}"
           VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          WINGET_AVAILABLE="${{ needs.setup-matrix.outputs.winget_version_available }}"
           RUN_MODE="${{ inputs.run_mode }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BRANCH="${{ github.head_ref || github.ref_name }}"
@@ -399,23 +418,48 @@ jobs:
             TITLE="Package Manager Tests — Some Failed"
           fi
 
-          MATRIX_JSON='${{ needs.setup-matrix.outputs.matrix }}'
-          TABLE="| Package Manager | Platform |\n|:---|:---|\n"
-          TABLE+=$(echo "$MATRIX_JSON" | python3 -c "
-          import json, sys
-          data = json.load(sys.stdin)
-          for entry in data.get('include', []):
-              pm = entry.get('pkg_manager', '')
-              distro = entry.get('distro_name', '')
-              os_name = entry.get('os', '').replace('-latest', '')
-              label = f'{pm} ({distro})' if distro else f'{pm} ({os_name})'
-              print(f'| {label} | {os_name} |')
+          TEXT=$(python3 -c "
+          import json, os, sys
+
+          jobs = json.loads(os.environ['JOBS_JSON'])
+          winget_available = os.environ.get('WINGET_AVAILABLE', 'false')
+          version = os.environ.get('VERSION', 'latest')
+
+          rows = []
+          for job in sorted(jobs, key=lambda j: j['name']):
+              name = job['name']
+              conclusion = job.get('conclusion', 'unknown')
+              url = job.get('html_url', '')
+
+              if conclusion == 'success':
+                  status = ':white_check_mark: Passed'
+              elif conclusion == 'failure':
+                  status = ':x: Failed'
+              elif conclusion == 'cancelled':
+                  status = ':no_entry_sign: Cancelled'
+              elif conclusion == 'skipped':
+                  status = ':fast_forward: Skipped'
+              else:
+                  status = f':grey_question: {conclusion}'
+
+              note = ''
+              if 'winget' in name.lower():
+                  if winget_available != 'true':
+                      note = ' _(manifest not in index yet — version-agnostic)_'
+                  elif conclusion == 'success':
+                      note = f' _(v{version} confirmed)_'
+
+              link = f'[{name}]({url})' if url else name
+              rows.append(f'| {link} | {status}{note} |')
+
+          table = '| Job | Result |\\n|:---|:---|\\n' + '\\n'.join(rows)
+          print(table)
           ")
 
-          TEXT="#### ${ICON} ${TITLE}\n\n"
-          TEXT+="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
-          TEXT+="${TABLE}\n\n"
-          TEXT+=":link: [View full run](${RUN_URL})"
+          MSG="#### ${ICON} ${TITLE}\n\n"
+          MSG+="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
+          MSG+="${TEXT}\n\n"
+          MSG+=":link: [View full run](${RUN_URL})"
 
           PAYLOAD=$(python3 -c "
           import json, sys
@@ -424,7 +468,7 @@ jobs:
               'icon_emoji': 'package',
               'text': sys.argv[1]
           }))
-          " "$TEXT")
+          " "$MSG")
 
           curl -sf -X POST -H 'Content-Type: application/json' \
             -d "$PAYLOAD" \
