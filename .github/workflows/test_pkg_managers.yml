@@ -294,6 +294,7 @@ jobs:
         run: |
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
           irm get.scoop.sh | iex
+          echo "$HOME\scoop\shims" >> $env:GITHUB_PATH
 
       - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
