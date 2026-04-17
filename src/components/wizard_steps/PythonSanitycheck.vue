@@ -46,11 +46,10 @@
 </template>
 
 <script>
-import { ref, watch } from "vue";
-import { useI18n } from 'vue-i18n';
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core"
+import { listen } from "@tauri-apps/api/event";
 import { NButton, NSpin } from 'naive-ui'
-import loading from "naive-ui/es/_internal/loading";
+import { useI18n } from 'vue-i18n';
 import { useAppStore } from '../../store'
 import CheckResultsList from '../CheckResultsList.vue'
 
@@ -70,11 +69,11 @@ export default {
     python_sane: false,
     checkResults: [],
     installing_python: false,
-    appStore: useAppStore()
+    appStore: useAppStore(),
+    _unlistenPythonInstall: null,
   }),
   watch: {
     python_sane(newValue) {
-      // Auto-navigate when Python check passes
       if (newValue && !this.loading && this.nextstep) {
         setTimeout(() => {
           this.nextstep();
@@ -83,30 +82,85 @@ export default {
     }
   },
   methods: {
-    check_python_sanity: async function () {
+    check_python_sanity: function () {
       this.loading = true;
-      const results = await invoke("python_sanity_check", {});
-      this.checkResults = results || [];
-      this.python_sane = this.checkResults.length > 0 && this.checkResults.every((r) => r.passed);
-      this.loading = false;
-      return false;
+      invoke("python_sanity_check", {}).then((results) => {
+        this.checkResults = results || [];
+        this.python_sane = this.checkResults.length > 0 && this.checkResults.every((r) => r.passed);
+      }).catch((error) => {
+        console.error("Python sanity check failed:", error);
+        this.checkResults = [];
+        this.python_sane = false;
+      }).finally(() => {
+        this.loading = false;
+      });
     },
-    get_os: async function () {
-      this.os = await this.appStore.getOs();
-      this.os = this.os.toLowerCase();
-      return false;
+    get_os: function () {
+      this.appStore.getOs().then((os) => {
+        this.os = os.toLowerCase();
+      }).catch((error) => {
+        console.error("Failed to get OS:", error);
+      });
     },
     install_python: async function () {
       this.installing_python = true;
-      await invoke("python_install", {});
-      this.installing_python = false;
-      this.check_python_sanity();
-      return false;
+      this.loading = true; // show the spinner over the whole card
+
+      // Set up a one-shot listener BEFORE invoking the install command,
+      // so we don't miss the completion event.
+      try {
+        // Clean up any prior listener just in case
+        if (this._unlistenPythonInstall) {
+          this._unlistenPythonInstall();
+          this._unlistenPythonInstall = null;
+        }
+
+        // Promise that resolves when the backend emits python-install-complete,
+        // or rejects on a 5-minute timeout.
+        const installCompleted = new Promise(async (resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            if (this._unlistenPythonInstall) {
+              this._unlistenPythonInstall();
+              this._unlistenPythonInstall = null;
+            }
+            reject(new Error("Python installation timed out"));
+          }, 5 * 60 * 1000);
+
+          this._unlistenPythonInstall = await listen("python-install-complete", (event) => {
+            clearTimeout(timeoutId);
+            if (this._unlistenPythonInstall) {
+              this._unlistenPythonInstall();
+              this._unlistenPythonInstall = null;
+            }
+            resolve(event.payload);
+          });
+        });
+
+        // Kick off the install (returns immediately on the Rust side)
+        await invoke("python_install", {});
+
+        // Wait for the real completion event
+        const payload = await installCompleted;
+        console.log("Python install complete:", payload);
+      } catch (error) {
+        console.error("Python installation failed:", error);
+      } finally {
+        this.installing_python = false;
+        // Re-run the sanity check regardless — even on failure, the user
+        // should see the current state instead of a stuck spinner.
+        this.check_python_sanity();
+      }
     },
   },
   mounted() {
     this.check_python_sanity();
     this.get_os();
+  },
+  beforeUnmount() {
+    if (this._unlistenPythonInstall) {
+      this._unlistenPythonInstall();
+      this._unlistenPythonInstall = null;
+    }
   }
 }
 </script>

@@ -10,6 +10,9 @@ use std::{
   thread,
 };
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 use anyhow::{anyhow, Context, Result};
 use idf_im_lib::{
   ensure_path,
@@ -303,6 +306,32 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         rust_i18n::t!("gui.installation.starting_separate_process").to_string());
 
     // Start the process with piped stdout and stderr
+    #[cfg(target_os = "windows")]
+    let mut child = {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        Command::new(current_exe)
+            .arg("install")
+            .arg("-n").arg("true")             // Non-interactive mode
+            .arg("-a").arg("true")             // Install prerequisites
+            .arg("-c").arg(config_path.clone())    // Path to config file
+            .stdout(Stdio::piped())            // Capture stdout
+            .stderr(Stdio::piped())            // Capture stderr
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map_err(|e| {
+                emit_installation_event(&app_handle, InstallationProgress {
+                    stage: InstallationStage::Error,
+                    percentage: 0,
+                    message: rust_i18n::t!("gui.installation.installer_process_failed").to_string(),
+                    detail: Some(e.to_string()),
+                    version: None,
+                });
+                format!("Failed to start installer: {}", e)
+            })?
+    };
+
+    #[cfg(not(target_os = "windows"))]
     let mut child = Command::new(current_exe)
         .arg("install")
         .arg("-n").arg("true")             // Non-interactive mode
@@ -1541,7 +1570,12 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: None,
             });
 
-            match install_prerequisites_offline(&offline_archive_dir) {
+            let tools_dir = settings.path
+                .as_ref()
+                .map(|p| p.join("tools"))
+                .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("tools"));
+
+            match install_prerequisites_offline(&offline_archive_dir, tools_dir) {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
                         rust_i18n::t!("gui.offline.prerequisites_success").to_string());

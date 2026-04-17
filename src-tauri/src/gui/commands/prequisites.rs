@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
 use log::{error, warn};
 use rust_i18n::t;
@@ -111,8 +113,22 @@ pub fn install_prerequisites(app_handle: AppHandle) -> bool {
 
     // Spawn tokio task to avoid blocking the UI
     let app_handle_clone = app_handle.clone();
-    task::spawn_blocking(move || {
-        match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites) {
+    let settings = match get_settings_non_blocking(&app_handle) {
+      Ok(settings) => settings,
+      Err(err) => {
+          let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
+          send_message(
+              &app_handle,
+              error_msg.clone(),
+              "error".to_string(),
+          );
+          error!("{}", error_msg);
+          return false;
+      }
+    };
+    let tool_install_directory = PathBuf::from(settings.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+    tokio::spawn(async move {
+        match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites, tool_install_directory).await {
             Ok(_) => {
                 // Emit event to notify frontend that installation is complete
                 let _ = app_handle_clone.emit("prerequisites-install-complete", json!({
@@ -180,33 +196,49 @@ pub fn python_sanity_check(app_handle: AppHandle, python: Option<&str>) -> Vec<C
         .collect()
 }
 
-/// Installs Python
+/// Installs Python (non-blocking - runs in tokio background task)
 #[tauri::command]
 pub fn python_install(app_handle: AppHandle) -> bool {
-  let settings = match get_settings_non_blocking(&app_handle) {
-      Ok(settings) => settings,
-      Err(err) => {
-          let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
-          send_message(
-              &app_handle,
-              error_msg.clone(),
-              "error".to_string(),
-          );
-          error!("{}", error_msg);
-          return false;
-      }
-  };
-    match idf_im_lib::system_dependencies::install_prerequisites(vec![settings.python_version_override.clone().unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())]) {
-        Ok(_) => true,
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(settings) => settings,
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
+            let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
             send_message(
                 &app_handle,
                 error_msg.clone(),
                 "error".to_string(),
             );
             error!("{}", error_msg);
-            false
+            return false;
         }
-    }
+    };
+    let tool_install_directory = PathBuf::from(settings.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+    let python_version = settings.python_version_override.clone().unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string());
+    let app_handle_clone = app_handle.clone();
+
+    tokio::spawn(async move {
+        match idf_im_lib::system_dependencies::install_prerequisites(vec![python_version], tool_install_directory).await {
+            Ok(_) => {
+                let _ = app_handle_clone.emit("python-install-complete", json!({
+                    "success": true
+                }));
+            }
+            Err(err) => {
+                let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
+                send_message(
+                    &app_handle_clone,
+                    error_msg.clone(),
+                    "error".to_string(),
+                );
+                error!("{}", error_msg);
+                let _ = app_handle_clone.emit("python-install-complete", json!({
+                    "success": false,
+                    "error": err.to_string()
+                }));
+            }
+        }
+    });
+
+    // Return immediately - installation runs in background
+    true
 }

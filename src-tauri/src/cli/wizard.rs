@@ -339,6 +339,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     } else {
         None
     };
+    let tool_install_directory = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
 
     if offline_mode {
         // only setting up temp directory if offline mode is enabled
@@ -352,7 +353,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         };
         // install prerequisites offline
         if std::env::consts::OS == "windows" {
-            match install_prerequisites_offline(&archive_dir) {
+            match install_prerequisites_offline(&archive_dir, tool_install_directory.clone()) {
                 Ok(_) => {
                     info!("{}", t!("wizard.prerequisites.offline_install.success"));
                 }
@@ -374,7 +375,9 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         check_and_install_prerequisites(
             config.non_interactive.unwrap_or_default(),
             config.install_all_prerequisites.unwrap_or_default(),
-        )?;
+            tool_install_directory.clone(),
+        )
+        .await?;
     }
 
     // Python sanity check
@@ -382,8 +385,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.non_interactive.unwrap_or_default(),
         config.install_all_prerequisites.unwrap_or_default(),
         config.python_version_override.clone(),
-        offline_mode
-    )?;
+        offline_mode,
+        tool_install_directory,
+    )
+    .await?;
 
     if offline_mode {
         let archive_dir = offline_archive_dir.as_ref().unwrap();
