@@ -370,7 +370,8 @@
         "fix": "Fix/Reinstall",
         "openFolder": "Open Folder",
         "openTerminal": "Open IDF Terminal",
-        "remove": "Remove"
+        "remove": "Remove",
+        "exportConfig": "Export Configuration"
       }
     },
     "quickActions": {
@@ -418,7 +419,8 @@
         "driversInstalled": "Driver installation successful.",
         "latestVersion": "You have the latest version",
         "updateAvailable": "New version available!",
-        "openTerminal": "IDF terminal opened"
+        "openTerminal": "IDF terminal opened",
+        "configExported": "Configuration exported successfully"
       },
       "error": {
         "loadVersions": "Failed to load installed versions",
@@ -431,7 +433,9 @@
         "driversPermission": "Insufficient permissions to install drivers. Please run the application as an administrator.",
         "drivers": "Failed to install drivers: {error}",
         "checkUpdates": "Failed to check for updates",
-        "openTerminal": "IDF terminal could not be opened"
+        "openTerminal": "IDF terminal could not be opened",
+        "exportConfig": "Failed to export configuration",
+        "noConfigToExport": "No configuration available to export"
       },
       "warning": {
         "confirmAction": "Please confirm the action"

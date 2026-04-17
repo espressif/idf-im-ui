@@ -190,6 +190,20 @@ export function runInstallVerification({
           fs.existsSync(idf.python),
           `Invalid Python path on idf ${idf.name || "invalid IDF Entry"}`
         ).to.be.true;
+
+        // installationConfig is optional (for backwards compatibility with v1 configs)
+        // When present, it should be a base64 encoded string containing binary serialized Settings
+        if (idf.installationConfig !== undefined) {
+          expect(
+            idf.installationConfig,
+            `installationConfig should be a string (base64 encoded) for IDF ${idf.name || "invalid IDF Entry"}`
+          ).to.be.a("string");
+          // Basic base64 validation - should be valid base64 string
+          expect(
+            /^[A-Za-z0-9+/]*={0,2}$/.test(idf.installationConfig),
+            `installationConfig should be valid base64 for IDF ${idf.name || "invalid IDF Entry"}`
+          ).to.be.true;
+        }
       }
     });
 

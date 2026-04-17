@@ -105,6 +105,16 @@
               </template>
               {{ t('versionManagement.version.actions.remove') }}
             </n-tooltip>
+            <n-tooltip v-if="version.installationConfig" trigger="hover">
+              <template #trigger>
+                <n-button @click="exportInstallationConfig(version)" quaternary circle :data-id="`export-config-button-${version.id}`">
+                  <template #icon>
+                    <n-icon><SaveOutlined /></n-icon>
+                  </template>
+                </n-button>
+              </template>
+              {{ t('versionManagement.version.actions.exportConfig') }}
+            </n-tooltip>
           </div>
         </n-card>
       </div>
@@ -249,6 +259,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { save } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
   NCheckbox, NAlert, NTooltip, useMessage
@@ -263,7 +274,8 @@ import {
   ClearOutlined,
   ReloadOutlined,
   UsbOutlined,
-  LaptopOutlined
+  LaptopOutlined,
+  SaveOutlined
 } from '@vicons/antd'
 import { useAppStore } from '../store'
 
@@ -274,7 +286,8 @@ export default {
     NCheckbox, NAlert, NTooltip,
     FolderOutlined, FolderOpenOutlined, EditOutlined,
     DeleteOutlined, ToolOutlined, PlusCircleOutlined,
-    ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined
+    ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined,
+    SaveOutlined
   },
   setup() {
     const router = useRouter()
@@ -486,6 +499,47 @@ export default {
       }
     }
 
+    const exportInstallationConfig = async (version) => {
+      try {
+        // Check if installationConfig is present
+        if (!version.installationConfig) {
+          message.error(t('versionManagement.messages.error.noConfigToExport'))
+          return
+        }
+
+        // Get the config string from the tauri command
+        const configContent = await invoke('generate_installation_config_for_version', {
+          id: version.id
+        })
+
+        if (!configContent) {
+          message.error(t('versionManagement.messages.error.exportConfig'))
+          return
+        }
+
+        // Show save dialog
+        const filePath = await save({
+          defaultPath: 'config.toml',
+          filters: [{
+            name: 'TOML',
+            extensions: ['toml']
+          }]
+        })
+
+        if (filePath) {
+          // Write the content to the file using tauri command
+          await invoke('write_text_file', {
+            path: filePath,
+            content: configContent
+          })
+          message.success(t('versionManagement.messages.success.configExported'))
+        }
+      } catch (error) {
+        console.error('Failed to export installation config:', error)
+        message.error(t('versionManagement.messages.error.exportConfig'))
+      }
+    }
+
     const goToBasicInstaller = () => {
       router.push('/basic-installer')
     }
@@ -533,6 +587,7 @@ export default {
       recheckPrerequisites,
       installDrivers,
       goToBasicInstaller,
+      exportInstallationConfig,
       t
     }
   }
