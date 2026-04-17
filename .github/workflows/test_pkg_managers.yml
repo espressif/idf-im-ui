@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       version:
-        description: 'Release tag to test (empty = version-agnostic nightly mode)'
+        description: 'Release tag to test (empty = resolve latest release automatically)'
         required: false
         type: string
         default: ''
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release tag to test (empty = version-agnostic nightly mode)'
+        description: 'Release tag to test (empty = resolve latest release automatically)'
         required: false
         type: string
         default: ''
@@ -29,6 +29,13 @@ on:
         required: false
         type: string
         default: 'nightly'
+  pull_request:
+    branches: [master]
+    paths:
+      - '.github/workflows/test_pkg_managers.yml'
+      - 'tests/scripts/CLIPkgManagerInstall.test.js'
+      - 'tests/suites/CLI-pkg-*.json'
+      - 'tests/CLIRunner.test.js'
 
 jobs:
   setup-matrix:
@@ -36,8 +43,58 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.set.outputs.matrix }}
+      resolved_version: ${{ steps.resolve.outputs.cli_version }}
+      resolved_stripped: ${{ steps.resolve.outputs.stripped }}
+      winget_version_available: ${{ steps.winget-check.outputs.available }}
     steps:
-      - id: set
+      - name: Resolve version from latest release (nightly / PR)
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          INPUT_VERSION="${{ inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            STRIPPED="${INPUT_VERSION#v}"
+            echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
+            echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
+            echo "Using provided version: ${STRIPPED}"
+          else
+            TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
+            if [ -n "$TAG" ]; then
+              STRIPPED="${TAG#v}"
+              echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
+              echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
+              echo "Resolved latest release: ${TAG} -> ${STRIPPED}"
+            else
+              echo "cli_version=" >> $GITHUB_OUTPUT
+              echo "stripped=" >> $GITHUB_OUTPUT
+              echo "WARNING: Could not resolve latest release, running version-agnostic"
+            fi
+          fi
+
+      - name: Check WinGet manifest availability (Option A)
+        id: winget-check
+        shell: bash
+        run: |
+          STRIPPED="${{ steps.resolve.outputs.stripped }}"
+          if [ -z "$STRIPPED" ]; then
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "No version to check, skipping WinGet manifest lookup"
+            exit 0
+          fi
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            "https://raw.githubusercontent.com/microsoft/winget-pkgs/master/manifests/e/Espressif/EIM-CLI/${STRIPPED}/Espressif.EIM-CLI.yaml")
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "available=true" >> $GITHUB_OUTPUT
+            echo "WinGet manifest for ${STRIPPED} found (HTTP $HTTP_CODE)"
+          else
+            echo "available=false" >> $GITHUB_OUTPUT
+            echo "WinGet manifest for ${STRIPPED} not found (HTTP $HTTP_CODE), version assertion will be skipped for WinGet"
+          fi
+
+      - name: Build matrix
+        id: set
         shell: bash
         run: |
           MATRIX='{"include":['
@@ -46,7 +103,9 @@ jobs:
           MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","suite_file":"CLI-pkg-rpm","container":"fedora:latest","node_arch":"x64","distro_name":"fedora"},'
           MATRIX+='{"os":"macos-latest","pkg_manager":"brew","suite_file":"CLI-pkg-brew"},'
           MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","suite_file":"CLI-pkg-scoop"}'
-          if [[ "${{ inputs.run_mode }}" != "release" ]]; then
+          RUN_MODE="${{ inputs.run_mode }}"
+          if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
+          if [[ "$RUN_MODE" != "release" ]]; then
             MATRIX+=',{"os":"windows-latest","pkg_manager":"winget","suite_file":"CLI-pkg-winget"}'
           fi
           MATRIX+=']}'
@@ -66,20 +125,23 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      - name: Derive version string
+      - name: Resolve version for this matrix entry
         id: version
         shell: bash
         run: |
-          TAG="${{ inputs.version }}"
-          if [ -n "$TAG" ]; then
-            STRIPPED="${TAG#v}"
-            echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
-            echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
-          else
-            echo "cli_version=" >> $GITHUB_OUTPUT
-            echo "stripped=" >> $GITHUB_OUTPUT
+          CLI_VERSION="${{ needs.setup-matrix.outputs.resolved_version }}"
+          STRIPPED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          PKG_MANAGER="${{ matrix.pkg_manager }}"
+          WINGET_AVAILABLE="${{ needs.setup-matrix.outputs.winget_version_available }}"
+
+          if [[ "$PKG_MANAGER" == "winget" && "$WINGET_AVAILABLE" != "true" ]]; then
+            echo "WinGet manifest not yet merged — skipping version assertion"
+            CLI_VERSION=""
+            STRIPPED=""
           fi
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+          echo "cli_version=${CLI_VERSION}" >> $GITHUB_OUTPUT
+          echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
 
       # Linux (Docker container)
 
@@ -211,11 +273,33 @@ jobs:
         run: |
           Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
+      - name: Verify WinGet version on runner (Option C)
+        if: matrix.pkg_manager == 'winget' && steps.version.outputs.stripped != ''
+        id: winget-runner-verify
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.stripped }}"
+          Write-Host "Checking if WinGet index has version ${version}..."
+          $result = winget show --id Espressif.EIM-CLI --version $version 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Version ${version} confirmed available in WinGet index"
+            echo "confirmed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "Version ${version} not in WinGet index yet — clearing version assertion"
+            echo "confirmed=false" >> $env:GITHUB_OUTPUT
+          }
+        continue-on-error: true
+
       - name: Run package manager tests (Windows)
         if: matrix.os == 'windows-latest'
         run: |
           $env:LOG_TO_FILE = "true"
-          $env:EIM_CLI_VERSION = "${{ steps.version.outputs.cli_version }}"
+          $cliVersion = "${{ steps.version.outputs.cli_version }}"
+          if ("${{ matrix.pkg_manager }}" -eq "winget" -and "${{ steps.winget-runner-verify.outputs.confirmed }}" -ne "true") {
+            Write-Host "WinGet version not confirmed on runner — running version-agnostic"
+            $cliVersion = ""
+          }
+          $env:EIM_CLI_VERSION = $cliVersion
           Set-Location -Path "./tests"
           npm run test-CLI-win --file=${{ matrix.suite_file }}
         continue-on-error: true
