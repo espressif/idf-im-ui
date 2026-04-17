@@ -189,7 +189,7 @@ jobs:
 
       - name: Verify binary on PATH (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner which eim
+        run: docker exec test-runner bash -c "command -v eim"
 
       - name: Verify version (Linux)
         if: matrix.os == 'ubuntu-latest'
@@ -298,7 +298,12 @@ jobs:
       - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
-        run: ${{ matrix.install_cmd }}
+        run: |
+          ${{ matrix.install_cmd }}
+          $wingetLinks = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
+          if (Test-Path $wingetLinks) {
+            echo $wingetLinks >> $env:GITHUB_PATH
+          }
 
       - name: Verify binary on PATH (Windows)
         if: matrix.os == 'windows-latest'
@@ -361,3 +366,65 @@ jobs:
           name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
           path: ./logs/
           if-no-files-found: ignore
+
+  notify:
+    name: Notify Mattermost
+    needs: [setup-matrix, test]
+    if: always() && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Mattermost notification
+        shell: bash
+        env:
+          HOOK_URL: ${{ secrets.MATTERMOST_CI_HOOK }}
+        run: |
+          TEST_RESULT="${{ needs.test.result }}"
+          VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          RUN_MODE="${{ inputs.run_mode }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+
+          if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
+          if [ -z "$VERSION" ]; then VERSION="latest"; fi
+
+          if [ "$TEST_RESULT" = "success" ]; then
+            ICON=":white_check_mark:"
+            TITLE="Package Manager Tests — All Passed"
+          elif [ "$TEST_RESULT" = "cancelled" ]; then
+            ICON=":no_entry_sign:"
+            TITLE="Package Manager Tests — Cancelled"
+          else
+            ICON=":x:"
+            TITLE="Package Manager Tests — Some Failed"
+          fi
+
+          MATRIX_JSON='${{ needs.setup-matrix.outputs.matrix }}'
+          TABLE="| Package Manager | Platform |\n|:---|:---|\n"
+          TABLE+=$(echo "$MATRIX_JSON" | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for entry in data.get('include', []):
+              pm = entry.get('pkg_manager', '')
+              distro = entry.get('distro_name', '')
+              os_name = entry.get('os', '').replace('-latest', '')
+              label = f'{pm} ({distro})' if distro else f'{pm} ({os_name})'
+              print(f'| {label} | {os_name} |')
+          ")
+
+          TEXT="#### ${ICON} ${TITLE}\n\n"
+          TEXT+="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
+          TEXT+="${TABLE}\n\n"
+          TEXT+=":link: [View full run](${RUN_URL})"
+
+          PAYLOAD=$(python3 -c "
+          import json, sys
+          print(json.dumps({
+              'username': 'EIM CI Bot',
+              'icon_emoji': 'package',
+              'text': sys.argv[1]
+          }))
+          " "$TEXT")
+
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" \
+            "$HOOK_URL"
