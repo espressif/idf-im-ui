@@ -288,6 +288,13 @@ jobs:
           }
         continue-on-error: true
 
+      - name: Install Scoop (Windows)
+        if: matrix.pkg_manager == 'scoop'
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+          irm get.scoop.sh | iex
+
       - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
         shell: pwsh
