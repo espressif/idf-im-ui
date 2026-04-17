@@ -507,10 +507,27 @@ pub fn remove_directory_all<P: AsRef<Path>>(path: P) -> io::Result<()> {
     Ok(())
 }
 
-/// Retry wrapper function that takes a closure and retries it according to the configuration
-pub fn with_retry<F, T, E>(f: F, max_retries: usize) -> Result<T, E>
+/// Internal retry strategy for controlling backoff behavior
+enum RetryStrategy {
+    /// No delay between retries
+    Immediate,
+    /// Exponential backoff starting at base_delay
+    Exponential(std::time::Duration),
+}
+
+impl RetryStrategy {
+    fn delay(&self, attempt: u32) -> std::time::Duration {
+        match self {
+            RetryStrategy::Immediate => std::time::Duration::ZERO,
+            RetryStrategy::Exponential(base) => *base * 2u32.pow(attempt.saturating_sub(1)) as u32,
+        }
+    }
+}
+
+/// Generic retry wrapper that takes a closure and retries it according to the configuration
+fn retry_with_strategy<F, T, E>(mut f: F, max_retries: usize, strategy: RetryStrategy, log_level: log::Level) -> Result<T, E>
 where
-    F: Fn() -> Result<T, E>,
+    F: FnMut() -> Result<T, E>,
     E: std::fmt::Debug,
 {
     let mut attempt = 0;
@@ -524,10 +541,37 @@ where
                     return Err(e);
                 }
 
-                debug!("Attempt {} failed with error: {:?}", attempt, e);
+                let delay = strategy.delay(attempt as u32);
+                match log_level {
+                    log::Level::Warn => warn!("Attempt {} failed: {:?}, retrying in {:?}", attempt, e, delay),
+                    log::Level::Debug => debug!("Attempt {} failed with error: {:?}", attempt, e),
+                    _ => {}
+                }
+                if delay > std::time::Duration::ZERO {
+                    std::thread::sleep(delay);
+                }
             }
         }
     }
+}
+
+/// Retry wrapper function that takes a closure and retries it according to the configuration
+pub fn with_retry<F, T, E>(f: F, max_retries: usize) -> Result<T, E>
+where
+    F: FnMut() -> Result<T, E>,
+    E: std::fmt::Debug,
+{
+    retry_with_strategy(f, max_retries, RetryStrategy::Immediate, log::Level::Debug)
+}
+
+/// Retry wrapper with exponential backoff for network operations.
+/// Retries up to `max_retries` times with exponential backoff between attempts.
+pub fn with_retry_exponential<F, T, E>(f: F, max_retries: usize, base_delay: std::time::Duration) -> Result<T, E>
+where
+    F: FnMut() -> Result<T, E>,
+    E: std::fmt::Debug + std::fmt::Display,
+{
+    retry_with_strategy(f, max_retries, RetryStrategy::Exponential(base_delay), log::Level::Warn)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
