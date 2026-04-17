@@ -101,11 +101,11 @@ jobs:
           MATRIX+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"},'
           STRIPPED="${{ steps.resolve.outputs.stripped }}"
           if [ -n "$STRIPPED" ]; then
-            SCOOP_URL="https://github.com/${{ github.repository }}/releases/download/v${STRIPPED}/eim-cli.json"
+            SCOOP_MANIFEST_URL="https://github.com/${{ github.repository }}/releases/download/v${STRIPPED}/eim-cli.json"
           else
-            SCOOP_URL="https://github.com/${{ github.repository }}/releases/latest/download/eim-cli.json"
+            SCOOP_MANIFEST_URL="https://github.com/${{ github.repository }}/releases/latest/download/eim-cli.json"
           fi
-          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","install_cmd":"scoop install '"${SCOOP_URL}"'","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
+          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","scoop_manifest_url":"'"${SCOOP_MANIFEST_URL}"'","install_cmd":"scoop install .\\eim-cli.json","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
           RUN_MODE="${{ inputs.run_mode }}"
           if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
           if [[ "$RUN_MODE" != "release" ]]; then
@@ -301,6 +301,14 @@ jobs:
           Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
           irm get.scoop.sh | iex
           echo "$HOME\scoop\shims" >> $env:GITHUB_PATH
+
+      - name: Download Scoop manifest
+        if: matrix.pkg_manager == 'scoop'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ matrix.scoop_manifest_url }}" -OutFile eim-cli.json
+          Write-Host "Downloaded manifest:"
+          Get-Content eim-cli.json
 
       - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
