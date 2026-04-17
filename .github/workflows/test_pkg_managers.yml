@@ -33,9 +33,6 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/test_pkg_managers.yml'
-      - 'tests/scripts/CLIPkgManagerInstall.test.js'
-      - 'tests/suites/CLI-pkg-*.json'
-      - 'tests/CLIRunner.test.js'
 
 jobs:
   setup-matrix:
@@ -98,15 +95,15 @@ jobs:
         shell: bash
         run: |
           MATRIX='{"include":['
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","suite_file":"CLI-pkg-deb","container":"ubuntu:latest","node_arch":"x64","distro_name":"ubuntu"},'
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","suite_file":"CLI-pkg-deb","container":"debian:latest","node_arch":"x64","distro_name":"debian"},'
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","suite_file":"CLI-pkg-rpm","container":"fedora:latest","node_arch":"x64","distro_name":"fedora"},'
-          MATRIX+='{"os":"macos-latest","pkg_manager":"brew","suite_file":"CLI-pkg-brew"},'
-          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","suite_file":"CLI-pkg-scoop"}'
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","container":"ubuntu:latest","node_arch":"x64","distro_name":"ubuntu","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","container":"debian:latest","node_arch":"x64","distro_name":"debian","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
+          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","container":"fedora:latest","node_arch":"x64","distro_name":"fedora","package_name":"eim-cli","install_cmd":"dnf install -y eim-cli","uninstall_cmd":"dnf remove -y eim-cli","meta_cmd":"rpm -qi eim-cli","repo_setup":"curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo"},'
+          MATRIX+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"},'
+          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","install_cmd":"scoop install eim-cli","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
           RUN_MODE="${{ inputs.run_mode }}"
           if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
           if [[ "$RUN_MODE" != "release" ]]; then
-            MATRIX+=',{"os":"windows-latest","pkg_manager":"winget","suite_file":"CLI-pkg-winget"}'
+            MATRIX+=',{"os":"windows-latest","pkg_manager":"winget","package_name":"Espressif.EIM-CLI","install_cmd":"winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements","uninstall_cmd":"winget uninstall --id Espressif.EIM-CLI --accept-source-agreements","meta_cmd":"winget list --id Espressif.EIM-CLI"}'
           fi
           MATRIX+=']}'
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
@@ -120,71 +117,49 @@ jobs:
       matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
-
       - name: Resolve version for this matrix entry
         id: version
         shell: bash
         run: |
-          CLI_VERSION="${{ needs.setup-matrix.outputs.resolved_version }}"
-          STRIPPED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          CLI_VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
           PKG_MANAGER="${{ matrix.pkg_manager }}"
           WINGET_AVAILABLE="${{ needs.setup-matrix.outputs.winget_version_available }}"
 
           if [[ "$PKG_MANAGER" == "winget" && "$WINGET_AVAILABLE" != "true" ]]; then
             echo "WinGet manifest not yet merged — skipping version assertion"
             CLI_VERSION=""
-            STRIPPED=""
           fi
 
-          echo "cli_version=${CLI_VERSION}" >> $GITHUB_OUTPUT
-          echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
+          echo "expected_version=${CLI_VERSION}" >> $GITHUB_OUTPUT
 
-      # Linux (Docker container)
-
-      - name: Set up Node.js (Linux host)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build node test dependencies (Linux host)
-        if: matrix.os == 'ubuntu-latest'
-        working-directory: tests
-        run: npm ci
+      # ── Linux (Docker container) ──
 
       - name: Start test container (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           docker create --name test-runner \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/tests \
-            -e LOG_TO_FILE=true \
-            -e EIM_CLI_PATH=/usr/bin/eim \
-            -e EIM_CLI_VERSION="${{ steps.version.outputs.cli_version }}" \
+            -e DEBIAN_FRONTEND=noninteractive \
+            -e TZ=Etc/UTC \
             ${{ matrix.container }} \
             sleep infinity
           docker start test-runner
 
+      - name: Configure package repository (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
           docker exec test-runner bash -c "
             if command -v apt-get &>/dev/null; then
               apt-get update && apt-get install -y curl ca-certificates sudo
             elif command -v dnf &>/dev/null; then
-              dnf install -y curl ca-certificates sudo tar gzip
+              dnf install -y curl ca-certificates sudo
             fi
-            curl -fsSL https://nodejs.org/dist/v20.20.0/node-v20.20.0-linux-${{ matrix.node_arch }}.tar.gz \
-              | tar -xz -C /usr/local --strip-components=1
-            node --version
-            npm --version
+            ${{ matrix.repo_setup }}
           "
 
       - name: Wait for package version availability (Linux, release mode)
-        if: matrix.os == 'ubuntu-latest' && inputs.run_mode == 'release' && steps.version.outputs.stripped != ''
+        if: matrix.os == 'ubuntu-latest' && inputs.run_mode == 'release' && steps.version.outputs.expected_version != ''
         run: |
-          EXPECTED_VERSION="${{ steps.version.outputs.stripped }}"
+          EXPECTED_VERSION="${{ steps.version.outputs.expected_version }}"
           echo "Waiting for version ${EXPECTED_VERSION} to appear in package repo..."
           docker exec test-runner bash -c "
             for i in \$(seq 1 10); do
@@ -208,77 +183,100 @@ jobs:
           "
         continue-on-error: true
 
-      - name: Run package manager tests (Linux)
+      - name: Install package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker exec test-runner bash -c "${{ matrix.install_cmd }}"
+
+      - name: Verify binary on PATH (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker exec test-runner which eim
+
+      - name: Verify version (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
-          docker exec test-runner npm run test-CLI --file=${{ matrix.suite_file }}
-        continue-on-error: true
+          VERSION=$(docker exec test-runner eim --do-not-track true --version 2>&1) || true
+          echo "Output: ${VERSION}"
+          EXPECTED="${{ steps.version.outputs.expected_version }}"
+          if [ -n "$EXPECTED" ]; then
+            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
+            echo "Version ${EXPECTED} confirmed"
+          fi
+
+      - name: Verify help output (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker exec test-runner bash -c "eim --do-not-track true --help | grep -i install"
+
+      - name: Verify package metadata (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker exec test-runner bash -c "${{ matrix.meta_cmd }}"
+
+      - name: Uninstall package (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker exec test-runner bash -c "${{ matrix.uninstall_cmd }}"
 
       - name: Copy EIM logs from container (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && always()
         run: |
-          docker cp test-runner:/root/.local/share/eim/logs/. ./tests/ 2>/dev/null || true
+          mkdir -p ./logs
+          docker cp test-runner:/root/.local/share/eim/logs/. ./logs/ 2>/dev/null || true
 
       - name: Stop test container (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest' && always()
         run: |
-          docker stop test-runner
-          docker rm test-runner
+          docker stop test-runner 2>/dev/null || true
+          docker rm test-runner 2>/dev/null || true
 
-      # macOS (Homebrew)
+      # ── macOS (Homebrew) ──
 
-      - name: Set up Node.js (macOS)
+      - name: Install package (macOS)
         if: matrix.os == 'macos-latest'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
+        run: ${{ matrix.install_cmd }}
 
-      - name: Build node test dependencies (macOS)
+      - name: Verify binary on PATH (macOS)
         if: matrix.os == 'macos-latest'
-        working-directory: tests
-        run: npm ci
+        run: which eim
 
-      - name: Run package manager tests (macOS)
+      - name: Verify version (macOS)
         if: matrix.os == 'macos-latest'
         run: |
-          export LOG_TO_FILE="true"
-          export EIM_CLI_PATH="$(brew --prefix)/bin/eim"
-          export EIM_CLI_VERSION="${{ steps.version.outputs.cli_version }}"
-          cd tests
-          npm run test-CLI --file=${{ matrix.suite_file }}
-        continue-on-error: true
+          VERSION=$(eim --do-not-track true --version 2>&1) || true
+          echo "Output: ${VERSION}"
+          EXPECTED="${{ steps.version.outputs.expected_version }}"
+          if [ -n "$EXPECTED" ]; then
+            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
+            echo "Version ${EXPECTED} confirmed"
+          fi
+
+      - name: Verify help output (macOS)
+        if: matrix.os == 'macos-latest'
+        run: eim --do-not-track true --help | grep -i install
+
+      - name: Verify package metadata (macOS)
+        if: matrix.os == 'macos-latest'
+        run: ${{ matrix.meta_cmd }}
+
+      - name: Uninstall package (macOS)
+        if: matrix.os == 'macos-latest'
+        run: ${{ matrix.uninstall_cmd }}
 
       - name: Copy EIM logs (macOS)
-        if: matrix.os == 'macos-latest'
+        if: matrix.os == 'macos-latest' && always()
         run: |
-          cp ~/Library/Application\ Support/eim/logs/*.log ./tests/ 2>/dev/null || true
-        continue-on-error: true
+          mkdir -p ./logs
+          cp ~/Library/Application\ Support/eim/logs/*.log ./logs/ 2>/dev/null || true
 
-      # Windows (Scoop / WinGet)
-
-      - name: Set up Node.js (Windows)
-        if: matrix.os == 'windows-latest'
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Expand node modules (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          Set-Location -Path "./tests"
-          if (Test-Path node_modules.zip) { Expand-Archive node_modules.zip } else { npm ci }
+      # ── Windows (Scoop / WinGet) ──
 
       - name: Exclude workspace from Defender (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+        run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
       - name: Verify WinGet version on runner (Option C)
-        if: matrix.pkg_manager == 'winget' && steps.version.outputs.stripped != ''
+        if: matrix.pkg_manager == 'winget' && steps.version.outputs.expected_version != ''
         id: winget-runner-verify
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.stripped }}"
+          $version = "${{ steps.version.outputs.expected_version }}"
           Write-Host "Checking if WinGet index has version ${version}..."
           $result = winget show --id Espressif.EIM-CLI --version $version 2>&1
           if ($LASTEXITCODE -eq 0) {
@@ -290,43 +288,69 @@ jobs:
           }
         continue-on-error: true
 
-      - name: Run package manager tests (Windows)
+      - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ${{ matrix.install_cmd }}
+
+      - name: Verify binary on PATH (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          $env:LOG_TO_FILE = "true"
-          $cliVersion = "${{ steps.version.outputs.cli_version }}"
+          $eimPath = Get-Command eim.exe -ErrorAction SilentlyContinue
+          if (-not $eimPath) { Write-Error "eim.exe not found on PATH"; exit 1 }
+          Write-Host "Found: $($eimPath.Source)"
+
+      - name: Verify version (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $output = & eim --do-not-track true --version 2>&1 | Out-String
+          Write-Host "Output: $output"
+          $expected = "${{ steps.version.outputs.expected_version }}"
           if ("${{ matrix.pkg_manager }}" -eq "winget" -and "${{ steps.winget-runner-verify.outputs.confirmed }}" -ne "true") {
-            Write-Host "WinGet version not confirmed on runner — running version-agnostic"
-            $cliVersion = ""
+            Write-Host "WinGet version not confirmed on runner — skipping assertion"
+            $expected = ""
           }
-          $env:EIM_CLI_VERSION = $cliVersion
-          Set-Location -Path "./tests"
-          npm run test-CLI-win --file=${{ matrix.suite_file }}
-        continue-on-error: true
+          if ($expected -ne "") {
+            if ($output -notmatch [regex]::Escape($expected)) {
+              Write-Error "FAIL: expected $expected in output"
+              exit 1
+            }
+            Write-Host "Version $expected confirmed"
+          }
+
+      - name: Verify help output (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $output = & eim --do-not-track true --help 2>&1 | Out-String
+          if ($output -notmatch "install") { Write-Error "help output missing 'install' command"; exit 1 }
+          Write-Host "Help output OK"
+
+      - name: Verify package metadata (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ${{ matrix.meta_cmd }}
+
+      - name: Uninstall package (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ${{ matrix.uninstall_cmd }}
 
       - name: Copy EIM logs (Windows)
-        if: matrix.os == 'windows-latest'
+        if: matrix.os == 'windows-latest' && always()
+        shell: pwsh
         run: |
-          Move-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination ".\tests\" -Force
-        continue-on-error: true
+          New-Item -ItemType Directory -Force -Path ./logs | Out-Null
+          Copy-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination "./logs/" -Force -ErrorAction SilentlyContinue
 
-      # Upload results & report
+      # ── Upload logs ──
 
-      - name: Upload test results
+      - name: Upload logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: autotest-pkg-manager-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
-          path: |
-            ./tests/results-*.json
-            ./tests/*.log
-
-      - name: Publish Test Results
-        uses: dorny/test-reporter@v2
-        if: always()
-        with:
-          name: PkgMgr-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
-          path: ./tests/results-*.json
-          path-replace-backslashes: "false"
-          reporter: mocha-json
-          fail-on-empty: true
+          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
+          path: ./logs/
+          if-no-files-found: ignore
