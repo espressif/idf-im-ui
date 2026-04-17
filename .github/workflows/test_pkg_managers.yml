@@ -374,11 +374,14 @@ jobs:
           path: ./logs/
           if-no-files-found: ignore
 
-  notify:
-    name: Notify Mattermost
+  build-notification:
+    name: Build notification
     needs: [setup-matrix, test]
     if: always()
     runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.msg.outputs.title }}
+      body: ${{ steps.msg.outputs.body }}
     steps:
       - name: Fetch per-job results
         id: results
@@ -391,10 +394,10 @@ jobs:
           echo "$JOBS_JSON" >> $GITHUB_OUTPUT
           echo "JOBS_EOF" >> $GITHUB_OUTPUT
 
-      - name: Send Mattermost notification
+      - name: Build message
+        id: msg
         shell: bash
         env:
-          HOOK_URL: ${{ secrets.MATTERMOST_CI_HOOK }}
           JOBS_JSON: ${{ steps.results.outputs.jobs }}
         run: |
           TEST_RESULT="${{ needs.test.result }}"
@@ -418,8 +421,8 @@ jobs:
             TITLE="Package Manager Tests — Some Failed"
           fi
 
-          TEXT=$(python3 -c "
-          import json, os, sys
+          TABLE=$(python3 -c "
+          import json, os
 
           jobs = json.loads(os.environ['JOBS_JSON'])
           winget_available = os.environ.get('WINGET_AVAILABLE', 'false')
@@ -452,24 +455,25 @@ jobs:
               link = f'[{name}]({url})' if url else name
               rows.append(f'| {link} | {status}{note} |')
 
-          table = '| Job | Result |\\n|:---|:---|\\n' + '\\n'.join(rows)
+          table = '| Job | Result |\n|:---|:---|\n' + '\n'.join(rows)
           print(table)
           ")
 
-          MSG="#### ${ICON} ${TITLE}\n\n"
-          MSG+="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
-          MSG+="${TEXT}\n\n"
-          MSG+=":link: [View full run](${RUN_URL})"
+          BODY="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
+          BODY+="${TABLE}\n\n"
+          BODY+=":link: [View full run](${RUN_URL})"
 
-          PAYLOAD=$(python3 -c "
-          import json, sys
-          print(json.dumps({
-              'username': 'EIM CI Bot',
-              'icon_emoji': 'package',
-              'text': sys.argv[1]
-          }))
-          " "$MSG")
+          echo "title=${ICON} ${TITLE}" >> $GITHUB_OUTPUT
+          echo "body<<BODY_EOF" >> $GITHUB_OUTPUT
+          echo -e "$BODY" >> $GITHUB_OUTPUT
+          echo "BODY_EOF" >> $GITHUB_OUTPUT
 
-          curl -sf -X POST -H 'Content-Type: application/json' \
-            -d "$PAYLOAD" \
-            "$HOOK_URL"
+  notify:
+    name: Notify Mattermost
+    needs: [build-notification]
+    if: always() && needs.build-notification.result == 'success'
+    uses: ./.github/workflows/notify_mattermost.yml
+    with:
+      title: ${{ needs.build-notification.outputs.title }}
+      body: ${{ needs.build-notification.outputs.body }}
+    secrets: inherit

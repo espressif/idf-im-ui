@@ -1,0 +1,52 @@
+name: Notify Mattermost
+
+on:
+  workflow_call:
+    inputs:
+      title:
+        description: 'Message heading (Markdown supported)'
+        required: true
+        type: string
+      body:
+        description: 'Message body (Markdown supported)'
+        required: true
+        type: string
+      icon_emoji:
+        description: 'Bot icon emoji name'
+        required: false
+        type: string
+        default: 'package'
+      username:
+        description: 'Bot display name'
+        required: false
+        type: string
+        default: 'EIM CI Bot'
+
+jobs:
+  send:
+    name: Send notification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Mattermost
+        shell: bash
+        env:
+          HOOK_URL: ${{ secrets.MATTERMOST_CI_HOOK }}
+          MSG_TITLE: ${{ inputs.title }}
+          MSG_BODY: ${{ inputs.body }}
+          BOT_EMOJI: ${{ inputs.icon_emoji }}
+          BOT_USER: ${{ inputs.username }}
+        run: |
+          export TEXT="#### ${MSG_TITLE}\n\n${MSG_BODY}"
+
+          PAYLOAD=$(python3 -c "
+          import json, os
+          print(json.dumps({
+              'username': os.environ['BOT_USER'],
+              'icon_emoji': os.environ['BOT_EMOJI'],
+              'text': os.environ['TEXT']
+          }))
+          ")
+
+          curl -sf -X POST -H 'Content-Type: application/json' \
+            -d "$PAYLOAD" \
+            "$HOOK_URL"
