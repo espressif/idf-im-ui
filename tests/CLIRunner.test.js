@@ -3,7 +3,7 @@
  * Entries should follow this format:
  *     {
         "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom", "offline" or "existing-git-clone"
+        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom" or "offline"
         "name": "<name>",               // A name for the test to correlate to logs and report
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"

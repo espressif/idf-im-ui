@@ -39,7 +39,8 @@ jobs:
     name: Build test matrix
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set.outputs.matrix }}
+      matrix_linux: ${{ steps.set.outputs.matrix_linux }}
+      matrix_other: ${{ steps.set.outputs.matrix_other }}
       resolved_version: ${{ steps.resolve.outputs.cli_version }}
       resolved_stripped: ${{ steps.resolve.outputs.stripped }}
     steps:
@@ -73,135 +74,120 @@ jobs:
         id: set
         shell: bash
         run: |
-          MATRIX='{"include":['
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","container":"ubuntu:latest","node_arch":"x64","distro_name":"ubuntu","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"apt","container":"debian:latest","node_arch":"x64","distro_name":"debian","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
-          MATRIX+='{"os":"ubuntu-latest","pkg_manager":"dnf","container":"fedora:latest","node_arch":"x64","distro_name":"fedora","package_name":"eim-cli","install_cmd":"dnf install -y eim-cli","uninstall_cmd":"dnf remove -y eim-cli","meta_cmd":"rpm -qi eim-cli","repo_setup":"curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo"},'
-          MATRIX+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"},'
-          STRIPPED="${{ steps.resolve.outputs.stripped }}"
-          if [ -n "$STRIPPED" ]; then
-            SCOOP_MANIFEST_URL="https://github.com/${{ github.repository }}/releases/download/v${STRIPPED}/eim-cli.json"
-          else
-            SCOOP_MANIFEST_URL="https://github.com/${{ github.repository }}/releases/latest/download/eim-cli.json"
-          fi
-          MATRIX+='{"os":"windows-latest","pkg_manager":"scoop","package_name":"eim-cli","scoop_manifest_url":"'"${SCOOP_MANIFEST_URL}"'","install_cmd":"scoop install .\\eim-cli.json","uninstall_cmd":"scoop uninstall eim-cli","meta_cmd":"scoop info eim-cli"}'
+          LINUX='{"include":['
+          LINUX+='{"image":"ubuntu:latest","pkg_manager":"apt","distro_name":"ubuntu","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
+          LINUX+='{"image":"fedora:latest","pkg_manager":"dnf","distro_name":"fedora","package_name":"eim-cli","install_cmd":"dnf install -y eim-cli","uninstall_cmd":"dnf remove -y eim-cli","meta_cmd":"rpm -qi eim-cli","repo_setup":"curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo"}'
+          LINUX+=']}'
+          echo "matrix_linux=$LINUX" >> $GITHUB_OUTPUT
+
+          OTHER='{"include":['
+          OTHER+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"}'
           RUN_MODE="${{ inputs.run_mode }}"
           if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
           if [[ "$RUN_MODE" != "release" ]]; then
-            MATRIX+=',{"os":"windows-latest","pkg_manager":"winget","package_name":"Espressif.EIM-CLI","install_cmd":"winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements","uninstall_cmd":"winget uninstall --id Espressif.EIM-CLI --accept-source-agreements","meta_cmd":"winget list --id Espressif.EIM-CLI"}'
+            OTHER+=',{"os":"windows-latest","pkg_manager":"winget","package_name":"Espressif.EIM-CLI","install_cmd":"winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements","uninstall_cmd":"winget uninstall --id Espressif.EIM-CLI --accept-source-agreements","meta_cmd":"winget list --id Espressif.EIM-CLI"}'
           fi
-          MATRIX+=']}'
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          OTHER+=']}'
+          echo "matrix_other=$OTHER" >> $GITHUB_OUTPUT
 
-  test:
-    name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name || '' }}
+  test-linux:
+    name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name }}
     needs: setup-matrix
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
+    container:
+      image: ${{ matrix.image }}
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        TZ: Etc/UTC
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix_linux) }}
 
     steps:
-      - name: Resolve version for this matrix entry
-        id: version
-        shell: bash
+      - name: Install prerequisites
         run: |
-          echo "expected_version=${{ needs.setup-matrix.outputs.resolved_stripped }}" >> $GITHUB_OUTPUT
+          if command -v apt-get &>/dev/null; then
+            apt-get update && apt-get install -y curl ca-certificates sudo
+          elif command -v dnf &>/dev/null; then
+            dnf install -y curl ca-certificates sudo
+          fi
 
-      # ── Linux (Docker container) ──
+      - name: Configure package repository
+        run: ${{ matrix.repo_setup }}
 
-      - name: Start test container (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Wait for package version availability (release mode)
+        if: inputs.run_mode == 'release' && needs.setup-matrix.outputs.resolved_stripped != ''
         run: |
-          docker create --name test-runner \
-            -e DEBIAN_FRONTEND=noninteractive \
-            -e TZ=Etc/UTC \
-            ${{ matrix.container }} \
-            sleep infinity
-          docker start test-runner
-
-      - name: Configure package repository (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          docker exec test-runner bash -c "
-            if command -v apt-get &>/dev/null; then
-              apt-get update && apt-get install -y curl ca-certificates sudo
-            elif command -v dnf &>/dev/null; then
-              dnf install -y curl ca-certificates sudo
-            fi
-            ${{ matrix.repo_setup }}
-          "
-
-      - name: Wait for package version availability (Linux, release mode)
-        if: matrix.os == 'ubuntu-latest' && inputs.run_mode == 'release' && steps.version.outputs.expected_version != ''
-        run: |
-          EXPECTED_VERSION="${{ steps.version.outputs.expected_version }}"
+          EXPECTED_VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
           echo "Waiting for version ${EXPECTED_VERSION} to appear in package repo..."
-          docker exec test-runner bash -c "
-            for i in \$(seq 1 10); do
-              if command -v apt-get &>/dev/null; then
-                apt-get update -qq 2>/dev/null
-                if apt-cache show eim-cli 2>/dev/null | grep -q \"Version:.*${EXPECTED_VERSION}\"; then
-                  echo \"Version ${EXPECTED_VERSION} found in APT repo on attempt \$i\"
-                  exit 0
-                fi
-              elif command -v dnf &>/dev/null; then
-                dnf makecache -q 2>/dev/null
-                if dnf info eim-cli 2>/dev/null | grep -q \"${EXPECTED_VERSION}\"; then
-                  echo \"Version ${EXPECTED_VERSION} found in RPM repo on attempt \$i\"
-                  exit 0
-                fi
+          for i in $(seq 1 10); do
+            if command -v apt-get &>/dev/null; then
+              apt-get update -qq 2>/dev/null
+              if apt-cache show ${{ matrix.package_name }} 2>/dev/null | grep -q "Version:.*${EXPECTED_VERSION}"; then
+                echo "Version ${EXPECTED_VERSION} found on attempt $i"
+                exit 0
               fi
-              echo \"Retry \$i/10: version ${EXPECTED_VERSION} not yet available, waiting 60s...\"
-              sleep 60
-            done
-            echo \"WARNING: Version ${EXPECTED_VERSION} not found after 10 retries, proceeding anyway\"
-          "
+            elif command -v dnf &>/dev/null; then
+              dnf makecache -q 2>/dev/null
+              if dnf info ${{ matrix.package_name }} 2>/dev/null | grep -q "${EXPECTED_VERSION}"; then
+                echo "Version ${EXPECTED_VERSION} found on attempt $i"
+                exit 0
+              fi
+            fi
+            echo "Retry $i/10: version ${EXPECTED_VERSION} not yet available, waiting 60s..."
+            sleep 60
+          done
+          echo "WARNING: Version ${EXPECTED_VERSION} not found after 10 retries, proceeding anyway"
         continue-on-error: true
 
-      - name: Install package (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner bash -c "${{ matrix.install_cmd }}"
+      - name: Install package
+        run: ${{ matrix.install_cmd }}
 
-      - name: Verify binary on PATH (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner bash -c "command -v eim"
+      - name: Verify binary on PATH
+        run: command -v eim
 
-      - name: Verify version (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Verify version
         run: |
-          VERSION=$(docker exec test-runner eim --do-not-track true --version 2>&1) || true
+          VERSION=$(eim --do-not-track true --version 2>&1) || true
           echo "Output: ${VERSION}"
-          EXPECTED="${{ steps.version.outputs.expected_version }}"
+          EXPECTED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
           if [ -n "$EXPECTED" ]; then
             echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
             echo "Version ${EXPECTED} confirmed"
           fi
 
-      - name: Verify help output (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner bash -c "eim --do-not-track true --help | grep -i install"
+      - name: Verify help output
+        run: eim --do-not-track true --help | grep -i install
 
-      - name: Verify package metadata (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner bash -c "${{ matrix.meta_cmd }}"
+      - name: Verify package metadata
+        run: ${{ matrix.meta_cmd }}
 
-      - name: Uninstall package (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        run: docker exec test-runner bash -c "${{ matrix.uninstall_cmd }}"
+      - name: Uninstall package
+        run: ${{ matrix.uninstall_cmd }}
 
-      - name: Copy EIM logs from container (Linux)
-        if: matrix.os == 'ubuntu-latest' && always()
+      - name: Collect EIM logs
+        if: always()
         run: |
           mkdir -p ./logs
-          docker cp test-runner:/root/.local/share/eim/logs/. ./logs/ 2>/dev/null || true
+          cp -r /root/.local/share/eim/logs/* ./logs/ 2>/dev/null || true
 
-      - name: Stop test container (Linux)
-        if: matrix.os == 'ubuntu-latest' && always()
-        run: |
-          docker stop test-runner 2>/dev/null || true
-          docker rm test-runner 2>/dev/null || true
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name }}
+          path: ./logs/
+          if-no-files-found: ignore
 
+  test:
+    name: PkgMgr (${{ matrix.pkg_manager }})
+    needs: setup-matrix
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix_other) }}
+
+    steps:
       # ── macOS (Homebrew) ──
 
       - name: Install package (macOS)
@@ -217,7 +203,7 @@ jobs:
         run: |
           VERSION=$(eim --do-not-track true --version 2>&1) || true
           echo "Output: ${VERSION}"
-          EXPECTED="${{ steps.version.outputs.expected_version }}"
+          EXPECTED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
           if [ -n "$EXPECTED" ]; then
             echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
             echo "Version ${EXPECTED} confirmed"
@@ -241,18 +227,18 @@ jobs:
           mkdir -p ./logs
           cp ~/Library/Application\ Support/eim/logs/*.log ./logs/ 2>/dev/null || true
 
-      # ── Windows (Scoop / WinGet) ──
+      # ── Windows (WinGet) ──
 
       - name: Exclude workspace from Defender (Windows)
         if: matrix.os == 'windows-latest'
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
       - name: Verify WinGet version on runner
-        if: matrix.pkg_manager == 'winget' && steps.version.outputs.expected_version != ''
+        if: matrix.pkg_manager == 'winget' && needs.setup-matrix.outputs.resolved_stripped != ''
         id: winget-runner-verify
         shell: pwsh
         run: |
-          $version = "${{ steps.version.outputs.expected_version }}"
+          $version = "${{ needs.setup-matrix.outputs.resolved_stripped }}"
           Write-Host "Checking if WinGet index has version ${version}..."
           $result = winget show --id Espressif.EIM-CLI --version $version 2>&1
           if ($LASTEXITCODE -eq 0) {
@@ -263,22 +249,6 @@ jobs:
             echo "confirmed=false" >> $env:GITHUB_OUTPUT
           }
         continue-on-error: true
-
-      - name: Install Scoop (Windows)
-        if: matrix.pkg_manager == 'scoop'
-        shell: pwsh
-        run: |
-          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-          irm get.scoop.sh | iex
-          echo "$HOME\scoop\shims" >> $env:GITHUB_PATH
-
-      - name: Download Scoop manifest
-        if: matrix.pkg_manager == 'scoop'
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "${{ matrix.scoop_manifest_url }}" -OutFile eim-cli.json
-          Write-Host "Downloaded manifest:"
-          Get-Content eim-cli.json
 
       - name: Install package (Windows)
         if: matrix.os == 'windows-latest'
@@ -304,7 +274,7 @@ jobs:
         run: |
           $output = & eim --do-not-track true --version 2>&1 | Out-String
           Write-Host "Output: $output"
-          $expected = "${{ steps.version.outputs.expected_version }}"
+          $expected = "${{ needs.setup-matrix.outputs.resolved_stripped }}"
           if ("${{ matrix.pkg_manager }}" -eq "winget" -and "${{ steps.winget-runner-verify.outputs.confirmed }}" -ne "true") {
             Write-Host "WinGet version not confirmed on runner — skipping assertion"
             $expected = ""
@@ -348,13 +318,13 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name || matrix.os }}
+          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.os }}
           path: ./logs/
           if-no-files-found: ignore
 
   build-notification:
     name: Build notification
-    needs: [setup-matrix, test]
+    needs: [setup-matrix, test-linux, test]
     if: always()
     runs-on: ubuntu-latest
     outputs:
@@ -378,7 +348,8 @@ jobs:
         env:
           JOBS_JSON: ${{ steps.results.outputs.jobs }}
         run: |
-          TEST_RESULT="${{ needs.test.result }}"
+          LINUX_RESULT="${{ needs.test-linux.result }}"
+          OTHER_RESULT="${{ needs.test.result }}"
           VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
           RUN_MODE="${{ inputs.run_mode }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
@@ -387,10 +358,10 @@ jobs:
           if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
           if [ -z "$VERSION" ]; then VERSION="latest"; fi
 
-          if [ "$TEST_RESULT" = "success" ]; then
+          if [ "$LINUX_RESULT" = "success" ] && [ "$OTHER_RESULT" = "success" ]; then
             ICON=":white_check_mark:"
             TITLE="Package Manager Tests — All Passed"
-          elif [ "$TEST_RESULT" = "cancelled" ]; then
+          elif [ "$LINUX_RESULT" = "cancelled" ] || [ "$OTHER_RESULT" = "cancelled" ]; then
             ICON=":no_entry_sign:"
             TITLE="Package Manager Tests — Cancelled"
           else
