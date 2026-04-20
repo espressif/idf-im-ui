@@ -8,10 +8,6 @@ on:
         required: false
         type: string
         default: ''
-      ref:
-        required: false
-        type: string
-        default: ''
       run_mode:
         description: '"release" for post-release, "nightly" for scheduled'
         required: false
@@ -34,65 +30,37 @@ on:
     paths:
       - '.github/workflows/test_pkg_managers.yml'
 
+# ─────────────────────────────────────────────────────────────
+#  Jobs
+# ─────────────────────────────────────────────────────────────
+
 jobs:
-  setup-matrix:
-    name: Build test matrix
+
+  # ── 1. Resolve the version string once ──
+
+  resolve-version:
     runs-on: ubuntu-latest
     outputs:
-      matrix_linux: ${{ steps.set.outputs.matrix_linux }}
-      matrix_other: ${{ steps.set.outputs.matrix_other }}
-      resolved_version: ${{ steps.resolve.outputs.cli_version }}
-      resolved_stripped: ${{ steps.resolve.outputs.stripped }}
+      stripped: ${{ steps.resolve.outputs.stripped }}
     steps:
-      - name: Resolve version from latest release (nightly / PR)
+      - name: Resolve version
         id: resolve
-        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          INPUT_VERSION="${{ inputs.version }}"
-          if [ -n "$INPUT_VERSION" ]; then
-            STRIPPED="${INPUT_VERSION#v}"
-            echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
-            echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
-            echo "Using provided version: ${STRIPPED}"
-          else
+          TAG="${{ inputs.version }}"
+          if [ -z "$TAG" ]; then
             TAG=$(gh api repos/${{ github.repository }}/releases/latest --jq '.tag_name' 2>/dev/null || echo "")
-            if [ -n "$TAG" ]; then
-              STRIPPED="${TAG#v}"
-              echo "cli_version=eim ${STRIPPED}" >> $GITHUB_OUTPUT
-              echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
-              echo "Resolved latest release: ${TAG} -> ${STRIPPED}"
-            else
-              echo "cli_version=" >> $GITHUB_OUTPUT
-              echo "stripped=" >> $GITHUB_OUTPUT
-              echo "WARNING: Could not resolve latest release, running version-agnostic"
-            fi
           fi
+          STRIPPED="${TAG#v}"
+          echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
+          echo "Resolved version: ${STRIPPED:-<none>}"
 
-      - name: Build matrix
-        id: set
-        shell: bash
-        run: |
-          LINUX='{"include":['
-          LINUX+='{"image":"ubuntu:latest","pkg_manager":"apt","distro_name":"ubuntu","package_name":"eim-cli","install_cmd":"apt-get install -y eim-cli","uninstall_cmd":"apt-get remove -y eim-cli","meta_cmd":"dpkg -l eim-cli","repo_setup":"echo '\''deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main'\'' | tee /etc/apt/sources.list.d/eim.list && apt-get update"},'
-          LINUX+='{"image":"fedora:latest","pkg_manager":"dnf","distro_name":"fedora","package_name":"eim-cli","install_cmd":"dnf install -y eim-cli","uninstall_cmd":"dnf remove -y eim-cli","meta_cmd":"rpm -qi eim-cli","repo_setup":"curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo"}'
-          LINUX+=']}'
-          echo "matrix_linux=$LINUX" >> $GITHUB_OUTPUT
-
-          OTHER='{"include":['
-          OTHER+='{"os":"macos-latest","pkg_manager":"brew","package_name":"espressif/eim/eim","install_cmd":"brew install espressif/eim/eim","uninstall_cmd":"brew uninstall espressif/eim/eim","meta_cmd":"brew list espressif/eim/eim"}'
-          RUN_MODE="${{ inputs.run_mode }}"
-          if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
-          if [[ "$RUN_MODE" != "release" ]]; then
-            OTHER+=',{"os":"windows-latest","pkg_manager":"winget","package_name":"Espressif.EIM-CLI","install_cmd":"winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements","uninstall_cmd":"winget uninstall --id Espressif.EIM-CLI --accept-source-agreements","meta_cmd":"winget list --id Espressif.EIM-CLI"}'
-          fi
-          OTHER+=']}'
-          echo "matrix_other=$OTHER" >> $GITHUB_OUTPUT
+  # ── 2. Linux — native container, inline YAML matrix ──
 
   test-linux:
     name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name }}
-    needs: setup-matrix
+    needs: resolve-version
     runs-on: ubuntu-latest
     container:
       image: ${{ matrix.image }}
@@ -101,43 +69,55 @@ jobs:
         TZ: Etc/UTC
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix_linux) }}
-
+      matrix:
+        include:
+          - image: ubuntu:latest
+            pkg_manager: apt
+            distro_name: ubuntu
+            package_name: eim-cli
+            install_cmd: apt-get install -y eim-cli
+            uninstall_cmd: apt-get remove -y eim-cli
+            meta_cmd: dpkg -l eim-cli
+            repo_setup: |
+              echo 'deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main' \
+                | tee /etc/apt/sources.list.d/eim.list
+              apt-get update
+          - image: fedora:latest
+            pkg_manager: dnf
+            distro_name: fedora
+            package_name: eim-cli
+            install_cmd: dnf install -y eim-cli
+            uninstall_cmd: dnf remove -y eim-cli
+            meta_cmd: rpm -qi eim-cli
+            repo_setup: curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo
     steps:
       - name: Install prerequisites
         run: |
           if command -v apt-get &>/dev/null; then
-            apt-get update && apt-get install -y curl ca-certificates sudo
+            apt-get update && apt-get install -y curl ca-certificates
           elif command -v dnf &>/dev/null; then
-            dnf install -y curl ca-certificates sudo
+            dnf install -y curl ca-certificates
           fi
 
       - name: Configure package repository
         run: ${{ matrix.repo_setup }}
 
-      - name: Wait for package version availability (release mode)
-        if: inputs.run_mode == 'release' && needs.setup-matrix.outputs.resolved_stripped != ''
+      - name: Wait for version availability (release mode)
+        if: inputs.run_mode == 'release' && needs.resolve-version.outputs.stripped != ''
         run: |
-          EXPECTED_VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          echo "Waiting for version ${EXPECTED_VERSION} to appear in package repo..."
+          EXPECTED="${{ needs.resolve-version.outputs.stripped }}"
           for i in $(seq 1 10); do
             if command -v apt-get &>/dev/null; then
               apt-get update -qq 2>/dev/null
-              if apt-cache show ${{ matrix.package_name }} 2>/dev/null | grep -q "Version:.*${EXPECTED_VERSION}"; then
-                echo "Version ${EXPECTED_VERSION} found on attempt $i"
-                exit 0
-              fi
+              apt-cache show ${{ matrix.package_name }} 2>/dev/null | grep -q "Version:.*${EXPECTED}" && echo "Found on attempt $i" && exit 0
             elif command -v dnf &>/dev/null; then
               dnf makecache -q 2>/dev/null
-              if dnf info ${{ matrix.package_name }} 2>/dev/null | grep -q "${EXPECTED_VERSION}"; then
-                echo "Version ${EXPECTED_VERSION} found on attempt $i"
-                exit 0
-              fi
+              dnf info ${{ matrix.package_name }} 2>/dev/null | grep -q "${EXPECTED}" && echo "Found on attempt $i" && exit 0
             fi
-            echo "Retry $i/10: version ${EXPECTED_VERSION} not yet available, waiting 60s..."
+            echo "Retry $i/10 — waiting 60s..."
             sleep 60
           done
-          echo "WARNING: Version ${EXPECTED_VERSION} not found after 10 retries, proceeding anyway"
+          echo "WARNING: version ${EXPECTED} not found after 10 retries, proceeding anyway"
         continue-on-error: true
 
       - name: Install package
@@ -150,10 +130,9 @@ jobs:
         run: |
           VERSION=$(eim --do-not-track true --version 2>&1) || true
           echo "Output: ${VERSION}"
-          EXPECTED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          EXPECTED="${{ needs.resolve-version.outputs.stripped }}"
           if [ -n "$EXPECTED" ]; then
-            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
-            echo "Version ${EXPECTED} confirmed"
+            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED}"; exit 1; }
           fi
 
       - name: Verify help output
@@ -165,244 +144,159 @@ jobs:
       - name: Uninstall package
         run: ${{ matrix.uninstall_cmd }}
 
-      - name: Collect EIM logs
-        if: always()
-        run: |
-          mkdir -p ./logs
-          cp -r /root/.local/share/eim/logs/* ./logs/ 2>/dev/null || true
-
-      - name: Upload logs
+      - name: Upload EIM logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name }}
-          path: ./logs/
+          path: /root/.local/share/eim/logs/
           if-no-files-found: ignore
 
-  test:
-    name: PkgMgr (${{ matrix.pkg_manager }})
-    needs: setup-matrix
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.setup-matrix.outputs.matrix_other) }}
+  # ── 3. macOS — Homebrew ──
 
+  test-brew:
+    name: PkgMgr (brew)
+    needs: resolve-version
+    runs-on: macos-latest
     steps:
-      # ── macOS (Homebrew) ──
+      - name: Install package
+        run: brew install espressif/eim/eim
 
-      - name: Install package (macOS)
-        if: matrix.os == 'macos-latest'
-        run: ${{ matrix.install_cmd }}
-
-      - name: Verify binary on PATH (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Verify binary on PATH
         run: which eim
 
-      - name: Verify version (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Verify version
         run: |
           VERSION=$(eim --do-not-track true --version 2>&1) || true
           echo "Output: ${VERSION}"
-          EXPECTED="${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          if [ -n "$EXPECTED" ]; then
-            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED} in output"; exit 1; }
-            echo "Version ${EXPECTED} confirmed"
-          fi
+          EXPECTED="${{ needs.resolve-version.outputs.stripped }}"
+          [ -z "$EXPECTED" ] || echo "$VERSION" | grep -q "$EXPECTED"
 
-      - name: Verify help output (macOS)
-        if: matrix.os == 'macos-latest'
+      - name: Verify help output
         run: eim --do-not-track true --help | grep -i install
 
-      - name: Verify package metadata (macOS)
-        if: matrix.os == 'macos-latest'
-        run: ${{ matrix.meta_cmd }}
+      - name: Verify package metadata
+        run: brew list espressif/eim/eim
 
-      - name: Uninstall package (macOS)
-        if: matrix.os == 'macos-latest'
-        run: ${{ matrix.uninstall_cmd }}
+      - name: Uninstall package
+        run: brew uninstall espressif/eim/eim
 
-      - name: Copy EIM logs (macOS)
-        if: matrix.os == 'macos-latest' && always()
-        run: |
-          mkdir -p ./logs
-          cp ~/Library/Application\ Support/eim/logs/*.log ./logs/ 2>/dev/null || true
+      - name: Upload EIM logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pkg-manager-logs-brew-macos
+          path: ~/Library/Application Support/eim/logs/
+          if-no-files-found: ignore
 
-      # ── Windows (WinGet) ──
+  # ── 4. Windows — WinGet (nightly / PR only) ──
 
-      - name: Exclude workspace from Defender (Windows)
-        if: matrix.os == 'windows-latest'
+  test-winget:
+    name: PkgMgr (winget)
+    needs: resolve-version
+    if: inputs.run_mode != 'release'
+    runs-on: windows-latest
+    steps:
+      - name: Exclude workspace from Defender
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
 
-      - name: Verify WinGet version on runner
-        if: matrix.pkg_manager == 'winget' && needs.setup-matrix.outputs.resolved_stripped != ''
-        id: winget-runner-verify
+      - name: Install package
         shell: pwsh
         run: |
-          $version = "${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          Write-Host "Checking if WinGet index has version ${version}..."
-          $result = winget show --id Espressif.EIM-CLI --version $version 2>&1
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Version ${version} confirmed available in WinGet index"
-            echo "confirmed=true" >> $env:GITHUB_OUTPUT
-          } else {
-            Write-Host "Version ${version} not in WinGet index yet — clearing version assertion"
-            echo "confirmed=false" >> $env:GITHUB_OUTPUT
-          }
-        continue-on-error: true
-
-      - name: Install package (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          ${{ matrix.install_cmd }}
+          winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements
           $wingetLinks = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
-          if (Test-Path $wingetLinks) {
-            echo $wingetLinks >> $env:GITHUB_PATH
-          }
+          if (Test-Path $wingetLinks) { echo $wingetLinks >> $env:GITHUB_PATH }
 
-      - name: Verify binary on PATH (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Verify binary on PATH
         shell: pwsh
         run: |
-          $eimPath = Get-Command eim.exe -ErrorAction SilentlyContinue
-          if (-not $eimPath) { Write-Error "eim.exe not found on PATH"; exit 1 }
-          Write-Host "Found: $($eimPath.Source)"
+          if (-not (Get-Command eim.exe -ErrorAction SilentlyContinue)) {
+            Write-Error "eim.exe not found on PATH"; exit 1
+          }
 
-      - name: Verify version (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Verify version
         shell: pwsh
         run: |
           $output = & eim --do-not-track true --version 2>&1 | Out-String
           Write-Host "Output: $output"
-          $expected = "${{ needs.setup-matrix.outputs.resolved_stripped }}"
-          if ("${{ matrix.pkg_manager }}" -eq "winget" -and "${{ steps.winget-runner-verify.outputs.confirmed }}" -ne "true") {
-            Write-Host "WinGet version not confirmed on runner — skipping assertion"
-            $expected = ""
-          }
-          if ($expected -ne "") {
-            if ($output -notmatch [regex]::Escape($expected)) {
-              Write-Error "FAIL: expected $expected in output"
-              exit 1
-            }
-            Write-Host "Version $expected confirmed"
+          $expected = "${{ needs.resolve-version.outputs.stripped }}"
+          if ($expected -and $output -notmatch [regex]::Escape($expected)) {
+            Write-Error "FAIL: expected $expected"; exit 1
           }
 
-      - name: Verify help output (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Verify help output
         shell: pwsh
         run: |
           $output = & eim --do-not-track true --help 2>&1 | Out-String
-          if ($output -notmatch "install") { Write-Error "help output missing 'install' command"; exit 1 }
-          Write-Host "Help output OK"
+          if ($output -notmatch "install") { Write-Error "help missing 'install'"; exit 1 }
 
-      - name: Verify package metadata (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Verify package metadata
         shell: pwsh
-        run: ${{ matrix.meta_cmd }}
+        run: winget list --id Espressif.EIM-CLI
 
-      - name: Uninstall package (Windows)
-        if: matrix.os == 'windows-latest'
+      - name: Uninstall package
         shell: pwsh
-        run: ${{ matrix.uninstall_cmd }}
+        run: winget uninstall --id Espressif.EIM-CLI --accept-source-agreements
 
-      - name: Copy EIM logs (Windows)
-        if: matrix.os == 'windows-latest' && always()
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path ./logs | Out-Null
-          Copy-Item -Path "$env:LOCALAPPDATA\eim\logs\*" -Destination "./logs/" -Force -ErrorAction SilentlyContinue
-
-      # ── Upload logs ──
-
-      - name: Upload logs
+      - name: Upload EIM logs
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.os }}
-          path: ./logs/
+          name: pkg-manager-logs-winget-windows
+          path: ${{ env.LOCALAPPDATA }}\eim\logs\
           if-no-files-found: ignore
+
+  # ── 5. Mattermost notification ──
 
   build-notification:
     name: Build notification
-    needs: [setup-matrix, test-linux, test]
+    needs: [resolve-version, test-linux, test-brew, test-winget]
     if: always()
     runs-on: ubuntu-latest
     outputs:
       title: ${{ steps.msg.outputs.title }}
       body: ${{ steps.msg.outputs.body }}
     steps:
-      - name: Fetch per-job results
-        id: results
-        shell: bash
+      - name: Build message
+        id: msg
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          JOBS_JSON=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --paginate --jq '[.jobs[] | select(.name | startswith("PkgMgr"))]')
-          echo "jobs<<JOBS_EOF" >> $GITHUB_OUTPUT
-          echo "$JOBS_JSON" >> $GITHUB_OUTPUT
-          echo "JOBS_EOF" >> $GITHUB_OUTPUT
+          JOBS=$(gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs \
+            --paginate --jq '.jobs[] | select(.name | startswith("PkgMgr")) | "\(.name)|\(.conclusion // "unknown")|\(.html_url)"')
 
-      - name: Build message
-        id: msg
-        shell: bash
-        env:
-          JOBS_JSON: ${{ steps.results.outputs.jobs }}
-        run: |
-          LINUX_RESULT="${{ needs.test-linux.result }}"
-          OTHER_RESULT="${{ needs.test.result }}"
-          VERSION="${{ needs.setup-matrix.outputs.resolved_stripped }}"
+          VERSION="${{ needs.resolve-version.outputs.stripped }}"
           RUN_MODE="${{ inputs.run_mode }}"
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           BRANCH="${{ github.head_ref || github.ref_name }}"
+          [ -z "$RUN_MODE" ] && RUN_MODE="nightly"
+          [ -z "$VERSION" ] && VERSION="latest"
 
-          if [ -z "$RUN_MODE" ]; then RUN_MODE="nightly"; fi
-          if [ -z "$VERSION" ]; then VERSION="latest"; fi
+          TABLE="| Job | Result |\n|:---|:---|\n"
+          ALL_PASS=true
+          while IFS='|' read -r NAME CONC URL; do
+            [ -z "$NAME" ] && continue
+            case "$CONC" in
+              success)   STATUS=":white_check_mark: Passed" ;;
+              failure)   STATUS=":x: Failed"; ALL_PASS=false ;;
+              cancelled) STATUS=":no_entry_sign: Cancelled"; ALL_PASS=false ;;
+              skipped)   STATUS=":fast_forward: Skipped" ;;
+              *)         STATUS=":grey_question: $CONC"; ALL_PASS=false ;;
+            esac
+            TABLE+="| [$NAME]($URL) | $STATUS |\n"
+          done <<< "$JOBS"
 
-          if [ "$LINUX_RESULT" = "success" ] && [ "$OTHER_RESULT" = "success" ]; then
-            ICON=":white_check_mark:"
-            TITLE="Package Manager Tests — All Passed"
-          elif [ "$LINUX_RESULT" = "cancelled" ] || [ "$OTHER_RESULT" = "cancelled" ]; then
-            ICON=":no_entry_sign:"
-            TITLE="Package Manager Tests — Cancelled"
+          if $ALL_PASS; then
+            TITLE=":white_check_mark: Package Manager Tests — All Passed"
           else
-            ICON=":x:"
-            TITLE="Package Manager Tests — Some Failed"
+            TITLE=":x: Package Manager Tests — Some Failed"
           fi
-
-          TABLE=$(python3 -c "
-          import json, os
-
-          jobs = json.loads(os.environ['JOBS_JSON'])
-
-          rows = []
-          for job in sorted(jobs, key=lambda j: j['name']):
-              name = job['name']
-              conclusion = job.get('conclusion', 'unknown')
-              url = job.get('html_url', '')
-
-              if conclusion == 'success':
-                  status = ':white_check_mark: Passed'
-              elif conclusion == 'failure':
-                  status = ':x: Failed'
-              elif conclusion == 'cancelled':
-                  status = ':no_entry_sign: Cancelled'
-              elif conclusion == 'skipped':
-                  status = ':fast_forward: Skipped'
-              else:
-                  status = f':grey_question: {conclusion}'
-
-              link = f'[{name}]({url})' if url else name
-              rows.append(f'| {link} | {status} |')
-
-          table = '| Job | Result |\n|:---|:---|\n' + '\n'.join(rows)
-          print(table)
-          ")
 
           BODY="**Version:** \`${VERSION}\` | **Mode:** ${RUN_MODE} | **Branch:** \`${BRANCH}\`\n\n"
           BODY+="${TABLE}\n\n"
           BODY+=":link: [View full run](${RUN_URL})"
 
-          echo "title=${ICON} ${TITLE}" >> $GITHUB_OUTPUT
+          echo "title=${TITLE}" >> $GITHUB_OUTPUT
           echo "body<<BODY_EOF" >> $GITHUB_OUTPUT
           echo -e "$BODY" >> $GITHUB_OUTPUT
           echo "BODY_EOF" >> $GITHUB_OUTPUT
