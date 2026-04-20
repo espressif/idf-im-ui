@@ -34,3 +34,6 @@ __pycache__/*
 *.pyc
 .venv/*
 .codex/*
+
+# Local agent notes (project-understanding skill)
+.cursor_project_understanding/
