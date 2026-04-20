@@ -1555,3 +1555,25 @@ jobs:
     with:
       version: ${{ github.ref_name }}
     secrets: inherit
+
+  Autotest-PkgManagers:
+    name: Autotest Package Manager Installation
+    needs: [update-linux-repos, update-homebrew, update-windows-packages]
+    uses: ./.github/workflows/test_pkg_managers.yml
+    if: github.event_name == 'release' && github.event.action == 'created'
+    with:
+      version: ${{ github.ref_name }}
+      ref: ${{ github.ref }}
+      run_mode: release
+    secrets: inherit
+
+  Autotest-PkgManagers-Nightly:
+    name: Autotest Package Manager Installation (Nightly)
+    needs: [build-cli-linux]
+    uses: ./.github/workflows/test_pkg_managers.yml
+    if: github.event_name == 'schedule'
+    with:
+      version: ''
+      ref: ${{ github.ref }}
+      run_mode: nightly
+    secrets: inherit
