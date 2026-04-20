@@ -1563,7 +1563,6 @@ jobs:
     if: github.event_name == 'release' && github.event.action == 'created'
     with:
       version: ${{ github.ref_name }}
-      ref: ${{ github.ref }}
       run_mode: release
     secrets: inherit
 
@@ -1574,6 +1573,5 @@ jobs:
     if: github.event_name == 'schedule'
     with:
       version: ''
-      ref: ${{ github.ref }}
       run_mode: nightly
     secrets: inherit
