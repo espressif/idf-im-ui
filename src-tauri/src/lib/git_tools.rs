@@ -380,46 +380,59 @@ pub fn clone_repository(
     let should_interrupt = &AtomicBool::new(false);
     let progress = gix::progress::Discard;
 
-    // Prepare clone
+    // Prepare clone - parse URL once, will be cloned inside retry closure
     let url = gix::url::parse(options.url.as_str().into())?;
 
-    let mut prepare = gix::prepare_clone(url, &dest_path)?
-        .with_remote_name("origin")?
-        .with_shallow(shallow);
-
-    // Configure which ref to fetch based on the reference type
-    match &options.reference {
-        GitReference::Branch(branch) => {
-            // For branches, configure the refspec to fetch that specific branch
-            let refspec = format!("+refs/heads/{}:refs/remotes/origin/{}", branch, branch);
-            prepare = prepare
-                .configure_remote(move |remote| {
-                    Ok(remote.with_refspecs(
-                        Some(BString::from(refspec.clone())),
-                        gix::remote::Direction::Fetch
-                    )?)
-                });
-        }
-        GitReference::Tag(tag) => {
-            // For tags, configure to fetch that specific tag
-            let refspec = format!("+refs/tags/{}:refs/tags/{}", tag, tag);
-            prepare = prepare
-                .configure_remote(move |remote| {
-                    Ok(remote.with_refspecs(
-                        Some(BString::from(refspec.clone())),
-                        gix::remote::Direction::Fetch
-                    )?)
-                });
-        }
-        _ => {
-            // For commits or None, use default behavior
-        }
-    }
-
     info!("Cloning repository from {:?}", options);
-    let mut prepare_mut = prepare;
+
+    // Retry with fresh connection handle each time to avoid hitting same CDN cache
+    let mut attempt = 0;
     let fetch_result = crate::utils::with_retry_exponential(
-        || prepare_mut.fetch_then_checkout(gix::progress::Discard, should_interrupt),
+        || {
+            attempt += 1;
+            if attempt > 1 {
+            // Only clean up on actual retries, not first attempt
+              let _ = std::fs::remove_dir_all(&dest_path);
+            }
+            std::fs::create_dir_all(&dest_path).ok();
+
+            // Create fresh clone handle on each retry to get new TCP connection
+            // Clone url and shallow since they can't be moved into FnMut closure multiple times
+            let shallow_clone = shallow.clone();
+            let fresh_prepare = gix::prepare_clone(url.clone(), &dest_path)
+                .map_err(|e| format!("Failed to prepare clone: {}", e))?
+                .with_remote_name("origin")
+                .map_err(|e| format!("Failed to set remote name: {}", e))?
+                .with_shallow(shallow_clone);
+
+            // Re-apply refspec configuration for each attempt
+            let mut configured_prepare = match &options.reference {
+                GitReference::Branch(branch) => {
+                    let refspec = format!("+refs/heads/{}:refs/remotes/origin/{}", branch, branch);
+                    fresh_prepare
+                        .configure_remote(move |remote| {
+                            Ok(remote.with_refspecs(
+                                Some(BString::from(refspec.clone())),
+                                gix::remote::Direction::Fetch
+                            )?)
+                        })
+                }
+                GitReference::Tag(tag) => {
+                    let refspec = format!("+refs/tags/{}:refs/tags/{}", tag, tag);
+                    fresh_prepare
+                        .configure_remote(move |remote| {
+                            Ok(remote.with_refspecs(
+                                Some(BString::from(refspec.clone())),
+                                gix::remote::Direction::Fetch
+                            )?)
+                        })
+                }
+                _ => fresh_prepare,
+            };
+
+            configured_prepare.fetch_then_checkout(gix::progress::Discard, should_interrupt)
+                .map_err(|e| format!("Failed to fetch: {}", e))
+        },
         3, // max_retries
         std::time::Duration::from_millis(500), // base_delay
     );
@@ -429,7 +442,7 @@ pub fn clone_repository(
         Err(e) => {
             let _ = tx.send(ProgressMessage::Finish);
             error!("Failed to fetch repository: {}", e);
-            return Err(Box::new(e));
+            return Err(anyhow::anyhow!("{}", e).into());
         }
     };
 
@@ -1093,27 +1106,22 @@ fn fetch_single_commit_to_modules(
     let remote_url = gix::url::parse(url.into())
         .map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
-    // Create remote WITH refspec for fetching the specific commit
-    let remote = repo
-        .remote_at(remote_url)?
-        .with_fetch_tags(gix::remote::fetch::Tags::None)
-        .with_refspecs(
-            [commit_sha].into_iter(),
-            gix::remote::Direction::Fetch,
-        )
-        .map_err(|e| format!("Failed to set refspec: {}", e))?;
-
     send_progress(&tx, submodule_name, 40);
 
     let shallow = gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap());
 
+    // Retry with fresh remote connection each time to avoid hitting same CDN cache
     let _outcome = crate::utils::with_retry_exponential(
         || {
-            let mut conn = remote
+            repo
+                .remote_at(remote_url.clone())
+                .map_err(|e| format!("Failed to create remote: {}", e))?
+                .with_fetch_tags(gix::remote::fetch::Tags::None)
+                .with_refspecs([commit_sha].into_iter(), gix::remote::Direction::Fetch)
+                .map_err(|e| format!("Failed to set refspec: {}", e))?
                 .connect(gix::remote::Direction::Fetch)
-                .map_err(|e| format!("Failed to connect: {}", e))?;
-
-            conn.prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
+                .map_err(|e| format!("Failed to connect: {}", e))?
+                .prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
                 .map_err(|e| format!("Failed to prepare fetch: {}", e))?
                 .with_shallow(shallow.clone())
                 .receive(gix::progress::Discard, &AtomicBool::new(false))
@@ -1473,16 +1481,6 @@ fn fetch_single_commit_gix(
     let remote_url = gix::url::parse(url.into())
         .map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
-    // Create remote with the specific SHA as a refspec
-    let remote = repo
-        .remote_at(remote_url)?
-        .with_fetch_tags(gix::remote::fetch::Tags::None)
-        .with_refspecs(
-            [commit_sha].into_iter(),
-            gix::remote::Direction::Fetch,
-        )
-        .map_err(|e| format!("Failed to set refspec: {}", e))?;
-
     send_progress(tx, submodule_name, 20);
 
     // Configure shallow fetch
@@ -1490,13 +1488,18 @@ fn fetch_single_commit_gix(
         NonZeroU32::new(1).unwrap()
     );
 
+    // Retry with fresh remote connection each time to avoid hitting same CDN cache
     let outcome = crate::utils::with_retry_exponential(
         || {
-            let mut conn = remote
+            repo
+                .remote_at(remote_url.clone())
+                .map_err(|e| format!("Failed to create remote: {}", e))?
+                .with_fetch_tags(gix::remote::fetch::Tags::None)
+                .with_refspecs([commit_sha].into_iter(), gix::remote::Direction::Fetch)
+                .map_err(|e| format!("Failed to set refspec: {}", e))?
                 .connect(gix::remote::Direction::Fetch)
-                .map_err(|e| format!("Failed to connect: {}", e))?;
-
-            conn.prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
+                .map_err(|e| format!("Failed to connect: {}", e))?
+                .prepare_fetch(gix::progress::Discard, gix::remote::ref_map::Options::default())
                 .map_err(|e| format!("Failed to prepare fetch: {}", e))?
                 .with_shallow(shallow.clone())
                 .receive(gix::progress::Discard, should_interrupt)
