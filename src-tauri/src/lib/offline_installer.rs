@@ -3,7 +3,7 @@ use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive, find_by_name_and_extension}};
 
 /// Installs prerequisite software packages from an offline archive.
 ///
@@ -48,23 +48,22 @@ pub fn install_prerequisites_offline(
             crate::ensure_path(tools_dir.to_str().unwrap())
                 .map_err(|e| format!("Failed to create tools directory: {}", e))?;
 
-            // Git is expected to be in archive_dir as PortableGit-X.Y.Z-64-bit.7z.exe
-            let git_exe = archive_dir.path().join("PortableGit-2.47.0.2-64-bit.7z.exe");
-            if !git_exe.exists() {
-                return Err(format!("Git installer not found in archive: {}", git_exe.display()));
-            }
+            // Find Git archive (.tar.bz2) in the archive directory
+            let git_archives = find_by_name_and_extension(archive_dir.path(), "git", "tar.bz2");
+            let git_archive_path = PathBuf::from(git_archives.first().ok_or_else(|| {
+                format!("Git portable archive not found in archive directory: {}", archive_dir.path().display())
+            })?);
 
-            // Copy git to tools_dir for installation
-            let git_in_tools = tools_dir.join("PortableGit-2.47.0.2-64-bit.7z.exe");
-            std::fs::copy(&git_exe, &git_in_tools)
-                .map_err(|e| format!("Failed to copy git installer: {}", e))?;
+            // Copy git archive to tools_dir for installation
+            std::fs::copy(&git_archive_path, tools_dir.join(git_archive_path.file_name().unwrap()))
+                .map_err(|e| format!("Failed to copy git archive: {}", e))?;
 
-            // Install git from the copied file
+            // Install git from the copied archive
             let rt = tokio::runtime::Runtime::new()
                 .map_err(|e| format!("Failed to create runtime: {}", e))?;
             match rt.block_on(crate::system_dependencies::install_git_from_downloaded(
                 tools_dir.clone(),
-                Some(git_in_tools),
+                None, // Archive will be found in tools_dir by install_git_from_downloaded
             )) {
                 Ok(install_path) => {
                     info!("Git installed successfully to {:?}", install_path);

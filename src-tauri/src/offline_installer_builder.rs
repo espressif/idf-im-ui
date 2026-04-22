@@ -7,6 +7,7 @@ use idf_im_lib::ensure_path;
 use idf_im_lib::idf_tools::get_list_of_tools_to_download;
 use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::system_dependencies::get_latest_git_for_windows_url;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::{parse_cmake_version, find_by_name_and_extension};
 use idf_im_lib::verify_file_checksum;
@@ -745,16 +746,25 @@ async fn main() {
             let prereq_path = temp_shared.path();
             ensure_path(prereq_path.to_str().unwrap()).expect("Failed to create prereq dir");
 
+            // Fetch latest Git for Windows portable URL dynamically
+            let (git_url, git_filename) = match get_latest_git_for_windows_url().await {
+                Ok(url) => url,
+                Err(err) => {
+                    error!("Failed to get latest Git for Windows URL: {}", err);
+                    return;
+                }
+            };
+
             let prereq_list = vec![
-                // Git - portable Windows distribution (matches system_dependencies.rs)
-                ("https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/PortableGit-2.47.0.2-64-bit.7z.exe", "PortableGit-2.47.0.2-64-bit.7z.exe"),
+                // Git - portable Windows distribution (fetched dynamically from GitHub)
+                (git_url, git_filename),
                 // Python - standalone Windows distribution (matches system_dependencies.rs)
-                ("https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz", "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz"),
+                ("https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string(), "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string()),
             ];
 
             for (link, name) in prereq_list {
                 info!("Downloading prerequisite: {} as {}", link, name);
-                match download_file_and_rename(link, prereq_path.to_str().unwrap(), None, Some(name), 3).await {
+                match download_file_and_rename(&link, prereq_path.to_str().unwrap(), None, Some(&name), 3).await {
                     Ok(_) => info!("Downloaded: {}", name),
                     Err(err) => {
                         error!("Failed to download {}: {}", name, err);

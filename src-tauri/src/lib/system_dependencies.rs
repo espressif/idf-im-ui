@@ -2,6 +2,7 @@ use anyhow::{anyhow, Context, Result};
 use std::{collections::HashSet, env, fs, path::PathBuf};
 
 use log::{debug, trace, warn};
+use serde_json;
 
 use crate::{command_executor, decompress_archive, download_file_and_rename, utils::find_by_name_and_extension};
 
@@ -734,9 +735,56 @@ fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
     }
 }
 
+/// Fetches the download URL for the latest Git for Windows tar.bz2 archive.
+///
+/// This function queries the GitHub API to find the latest release of git-for-windows/git
+/// and extracts the URL for the tar.bz2 archive matching the current system architecture.
+///
+/// # Returns
+///
+/// * `Ok((String, String))` - A tuple of (url, filename) for the latest Git archive.
+/// * `Err(anyhow::Error)` - If an error occurs during the HTTP request or parsing.
+pub async fn get_latest_git_for_windows_url() -> anyhow::Result<(String, String)> {
+    const API_URL: &str = "https://api.github.com/repos/git-for-windows/git/releases/latest";
+
+    // Determine architecture suffix based on system architecture
+    let arch_suffix = match std::env::consts::ARCH {
+        "x86_64" => "64-bit",
+        "aarch64" | "arm64" => "arm64",
+        arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("esp-idf-installer")
+        .build()?;
+
+    let response = client.get(API_URL).send().await?;
+    let json: serde_json::Value = response.json().await?;
+
+    let assets = json["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow!("No assets found in GitHub release response"))?;
+
+    // Look for Git-X.Y.Z-arch.tar.bz2 pattern matching our architecture
+    for asset in assets {
+        let name = asset["name"].as_str().unwrap_or("");
+        let browser_download_url = asset["browser_download_url"].as_str().unwrap_or("");
+
+        if name.starts_with("Git-") && name.ends_with(".tar.bz2") && name.contains(arch_suffix) {
+            debug!("Found latest Git for Windows: {}", name);
+            return Ok((browser_download_url.to_string(), name.to_string()));
+        }
+    }
+
+    Err(anyhow!(
+        "Could not find Git tar.bz2 asset for architecture '{}' in latest Git for Windows release",
+        arch_suffix
+    ))
+}
+
 /// Downloads Git for Windows from the official portable distribution.
 ///
-/// This function downloads the Git portable executable to the specified tools directory.
+/// This function fetches the latest release URL and downloads the portable archive.
 ///
 /// # Arguments
 ///
@@ -745,7 +793,7 @@ fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
 ///
 /// # Returns
 ///
-/// * `Ok(PathBuf)` - The path to the downloaded Git installer
+/// * `Ok(PathBuf)` - The path to the downloaded Git archive
 /// * `Err(anyhow::Error)` - If an error occurs during download
 pub async fn download_git(
     tools_dir: PathBuf,
@@ -753,23 +801,21 @@ pub async fn download_git(
 ) -> anyhow::Result<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            const GIT_URL: &str = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/PortableGit-2.47.0.2-64-bit.7z.exe";
-            const GIT_FILENAME: &str = "PortableGit-2.47.0.2-64-bit.7z.exe";
+            let (git_url, git_filename) = get_latest_git_for_windows_url().await?;
+            debug!("Downloading Git from {}", git_url);
 
-            debug!("Downloading Git from {}", GIT_URL);
-
-            // Download git portable
+            // Download git portable archive
             download_file_and_rename(
-                GIT_URL,
+                &git_url,
                 tools_dir.to_str().unwrap(),
                 progress_sender,
-                Some(GIT_FILENAME),
+                Some(&git_filename),
                 3,
             )
             .await
             .map_err(|e| anyhow!("Failed to download Git: {}", e))?;
 
-            let git_downloaded_path = tools_dir.join(GIT_FILENAME);
+            let git_downloaded_path = tools_dir.join(&git_filename);
             debug!("Git downloaded to {}", git_downloaded_path.display());
             Ok(git_downloaded_path)
         }
@@ -779,50 +825,58 @@ pub async fn download_git(
     }
 }
 
-/// Installs Git from a previously downloaded installer.
+/// Installs Git from a previously downloaded archive.
 ///
-/// This function runs the Git installer with silent flags and adds it to the system PATH.
+/// This function extracts the Git portable archive to the tools directory
+/// and adds it to the system PATH.
 ///
 /// # Arguments
 ///
 /// * `tools_dir` - A PathBuf pointing to the directory where Git should be installed
-/// * `git_exe_path` - Optional path to the downloaded Git installer. If None, looks in tools_dir
+/// * `git_archive_path` - Optional path to the downloaded Git archive. If None, looks in tools_dir
 ///
 /// # Returns
 ///
 /// * `Ok(PathBuf)` - The path to the installed Git directory
-/// * `Err(anyhow::Error)` - If an error occurs during installation
+/// * `Err(anyhow::Error)` - If an error occurs during extraction
 pub async fn install_git_from_downloaded(
     tools_dir: PathBuf,
-    git_exe_path: Option<PathBuf>,
+    git_archive_path: Option<PathBuf>,
 ) -> anyhow::Result<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            const GIT_FILENAME: &str = "PortableGit-2.47.0.2-64-bit.7z.exe";
+            // Find the downloaded archive by looking for .tar.bz2 files
+            let git_archive = if let Some(path) = git_archive_path {
+                path
+            } else {
+                // Look for the archive in tools_dir
+                let found = find_by_name_and_extension(&tools_dir, "git", "tar.bz2");
+                found.first().ok_or_else(|| {
+                    anyhow!("Git archive not found in {}. Expected file ending with .tar.bz2", tools_dir.display())
+                })?.clone().into()
+            };
 
-            let git_exe = git_exe_path.unwrap_or_else(|| tools_dir.join(GIT_FILENAME));
+            debug!("Extracting Git archive at {}", git_archive.display());
 
-            debug!("Running Git installer at {}", git_exe.display());
+            // Extract the archive
+            decompress_archive(
+                git_archive.to_str().unwrap(),
+                tools_dir.join("git").to_str().unwrap(),
+            )
+            .map_err(|e| anyhow!("Failed to extract Git archive: {}", e))?;
 
-            // Run the installer silently
-            // -o specifies the installation directory, -y suppresses yes/no prompts
-            let target_dir = tools_dir.join("git").to_string_lossy().to_string();
-            let output = command_executor::execute_command_direct(
-                &git_exe.to_string_lossy(),
-                &["-o", &target_dir, "-y"],
-            )?;
+            let expected_git = tools_dir.join("git").join("bin").join("git.exe");
+            // Find the actual Git directory (the archive extracts to a subdirectory like Git-2.54.0-64-bit/)
+            let git_install_dir = if expected_git.exists() {
+                tools_dir.join("git")
+            } else {
+                find_git_install_dir(&tools_dir)?.parent().unwrap().to_path_buf()
+            };
 
-            if !output.status.success() {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                return Err(anyhow!("Git installation failed: {} {}", stderr, stdout));
-            }
-
-            // Clean up the installer
-            let _ = std::fs::remove_file(&git_exe);
-
-            let git_install_dir = tools_dir.join("git");
             add_git_to_path(&git_install_dir)?;
+
+            // Clean up the archive only after successful installation
+            let _ = std::fs::remove_file(&git_archive);
 
             debug!("Git installed successfully at {}", git_install_dir.display());
             Ok(git_install_dir)
@@ -991,6 +1045,42 @@ fn find_python_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
         Ok(python_dir)
     } else {
         Err(anyhow!("python.exe not found in {}. Python installation may have failed.", tools_dir.display()))
+    }
+}
+
+/// Finds the Git installation directory by looking for git.exe in subdirectories.
+///
+/// The Git portable archive extracts to a structure like:
+/// tools_dir/
+///   └── PortableGit-xxxx.xxx/
+///       └── bin\git.exe
+///
+/// This function finds that actual directory using find_by_name_and_extension.
+/// Returns an error if git.exe is not found, or if it's found directly in tools_dir
+/// (not in a subdirectory) which would indicate an unexpected extraction pattern.
+fn find_git_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    // Look for git.exe in subdirectories of tools_dir
+    let found = find_by_name_and_extension(tools_dir, "git", "exe");
+
+    if let Some(git_exe_path) = found.first() {
+        let git_exe = PathBuf::from(git_exe_path);
+        let git_dir = git_exe
+            .parent()
+            .map(|p| p.to_path_buf())
+            .ok_or_else(|| anyhow!("Failed to get parent directory of git.exe"))?;
+
+        // git.exe should NOT be directly in tools_dir - it should be in a subdirectory
+        if git_dir == *tools_dir {
+            return Err(anyhow!(
+                "git.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
+                tools_dir.display()
+            ));
+        }
+
+        debug!("Found Git installation at: {}", git_dir.display());
+        Ok(git_dir)
+    } else {
+        Err(anyhow!("git.exe not found in {}. Git installation may have failed.", tools_dir.display()))
     }
 }
 

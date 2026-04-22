@@ -1477,6 +1477,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "bytes",
+ "bzip2",
  "chrono",
  "clap 4.6.1",
  "clap_complete",

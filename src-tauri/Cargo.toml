@@ -112,6 +112,7 @@ tempfile = "3.2"
 anyhow = "^1.0"
 rust_search = "2.1.0"
 flate2 = { version = "1.0", default-features = false, features = ["rust_backend"] }
+bzip2 = "0.6.1"
 tar = { version = "0.4", default-features = false }
 filetime = "0.2"
 zip = { version = "8.1", default-features = true }
