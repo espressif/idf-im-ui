@@ -565,7 +565,11 @@ pub fn copy_idf_from_offline_archive(
                     }
                     Err(rename_err) => {
                         debug!("fs::rename failed (likely cross-filesystem): {}, falling back to mtime-preserving copy", rename_err);
-                        match copy_dir_contents_preserving_mtime(&src_path, &dst_path) {
+                        // For copy, we need to copy the esp-idf subdirectory specifically
+                        // since the archive structure is: version/esp-idf/...
+                        let src_idf_path = src_path.join("esp-idf");
+                        let dst_idf_path = dst_path.join("esp-idf");
+                        match copy_dir_contents_preserving_mtime(&src_idf_path, &dst_idf_path) {
                             Ok(_) => {
                                 info!("Successfully copied IDF version with preserved timestamps: {}", archive_version);
                             }

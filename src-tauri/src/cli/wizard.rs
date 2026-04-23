@@ -600,7 +600,9 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 );
             }
         }
-        if !using_existing_idf {
+        if offline_mode && !using_existing_idf {
+          error!("THIS SHOULD NOT HAPPEN: offline mode should be using existing IDF copied from offline archive, but it seems like the IDF is not present at the expected location. This likely means that the copy from offline archive failed. Please check previous logs for any errors related to copying IDF from offline archive.");
+        } else if !using_existing_idf {
             // download idf
             let download_config = DownloadConfig {
                 idf_path: paths.idf_path.to_str().unwrap().to_string(),
