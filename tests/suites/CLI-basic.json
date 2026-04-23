@@ -22,9 +22,9 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "CLI Non-Interactive v5.4.3",
+    "name": "CLI Non-Interactive v5.4.4",
     "data": {
-      "idfList": "v5.4.3"
+      "idfList": "v5.4.4"
     },
     "deleteAfterTest": false,
     "testProxyMode": false
@@ -34,7 +34,7 @@
     "type": "version-management",
     "name": "CLI Version Management",
     "data": {
-      "idfList": "default|v5.4.3"
+      "idfList": "default|v5.4.4"
     }
   },
   {
@@ -44,7 +44,7 @@
     "data": {
       "installFolder": ".espext1",
       "gitRepoUrl": "https://github.com/espressif/esp-idf.git",
-      "gitRepoBranch": "v5.5.3"
+      "gitRepoBranch": "v5.5.4"
     },
     "deleteAfterTest": true,
     "testProxyMode": false

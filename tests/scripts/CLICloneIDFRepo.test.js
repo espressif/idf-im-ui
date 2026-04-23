@@ -18,13 +18,13 @@ import { execSync } from "child_process";
  * @param {string} [options.id=0] - Sub-id for the describe title
  * @param {string} options.path - Full path where the repo will be cloned (will be created/cleaned)
  * @param {string} [options.gitRepoUrl] - Git repo URL (default: esp-idf upstream)
- * @param {string} [options.gitRepoBranch] - Branch or tag to clone (default: v5.5.3)
+ * @param {string} [options.gitRepoBranch] - Branch or tag to clone (default: v5.5.4)
  */
 export function runCLIClonedIDFRepo({
   id = 0,
   path: clonePath,
   gitRepoUrl = "https://github.com/espressif/esp-idf.git",
-  gitRepoBranch = "v5.5.3",
+  gitRepoBranch = "v5.5.4",
 }) {
   describe(`${id}- Clone IDF repo |`, function () {
     before(async function () {

@@ -2,9 +2,9 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com v5.4.3",
+    "name": "Mirrors jihulab and dl_com v5.4.4",
     "data": {
-      "idfList": "v5.4.3",
+      "idfList": "v5.4.4",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_com",
       "pypiMirror": "pypi_aliyun",
@@ -17,9 +17,9 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn v5.4.3",
+    "name": "Mirrors jihulab and dl_cn v5.4.4",
     "data": {
-      "idfList": "v5.4.3",
+      "idfList": "v5.4.4",
       "idfMirror": "jihulab",
       "toolsMirror": "dl_cn",
       "pypiMirror": "pypi_aliyun",
