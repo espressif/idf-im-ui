@@ -795,36 +795,66 @@ jobs:
           /pa `
           "$exePath"
 
-      - name: Codesign macOS Binary
-        if: startsWith(matrix.os, 'macos')
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-        run: |
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate.p12
-          security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p espressif build.keychain
-          security import certificate.p12 -k build.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
-          codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/eim -v
-          codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
+      - name: Sign files
+        uses: espressif/release-sign@master
+        if: startsWith(matrix.os, 'macos') && github.event_name == 'release' && github.event.action == 'created'
+        with:
+          path: ./release_cli/${{ matrix.package_name }}
+          macos-signing-identity: ${{ secrets.MACOS_CS_IDENTITY_ID }}
+          macos-certificate: ${{ secrets.MACOS_CS_CERTIFICATE }}
+          macos-certificate-pwd: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
+          macos-entitlements: eim.entitlement   # optional
+          notarization-username: ${{ secrets.MACOS_CS_APPLE_ID }}
+          notarization-password: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
+          notarization-team-id: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
 
-      - name: Notarize macOS Binary
-        if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
-        env:
-          NOTARIZATION_USERNAME: ${{ secrets.NOTARIZATION_USERNAME }}
-          NOTARIZATION_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-          NOTARIZATION_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
-        run: |
-          cd release_cli/${{ matrix.package_name }}
-          zip -r eim.zip eim
-          security create-keychain -p espressif notary.keychain
-          security default-keychain -s notary.keychain
-          security unlock-keychain -p espressif notary.keychain
-          xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-          xcrun notarytool submit eim.zip --keychain-profile "eim-notarytool-profile" --wait
-          unzip -o eim.zip -d .
+      # - name: Codesign macOS Binary
+      #   if: startsWith(matrix.os, 'macos')
+      #   env:
+      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CS_CERTIFICATE }}
+      #     MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
+      #     APPLE_TEAM_ID: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
+      #   run: |
+      #     set -euo pipefail
+
+      #     echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
+
+      #     # Create (if needed) and configure the keychain
+      #     security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
+      #     security default-keychain -s build.keychain
+      #     security unlock-keychain -p espressif build.keychain
+      #     security set-keychain-settings -lut 21600 build.keychain
+
+      #     # Make sure codesign actually searches this keychain
+      #     security list-keychains -d user -s build.keychain login.keychain
+
+      #     # Import cert and allow codesign to use it non-interactively
+      #     security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
+
+      #     # Verify the identity is actually present before signing (fails fast with a clearer error)
+      #     security find-identity -v -p codesigning build.keychain
+
+      #     codesign --entitlements eim.entitlement --options runtime --force \
+      #       -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. ($APPLE_TEAM_ID)" \
+      #       release_cli/${{ matrix.package_name }}/eim -v
+      #     codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
+
+      # - name: Notarize macOS Binary
+      #   if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
+      #   env:
+      #     NOTARIZATION_USERNAME: ${{ secrets.MACOS_CS_APPLE_ID }}
+      #     NOTARIZATION_PASSWORD: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
+      #     NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
+      #   run: |
+      #     cd release_cli/${{ matrix.package_name }}
+      #     zip -r eim.zip eim
+      #     security create-keychain -p espressif notary.keychain
+      #     security default-keychain -s notary.keychain
+      #     security unlock-keychain -p espressif notary.keychain
+      #     xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
+      #     xcrun notarytool submit eim.zip --keychain-profile "eim-notarytool-profile" --wait
+      #     unzip -o eim.zip -d .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -921,19 +951,32 @@ jobs:
           "$exePath"
 
       - name: Codesign macOS offline_installer_builder Binary
-        if: startsWith(matrix.os, 'macos')
-        env:
-          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
-          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
-        run: |
-          echo $MACOS_CERTIFICATE | base64 --decode > certificate_offline.p12
-          security create-keychain -p espressif build_offline.keychain
-          security default-keychain -s build_offline.keychain
-          security unlock-keychain -p espressif build_offline.keychain
-          security import certificate_offline.p12 -k build_offline.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build_offline.keychain
-          codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
-          codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
+        uses: espressif/release-sign@master
+        if: startsWith(matrix.os, 'macos') && github.event_name == 'release' && github.event.action == 'created'
+        with:
+          path: ./release_cli/${{ matrix.package_name }}/offline_installer_builder
+          macos-signing-identity: ${{ secrets.MACOS_CS_IDENTITY_ID }}
+          macos-certificate: ${{ secrets.MACOS_CS_CERTIFICATE }}
+          macos-certificate-pwd: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
+          macos-entitlements: eim.entitlement   # optional
+          notarization-username: ${{ secrets.MACOS_CS_APPLE_ID }}
+          notarization-password: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
+          notarization-team-id: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
+
+      # - name: Codesign macOS offline_installer_builder Binary
+      #   if: startsWith(matrix.os, 'macos')
+      #   env:
+      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CS_CERTIFICATE }}
+      #     MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
+      #   run: |
+      #     echo $MACOS_CERTIFICATE | base64 --decode > certificate_offline.p12
+      #     security create-keychain -p espressif build_offline.keychain
+      #     security default-keychain -s build_offline.keychain
+      #     security unlock-keychain -p espressif build_offline.keychain
+      #     security import certificate_offline.p12 -k build_offline.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
+      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build_offline.keychain
+      #     codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
+      #     codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
 
       - name: Upload offline_installer_builder build artifacts
         uses: actions/upload-artifact@v4
@@ -1046,8 +1089,8 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: apple-actions/import-codesign-certs@v3
         with:
-          p12-file-base64: ${{ secrets.MACOS_CERTIFICATE }}
-          p12-password: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          p12-file-base64: ${{ secrets.MACOS_CS_CERTIFICATE }}
+          p12-password: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
           keychain: build
 
       - name: Remove offline_installer_builder from Cargo.toml for GUI build (Linux/macOS)
@@ -1076,9 +1119,9 @@ jobs:
       - name: Build GUI (macOS) - release
         if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
         env:
-          APPLE_ID: ${{ secrets.NOTARIZATION_USERNAME }}
-          APPLE_PASSWORD: ${{ secrets.NOTARIZATION_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.NOTARIZATION_TEAM_ID }}
+          APPLE_ID: ${{ secrets.MACOS_CS_APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
