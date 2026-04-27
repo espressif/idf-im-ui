@@ -179,6 +179,10 @@ Reasons to use PowerShell:
 
 To use PowerShell, simply run the generated PowerShell profile script - it is created automatically during installation.
 
+### Open IDF Terminal fails with "running scripts is disabled on this system" on Windows
+
+If clicking **Open IDF Terminal** in an older EIM build shows `File ... cannot be loaded because running scripts is disabled on this system` (`PSSecurityException` / `UnauthorizedAccess`), your PowerShell execution policy is `Restricted` or `AllSigned`. Either run once per user `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or launch the profile manually with `powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -File "<path-to>\Microsoft.{version}.PowerShell_profile.ps1"`. Newer EIM builds pass `-ExecutionPolicy Bypass` automatically, and the desktop shortcut and Windows Terminal profile created by EIM already do so.
+
 ## More Questions?
 
 If you have additional questions, you can:
