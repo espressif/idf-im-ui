@@ -165,6 +165,10 @@ jobs:
           ZLIB_STATIC: 1
           LZMA_API_STATIC: 1
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+          # gix-specific environment variables
+          GIX_HTTP_TIMEOUT: "60"
+          GIX_MAX_CONNECTIONS: "1"
+          RUST_HTTP_PROTOCOL: "http/1.1"  # Disable HTTP/2 which can have issues on ARM
         run: |
           cd src-tauri
           unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -348,6 +352,9 @@ jobs:
           ZLIB_STATIC: 1
           LZMA_API_STATIC: 1
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+          GIX_HTTP_TIMEOUT: "60"
+          GIX_MAX_CONNECTIONS: "1"
+          RUST_HTTP_PROTOCOL: "http/1.1"  # Disable HTTP/2 which can have issues on ARM
         run: |
           cd src-tauri
           cross build --release --no-default-features --features cli --target ${{ env.CROSS_TARGET }}
@@ -411,6 +418,9 @@ jobs:
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
           LZMA_API_STATIC: 1
+          GIX_HTTP_TIMEOUT: "60"
+          GIX_MAX_CONNECTIONS: "1"
+          RUST_HTTP_PROTOCOL: "http/1.1"  # Disable HTTP/2 which can have issues on ARM
         run: |
           cd src-tauri
           cross build --release --no-default-features --features offline --bin offline_installer_builder --target ${{ env.CROSS_TARGET }}
@@ -728,6 +738,9 @@ jobs:
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
           APP_INSIGHTS_CONNECTION_STRING: ${{ secrets.APP_INSIGHTS_CONNECTION_STRING }}
+          GIX_HTTP_TIMEOUT: "60"
+          GIX_MAX_CONNECTIONS: "1"
+          RUST_HTTP_PROTOCOL: "http/1.1"  # Disable HTTP/2 which can have issues on ARM
         run: |
           cd src-tauri
           unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && cargo build --release --no-default-features --features cli ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
@@ -807,54 +820,6 @@ jobs:
           notarization-username: ${{ secrets.MACOS_CS_APPLE_ID }}
           notarization-password: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
           notarization-team-id: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
-
-      # - name: Codesign macOS Binary
-      #   if: startsWith(matrix.os, 'macos')
-      #   env:
-      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CS_CERTIFICATE }}
-      #     MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
-      #     APPLE_TEAM_ID: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
-      #   run: |
-      #     set -euo pipefail
-
-      #     echo "$MACOS_CERTIFICATE" | base64 --decode > certificate.p12
-
-      #     # Create (if needed) and configure the keychain
-      #     security list-keychains | grep -q "build.keychain" || security create-keychain -p espressif build.keychain
-      #     security default-keychain -s build.keychain
-      #     security unlock-keychain -p espressif build.keychain
-      #     security set-keychain-settings -lut 21600 build.keychain
-
-      #     # Make sure codesign actually searches this keychain
-      #     security list-keychains -d user -s build.keychain login.keychain
-
-      #     # Import cert and allow codesign to use it non-interactively
-      #     security import certificate.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
-      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build.keychain
-
-      #     # Verify the identity is actually present before signing (fails fast with a clearer error)
-      #     security find-identity -v -p codesigning build.keychain
-
-      #     codesign --entitlements eim.entitlement --options runtime --force \
-      #       -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. ($APPLE_TEAM_ID)" \
-      #       release_cli/${{ matrix.package_name }}/eim -v
-      #     codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/eim
-
-      # - name: Notarize macOS Binary
-      #   if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
-      #   env:
-      #     NOTARIZATION_USERNAME: ${{ secrets.MACOS_CS_APPLE_ID }}
-      #     NOTARIZATION_PASSWORD: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
-      #     NOTARIZATION_TEAM_ID: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
-      #   run: |
-      #     cd release_cli/${{ matrix.package_name }}
-      #     zip -r eim.zip eim
-      #     security create-keychain -p espressif notary.keychain
-      #     security default-keychain -s notary.keychain
-      #     security unlock-keychain -p espressif notary.keychain
-      #     xcrun notarytool store-credentials "eim-notarytool-profile" --apple-id $NOTARIZATION_USERNAME --team-id $NOTARIZATION_TEAM_ID --password $NOTARIZATION_PASSWORD
-      #     xcrun notarytool submit eim.zip --keychain-profile "eim-notarytool-profile" --wait
-      #     unzip -o eim.zip -d .
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -962,21 +927,6 @@ jobs:
           notarization-username: ${{ secrets.MACOS_CS_APPLE_ID }}
           notarization-password: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
           notarization-team-id: ${{ secrets.MACOS_CS_APPLE_TEAM_ID }}
-
-      # - name: Codesign macOS offline_installer_builder Binary
-      #   if: startsWith(matrix.os, 'macos')
-      #   env:
-      #     MACOS_CERTIFICATE: ${{ secrets.MACOS_CS_CERTIFICATE }}
-      #     MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CS_CERTIFICATE_PWD }}
-      #   run: |
-      #     echo $MACOS_CERTIFICATE | base64 --decode > certificate_offline.p12
-      #     security create-keychain -p espressif build_offline.keychain
-      #     security default-keychain -s build_offline.keychain
-      #     security unlock-keychain -p espressif build_offline.keychain
-      #     security import certificate_offline.p12 -k build_offline.keychain -P $MACOS_CERTIFICATE_PWD -T /usr/bin/codesign
-      #     security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k espressif build_offline.keychain
-      #     codesign --entitlements eim.entitlement --options runtime --force -s "ESPRESSIF SYSTEMS (SHANGHAI) CO., LTD. (QWXF6GB4AV)" release_cli/${{ matrix.package_name }}/offline_installer_builder -v
-      #     codesign -v -vvv --deep release_cli/${{ matrix.package_name }}/offline_installer_builder
 
       - name: Upload offline_installer_builder build artifacts
         uses: actions/upload-artifact@v4
