@@ -283,7 +283,7 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "existing-git-clone") {
       const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
-      const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.3";
+      const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.4";
       const installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
