@@ -837,6 +837,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cd release_cli/${{ matrix.package_name }}
+          zip -r eim.zip eim
+          cd ../..
           cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
           gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
 
@@ -939,8 +942,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.zip --clobber
+          (cd release_cli/${{ matrix.package_name }} && zip offline_installer_builder.zip offline_installer_builder)
+          gh release upload "${{ github.event.release.tag_name }}" \
+            release_cli/${{ matrix.package_name }}/offline_installer_builder.zip \
+            --clobber
 
       - name: Upload offline_installer_builder Release Asset (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
