@@ -807,7 +807,7 @@ pub async fn download_git(
             // Download git portable archive
             download_file_and_rename(
                 &git_url,
-                tools_dir.to_str().unwrap(),
+                &tools_dir.to_string_lossy(),
                 progress_sender,
                 Some(&git_filename),
                 3,
@@ -860,8 +860,8 @@ pub async fn install_git_from_downloaded(
 
             // Extract the archive
             decompress_archive(
-                git_archive.to_str().unwrap(),
-                tools_dir.join("git").to_str().unwrap(),
+                &git_archive.to_string_lossy(),
+                &tools_dir.join("git").to_string_lossy(),
             )
             .map_err(|e| anyhow!("Failed to extract Git archive: {}", e))?;
 
@@ -944,7 +944,7 @@ pub async fn download_python(
             // Download python archive
             download_file_and_rename(
                 PYTHON_URL,
-                tools_dir.to_str().unwrap(),
+                &tools_dir.to_string_lossy(),
                 progress_sender,
                 Some(PYTHON_FILENAME),
                 3,
@@ -989,8 +989,8 @@ pub async fn install_python_from_downloaded(
 
             // Extract the archive
             decompress_archive(
-                python_archive.to_str().unwrap(),
-                tools_dir.to_str().unwrap(),
+                &python_archive.to_string_lossy(),
+                &tools_dir.to_string_lossy(),
             )
             .map_err(|e| anyhow!("Failed to extract Python archive: {}", e))?;
 

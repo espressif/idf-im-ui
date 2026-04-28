@@ -353,7 +353,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         };
         // install prerequisites offline
         if std::env::consts::OS == "windows" {
-            match install_prerequisites_offline(&archive_dir, tool_install_directory.clone()) {
+            match install_prerequisites_offline(&archive_dir, tool_install_directory.clone()).await {
                 Ok(_) => {
                     info!("{}", t!("wizard.prerequisites.offline_install.success"));
                 }

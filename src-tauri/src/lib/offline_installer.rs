@@ -38,7 +38,7 @@ use crate::{add_path_to_path, command_executor::{self, execute_command}, render_
 /// let tools_dir = PathBuf::from("C:\\tools");
 /// install_prerequisites_offline(&archive_dir, tools_dir)?;
 /// ```
-pub fn install_prerequisites_offline(
+pub async fn install_prerequisites_offline(
     archive_dir: &TempDir,
     tools_dir: PathBuf,
 ) -> Result<(), String> {
@@ -59,12 +59,12 @@ pub fn install_prerequisites_offline(
                 .map_err(|e| format!("Failed to copy git archive: {}", e))?;
 
             // Install git from the copied archive
-            let rt = tokio::runtime::Runtime::new()
-                .map_err(|e| format!("Failed to create runtime: {}", e))?;
-            match rt.block_on(crate::system_dependencies::install_git_from_downloaded(
+            match crate::system_dependencies::install_git_from_downloaded(
                 tools_dir.clone(),
                 None, // Archive will be found in tools_dir by install_git_from_downloaded
-            )) {
+            )
+            .await
+            {
                 Ok(install_path) => {
                     info!("Git installed successfully to {:?}", install_path);
                 }
@@ -85,10 +85,12 @@ pub fn install_prerequisites_offline(
                 .map_err(|e| format!("Failed to copy python archive: {}", e))?;
 
             // Install python from the copied archive
-            match rt.block_on(crate::system_dependencies::install_python_from_downloaded(
+            match crate::system_dependencies::install_python_from_downloaded(
                 tools_dir.clone(),
                 Some(python_in_tools),
-            )) {
+            )
+            .await
+            {
                 Ok(install_path) => {
                     info!("Python installed successfully to {:?}", install_path);
                 }

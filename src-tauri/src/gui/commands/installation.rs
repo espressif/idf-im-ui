@@ -1575,7 +1575,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 .map(|p| p.join("tools"))
                 .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("tools"));
 
-            match install_prerequisites_offline(&offline_archive_dir, tools_dir) {
+            match install_prerequisites_offline(&offline_archive_dir, tools_dir).await {
                 Ok(_) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
                         rust_i18n::t!("gui.offline.prerequisites_success").to_string());
