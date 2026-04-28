@@ -14,9 +14,9 @@ The downloaded artifact is a zip archive containing the installer binary and a `
 
 ![Welcome - offline](./screenshots/offline_archive_welcome.png)
 
-1.  Unzip the downloaded artifact.
-2.  Launch the installer application. The welcome screen will automatically detect the offline archive in the same directory and offer an **Offline Installation** option.
-3.  Click **Install from Archive**.
+1.  Launch the installer application (EIM).
+2.  If the zst archive is in the same directory as EIM it will be autodetected, otherwise just click on the button "New Installation" and than "Offline Installation" or "Browse Archive File"
+3.  Select the zst archive
 4.  The next screen will show the detected archive and allow you to configure the **Installation Path**. You can use the default path or choose a custom one.
 5.  Click **Start Installation** to begin. The installation progress will be displayed, mirroring the progress view of the expert installation.
 
