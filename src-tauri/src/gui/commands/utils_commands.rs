@@ -325,17 +325,17 @@ pub async fn track_event_command(app_handle: AppHandle,name: &str, additional_da
 pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
     #[cfg(target_os = "windows")]
     {
-        // Windows: Open PowerShell and dot-source the script
-        let ps_command = format!(
-            "$scriptPath = '{}'; if (Test-Path $scriptPath) {{ . $scriptPath }} else {{ Write-Host \"Script not found: $scriptPath\" }}",
-            script_path.replace("\\", "\\\\").replace("'", "''")
-        );
+        if !std::path::Path::new(&script_path).exists() {
+            return Err(format!("Script not found: {}", script_path));
+        }
 
         let mut cmd = Command::new("powershell");
-        cmd.args(&[
+        cmd.args([
+            "-NoLogo",
+            "-NoProfile",
+            "-ExecutionPolicy", "Bypass",
             "-NoExit",
-            "-Command",
-            &ps_command
+            "-File", &script_path,
         ]);
 
         #[cfg(windows)]
