@@ -74,7 +74,7 @@ export default {
   }),
   watch: {
     python_sane(newValue) {
-      if (newValue && !this.loading && this.nextstep) {
+      if (newValue && !this.installing_python && this.nextstep) {
         setTimeout(() => {
           this.nextstep();
         }, 250);

@@ -74,13 +74,13 @@ pub fn install_prerequisites_offline(
             }
 
             // Python is expected to be in archive_dir as cpython-X.Y.Z+-x86_64-pc-windows-msvc-install_only.tar.gz
-            let python_archive = archive_dir.path().join("cpython-3.12.8+20250107-x86_64-pc-windows-msvc-install_only.tar.gz");
+            let python_archive = archive_dir.path().join("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz");
             if !python_archive.exists() {
                 return Err(format!("Python archive not found in archive: {}", python_archive.display()));
             }
 
             // Copy python archive to tools_dir for installation
-            let python_in_tools = tools_dir.join("cpython-3.12.8+20250107-x86_64-pc-windows-msvc-install_only.tar.gz");
+            let python_in_tools = tools_dir.join("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz");
             std::fs::copy(&python_archive, &python_in_tools)
                 .map_err(|e| format!("Failed to copy python archive: {}", e))?;
 
