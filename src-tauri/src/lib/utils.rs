@@ -670,6 +670,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
             Some(env_vars_vec),
             &paths.python_path.to_string_lossy().to_string(),
             false, // create_cmd_bat
+            false,
         );
 
         let installation = IdfInstallation {

@@ -846,6 +846,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             None, // env_vars
             &paths.python_path.to_string_lossy(),
             config.create_bat_activation_script.unwrap_or(false),
+            offline_mode,
         )
     }
     save_config_if_desired(&config)?;

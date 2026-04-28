@@ -1777,6 +1777,7 @@ pub fn single_version_post_install(
     env_vars: Option<Vec<(String, String)>>,
     python_bin_path: &str,
     create_cmd_bat: bool,
+    offline_installation: bool,
 ) {
     let mut env_vars = match env_vars {
         Some(vars) => vars,
@@ -1912,19 +1913,21 @@ pub fn single_version_post_install(
         "windows" => format!("{}\\Microsoft.{}.PowerShell_profile.ps1", activation_script_path, idf_version),
         _ => format!("{}/activate_idf_{}.sh", activation_script_path, idf_version),
     };
-    let command = format!(
-      "compote registry sync --resolution=latest --recursive {}",
-      tool_install_directory
-    );
-    match run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path)) {
-        Ok(output) => {
-            if output.success() {
-                info!("Components registry synchronized successfully");
-            } else {
-                warn!("Failed to synchronize components.");
-            }
-        }
-        Err(err) => warn!("Error running command to synchronize components registry: {:?}", err),
+    if !offline_installation {
+      let command = format!(
+        "compote registry sync --resolution=latest --recursive {}",
+        tool_install_directory
+      );
+      match run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path)) {
+          Ok(output) => {
+              if output.success() {
+                  info!("Components registry synchronized successfully");
+              } else {
+                  warn!("Failed to synchronize components.");
+              }
+          }
+          Err(err) => warn!("Error running command to synchronize components registry: {:?}", err),
+      }
     }
 }
 
