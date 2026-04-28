@@ -130,6 +130,9 @@ pub enum Commands {
         #[arg(help = "Shell for which to generate completion.", value_parser = value_parser!(Shell))]
         shell: Shell,
     },
+
+    /// Print help in JSON format for machine reading
+    HelpJson,
 }
 
 #[derive(Parser, Debug, Clone, Default)]

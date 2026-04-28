@@ -34,6 +34,7 @@ These options can be used with any command:
 | `run` | Run a command in the context of a specific ESP-IDF version |
 | `discover` | Discover available ESP-IDF versions (not implemented yet) |
 | `completions` | Generate shell completion script to stdout |
+| `help-json` | Print help in JSON format for machine reading |
 
 ## Command Details
 
@@ -208,6 +209,19 @@ eim completions <SHELL>
 
 `SHELL`  Shell for which to generate completion. <br>
 **Possible values:** `bash`, `elvish`, `fish`, `powershell`, `zsh`
+
+### HelpJson Command
+
+Print help in JSON format for machine reading. This is useful for programmatic consumption of CLI help information.
+
+```bash
+eim help-json
+```
+
+The output is a JSON object containing the command structure with all subcommands, arguments, and their descriptions. This is useful for:
+- Building external documentation
+- Generating shell completions manually
+- Integration with other tools that need to understand the CLI interface
 
 ## Examples
 
