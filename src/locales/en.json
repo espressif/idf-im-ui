@@ -182,6 +182,7 @@
       "scanningArchives": "Scanning for offline archives...",
       "verifyingPaths": "Verifying installation paths...",
       "installingPrerequisites": "Installing Prerequisites",
+      "installingPython":"Installing Python...",
       "pleaseWait": "Please wait while prerequisites are being installed..."
     },
     "prerequisites": {

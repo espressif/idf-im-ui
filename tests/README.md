@@ -18,7 +18,7 @@ There is a GitHub workflow yaml file dedicated for the test execution, this work
 
 The test workflow is intended to prepare the github runners for the test execution, which includes capturing the latest EIM tag (to compare with the version printed by the application), installing a supported version of python, setting up environmental variables used by the tests and calling the node test script.
 
-Note that for the Windows runners, one of the runners are set to remove git and python from path, so EIM installs a new version using scoop.
+Note that for the Windows runners, one of the runners are set to remove git and python from path, so EIM installs a new version using portable installers.
 
 The node scripts are called passing a parameter, which is the test suit json file name, by using this approach it is possible to use the same script for multiple tests suites, just specifying which script should be used for the test.
 

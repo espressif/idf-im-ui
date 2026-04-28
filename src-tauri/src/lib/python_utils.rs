@@ -17,7 +17,7 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, system_dependencies::get_scoop_path, utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult}
+    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult}
 };
 
 /// Identifies which Python sanity check a [`GenericCheckResult`] belongs to.
@@ -615,7 +615,14 @@ pub async fn install_python_env(
         debug!("No offline archive directory provided, skipping copying contents.");
     }
 
-    let python_executable = detect_default_python();
+    // first lets try if we installed python as part of prerequisites installation, if not we will fallback to system python
+    let python_installed_by_us = idf_tools_path.join("python").join("python");
+
+    let python_executable = if is_python3(python_installed_by_us.to_str().unwrap()) {
+        python_installed_by_us.display().to_string()
+    } else {
+        detect_default_python()
+    };
 
     // create the venv
     match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
@@ -1026,9 +1033,8 @@ fn where_non_alias(name: &str) -> Option<PathBuf> {
 /// Detects the best available Python 3 interpreter on the system.
 ///
 /// Search order:
-/// - **Windows**: Scoop shims (`python3.exe`, `python.exe`), then generic
-///   names on PATH while skipping App Execution Aliases — each verified
-///   with [`is_python3`].
+/// - **Windows**: Generic names on PATH while skipping App Execution Aliases,
+///   each verified with [`is_python3`].
 /// - **Linux/macOS**: `python3` first, then `python` (only accepted if it
 ///   reports a 3.x version, since on some distros `python` is still 2.7).
 ///
@@ -1037,20 +1043,7 @@ fn where_non_alias(name: &str) -> Option<PathBuf> {
 fn detect_default_python() -> String {
     match std::env::consts::OS {
         "windows" => {
-            // 1. Scoop shims (highest priority on Windows)
-            if let Some(scoop_shims) = get_scoop_path() {
-                let scoop_dir = PathBuf::from(&scoop_shims);
-                for name in &["python3.exe", "python.exe"] {
-                    let candidate = scoop_dir.join(name);
-                    let candidate_str = candidate.to_string_lossy();
-                    if is_python3(&candidate_str) {
-                        info!("Using Scoop {}: {}", name, candidate.display());
-                        return candidate_str.into_owned();
-                    }
-                }
-            }
-
-            // 2. Generic names on PATH — skip App Execution Aliases
+            // Generic names on PATH — skip App Execution Aliases
             for name in ["python3", "python"] {
                 if let Some(path) = where_non_alias(name) {
                     let s = path.to_string_lossy().into_owned();

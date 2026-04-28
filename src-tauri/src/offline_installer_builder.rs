@@ -7,6 +7,7 @@ use idf_im_lib::ensure_path;
 use idf_im_lib::idf_tools::get_list_of_tools_to_download;
 use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::system_dependencies::get_latest_git_for_windows_url;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::utils::{parse_cmake_version, find_by_name_and_extension};
 use idf_im_lib::verify_file_checksum;
@@ -742,23 +743,28 @@ async fn main() {
         // DOWNLOAD SHARED PREREQUISITES ONCE (Windows only)
         let shared_prereq_dir: Option<TempDir> = if std::env::consts::OS == "windows" {
             let temp_shared = TempDir::new().expect("Failed to create shared prereq temp dir");
-            let scoop_path = temp_shared.path().join("scoop");
-            ensure_path(scoop_path.to_str().unwrap()).expect("Failed to create scoop dir");
+            let prereq_path = temp_shared.path();
+            ensure_path(prereq_path.to_str().unwrap()).expect("Failed to create prereq dir");
 
-            let scoop_list = vec![
-                ("https://github.com/ScoopInstaller/Scoop/archive/master.zip", "scoop-master.zip"),
-                ("https://github.com/ScoopInstaller/Main/archive/master.zip", "main-master.zip"),
-                ("https://github.com/git-for-windows/git/releases/download/v2.50.1.windows.1/PortableGit-2.50.1-64-bit.7z.exe", "PortableGit-2.50.1-64-bit.7z.exe"),
-                ("https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe", "python-3.11.9-amd64.exe"),
-                ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/install-pep-514.reg", "install-pep-514.reg"),
-                ("https://raw.githubusercontent.com/ScoopInstaller/Main/master/scripts/python/uninstall-pep-514.reg", "uninstall-pep-514.reg"),
-                ("https://www.7-zip.org/a/7z2501-x64.msi", "7z2501-x64.msi"),
-                ("https://raw.githubusercontent.com/ScoopInstaller/Binary/master/dark/dark-3.14.1.zip", "dark-3.14.1.zip"),
+            // Fetch latest Git for Windows portable URL dynamically
+            let (git_url, git_filename) = match get_latest_git_for_windows_url().await {
+                Ok(url) => url,
+                Err(err) => {
+                    error!("Failed to get latest Git for Windows URL: {}", err);
+                    return;
+                }
+            };
+
+            let prereq_list = vec![
+                // Git - portable Windows distribution (fetched dynamically from GitHub)
+                (git_url, git_filename),
+                // Python - standalone Windows distribution (matches system_dependencies.rs)
+                ("https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string(), "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string()),
             ];
 
-            for (link, name) in scoop_list {
-                info!("Downloading Scoop prereq: {} as {}", link, name);
-                match download_file_and_rename(link, scoop_path.to_str().unwrap(), None, Some(name), 3).await {
+            for (link, name) in prereq_list {
+                info!("Downloading prerequisite: {} as {}", link, name);
+                match download_file_and_rename(&link, prereq_path.to_str().unwrap(), None, Some(&name), 3).await {
                     Ok(_) => info!("Downloaded: {}", name),
                     Err(err) => {
                         error!("Failed to download {}: {}", name, err);
@@ -766,10 +772,6 @@ async fn main() {
                     }
                 }
             }
-
-            let scoop_install_script = include_str!("../powershell_scripts/install_scoop_offline.ps1");
-            fs::write(scoop_path.join("install_scoop_offline.ps1"), scoop_install_script)
-                .expect("Failed to write install_scoop_offline.ps1 script");
 
             info!("Shared Windows prerequisites downloaded to: {:?}", temp_shared.path());
             Some(temp_shared)
@@ -795,11 +797,11 @@ async fn main() {
 
             // 👇 COPY SHARED PREREQUISITES (if any)
             if let Some(ref shared_dir) = shared_prereq_dir {
-                let dest_scoop = archive_dir.path().join("scoop");
-                info!("Copying shared prerequisites to: {:?}", dest_scoop);
+                // Copy directly from shared_dir
+                info!("Copying shared prerequisites to: {:?}", archive_dir.path());
                 fs_extra::dir::copy(
-                    shared_dir.path().join("scoop"),
-                    &dest_scoop,
+                    shared_dir.path(),
+                    archive_dir.path(),
                     &fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true),
                 )
                 .expect("Failed to copy shared prerequisites");
