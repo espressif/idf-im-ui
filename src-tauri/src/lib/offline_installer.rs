@@ -3,7 +3,7 @@ use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive, find_by_name_and_extension}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
 
 /// Installs prerequisite software packages from an offline archive.
 ///
@@ -49,19 +49,29 @@ pub async fn install_prerequisites_offline(
                 .map_err(|e| format!("Failed to create tools directory: {}", e))?;
 
             // Find Git archive (.tar.bz2) in the archive directory
-            let git_archives = find_by_name_and_extension(archive_dir.path(), "git", "tar.bz2");
-            let git_archive_path = PathBuf::from(git_archives.first().ok_or_else(|| {
-                format!("Git portable archive not found in archive directory: {}", archive_dir.path().display())
-            })?);
+            // Archive names are like "Git-2.42.0-64-bit.tar.bz2"
+            let git_archive_path = std::fs::read_dir(archive_dir.path())
+                .map_err(|e| format!("Failed to read archive directory: {}", e))?
+                .filter_map(|entry| entry.ok())
+                .filter(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_lowercase();
+                    name.starts_with("git-") && name.ends_with(".tar.bz2")
+                })
+                .next()
+                .map(|entry| entry.path())
+                .ok_or_else(|| {
+                    format!("Git portable archive not found in archive directory: {}", archive_dir.path().display())
+                })?;
 
             // Copy git archive to tools_dir for installation
-            std::fs::copy(&git_archive_path, tools_dir.join(git_archive_path.file_name().unwrap()))
+            let git_archive_in_tools = tools_dir.join(git_archive_path.file_name().unwrap());
+            std::fs::copy(&git_archive_path, &git_archive_in_tools)
                 .map_err(|e| format!("Failed to copy git archive: {}", e))?;
 
             // Install git from the copied archive
             match crate::system_dependencies::install_git_from_downloaded(
                 tools_dir.clone(),
-                None, // Archive will be found in tools_dir by install_git_from_downloaded
+                Some(git_archive_in_tools),
             )
             .await
             {

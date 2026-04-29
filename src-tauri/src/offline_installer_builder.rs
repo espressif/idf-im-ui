@@ -797,12 +797,11 @@ async fn main() {
 
             // 👇 COPY SHARED PREREQUISITES (if any)
             if let Some(ref shared_dir) = shared_prereq_dir {
-                // Copy directly from shared_dir
+                // Copy CONTENTS of shared_dir into archive_dir (not the dir itself)
                 info!("Copying shared prerequisites to: {:?}", archive_dir.path());
-                fs_extra::dir::copy(
+                idf_im_lib::utils::copy_dir_contents(
                     shared_dir.path(),
                     archive_dir.path(),
-                    &fs_extra::dir::CopyOptions::new().overwrite(true).copy_inside(true),
                 )
                 .expect("Failed to copy shared prerequisites");
             }
