@@ -74,8 +74,7 @@
           "pixman",
           "SDL2",
           "libslirp",
-          "python3 >= 3.10",
-          "python3 < 3.14"
+          "python3 >= 3.10"
         ]
       }
     },
