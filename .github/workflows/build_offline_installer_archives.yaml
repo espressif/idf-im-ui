@@ -12,12 +12,12 @@ on:
       idf_version:
         required: false
         type: string
-        description: "Specific IDF version to build (e.g., v5.1.2). If empty, builds all versions."
+        description: "Specific IDF version (e.g. v5.1.2). Empty = build all."
       debug:
         required: false
         type: boolean
         default: false
-        description: "Debug mode: Uploads to debug folder, skips JSON update, skips purge."
+        description: "Debug: uploads to debug/ prefix, skips JSON update & purge."
     secrets:
       AWS_ACCESS_KEY_ID:
         required: true
@@ -29,20 +29,20 @@ on:
   workflow_dispatch:
     inputs:
       run_id:
-        description: "The run id from which to take binaries"
+        description: "Run ID to take binaries from (blank = auto-detect latest release)"
         required: false
         type: string
       idf_version:
-        description: "Specific IDF version to build (e.g., v5.1.2). Leave empty to build all."
+        description: "Specific IDF version (e.g. v5.1.2). Leave blank for all."
         required: false
         type: string
       purge_all:
-        description: "Purge all existing archives from currently built IDF version from S3 before upload (DANGEROUS)"
+        description: "Purge all existing archives for the built versions from S3 (DANGEROUS)"
         required: false
         type: boolean
         default: false
       debug:
-        description: "Debug mode: Uploads to debug folder, skips JSON update, skips purge."
+        description: "Debug: uploads to debug/ prefix, skips JSON update & purge."
         required: false
         type: boolean
         default: false
@@ -54,55 +54,59 @@ concurrency:
 permissions:
   contents: read
 
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
+
+  # ── 1. Resolve versions & run_id ──────────────────────────────────────────
   get-versions:
-    name: Get IDF Versions to Build
+    name: "🔍 Resolve Versions & Run ID"
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: read
     outputs:
-      versions: ${{ steps.get-versions.outputs.versions }}
-      should_purge: ${{ steps.get-versions.outputs.should_purge }}
-      debug: ${{ steps.get-versions.outputs.debug }}
-      resolved_run_id: ${{ steps.resolve-run-id.outputs.run_id }}
+      versions:         ${{ steps.get-versions.outputs.versions }}
+      version_count:    ${{ steps.get-versions.outputs.version_count }}
+      should_purge:     ${{ steps.get-versions.outputs.should_purge }}
+      debug:            ${{ steps.get-versions.outputs.debug }}
+      resolved_run_id:  ${{ steps.resolve-run-id.outputs.run_id }}
+
     steps:
-      - name: Checkout (for scripts if needed)
+      - name: Checkout
         uses: actions/checkout@v4
 
+      # ── Resolve the source run_id ──────────────────────────────────────────
       - name: Resolve run_id
         id: resolve-run-id
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        continue-on-error: false
         run: |
           if [ -n "${{ inputs.run_id }}" ]; then
             echo "run_id=${{ inputs.run_id }}" >> $GITHUB_OUTPUT
-            echo "Using provided run_id: ${{ inputs.run_id }}"
+            echo "✅ Using provided run_id: ${{ inputs.run_id }}"
           else
-            echo "No run_id provided — looking up latest successful release run of 'Unified Build Workflow'..."
+            echo "ℹ️ No run_id provided — finding latest successful release run of 'Unified Build Workflow'..."
 
             WORKFLOW_ID=$(gh api \
               "/repos/${{ github.repository }}/actions/workflows" \
               --jq '.workflows[] | select(.name == "Unified Build Workflow") | .id')
-
-            echo "Found workflow ID: $WORKFLOW_ID"
+            echo "Workflow ID: $WORKFLOW_ID"
 
             RUN_ID=$(gh api \
               "/repos/${{ github.repository }}/actions/workflows/${WORKFLOW_ID}/runs?event=release&status=completed&per_page=10" \
               --jq '[.workflow_runs[] | select(.display_title | test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))] | first | .id')
-
-            echo "Found run ID: $RUN_ID"
 
             if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
               echo "::error::Could not find a successful release run of 'Unified Build Workflow'"
               exit 1
             fi
 
+            echo "✅ Auto-resolved run_id: $RUN_ID"
             echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
           fi
 
-      - name: Download offline_installer_builder artifact
+      # ── Download builder binary (needed only to list versions) ─────────────
+      - name: Download offline_installer_builder (linux-x64)
         uses: actions/download-artifact@v5
         with:
           pattern: offline_installer_builder-linux-x64-*
@@ -120,340 +124,121 @@ jobs:
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
+      # ── Compute versions & flags ───────────────────────────────────────────
       - name: Get IDF versions
         id: get-versions
         run: |
-          echo "debug=${{ inputs.debug }}" >> $GITHUB_OUTPUT
+          DEBUG="${{ inputs.debug }}"
+          echo "debug=$DEBUG" >> $GITHUB_OUTPUT
 
-          if [ "${{ inputs.debug }}" = "true" ]; then
+          # Purge logic
+          if [ "$DEBUG" = "true" ]; then
             echo "should_purge=false" >> $GITHUB_OUTPUT
           else
-            SHOULD_PURGE=$([ "${{ github.event_name }}" = "release" ] || [ "${{ inputs.purge_all }}" = "true" ] && echo "true" || echo "false")
-            echo "should_purge=$SHOULD_PURGE" >> $GITHUB_OUTPUT
+            if [ "${{ github.event_name }}" = "release" ] || [ "${{ inputs.purge_all }}" = "true" ]; then
+              echo "should_purge=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_purge=false" >> $GITHUB_OUTPUT
+            fi
           fi
 
+          # Versions list
           if [ -n "${{ inputs.idf_version }}" ]; then
             VERSIONS='["${{ inputs.idf_version }}"]'
+            echo "📌 Building specific version: ${{ inputs.idf_version }}"
           else
-            echo "Getting available IDF versions..."
+            echo "📋 Fetching available IDF versions..."
             VERSIONS_OUTPUT=$(./offline_installer_builder --list-versions)
-            echo "Available versions:"
             echo "$VERSIONS_OUTPUT"
             VERSIONS=$(echo "$VERSIONS_OUTPUT" | jq -R -s -c 'split("\n") | map(select(length > 0))')
           fi
 
-          echo "versions=$VERSIONS" >> $GITHUB_OUTPUT
+          COUNT=$(echo "$VERSIONS" | jq 'length')
+          echo "🔢 Will build $COUNT version(s): $VERSIONS"
 
-  build-and-upload:
-    name: Build & Upload (${{ matrix.package_name }}, ${{ matrix.idf_version }})
+          echo "versions=$VERSIONS"       >> $GITHUB_OUTPUT
+          echo "version_count=$COUNT"     >> $GITHUB_OUTPUT
+
+      # ── Initial dashboard entry in the run summary ─────────────────────────
+      - name: Write initial run summary
+        run: |
+          VERSIONS='${{ steps.get-versions.outputs.versions }}'
+          DEBUG="${{ steps.get-versions.outputs.debug }}"
+          PURGE="${{ steps.get-versions.outputs.should_purge }}"
+          RUN_ID="${{ steps.resolve-run-id.outputs.run_id }}"
+
+          echo "# 🏗️ Offline Installer Build Pipeline" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Setting | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Source Run ID | \`$RUN_ID\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Debug mode | $( [ "$DEBUG" = "true" ] && echo "⚠️ Yes (uploads to \`debug/\`)" || echo "No") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Purge old archives | $( [ "$PURGE" = "true" ] && echo "🗑️ Yes" || echo "No") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Versions to build | \`$(echo $VERSIONS | jq -r 'join(", ")')\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Platforms per version | linux-x64, linux-aarch64, windows-x64, macos-aarch64, macos-x64 |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> ⏳ Versions are processed **sequentially** (one at a time) to avoid rate limiting." >> $GITHUB_STEP_SUMMARY
+          echo "> Platforms within each version build **in parallel**." >> $GITHUB_STEP_SUMMARY
+
+  # ── 2. Build versions one at a time ───────────────────────────────────────
+  #
+  # max-parallel: 1  ← THE KEY CHANGE: versions are serialised.
+  # continue-on-error: true ← a failed version doesn't cancel subsequent ones.
+  # ──────────────────────────────────────────────────────────────────────────
+  build-version:
+    name: "📦 IDF ${{ matrix.idf_version }}"
     needs: get-versions
-    runs-on: ${{ matrix.os }}
-    continue-on-error: false
-
     strategy:
-      fail-fast: false
+      fail-fast: false          # version N+1 still runs even if version N failed
+      max-parallel: 1           # ← serialise: no concurrent version builds
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest, macos-15-intel]
-        package_name: [linux-x64, linux-aarch64, windows-x64, macos-aarch64, macos-x64]
         idf_version: ${{ fromJson(needs.get-versions.outputs.versions) }}
-        exclude:
-          - os: ubuntu-latest
-            package_name: linux-aarch64
-          - os: ubuntu-latest
-            package_name: windows-x64
-          - os: ubuntu-latest
-            package_name: macos-aarch64
-          - os: ubuntu-latest
-            package_name: macos-x64
-          - os: ubuntu-24.04-arm
-            package_name: linux-x64
-          - os: ubuntu-24.04-arm
-            package_name: windows-x64
-          - os: ubuntu-24.04-arm
-            package_name: macos-aarch64
-          - os: ubuntu-24.04-arm
-            package_name: macos-x64
-          - os: windows-latest
-            package_name: linux-x64
-          - os: windows-latest
-            package_name: linux-aarch64
-          - os: windows-latest
-            package_name: macos-aarch64
-          - os: windows-latest
-            package_name: macos-x64
-          - os: macos-latest
-            package_name: linux-x64
-          - os: macos-latest
-            package_name: linux-aarch64
-          - os: macos-latest
-            package_name: windows-x64
-          - os: macos-latest
-            package_name: macos-x64
-          - os: macos-15-intel
-            package_name: linux-x64
-          - os: macos-15-intel
-            package_name: linux-aarch64
-          - os: macos-15-intel
-            package_name: windows-x64
-          - os: macos-15-intel
-            package_name: macos-aarch64
+    uses: ./.github/workflows/build_single_offline_installer_version.yml
+    with:
+      idf_version:      ${{ matrix.idf_version }}
+      resolved_run_id:  ${{ needs.get-versions.outputs.resolved_run_id }}
+      should_purge:     ${{ needs.get-versions.outputs.should_purge }}
+      debug:            ${{ needs.get-versions.outputs.debug }}
+      ref:              ${{ inputs.ref || github.ref }}
+    secrets:
+      AWS_ACCESS_KEY_ID:      ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY:  ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      DL_DISTRIBUTION_ID:     ${{ secrets.DL_DISTRIBUTION_ID }}
 
-    steps:
-      - name: Checkout (for scripts if needed)
-        uses: actions/checkout@v4
-
-      - name: Download offline_installer_builder artifact
-        uses: actions/download-artifact@v5
-        with:
-          pattern: offline_installer_builder-${{ matrix.package_name }}-*
-          merge-multiple: true
-          path: ./
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ needs.get-versions.outputs.resolved_run_id }}
-
-      - name: Make binary executable (Unix)
-        if: runner.os != 'Windows'
-        run: chmod +x ./offline_installer_builder
-
-        # Only needed for version IDF 5.1
-      - name: Install dependencies (Unix)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            libgdk-pixbuf2.0-dev \
-            libcairo2-dev \
-            libpango1.0-dev \
-            libjpeg-dev \
-            libpng-dev \
-            zlib1g-dev \
-            meson \
-            libglib2.0-dev \
-            libssl-dev \
-            libdbus-1-dev \
-            libdbus-glib-1-dev \
-            libgirepository1.0-dev \
-            pkg-config
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew update
-          brew install \
-            gdk-pixbuf \
-            cairo \
-            pango \
-            libjpeg \
-            libpng \
-            zlib \
-            meson \
-            glib \
-            dbus-glib
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v2
-
-      - name: Set up AWS CLI
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-east-1
-
-      - name: Download current offline_archives.json
-        if: needs.get-versions.outputs.should_purge == 'true'
-        id: download_json
-        shell: bash
-        run: |
-          aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null || echo "[]" > ./offline_archives.json
-          if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
-            echo "[]" > ./offline_archives.json
-          fi
-
-      - name: Purge existing archives for this version (if requested) - Unix
-        if: needs.get-versions.outputs.should_purge == 'true' && runner.os != 'Windows'
-        shell: bash
-        continue-on-error: true
-        run: |
-          echo "Purging existing archives for version ${{ matrix.idf_version }} from S3..."
-          set +e
-          aws s3 ls s3://espdldata/dl/eim/ | grep "archive_${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" | awk '{print $4}' | while read filename; do
-            if [ -n "$filename" ]; then
-              aws s3 rm "s3://espdldata/dl/eim/$filename" || true
-            fi
-          done
-          exit 0
-
-      - name: Purge existing archives for this version (if requested) - Windows
-        if: needs.get-versions.outputs.should_purge == 'true' && runner.os == 'Windows'
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          Write-Host "Purging existing archives for version ${{ matrix.idf_version }} from S3..."
-          try {
-            $archives = aws s3 ls s3://espdldata/dl/eim/ | Where-Object { $_.Split()[-1] -match "archive_${{ matrix.idf_version }}_${{ matrix.package_name }}\.zst" }
-            if (-not $archives) { Write-Host "::warning::No existing archives found" }
-            foreach ($archive in $archives) {
-              $filename = $archive.Split()[-1]
-              if ($filename) { aws s3 rm "s3://espdldata/dl/eim/$filename" || true }
-            }
-          } catch { Write-Host "::warning::Purge step encountered an error: $_" }
-          exit 0
-
-      - name: Build archive for specific version
-        id: build
-        continue-on-error: true
-        shell: bash
-        run: |
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            BINARY="./offline_installer_builder.exe"
-          else
-            BINARY="./offline_installer_builder"
-          fi
-          echo "Building specific version: ${{ matrix.idf_version }}"
-          PLATFORM="${{ matrix.package_name }}"
-          VERSION="${{ matrix.idf_version }}"
-          mkdir -p built_archives
-          LOG_FILE="built_archives/archive_v${VERSION}_${PLATFORM}.log"
-
-          set -o pipefail
-          $BINARY -c default --idf-version-override ${{ matrix.idf_version }} 2>&1 | tee "$LOG_FILE"
-
-          # The binary now creates build_summary.md automatically
-          if [ -f "build_summary.md" ]; then
-            echo "## Build Summary for ${{ matrix.package_name }}" >> $GITHUB_STEP_SUMMARY
-            cat build_summary.md >> $GITHUB_STEP_SUMMARY
-          fi
-
-          for file in archive_v*.zst; do
-            if [ ! -f "$file" ]; then continue; fi
-            NEW_NAME="archive_v${VERSION}_${PLATFORM}.zst"
-            mv "$file" "built_archives/$NEW_NAME"
-            echo "Built archive: built_archives/$NEW_NAME"
-          done
-          if [ ! "$(ls -A built_archives/*.zst 2>/dev/null)" ]; then
-            echo "ERROR: No archives built!" >&2
-            exit 1
-          fi
-
-      - name: Upload archive and log to S3 - Unix
-        if: runner.os != 'Windows'
-        id: upload_unix
-        shell: bash
-        env:
-          S3_PREFIX: ${{ needs.get-versions.outputs.debug == 'true' && 'debug/' || '' }}
-        run: |
-          PLATFORM="${{ matrix.package_name }}"
-          VERSION="${{ matrix.idf_version }}"
-          archive=$(ls built_archives/*.zst | head -1)
-          if [ ! -f "$archive" ]; then echo "ERROR: No archive found!" >&2; exit 1; fi
-
-          FILENAME=$(basename "$archive")
-          # Prepend prefix for JSON file logic
-          JSON_FILENAME="${S3_PREFIX}${FILENAME}"
-
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            SIZE=$(stat -f %z "$archive")
-          else
-            SIZE=$(stat -c %s "$archive")
-          fi
-
-          echo "Uploading to S3 prefix: ${S3_PREFIX}"
-
-          # Upload Archive
-          aws s3 cp --acl=public-read --content-type="application/zstd" "$archive" "s3://espdldata/dl/eim/${S3_PREFIX}${FILENAME}"
-
-          # Upload Log
-          LOG_FILE="${archive%.zst}.log"
-          if [ -f "$LOG_FILE" ]; then
-            LOG_FILENAME=$(basename "$LOG_FILE")
-            aws s3 cp --acl=public-read --content-type="text/plain" "$LOG_FILE" "s3://espdldata/dl/eim/${S3_PREFIX}${LOG_FILENAME}"
-          fi
-
-          # Generate build-info.json with the correct path (including prefix)
-          mkdir -p build-info
-          jq -n \
-            --arg version "$VERSION" \
-            --arg platform "$PLATFORM" \
-            --arg filename "$JSON_FILENAME" \
-            --argjson size $SIZE \
-            '{"version": $version, "platform": $platform, "filename": $filename, "size": $size}' \
-            > "build-info/build-info.json"
-
-      - name: Upload archive and log to S3 - Windows
-        if: runner.os == 'Windows'
-        id: upload_windows
-        shell: pwsh
-        env:
-          S3_PREFIX: ${{ needs.get-versions.outputs.debug == 'true' && 'debug/' || '' }}
-        run: |
-          $PLATFORM = "${{ matrix.package_name }}"
-          $VERSION = "${{ matrix.idf_version }}"
-          $archive = Get-ChildItem "built_archives/*.zst" | Select-Object -First 1
-          if (-not $archive) { Write-Error "ERROR: No archive found!"; exit 1 }
-
-          $FILENAME = $archive.Name
-          $archivePath = $archive.FullName
-          $SIZE = $archive.Length
-          $Prefix = "${{ env.S3_PREFIX }}"
-
-          # Prepend prefix for JSON file logic
-          $JsonFilename = "$Prefix$FILENAME"
-
-          # Upload Archive
-          aws s3 cp --acl=public-read --content-type="application/zstd" "$archivePath" "s3://espdldata/dl/eim/$Prefix$FILENAME"
-
-          # Upload Log
-          $LogFile = "$($archive.DirectoryName)\$($archive.BaseName).log"
-          if (Test-Path $LogFile) {
-             $LogFilename = Split-Path $LogFile -Leaf
-             aws s3 cp --acl=public-read --content-type="text/plain" "$LogFile" "s3://espdldata/dl/eim/$Prefix$LogFilename"
-          }
-
-          # Generate build-info.json with the correct path
-          New-Item -ItemType Directory -Path "build-info" -Force | Out-Null
-          $buildInfo = @{
-            version = $VERSION
-            platform = $PLATFORM
-            filename = $JsonFilename
-            size = $SIZE
-          }
-          $buildInfo | ConvertTo-Json | Out-File -FilePath "build-info/build-info.json" -Encoding UTF8
-
-      - name: Save build info as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info-${{ matrix.idf_version }}-${{ matrix.package_name }}
-          path: build-info/
-          retention-days: 7
-
+  # ── 3. Update offline_archives.json ───────────────────────────────────────
   update-json:
-    name: Update offline_archives.json
-    needs: [get-versions, build-and-upload]
-    if: needs.get-versions.outputs.debug != 'true'
+    name: "📝 Update offline_archives.json"
+    needs: [get-versions, build-version]
+    if: |
+      always() &&
+      needs.get-versions.outputs.debug != 'true' &&
+      !contains(needs.build-version.result, 'cancelled')
     runs-on: ubuntu-latest
+
     steps:
-      - name: Set up AWS CLI
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-east-1
 
-      - name: Download current offline_archives.json
+      - name: Download current offline_archives.json from S3
         run: |
-          aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null || echo "[]" > ./offline_archives.json
+          aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null \
+            || echo "[]" > ./offline_archives.json
           if ! jq -e 'type == "array"' ./offline_archives.json >/dev/null 2>&1; then
             echo "[]" > ./offline_archives.json
           fi
+          echo "📥 Current JSON has $(jq length ./offline_archives.json) entries."
 
-      - name: Download all build infos
+      - name: Download all build-infos
         uses: actions/download-artifact@v4
         with:
           pattern: build-info-*
           path: ./all-build-infos/
 
+      # ── Purge obsolete archives ─────────────────────────────────────────────
       - name: Purge unsupported archives from S3
         if: needs.get-versions.outputs.should_purge == 'true'
         shell: bash
@@ -463,113 +248,283 @@ jobs:
           BUCKET="espdldata"
           PREFIX="dl/eim/archive_"
 
-          # Build allowed set from build-info artifacts (these contain the exact filenames on S3)
+          # Build allowed set from successful build-infos only
           declare -A ALLOWED
           while IFS= read -r -d '' info_file; do
-            if [ -f "$info_file" ] && jq empty "$info_file" 2>/dev/null; then
-              filename=$(jq -r '.filename' "$info_file")
-              if [ -n "$filename" ] && [ "$filename" != "null" ]; then
-                ALLOWED["$filename"]=1
-                echo "Allowed: $filename"
-              fi
+            [ -f "$info_file" ] || continue
+            jq empty "$info_file" 2>/dev/null || continue
+            status=$(jq -r '.status' "$info_file")
+            [ "$status" = "success" ] || continue
+            filename=$(jq -r '.filename' "$info_file")
+            if [ -n "$filename" ] && [ "$filename" != "null" ]; then
+              ALLOWED["$filename"]=1
+              echo "  ✅ Allowed: $filename"
             fi
           done < <(find all-build-infos -name "build-info.json" -type f -print0)
 
           echo ""
           echo "Total allowed archives: ${#ALLOWED[@]}"
-          echo ""
 
-          # List all .zst objects under dl/eim/archive_ (excludes debug/ since those are dl/eim/debug/archive_)
-          # With --output text, empty string is returned when no objects (not "None")
           S3_OBJECTS=$(aws s3api list-objects-v2 \
             --bucket "${BUCKET}" \
             --prefix "${PREFIX}" \
             --query 'Contents[?ends_with(Key, `.zst`)].[Key,Size]' \
-            --output text 2>&1) || { echo "::warning::Failed to list S3 objects. Check bucket=${BUCKET} prefix=${PREFIX} and AWS credentials."; S3_OBJECTS=""; touch old_files.txt; }
+            --output text 2>&1) || {
+              echo "::warning::Failed to list S3 objects."
+              S3_OBJECTS=""
+            }
 
           touch old_files.txt
-          DELETED_COUNT=0
-          KEPT_COUNT=0
+          DELETED=0; KEPT=0
 
           if [ -n "${S3_OBJECTS}" ]; then
             while IFS=$'\t' read -r key size; do
               [ -z "${key}" ] && continue
               filename=$(basename "$key")
-
               if [ -z "${ALLOWED[$filename]+x}" ]; then
-                echo "Deleting unsupported archive: ${key} (${size} bytes)"
+                echo "  🗑️  Deleting: ${key} (${size} bytes)"
                 if aws s3 rm "s3://${BUCKET}/${key}"; then
                   echo "$filename" >> old_files.txt
-                  DELETED_COUNT=$((DELETED_COUNT + 1))
-
-                  # Also delete the corresponding .log file if it exists
+                  DELETED=$((DELETED+1))
                   log_key="${key%.zst}.log"
-                  aws s3 rm "s3://${BUCKET}/${log_key}" 2>/dev/null || echo "::warning::Failed to delete log ${log_key}"
+                  aws s3 rm "s3://${BUCKET}/${log_key}" 2>/dev/null \
+                    || echo "::warning::No log to delete at ${log_key}"
                 else
                   echo "::warning::Failed to delete ${key}"
                 fi
               else
-                echo "Keeping: ${key}"
-                KEPT_COUNT=$((KEPT_COUNT + 1))
+                echo "  ✅ Keeping: ${key}"
+                KEPT=$((KEPT+1))
               fi
             done <<< "${S3_OBJECTS}"
           fi
 
-          echo ""
-          echo "=== Purge Summary ==="
-          echo "Archives deleted: ${DELETED_COUNT}"
-          echo "Archives kept: ${KEPT_COUNT}"
-
           {
-            echo "## Purge Unsupported Archives"
+            echo "## 🗑️ Purge Results"
             echo ""
-            echo "| Metric | Value |"
+            echo "| Metric | Count |"
             echo "|--------|-------|"
-            echo "| Deleted | ${DELETED_COUNT} |"
-            echo "| Kept | ${KEPT_COUNT} |"
+            echo "| Deleted | ${DELETED} |"
+            echo "| Kept | ${KEPT} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Merge and update JSON
+      # ── Merge JSON ──────────────────────────────────────────────────────────
+      - name: Merge and upload updated JSON
         run: |
+          # Collect only successful entries
           NEW_ENTRIES="[]"
           while IFS= read -r -d '' info_file; do
-            if [ -f "$info_file" ] && jq empty "$info_file" 2>/dev/null; then
-              entry=$(cat "$info_file")
-              NEW_ENTRIES=$(echo "$NEW_ENTRIES" | jq --argjson entry "$entry" '. + [$entry]')
-            fi
+            [ -f "$info_file" ] || continue
+            jq empty "$info_file" 2>/dev/null || continue
+            status=$(jq -r '.status' "$info_file")
+            [ "$status" = "success" ] || continue
+            entry=$(cat "$info_file")
+            NEW_ENTRIES=$(echo "$NEW_ENTRIES" | jq --argjson e "$entry" '. + [$e]')
           done < <(find all-build-infos -name "build-info.json" -type f -print0)
+
+          echo "📊 New/updated entries: $(echo "$NEW_ENTRIES" | jq length)"
 
           CURRENT=$(cat offline_archives.json)
 
+          # Remove entries for files that were purged
           if [ -f old_files.txt ] && [ -s old_files.txt ]; then
             OLD_FILENAMES=$(jq -R -s -c 'split("\n") | map(select(length > 0))' old_files.txt)
-            CURRENT=$(echo "$CURRENT" | jq --argjson old "$OLD_FILENAMES" 'map(select(.filename as $f | ($old | index($f)) | not))')
+            CURRENT=$(echo "$CURRENT" | jq --argjson old "$OLD_FILENAMES" \
+              'map(select(.filename as $f | ($old | index($f)) | not))')
           fi
 
+          # Merge: replace entries for (version, platform) pairs present in new
           UPDATED=$(echo "$CURRENT" | jq --argjson new "$NEW_ENTRIES" '
             . as $current |
             ($new | map({version, platform})) as $to_replace |
-            ($current | map(select(
-              (.version + "-" + .platform) as $key |
-              ($to_replace | map(.version + "-" + .platform) | index($key)) | not
-            ))) + $new
+            (
+              $current | map(select(
+                (.version + "-" + .platform) as $key |
+                ($to_replace | map(.version + "-" + .platform) | index($key)) | not
+              ))
+            ) + $new
           ')
 
           echo "$UPDATED" > updated_offline_archives.json
-          if ! jq empty updated_offline_archives.json; then echo "ERROR: JSON Invalid"; exit 1; fi
 
-          aws s3 cp --acl=public-read updated_offline_archives.json s3://espdldata/dl/eim/offline_archives.json
+          if ! jq empty updated_offline_archives.json; then
+            echo "::error::Produced invalid JSON — aborting upload!"
+            exit 1
+          fi
 
+          TOTAL=$(jq length updated_offline_archives.json)
+          echo "📤 Uploading JSON with $TOTAL entries..."
+
+          aws s3 cp --acl=public-read \
+            updated_offline_archives.json \
+            s3://espdldata/dl/eim/offline_archives.json
+
+          # CloudFront invalidation
           aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.DL_DISTRIBUTION_ID }} \
             --paths "/dl/eim/offline_archives.json" "/dl/eim/archive_*.zst"
 
+          {
+            echo "## 📝 offline_archives.json Updated"
+            echo ""
+            echo "| Metric | Count |"
+            echo "|--------|-------|"
+            echo "| New/updated entries | $(echo "$NEW_ENTRIES" | jq length) |"
+            echo "| Total entries in JSON | ${TOTAL} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 4. Final dashboard ─────────────────────────────────────────────────────
+  dashboard:
+    name: "📊 Pipeline Dashboard"
+    needs: [get-versions, build-version, update-json]
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all build-infos
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-info-*
+          path: ./all-build-infos/
+        continue-on-error: true
+
+      - name: Generate dashboard
+        shell: bash
+        run: |
+          echo "# 🏗️ Offline Installer Build — Final Dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** \`${{ github.event_name }}\` | **Ref:** \`${{ inputs.ref || github.ref }}\` | **Run:** [\`${{ github.run_id }}\`](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          PLATFORMS="linux-x64 linux-aarch64 windows-x64 macos-aarch64 macos-x64"
+          VERSIONS='${{ needs.get-versions.outputs.versions }}'
+          VERSION_LIST=$(echo "$VERSIONS" | jq -r '.[]')
+
+          TOTAL=0; SUCCESS=0; FAILURE=0; TOTAL_SIZE=0
+
+          # Build a result map from downloaded artifacts
+          declare -A STATUS_MAP
+          declare -A SIZE_MAP
+          while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            jq empty "$f" 2>/dev/null || continue
+            v=$(jq -r '.version'  "$f")
+            p=$(jq -r '.platform' "$f")
+            s=$(jq -r '.status'   "$f")
+            sz=$(jq -r '.size'    "$f")
+            STATUS_MAP["${v}::${p}"]="$s"
+            SIZE_MAP["${v}::${p}"]="$sz"
+          done < <(find all-build-infos -name "build-info.json" -type f -print0)
+
+          # ── Matrix table ───────────────────────────────────────────────────
+          echo "## 🗂️ Build Matrix" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Header
+          HEADER="| Version |"
+          DIVIDER="|---------|"
+          for P in $PLATFORMS; do
+            HEADER="$HEADER $P |"
+            DIVIDER="$DIVIDER:---:|"
+          done
+          echo "$HEADER" >> $GITHUB_STEP_SUMMARY
+          echo "$DIVIDER" >> $GITHUB_STEP_SUMMARY
+
+          # Rows
+          while IFS= read -r V; do
+            ROW="| \`$V\` |"
+            for P in $PLATFORMS; do
+              KEY="${V}::${P}"
+              S="${STATUS_MAP[$KEY]:-unknown}"
+              SZ="${SIZE_MAP[$KEY]:-0}"
+              TOTAL=$((TOTAL+1))
+
+              case "$S" in
+                success)
+                  ICON="✅"
+                  SUCCESS=$((SUCCESS+1))
+                  TOTAL_SIZE=$((TOTAL_SIZE+SZ))
+                  SZ_MB=$(( SZ / 1048576 ))
+                  ROW="$ROW ✅ ${SZ_MB}MB |"
+                  ;;
+                failure)
+                  ICON="❌"
+                  FAILURE=$((FAILURE+1))
+                  ROW="$ROW ❌ |"
+                  ;;
+                *)
+                  ROW="$ROW ❓ |"
+                  ;;
+              esac
+            done
+            echo "$ROW" >> $GITHUB_STEP_SUMMARY
+          done <<< "$VERSION_LIST"
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # ── Aggregate stats ────────────────────────────────────────────────
+          TOTAL_MB=$(( TOTAL_SIZE / 1048576 ))
+
+          if   [ $FAILURE -eq 0 ]; then OVERALL="✅ All builds succeeded"
+          elif [ $SUCCESS -eq 0 ]; then OVERALL="❌ All builds failed"
+          else                          OVERALL="⚠️ Partial success ($SUCCESS/$TOTAL)"
+          fi
+
+          echo "## 📈 Aggregate Statistics" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Overall status | $OVERALL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total builds | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+          echo "| Succeeded | $SUCCESS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Failed | $FAILURE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Total data uploaded | ~${TOTAL_MB} MB |" >> $GITHUB_STEP_SUMMARY
+          echo "| JSON updated | ${{ needs.update-json.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Debug mode | ${{ needs.get-versions.outputs.debug }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Purge ran | ${{ needs.get-versions.outputs.should_purge }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # ── Failed builds detail ───────────────────────────────────────────
+          if [ $FAILURE -gt 0 ]; then
+            echo "## ❌ Failed Builds" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| Version | Platform |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|----------|" >> $GITHUB_STEP_SUMMARY
+            while IFS= read -r V; do
+              for P in $PLATFORMS; do
+                KEY="${V}::${P}"
+                S="${STATUS_MAP[$KEY]:-unknown}"
+                if [ "$S" != "success" ]; then
+                  echo "| \`$V\` | \`$P\` |" >> $GITHUB_STEP_SUMMARY
+                fi
+              done
+            done <<< "$VERSION_LIST"
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "> 💡 Download the \`build-log-*\` artifacts above for detailed error output." >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # ── Next steps hint ────────────────────────────────────────────────
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🔗 Useful Links" >> $GITHUB_STEP_SUMMARY
+          echo "- [S3 bucket (dl/eim)](https://s3.console.aws.amazon.com/s3/buckets/espdldata?prefix=dl/eim/)" >> $GITHUB_STEP_SUMMARY
+          echo "- [offline_archives.json](https://dl.espressif.com/dl/eim/offline_archives.json)" >> $GITHUB_STEP_SUMMARY
+          echo "- [This run's artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+
+          # ── Fail the job if all builds failed (makes the overall run red) ──
+          if [ $SUCCESS -eq 0 ] && [ $TOTAL -gt 0 ]; then
+            echo "::error::All $TOTAL builds failed — marking pipeline as failed."
+            exit 1
+          fi
+
+  # ── 5. Autotest ────────────────────────────────────────────────────────────
   autotest:
-    name: Autotest Offline Archives Installation
-    needs: [get-versions, build-and-upload]
-    if: (!cancelled())
+    name: "🧪 Autotest Offline Archives"
+    needs: [get-versions, build-version]
+    if: "!cancelled()"
     uses: ./.github/workflows/test_offline.yml
     with:
-      ref: ${{ inputs.ref || github.ref }}
+      ref:               ${{ inputs.ref || github.ref }}
       build_info_run_id: ${{ github.run_id }}
-      eim_cli_run_id: ${{ needs.get-versions.outputs.resolved_run_id }}
+      eim_cli_run_id:    ${{ needs.get-versions.outputs.resolved_run_id }}

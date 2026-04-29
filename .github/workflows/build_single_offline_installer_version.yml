@@ -1,0 +1,368 @@
+name: "[Internal] Build Single IDF Version"
+
+# This workflow is called by the orchestrator for each IDF version.
+# It runs all platform builds in parallel for ONE version, then aggregates results.
+
+on:
+  workflow_call:
+    inputs:
+      idf_version:
+        required: true
+        type: string
+      resolved_run_id:
+        required: true
+        type: string
+      should_purge:
+        required: true
+        type: string   # 'true' | 'false'  (booleans can't cross workflow_call cleanly)
+      debug:
+        required: true
+        type: string   # 'true' | 'false'
+      ref:
+        required: true
+        type: string
+    secrets:
+      AWS_ACCESS_KEY_ID:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      DL_DISTRIBUTION_ID:
+        required: true
+    outputs:
+      version_status:
+        description: "Overall status for this version: success | partial | failure"
+        value: ${{ jobs.version-summary.outputs.version_status }}
+      build_results:
+        description: "JSON array of per-platform results"
+        value: ${{ jobs.version-summary.outputs.build_results }}
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────────────
+  # Build & upload all platforms in parallel for this one version
+  # ──────────────────────────────────────────────────────────────────────────
+  build-and-upload:
+    name: "${{ matrix.package_name }}"
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true   # platform failure stays visible but doesn't block others
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+          - os: windows-latest
+            package_name: windows-x64
+          - os: macos-latest
+            package_name: macos-aarch64
+          - os: macos-15-intel
+            package_name: macos-x64
+
+    outputs:
+      # Each job can't output per-matrix values; we collect via artifacts instead.
+      # These outputs are from the version-summary job below.
+      dummy: "unused"
+
+    steps:
+      - name: "🔖 Job info"
+        shell: bash
+        run: |
+          echo "## 📦 ${{ matrix.package_name }} — IDF ${{ inputs.idf_version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | \`${{ matrix.package_name }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| IDF Version | \`${{ inputs.idf_version }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Runner | \`${{ matrix.os }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Source run_id | \`${{ inputs.resolved_run_id }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Download offline_installer_builder artifact
+        uses: actions/download-artifact@v5
+        with:
+          pattern: offline_installer_builder-${{ matrix.package_name }}-*
+          merge-multiple: true
+          path: ./
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.resolved_run_id }}
+
+      - name: Make binary executable (Unix)
+        if: runner.os != 'Windows'
+        run: chmod +x ./offline_installer_builder
+
+      # ── Dependencies ───────────────────────────────────────────────────────
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            build-essential libgdk-pixbuf2.0-dev libcairo2-dev libpango1.0-dev \
+            libjpeg-dev libpng-dev zlib1g-dev meson libglib2.0-dev libssl-dev \
+            libdbus-1-dev libdbus-glib-1-dev libgirepository1.0-dev pkg-config
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install gdk-pixbuf cairo pango libjpeg libpng zlib meson glib dbus-glib
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v2
+
+      # ── AWS ────────────────────────────────────────────────────────────────
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      # ── Purge (if requested) ───────────────────────────────────────────────
+      - name: Purge existing archives — Unix
+        if: inputs.should_purge == 'true' && runner.os != 'Windows'
+        shell: bash
+        continue-on-error: true
+        run: |
+          echo "🗑️ Purging existing archives for ${{ inputs.idf_version }} / ${{ matrix.package_name }}..."
+          set +e
+          aws s3 ls s3://espdldata/dl/eim/ \
+            | grep "archive_${{ inputs.idf_version }}_${{ matrix.package_name }}\.zst" \
+            | awk '{print $4}' \
+            | while read filename; do
+                [ -n "$filename" ] && aws s3 rm "s3://espdldata/dl/eim/$filename" || true
+              done
+          exit 0
+
+      - name: Purge existing archives — Windows
+        if: inputs.should_purge == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "🗑️ Purging existing archives for ${{ inputs.idf_version }} / ${{ matrix.package_name }}..."
+          try {
+            $archives = aws s3 ls s3://espdldata/dl/eim/ |
+              Where-Object { $_ -match "archive_${{ inputs.idf_version }}_${{ matrix.package_name }}\.zst" }
+            if (-not $archives) { Write-Host "No existing archives found." }
+            foreach ($archive in $archives) {
+              $filename = $archive.Split()[-1]
+              if ($filename) { aws s3 rm "s3://espdldata/dl/eim/$filename" }
+            }
+          } catch { Write-Host "::warning::Purge error: $_" }
+          exit 0
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Build archive
+        id: build
+        shell: bash
+        run: |
+          BINARY="./offline_installer_builder${{ runner.os == 'Windows' && '.exe' || '' }}"
+          PLATFORM="${{ matrix.package_name }}"
+          VERSION="${{ inputs.idf_version }}"
+          mkdir -p built_archives
+
+          LOG_FILE="built_archives/archive_${VERSION}_${PLATFORM}.log"
+          echo "▶️ Building IDF ${VERSION} for ${PLATFORM}..."
+
+          set -o pipefail
+          if $BINARY -c default --idf-version-override "${VERSION}" 2>&1 | tee "$LOG_FILE"; then
+            echo "build_ok=true" >> $GITHUB_OUTPUT
+          else
+            echo "build_ok=false" >> $GITHUB_OUTPUT
+            echo "::error::Build FAILED for ${VERSION} / ${PLATFORM}"
+          fi
+
+          if [ -f "build_summary.md" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🔨 Build Output" >> $GITHUB_STEP_SUMMARY
+            cat build_summary.md >> $GITHUB_STEP_SUMMARY
+          fi
+
+          for file in archive_v*.zst; do
+            [ -f "$file" ] || continue
+            NEW_NAME="archive_${VERSION}_${PLATFORM}.zst"
+            mv "$file" "built_archives/$NEW_NAME"
+            echo "✅ Built: built_archives/$NEW_NAME"
+          done
+
+          if [ -z "$(ls built_archives/*.zst 2>/dev/null)" ]; then
+            echo "::error::No .zst archive produced!"
+            echo "build_ok=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+
+      # ── Upload ─────────────────────────────────────────────────────────────
+      - name: Upload to S3 — Unix
+        if: runner.os != 'Windows'
+        id: upload_unix
+        shell: bash
+        env:
+          S3_PREFIX: ${{ inputs.debug == 'true' && 'debug/' || '' }}
+        run: |
+          PLATFORM="${{ matrix.package_name }}"
+          VERSION="${{ inputs.idf_version }}"
+          archive=$(ls built_archives/*.zst | head -1)
+          FILENAME=$(basename "$archive")
+          JSON_FILENAME="${S3_PREFIX}${FILENAME}"
+
+          SIZE=$([ "${{ runner.os }}" = "macOS" ] && stat -f %z "$archive" || stat -c %s "$archive")
+
+          echo "☁️ Uploading ${FILENAME} ($(numfmt --to=iec $SIZE)) to s3://espdldata/dl/eim/${S3_PREFIX}"
+
+          aws s3 cp --acl=public-read --content-type="application/zstd" \
+            "$archive" "s3://espdldata/dl/eim/${S3_PREFIX}${FILENAME}"
+
+          LOG_FILE="${archive%.zst}.log"
+          if [ -f "$LOG_FILE" ]; then
+            aws s3 cp --acl=public-read --content-type="text/plain" \
+              "$LOG_FILE" "s3://espdldata/dl/eim/${S3_PREFIX}$(basename $LOG_FILE)"
+          fi
+
+          mkdir -p build-info
+          jq -n \
+            --arg version  "$VERSION" \
+            --arg platform "$PLATFORM" \
+            --arg filename "$JSON_FILENAME" \
+            --argjson size "$SIZE" \
+            '{"version":$version,"platform":$platform,"filename":$filename,"size":$size,"status":"success"}' \
+            > build-info/build-info.json
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### ☁️ Upload" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| File | \`${JSON_FILENAME}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | $(numfmt --to=iec $SIZE) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload to S3 — Windows
+        if: runner.os == 'Windows'
+        id: upload_windows
+        shell: pwsh
+        env:
+          S3_PREFIX: ${{ inputs.debug == 'true' && 'debug/' || '' }}
+        run: |
+          $PLATFORM = "${{ matrix.package_name }}"
+          $VERSION  = "${{ inputs.idf_version }}"
+          $archive  = Get-ChildItem "built_archives/*.zst" | Select-Object -First 1
+          if (-not $archive) { Write-Error "No archive found!"; exit 1 }
+
+          $FILENAME    = $archive.Name
+          $SIZE        = $archive.Length
+          $Prefix      = "${{ env.S3_PREFIX }}"
+          $JsonFilename = "$Prefix$FILENAME"
+
+          Write-Host "☁️ Uploading $FILENAME ($([math]::Round($SIZE/1MB, 1)) MB)"
+
+          aws s3 cp --acl=public-read --content-type="application/zstd" `
+            "$($archive.FullName)" "s3://espdldata/dl/eim/$Prefix$FILENAME"
+
+          $LogFile = "$($archive.DirectoryName)\$($archive.BaseName).log"
+          if (Test-Path $LogFile) {
+            aws s3 cp --acl=public-read --content-type="text/plain" `
+              "$LogFile" "s3://espdldata/dl/eim/$Prefix$(Split-Path $LogFile -Leaf)"
+          }
+
+          New-Item -ItemType Directory -Path "build-info" -Force | Out-Null
+          @{
+            version  = $VERSION
+            platform = $PLATFORM
+            filename = $JsonFilename
+            size     = $SIZE
+            status   = "success"
+          } | ConvertTo-Json | Out-File "build-info/build-info.json" -Encoding UTF8
+
+      # Write failure build-info so the dashboard can count it
+      - name: Write failure build-info
+        if: failure() || steps.build.outputs.build_ok == 'false'
+        shell: bash
+        run: |
+          mkdir -p build-info
+          jq -n \
+            --arg version  "${{ inputs.idf_version }}" \
+            --arg platform "${{ matrix.package_name }}" \
+            '{"version":$version,"platform":$platform,"filename":null,"size":0,"status":"failure"}' \
+            > build-info/build-info.json
+
+      - name: Save build-info artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ inputs.idf_version }}-${{ matrix.package_name }}
+          path: build-info/
+          retention-days: 7
+
+      - name: Save build log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ inputs.idf_version }}-${{ matrix.package_name }}
+          path: built_archives/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # Per-version summary — aggregates platform results, outputs version_status
+  # ──────────────────────────────────────────────────────────────────────────
+  version-summary:
+    name: "📊 Summary — IDF ${{ inputs.idf_version }}"
+    needs: build-and-upload
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      version_status: ${{ steps.aggregate.outputs.version_status }}
+      build_results:  ${{ steps.aggregate.outputs.build_results }}
+
+    steps:
+      - name: Download all build-infos for this version
+        uses: actions/download-artifact@v4
+        with:
+          pattern: build-info-${{ inputs.idf_version }}-*
+          path: ./build-infos/
+          merge-multiple: true
+
+      - name: Aggregate results
+        id: aggregate
+        shell: bash
+        run: |
+          # Slurp all build-info.json files in one jq call — avoids iterative
+          # string-building which corrupts JSON when files contain newlines.
+          RESULTS=$(find build-infos -name "build-info.json" -type f \
+            | sort \
+            | xargs cat \
+            | jq -sc '.')
+
+          SUCCESS=$(echo "$RESULTS" | jq '[.[] | select(.status == "success")] | length')
+          FAILURE=$(echo "$RESULTS" | jq '[.[] | select(.status != "success")] | length')
+          TOTAL=$((SUCCESS+FAILURE))
+
+          if   [ "$FAILURE" -eq 0 ]; then STATUS="success"
+          elif [ "$SUCCESS" -eq 0 ]; then STATUS="failure"
+          else                            STATUS="partial"
+          fi
+
+          echo "version_status=$STATUS" >> $GITHUB_OUTPUT
+          echo "build_results=$(echo "$RESULTS" | jq -c '.')" >> $GITHUB_OUTPUT
+
+          # ── Step Summary ────────────────────────────────────────────────
+          echo "## 📦 IDF ${{ inputs.idf_version }} — Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          case "$STATUS" in
+            success) echo "**Overall: ✅ All $TOTAL platforms succeeded**" >> $GITHUB_STEP_SUMMARY ;;
+            partial) echo "**Overall: ⚠️ $SUCCESS/$TOTAL platforms succeeded**" >> $GITHUB_STEP_SUMMARY ;;
+            failure) echo "**Overall: ❌ All $TOTAL platforms failed**" >> $GITHUB_STEP_SUMMARY ;;
+          esac
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Platform | Status | Size | Filename |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|--------|------|----------|" >> $GITHUB_STEP_SUMMARY
+
+          echo "$RESULTS" | jq -r '.[] |
+            "| `\(.platform)` | \(if .status == "success" then "✅ Success" else "❌ Failed" end) | \(if .size > 0 then (.size / 1048576 | floor | tostring) + " MB" else "—" end) | \(if .filename then "`\(.filename)`" else "—" end) |"
+          ' >> $GITHUB_STEP_SUMMARY
