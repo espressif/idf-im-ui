@@ -1,9 +1,10 @@
 use anyhow::{anyhow, Context, Result};
-use std::{collections::HashSet, env, fs};
+use std::{collections::HashSet, env, fs, path::PathBuf};
 
 use log::{debug, trace, warn};
+use serde_json;
 
-use crate::{command_executor, utils::find_by_name_and_extension};
+use crate::{command_executor, decompress_archive, download_file_and_rename, utils::find_by_name_and_extension};
 
 pub const PYTHON_NAME_TO_INSTALL: &str = "python313";
 
@@ -553,12 +554,10 @@ fn check_tools_with_package_manager(
         }
         "windows" => {
             for tool in list_of_required_tools {
-                let current_path = std::env::var("PATH").unwrap_or_default();
-                let system_path = format!("{};{}", get_scoop_path().unwrap(), current_path);
-                let output = command_executor::execute_command_with_env(
+                // First try using where.exe which searches PATH
+                let output = command_executor::execute_command(
                     "powershell",
-                    &vec!["-Command", &format!("{} --version", tool)],
-                    vec![("PATH", &system_path)],
+                    &vec!["-Command", &format!("where.exe {} 2>$null; if ($LASTEXITCODE -ne 0) {{ Get-Command {} -ErrorAction SilentlyContinue }}", tool, tool)],
                 );
                 match output {
                     Ok(o) => {
@@ -641,140 +640,530 @@ pub fn check_qemu_prerequisites() -> Result<Vec<&'static str>, String> {
     check_tools_installed(list_of_qemu_tools)
 }
 
-/// Returns the path to the Scoop shims directory.
-/// This function is only relevant for Windows systems.
+
+fn add_to_registry_path(new_entry: &PathBuf) -> anyhow::Result<()> {
+    if std::env::consts::OS != "windows" {
+        return Ok(());
+    }
+
+    let new_str = new_entry.to_string_lossy().to_string();
+    // Escape single quotes for PowerShell
+    let escaped = new_str.replace('\'', "''");
+
+    let ps_script = format!(
+        r#"
+$newDir = '{escaped}'
+$oldPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
+if ($null -eq $oldPath) {{ $oldPath = '' }}
+$parts = $oldPath.Split(';') | Where-Object {{ $_ -ne '' }}
+$exists = $false
+foreach ($p in $parts) {{
+    if ($p.TrimEnd('\').Equals($newDir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {{
+        $exists = $true
+        break
+    }}
+}}
+if (-not $exists) {{
+    if ($oldPath -eq '') {{
+        $newPath = $newDir
+    }} else {{
+        $newPath = $newDir + ';' + $oldPath
+    }}
+    [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
+    Write-Host "Added: $newDir"
+}} else {{
+    Write-Host "Already present: $newDir"
+}}
+"#
+    );
+
+    let executor = command_executor::get_executor();
+    let output = executor
+        .run_script_from_string(&ps_script)
+        .map_err(|e| anyhow!("PowerShell failed: {}", e))?;
+
+    if !output.status.success() {
+        return Err(anyhow!(
+            "Registry PATH update failed: {} {}",
+            String::from_utf8_lossy(&output.stderr),
+            String::from_utf8_lossy(&output.stdout)
+        ));
+    }
+    Ok(())
+}
+
+/// Adds git/bin and git/cmd directories to the current process PATH and user registry PATH.
+///
+/// This function makes git accessible in the current session and persists the change
+/// across sessions by writing to the Windows registry.
+///
+/// # Arguments
+///
+/// * `git_dir` - A PathBuf pointing to the Git installation directory (containing bin/ and cmd/ subdirectories)
 ///
 /// # Returns
 ///
-/// * `Some(String)` - If the function is executed on a Windows system and the Scoop shims directory is found,
-///   the function returns the path to the Scoop shims directory.
-/// * `None` - If the function is executed on a non-Windows system or if the Scoop shims directory cannot be found,
-///   the function returns None.
-pub fn get_scoop_path() -> Option<String> {
-    if std::env::consts::OS == "windows" {
-        let home_dir = match dirs::home_dir() {
-            Some(d) => d,
-            None => {
-                debug!("Could not get home directory");
-                return None;
-            }
-        };
-        let scoop_shims_path = home_dir.join("scoop").join("shims");
-        Some(scoop_shims_path.to_string_lossy().to_string())
-    } else {
-        None
-    }
-}
-
-/// Returns the path to the Scoop Git binary directory.
-pub fn get_scoop_git_path() -> Option<String> {
-    if std::env::consts::OS == "windows" {
-        let home_dir = match dirs::home_dir() {
-            Some(d) => d,
-            None => {
-                debug!("Could not get home directory");
-                return None;
-            }
-        };
-        let scoop_git_path = home_dir.join("scoop").join("apps").join("git").join("current").join("bin");
-        Some(scoop_git_path.to_string_lossy().to_string())
-    } else {
-        None
-    }
-}
-
-/// Installs the Scoop package manager on Windows.
-///
-/// This function is only relevant for Windows systems. It sets the execution policy to RemoteSigned,
-/// downloads the Scoop installer script from the official website, and executes it.
-///
-/// # Returns
-///
-/// * `Ok(())` - If the Scoop package manager is successfully installed.
-/// * `Err(String)` - If an error occurs during the installation process.
-fn install_scoop_package_manager() -> Result<(), String> {
+/// * `Ok(())` - If git was added to PATH successfully
+/// * `Err(anyhow::Error)` - If an error occurs
+fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
     match std::env::consts::OS {
         "windows" => {
-            match get_scoop_path() {
-                Some(s) => add_to_path(&s).unwrap(),
-                None => {
-                    debug!("Could not get scoop path");
-                    return Err(String::from("Could not get scoop path"));
-                }
-            };
-            match get_scoop_git_path() {
-                Some(s) => add_to_path(&s).unwrap(),
-                None => {
-                    debug!("Could not get scoop git path");
-                    "".to_string()
-                }
-            };
+            let git_bin = git_dir.join("bin");
+            let git_cmd = git_dir.join("cmd"); // git.exe lives here
 
-            let scoop_install_cmd = include_str!("../../powershell_scripts/install_scoop.ps1");
-            let output = crate::run_powershell_script(scoop_install_cmd);
+            // For current process only (immediate effect):
+            let current_path = std::env::var("PATH").unwrap_or_default();
+            let new_path = format!("{};{};{}", git_cmd.display(), git_bin.display(), current_path);
+            std::env::set_var("PATH", &new_path);
+            debug!("Updated current process PATH with git: {}", new_path);
 
-            match output {
-                Ok(o) => {
-                    trace!("output: {}", o);
-                    debug!("Successfully installed Scoop package manager. Adding to PATH");
-
-                    Ok(())
-                }
-                Err(e) => Err(e.to_string()),
+            // For persistence across sessions — write to HKCU (no admin required):
+            if let Err(e) = add_to_registry_path(&git_cmd) {
+                debug!("Failed to add git_cmd to registry: {}", e);
             }
+            if let Err(e) = add_to_registry_path(&git_bin) {
+                debug!("Failed to add git_bin to registry: {}", e);
+            }
+
+            Ok(())
         }
         _ => {
-            // this function should not be called on non-windows platforms
-            debug!("Scoop package manager is only supported on Windows. Skipping installation.");
-            Err(format!("Unsupported OS - {}", std::env::consts::OS))
+            // On non-Windows, git is typically installed via package manager
+            debug!("Git PATH modification not needed on {}", std::env::consts::OS);
+            Ok(())
         }
     }
 }
 
-/// Ensures that the Scoop package manager is installed on Windows.
+/// Fetches the download URL for the latest Git for Windows tar.bz2 archive.
 ///
-/// This function checks if the Scoop package manager is installed on the system.
-/// If it is not installed, the function installs it by setting the execution policy to RemoteSigned,
-/// downloading the Scoop installer script from the official website, and executing it.
+/// This function queries the GitHub API to find the latest release of git-for-windows/git
+/// and extracts the URL for the tar.bz2 archive matching the current system architecture.
 ///
 /// # Returns
 ///
-/// * `Ok(())` - If the Scoop package manager is successfully installed.
-/// * `Err(String)` - If an error occurs during the installation process.
-pub fn ensure_scoop_package_manager() -> Result<(), String> {
+/// * `Ok((String, String))` - A tuple of (url, filename) for the latest Git archive.
+/// * `Err(anyhow::Error)` - If an error occurs during the HTTP request or parsing.
+pub async fn get_latest_git_for_windows_url() -> anyhow::Result<(String, String)> {
+    const API_URL: &str = "https://api.github.com/repos/git-for-windows/git/releases/latest";
+
+    // Determine architecture suffix based on system architecture
+    let arch_suffix = match std::env::consts::ARCH {
+        "x86_64" => "64-bit",
+        "aarch64" | "arm64" => "arm64",
+        arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
+    };
+
+    let client = reqwest::Client::builder()
+        .user_agent("esp-idf-installer")
+        .build()?;
+
+    let response = client.get(API_URL).send().await?;
+    let json: serde_json::Value = response.json().await?;
+
+    let assets = json["assets"]
+        .as_array()
+        .ok_or_else(|| anyhow!("No assets found in GitHub release response"))?;
+
+    // Look for Git-X.Y.Z-arch.tar.bz2 pattern matching our architecture
+    for asset in assets {
+        let name = asset["name"].as_str().unwrap_or("");
+        let browser_download_url = asset["browser_download_url"].as_str().unwrap_or("");
+
+        if name.starts_with("Git-") && name.ends_with(".tar.bz2") && name.contains(arch_suffix) {
+            debug!("Found latest Git for Windows: {}", name);
+            return Ok((browser_download_url.to_string(), name.to_string()));
+        }
+    }
+
+    Err(anyhow!(
+        "Could not find Git tar.bz2 asset for architecture '{}' in latest Git for Windows release",
+        arch_suffix
+    ))
+}
+
+/// Downloads Git for Windows from the official portable distribution.
+///
+/// This function fetches the latest release URL and downloads the portable archive.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Git should be downloaded
+/// * `progress_sender` - Optional channel sender for download progress updates
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the downloaded Git archive
+/// * `Err(anyhow::Error)` - If an error occurs during download
+pub async fn download_git(
+    tools_dir: PathBuf,
+    progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
+) -> anyhow::Result<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            let path_with_scoop = match get_scoop_path() {
-                Some(s) => s,
-                None => {
-                    debug!("Could not get scoop path");
-                    return Err(String::from("Could not get scoop path"));
-                }
-            };
-            add_to_path(&path_with_scoop).unwrap();
+            let (git_url, git_filename) = get_latest_git_for_windows_url().await?;
+            debug!("Downloading Git from {}", git_url);
 
-            let executor = command_executor::get_executor();
-            let output = executor.run_script_from_string("if (Get-Command scoop -ErrorAction SilentlyContinue) { exit 0 } else { exit 1 }");
-            match output {
-                Ok(o) => {
-                    let stdout = String::from_utf8_lossy(&o.stdout);
-                    debug!("scoop check stdout: {}", stdout);
-                    debug!("scoop check status: {}", o.status);
+            // Download git portable archive
+            download_file_and_rename(
+                &git_url,
+                &tools_dir.to_string_lossy(),
+                progress_sender,
+                Some(&git_filename),
+                3,
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to download Git: {}", e))?;
 
-                    if o.status.success() {
-                        debug!("Scoop package manager is already installed");
-                        Ok(())
-                    } else {
-                        debug!("Installing scoop package manager");
-                        install_scoop_package_manager()
-                    }
-                }
-                Err(_) => install_scoop_package_manager(),
-            }
+            let git_downloaded_path = tools_dir.join(&git_filename);
+            debug!("Git downloaded to {}", git_downloaded_path.display());
+            Ok(git_downloaded_path)
         }
         _ => {
-            debug!("Scoop package manager is only supported on Windows. Skipping installation.");
-            Err(format!("Unsupported OS - {}", std::env::consts::OS))
+            Err(anyhow!("download_git is only supported on Windows"))
+        }
+    }
+}
+
+/// Installs Git from a previously downloaded archive.
+///
+/// This function extracts the Git portable archive to the tools directory
+/// and adds it to the system PATH.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Git should be installed
+/// * `git_archive_path` - Optional path to the downloaded Git archive. If None, looks in tools_dir
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the installed Git directory
+/// * `Err(anyhow::Error)` - If an error occurs during extraction
+pub async fn install_git_from_downloaded(
+    tools_dir: PathBuf,
+    git_archive_path: Option<PathBuf>,
+) -> anyhow::Result<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            // Find the downloaded archive by looking for .tar.bz2 files
+            let git_archive = if let Some(path) = git_archive_path {
+                path
+            } else {
+                // Look for the archive in tools_dir
+                let found = find_by_name_and_extension(&tools_dir, "git", "tar.bz2");
+                found.first().ok_or_else(|| {
+                    anyhow!("Git archive not found in {}. Expected file ending with .tar.bz2", tools_dir.display())
+                })?.clone().into()
+            };
+
+            debug!("Extracting Git archive at {}", git_archive.display());
+
+            // Extract the archive
+            decompress_archive(
+                &git_archive.to_string_lossy(),
+                &tools_dir.join("git").to_string_lossy(),
+            )
+            .map_err(|e| anyhow!("Failed to extract Git archive: {}", e))?;
+
+            let expected_git = tools_dir.join("git").join("bin").join("git.exe");
+            // Find the actual Git directory (the archive extracts to a subdirectory like Git-2.54.0-64-bit/)
+            let git_install_dir = if expected_git.exists() {
+                tools_dir.join("git")
+            } else {
+                find_git_install_dir(&tools_dir)?.parent().unwrap().to_path_buf()
+            };
+
+            add_git_to_path(&git_install_dir)?;
+
+            // Clean up the archive only after successful installation
+            let _ = std::fs::remove_file(&git_archive);
+
+            debug!("Git installed successfully at {}", git_install_dir.display());
+            Ok(git_install_dir)
+        }
+        _ => {
+            Err(anyhow!("install_git_from_downloaded is only supported on Windows"))
+        }
+    }
+}
+
+/// Installs Git for Windows from the official portable distribution.
+///
+/// This function downloads the Git portable executable, runs it silently with installation flags,
+/// and adds it to the system PATH. The installation is performed in the specified tools directory.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Git should be installed
+/// * `progress_sender` - Optional channel sender for download progress updates
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the installed Git directory
+/// * `Err(anyhow::Error)` - If an error occurs during download or installation
+pub async fn install_git(
+    tools_dir: PathBuf,
+    progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
+) -> anyhow::Result<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            let git_exe = download_git(tools_dir.clone(), progress_sender).await?;
+            install_git_from_downloaded(tools_dir, Some(git_exe)).await
+        }
+        _ => {
+            Err(anyhow!("install_git is only supported on Windows"))
+        }
+    }
+}
+
+/// Downloads Python from the official standalone distribution for Windows.
+///
+/// This function downloads the Python standalone archive to the specified tools directory.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Python should be downloaded
+/// * `progress_sender` - Optional channel sender for download progress updates
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the downloaded Python archive
+/// * `Err(anyhow::Error)` - If an error occurs during download
+pub async fn download_python(
+    tools_dir: PathBuf,
+    progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
+) -> anyhow::Result<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            const PYTHON_URL: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
+
+            const PYTHON_FILENAME: &str = "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
+
+            debug!("Downloading Python from {}", PYTHON_URL);
+
+            // Download python archive
+            download_file_and_rename(
+                PYTHON_URL,
+                &tools_dir.to_string_lossy(),
+                progress_sender,
+                Some(PYTHON_FILENAME),
+                3,
+            )
+            .await
+            .map_err(|e| anyhow!("Failed to download Python: {}", e))?;
+
+            let python_archive_path = tools_dir.join(PYTHON_FILENAME);
+            debug!("Python downloaded to {}", python_archive_path.display());
+            Ok(python_archive_path)
+        }
+        _ => {
+            Err(anyhow!("download_python is only supported on Windows"))
+        }
+    }
+}
+
+/// Installs Python from a previously downloaded archive.
+///
+/// This function extracts the Python archive to the tools directory and adds it to the system PATH.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Python should be installed
+/// * `python_archive_path` - Optional path to the downloaded Python archive. If None, looks in tools_dir
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the installed Python directory
+/// * `Err(anyhow::Error)` - If an error occurs during extraction
+pub async fn install_python_from_downloaded(
+    tools_dir: PathBuf,
+    python_archive_path: Option<PathBuf>,
+) -> anyhow::Result<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            const PYTHON_FILENAME: &str = "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
+
+            let python_archive = python_archive_path.unwrap_or_else(|| tools_dir.join(PYTHON_FILENAME));
+
+            debug!("Extracting Python to {}", tools_dir.display());
+
+            // Extract the archive
+            decompress_archive(
+                &python_archive.to_string_lossy(),
+                &tools_dir.to_string_lossy(),
+            )
+            .map_err(|e| anyhow!("Failed to extract Python archive: {}", e))?;
+
+            // Clean up the archive
+            let _ = std::fs::remove_file(&python_archive);
+
+            // Find the actual Python directory (the archive extracts to a subdirectory like python3.11)
+            let python_install_dir = find_python_install_dir(&tools_dir)?;
+
+            // Add python to PATH
+            add_python_to_path(&python_install_dir)?;
+
+            debug!("Python installed successfully at {}", python_install_dir.display());
+            Ok(python_install_dir)
+        }
+        _ => {
+            Err(anyhow!("install_python_from_downloaded is only supported on Windows"))
+        }
+    }
+}
+
+/// Finds the Python installation directory by looking for python.exe in subdirectories.
+///
+/// The Python standalone archive extracts to a structure like:
+/// tools_dir/
+///   └── python3.11/
+///       └── python.exe
+///
+/// This function finds that actual directory using find_by_name_and_extension.
+/// Returns an error if python.exe is not found, or if it's found directly in tools_dir
+/// (not in a subdirectory) which would indicate an unexpected extraction pattern.
+fn find_python_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    // Look for python.exe in subdirectories of tools_dir
+    let found = find_by_name_and_extension(tools_dir, "python", "exe");
+
+    if let Some(python_exe_path) = found.first() {
+        let python_exe = PathBuf::from(python_exe_path);
+        let python_dir = python_exe
+            .parent()
+            .map(|p| p.to_path_buf())
+            .ok_or_else(|| anyhow!("Failed to get parent directory of python.exe"))?;
+
+        // python.exe should NOT be directly in tools_dir - it should be in a subdirectory
+        if python_dir == *tools_dir {
+            return Err(anyhow!(
+                "python.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
+                tools_dir.display()
+            ));
+        }
+
+        debug!("Found Python installation at: {}", python_dir.display());
+        Ok(python_dir)
+    } else {
+        Err(anyhow!("python.exe not found in {}. Python installation may have failed.", tools_dir.display()))
+    }
+}
+
+/// Finds the Git installation directory by looking for git.exe in subdirectories.
+///
+/// The Git portable archive extracts to a structure like:
+/// tools_dir/
+///   └── PortableGit-xxxx.xxx/
+///       └── bin\git.exe
+///
+/// This function finds that actual directory using find_by_name_and_extension.
+/// Returns an error if git.exe is not found, or if it's found directly in tools_dir
+/// (not in a subdirectory) which would indicate an unexpected extraction pattern.
+fn find_git_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
+    // Look for git.exe in subdirectories of tools_dir
+    let found = find_by_name_and_extension(tools_dir, "git", "exe");
+
+    if let Some(git_exe_path) = found.first() {
+        let git_exe = PathBuf::from(git_exe_path);
+        let git_dir = git_exe
+            .parent()
+            .map(|p| p.to_path_buf())
+            .ok_or_else(|| anyhow!("Failed to get parent directory of git.exe"))?;
+
+        // git.exe should NOT be directly in tools_dir - it should be in a subdirectory
+        if git_dir == *tools_dir {
+            return Err(anyhow!(
+                "git.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
+                tools_dir.display()
+            ));
+        }
+
+        debug!("Found Git installation at: {}", git_dir.display());
+        Ok(git_dir)
+    } else {
+        Err(anyhow!("git.exe not found in {}. Git installation may have failed.", tools_dir.display()))
+    }
+}
+
+/// Installs Python from the official standalone distribution for Windows.
+///
+/// This function downloads the Python standalone archive, extracts it to the tools directory,
+/// and adds it to the system PATH. The installation is performed in the specified tools directory.
+///
+/// # Arguments
+///
+/// * `tools_dir` - A PathBuf pointing to the directory where Python should be installed
+/// * `progress_sender` - Optional channel sender for download progress updates
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The path to the installed Python directory
+/// * `Err(anyhow::Error)` - If an error occurs during download or extraction
+pub async fn install_python(
+    tools_dir: PathBuf,
+    progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
+) -> anyhow::Result<PathBuf> {
+    match std::env::consts::OS {
+        "windows" => {
+            let python_archive = download_python(tools_dir.clone(), progress_sender).await?;
+            install_python_from_downloaded(tools_dir, Some(python_archive)).await
+        }
+        _ => {
+            Err(anyhow!("install_python is only supported on Windows"))
+        }
+    }
+}
+
+/// Adds Python directories to the current process PATH and user registry PATH.
+///
+/// This function makes python accessible in the current session and persists the change
+/// across sessions by writing to the Windows registry.
+///
+/// # Arguments
+///
+/// * `python_dir` - A PathBuf pointing to the Python installation directory (containing Scripts/ and PCBuild/ etc.)
+///
+/// # Returns
+///
+/// * `Ok(())` - If Python was added to PATH successfully
+/// * `Err(anyhow::Error)` - If an error occurs
+fn add_python_to_path(python_dir: &PathBuf) -> anyhow::Result<()> {
+    match std::env::consts::OS {
+        "windows" => {
+            // For Python standalone builds, we need to add:
+            // - The root directory (contains python.exe)
+            // - Scripts directory if it exists (contains pip.exe)
+
+            let current_path = std::env::var("PATH").unwrap_or_default();
+
+            // Add root directory to PATH for python.exe
+            let new_path = format!("{};{}", python_dir.display(), current_path);
+            std::env::set_var("PATH", &new_path);
+            debug!("Updated current process PATH with python: {}", new_path);
+
+            // Only add Scripts directory if it actually exists
+            let scripts_dir = python_dir.join("Scripts");
+            if scripts_dir.exists() {
+                let new_path_with_scripts = format!("{};{};{}", scripts_dir.display(), python_dir.display(), current_path);
+                std::env::set_var("PATH", &new_path_with_scripts);
+                debug!("Updated current process PATH with python Scripts: {}", new_path_with_scripts);
+                if let Err(e) = add_to_registry_path(&scripts_dir) {
+                    debug!("Failed to add Scripts to registry: {}", e);
+                }
+            } else {
+                debug!("Scripts directory does not exist, skipping: {}", scripts_dir.display());
+            }
+
+            // Add the root directory for persistence
+            if let Err(e) = add_to_registry_path(python_dir) {
+                debug!("Failed to add python_dir to registry: {}", e);
+            }
+
+            Ok(())
+        }
+        _ => {
+            // On non-Windows, Python is typically installed via package manager
+            debug!("Python PATH modification not needed on {}", std::env::consts::OS);
+            Ok(())
         }
     }
 }
@@ -787,22 +1176,29 @@ pub fn ensure_scoop_package_manager() -> Result<(), String> {
 ///
 /// * `packages_list` - A vector of strings representing the names of the packages to be installed.
 ///   this can be obtained by calling the check_prerequisites() function.
+/// * `tools_dir` - A PathBuf pointing to the directory where tools (git, python) should be installed.
+///   On Windows, this is typically the tools directory in the user's home folder.
 ///
 /// # Returns
 ///
 /// * `Ok(())` - If the packages are successfully installed.
 /// * `Err(String)` - If an error occurs during the installation process.
-pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
+pub async fn install_prerequisites(packages_list: Vec<String>, tools_dir: PathBuf) -> Result<(), String> {
     match std::env::consts::OS {
         "linux" => {
             let package_manager = determine_package_manager();
             match package_manager {
                 Some("apt") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command_direct(
-                            "sudo",
-                            &["apt", "install", "-y", &package],
-                        );
+                        let pkg = package.to_string();
+                        let output = tokio::task::spawn_blocking(move || {
+                            command_executor::execute_command_direct(
+                                "sudo",
+                                &["apt", "install", "-y", &pkg],
+                            )
+                        })
+                        .await
+                        .map_err(|e| format!("Task join error: {}", e))?;
                         match output {
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
@@ -813,10 +1209,15 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("dnf") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command_direct(
-                            "sudo",
-                            &["dnf", "install", "-y", &package],
-                        );
+                        let pkg = package.to_string();
+                        let output = tokio::task::spawn_blocking(move || {
+                            command_executor::execute_command_direct(
+                                "sudo",
+                                &["dnf", "install", "-y", &pkg],
+                            )
+                        })
+                        .await
+                        .map_err(|e| format!("Task join error: {}", e))?;
                         match output {
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
@@ -827,10 +1228,15 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("pacman") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command_direct(
-                            "sudo",
-                            &["pacman", "-S", "--noconfirm", &package],
-                        );
+                        let pkg = package.to_string();
+                        let output = tokio::task::spawn_blocking(move || {
+                            command_executor::execute_command_direct(
+                                "sudo",
+                                &["pacman", "-S", "--noconfirm", &pkg],
+                            )
+                        })
+                        .await
+                        .map_err(|e| format!("Task join error: {}", e))?;
                         match output {
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
@@ -841,10 +1247,15 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
                 }
                 Some("zypper") => {
                     for package in packages_list {
-                        let output = command_executor::execute_command_direct(
-                            "sudo",
-                            &["zypper", "install", "-y", &package],
-                        );
+                        let pkg = package.to_string();
+                        let output = tokio::task::spawn_blocking(move || {
+                            command_executor::execute_command_direct(
+                                "sudo",
+                                &["zypper", "install", "-y", &pkg],
+                            )
+                        })
+                        .await
+                        .map_err(|e| format!("Task join error: {}", e))?;
                         match output {
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
@@ -862,7 +1273,12 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
         }
         "macos" => {
             for package in packages_list {
-                let output = command_executor::execute_command_direct("brew", &["install", &package]);
+                let pkg = package.to_string();
+                let output = tokio::task::spawn_blocking(move || {
+                    command_executor::execute_command_direct("brew", &["install", &pkg])
+                })
+                .await
+                .map_err(|e| format!("Task join error: {}", e))?;
                 match output {
                     Ok(_) => {
                         debug!("Successfully installed {}", package);
@@ -872,67 +1288,36 @@ pub fn install_prerequisites(packages_list: Vec<String>) -> Result<(), String> {
             }
         }
         "windows" => {
-            ensure_scoop_package_manager()?;
+            // Ensure tools directory exists
+            if !tools_dir.exists() {
+                std::fs::create_dir_all(&tools_dir)
+                    .map_err(|e| format!("Failed to create tools directory: {}", e))?;
+            }
 
             for package in packages_list {
-                let scoop_shims = match get_scoop_path() {
-                    Some(s) => s,
-                    None => {
-                        debug!("Could not get scoop path");
-                        return Err(String::from("Could not get scoop path"));
-                    }
-                };
-                let scoop_git = get_scoop_git_path().unwrap_or_default();
-
-                let current_path = std::env::var("PATH").unwrap_or_default();
-                let full_path = format!("{};{};{}", scoop_shims, scoop_git, current_path);
-                let scoop_exe = format!("{}\\scoop.cmd", scoop_shims);
-
-                debug!("Installing {} with scoop: {}", package, scoop_exe);
-
-                // Add versions bucket
-                let output = command_executor::execute_command_with_env(
-                    &scoop_exe,
-                    &vec!["bucket", "add", "versions"],
-                    vec![("PATH", &full_path)],
-                );
-                match output {
-                    Ok(o) => {
-                        if o.status.success() {
-                            debug!("Successfully added versions bucket to scoop");
-                        } else {
-                            let stderr = String::from_utf8_lossy(&o.stderr);
-                            let stdout = String::from_utf8_lossy(&o.stdout);
-                            debug!("Failed to add versions bucket to scoop: {} {}", stderr, stdout);
+                if package.starts_with("python") {
+                    match install_python(tools_dir.clone(), None).await {
+                        Ok(install_path) => {
+                            debug!("Successfully installed python to {:?}", install_path);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to install python: {}", e));
                         }
                     }
-                    Err(e) => {
-                        debug!("Failed to add versions bucket to scoop: {}", e);
-                    }
-                }
-
-                // Install package
-                let output = command_executor::execute_command_with_env(
-                    &scoop_exe,
-                    &vec!["install", &package],
-                    vec![("PATH", &full_path)],
-                );
-
-                match output {
-                    Ok(o) => {
-                        if o.status.success() {
-                            let stdout = String::from_utf8_lossy(&o.stdout);
-                            trace!("{}", stdout);
-                            debug!("Successfully installed {:?}", package);
-                        } else {
-                            let stdout = String::from_utf8_lossy(&o.stdout);
-                            let stderr = String::from_utf8_lossy(&o.stderr);
-                            debug!("Failed to install {}: {}", package, stderr);
-                            debug!("Output: {}", stdout);
-                            return Err(format!("Failed to install {}: {} {}", package, stderr, stdout));
+                } else if package == "git" {
+                    match install_git(tools_dir.clone(), None).await {
+                        Ok(install_path) => {
+                            debug!("Successfully installed git to {:?}", install_path);
+                        }
+                        Err(e) => {
+                            return Err(format!("Failed to install git: {}", e));
                         }
                     }
-                    Err(e) => panic!("Failed to install {}: {}", package, e),
+                } else {
+                    return Err(format!(
+                        "Unsupported package on Windows: '{}'. Only 'git' and 'python*' are supported.",
+                        package
+                    ));
                 }
             }
         }
@@ -963,8 +1348,13 @@ pub fn get_correct_powershell_command() -> String {
 
 /// Adds a new directory to the system's PATH environment variable.
 ///
-/// This function appends the new directory to the current PATH if it's not already present.
-/// On Windows systems, it also updates the user's PATH environment variable persistently.
+/// This function appends the new directory to the current process PATH if it's not
+/// already present. On Windows, it also persists the change to the user's registry
+/// PATH by delegating to `add_to_registry_path`, which broadcasts `WM_SETTINGCHANGE`
+/// so new processes pick up the change without requiring a logout.
+///
+/// Note: The currently-running terminal will not see the persisted change — only
+/// processes spawned *after* this call will inherit the updated PATH.
 ///
 /// # Parameters
 ///
@@ -972,55 +1362,53 @@ pub fn get_correct_powershell_command() -> String {
 ///
 /// # Returns
 ///
-/// * `Ok(String)` - Returns the updated PATH string if the operation is successful.
-/// * `Err(std::io::Error)` - Returns an IO error if the PATH update fails on Windows systems.
+/// * `Ok(String)` - The updated in-process PATH string if the operation is successful.
+/// * `Err(std::io::Error)` - If persisting the PATH to the registry fails on Windows.
 pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     let binding = env::var_os("PATH").unwrap_or_default();
-    let paths = binding.to_str().unwrap();
+    let paths = binding.to_string_lossy().to_string();
 
-    // Note: We wrap the path in quotes for Windows to handle spaces correctly.
-    let new_path_string = match std::env::consts::OS {
-        "windows" => format!("{};{}", new_path, paths),
-        _ => format!("{}:{}", new_path, paths),
+    let separator = if std::env::consts::OS == "windows" { ';' } else { ':' };
+
+    // Case-insensitive dedup on Windows, case-sensitive elsewhere.
+    let already_present = paths.split(separator).any(|p| {
+        let a = p.trim_end_matches(['/', '\\']);
+        let b = new_path.trim_end_matches(['/', '\\']);
+        if std::env::consts::OS == "windows" {
+            a.eq_ignore_ascii_case(b)
+        } else {
+            a == b
+        }
+    });
+
+    let new_path_string = if already_present {
+        paths.clone()
+    } else if paths.is_empty() {
+        new_path.to_string()
+    } else {
+        format!("{}{}{}", new_path, separator, paths)
     };
 
-    if !paths.contains(new_path) {
+    // Update the current process PATH so the change takes effect immediately
+    // for any child processes spawned from this one.
+    if !already_present {
         env::set_var("PATH", &new_path_string);
+        debug!("Added {} to current process PATH", new_path);
+    } else {
+        debug!("{} already in current process PATH, skipping", new_path);
     }
 
+    // Persist to the user registry on Windows (no admin required).
+    // This also broadcasts WM_SETTINGCHANGE so new processes see the update.
     if std::env::consts::OS == "windows" {
-        // Use simple PowerShell script that sets PATH without complex quoting
-        // The script handles paths with spaces by using proper string assignment
-        let ps_script = format!(
-            "$newDir = '{}'; $oldPath = [Environment]::GetEnvironmentVariable('PATH', 'User'); if ($null -eq $oldPath) {{ $oldPath = '' }}; if (-not $oldPath.Contains($newDir)) {{ $newPath = $newDir + ';' + $oldPath; [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User') }}",
-            new_path.replace("'", "''")
-        );
-
-        let executor = command_executor::get_executor();
-        let res = executor.run_script_from_string(&ps_script);
-
-        match res {
-            Ok(o) => {
-                if o.status.success() {
-                    debug!("Added {} to PATH", new_path);
-                } else {
-                    let stderr = String::from_utf8_lossy(&o.stderr);
-                    let stdout = String::from_utf8_lossy(&o.stdout);
-                    warn!("Failed to add {} to PATH: {} {}", new_path, stderr, stdout);
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("Failed to update PATH: {} {}", stderr, stdout),
-                    ));
-                }
-            }
-            Err(e) => {
-                warn!("Failed to add {} to PATH: {}", new_path, e);
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to update PATH: {}", e),
-                ));
-            }
-        }
+        let path_buf = PathBuf::from(new_path);
+        add_to_registry_path(&path_buf).map_err(|e| {
+            warn!("Failed to persist {} to registry PATH: {}", new_path, e);
+            std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to update registry PATH: {}", e),
+            )
+        })?;
     }
 
     Ok(new_path_string)

@@ -46,9 +46,10 @@ pub async fn select_idf_version(
     }
 }
 
-pub fn check_and_install_prerequisites(
+pub async fn check_and_install_prerequisites(
     non_interactive: bool,
     install_all_prerequisites: bool,
+    tools_dir: PathBuf,
 ) -> Result<(), String> {
     // Run the prerequisites check
     let check_result = if non_interactive {
@@ -111,7 +112,8 @@ pub fn check_and_install_prerequisites(
                     Ok(false)
                 };
                 if res.map_err(|e| e.to_string())? {
-                    system_dependencies::install_prerequisites(unsatisfied_prerequisites)
+                    system_dependencies::install_prerequisites(unsatisfied_prerequisites, tools_dir)
+                        .await
                         .map_err(|e| e.to_string())?;
 
                     // Re-check after installation to verify prerequisites were installed
@@ -180,11 +182,12 @@ fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String
         Err(t!("python.sanitycheck.fail").to_string())
     }
 }
-pub fn check_and_install_python(
+pub async fn check_and_install_python(
     non_interactive: bool,
     install_all_prerequisites: bool,
     python_version_override: Option<String>,
-    offline: bool
+    offline: bool,
+    tools_dir: PathBuf,
 ) -> Result<(), String> {
     info!("{}", t!("python.sanitycheck.info"));
     let check_result = if non_interactive {
@@ -205,20 +208,15 @@ pub fn check_and_install_python(
             };
 
             if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(vec![python_version_override.unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())])
+                system_dependencies::install_prerequisites(vec![python_version_override.unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())], tools_dir.clone())
+                    .await
                     .map_err(|e| e.to_string())?;
-                let scp = system_dependencies::get_scoop_path();
-                let usable_python = match scp {
-                    Some(path) => {
-                        let mut python_path = PathBuf::from(path);
-                        python_path.push("python3.exe");
-                        python_path
-                            .to_str()
-                            .map(|s| s.to_string())
-                            .ok_or_else(|| t!("error.path_to_string").to_string())?
-                    }
-                    None => "python3.exe".to_string(),
-                };
+                let usable_python = tools_dir
+                    .join("python")
+                    .join("python.exe")
+                    .to_str()
+                    .ok_or_else(|| t!("error.path_to_string").to_string())?
+                    .to_string();
                 debug!("{}", t!("debug.using_python", path = usable_python));
                 match run_with_spinner(|| python_sanity_check(Some(&usable_python), offline)) {
                     Ok(_) => info!("{}", t!("python.install.success")),

@@ -1,7 +1,7 @@
 use crate::{
     command_executor::{CommandExecutor, get_executor},
     idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file, single_version_post_install, system_dependencies::{get_scoop_git_path, get_scoop_path}, version_manager::get_default_config_path
+    idf_tools::read_and_parse_tools_file, single_version_post_install, version_manager::get_default_config_path
 };
 use anyhow::{anyhow, Result, Error};
 use log::{debug, error, info, warn};
@@ -123,8 +123,7 @@ impl Ord for MirrorEntry {
 /// # Purpose
 ///
 /// The function attempts to locate the git executable by:
-/// 1. Checking Scoop shims directory first on Windows (highest priority)
-/// 2. Searching the system PATH using appropriate commands via CommandExecutor
+/// 1. Searching the system PATH using appropriate commands via CommandExecutor
 ///
 /// # Return Value
 ///
@@ -135,32 +134,6 @@ pub fn get_git_path() -> Result<String, String> {
     let executor = get_executor();
 
     if std::env::consts::OS == "windows" {
-        // Scoop shims (highest priority) - check exact path first
-        if let Some(scoop_shims) = get_scoop_path() {
-            let scoop_git = std::path::PathBuf::from(&scoop_shims).join("git.exe");
-            if scoop_git.exists() {
-                let path_str = scoop_git.to_string_lossy().to_string();
-                if verify_git(&*executor, &path_str) {
-                    info!("Using Scoop git: {}", scoop_git.display());
-                    return Ok(path_str);
-                }
-            }
-        }
-
-        // Scoop shims (highest priority) - check exact path first
-        if let Some(scoop_bins) = get_scoop_git_path() {
-            let scoop_git = std::path::PathBuf::from(&scoop_bins).join("git.exe");
-            if scoop_git.exists() {
-                let path_str = scoop_git.to_string_lossy().to_string();
-                if verify_git(&*executor, &path_str) {
-                    info!("Using Scoop git: {}", scoop_git.display());
-                    return Ok(path_str);
-                }
-            }
-        }
-
-
-
         // Search PATH via `where` command
         match executor.execute("where", &["git"]) {
             Ok(output) if output.status.success() => {
@@ -279,13 +252,13 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
 /// Searches for files within a specified directory that match a given name and extension.
 ///
 /// This function constructs a search query using `SearchBuilder` to find files.
-/// The search is strict, case-insensitive, includes hidden files, and looks for
-/// an exact match for the file name and extension.
+/// The search is strict, case-insensitive, includes hidden files, and performs
+/// a substring match on the file name (the name must contain the given substring).
 ///
 /// # Arguments
 ///
 /// * `path` - A reference to a `Path` indicating the directory where the search should begin.
-/// * `name` - A string slice representing the exact name of the file to search for (without the extension).
+/// * `name` - A string slice representing a substring to match in the file name (without the extension).
 /// * `extension` - A string slice representing the exact extension of the file to search for (e.g., "txt", "rs").
 ///
 /// # Returns

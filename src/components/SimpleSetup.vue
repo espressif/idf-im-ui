@@ -137,19 +137,22 @@
           <template #footer>
             <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
+              <n-button v-if="pythonFailed && appStore.os === 'windows' && !isInstallingPython" @click="installPython" type="primary" size="large" data-id="install-python-button">
+                {{ $t('wizard.steps.python.installPython') }}
+              </n-button>
               <n-button v-if="verificationFailed && appStore.os === 'windows' && !isInstallingPrerequisites" @click="installPrerequisites" type="primary" size="large" data-id="install-prerequisites-button">
                 {{ $t('basicInstaller.prerequisites.installButton') }}
               </n-button>
               <n-button v-if="verificationFailed" :disabled="isInstallingPrerequisites" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites" @click="viewLogs" type="info" size="large">
+              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="viewLogs" type="info" size="large">
                 {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites" @click="retry" type="warning" size="large">
+              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="retry" type="warning" size="large">
                 {{ $t('simpleSetup.error.retry') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites" @click="useWizard" type="info" size="large">
+              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="useWizard" type="info" size="large">
                 {{ $t('simpleSetup.error.wizard') }}
               </n-button>
             </div>
@@ -168,6 +171,15 @@
       <div class="checking-status">
         <n-spin size="large" />
         <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
+        <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
+      </div>
+    </n-card>
+
+    <!-- Installing Python Loading State -->
+    <n-card v-if="isInstallingPython" class="status-card">
+      <div class="checking-status">
+        <n-spin size="large" />
+        <h2>{{ $t('basicInstaller.loading.installingPython') }}</h2>
         <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
       </div>
     </n-card>
@@ -251,6 +263,8 @@ export default {
     const errorDetails = ref('')
     const pythonCheckResults = ref([])
     const verificationFailed = ref(false)
+    const pythonFailed = ref(false)
+    const isInstallingPython = ref(false)
 
     // Helper function to fetch settings, versions, and validate installation path
     const prepareForInstallation = async () => {
@@ -365,26 +379,14 @@ export default {
         let results = await invoke("python_sanity_check", {});
         let python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
         if (!python_sane) {
-          if (appStore.os == 'windows') {
-            console.log("Python sanity check failed - attempting automatic installation");
-            try {
-              console.log("Installing Python...");
-              await invoke("python_install", {});
-              results = await invoke("python_sanity_check", {});
-              python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
-            } catch (error) {
-              console.error('Automatic Python installation failed:', error);
-              python_sane = false;
-            }
-          }
-          if (!python_sane) {
-            errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
-            errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
-            pythonCheckResults.value = Array.isArray(results) ? results : []
-            errorDetails.value = ''
-            currentState.value = 'error'
-            return false
-          }
+          // Python check failed - show error with install button
+          pythonFailed.value = true;
+          pythonCheckResults.value = Array.isArray(results) ? results : [];
+          errorTitle.value = t('simpleSetup.error.prerequisites.python.title');
+          errorMessage.value = t('simpleSetup.error.prerequisites.python.message');
+          errorDetails.value = '';
+          currentState.value = 'error';
+          return false;
         } else {
           console.log("Python sanity check passed");
         }
@@ -463,6 +465,62 @@ export default {
         if (unlistenFn) unlistenFn()
         isInstallingPrerequisites.value = false
         message.error(t('basicInstaller.messages.errors.prerequisites'))
+      }
+    }
+
+    const installPython = async () => {
+      try {
+        isInstallingPython.value = true;
+        pythonFailed.value = false;
+        message.info(t('basicInstaller.messages.installingPython'));
+
+        // Wait for python install to complete via event
+        const installResult = await new Promise(async (resolve) => {
+          let timeoutId = null;
+          const unlisten = await listen('python-install-complete', async (event) => {
+            console.log('Python install event received:', event.payload);
+            unlisten();
+            if (timeoutId) clearTimeout(timeoutId);
+            if (event.payload.success) {
+              // Re-check Python after installation
+              const newResults = await invoke("python_sanity_check", {});
+              const newPythonSane = Array.isArray(newResults) && newResults.length > 0 && newResults.every((r) => r.passed);
+              resolve({ success: event.payload.success, pythonSane: newPythonSane, results: newResults });
+            } else {
+              resolve({ success: false, pythonSane: false, results: [] });
+            }
+          });
+
+          // Timeout after 5 minutes
+          timeoutId = setTimeout(() => {
+            unlisten();
+            resolve({ success: false, pythonSane: false, results: [] });
+          }, 300000);
+
+          await invoke("python_install", {});
+        });
+
+        isInstallingPython.value = false;
+
+        if (installResult.pythonSane) {
+          // Python installed successfully, retry the full check
+          message.success(t('basicInstaller.messages.pythonInstalled'));
+          pythonFailed.value = false;
+          await checkPrerequisites(true);
+        } else {
+          // Python installation failed
+          pythonFailed.value = true;
+          pythonCheckResults.value = installResult.results;
+          errorTitle.value = t('simpleSetup.error.prerequisites.python.title');
+          errorMessage.value = t('simpleSetup.error.prerequisites.python.message');
+          errorDetails.value = '';
+          currentState.value = 'error';
+        }
+      } catch (error) {
+        console.error('Error installing Python:', error);
+        isInstallingPython.value = false;
+        pythonFailed.value = true;
+        message.error(t('basicInstaller.messages.errors.python'));
       }
     }
 
@@ -683,12 +741,15 @@ export default {
       errorDetails,
       pythonCheckResults,
       verificationFailed,
+      pythonFailed,
       isInstallingPrerequisites,
+      isInstallingPython,
       getStatusIcon,
       getStatusIconClass,
       getProgressColorScheme,
       startInstallation,
       installPrerequisites,
+      installPython,
       retry,
       skipAndContinue,
       viewLogs,

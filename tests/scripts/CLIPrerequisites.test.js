@@ -108,7 +108,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       if (os.platform() !== "win32") {
         this.skip();
       }
-      logger.info(`Starting test - installing git with scoop`);
+      logger.info(`Starting test - installing git`);
       await testRunner.waitForOutput(
         "Do you want to install prerequisites?",
         30000

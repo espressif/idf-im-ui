@@ -105,7 +105,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       if (os.platform() !== "win32") {
         this.skip();
       }
-      logger.info(`Starting test - installing python with scoop`);
+      logger.info(`Starting test - installing python`);
       await testRunner.waitForOutput(
         "Do you want to install Python?"
       );

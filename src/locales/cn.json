@@ -181,6 +181,7 @@
       "scanningArchives": "正在扫描离线存档...",
       "verifyingPaths": "正在验证安装路径...",
       "installingPrerequisites": "正在安装依赖项",
+      "installingPython": "正在安装 Python...",
       "pleaseWait": "请稍候，正在安装依赖项..."
     },
     "prerequisites": {
