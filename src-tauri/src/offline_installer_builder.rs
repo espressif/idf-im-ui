@@ -9,7 +9,7 @@ use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::system_dependencies::get_latest_git_for_windows_url;
 use idf_im_lib::utils::extract_zst_archive;
-use idf_im_lib::utils::{parse_cmake_version, find_by_name_and_extension};
+use idf_im_lib::utils::{parse_cmake_version};
 use idf_im_lib::verify_file_checksum;
 use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::git_tools::ProgressMessage;
@@ -757,14 +757,15 @@ async fn main() {
 
             let prereq_list = vec![
                 // Git - portable Windows distribution (fetched dynamically from GitHub)
-                (git_url, git_filename),
+                // Download directly with simple name for reliable extraction
+                (git_url, "git.tar.bz2"),
                 // Python - standalone Windows distribution (matches system_dependencies.rs)
-                ("https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string(), "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string()),
+                ("https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz".to_string(), "python.tar.gz"),
             ];
 
             for (link, name) in prereq_list {
                 info!("Downloading prerequisite: {} as {}", link, name);
-                match download_file_and_rename(&link, prereq_path.to_str().unwrap(), None, Some(&name), 3).await {
+                match download_file_and_rename(&link, prereq_path.to_str().unwrap(), None, Some(name), 3).await {
                     Ok(_) => info!("Downloaded: {}", name),
                     Err(err) => {
                         error!("Failed to download {}: {}", name, err);
@@ -798,6 +799,7 @@ async fn main() {
             // 👇 COPY SHARED PREREQUISITES (if any)
             if let Some(ref shared_dir) = shared_prereq_dir {
                 // Copy CONTENTS of shared_dir into archive_dir (not the dir itself)
+                // Archives are already named simply (git.tar.bz2, python.tar.gz) for reliable lookup
                 info!("Copying shared prerequisites to: {:?}", archive_dir.path());
                 idf_im_lib::utils::copy_dir_contents(
                     shared_dir.path(),

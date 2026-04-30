@@ -252,13 +252,13 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
 /// Searches for files within a specified directory that match a given name and extension.
 ///
 /// This function constructs a search query using `SearchBuilder` to find files.
-/// The search is strict, case-insensitive, includes hidden files, and looks for
-/// an exact match for the file name and extension.
+/// The search is strict, case-insensitive, includes hidden files, and performs
+/// a substring match on the file name (the name must contain the given substring).
 ///
 /// # Arguments
 ///
 /// * `path` - A reference to a `Path` indicating the directory where the search should begin.
-/// * `name` - A string slice representing the exact name of the file to search for (without the extension).
+/// * `name` - A string slice representing a substring to match in the file name (without the extension).
 /// * `extension` - A string slice representing the exact extension of the file to search for (e.g., "txt", "rs").
 ///
 /// # Returns

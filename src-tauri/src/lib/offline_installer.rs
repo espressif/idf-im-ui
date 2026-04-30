@@ -48,23 +48,15 @@ pub async fn install_prerequisites_offline(
             crate::ensure_path(tools_dir.to_str().unwrap())
                 .map_err(|e| format!("Failed to create tools directory: {}", e))?;
 
-            // Find Git archive (.tar.bz2) in the archive directory
-            // Archive names are like "Git-2.42.0-64-bit.tar.bz2"
-            let git_archive_path = std::fs::read_dir(archive_dir.path())
-                .map_err(|e| format!("Failed to read archive directory: {}", e))?
-                .filter_map(|entry| entry.ok())
-                .filter(|entry| {
-                    let name = entry.file_name().to_string_lossy().to_lowercase();
-                    name.starts_with("git-") && name.ends_with(".tar.bz2")
-                })
-                .next()
-                .map(|entry| entry.path())
-                .ok_or_else(|| {
-                    format!("Git portable archive not found in archive directory: {}", archive_dir.path().display())
-                })?;
+            // Find Git archive - renamed to simple name during archive creation
+            let git_archive_path = archive_dir.path().join("git.tar.bz2");
+            if !git_archive_path.exists() {
+                return Err(format!("Git portable archive not found at expected path: {}", git_archive_path.display()));
+            }
+            debug!("Found Git archive at: {}", git_archive_path.display());
 
             // Copy git archive to tools_dir for installation
-            let git_archive_in_tools = tools_dir.join(git_archive_path.file_name().unwrap());
+            let git_archive_in_tools = tools_dir.join("git.tar.bz2");
             std::fs::copy(&git_archive_path, &git_archive_in_tools)
                 .map_err(|e| format!("Failed to copy git archive: {}", e))?;
 
@@ -83,14 +75,15 @@ pub async fn install_prerequisites_offline(
                 }
             }
 
-            // Python is expected to be in archive_dir as cpython-X.Y.Z+-x86_64-pc-windows-msvc-install_only.tar.gz
-            let python_archive = archive_dir.path().join("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz");
+            // Find Python archive - renamed to simple name during archive creation
+            let python_archive = archive_dir.path().join("python.tar.gz");
             if !python_archive.exists() {
-                return Err(format!("Python archive not found in archive: {}", python_archive.display()));
+                return Err(format!("Python archive not found at expected path: {}", python_archive.display()));
             }
+            debug!("Found Python archive at: {}", python_archive.display());
 
             // Copy python archive to tools_dir for installation
-            let python_in_tools = tools_dir.join("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz");
+            let python_in_tools = tools_dir.join("python.tar.gz");
             std::fs::copy(&python_archive, &python_in_tools)
                 .map_err(|e| format!("Failed to copy python archive: {}", e))?;
 
