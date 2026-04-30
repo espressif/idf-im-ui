@@ -1730,7 +1730,7 @@ fn stat_from_metadata(metadata: &std::fs::Metadata) -> gix::index::entry::Stat {
 }
 
 /// Defines the type of Git reference to be checked out.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum GitReference {
     /// A branch reference.
     Branch(String),
@@ -1914,23 +1914,36 @@ fn set_head_to_ref(repo: &gix::Repository, refname: &str, message: &str) -> Resu
 
 /// Clones the ESP-IDF repository with specified options.
 ///
-/// This is a high-level function that orchestrates the cloning of ESP-IDF. It determines
-/// the correct repository URL based on mirror settings, parses the desired version into a
-/// `GitReference`, and then calls `clone_repository` to perform the actual clone operation.
+/// Tries the pure-Rust `gix`-based [`clone_repository`] first. If that fails
+/// **and** the destination directory was either absent or empty before this
+/// call started, the function falls back to the system `git` binary via
+/// [`clone_with_git_cli`]. Both paths honor the same `shallow` and
+/// `recurse_submodules` semantics, including shallow (depth=1) submodule
+/// clones.
+///
+/// # Data safety
+///
+/// The fallback path will **never** delete pre-existing user content. If
+/// `path` already contained files (for example, a previous clone, a `.git`
+/// directory, or unrelated user data) before this function was called, a
+/// failure of the gix clone is returned as-is and the destination is left
+/// untouched. Only contents that this call itself produced (in a previously
+/// empty or non-existent directory) are removed before retrying.
 ///
 /// # Arguments
 ///
-/// * `path` - The local filesystem path where the repository should be cloned.
-/// * `repository` - An optional repository string (e.g., "espressif/esp-idf").
-/// * `version` - The version to check out (can be a branch, tag, or commit SHA).
-/// * `mirror` - An optional mirror URL prefix.
-/// * `with_submodules` - If `true`, submodules will be initialized and updated.
-/// * `tx` - A sender for reporting clone progress.
+/// * `path` - Local path where the repository should be cloned.
+/// * `repository` - Optional `owner/name` repo string.
+/// * `version` - Branch (`master`, `release-xxx`), tag (e.g. `v5.1.2`), or 40-char commit SHA.
+/// * `mirror` - Optional mirror URL prefix (e.g. Gitee).
+/// * `with_submodules` - If `true`, recursively initialize submodules.
+/// * `tx` - Progress channel.
 ///
 /// # Returns
 ///
-/// * `Ok(String)` with the path to the cloned repository on success.
-/// * `Err(String)` with an error message on failure.
+/// * `Ok(String)` with the cloned path on success (from either path).
+/// * `Err(String)` if the gix clone fails and either the fallback also fails
+///   or the fallback was skipped because pre-existing content was detected.
 pub fn get_esp_idf(
     path: &str,
     repository: Option<&str>,
@@ -1939,7 +1952,13 @@ pub fn get_esp_idf(
     with_submodules: bool,
     tx: Sender<ProgressMessage>,
 ) -> Result<String, String> {
-    // Ensure the path exists
+    let dest_path = std::path::PathBuf::from(path);
+
+    let had_preexisting_content = dest_path.exists() && (
+        !dest_path.is_dir() || std::fs::read_dir(&dest_path).map(|mut it| it.next().is_some()).unwrap_or(false)
+    );
+
+    // Ensure the path exists (may create an empty directory).
     let _ = ensure_path(path);
 
     let url = get_repo_url(repository, mirror);
@@ -1948,13 +1967,11 @@ pub fn get_esp_idf(
     // Parse version into a GitReference
     let reference = if version == "master" {
         GitReference::Branch("master".to_string())
-    } else if version.contains("release")  {
+    } else if version.contains("release") {
         GitReference::Branch(version.to_string().replace("release-", "release/"))
     } else if version.len() == 40 && version.chars().all(|c| c.is_ascii_hexdigit()) {
-        // If version is a 40-character hex string, assume it's a commit hash
         GitReference::Commit(version.to_string())
     } else {
-        // Otherwise assume it's a tag
         GitReference::Tag(version.to_string())
     };
 
@@ -1963,12 +1980,72 @@ pub fn get_esp_idf(
         path: path.to_string(),
         reference,
         recurse_submodules: with_submodules,
-        shallow: shallow, // Default to shallow clone when possible
+        shallow,
     };
 
-    match clone_repository(clone_options, tx) {
-        Ok(repo) => Ok(repo.to_str().unwrap_or(path).to_string()),
-        Err(e) => Err(e.to_string()),
+    // First attempt: pure-Rust gix-based clone. This is faster and more efficient and result is smaller, but may fail on some platforms or network conditions.
+    //
+    // `clone_repository` consumes its `CloneOptions`, so we hand it a freshly
+    // rebuilt copy and keep the original around for the potential fallback.
+    let gix_attempt = clone_repository(
+      CloneOptions {
+        url: clone_options.url.clone(),
+        path: clone_options.path.clone(),
+        reference: clone_options.reference.clone(),
+        recurse_submodules: clone_options.recurse_submodules,
+        shallow: clone_options.shallow,
+      },
+      tx.clone(),
+    );
+
+    match gix_attempt {
+      Ok(repo) => Ok(repo.to_str().unwrap_or(path).to_string()),
+      Err(gix_err) => {
+        if had_preexisting_content {
+          let _ = tx.send(ProgressMessage::Finish);
+          error!(
+            "gix-based clone failed and {} already contained data \
+              before this call; refusing to wipe it. Move or remove \
+              the directory manually and retry.",
+            dest_path.display()
+          );
+          return Err(format!(
+            "gix clone failed and destination {} is not empty; \
+              refusing to delete pre-existing content. Original error: {}",
+            dest_path.display(),
+            gix_err
+          ));
+        }
+
+        warn!(
+          "gix-based clone of ESP-IDF failed ({}); falling back to system git",
+          gix_err
+        );
+
+        if dest_path.exists() {
+          if let Err(e) = std::fs::remove_dir_all(&dest_path) {
+            debug!(
+              "Failed to fully clean {} before fallback clone: {}",
+              dest_path.display(),
+              e
+            );
+          }
+        }
+
+        match clone_with_git_cli(&clone_options, tx.clone()) {
+          Ok(repo) => {
+            let _ = tx.send(ProgressMessage::Finish);
+            Ok(repo.to_str().unwrap_or(path).to_string())
+          }
+          Err(cli_err) => {
+            let _ = tx.send(ProgressMessage::Finish);
+            Err(format!(
+              "Both gix and system git failed to clone ESP-IDF. \
+                gix error: {gix_err}; git CLI error: {cli_err}"
+            ))
+          }
+        }
+      }
     }
 }
 
@@ -2075,4 +2152,280 @@ pub fn get_raw_file_url(
         // Default to GitHub raw format: https://raw.githubusercontent.com/owner/repo/branch/path
         format!("https://raw.githubusercontent.com/{}/{}/{}", repo_name, ref_name, file_path)
     }
+}
+
+/// Performs a full repository clone using the system `git` command-line tool.
+///
+/// This function mirrors the behavior of [`clone_repository`] but uses the
+/// system `git` binary instead of `gix`. It is intended as a fallback for
+/// environments where the pure-Rust implementation cannot complete the clone
+/// (e.g. due to protocol/CDN quirks or unsupported features).
+///
+/// Behavior:
+/// * If `options.shallow` is `true`, the clone is performed with `--depth 1`.
+///   For branches and tags, `--branch <name> --single-branch` is also passed.
+///   For raw commit SHAs, the default branch is shallow-cloned first and then
+///   `git fetch --depth 1 origin <sha>` is attempted, falling back to a
+///   non-shallow fetch if the server rejects fetching by SHA.
+/// * If `options.recurse_submodules` is `true`, submodules are initialized
+///   with `git submodule update --init --recursive --depth 1` so each
+///   submodule is also a shallow clone of a single commit.
+/// * Progress is parsed from `git`'s stderr (via `--progress`) and forwarded
+///   through `tx` as [`ProgressMessage::Update`] for the main clone and
+///   [`ProgressMessage::SubmoduleUpdate`] for submodules. Note that progress
+///   streaming only takes effect when `spawn_with_dir` pipes stderr; if it
+///   inherits stderr the milestone updates (0 / 80 / 100) still fire.
+///
+/// All command invocations go through [`crate::command_executor`] so that
+/// platform-specific concerns (e.g. hidden console windows on Windows) are
+/// handled consistently.
+///
+/// # Arguments
+///
+/// * `options` - Clone configuration (URL, destination, reference, flags).
+/// * `tx`      - Sender used to report progress to the caller.
+///
+/// # Returns
+///
+/// * `Ok(PathBuf)` - The destination path on success.
+/// * `Err`         - If any underlying `git` command fails.
+pub fn clone_with_git_cli(
+    options: &CloneOptions,
+    tx: Sender<ProgressMessage>,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let dest_path = PathBuf::from(&options.path);
+
+    info!(
+        "Cloning {} into {} via system git (fallback)",
+        options.url,
+        dest_path.display()
+    );
+
+    if let Some(parent) = dest_path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+
+    let dest_exists_nonempty = dest_path.exists() && (
+        !dest_path.is_dir() || std::fs::read_dir(&dest_path).map(|mut it| it.next().is_some()).unwrap_or(false)
+    );
+    if dest_exists_nonempty {
+        return Err(format!(
+            "Destination {} exists and is not empty; refusing to clone over it",
+            dest_path.display()
+        )
+        .into());
+    }
+
+    let cwd = match dest_path.parent() {
+        Some(p) if !p.as_os_str().is_empty() => p.to_path_buf(),
+        _ => std::env::current_dir()?,
+    };
+    let cwd_str = cwd
+        .to_str()
+        .ok_or("Working directory contains non-UTF-8 characters")?;
+
+    let dest_str = dest_path
+        .to_str()
+        .ok_or("Destination path contains non-UTF-8 characters")?;
+
+    // Build `git clone` arguments based on the requested reference.
+    // For commits we cannot point clone directly at the SHA, so we clone the
+    // default branch first and resolve the commit afterwards.
+    let mut clone_args: Vec<String> = vec![
+        "clone".to_string(),
+        "--progress".to_string(),
+    ];
+
+    if options.shallow {
+        clone_args.push("--depth".to_string());
+        clone_args.push("1".to_string());
+    }
+
+    let mut needs_post_checkout_commit: Option<String> = None;
+    match &options.reference {
+        GitReference::Branch(branch) => {
+            clone_args.push("--branch".to_string());
+            clone_args.push(branch.clone());
+            clone_args.push("--single-branch".to_string());
+        }
+        GitReference::Tag(tag) => {
+            clone_args.push("--branch".to_string());
+            clone_args.push(tag.clone());
+            clone_args.push("--single-branch".to_string());
+        }
+        GitReference::Commit(sha) => {
+            // Will fetch + checkout this commit after the initial clone.
+            needs_post_checkout_commit = Some(sha.clone());
+        }
+        GitReference::None => {}
+    }
+
+    // Submodules: ask git to recurse and shallow-clone them in one shot when
+    // we don't need a post-clone commit checkout. When we do need a
+    // post-checkout (commit case), run submodule update separately so the
+    // submodule SHAs match the checked-out commit instead of the default
+    // branch tip.
+    let recurse_during_clone =
+        options.recurse_submodules && needs_post_checkout_commit.is_none();
+    if recurse_during_clone {
+        clone_args.push("--recurse-submodules".to_string());
+        if options.shallow {
+            clone_args.push("--shallow-submodules".to_string());
+        }
+    }
+
+    clone_args.push(options.url.clone());
+    clone_args.push(dest_str.to_string());
+
+    // 0% - starting
+    let _ = tx.send(ProgressMessage::Update(0));
+
+    // Spawn `git clone` and stream stderr for progress (best-effort).
+    let clone_args_ref: Vec<&str> = clone_args.iter().map(|s| s.as_str()).collect();
+    let mut child = spawn_with_dir("git", &clone_args_ref, cwd_str)?;
+    if let Some(stderr) = child.stderr.take() {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            if let Some(percentage) = parse_git_progress(&line) {
+                // Scale git's 0-100% into 0-80% so we leave headroom for
+                // post-clone work (commit checkout / submodules).
+                let scaled = (percentage * 80) / 100;
+                let _ = tx.send(ProgressMessage::Update(scaled));
+            }
+        }
+    }
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(format!(
+            "git clone failed (exit code {:?}) for {}",
+            status.code(),
+            options.url
+        )
+        .into());
+    }
+
+    let _ = tx.send(ProgressMessage::Update(80));
+
+    // If the user asked for a specific commit, fetch + checkout it now.
+    if let Some(sha) = needs_post_checkout_commit.as_deref() {
+        info!("Fetching specific commit {} via git CLI fallback", sha);
+
+        // First try a depth-1 fetch by SHA. Many servers support this when
+        // `uploadpack.allowReachableSHA1InWant` is enabled (GitHub does).
+        let shallow_fetch = execute_command_with_dir(
+            "git",
+            &["fetch", "--depth", "1", "origin", sha],
+            dest_str,
+        )?;
+
+        if !shallow_fetch.status.success() {
+            debug!(
+                "Shallow fetch of commit {} failed, retrying without --depth: {}",
+                sha,
+                String::from_utf8_lossy(&shallow_fetch.stderr)
+            );
+
+            // Try to unshallow first; if the repo is already complete that
+            // errors out, in which case do a plain fetch.
+            let unshallow = execute_command_with_dir(
+                "git",
+                &["fetch", "--unshallow", "origin"],
+                dest_str,
+            )?;
+            if !unshallow.status.success() {
+                let plain_fetch = execute_command_with_dir(
+                    "git",
+                    &["fetch", "origin"],
+                    dest_str,
+                )?;
+                if !plain_fetch.status.success() {
+                    return Err(format!(
+                        "git fetch failed while resolving commit {}: {}",
+                        sha,
+                        String::from_utf8_lossy(&plain_fetch.stderr)
+                    )
+                    .into());
+                }
+            }
+        }
+
+        checkout_with_git_cli(&dest_path, sha)?;
+    }
+
+    // Run submodule update separately when we couldn't recurse during clone.
+    if options.recurse_submodules && !recurse_during_clone {
+        info!("Initializing submodules via git CLI fallback (shallow)");
+        let mut submodule_args: Vec<&str> =
+            vec!["submodule", "update", "--init", "--recursive", "--progress"];
+        if options.shallow {
+            submodule_args.push("--depth");
+            submodule_args.push("1");
+        }
+
+        // Stream stderr so submodule progress reaches the UI as well.
+        let mut sub_child = spawn_with_dir("git", &submodule_args, dest_str)?;
+        let mut current_submodule: Option<String> = None;
+        if let Some(stderr) = sub_child.stderr.take() {
+            let reader = BufReader::new(stderr);
+            for line in reader.lines().map_while(Result::ok) {
+                if let Some(name) = parse_submodule_name(&line) {
+                    if let Some(prev) = current_submodule.replace(name.clone()) {
+                        if prev != name {
+                            let _ = tx.send(ProgressMessage::SubmoduleFinish(prev));
+                        }
+                    }
+                }
+                if let Some(percentage) = parse_git_progress(&line) {
+                    if let Some(name) = current_submodule.as_deref() {
+                        let _ = tx.send(ProgressMessage::SubmoduleUpdate((
+                            name.to_string(),
+                            percentage,
+                        )));
+                    }
+                }
+            }
+        }
+        let sub_status = sub_child.wait()?;
+        if !sub_status.success() {
+            return Err(format!(
+                "git submodule update failed (exit code {:?})",
+                sub_status.code()
+            )
+            .into());
+        }
+
+        if let Some(name) = current_submodule.take() {
+            let _ = tx.send(ProgressMessage::SubmoduleFinish(name));
+        }
+    }
+
+    let _ = tx.send(ProgressMessage::Update(100));
+    Ok(dest_path)
+}
+
+/// Best-effort parse of `git submodule` stderr to figure out which submodule
+/// a progress line belongs to.
+///
+/// Recognizes lines like:
+/// * `Submodule path 'components/foo': ...`
+/// * `Cloning into '/abs/path/components/foo'...`
+fn parse_submodule_name(line: &str) -> Option<String> {
+    if let Some(rest) = line.strip_prefix("Submodule path '") {
+        if let Some(end) = rest.find('\'') {
+            return Some(rest[..end].to_string());
+        }
+    }
+    if let Some(rest) = line.strip_prefix("Cloning into '") {
+        if let Some(end) = rest.rfind('\'') {
+            let path = &rest[..end];
+            let name = std::path::Path::new(path)
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or(path);
+            return Some(name.to_string());
+        }
+    }
+    None
 }
