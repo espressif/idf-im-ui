@@ -1562,6 +1562,32 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
 
         // Install prerequisites on Windows
         if std::env::consts::OS == "windows" {
+            info!("About to install prerequisites from offline archive");
+
+            // Get the tools directory from version paths
+            let tools_dir = if let Some(idf_versions) = &settings.idf_versions {
+                if let Some(version) = idf_versions.first() {
+                    match settings.get_version_paths(version) {
+                        Ok(paths) => {
+                            info!("Using tools dir from get_version_paths: {:?}", paths.tool_install_directory);
+                            Some(paths.tool_install_directory)
+                        }
+                        Err(e) => {
+                            warn!("Failed to get version paths: {}, falling back to manual calculation", e);
+                            None
+                        }
+                    }
+                } else {
+                    warn!("No IDF versions found in settings");
+                    None
+                }
+            } else {
+                warn!("No IDF versions set in settings");
+                None
+            };
+
+            let tools_dir = tools_dir.unwrap();
+
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: ((archive_index * 90 + 25) / total_archives) as u32,
@@ -1570,10 +1596,8 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: None,
             });
 
-            let tools_dir = settings.path
-                .as_ref()
-                .map(|p| p.join("tools"))
-                .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("tools"));
+            info!("Tools dir set to: {:?}", tools_dir);
+            info!("Archive dir path: {:?}", offline_archive_dir.path());
 
             match install_prerequisites_offline(&offline_archive_dir, tools_dir).await {
                 Ok(_) => {

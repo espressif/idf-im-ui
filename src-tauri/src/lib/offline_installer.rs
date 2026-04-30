@@ -36,70 +36,117 @@ use crate::{add_path_to_path, command_executor::{self, execute_command}, render_
 ///
 /// let archive_dir = TempDir::new().unwrap();
 /// let tools_dir = PathBuf::from("C:\\tools");
-/// install_prerequisites_offline(&archive_dir, tools_dir)?;
-/// ```
+/// Installs prerequisite software packages from an offline archive.
+///
+/// This function first checks which prerequisites are missing using `check_prerequisites_with_result`,
+/// then only installs the ones that are needed (git and python on Windows).
+///
+/// # Arguments
+///
+/// * `archive_dir` - Temporary directory containing the offline installation archive
+/// * `tools_dir` - Directory where tools (git, python) should be installed
+///
+/// # Returns
+///
+/// * `Ok(())` - Prerequisites installed successfully (or already present)
+/// * `Err(String)` - Error message if installation fails
 pub async fn install_prerequisites_offline(
     archive_dir: &TempDir,
     tools_dir: PathBuf,
 ) -> Result<(), String> {
+    // First check which prerequisites are missing
+    let check_result = crate::system_dependencies::check_prerequisites_with_result()
+        .map_err(|e| format!("Failed to check prerequisites: {}", e))?;
+
+    if check_result.shell_failed {
+        warn!("Shell verification failed, cannot determine missing prerequisites");
+        return Err("Cannot verify prerequisites: shell execution failed".to_string());
+    }
+
+    info!("Missing prerequisites: {:?}", check_result.missing);
+
+    // Determine what needs to be installed
+    let needs_git = check_result.missing.iter().any(|m| *m == "git");
+    let needs_python = check_result.missing.iter().any(|m| *m == "python" || *m == "python3");
+
+    if !needs_git && !needs_python {
+        info!("All prerequisites already present, skipping offline installation");
+        return Ok(());
+    }
+
     match std::env::consts::OS {
         "windows" => {
             // Ensure tools directory exists
             crate::ensure_path(tools_dir.to_str().unwrap())
                 .map_err(|e| format!("Failed to create tools directory: {}", e))?;
 
-            // Find Git archive - renamed to simple name during archive creation
-            let git_archive_path = archive_dir.path().join("git.tar.bz2");
-            if !git_archive_path.exists() {
-                return Err(format!("Git portable archive not found at expected path: {}", git_archive_path.display()));
+            if needs_git {
+                // Find Git archive - renamed to simple name during archive creation
+                let git_archive_path = archive_dir.path().join("git.tar.bz2");
+                warn!("Looking for Git archive at: {}", git_archive_path.display());
+                let archive_contents = std::fs::read_dir(archive_dir.path())
+                    .map(|d| d.into_iter().filter_map(|e| e.ok())
+                        .map(|e| e.file_name().to_str().unwrap_or("").to_string())
+                        .collect::<Vec<_>>())
+                    .unwrap_or_default();
+                warn!("Archive dir contents: {:?}", archive_contents);
+                if !git_archive_path.exists() {
+                    return Err(format!("Git portable archive not found at expected path: {}", git_archive_path.display()));
+                }
+                info!("Found Git archive at: {}", git_archive_path.display());
+
+                // Copy git archive to tools_dir for installation
+                let git_archive_in_tools = tools_dir.join("git.tar.bz2");
+                std::fs::copy(&git_archive_path, &git_archive_in_tools)
+                    .map_err(|e| format!("Failed to copy git archive: {}", e))?;
+
+                // Install git from the copied archive
+                match crate::system_dependencies::install_git_from_downloaded(
+                    tools_dir.clone(),
+                    Some(git_archive_in_tools),
+                )
+                .await
+                {
+                    Ok(install_path) => {
+                        info!("Git installed successfully to {:?}", install_path);
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to install git: {}", e));
+                    }
+                }
+            } else {
+                info!("Git not needed, skipping installation");
             }
-            debug!("Found Git archive at: {}", git_archive_path.display());
 
-            // Copy git archive to tools_dir for installation
-            let git_archive_in_tools = tools_dir.join("git.tar.bz2");
-            std::fs::copy(&git_archive_path, &git_archive_in_tools)
-                .map_err(|e| format!("Failed to copy git archive: {}", e))?;
-
-            // Install git from the copied archive
-            match crate::system_dependencies::install_git_from_downloaded(
-                tools_dir.clone(),
-                Some(git_archive_in_tools),
-            )
-            .await
-            {
-                Ok(install_path) => {
-                    info!("Git installed successfully to {:?}", install_path);
+            if needs_python {
+                // Find Python archive - renamed to simple name during archive creation
+                let python_archive = archive_dir.path().join("python.tar.gz");
+                if !python_archive.exists() {
+                    return Err(format!("Python archive not found at expected path: {}", python_archive.display()));
                 }
-                Err(e) => {
-                    return Err(format!("Failed to install git: {}", e));
-                }
-            }
+                debug!("Found Python archive at: {}", python_archive.display());
 
-            // Find Python archive - renamed to simple name during archive creation
-            let python_archive = archive_dir.path().join("python.tar.gz");
-            if !python_archive.exists() {
-                return Err(format!("Python archive not found at expected path: {}", python_archive.display()));
-            }
-            debug!("Found Python archive at: {}", python_archive.display());
+                // Copy python archive to tools_dir for installation
+                let python_in_tools = tools_dir.join("python.tar.gz");
+                std::fs::copy(&python_archive, &python_in_tools)
+                    .map_err(|e| format!("Failed to copy python archive: {}", e))?;
 
-            // Copy python archive to tools_dir for installation
-            let python_in_tools = tools_dir.join("python.tar.gz");
-            std::fs::copy(&python_archive, &python_in_tools)
-                .map_err(|e| format!("Failed to copy python archive: {}", e))?;
-
-            // Install python from the copied archive
-            match crate::system_dependencies::install_python_from_downloaded(
-                tools_dir.clone(),
-                Some(python_in_tools),
-            )
-            .await
-            {
-                Ok(install_path) => {
-                    info!("Python installed successfully to {:?}", install_path);
+                // Install python from the copied archive
+                match crate::system_dependencies::install_python_from_downloaded(
+                    tools_dir.clone(),
+                    Some(python_in_tools),
+                )
+                .await
+                {
+                    Ok(install_path) => {
+                        info!("Python installed successfully to {:?}", install_path);
+                    }
+                    Err(e) => {
+                        return Err(format!("Failed to install python: {}", e));
+                    }
                 }
-                Err(e) => {
-                    return Err(format!("Failed to install python: {}", e));
-                }
+            } else {
+                info!("Python not needed, skipping installation");
             }
         }
         _ => {
