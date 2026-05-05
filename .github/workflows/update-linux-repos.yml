@@ -1,4 +1,4 @@
-name: Update APT and RPM Repositories
+name: Update APT, RPM, and Pacman Repositories
 
 on:
   workflow_call:
@@ -286,134 +286,146 @@ jobs:
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/rpm/*"
 
   update-pacman-repo:
-    name: Update pacman Repository on S3
-    needs: update-apt-repo
+    name: Update Pacman Repository on S3
+    needs: update-rpm-repo
     runs-on: ubuntu-latest
+    container:
+      image: archlinux:latest
     steps:
+      - name: Install Arch dependencies
+        run: |
+          pacman -Sy --noconfirm base-devel git zstd awscli
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-east-1
-
-      - name: Install Arch dependencies for pacman tools
+      - name: Configure AWS credentials (env)
         run: |
-          sudo apt-get update
-          sudo apt-get install -y curl jq
+          mkdir -p ~/.aws
+          cat > ~/.aws/credentials << EOF
+          [default]
+          aws_access_key_id = ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key = ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          EOF
+          cat > ~/.aws/config << EOF
+          [default]
+          region = ap-east-1
+          EOF
 
       - name: Download CLI linux-x64 pacman artifact
         uses: actions/download-artifact@v4
         with:
           name: eim-cli-linux-x64-${{ inputs.version }}-pacman
-          path: new-pacman/
+          path: new-pkgs/
         continue-on-error: true
 
       - name: Download CLI linux-aarch64 pacman artifact
         uses: actions/download-artifact@v4
         with:
           name: eim-cli-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pacman/
+          path: new-pkgs/
         continue-on-error: true
 
       - name: Download CLI linux-armv7 pacman artifact
         uses: actions/download-artifact@v4
         with:
           name: eim-cli-linux-armv7-${{ inputs.version }}-pacman
-          path: new-pacman/
+          path: new-pkgs/
         continue-on-error: true
 
       - name: Download GUI linux-x64 pacman artifact
         uses: actions/download-artifact@v4
         with:
           name: eim-gui-linux-x64-${{ inputs.version }}-pacman
-          path: new-pacman/
-        continue-on-error: true
+          path: new-pkgs/
 
       - name: Download GUI linux-aarch64 pacman artifact
         uses: actions/download-artifact@v4
         with:
           name: eim-gui-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pacman/
+          path: new-pkgs/
         continue-on-error: true
 
-      - name: Create pacman repository structure
+      - name: Create Pacman repository structure
+        shell: bash
         run: |
-          # Create directory structure
+          set -euo pipefail
+
           mkdir -p pacman-repo/x86_64
           mkdir -p pacman-repo/aarch64
-          mkdir -p pacman-repo/armv7
+          mkdir -p pacman-repo/armv7h
 
-          # Sync existing .pkg.tar.gz files from S3
-          aws s3 sync s3://espdldata/dl/eim/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing x86_64 pacman packages found"
-          aws s3 sync s3://espdldata/dl/eim/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing aarch64 pacman packages found"
-          aws s3 sync s3://espdldata/dl/eim/pacman/armv7/ pacman-repo/armv7/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing armv7 pacman packages found"
+          # Sync existing packages from S3 (so previous versions stay available)
+          aws s3 sync s3://espdldata/dl/eim/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing x86_64 pacman packages"
+          aws s3 sync s3://espdldata/dl/eim/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing aarch64 pacman packages"
+          aws s3 sync s3://espdldata/dl/eim/pacman/armv7h/  pacman-repo/armv7h/  --exclude "*" --include "*.pkg.tar.*" || echo "No existing armv7h pacman packages"
 
-          # Debug: Show contents of downloaded packages
-          echo "Downloaded pacman artifacts:"
-          find new-pacman -type f -name "*.pkg.tar.gz" -exec ls -la {} \;
+          echo "Downloaded artifacts:"
+          find new-pkgs -type f -name "*.pkg.tar.*" -exec ls -la {} \; || true
 
-          # Copy new .pkg.tar.gz files to appropriate architecture directories
-          if [ -d "new-pacman" ] && [ "$(ls -A new-pacman)" ]; then
-            # Copy x86_64 packages
-            find new-pacman -type f \( -name "*x86_64*.pkg.tar.gz" -o -name "*linux-x64*.pkg.tar.gz" \) -exec cp {} pacman-repo/x86_64/ \; || echo "No x86_64 packages to copy"
+          if [ -d "new-pkgs" ] && [ -n "$(ls -A new-pkgs 2>/dev/null || true)" ]; then
+            # Route packages to the correct arch directory based on filename
+            find new-pkgs -type f \( -name "*-x86_64.pkg.tar.*"  -o -name "*linux-x64*.pkg.tar.*" \)  -exec cp {} pacman-repo/x86_64/  \; || true
+            find new-pkgs -type f \( -name "*-aarch64.pkg.tar.*" -o -name "*linux-aarch64*.pkg.tar.*" \) -exec cp {} pacman-repo/aarch64/ \; || true
+            find new-pkgs -type f \( -name "*-armv7h.pkg.tar.*"  -o -name "*linux-armv7*.pkg.tar.*"  -o -name "*-armv7hl.pkg.tar.*" \) -exec cp {} pacman-repo/armv7h/ \; || true
 
-            # Copy aarch64 packages
-            find new-pacman -type f \( -name "*aarch64*.pkg.tar.gz" -o -name "*arm64*.pkg.tar.gz" -o -name "*linux-aarch64*.pkg.tar.gz" \) -exec cp {} pacman-repo/aarch64/ \; || echo "No aarch64 packages to copy"
-
-            # Copy armv7 packages
-            find new-pacman -type f \( -name "*armv7*.pkg.tar.gz" -o -name "*armhf*.pkg.tar.gz" -o -name "*linux-armv7*.pkg.tar.gz" \) -exec cp {} pacman-repo/armv7/ \; || echo "No armv7 packages to copy"
-
-            echo "Copied pacman package files:"
-            echo "x86_64 packages:"
-            ls -la pacman-repo/x86_64/ || echo "No x86_64 packages"
-            echo "aarch64 packages:"
-            ls -la pacman-repo/aarch64/ || echo "No aarch64 packages"
-            echo "armv7 packages:"
-            ls -la pacman-repo/armv7/ || echo "No armv7 packages"
+            echo "Routed packages:"
+            ls -la pacman-repo/x86_64/  || true
+            ls -la pacman-repo/aarch64/ || true
+            ls -la pacman-repo/armv7h/  || true
           else
             echo "No pacman artifacts downloaded"
           fi
 
-      - name: Generate pacman repository database
-        working-directory: pacman-repo
+      - name: Generate Pacman repository databases
+        shell: bash
         run: |
-          # Function to generate repo for an architecture
-          generate_repo() {
-            local arch_dir="$1"
-            local arch_name="$2"
-            if [ -d "$arch_dir" ] && [ "$(ls -A $arch_dir/*.pkg.tar.gz 2>/dev/null)" ]; then
-              echo "Generating database for $arch_name..."
-              # Create the repo database using tar (standard tarball for pacman)
-              # Pacman uses a simple tarball with a database directory structure
-              mkdir -p "$arch_dir/db"
-              cd "$arch_dir"
-              # Extract and re-create the database
-              for pkg in *.pkg.tar.gz; do
-                tar -xzf "$pkg" -C db/ 2>/dev/null || true
-              done
-              # For simple file hosting, we just need the packages themselves
-              # pacman uses the sync database format via repo-add
-              echo "Packages in $arch_name ready for hosting"
-            else
-              echo "No $arch_name packages found, skipping"
+          set -euo pipefail
+
+          # repo-add builds the .db / .files databases pacman needs
+          for ARCH in x86_64 aarch64 armv7h; do
+            DIR="pacman-repo/$ARCH"
+            shopt -s nullglob
+            PKGS=("$DIR"/*.pkg.tar.*)
+            shopt -u nullglob
+
+            if [ ${#PKGS[@]} -eq 0 ]; then
+              echo "No packages for $ARCH, skipping db generation"
+              continue
             fi
-          }
 
-          generate_repo "x86_64" "x86_64"
-          generate_repo "aarch64" "aarch64"
-          generate_repo "armv7" "armv7"
+            echo "Building eim.db.tar.gz for $ARCH from ${#PKGS[@]} package(s)..."
+            (cd "$DIR" && repo-add -n -R eim.db.tar.gz *.pkg.tar.*)
 
-      - name: Upload repository to S3
+            # repo-add creates symlinks (eim.db -> eim.db.tar.gz, eim.files -> ...).
+            # S3 doesn't preserve symlinks, so materialize them as real files.
+            for link in "$DIR"/eim.db "$DIR"/eim.files; do
+              if [ -L "$link" ]; then
+                target="$(readlink "$link")"
+                rm "$link"
+                cp "$DIR/$target" "$link"
+              fi
+            done
+
+            echo "Contents of $DIR:"
+            ls -la "$DIR"
+          done
+
+      - name: Create pacman.conf snippet for end users
         run: |
-          # Upload the entire repository structure
-          aws s3 sync pacman-repo/ s3://espdldata/dl/eim/pacman/ --acl public-read --delete
+          cat > pacman-repo/eim.pacman.conf << 'EOF'
+          # Add this snippet to /etc/pacman.conf
+          [eim]
+          SigLevel = Optional TrustAll
+          Server = https://dl.espressif.com/dl/eim/pacman/$arch
+          EOF
+          echo "Generated eim.pacman.conf:"
+          cat pacman-repo/eim.pacman.conf
 
-          # Verify upload
-          echo "Uploaded repository structure:"
+      - name: Upload Pacman repository to S3
+        run: |
+          aws s3 sync pacman-repo/ s3://espdldata/dl/eim/pacman/ --acl public-read --delete
+          echo "Uploaded pacman repo:"
           aws s3 ls s3://espdldata/dl/eim/pacman/ --recursive
 
       - name: Invalidate CloudFront cache
