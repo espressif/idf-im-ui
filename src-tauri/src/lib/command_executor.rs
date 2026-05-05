@@ -6,6 +6,8 @@ use std::process::{Command, Output};
 
 use std::process::Child;
 
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
 pub trait CommandExecutor: Send {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output>;
     fn execute_with_env(
@@ -28,6 +30,8 @@ pub trait CommandExecutor: Send {
     ) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
     fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus>;
     fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output>;
     fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus>;
 }
@@ -86,6 +90,12 @@ impl CommandExecutor for DefaultExecutor {
         .stdin(std::process::Stdio::inherit())
         .status()
     }
+    fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
+        self.run_script_from_string_streaming(script)
+    }
+    fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+        self.run_script_from_string_streaming_with_dir(script, dir)
+    }
     fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
         Command::new("bash")
             .args(["-c", script])
@@ -107,7 +117,6 @@ impl CommandExecutor for DefaultExecutor {
 struct WindowsExecutor;
 
 pub fn get_powershell_version() -> std::io::Result<i32> {
-    const CREATE_NO_WINDOW: u32 = 0x08000000;
     let mut binding = Command::new("powershell");
     let mut cmd = binding.args(["-Command", "$PSVersionTable.PSVersion.Major"]);
 
@@ -166,8 +175,6 @@ impl WindowsExecutor {
 #[cfg(target_os = "windows")]
 impl CommandExecutor for WindowsExecutor {
     fn execute(&self, command: &str, args: &[&str]) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
         Command::new(command)
             .args(args)
             .creation_flags(CREATE_NO_WINDOW)
@@ -180,8 +187,6 @@ impl CommandExecutor for WindowsExecutor {
         args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
         let mut binding = Command::new(command);
         let mut command = binding.args(args).creation_flags(CREATE_NO_WINDOW);
         for (key, value) in env {
@@ -196,8 +201,6 @@ impl CommandExecutor for WindowsExecutor {
         args: &[&str],
         dir: &str,
     ) -> std::io::Result<Output> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
         Command::new(command)
             .args(args)
             .current_dir(dir)
@@ -211,8 +214,6 @@ impl CommandExecutor for WindowsExecutor {
         args: &[&str],
         dir: &str,
     ) -> std::io::Result<Child> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
         Command::new(command)
             .args(args)
             .current_dir(dir)
@@ -221,8 +222,6 @@ impl CommandExecutor for WindowsExecutor {
     }
 
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
-      use std::os::windows::process::CommandExt;
-      const CREATE_NO_WINDOW: u32 = 0x08000000;
 
       let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
@@ -250,9 +249,36 @@ impl CommandExecutor for WindowsExecutor {
       status
   }
 
+  fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+
+      let status = cmd
+          .creation_flags(CREATE_NO_WINDOW)
+          .stdout(std::process::Stdio::inherit())
+          .stderr(std::process::Stdio::inherit())
+          .stdin(std::process::Stdio::inherit())
+          .status();
+
+      let _ = std::fs::remove_file(&script_path);
+      status
+  }
+
+  fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+
+      let status = cmd
+          .current_dir(dir)
+          .creation_flags(CREATE_NO_WINDOW)
+          .stdout(std::process::Stdio::inherit())
+          .stderr(std::process::Stdio::inherit())
+          .stdin(std::process::Stdio::inherit())
+          .status();
+
+      let _ = std::fs::remove_file(&script_path);
+      status
+  }
+
   fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
-      use std::os::windows::process::CommandExt;
-      const CREATE_NO_WINDOW: u32 = 0x08000000;
 
       let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
@@ -341,6 +367,21 @@ pub fn run_script_from_string_streaming_with_dir(
 ) -> std::io::Result<std::process::ExitStatus> {
     let executor = get_executor();
     executor.run_script_from_string_streaming_with_dir(script, dir)
+}
+
+pub fn run_script_from_string_streaming_headless(
+    script: &str,
+) -> std::io::Result<std::process::ExitStatus> {
+    let executor = get_executor();
+    executor.run_script_from_string_streaming_headless(script)
+}
+
+pub fn run_script_from_string_streaming_headless_with_dir(
+    script: &str,
+    dir: &str,
+) -> std::io::Result<std::process::ExitStatus> {
+    let executor = get_executor();
+    executor.run_script_from_string_streaming_headless_with_dir(script, dir)
 }
 
 pub fn execute_command_direct(command: &str, args: &[&str]) -> std::io::Result<Output> {
