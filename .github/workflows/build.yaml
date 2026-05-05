@@ -644,6 +644,157 @@ jobs:
           cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
           gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
+  # ============================================================
+  # Build CLI pacman packages inside Arch container
+  # ============================================================
+  build-cli-pacman:
+    name: Build CLI pacman (${{ matrix.package_name }})
+    needs: [build-cli-linux, build-cli-linux-armv7]
+    if: needs.build-cli-linux.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            target: "x86_64-unknown-linux-musl"
+            pacman_arch: x86_64
+          - os: ubuntu-24.04-arm
+            package_name: linux-aarch64
+            target: "aarch64-unknown-linux-musl"
+            pacman_arch: aarch64
+          - os: ubuntu-latest
+            package_name: linux-armv7
+            target: "armv7-unknown-linux-musleabihf"
+            pacman_arch: armv7
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arch dependencies
+        run: |
+          pacman -Sy --noconfirm base-devel curl gh git
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Download built binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: pacman-input/
+
+      - name: Prepare build tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+
+          TARGET="${{ matrix.target }}"
+          RELEASE_DIR="src-tauri/target/${TARGET}/release"
+          mkdir -p "$RELEASE_DIR"
+
+          # Copy binary from the downloaded artifact into the expected location
+          cp pacman-input/release_cli/${{ matrix.package_name }}/eim "$RELEASE_DIR/eim"
+          chmod +x "$RELEASE_DIR/eim"
+
+          # Copy completions if present
+          if [ -d "pacman-input/src-tauri/target/release/completions" ]; then
+            mkdir -p src-tauri/target/release/completions
+            cp -a pacman-input/src-tauri/target/release/completions/. src-tauri/target/release/completions/
+            mkdir -p "$RELEASE_DIR/completions"
+            cp -a pacman-input/src-tauri/target/release/completions/. "$RELEASE_DIR/completions/"
+          fi
+
+          echo "Build tree prepared:"
+          find "$RELEASE_DIR" -type f
+
+      - name: Create pacman package
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+
+          PKG_NAME="eim-cli-${{ matrix.package_name }}"
+          PKG_VERSION="${{ github.ref_name }}"
+          # Strip 'v' prefix if present
+          PKG_VERSION="${PKG_VERSION#v}"
+          PKG_REL="1"
+          PACMAN_ARCH="${{ matrix.pacman_arch }}"
+
+          # Create package directory structure
+          PKG_DIR=$(mktemp -d)
+          mkdir -p "$PKG_DIR/usr/local/bin"
+          mkdir -p "$PKG_DIR/usr/local/share/zsh/site-functions"
+          mkdir -p "$PKG_DIR/usr/local/share/bash-completion/completions"
+          mkdir -p "$PKG_DIR/usr/local/share/fish/vendor_completions.d"
+          mkdir -p "$PKG_DIR/usr/local/share/elvish/lib"
+
+          # Copy binary
+          cp src-tauri/target/${{ matrix.target }}/release/eim "$PKG_DIR/usr/local/bin/eim"
+          chmod +x "$PKG_DIR/usr/local/bin/eim"
+
+          # Copy completions if available
+          if [ -d "src-tauri/target/release/completions" ]; then
+            cp src-tauri/target/release/completions/_eim "$PKG_DIR/usr/local/share/zsh/site-functions/" 2>/dev/null || true
+            cp src-tauri/target/release/completions/eim.bash "$PKG_DIR/usr/local/share/bash-completion/completions/eim" 2>/dev/null || true
+            cp src-tauri/target/release/completions/eim.fish "$PKG_DIR/usr/local/share/fish/vendor_completions.d/" 2>/dev/null || true
+            cp src-tauri/target/release/completions/eim.elv "$PKG_DIR/usr/local/share/elvish/lib/" 2>/dev/null || true
+          fi
+
+          # Create .PKGINFO
+          cat > "$PKG_DIR/.PKGINFO" << EOF
+pkgname = eim-cli-${{ matrix.package_name }}
+pkgver = ${PKG_VERSION}-${PKG_REL}
+pkgdesc = Espressif IDF Installation Manager CLI
+url = https://github.com/espressif/idf-im-ui
+builddate = $(date +%s)
+packager = CI
+arch = $PACMAN_ARCH
+license = MIT
+depend = git
+depend = wget
+depend = libusb
+depend = libffi
+depend = openssl
+EOF
+
+          # Create .INSTALL (optional post-install script)
+          cat > "$PKG_DIR/.INSTALL" << 'EOF'
+post_install() {
+  echo "Installing eim completion files..."
+}
+EOF
+
+          # Create the package
+          cd "$PKG_DIR"
+          tar -czf "$HOME/$PKG_NAME-${PACMAN_ARCH}.pkg.tar.gz" *
+          ls -la "$HOME/$PKG_NAME-${PACMAN_ARCH}.pkg.tar.gz"
+
+      - name: Upload pacman artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          path: ~/*.pkg.tar.gz
+          if-no-files-found: warn
+
+      - name: Upload pacman Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACMAN_FILE=$(ls ~/*.pkg.tar.gz | head -1)
+          cp "$PACMAN_FILE" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.gz"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.gz" --repo "${{ github.repository }}" --clobber
+
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -1188,15 +1339,6 @@ jobs:
             src-tauri/target/release/eim
           if-no-files-found: warn
 
-      - name: Upload Linux artifacts - .AppImage
-        if: startsWith(matrix.os, 'ubuntu')
-        uses: actions/upload-artifact@v4
-        with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-AppImage
-          path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-          if-no-files-found: warn
-
       - name: Upload macOS artifacts
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
@@ -1268,16 +1410,6 @@ jobs:
           DEB_FILE=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
           cp "$DEB_FILE" "eim-gui-${{ matrix.package_name }}.deb"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.deb" --clobber
-
-      - name: Upload Release Assets (Linux - .AppImage)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          APPIMAGE_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
-          cp "$APPIMAGE_FILE" "eim-gui-${{ matrix.package_name }}.AppImage"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.AppImage" --clobber
 
       - name: Upload Release Assets (macOS)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
@@ -1475,6 +1607,108 @@ jobs:
           cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
+  # ============================================================
+  # Build GUI pacman packages inside Arch container
+  # ============================================================
+  build-gui-pacman:
+    name: Build GUI pacman (${{ matrix.package_name }})
+    needs: [build-gui]
+    if: needs.build-gui.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: archlinux:latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            pacman_arch: x86_64
+          - os: ubuntu-22.04-arm
+            package_name: linux-aarch64
+            pacman_arch: aarch64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arch dependencies
+        run: |
+          pacman -Sy --noconfirm base-devel curl gh git
+
+      - name: Install Rust toolchain
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Download built GUI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: pacman-input/
+
+      - name: Create pacman package for GUI
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$HOME/.cargo/env"
+
+          PKG_VERSION="${{ github.ref_name }}"
+          # Strip 'v' prefix if present
+          PKG_VERSION="${PKG_VERSION#v}"
+          PKG_REL="1"
+          PACMAN_ARCH="${{ matrix.pacman_arch }}"
+
+          # Create package directory structure
+          PKG_DIR=$(mktemp -d)
+          mkdir -p "$PKG_DIR/usr/local/bin"
+          mkdir -p "$PKG_DIR/usr/local/share/eim"
+
+          # Copy binary
+          cp pacman-input/eim "$PKG_DIR/usr/local/bin/eim"
+          chmod +x "$PKG_DIR/usr/local/bin/eim"
+
+          # Create .PKGINFO
+          cat > "$PKG_DIR/.PKGINFO" << EOF
+pkgname = eim-gui-${{ matrix.package_name }}
+pkgver = ${PKG_VERSION}-${PKG_REL}
+pkgdesc = Espressif IDF Installation Manager GUI
+url = https://github.com/espressif/idf-im-ui
+builddate = $(date +%s)
+packager = CI
+arch = $PACMAN_ARCH
+license = MIT
+depend = gtk4
+depend = libadwaita
+depend = webkit2gtk-4.1
+depend = libusb
+depend = libffi
+depend = openssl
+EOF
+
+          # Create the package
+          cd "$PKG_DIR"
+          tar -czf "$HOME/eim-gui-${{ matrix.package_name }}-${PACMAN_ARCH}.pkg.tar.gz" *
+          ls -la "$HOME/eim-gui-${{ matrix.package_name }}-${PACMAN_ARCH}.pkg.tar.gz"
+
+      - name: Upload pacman artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          path: ~/*.pkg.tar.gz
+          if-no-files-found: warn
+
+      - name: Upload pacman Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACMAN_FILE=$(ls ~/*.pkg.tar.gz | head -1)
+          cp "$PACMAN_FILE" "eim-gui-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.gz"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.gz" --repo "${{ github.repository }}" --clobber
+
   Autotest-CLI:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
@@ -1534,7 +1768,7 @@ jobs:
 
   update-linux-repos:
     name: Update APT and RPM Repositories
-    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, update-release-info]
+    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, build-cli-pacman, build-gui-pacman, update-release-info]
     permissions:
       contents: write
     uses: ./.github/workflows/update-linux-repos.yml
