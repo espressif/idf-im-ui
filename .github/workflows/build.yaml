@@ -752,27 +752,27 @@ jobs:
 
           # Create .PKGINFO
           cat > "$PKG_DIR/.PKGINFO" << EOF
-pkgname = eim-cli-${{ matrix.package_name }}
-pkgver = ${PKG_VERSION}-${PKG_REL}
-pkgdesc = Espressif IDF Installation Manager CLI
-url = https://github.com/espressif/idf-im-ui
-builddate = $(date +%s)
-packager = CI
-arch = $PACMAN_ARCH
-license = MIT
-depend = git
-depend = wget
-depend = libusb
-depend = libffi
-depend = openssl
-EOF
+          pkgname = eim-cli-${{ matrix.package_name }}
+          pkgver = ${PKG_VERSION}-${PKG_REL}
+          pkgdesc = Espressif IDF Installation Manager CLI
+          url = https://github.com/espressif/idf-im-ui
+          builddate = $(date +%s)
+          packager = CI
+          arch = $PACMAN_ARCH
+          license = MIT
+          depend = git
+          depend = wget
+          depend = libusb
+          depend = libffi
+          depend = openssl
+          EOF
 
-          # Create .INSTALL (optional post-install script)
-          cat > "$PKG_DIR/.INSTALL" << 'EOF'
-post_install() {
-  echo "Installing eim completion files..."
-}
-EOF
+                    # Create .INSTALL (optional post-install script)
+                    cat > "$PKG_DIR/.INSTALL" << 'EOF'
+          post_install() {
+            echo "Installing eim completion files..."
+          }
+          EOF
 
           # Create the package
           cd "$PKG_DIR"
@@ -1672,21 +1672,21 @@ EOF
 
           # Create .PKGINFO
           cat > "$PKG_DIR/.PKGINFO" << EOF
-pkgname = eim-gui-${{ matrix.package_name }}
-pkgver = ${PKG_VERSION}-${PKG_REL}
-pkgdesc = Espressif IDF Installation Manager GUI
-url = https://github.com/espressif/idf-im-ui
-builddate = $(date +%s)
-packager = CI
-arch = $PACMAN_ARCH
-license = MIT
-depend = gtk4
-depend = libadwaita
-depend = webkit2gtk-4.1
-depend = libusb
-depend = libffi
-depend = openssl
-EOF
+          pkgname = eim-gui-${{ matrix.package_name }}
+          pkgver = ${PKG_VERSION}-${PKG_REL}
+          pkgdesc = Espressif IDF Installation Manager GUI
+          url = https://github.com/espressif/idf-im-ui
+          builddate = $(date +%s)
+          packager = CI
+          arch = $PACMAN_ARCH
+          license = MIT
+          depend = gtk4
+          depend = libadwaita
+          depend = webkit2gtk-4.1
+          depend = libusb
+          depend = libffi
+          depend = openssl
+          EOF
 
           # Create the package
           cd "$PKG_DIR"

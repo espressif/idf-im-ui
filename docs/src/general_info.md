@@ -12,6 +12,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 > | **Linux (Homebrew)** | [Homebrew](#linux-installation-via-homebrew) |
 > | **Linux (Debian/Ubuntu)** | [APT](#debian-based-linux-installation-via-apt-repository) |
 > | **Linux (Fedora/RHEL)** | [RPM](#rpm-based-linux-installation-via-dnf-repository) |
+> | **Linux (Arch)** | [pacman](#arch-linux-installation-via-pacman-repository) |
 >
 > If you prefer a manual installation, you can download standalone installers for **all platforms** and **ESP-IDF versions** directly from the
 > 👉 [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
@@ -222,9 +223,47 @@ sudo dnf upgrade eim
 
 ---
 
+### Arch Linux Installation (via pacman Repository)
+
+<a id="arch-linux-installation-via-pacman-repository"></a>
+
+For **Arch-based** distributions (Arch Linux, Manjaro, EndeavourOS, CachyOS, etc.), use the official Espressif pacman repository:
+
+```bash
+# Add the Espressif pacman repository
+# Edit /etc/pacman.conf and add the following at the end:
+
+[espressif]
+Server = https://dl.espressif.com/dl/eim/pacman/$arch
+
+# Or use the shell command below (requires sudo):
+sudo tee -a /etc/pacman.conf << 'EOF'
+[espressif]
+Server = https://dl.espressif.com/dl/eim/pacman/$arch
+EOF
+
+# Update package databases
+sudo pacman -Sy
+
+# Install CLI only
+sudo pacman -S eim-cli
+
+# Or install GUI (includes CLI)
+sudo pacman -S eim-gui
+```
+
+> **Note:** The GUI package depends on `gtk4`, `libadwaita`, and `webkit2gtk-4.1`, which may require additional setup on some distributions.
+
+To update EIM later:
+```bash
+sudo pacman -Syu eim
+```
+
+---
+
 ### Alternative: Direct Downloads
 
-> 🧩 You can download `.deb`, `.rpm`, `.msi`, `.dmg` packages or binaries for Linux from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
+> 🧩 You can download `.deb`, `.rpm`, `.pkg.tar.gz` (pacman), `.msi`, `.dmg` packages or binaries for Linux from the [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
 > The download page includes packages for **all platforms** and **ESP-IDF versions** — ideal for offline or custom deployments.
 
 > **Note:**
