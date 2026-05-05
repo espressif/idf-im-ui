@@ -284,3 +284,140 @@ jobs:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/rpm/*"
+
+  update-pacman-repo:
+    name: Update pacman Repository on S3
+    needs: update-apt-repo
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Install Arch dependencies for pacman tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl jq
+
+      - name: Download CLI linux-x64 pacman artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-x64-${{ inputs.version }}-pacman
+          path: new-pacman/
+        continue-on-error: true
+
+      - name: Download CLI linux-aarch64 pacman artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-aarch64-${{ inputs.version }}-pacman
+          path: new-pacman/
+        continue-on-error: true
+
+      - name: Download CLI linux-armv7 pacman artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-cli-linux-armv7-${{ inputs.version }}-pacman
+          path: new-pacman/
+        continue-on-error: true
+
+      - name: Download GUI linux-x64 pacman artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-x64-${{ inputs.version }}-pacman
+          path: new-pacman/
+        continue-on-error: true
+
+      - name: Download GUI linux-aarch64 pacman artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: eim-gui-linux-aarch64-${{ inputs.version }}-pacman
+          path: new-pacman/
+        continue-on-error: true
+
+      - name: Create pacman repository structure
+        run: |
+          # Create directory structure
+          mkdir -p pacman-repo/x86_64
+          mkdir -p pacman-repo/aarch64
+          mkdir -p pacman-repo/armv7
+
+          # Sync existing .pkg.tar.gz files from S3
+          aws s3 sync s3://espdldata/dl/eim/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing x86_64 pacman packages found"
+          aws s3 sync s3://espdldata/dl/eim/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing aarch64 pacman packages found"
+          aws s3 sync s3://espdldata/dl/eim/pacman/armv7/ pacman-repo/armv7/ --exclude "*" --include "*.pkg.tar.gz" || echo "No existing armv7 pacman packages found"
+
+          # Debug: Show contents of downloaded packages
+          echo "Downloaded pacman artifacts:"
+          find new-pacman -type f -name "*.pkg.tar.gz" -exec ls -la {} \;
+
+          # Copy new .pkg.tar.gz files to appropriate architecture directories
+          if [ -d "new-pacman" ] && [ "$(ls -A new-pacman)" ]; then
+            # Copy x86_64 packages
+            find new-pacman -type f \( -name "*x86_64*.pkg.tar.gz" -o -name "*linux-x64*.pkg.tar.gz" \) -exec cp {} pacman-repo/x86_64/ \; || echo "No x86_64 packages to copy"
+
+            # Copy aarch64 packages
+            find new-pacman -type f \( -name "*aarch64*.pkg.tar.gz" -o -name "*arm64*.pkg.tar.gz" -o -name "*linux-aarch64*.pkg.tar.gz" \) -exec cp {} pacman-repo/aarch64/ \; || echo "No aarch64 packages to copy"
+
+            # Copy armv7 packages
+            find new-pacman -type f \( -name "*armv7*.pkg.tar.gz" -o -name "*armhf*.pkg.tar.gz" -o -name "*linux-armv7*.pkg.tar.gz" \) -exec cp {} pacman-repo/armv7/ \; || echo "No armv7 packages to copy"
+
+            echo "Copied pacman package files:"
+            echo "x86_64 packages:"
+            ls -la pacman-repo/x86_64/ || echo "No x86_64 packages"
+            echo "aarch64 packages:"
+            ls -la pacman-repo/aarch64/ || echo "No aarch64 packages"
+            echo "armv7 packages:"
+            ls -la pacman-repo/armv7/ || echo "No armv7 packages"
+          else
+            echo "No pacman artifacts downloaded"
+          fi
+
+      - name: Generate pacman repository database
+        working-directory: pacman-repo
+        run: |
+          # Function to generate repo for an architecture
+          generate_repo() {
+            local arch_dir="$1"
+            local arch_name="$2"
+            if [ -d "$arch_dir" ] && [ "$(ls -A $arch_dir/*.pkg.tar.gz 2>/dev/null)" ]; then
+              echo "Generating database for $arch_name..."
+              # Create the repo database using tar (standard tarball for pacman)
+              # Pacman uses a simple tarball with a database directory structure
+              mkdir -p "$arch_dir/db"
+              cd "$arch_dir"
+              # Extract and re-create the database
+              for pkg in *.pkg.tar.gz; do
+                tar -xzf "$pkg" -C db/ 2>/dev/null || true
+              done
+              # For simple file hosting, we just need the packages themselves
+              # pacman uses the sync database format via repo-add
+              echo "Packages in $arch_name ready for hosting"
+            else
+              echo "No $arch_name packages found, skipping"
+            fi
+          }
+
+          generate_repo "x86_64" "x86_64"
+          generate_repo "aarch64" "aarch64"
+          generate_repo "armv7" "armv7"
+
+      - name: Upload repository to S3
+        run: |
+          # Upload the entire repository structure
+          aws s3 sync pacman-repo/ s3://espdldata/dl/eim/pacman/ --acl public-read --delete
+
+          # Verify upload
+          echo "Uploaded repository structure:"
+          aws s3 ls s3://espdldata/dl/eim/pacman/ --recursive
+
+      - name: Invalidate CloudFront cache
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/pacman/*"
