@@ -53,7 +53,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-use crate::version_manager::{run_command_using_activation_script};
+use crate::version_manager::{run_command_using_activation_script, run_command_using_activation_script_headless};
 
 /// Creates an executable shell script with the given content and file path.
 ///
@@ -1829,6 +1829,7 @@ pub fn single_version_post_install(
     python_bin_path: &str,
     create_cmd_bat: bool,
     offline_installation: bool,
+    is_gui: bool,
 ) {
     let mut env_vars = match env_vars {
         Some(vars) => vars,
@@ -1969,7 +1970,15 @@ pub fn single_version_post_install(
         "compote registry sync --resolution=latest --recursive {}",
         tool_install_directory
       );
-      match run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path)) {
+
+      let result = if is_gui {
+          // Use headless mode in GUI to avoid showing PowerShell window
+          run_command_using_activation_script_headless(&activation_script_fullname, &command, Some(idf_path))
+      } else {
+          run_command_using_activation_script(&activation_script_fullname, &command, Some(idf_path))
+      };
+
+      match result {
           Ok(output) => {
               if output.success() {
                   info!("Components registry synchronized successfully");

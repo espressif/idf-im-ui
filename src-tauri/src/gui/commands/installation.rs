@@ -231,7 +231,8 @@ pub async fn install_single_version(
       None, // env_vars
       &paths.python_path.to_string_lossy().to_string(),
       false, // create_cmd_bat
-      false,
+      false, // offline_installation
+      true,  // is_gui
   );
 
   Ok(())
@@ -1860,6 +1861,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 &paths.python_path.to_string_lossy(),
                 false, // create_cmd_bat
                 true,  // is_offline_install
+                true,  // is_gui
             );
 
             emit_log_message(&app_handle, MessageLevel::Success,

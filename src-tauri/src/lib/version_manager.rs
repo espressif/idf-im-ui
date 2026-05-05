@@ -412,7 +412,7 @@ pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result
     run_command_using_activation_script(activation_script, command, None)
 }
 
-pub fn run_command_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+fn build_activation_script(activation_script: &str, command: &str) -> String {
     #[cfg(not(target_os = "windows"))]
     let script = format!(
         "source \"{}\"\nshopt -s expand_aliases\n{}",
@@ -427,6 +427,11 @@ pub fn run_command_using_activation_script(activation_script: &str, command: &st
         command
     );
 
+    script
+}
+
+pub fn run_command_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+    let script = build_activation_script(activation_script, command);
     debug!("Running command using activation script {}", activation_script);
 
     let executor = crate::command_executor::get_executor();
@@ -441,6 +446,23 @@ pub fn run_command_using_activation_script(activation_script: &str, command: &st
         Ok(status) => Ok(status),
         Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
       }
+    }
+  }
+
+pub fn run_command_using_activation_script_headless(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+    let script = build_activation_script(activation_script, command);
+    debug!("Running headless command using activation script {}", activation_script);
+
+    let executor = crate::command_executor::get_executor();
+    let result = if dir.is_some() {
+        debug!("Running headless command in directory {}", dir.unwrap());
+        executor.run_script_from_string_streaming_headless_with_dir(&script, dir.unwrap())
+    } else {
+        executor.run_script_from_string_streaming_headless(&script)
+    };
+    match result {
+      Ok(status) => Ok(status),
+      Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
     }
   }
 
