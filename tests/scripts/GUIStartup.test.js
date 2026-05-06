@@ -3,6 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { getOSName, getArchitecture } from "../helper.js";
+import { tGui, xpathText } from "../helpers/i18n.js";
 
 // This function verifies the EIM GUI properly starts and displays the welcome page
 
@@ -46,7 +47,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
-        "Welcome to ESP-IDF Installation Manager"
+        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
       );
     });
 
@@ -54,15 +55,13 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const footer = await eimRunner.findByClass("app-footer");
       const text = await footer.getText();
       expect(text, "Expected correct version shown on page").to.include(
-        `ESP-IDF Installation Manager v${eimVersion}`
+        tGui("footer.app.version", { version: eimVersion })
       );
     });
 
     it("3- Should show option to hide welcome page", async function () {
-      const hideWelcome = await eimRunner.findByText(
-        "show this welcome screen again",
-        20000
-      );
+      const dontShowText = xpathText("welcome.preferences.dontShow");
+      const hideWelcome = await eimRunner.findByText(dontShowText, 20000);
       expect(hideWelcome, "Expected option to hide welcome page").to.not.be
         .false;
       const isDisplayed = await hideWelcome.isDisplayed();
@@ -70,7 +69,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const checkBox = await eimRunner.findByRelation(
         "parent",
         "div",
-        "show this welcome screen again"
+        dontShowText
       );
       const checked = await checkBox.getAttribute("class");
       expect(checked, "Expected checkbox to be unchecked").to.not.include(
@@ -80,7 +79,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
 
     it("4- Should show usage statistics opt-in (off with do-not-track)", async function () {
       const allowStatistics = await eimRunner.findByText(
-        "Allow sending usage statistics",
+        tGui("welcome.preferences.allowTracking"),
         20000
       );
       expect(
@@ -103,7 +102,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const documentationLink = await eimRunner.findByRelation(
         "parent",
         "a",
-        "Documentation"
+        tGui("footer.buttons.documentation")
       );
       expect(documentationLink, "Expected Documentation link in footer").to.not
         .be.false;
@@ -111,14 +110,14 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const logsButton = await eimRunner.findByRelation(
         "parent",
         "button",
-        "Logs"
+        tGui("footer.buttons.logs")
       );
       expect(logsButton, "Expected Logs button in footer").to.not.be.false;
 
       const reportIssueButton = await eimRunner.findByRelation(
         "parent",
         "button",
-        "Report Issue"
+        tGui("footer.buttons.reportIssue")
       );
       expect(reportIssueButton, "Expected Report Issue button in footer").to.not
         .be.false;
@@ -126,16 +125,20 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const aboutButton = await eimRunner.findByRelation(
         "parent",
         "button",
-        "About"
+        tGui("footer.buttons.about")
       );
       expect(aboutButton, "Expected About button in footer").to.not.be.false;
     });
 
     it("6 - Should allow reporting an issue from the footer link and attach OS information", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton("Report Issue");
+      await eimRunner.clickButton(tGui("footer.buttons.reportIssue"));
       await new Promise((resolve) => setTimeout(resolve, 3000));
-      const OSData = await eimRunner.findByRelation("parent", "div", "OS");
+      const OSData = await eimRunner.findByRelation(
+        "parent",
+        "div",
+        tGui("footer.modal.report.labels.os")
+      );
       const osText = await OSData.getText();
       expect(osText, "Expected OS information to be present").to.include(
         getOSName()
@@ -144,7 +147,7 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const architectureData = await eimRunner.findByRelation(
         "parent",
         "div",
-        "Architecture"
+        tGui("footer.modal.report.labels.arch")
       );
       const architectureText = await architectureData.getText();
       expect(
@@ -155,16 +158,18 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
       const appVersionData = await eimRunner.findByRelation(
         "parent",
         "div",
-        "App Version"
+        tGui("footer.modal.report.labels.appVersion")
       );
       const appVersionText = await appVersionData.getText();
       expect(
         appVersionText,
         "Expected App Version information to be present"
       ).to.include(eimVersion);
-      await eimRunner.clickButton("Cancel");
+      await eimRunner.clickButton(tGui("footer.modal.report.buttons.cancel"));
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const generateButton = await eimRunner.findByText("Generate Report");
+      const generateButton = await eimRunner.findByText(
+        tGui("footer.modal.report.buttons.generate")
+      );
       expect(
         generateButton,
         "Expected Generate Report button to not be present after cancel"
@@ -173,10 +178,10 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
 
     it("7- Should show application information when clicking on about", async function () {
       this.timeout(5000);
-      await eimRunner.clickButton("About");
+      await eimRunner.clickButton(tGui("footer.buttons.about"));
       await new Promise((resolve) => setTimeout(resolve, 3000));
       const aboutText = await eimRunner.findByText(
-        "A cross-platform tool for installing and managing ESP-IDF development environment"
+        tGui("footer.modal.about.description.line1")
       );
       expect(aboutText, "Expected about text to be present").to.not.be.false;
     });
