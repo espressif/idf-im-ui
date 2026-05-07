@@ -73,7 +73,11 @@
         "pythonConfig": "Python Configuration",
         "mirrorSelection": "Mirror Selection",
         "additionalOptions": "Additional Options",
-        "review": "Review & Confirm"
+        "review": "Review & Confirm",
+        "python": {
+          "installPython": "Install Python",
+          "installingPython": "Installing Python..."
+        }
       },
       "options": {
         "createShortcuts": "Create shortcuts",

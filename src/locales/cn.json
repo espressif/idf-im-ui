@@ -72,7 +72,11 @@
         "pythonConfig": "Python 配置",
         "mirrorSelection": "选择镜像",
         "additionalOptions": "附加选项",
-        "review": "核查与确认"
+        "review": "核查与确认",
+        "python": {
+          "installPython": "安装 Python",
+           "installingPython": "正在安装 Python..."
+        }
       },
       "options": {
         "createShortcuts": "创建快捷方式",
