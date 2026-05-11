@@ -689,6 +689,177 @@ jobs:
           cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
           gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
+  # ============================================================
+  # Build CLI pacman packages inside Arch container
+  # ============================================================
+  build-cli-pacman:
+    name: Build CLI pacman (${{ matrix.package_name }})
+    needs: [build-cli-linux, build-cli-linux-armv7]
+    if: needs.build-cli-linux.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            pacman_arch: x86_64
+            image: archlinux:latest
+          - os: ubuntu-22.04-arm
+            package_name: linux-aarch64
+            pacman_arch: aarch64
+            image: menci/archlinuxarm:latest
+          - os: ubuntu-latest
+            package_name: linux-armv7
+            pacman_arch: armv7h
+            image: archlinux:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arch dependencies
+        run: |
+          pacman -Sy --noconfirm base-devel curl git fakeroot github-cli
+
+      - name: Download built binary artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: pacman-input/
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0.${GITHUB_SHA:0:7}"
+          fi
+          # pacman doesn't allow '-' in pkgver; replace with '.'
+          VERSION="${VERSION//-/.}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
+      - name: Create pacman package for CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PKG_VERSION="${{ steps.version.outputs.version }}"
+          PKG_REL="1"
+          PACMAN_ARCH="${{ matrix.pacman_arch }}"
+          PKG_NAME="eim-cli"
+
+          # Locate the binary in the downloaded artifact
+          BIN_SRC="pacman-input/release_cli/${{ matrix.package_name }}/eim"
+          if [ ! -f "$BIN_SRC" ]; then
+            BIN_SRC=$(find pacman-input -type f -name "eim" -not -path "*/completions/*" | head -1)
+          fi
+
+          if [ -z "$BIN_SRC" ] || [ ! -f "$BIN_SRC" ]; then
+            echo "Could not find eim binary in artifact" >&2
+            find pacman-input -type f
+            exit 1
+          fi
+
+          echo "Using binary: $BIN_SRC"
+
+          # Build package directory layout
+          PKG_DIR=$(mktemp -d)
+          mkdir -p "$PKG_DIR/usr/bin"
+          cp "$BIN_SRC" "$PKG_DIR/usr/bin/eim"
+          chmod +x "$PKG_DIR/usr/bin/eim"
+
+          # Install shell completions if present
+          COMPLETIONS_SRC="pacman-input/src-tauri/target/release/completions"
+          if [ -d "$COMPLETIONS_SRC" ]; then
+            mkdir -p "$PKG_DIR/usr/share/bash-completion/completions"
+            mkdir -p "$PKG_DIR/usr/share/zsh/site-functions"
+            mkdir -p "$PKG_DIR/usr/share/fish/vendor_completions.d"
+            [ -f "$COMPLETIONS_SRC/eim.bash" ] && cp "$COMPLETIONS_SRC/eim.bash" "$PKG_DIR/usr/share/bash-completion/completions/eim"
+            [ -f "$COMPLETIONS_SRC/_eim" ]     && cp "$COMPLETIONS_SRC/_eim"     "$PKG_DIR/usr/share/zsh/site-functions/_eim"
+            [ -f "$COMPLETIONS_SRC/eim.fish" ] && cp "$COMPLETIONS_SRC/eim.fish" "$PKG_DIR/usr/share/fish/vendor_completions.d/eim.fish"
+          fi
+
+          # Manpage if present in repo
+          if [ -f "man/eim.1" ]; then
+            mkdir -p "$PKG_DIR/usr/share/man/man1"
+            cp man/eim.1 "$PKG_DIR/usr/share/man/man1/eim.1"
+            gzip -9 "$PKG_DIR/usr/share/man/man1/eim.1"
+          fi
+
+          # Compute install size (KiB) for .PKGINFO
+          ISIZE=$(du -sb "$PKG_DIR" | awk '{print $1}')
+
+          # Create .PKGINFO. pacman parses each line as 'key = value' and
+          # rejects leading whitespace, so we write it with printf rather than
+          # a heredoc (heredoc bodies inside YAML inevitably carry indentation).
+          {
+            printf 'pkgname = %s\n'  "${PKG_NAME}"
+            printf 'pkgver = %s-%s\n' "${PKG_VERSION}" "${PKG_REL}"
+            printf 'pkgdesc = %s\n'  "Espressif IDF Installation Manager (CLI)"
+            printf 'url = %s\n'      "https://github.com/espressif/idf-im-ui"
+            printf 'builddate = %s\n' "$(date +%s)"
+            printf 'packager = %s\n' "Espressif Systems CI <[email protected]>"
+            printf 'size = %s\n'     "${ISIZE}"
+            printf 'arch = %s\n'     "${PACMAN_ARCH}"
+            printf 'license = %s\n'  "MIT"
+            for dep in git wget flex cmake bison gperf ccache libffi openssl dfu-util libusb; do
+              printf 'depend = %s\n' "$dep"
+            done
+          } > "$PKG_DIR/.PKGINFO"
+
+          echo "=== Generated .PKGINFO ==="
+          cat -A "$PKG_DIR/.PKGINFO"
+          echo "=========================="
+
+          # Generate .MTREE (pacman metadata describing file tree)
+          # bsdtar is provided by libarchive in base-devel
+          cd "$PKG_DIR"
+          LANG=C bsdtar -czf .MTREE \
+            --format=mtree \
+            --options='!all,use-set,type,uid,gid,mode,time,size,md5,sha256,link' \
+            .PKGINFO usr
+
+          # Build the final package: must be a tar.zst (or tar.gz/.xz) containing
+          # .PKGINFO, .MTREE, and the file tree at the archive root.
+          OUT_DIR="$GITHUB_WORKSPACE/pacman_output"
+          mkdir -p "$OUT_DIR"
+          PKG_FILE="$OUT_DIR/${PKG_NAME}-${PKG_VERSION}-${PKG_REL}-${PACMAN_ARCH}.pkg.tar.zst"
+
+          # zstd is in base-devel; fall back to gzip if not.
+          if command -v zstd >/dev/null 2>&1; then
+            tar --zstd -cf "$PKG_FILE" .PKGINFO .MTREE usr
+          else
+            PKG_FILE="${PKG_FILE%.zst}.gz"
+            tar -czf "$PKG_FILE" .PKGINFO .MTREE usr
+          fi
+
+          ls -la "$OUT_DIR"
+          echo "Built pacman package: $PKG_FILE"
+
+      - name: Upload pacman artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          path: pacman_output/*.pkg.tar.*
+          if-no-files-found: warn
+
+      - name: Upload pacman Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PACMAN_FILE=$(ls pacman_output/*.pkg.tar.* | head -1)
+          EXT="${PACMAN_FILE##*.pkg.tar.}"
+          cp "$PACMAN_FILE" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}" --repo "${{ github.repository }}" --clobber
+
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
     needs: [setup, build-test-lib]
@@ -1233,15 +1404,6 @@ jobs:
             src-tauri/target/release/eim
           if-no-files-found: warn
 
-      - name: Upload Linux artifacts - .AppImage
-        if: startsWith(matrix.os, 'ubuntu')
-        uses: actions/upload-artifact@v4
-        with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-AppImage
-          path: |
-            src-tauri/target/release/bundle/appimage/*.AppImage
-          if-no-files-found: warn
-
       - name: Upload macOS artifacts
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v4
@@ -1313,16 +1475,6 @@ jobs:
           DEB_FILE=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
           cp "$DEB_FILE" "eim-gui-${{ matrix.package_name }}.deb"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.deb" --clobber
-
-      - name: Upload Release Assets (Linux - .AppImage)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          APPIMAGE_FILE=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
-          cp "$APPIMAGE_FILE" "eim-gui-${{ matrix.package_name }}.AppImage"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.AppImage" --clobber
 
       - name: Upload Release Assets (macOS)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
@@ -1520,6 +1672,164 @@ jobs:
           cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
+  # ============================================================
+  # Build GUI pacman packages inside Arch container
+  # ============================================================
+  build-gui-pacman:
+    name: Build GUI pacman (${{ matrix.package_name }})
+    needs: [build-gui]
+    if: needs.build-gui.result == 'success'
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    container:
+      image: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            package_name: linux-x64
+            pacman_arch: x86_64
+            image: archlinux:latest
+          - os: ubuntu-22.04-arm
+            package_name: linux-aarch64
+            pacman_arch: aarch64
+            image: menci/archlinuxarm:latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Arch dependencies
+        run: |
+          pacman -Sy --noconfirm base-devel curl git github-cli
+
+      - name: Download built GUI artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          path: pacman-input/
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="0.0.0.${GITHUB_SHA:0:7}"
+          fi
+          # pacman doesn't allow '-' in pkgver; replace with '.'
+          VERSION="${VERSION//-/.}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+
+      - name: Create pacman package for GUI
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PKG_VERSION="${{ steps.version.outputs.version }}"
+          # Strip 'v' prefix if present
+          PKG_VERSION="${PKG_VERSION#v}"
+          # pacman's pkgver disallows '-'; replace with '.'
+          PKG_VERSION="${PKG_VERSION//-/.}"
+          PKG_REL="1"
+          PACMAN_ARCH="${{ matrix.pacman_arch }}"
+          PKG_NAME="eim-gui"
+
+          PKG_DIR=$(mktemp -d)
+          mkdir -p "$PKG_DIR/usr/bin"
+
+          # Copy binary
+          cp pacman-input/eim "$PKG_DIR/usr/bin/eim"
+          chmod +x "$PKG_DIR/usr/bin/eim"
+
+          # Compute installed size for .PKGINFO
+          ISIZE=$(du -sb "$PKG_DIR" | awk '{print $1}')
+
+          {
+            printf 'pkgname = %s\n'   "${PKG_NAME}"
+            printf 'pkgver = %s-%s\n' "${PKG_VERSION}" "${PKG_REL}"
+            printf 'pkgdesc = %s\n'   "Espressif IDF Installation Manager (GUI)"
+            printf 'url = %s\n'       "https://github.com/espressif/idf-im-ui"
+            printf 'builddate = %s\n' "$(date +%s)"
+            printf 'packager = %s\n'  "Espressif Systems CI <[email protected]>"
+            printf 'size = %s\n'      "${ISIZE}"
+            printf 'arch = %s\n'      "${PACMAN_ARCH}"
+            printf 'license = %s\n'   "MIT"
+            for dep in gtk4 libadwaita webkit2gtk-4.1 libusb libffi openssl; do
+              printf 'depend = %s\n' "$dep"
+            done
+          } > "$PKG_DIR/.PKGINFO"
+
+          echo "=== Generated .PKGINFO ==="
+          cat -A "$PKG_DIR/.PKGINFO"
+          echo "=========================="
+
+          # Generate .MTREE (file tree metadata pacman uses for verification).
+          # bsdtar is provided by libarchive in base-devel.
+          cd "$PKG_DIR"
+          LANG=C bsdtar -czf .MTREE \
+            --format=mtree \
+            --options='!all,use-set,type,uid,gid,mode,time,size,md5,sha256,link' \
+            .PKGINFO usr
+
+          # Build the package. zstd is the modern pacman default; fall back
+          # to gzip if for some reason it's not available.
+          OUT="$HOME/${PKG_NAME}-${PKG_VERSION}-${PKG_REL}-${PACMAN_ARCH}.pkg.tar.zst"
+          if command -v zstd >/dev/null 2>&1; then
+            tar --zstd -cf "$OUT" .PKGINFO .MTREE usr
+          else
+            OUT="${OUT%.zst}.gz"
+            tar -czf "$OUT" .PKGINFO .MTREE usr
+          fi
+
+          ls -la "$OUT"
+          echo "Built pacman package: $OUT"
+
+      - name: Collect pacman package
+        id: collect-pkg
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/pacman_output"
+          # Match both .pkg.tar.zst (default) and .pkg.tar.gz (fallback).
+          # nullglob prevents an unmatched glob from being passed literally to cp.
+          shopt -s nullglob
+          pkgs=("$HOME"/*.pkg.tar.zst "$HOME"/*.pkg.tar.gz)
+          shopt -u nullglob
+
+          if [ ${#pkgs[@]} -eq 0 ]; then
+            echo "No pacman packages found in $HOME" >&2
+            ls -la "$HOME" >&2
+            exit 1
+          fi
+
+          cp "${pkgs[@]}" "$GITHUB_WORKSPACE/pacman_output/"
+          ls -la "$GITHUB_WORKSPACE/pacman_output/"
+
+      - name: Upload pacman artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          path: pacman_output/*.pkg.tar.*
+          if-no-files-found: warn
+
+      - name: Upload pacman Release Asset
+        if: github.event_name == 'release' && github.event.action == 'created'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PACMAN_FILE=$(ls "$GITHUB_WORKSPACE"/pacman_output/*.pkg.tar.* | head -1)
+          # Preserve the actual extension (zst or gz)
+          EXT="${PACMAN_FILE##*.pkg.tar.}"
+          DEST="eim-gui-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}"
+          cp "$PACMAN_FILE" "$DEST"
+          gh release upload "${{ github.event.release.tag_name }}" "$DEST" --clobber
+
   Autotest-CLI:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
@@ -1579,7 +1889,7 @@ jobs:
 
   update-linux-repos:
     name: Update APT and RPM Repositories
-    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, update-release-info]
+    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, build-cli-pacman, build-gui-pacman, update-release-info]
     permissions:
       contents: write
     uses: ./.github/workflows/update-linux-repos.yml

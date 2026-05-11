@@ -25,6 +25,19 @@ brew tap espressif/eim
 brew install eim
 ```
 
+Or on Arch Linux via pacman:
+```bash
+# Check if repository already exists, then add if not
+if ! grep -q "\[eim\]" /etc/pacman.conf; then
+  sudo tee -a /etc/pacman.conf << 'EOF'
+[espressif]
+SigLevel = Optional TrustAll
+Server = https://dl.espressif.com/dl/eim/pacman/$arch
+EOF
+fi
+sudo pacman -S eim-cli
+```
+
 ## Installation Methods
 
 ### Interactive Wizard
