@@ -3,6 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { By } from "selenium-webdriver";
+import { tGui, matchable } from "../helpers/i18n.js";
 
 // This function verifies the presence of the installed IDF versions in the dashboard
 export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
@@ -56,18 +57,22 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
       expect(header, "Expected welcome header").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected welcome text").to.equal(
-        "Welcome to ESP-IDF Installation Manager"
+        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
       );
     });
 
     it("2- Should show option to manage installations", async function () {
       this.timeout(10000);
-      const dashboardCard = await eimRunner.findByText("Manage Installations");
+      const dashboardCard = await eimRunner.findByText(
+        tGui("welcome.cards.manage.title")
+      );
       expect(
         dashboardCard,
         "Expected dashboard card to be shown on welcome page"
       ).to.not.be.false;
-      const dashboardContent = await eimRunner.findByText("View and manage");
+      const dashboardContent = await eimRunner.findByText(
+        matchable("welcome.cards.manage.description")
+      );
       const text = await dashboardContent.getText();
       const numberMatch = text.match(/\d+/);
       totalInstallations = numberMatch ? parseInt(numberMatch[0], 10) : 0;
@@ -75,7 +80,9 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
         totalInstallations,
         "Expected at least one installation"
       ).to.be.gte(1);
-      const click = await eimRunner.clickButton("Open Dashboard");
+      const click = await eimRunner.clickButton(
+        tGui("welcome.cards.manage.button")
+      );
       expect(click, "Expected to click on Open Dashboard button").to.be.true;
     });
 

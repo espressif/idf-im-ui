@@ -3,6 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
+import { tGui } from "../helpers/i18n.js";
 
 // This function verifies the EIM GUI properly lists the missing python installation
 // On Windows, the python is installed as part of the test.
@@ -44,20 +45,24 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
 
     it("1- Should check python requirement", async function () {
       this.timeout(25000);
-      await new Promise((resolve) => setTimeout(resolve, 10000));      
-      await eimRunner.clickButton("Start Installation");
-      await new Promise((resolve) => setTimeout(resolve, 2000));      
-      await eimRunner.clickButton("Start Configuration Wizard");
-      await new Promise((resolve) => setTimeout(resolve, 5000));      
+      await new Promise((resolve) => setTimeout(resolve, 10000));
+      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await eimRunner.clickButton(tGui("basicInstaller.cards.custom.button"));
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       const result = await eimRunner.findByDataId("python-check-result");
-      expect(await result.getText()).to.include("Python Setup Required");
+      expect(await result.getText()).to.include(
+        tGui("pythonSanitycheck.status.setupRequired.title")
+      );
     });
 
     it("2- Should show option to install python on Windows", async function () {
       if (os.platform() !== "win32") {
         this.skip();
       }
-      const installpythonButton = await eimRunner.findByText("Install Python");
+      const installpythonButton = await eimRunner.findByText(
+        tGui("pythonSanitycheck.actions.installPython")
+      );
       expect(installpythonButton, "Expected Install Python button to be present").to.not.be.false;
     });
 
@@ -66,9 +71,9 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
       if (os.platform() !== "win32") {
         this.skip();
       }
-      await eimRunner.clickButton("Install Python");
+      await eimRunner.clickButton(tGui("pythonSanitycheck.actions.installPython"));
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = await eimRunner.findByText("Select Target Chips", 450000);
+      const result = await eimRunner.findByText(tGui("targetSelect.title"), 450000);
       expect(result, "Expected Select Target Chips text to be present").to.not.be.false;
     });
   });
