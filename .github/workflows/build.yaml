@@ -185,6 +185,51 @@ jobs:
           zip -r eim.zip eim
         shell: bash
 
+      - name: Verify static linkage
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="release_cli/${{ matrix.package_name }}/eim"
+
+          echo "=== Checking static linkage for: $BIN ==="
+
+          # ldd on a musl static binary exits non-zero and prints
+          # "not a dynamic executable" — we treat that as success.
+          LDD_OUTPUT=$(ldd "$BIN" 2>&1 || true)
+          echo "$LDD_OUTPUT"
+
+          if echo "$LDD_OUTPUT" | grep -qE "not a dynamic executable|statically linked"; then
+            echo "✓ Binary is statically linked."
+          else
+            # Any resolved .so entry means a dynamic dependency leaked in.
+            if echo "$LDD_OUTPUT" | grep -qE "\.so"; then
+              echo "✗ Dynamic dependencies detected — binary is NOT fully static:" >&2
+              echo "$LDD_OUTPUT" >&2
+              exit 1
+            fi
+            echo "✓ No dynamic libraries found — treating as static."
+          fi
+
+          # Belt-and-suspenders: readelf / file as secondary checks
+          if command -v readelf &>/dev/null; then
+            INTERP=$(readelf -l "$BIN" 2>/dev/null | grep "INTERP" || true)
+            if [ -n "$INTERP" ]; then
+              echo "✗ ELF interpreter (dynamic linker) segment found:" >&2
+              echo "$INTERP" >&2
+              exit 1
+            fi
+            echo "✓ No ELF interpreter segment — confirmed static."
+          fi
+
+          if command -v file &>/dev/null; then
+            FILE_OUT=$(file "$BIN")
+            echo "$FILE_OUT"
+            if echo "$FILE_OUT" | grep -q "dynamically linked"; then
+              echo "✗ 'file' reports dynamically linked binary." >&2
+              exit 1
+            fi
+          fi
+
       - name: Generate Completions
         shell: bash
         run: |
