@@ -87,7 +87,7 @@ pub fn run_python_script_from_file(
     let python_cmd = match python {
         Some(p) => p,
         None => {
-            detected = detect_default_python();
+            detected = detect_default_python().unwrap_or_else(|_| "python3".to_string());
             &detected
         }
     };
@@ -621,7 +621,7 @@ pub async fn install_python_env(
     let python_executable = if is_python3(python_installed_by_us.to_str().unwrap()) {
         python_installed_by_us.display().to_string()
     } else {
-        detect_default_python()
+        detect_default_python().unwrap_or_else(|_| "python3".to_string())
     };
 
     // create the venv
@@ -846,7 +846,7 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
     let py = match python {
         Some(p) => p,
         None => {
-            detected = detect_default_python();
+            detected  = detect_default_python().unwrap_or_else(|_| "python3".to_string());
             &detected
         }
     };
@@ -1005,7 +1005,7 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
 ///
 /// On Windows, runs `where.exe` and skips any App Execution Alias stubs.
 /// On other platforms, always returns `None` (aliases don't exist there).
-fn where_non_alias(name: &str) -> Option<PathBuf> {
+pub fn where_non_alias(name: &str) -> Option<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
             let output = match command_executor::execute_command_direct("where", &[name]) {
@@ -1040,37 +1040,37 @@ fn where_non_alias(name: &str) -> Option<PathBuf> {
 ///
 /// Returns the command/path string for the first working Python 3 it finds,
 /// or a sensible default so callers get a clear error downstream rather than a panic.
-fn detect_default_python() -> String {
+pub fn detect_default_python() -> Result<String> {
     match std::env::consts::OS {
         "windows" => {
             // Generic names on PATH — skip App Execution Aliases
-            for name in ["python3", "python"] {
+            for name in ["python3", "python", "python3.exe", "python.exe"] {
                 if let Some(path) = where_non_alias(name) {
                     let s = path.to_string_lossy().into_owned();
                     if is_python3(&s) {
                         info!("Found {} on Windows PATH (alias-free): {}", name, s);
-                        return s;
+                        return Ok(s);
                     }
                 }
             }
 
-            warn!("No working Python 3 found on Windows, falling back to \"python\"");
-            "python".to_string()
+            warn!("No working Python 3 found on Windows PATH");
+            Err(anyhow!("No working Python 3 interpreter found on Windows PATH"))
         }
         _ => {
             // Unix: prefer python3
             if is_python3("python3") {
                 info!("Found python3");
-                return "python3".to_string();
+                return Ok("python3".to_string());
             }
             // Fallback: bare `python`, but only if it's actually 3.x
             if is_python3("python") {
                 info!("Found python (verified 3.x)");
-                return "python".to_string();
+                return Ok("python".to_string());
             }
 
-            warn!("No working Python 3 found, falling back to \"python3\"");
-            "python3".to_string()
+            warn!("No working Python 3 found ");
+            Err(anyhow!("No working Python 3 found"))
         }
     }
 }
