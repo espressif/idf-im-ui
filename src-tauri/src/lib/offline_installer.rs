@@ -3,7 +3,7 @@ use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, python_utils::detect_default_python, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
 
 /// Installs prerequisite software packages from an offline archive.
 ///
@@ -67,7 +67,7 @@ pub async fn install_prerequisites_offline(
 
     // Determine what needs to be installed
     let needs_git = check_result.missing.iter().any(|m| *m == "git");
-    let needs_python = check_result.missing.iter().any(|m| *m == "python" || *m == "python3");
+    let needs_python = detect_default_python().is_err();
 
     if !needs_git && !needs_python {
         info!("All prerequisites already present, skipping offline installation");
