@@ -294,7 +294,9 @@ jobs:
     steps:
       - name: Install Arch dependencies
         run: |
-          pacman -Sy --noconfirm base-devel git zstd awscli
+          pacman -Syu --noconfirm --needed base-devel git zstd python-pip
+          # awscli isn't in Arch's official repos; install via pip
+          pip install --break-system-packages awscli
 
       - name: Checkout repository
         uses: actions/checkout@v4
