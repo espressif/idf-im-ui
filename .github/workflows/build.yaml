@@ -1828,7 +1828,7 @@ jobs:
           EXT="${PACMAN_FILE##*.pkg.tar.}"
           DEST="eim-gui-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}"
           cp "$PACMAN_FILE" "$DEST"
-          gh release upload "${{ github.event.release.tag_name }}" "$DEST" --clobber
+          gh release upload "${{ github.event.release.tag_name }}" "$DEST" --repo "${{ github.repository }}" --clobber
 
   Autotest-CLI:
     name: Autotest CLI
