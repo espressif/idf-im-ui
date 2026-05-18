@@ -30,7 +30,7 @@ Or on Arch Linux via pacman:
 # Check if repository already exists, then add if not
 if ! grep -q "\[eim\]" /etc/pacman.conf; then
   sudo tee -a /etc/pacman.conf << 'EOF'
-[espressif]
+[eim]
 SigLevel = Optional TrustAll
 Server = https://dl.espressif.com/dl/eim/pacman/$arch
 EOF

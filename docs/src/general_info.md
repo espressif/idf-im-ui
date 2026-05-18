@@ -227,19 +227,19 @@ sudo dnf upgrade eim
 
 <a id="arch-linux-installation-via-pacman-repository"></a>
 
-For **Arch-based** distributions (Arch Linux, Manjaro, EndeavourOS, CachyOS, etc.), use the official Espressif pacman repository:
+For **Arch-based** distributions (Arch Linux, Manjaro, EndeavourOS, CachyOS, etc.), use the official EIM pacman repository:
 
 ```bash
-# Add the Espressif pacman repository
+# Add the EIM pacman repository
 # Edit /etc/pacman.conf and add the following at the end:
 
-[espressif]
+[eim]
 SigLevel = Optional TrustAll
 Server = https://dl.espressif.com/dl/eim/pacman/$arch
 
 # Or use the shell command below (requires sudo):
 sudo tee -a /etc/pacman.conf << 'EOF'
-[espressif]
+[eim]
 SigLevel = Optional TrustAll
 Server = https://dl.espressif.com/dl/eim/pacman/$arch
 EOF
@@ -259,12 +259,12 @@ sudo pacman -S eim-gui
 To update EIM later:
 ```bash
 # Update the entire system (recommended for Arch Linux)
-+sudo pacman -Syu
-+
-+# Or update specific EIM package
-+sudo pacman -Syu eim-cli
-+# or
-+sudo pacman -Syu eim-gui
+sudo pacman -Syu
+
+# Or update specific EIM package
+sudo pacman -Syu eim-cli
+# or
+sudo pacman -Syu eim-gui
 ```
 
 ---
