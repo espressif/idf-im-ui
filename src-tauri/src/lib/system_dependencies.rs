@@ -650,32 +650,8 @@ fn add_to_registry_path(new_entry: &PathBuf) -> anyhow::Result<()> {
     // Escape single quotes for PowerShell
     let escaped = new_str.replace('\'', "''");
 
-    let ps_script = format!(
-        r#"
-$newDir = '{escaped}'
-$oldPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
-if ($null -eq $oldPath) {{ $oldPath = '' }}
-$parts = $oldPath.Split(';') | Where-Object {{ $_ -ne '' }}
-$exists = $false
-foreach ($p in $parts) {{
-    if ($p.TrimEnd('\').Equals($newDir.TrimEnd('\'), [StringComparison]::OrdinalIgnoreCase)) {{
-        $exists = $true
-        break
-    }}
-}}
-if (-not $exists) {{
-    if ($oldPath -eq '') {{
-        $newPath = $newDir
-    }} else {{
-        $newPath = $newDir + ';' + $oldPath
-    }}
-    [Environment]::SetEnvironmentVariable('PATH', $newPath, 'User')
-    Write-Host "Added: $newDir"
-}} else {{
-    Write-Host "Already present: $newDir"
-}}
-"#
-    );
+    let ps_script = include_str!("../../powershell_scripts/add_to_registry_path_template.ps1")
+        .replace("{{new_dir}}", &escaped);
 
     let executor = command_executor::get_executor();
     let output = executor
