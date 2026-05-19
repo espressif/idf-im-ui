@@ -84,13 +84,20 @@ jobs:
           ref: ${{ inputs.ref }}
 
       - name: Download offline_installer_builder artifact
-        uses: actions/download-artifact@v5
-        with:
-          pattern: offline_installer_builder-${{ matrix.package_name }}-*
-          merge-multiple: true
-          path: ./
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.resolved_run_id }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download ${{ inputs.resolved_run_id }} \
+            --repo ${{ github.repository }} \
+            --pattern "offline_installer_builder-${{ matrix.package_name }}-*" \
+            --dir ./downloaded
+
+          echo "--- Downloaded files ---"
+          find ./downloaded -type f
+
+          # gh creates a subdirectory per artifact, flatten it
+          find ./downloaded -type f \( -name "offline_installer_builder" -o -name "offline_installer_builder.exe" \) -exec cp {} ./ \;
 
       - name: Make binary executable (Unix)
         if: runner.os != 'Windows'
