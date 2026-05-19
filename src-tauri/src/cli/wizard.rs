@@ -578,7 +578,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     t!("wizard.qemu.prerequisites.missing"),
                     prereqs
                 );
-                 panic!("wizard.qemu.prerequisites.unmet").to_string();
+                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
             }
             Err(err) => {
                 error!(
@@ -586,7 +586,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     t!("wizard.qemu.prerequisites.check_error"),
                     err
                 );
-                panic!("wizard.qemu.prerequisites.unmet").to_string();
+                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
             }
             Ok(_) => { /* All good, continue. */ }
           }

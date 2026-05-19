@@ -324,7 +324,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                                         if let Some(selected) = get_selected_version() {
                                           println!("{}", t!("wizard.separator.line"));
                                           println!("{}", t!("cli.select.activation_instructions"));
-                                          println!("source {}",selected.activation_script );
+                                          match std::env::consts::OS {
+                                            "windows" => println!(". \"{}\"",selected.activation_script ),
+                                            _ => println!("source \"{}\"",selected.activation_script ),
+                                          }
                                           println!("{}", t!("wizard.separator.line"));
                                         } else {
                                           warn!("{}", t!("select.unable_to_get_selected"));
