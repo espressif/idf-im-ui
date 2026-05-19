@@ -72,23 +72,36 @@ jobs:
           python-version: ${{ matrix.version }}
 
       - name: Download Build Info files from another run_id
-        uses: actions/download-artifact@v5
         if: inputs.build_info_run_id != 'release'
-        with:
-          pattern: build-info-*-${{ matrix.package_name }}
-          path: ./artifacts
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.build_info_run_id }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download ${{ inputs.build_info_run_id }} \
+            --repo ${{ github.repository }} \
+            --pattern "build-info-*-${{ matrix.package_name }}" \
+            --dir ./artifacts
+
+          echo "--- Downloaded files ---"
+          find ./artifacts -type f
 
       - name: Download EIM-CLI artifacts from another run id
-        uses: actions/download-artifact@v4
         if: inputs.eim_cli_run_id != 'release'
-        with:
-          pattern: eim-cli-${{ matrix.package_name }}-*
-          path: ./artifacts
-          merge-multiple: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ inputs.eim_cli_run_id }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download ${{ inputs.eim_cli_run_id }} \
+            --repo ${{ github.repository }} \
+            --pattern "eim-cli-${{ matrix.package_name }}-*" \
+            --dir ./artifacts/downloaded
+
+          echo "--- Downloaded files ---"
+          find ./artifacts/downloaded -type f
+
+          # flatten subdirectories gh creates into ./artifacts
+          find ./artifacts/downloaded -type f \
+            -exec cp {} ./artifacts/ \;
 
       # Non-Windows steps
 

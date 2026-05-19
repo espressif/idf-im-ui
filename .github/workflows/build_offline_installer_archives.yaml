@@ -107,13 +107,20 @@ jobs:
 
       # ── Download builder binary (needed only to list versions) ─────────────
       - name: Download offline_installer_builder (linux-x64)
-        uses: actions/download-artifact@v5
-        with:
-          pattern: offline_installer_builder-linux-x64-*
-          merge-multiple: true
-          path: ./
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          run-id: ${{ steps.resolve-run-id.outputs.run_id }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download ${{ steps.resolve-run-id.outputs.run_id }} \
+            --repo ${{ github.repository }} \
+            --pattern "offline_installer_builder-linux-x64-*" \
+            --dir ./downloaded
+
+          echo "--- Downloaded files ---"
+          find ./downloaded -type f
+
+          # gh creates a subdirectory per artifact, flatten it
+          find ./downloaded -type f -name "offline_installer_builder" -exec cp {} ./ \;
 
       - name: Make binary executable
         run: chmod +x ./offline_installer_builder
