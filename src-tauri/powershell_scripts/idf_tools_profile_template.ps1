@@ -82,7 +82,7 @@ $env_var_pairs.GetEnumerator() | ForEach-Object {
 }
 
 # Set system path
-$env:PATH = "{{add_paths_extras}};$env:PATH"
+$env:PATH = "$env:PATH;{{add_paths_extras}}"
 
 # Define the Invoke-idfpy function
 function global:Invoke-idfpy {

@@ -86,7 +86,7 @@ add_env_variable() {
 
 # Function to add a directory to the system PATH
 add_to_path() {
-    export PATH="{{addition_to_path}}:$PATH"
+    export PATH="$PATH:{{addition_to_path}}"
     printf '%s\n' "Added proper directory to PATH"
 }
 
