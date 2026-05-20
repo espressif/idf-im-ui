@@ -127,23 +127,43 @@ else
     fi
 fi
 
-alias idf.py="{{python_bin_path}} {{idf_path_escaped}}/tools/idf.py"
+# Define IDF tool functions/aliases depending on shell support for dots in names
+# dash does not support dots in function names, so fall back to aliases there
+if ( f.x() { :; }; f.x ) 2>/dev/null; then
 
-alias esptool.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+    idf.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" "$@"; }
 
-alias esptool="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+    esptool.py() { esptool "$@"; }
 
-alias espefuse.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+    espefuse.py() { espefuse "$@"; }
 
-alias espefuse="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+    espsecure.py() { espsecure "$@"; }
 
-alias espsecure.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+    otatool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/app_update/otatool.py" "$@"; }
 
-alias espsecure="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+    parttool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/partition_table/parttool.py" "$@"; }
+else
+    # Fallback: aliases for dot-named commands (dash-compatible)
 
-alias otatool.py="{{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py"
+    alias idf.py="{{python_bin_path}} {{idf_path_escaped}}/tools/idf.py"
 
-alias parttool.py="{{python_bin_path}} {{idf_path_escaped}}/components/partition_table/parttool.py"
+    alias esptool.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+
+    alias espefuse.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+
+    alias espsecure.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+
+    alias otatool.py="{{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py"
+
+    alias parttool.py="{{python_bin_path}} {{idf_path_escaped}}/components/partition_table/parttool.py"
+fi
+
+# shellcheck disable=SC2317
+esptool() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/esptool.py" "$@"; }
+# shellcheck disable=SC2317
+espefuse() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py" "$@"; }
+# shellcheck disable=SC2317
+espsecure() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py" "$@"; }
 
 
 # Main execution
