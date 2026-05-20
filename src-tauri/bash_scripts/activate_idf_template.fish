@@ -116,39 +116,39 @@ end
 
 # Define functions for IDF tools
 function idf.py
-    {{python_bin_path}} {{idf_path_escaped}}/tools/idf.py $argv
-end
-
-function esptool.py
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" $argv
 end
 
 function esptool
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/esptool.py" $argv
 end
 
-function espefuse.py
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py $argv
+function esptool.py
+    esptool $argv
 end
 
 function espefuse
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py" $argv
 end
 
-function espsecure.py
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py $argv
+function espefuse.py
+    espefuse $argv
 end
 
 function espsecure
-    {{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py" $argv
+end
+
+function espsecure.py
+    espsecure $argv
 end
 
 function otatool.py
-    {{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/components/app_update/otatool.py" $argv
 end
 
 function parttool.py
-    {{python_bin_path}} {{idf_path_escaped}}/components/partition_table/parttool.py $argv
+    "{{python_bin_path}}" "{{idf_path_escaped}}/components/partition_table/parttool.py" $argv
 end
 
 # Main execution

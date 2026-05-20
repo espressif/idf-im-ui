@@ -86,39 +86,39 @@ $env:PATH = "{{add_paths_extras}};$env:PATH"
 
 # Define the Invoke-idfpy function
 function global:Invoke-idfpy {
-    {{python_bin_path}} {{idf_path}}\tools\idf.py @args
-}
-
-function global:esptool.py {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\tools\idf.py" @args
 }
 
 function global:esptool {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\esptool.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\components\esptool_py\esptool\esptool.py" @args
 }
 
-function global:espefuse.py {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
+function global:esptool.py {
+    esptool @args
 }
 
 function global:espefuse {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espefuse.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\components\esptool_py\esptool\espefuse.py" @args
 }
 
-function global:espsecure.py {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
+function global:espefuse.py {
+    espefuse @args
 }
 
 function global:espsecure {
-  {{python_bin_path}} {{idf_path}}\components\esptool_py\esptool\espsecure.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\components\esptool_py\esptool\espsecure.py" @args
+}
+
+function global:espsecure.py {
+    espsecure @args
 }
 
 function global:otatool.py {
-  {{python_bin_path}} {{idf_path}}\components\app_update\otatool.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\components\app_update\otatool.py" @args
 }
 
 function global:parttool.py {
-  {{python_bin_path}} {{idf_path}}\components\partition_table\parttool.py @args
+    & "{{python_bin_path}}" "{{idf_path}}\components\partition_table\parttool.py" @args
 }
 
 # Create an alias for the function
