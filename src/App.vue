@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="theme">
+  <n-config-provider :theme="theme" abstract>
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -262,8 +262,7 @@ html, body {
   position: relative;
 }
 
-#app,
-#app > .n-config-provider {
+#app {
   height: 100%;
   min-height: 0;
 }

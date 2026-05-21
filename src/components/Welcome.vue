@@ -312,10 +312,6 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f5f5f5;
-  background-image: url('../assets/bg.png');
-  background-size: cover;
-  background-position: center;
   position: relative;
   overflow: visible;
   padding: clamp(1rem, 3vh, 2rem) 0;
