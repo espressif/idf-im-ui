@@ -307,7 +307,7 @@ export default {
 <style scoped>
 .welcome-container {
   min-height: 100%;
-  height: 100%;
+  height: auto;
   width: 100%;
   display: flex;
   align-items: center;
@@ -317,8 +317,8 @@ export default {
   background-size: cover;
   background-position: center;
   position: relative;
-  overflow: hidden;
-  padding: 2rem 0;
+  overflow: visible;
+  padding: clamp(1rem, 3vh, 2rem) 0;
 }
 
 /* Splash Screen */
@@ -372,24 +372,26 @@ export default {
 /* Main Content */
 .main-content {
   width: 100%;
-  max-width: 1200px;
-  padding: 0 2rem;
+  max-width: min(1200px, 100%);
+  padding: 0 clamp(1rem, 3vw, 2rem);
   margin: 0 auto;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100%;
+  min-width: 0;
 }
 
 .welcome-card {
   background: white;
-  padding: 3rem 4rem;
-  border-radius: 12px;
+  padding: clamp(1.5rem, 4vw, 3rem) clamp(1.25rem, 5vw, 4rem);
+  border-radius: 8px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
   width: 100%;
   max-width: 1000px;
   margin: auto;
   position: relative;
+  min-width: 0;
 }
 
 
@@ -405,6 +407,8 @@ export default {
   font-size: 2.25rem;
   color: #1f2937;
   margin: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .welcome-card h1 span {
@@ -430,22 +434,21 @@ export default {
 
 /* Decision Cards */
 .decision-cards {
-  display: flex;
-  gap: 2rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: clamp(1rem, 2vw, 2rem);
   margin: 2rem 0;
   justify-content: center;
-  flex-wrap: wrap;
   width: 100%;
-  padding: 0 1rem;
+  padding: 0;
 }
 
 .decision-card {
   transition: all 0.3s ease;
   cursor: pointer;
   border: 2px solid transparent;
-  flex: 1;
-  min-width: 280px;
-  max-width: 350px;
+  min-width: 0;
+  max-width: none;
 }
 
 .decision-card:hover {
@@ -503,6 +506,7 @@ export default {
   padding-top: 2rem;
   border-top: 1px solid #e5e7eb;
   text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .n-button[type="primary"] {
@@ -558,24 +562,43 @@ export default {
 /* Responsive adjustments for Windows */
 @media (max-width: 1100px) {
   .main-content {
-    max-width: 95%;
-    padding: 0 1rem;
+    max-width: 100%;
   }
 
   .welcome-card {
     padding: 2rem;
     max-width: none;
   }
+}
 
-  .decision-cards {
-    flex-direction: row;
-    align-items: center;
-    gap: 1rem;
+@media (max-width: 640px) {
+  .welcome-container {
+    align-items: flex-start;
   }
 
-  .decision-card {
-    max-width: 400px;
-    min-width: 300px;
+  .main-content {
+    padding: 0 0.75rem;
+  }
+
+  .welcome-card {
+    padding: 1.25rem;
+  }
+
+  .welcome-card h1 {
+    font-size: 1.6rem;
+  }
+
+  .subtitle {
+    font-size: 1rem;
+  }
+
+  .welcome-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .subtitle,
+  .preferences {
+    text-align: left;
   }
 }
 </style>
