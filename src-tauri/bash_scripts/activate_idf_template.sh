@@ -103,6 +103,44 @@ activate_venv() {
     fi
 }
 
+register_idf_completions() {
+    case "$-" in
+        *i*)
++            # Interactive shell - proceed with registration
++            ;;
+         *)
++            # Non-interactive shell - skip completion registration
++            return 0
+             ;;
+    esac
+
+    if [ -n "$ZSH_VERSION" ]; then
+        if ! command -v compdef >/dev/null 2>&1; then
+            autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
+        fi
+
+        _idf_completion="$(_IDF.PY_COMPLETE=zsh_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
+        if [ -z "$_idf_completion" ]; then
+            _idf_completion="$(_IDF.PY_COMPLETE=source_zsh "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
+        fi
+        if [ -n "$_idf_completion" ]; then
+            eval "$_idf_completion" && \
+                printf '%s\n' "Registered idf.py tab completion (zsh)."
+        fi
+        unset _idf_completion
+    elif [ -n "$BASH_VERSION" ]; then
+        _idf_completion="$(_IDF.PY_COMPLETE=bash_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
+        if [ -z "$_idf_completion" ]; then
+            _idf_completion="$(_IDF.PY_COMPLETE=source_bash "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
+        fi
+        if [ -n "$_idf_completion" ]; then
+            eval "$_idf_completion" && \
+                printf '%s\n' "Registered idf.py tab completion (bash)."
+        fi
+        unset _idf_completion
+    fi
+}
+
 # Check if the script is being sourced or executed
 is_sourced() {
   if [ -n "$ZSH_VERSION" ]; then
@@ -173,6 +211,8 @@ add_to_path
 # Activate virtual environment (uncomment and provide the correct path)
 venv_default="{{idf_python_env_path_escaped}}"
 activate_venv "${IDF_PYTHON_ENV_PATH:-$venv_default}"
+
+register_idf_completions
 
 printf '%s\n' "Environment setup complete for the current shell session."
 printf '%s\n' "These changes will be lost when you close this terminal."

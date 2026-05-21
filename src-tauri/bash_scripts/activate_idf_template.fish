@@ -102,6 +102,21 @@ function activate_venv
     end
 end
 
+function register_idf_completions
+    set -l completion_script ""
+
+    set completion_script (env _IDF.PY_COMPLETE=fish_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+
+    if test -z "$completion_script"
+        set completion_script (env _IDF.PY_COMPLETE=source_fish "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+    end
+
+    if test -n "$completion_script"
+        echo "$completion_script" | source
+        and printf '%s\n' "Registered idf.py tab completion (fish)."
+    end
+end
+
 # Check if the script is being sourced
 if not status is-interactive
     if test (count $argv) -ge 1; and test "$argv[1]" = "-e"
@@ -162,6 +177,8 @@ if set -q IDF_PYTHON_ENV_PATH; and test -n "$IDF_PYTHON_ENV_PATH"
 else
     activate_venv "$venv_default"
 end
+
+register_idf_completions
 
 printf '%s\n' "Environment setup complete for the current shell session."
 printf '%s\n' "These changes will be lost when you close this terminal."
