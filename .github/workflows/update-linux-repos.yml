@@ -294,7 +294,7 @@ jobs:
     steps:
       - name: Install Arch dependencies
         run: |
-          pacman -Syu --noconfirm --needed base-devel git zstd python-pip
+          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip
           # awscli isn't in Arch's official repos; install via pip
           pip install --break-system-packages awscli
 
