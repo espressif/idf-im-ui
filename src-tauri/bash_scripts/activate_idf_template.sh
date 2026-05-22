@@ -106,11 +106,11 @@ activate_venv() {
 register_idf_completions() {
     case "$-" in
         *i*)
-+            # Interactive shell - proceed with registration
-+            ;;
+           # Interactive shell - proceed with registration
+            ;;
          *)
-+            # Non-interactive shell - skip completion registration
-+            return 0
+            # Non-interactive shell - skip completion registration
+            return 0
              ;;
     esac
 
