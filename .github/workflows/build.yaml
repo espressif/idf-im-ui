@@ -723,7 +723,7 @@ jobs:
 
       - name: Install Arch dependencies
         run: |
-          pacman -Sy --noconfirm base-devel curl git fakeroot github-cli
+          pacman -Sy --noconfirm --overwrite '*' base-devel curl git fakeroot github-cli
 
       - name: Download built binary artifact
         uses: actions/download-artifact@v4
@@ -1702,7 +1702,7 @@ jobs:
 
       - name: Install Arch dependencies
         run: |
-          pacman -Sy --noconfirm base-devel curl git github-cli
+          pacman -Sy --noconfirm --overwrite '*' base-devel curl git github-cli
 
       - name: Download built GUI artifact
         uses: actions/download-artifact@v4
