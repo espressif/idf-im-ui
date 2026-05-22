@@ -69,6 +69,31 @@ function Print-EnvVariables {
     }
 }
 
+function Register-IdfCompletions {
+    try {
+        # Set env var only for the duration of this call.
+        $previous = $env:'_IDF.PY_COMPLETE'
+        $env:'_IDF.PY_COMPLETE' = 'powershell_source'
+
+        $completionScript = & "{{python_bin_path}}" "{{idf_path}}\tools\idf.py" 2>$null | Out-String
+
+        # Restore previous value (or remove if unset).
+        if ($null -eq $previous) {
+            Remove-Item Env:'_IDF.PY_COMPLETE' -ErrorAction SilentlyContinue
+        } else {
+            $env:'_IDF.PY_COMPLETE' = $previous
+        }
+
+        if (-not [string]::IsNullOrWhiteSpace($completionScript)) {
+            # Evaluate the Register-ArgumentCompleter snippet Click emitted.
+            Invoke-Expression $completionScript
+            Write-Host "Registered idf.py tab completion (powershell)."
+        }
+    } catch {
+        # Older Click versions don't support powershell_source — silently skip.
+    }
+}
+
 # If -e parameter is provided, print variables and exit
 if ($e) {
     Print-EnvVariables
@@ -126,6 +151,8 @@ New-Alias -Name idf.py -Value Invoke-idfpy -Force -Scope Global
 
 # Activate your Python environment
 . "{{idf_python_env_path}}\Scripts\Activate.ps1"
+
+Register-IdfCompletions
 
 # Display setup information
 Write-Host 'IDF PowerShell Environment'
