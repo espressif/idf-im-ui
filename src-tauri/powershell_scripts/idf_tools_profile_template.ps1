@@ -72,16 +72,16 @@ function Print-EnvVariables {
 function Register-IdfCompletions {
     try {
         # Set env var only for the duration of this call.
-        $previous = $env:'_IDF.PY_COMPLETE'
-        $env:'_IDF.PY_COMPLETE' = 'powershell_source'
+        $previous = ${env:_IDF.PY_COMPLETE}
+        ${env:_IDF.PY_COMPLETE} = 'powershell_source'
 
         $completionScript = & "{{python_bin_path}}" "{{idf_path}}\tools\idf.py" 2>$null | Out-String
 
         # Restore previous value (or remove if unset).
         if ($null -eq $previous) {
-            Remove-Item Env:'_IDF.PY_COMPLETE' -ErrorAction SilentlyContinue
+            Remove-Item 'Env:_IDF.PY_COMPLETE' -ErrorAction SilentlyContinue
         } else {
-            $env:'_IDF.PY_COMPLETE' = $previous
+            ${env:_IDF.PY_COMPLETE} = $previous
         }
 
         if (-not [string]::IsNullOrWhiteSpace($completionScript)) {
