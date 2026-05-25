@@ -17,6 +17,20 @@ pub mod cli;
 
 rust_i18n::i18n!("locales", fallback = "en");
 
+/// Ensures the directory containing the current eim executable is in PATH.
+/// On Windows, this persists to the user registry so new processes inherit it.
+#[cfg(target_os = "windows")]
+fn ensure_eim_in_path() {
+    if let Ok(eim_path) = std::env::current_exe() {
+        if let Some(eim_dir) = eim_path.parent() {
+            let eim_dir_str = eim_dir.to_string_lossy();
+            if let Err(e) = idf_im_lib::system_dependencies::add_to_path(&eim_dir_str) {
+                eprintln!("Failed to add eim to PATH: {}", e);
+            }
+        }
+    }
+}
+
 fn set_locale(locale: &Option<String>) {
     match locale {
         Some(l) => {
@@ -111,6 +125,8 @@ async fn main() {
         eprintln!("Error: Neither GUI nor CLI features are enabled!");
         return;
     }
+    #[cfg(target_os = "windows")]
+    ensure_eim_in_path();
     #[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
     if is_interactive_command() {
         setup_interactive_console()
