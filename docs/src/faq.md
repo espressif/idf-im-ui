@@ -63,7 +63,15 @@ To install to a completely custom location, configure **all** relevant paths:
 eim install -p D:\YourCustomPath\.espressif \
   --tool-install-folder-name D:\YourCustomPath\tools \
   --tool-download-folder-name D:\YourCustomPath\dist \
-  --activation-script-path-override D:\YourCustomPath\tools
+  --activation-script-path-override D:\YourCustomPath\tools \
+  --esp-idf-json-path D:\YourCustomPath\tools
+```
+
+If you use `--esp-idf-json-path` during installation, you must also pass it to subsequent version management commands so they can find your `eim_idf.json`:
+
+```bash
+eim list --esp-idf-json-path D:\YourCustomPath\tools
+eim select --esp-idf-json-path D:\YourCustomPath\tools
 ```
 
 For a full list of configurable paths, see the [CLI Configuration](./cli_configuration.md) documentation.

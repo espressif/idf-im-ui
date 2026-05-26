@@ -17,10 +17,10 @@ use anyhow::{anyhow, Context, Result};
 use idf_im_lib::{
   ensure_path,
   expand_tilde,
-  idf_config::IdfConfig,
+  idf_config::{IdfConfig, IDF_CONFIG_FILE_NAME},
   offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive},
   utils::{copy_dir_contents, extract_zst_archive, is_valid_idf_directory, parse_cmake_version},
-  version_manager::{get_default_config_path, prepare_settings_for_fix_idf_installation},
+  version_manager::prepare_settings_for_fix_idf_installation,
   git_tools::ProgressMessage};
 use log::{debug, error, info, warn};
 use serde_json::json;
@@ -1151,7 +1151,13 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     emit_log_message(&app_handle, MessageLevel::Info,
         rust_i18n::t!("gui.fix.starting_repair", id = id.clone()).to_string());
 
-    let versions = get_installed_versions();
+    let fix_config_path = {
+        let settings = app_state::get_locked_settings(&app_handle)
+            .map_err(|e| format!("Failed to get settings: {}", e))?;
+        settings.esp_idf_json_path.as_ref().map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME))
+    };
+
+    let versions = get_installed_versions(app_handle.clone());
     let installation = match versions.iter().find(|v| v.id == id) {
         Some(inst) => {
             emit_installation_event(&app_handle, InstallationProgress {
@@ -1194,7 +1200,7 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
         version: Some(installation.name.clone()),
     });
 
-    let mut settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone())).await {
+    let mut settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone()), fix_config_path.as_ref()).await {
         Ok(settings) => {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
@@ -1227,8 +1233,8 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
         }
     };
 
-    // Get the config path for IDE configuration
-    let config_path = get_default_config_path();
+    let config_path = fix_config_path.clone()
+        .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
 
     // Starting actual repair (reinstallation)
     emit_installation_event(&app_handle, InstallationProgress {

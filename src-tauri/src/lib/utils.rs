@@ -589,7 +589,7 @@ fn extract_tools_path_from_python_env_path(path: &str) -> Option<PathBuf> {
 ///
 /// This function logs errors to the console if the configuration file cannot be read or parsed.
 /// It also logs errors if the IDF installation configuration cannot be updated.
-pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
+pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>) -> Result<()> {
     let config_path = Path::new(config_path);
     let json_str = std::fs::read_to_string(config_path).unwrap();
     let config: Vec<IdfToolsConfig> = match serde_json::from_str(&json_str) {
@@ -597,7 +597,7 @@ pub fn parse_tool_set_config(config_path: &str) -> Result<()> {
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
     };
     let mut settings = crate::settings::Settings::default();
-    let config_path = get_default_config_path();
+    let config_path = idf_json_path.cloned().unwrap_or_else(get_default_config_path);
     let mut current_config = match IdfConfig::from_file(&config_path) {
       Ok(config) => config,
       Err(_e) => {

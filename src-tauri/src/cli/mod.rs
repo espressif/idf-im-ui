@@ -12,6 +12,7 @@ use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::logging::formatter;
+use idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
@@ -208,6 +209,8 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           "command": format!("{:?}", command)
         }))).await;
     }
+    let cli_esp_idf_json_path = cli.esp_idf_json_path;
+    let config_path = cli_esp_idf_json_path.as_ref().map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME));
     match command {
         Commands::Completions { .. } => unreachable!(),
         Commands::HelpJson => unreachable!(),
@@ -220,13 +223,20 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             match settings {
                 Ok(mut settings) => {
                   debug!("Settings before adjustments: {:?}", settings);
+                  if let Some(ref p) = cli_esp_idf_json_path {
+                    settings.esp_idf_json_path = Some(p.clone());
+                  }
                   if install_args.install_all_prerequisites.is_none() { // if cli argument is not set
                     settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
+                  }
+                  match settings.initialize_esp_ide_json() {
+                    Ok(_) => debug!("ESP-IDF JSON initialized at configured path."),
+                    Err(e) => warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
                   }
                   debug!("Settings after adjustments: {:?}", settings);
                   // Check if the provided path is already an installed IDF
                   if let Some(ref path) = settings.path {
-                      match idf_im_lib::version_manager::list_installed_versions() {
+                      match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                           Ok(versions) => {
                             debug!("Checking provided path against installed versions. Provided path: '{}'", path.display());
                             if let Some(provided_path) = idf_im_lib::utils::normalize_path_for_comparison(&path.to_string_lossy()) {
@@ -283,7 +293,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::List => {
             info!("{}", t!("list.title"));
-            match idf_im_lib::version_manager::get_esp_ide_config() {
+            match idf_im_lib::version_manager::get_esp_ide_config(config_path.as_ref()) {
                 Ok(config) => {
                     if config.idf_installed.is_empty() {
                         warn!("{}", t!("list.no_versions"));
@@ -302,6 +312,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
                 Err(err) => {
                     info!("{}", t!("list.no_versions"));
+                    info!("{}", t!("cli.hint.custom_json_path"));
                     debug!("Error: {}", err);
                     Ok(())
                 }
@@ -309,7 +320,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::Select { version } => {
             if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions() {
+                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                     Ok(versions) => {
                         if versions.is_empty() {
                             warn!("{}", t!("select.no_versions"));
@@ -318,10 +329,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             println!("{}", t!("select.available_title"));
                             let options = versions.iter().map(|v| v.name.clone()).collect();
                             match generic_select(&t!("select.prompt"), &options) {
-                                Ok(selected) => match select_idf_version(&selected) {
+                                Ok(selected) => match select_idf_version(&selected, config_path.as_ref()) {
                                     Ok(_) => {
                                         println!("{}", t!("select.success", version = selected));
-                                        if let Some(selected) = get_selected_version() {
+                                        if let Some(selected) = get_selected_version(config_path.as_ref()) {
                                           println!("{}", t!("wizard.separator.line"));
                                           println!("{}", t!("cli.select.activation_instructions"));
                                           match std::env::consts::OS {
@@ -342,15 +353,16 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     }
                     Err(err) => {
                         error!("{}", t!("list.no_versions"));
+                        info!("{}", t!("cli.hint.custom_json_path"));
                         debug!("Error: {}", err);
                         Err(anyhow::anyhow!(err))
                     }
                 }
             } else {
-                match select_idf_version(&version.clone().unwrap()) {
+                match select_idf_version(&version.clone().unwrap(), config_path.as_ref()) {
                     Ok(_) => {
                         info!("{}", t!("select.success", version = version.clone().unwrap()));
-                        if let Some(selected) = get_selected_version() {
+                        if let Some(selected) = get_selected_version(config_path.as_ref()) {
                           info!("{}", t!("wizard.separator.line"));
                           info!("{}", t!("cli.select.activation_instructions"));
                           info!("source {}",selected.activation_script );
@@ -367,14 +379,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Run { command, idf } => {
             let idf_identifier = if let Some(idf_str) = idf {
                 idf_str
-            } else if let Some(selected) = get_selected_version() {
+            } else if let Some(selected) = get_selected_version(config_path.as_ref()) {
                 info!("{}", t!("run.using_selected", idf = selected.name));
                 selected.id
             } else {
                 return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")));
             };
 
-            match run_command_in_context(&idf_identifier, &command) {
+            match run_command_in_context(&idf_identifier, &command, config_path.as_ref()) {
                 Ok(status) => {
                     if !status.success() {
                         return Err(anyhow::anyhow!(t!("run.command_failed")));
@@ -386,7 +398,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::Rename { version, new_name } => {
             if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions() {
+                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                     Ok(versions) => {
                         if versions.is_empty() {
                             warn!("{}", t!("rename.no_versions"));
@@ -423,7 +435,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                                 }
                             };
                             match idf_im_lib::version_manager::rename_idf_version(
-                                &version, new_name,
+                                &version, new_name, config_path.as_ref(),
                             ) {
                                 Ok(_) => {
                                     println!("{}", t!("rename.success"));
@@ -436,6 +448,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     Err(err) => {
                         debug!("Error: {}", err);
                         error!("{}", t!("list.no_versions"));
+                        info!("{}", t!("cli.hint.custom_json_path"));
                         Err(anyhow::anyhow!(err))
                     }
                 }
@@ -458,6 +471,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 match idf_im_lib::version_manager::rename_idf_version(
                     &version.clone().unwrap(),
                     new_name,
+                    config_path.as_ref(),
                 ) {
                     Ok(_) => {
                         println!("{}", t!("rename.success"));
@@ -469,6 +483,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 match idf_im_lib::version_manager::rename_idf_version(
                     &version.clone().unwrap(),
                     new_name.clone().unwrap(),
+                    config_path.as_ref(),
                 ) {
                     Ok(_) => {
                         println!("{}", t!("rename.success"));
@@ -491,7 +506,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Import { path } => match path {
             Some(config_file) => {
                 info!("{}", t!("import.using_config", config = format!("{:?}", config_file)));
-                match idf_im_lib::utils::parse_tool_set_config(&config_file) {
+                match idf_im_lib::utils::parse_tool_set_config(&config_file, config_path.as_ref()) {
                     Ok(_) => {
                         info!("{}", t!("import.success"));
                         Ok(())
@@ -507,7 +522,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Remove { version } => {
             // todo: add spinner
             if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions() {
+                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                     Ok(versions) => {
                         if versions.is_empty() {
                             info!("{}", t!("remove.no_versions"));
@@ -516,7 +531,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             println!("{}", t!("remove.available_title"));
                             let options = versions.iter().map(|v| v.name.clone()).collect();
                             match generic_select(&t!("remove.prompt"), &options) {
-                                Ok(selected) => match remove_single_idf_version(&selected, false) {
+                                Ok(selected) => match remove_single_idf_version(&selected, false, config_path.as_ref()) {
                                     Ok(_) => {
                                         info!("{}", t!("remove.success", version = selected));
                                         Ok(())
@@ -530,7 +545,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     Err(err) => Err(anyhow::anyhow!(err)),
                 }
             } else {
-                match remove_single_idf_version(&version.clone().unwrap(), false) {
+                match remove_single_idf_version(&version.clone().unwrap(), false, config_path.as_ref()) {
                     Ok(_) => {
                         println!("{}", t!("remove.success", version = version.clone().unwrap()));
                         Ok(())
@@ -542,7 +557,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         Commands::Purge => {
             // Todo: offer to run discovery first
             println!("{}", t!("purge.title"));
-            match idf_im_lib::version_manager::list_installed_versions() {
+            match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                 Ok(versions) => {
                     if versions.is_empty() {
                         println!("{}", t!("purge.no_versions"));
@@ -551,7 +566,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         let mut failed = false;
                         for version in versions {
                             info!("{}", t!("purge.removing", version = version.name));
-                            match remove_single_idf_version(&version.name, false) {
+                            match remove_single_idf_version(&version.name, false, config_path.as_ref()) {
                                 Ok(_) => {
                                     info!("{}", t!("purge.removed", version = version.name));
                                 }
@@ -580,7 +595,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             );
             match settings {
                 Ok(mut settings) => {
+                    if let Some(ref p) = cli_esp_idf_json_path {
+                      settings.esp_idf_json_path = Some(p.clone());
+                    }
                     settings.non_interactive = Some(false);
+                    match settings.initialize_esp_ide_json() {
+                      Ok(_) => debug!("ESP-IDF JSON initialized at configured path."),
+                      Err(e) => warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
+                    }
                     let time = std::time::SystemTime::now();
                     if !do_not_track {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
@@ -623,7 +645,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 return Err(anyhow::anyhow!(t!("fix.invalid_directory", path = path)));
                }
             } else {
-              match idf_im_lib::version_manager::list_installed_versions() {
+              match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
                 Ok(versions) => {
                   if versions.is_empty() {
                       warn!("{}", t!("fix.no_versions"));
@@ -651,7 +673,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           };
           info!("{}", t!("fix.fixing", path = path_to_fix.display()));
           // The fix logic is just instalation with use of existing repository
-          let settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone()).await?;
+          let settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
           let result = wizard::run_wizzard_run(settings).await;
           match result {
             Ok(r) => {
@@ -680,7 +702,12 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 install_args.config.clone(),
                 install_args.clone().into_iter(),
             ) {
-              Ok(settings) => Some(settings),
+              Ok(mut settings) => {
+                if let Some(ref p) = cli_esp_idf_json_path {
+                  settings.esp_idf_json_path = Some(p.clone());
+                }
+                Some(settings)
+              }
               Err(_) => None
             };
             gui::run(settings, Some(log_level), do_not_track);

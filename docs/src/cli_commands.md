@@ -16,6 +16,7 @@ These options can be used with any command:
 - `-v, --verbose`: Increase verbosity level (can be used multiple times)
 - `--log-file <LOG_FILE>`: File in which logs will be stored (default: eim.log)
 - `--do-not-track <DO_NOT_TRACK>`: If set to true, the installer will not send any usage data. Default is false. [possible values: true, false]
+- `--esp-idf-json-path <PATH>`: Path to the directory for `eim_idf.json`. During install, the configuration file is saved here. For version management commands (list, select, rename, remove, etc.), it specifies where to read the file. Defaults to `~/.espressif/tools` on POSIX, `C:\Espressif\tools` on Windows.
 - `-h, --help`: Print help information
 - `-V, --version`: Print version information
 
@@ -50,7 +51,6 @@ eim install [OPTIONS]
 
 Options:
 - `-p, --path <PATH>`: Base path to which all files and folders will be installed
-- `--esp-idf-json-path <ESP_IDF_JSON_PATH>`: Absolute path to save eim_idf.json file
 - `-c, --config <FILE>`: Path to configuration file
 - `-t, --target <TARGET>`: Target platforms (comma-separated)
 - `-i, --idf-versions <IDF_VERSIONS>`: ESP-IDF versions to install (comma-separated)

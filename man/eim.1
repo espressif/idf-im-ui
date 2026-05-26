@@ -36,6 +36,10 @@ Print help information
 .BR \-V ", " \-\-version
 Print version information
 
+.TP
+.B \-\-esp\-idf\-json\-path \fIPATH\fR
+Path to the directory for eim_idf.json. During install, the configuration file is saved here. For version management commands (list, select, rename, remove, etc.), it specifies where to read the file. Defaults to ~/.espressif/tools on POSIX, C:\\Espressif\\tools on Windows.
+
 .SH COMMANDS
 
 .SS install
@@ -48,10 +52,6 @@ Non-interactive installation of ESP-IDF versions. This command runs in non-inter
 .TP
 .BR \-p ", " \-\-path " " \fIPATH\fR
 Base path to which all files and folders will be installed
-
-.TP
-.B \-\-esp\-idf\-json\-path \fIESP_IDF_JSON_PATH\fR
-Absolute path to save eim_idf.json file
 
 .TP
 .BR \-c ", " \-\-config " " \fIFILE\fR

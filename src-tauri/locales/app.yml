@@ -500,6 +500,9 @@ remove.prompt:
 remove.success:
   en: "Removed version: %{version}"
   cn: "已删除版本：%{version}"
+cli.hint.custom_json_path:
+  en: "Hint: if you installed ESP-IDF to a custom location, use --esp-idf-json-path <path> to point version management commands to your eim_idf.json."
+  cn: "提示：如果您将 ESP-IDF 安装到自定义位置，请使用 --esp-idf-json-path <路径> 指定 eim_idf.json 的位置。"
 purge.title:
   en: Purging all known IDF installations...
   cn: 正在清除所有已知的 IDF 安装...

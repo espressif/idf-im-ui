@@ -1,11 +1,28 @@
-use idf_im_lib::idf_config::IdfInstallation;
+use std::path::PathBuf;
+
+use idf_im_lib::idf_config::{IdfInstallation, IDF_CONFIG_FILE_NAME};
 use idf_im_lib::settings::Settings;
 use log::{debug, error, info};
+use tauri::{AppHandle, Manager};
 
+use crate::gui::app_state::AppState;
+
+fn get_config_path_from_state(app_handle: &AppHandle) -> Option<PathBuf> {
+    let app_state = app_handle.state::<AppState>();
+    let guard = match app_state.settings.lock() {
+        Ok(g) => g,
+        Err(e) => {
+            error!("Failed to acquire settings lock: {}", e);
+            return None;
+        }
+    };
+    guard.esp_idf_json_path.as_ref().map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME))
+}
 
 #[tauri::command]
-pub fn get_installed_versions() -> Vec<IdfInstallation>{
-  match idf_im_lib::version_manager::get_esp_ide_config() {
+pub fn get_installed_versions(app_handle: AppHandle) -> Vec<IdfInstallation>{
+  let config_path = get_config_path_from_state(&app_handle);
+  match idf_im_lib::version_manager::get_esp_ide_config(config_path.as_ref()) {
     Ok(config) => {
       if config.idf_installed.is_empty() {
         debug!(
@@ -25,10 +42,11 @@ pub fn get_installed_versions() -> Vec<IdfInstallation>{
 }
 
 #[tauri::command]
-pub fn rename_installation(id: String, new_name: String) -> bool {
+pub fn rename_installation(app_handle: AppHandle, id: String, new_name: String) -> bool {
   debug!("Renaming installation with id {} to {}", id, new_name);
+  let config_path = get_config_path_from_state(&app_handle);
 
-  match idf_im_lib::version_manager::rename_idf_version(&id, new_name) {
+  match idf_im_lib::version_manager::rename_idf_version(&id, new_name, config_path.as_ref()) {
     Ok(_) => {
         debug!("Successfully renamed installation {}", id);
         true
@@ -40,10 +58,11 @@ pub fn rename_installation(id: String, new_name: String) -> bool {
   }
 }
 #[tauri::command]
-pub fn remove_installation(id: String) -> bool {
+pub fn remove_installation(app_handle: AppHandle, id: String) -> bool {
   debug!("Removing installation with id {}", id);
+  let config_path = get_config_path_from_state(&app_handle);
 
-  match idf_im_lib::version_manager::remove_single_idf_version(&id, false) {
+  match idf_im_lib::version_manager::remove_single_idf_version(&id, false, config_path.as_ref()) {
     Ok(_) => {
         debug!("Successfully removed installation {}", id);
         true
@@ -56,10 +75,11 @@ pub fn remove_installation(id: String) -> bool {
 }
 
 #[tauri::command]
-pub fn purge_all_installations() -> bool {
+pub fn purge_all_installations(app_handle: AppHandle) -> bool {
   debug!("Purging all installations");
+  let config_path = get_config_path_from_state(&app_handle);
 
-  match idf_im_lib::version_manager::list_installed_versions() {
+  match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
       Ok(versions) => {
         if versions.is_empty() {
           info!("No versions installed");
@@ -68,7 +88,7 @@ pub fn purge_all_installations() -> bool {
           let mut failed = false;
           for version in versions {
             info!("Removing version: {}", version.name);
-            match idf_im_lib::version_manager::remove_single_idf_version(&version.name, false) {
+            match idf_im_lib::version_manager::remove_single_idf_version(&version.name, false, config_path.as_ref()) {
               Ok(_) => {
                 info!("Removed version: {}", version.name);
               }
@@ -95,10 +115,11 @@ pub fn purge_all_installations() -> bool {
 }
 
 #[tauri::command]
-pub fn generate_installation_config_for_version(id: String) -> Option<String> {
+pub fn generate_installation_config_for_version(app_handle: AppHandle, id: String) -> Option<String> {
   debug!("Generating installation config for id {}", id);
+  let config_path = get_config_path_from_state(&app_handle);
 
-  let config = match idf_im_lib::version_manager::get_esp_ide_config() {
+  let config = match idf_im_lib::version_manager::get_esp_ide_config(config_path.as_ref()) {
     Ok(config) => config,
     Err(err) => {
       error!("Failed to get ESP ide config: {}", err);

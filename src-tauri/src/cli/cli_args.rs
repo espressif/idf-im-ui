@@ -59,6 +59,13 @@ pub struct Cli {
         action = clap::ArgAction::Set
     )]
     pub do_not_track: bool,
+
+    #[arg(
+        long,
+        global = true,
+        help = "Path to directory for eim_idf.json. During install, the configuration file is saved here. For version management commands (list, select, rename, remove, etc.), it specifies where to read the file. Defaults to ~/.espressif/tools on POSIX, C:\\Espressif\\tools on Windows."
+    )]
+    pub esp_idf_json_path: Option<String>,
 }
 
 // todo: add fix command which will reinstall using the existing IDF repository
@@ -146,12 +153,6 @@ pub struct InstallArgs {
         }
     )]
     path: Option<String>,
-
-    #[arg(
-        long,
-        help = "Absolute path to save eim_idf.json file. Default is $HOME/.espressif/tools/eim_idf.json on POSIX systems and C:\\Espressif\\tools\\eim_idf.json on Windows systems"
-    )]
-    esp_idf_json_path: Option<String>,
 
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
@@ -313,10 +314,6 @@ impl IntoIterator for InstallArgs {
     fn into_iter(self) -> Self::IntoIter {
         vec![
             ("path".to_string(), self.path.map(Into::into)),
-            (
-                "esp_idf_json_path".to_string(),
-                self.esp_idf_json_path.map(Into::into),
-            ),
             (
                 "config".to_string(),
                 self.config.map(|p| p.to_str().unwrap().into()),
