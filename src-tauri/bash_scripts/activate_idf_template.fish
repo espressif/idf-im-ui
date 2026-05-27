@@ -103,16 +103,33 @@ function activate_venv
 end
 
 function register_idf_completions
-    set -l completion_script ""
+    set -l idf_py "{{idf_path_escaped}}/tools/idf.py"
+    set -l python_bin "{{python_bin_path}}"
+    set -l idf_path "{{idf_path_escaped}}"
+    set -l idf_venv "{{idf_python_env_path_escaped}}"
 
-    set completion_script (env _IDF.PY_COMPLETE=fish_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+    set -l completion_script (cd /tmp; and env _IDF.PY_COMPLETE=fish_source \
+        IDF_PATH="$idf_path" \
+        IDF_PYTHON_ENV_PATH="$idf_venv" \
+        IDF_SKIP_DEPS=1 \
+        IDF_COMPONENT_MERGE=0 \
+        $python_bin $idf_py 2>/dev/null)
 
     if test -z "$completion_script"
-        set completion_script (env _IDF.PY_COMPLETE=source_fish "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+        set -l completion_script (cd /tmp; and env _IDF.PY_COMPLETE=source_fish \
+            IDF_PATH="$idf_path" \
+            IDF_PYTHON_ENV_PATH="$idf_venv" \
+            IDF_SKIP_DEPS=1 \
+            IDF_COMPONENT_MERGE=0 \
+            $python_bin $idf_py 2>/dev/null)
     end
 
     if test -n "$completion_script"
-        echo "$completion_script" | source
+        set -l patched_script (echo "$completion_script" | sed -E \
+            -e "s|(_IDF\\.PY_COMPLETE=fish_complete) idf\\.py|\1 IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 IDF_PATH='$idf_path' \"$python_bin\" \"$idf_py\"|g" \
+            -e "s|(_IDF\\.PY_COMPLETE=source_fish) idf\\.py|\1 IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 IDF_PATH='$idf_path' \"$python_bin\" \"$idf_py\"|g")
+
+        echo "$patched_script" | source
         and printf '%s\n' "Registered idf.py tab completion (fish)."
     end
 end
