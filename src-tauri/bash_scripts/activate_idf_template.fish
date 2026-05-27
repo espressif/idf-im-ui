@@ -15,6 +15,7 @@ function parse_cmake_version
 
     set major ""
     set minor ""
+    set patch ""
 
     # Read the file and extract version numbers
     while read -l line
@@ -28,6 +29,9 @@ function parse_cmake_version
         else if string match -q "set(IDF_VERSION_MINOR *" "$line"
             set -l matches (string match -r 'set\(IDF_VERSION_MINOR\s+(\d+)' "$line")
             and set minor $matches[2]
+        else if string match -q "set(IDF_VERSION_PATCH *" "$line"
+            set -l matches (string match -r 'set\(IDF_VERSION_PATCH\s+(\d+)' "$line")
+            and set patch $matches[2]
         end
     end < "$cmake_file"
 
@@ -37,8 +41,12 @@ function parse_cmake_version
         return 1
     end
 
-    # Return the version
-    echo "$major.$minor"
+    # Return the version (include patch if available)
+    if test -n "$patch"
+        echo "$major.$minor.$patch"
+    else
+        echo "$major.$minor"
+    end
     return 0
 end
 

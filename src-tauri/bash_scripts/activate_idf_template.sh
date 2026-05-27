@@ -16,6 +16,7 @@ parse_cmake_version() {
 
     major=""
     minor=""
+    patch=""
 
     # Read the file and extract version numbers using POSIX tools
     while IFS= read -r line || [ -n "$line" ]; do
@@ -32,6 +33,10 @@ parse_cmake_version() {
                 # Extract number using sed
                 minor=$(printf '%s\n' "$line" | sed 's/.*set(IDF_VERSION_MINOR[[:space:]]*\([0-9]*\).*/\1/')
                 ;;
+            "set(IDF_VERSION_PATCH "*)
+                # Extract number using sed
+                patch=$(printf '%s\n' "$line" | sed 's/.*set(IDF_VERSION_PATCH[[:space:]]*\([0-9]*\).*/\1/')
+                ;;
         esac
     done < "$cmake_file"
 
@@ -41,8 +46,12 @@ parse_cmake_version() {
         return 1
     fi
 
-    # Return the version
-    printf '%s.%s\n' "$major" "$minor"
+    # Return the version (include patch if available)
+    if [ -n "$patch" ]; then
+        printf '%s.%s.%s\n' "$major" "$minor" "$patch"
+    else
+        printf '%s.%s\n' "$major" "$minor"
+    fi
     return 0
 }
 
