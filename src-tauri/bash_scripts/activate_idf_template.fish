@@ -102,58 +102,93 @@ function activate_venv
     end
 end
 
-function register_idf_completions
-    complete -c idf.py -e 2>/dev/null
+function _idf_py_completion
+    set -l words (commandline -opc)
+    if test (count $words) -eq 0
+        set words "idf.py"
+    end
 
-    function _idf_py_completion
-        set -l words (commandline -opc)
-        if test (count $words) -eq 0
-            set words "idf.py"
+    set -l current_word (commandline -ct)
+
+    if string match -q "@*" "$current_word"
+        set -l search_path (string sub -s 2 -- "$current_word")
+
+        # Handle directory paths (ends with /)
+        if string match -q "*/" "$search_path"
+            set -l dir (string replace -r '/$' '' "$search_path")
+            if test -d "$dir"
+                # List contents, prepend @, and return
+                for f in "$dir"/*
+                    echo "@$f"
+                end
+            end
+            return
         end
-        
-        set -l comp_words (string join " " $words)
-        set -l comp_cword (count $words)
-        set -l comp_line (string join " " $words)
 
-        set -l results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
-            _IDF.PY_COMPLETE=zsh_complete \
+        set -l candidates $search_path*
+        set -l found false
+
+        for f in $candidates
+            if test -e "$f"
+                echo "@$f"
+                set found true
+            end
+        end
+
+        if not test "$found" = true
+            echo "@$search_path"
+        end
+        return
+    end
+
+    set -l comp_words (string join " " $words)
+    set -l comp_cword (math (count $words) - 1)
+    if test "$comp_cword" -lt 1
+        set comp_cword 1
+    end
+    set -l comp_line (string join " " $words)
+
+    set -l results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
+        _IDF.PY_COMPLETE=zsh_complete \
+        IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
+        IDF_PATH="{{idf_path_escaped}}" \
+        IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
+        "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+
+    if test -z "$results"
+        set results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
+            _IDF.PY_COMPLETE=fish_complete \
             IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
             IDF_PATH="{{idf_path_escaped}}" \
             IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
             "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+    end
 
-        if test -z "$results"
-            set results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
-                _IDF.PY_COMPLETE=fish_complete \
-                IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
-                IDF_PATH="{{idf_path_escaped}}" \
-                IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
-                "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+    for line in $results
+        set line (string trim "$line")
+        if test -z "$line"; continue; end
+
+        set line (string replace -r "^plain\s+" "" "$line")
+
+        if string match -q "*\t*" "$line"
+            echo "$line"
+            continue
         end
 
-        for line in $results
-            set line (string trim "$line")
-            set line (string replace -r "^[']" "" "$line")
-            set line (string replace -r "[']" "" "$line")
+        set -l parts (string split -m 1 " " "$line")
+        set -l cmd $parts[1]
 
-            if string match -q "plain *" "$line"
-                set line (string sub -s 7 "$line")
-                set -l cmd (string split -m 1 " " "$line")[1]
-                set -l desc (string split -m 1 " " "$line")[2..-1]
-                if test -n "$desc"
-                    echo "$cmd\t$desc"
-                else
-                    echo "$cmd"
-                end
-            else if string match -q "*:*" "$line"
-                set -l cmd (string split -m 1 ":" "$line")[1]
-                set -l desc (string split -m 1 ":" "$line")[2]
-                echo "$cmd\t$desc"
-            else
-                echo "$line"
-            end
+        if test (count $parts) -gt 1
+            printf '%s\t%s\n' "$cmd" "$parts[2]"
+        else
+            echo "$line"
         end
     end
+end
+
+function register_idf_completions
+    # Clear stale completions
+    complete -c idf.py -e 2>/dev/null
 
     # Register the function
     complete -c idf.py -f -a '(_idf_py_completion)' 2>/dev/null
