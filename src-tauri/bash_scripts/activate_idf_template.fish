@@ -103,35 +103,61 @@ function activate_venv
 end
 
 function register_idf_completions
-    set -l idf_py "{{idf_path_escaped}}/tools/idf.py"
-    set -l python_bin "{{python_bin_path}}"
-    set -l idf_path "{{idf_path_escaped}}"
-    set -l idf_venv "{{idf_python_env_path_escaped}}"
+    complete -c idf.py -e 2>/dev/null
 
-    set -l completion_script (cd /tmp; and env _IDF.PY_COMPLETE=fish_source \
-        IDF_PATH="$idf_path" \
-        IDF_PYTHON_ENV_PATH="$idf_venv" \
-        IDF_SKIP_DEPS=1 \
-        IDF_COMPONENT_MERGE=0 \
-        $python_bin $idf_py 2>/dev/null)
+    function _idf_py_completion
+        set -l words (commandline -opc)
+        if test (count $words) -eq 0
+            set words "idf.py"
+        end
+        
+        set -l comp_words (string join " " $words)
+        set -l comp_cword (count $words)
+        set -l comp_line (string join " " $words)
 
-    if test -z "$completion_script"
-        set -l completion_script (cd /tmp; and env _IDF.PY_COMPLETE=source_fish \
-            IDF_PATH="$idf_path" \
-            IDF_PYTHON_ENV_PATH="$idf_venv" \
-            IDF_SKIP_DEPS=1 \
-            IDF_COMPONENT_MERGE=0 \
-            $python_bin $idf_py 2>/dev/null)
+        set -l results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
+            _IDF.PY_COMPLETE=zsh_complete \
+            IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
+            IDF_PATH="{{idf_path_escaped}}" \
+            IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
+            "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+
+        if test -z "$results"
+            set results (env COMP_WORDS="$comp_words" COMP_CWORD="$comp_cword" COMP_LINE="$comp_line" \
+                _IDF.PY_COMPLETE=fish_complete \
+                IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
+                IDF_PATH="{{idf_path_escaped}}" \
+                IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
+                "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+        end
+
+        for line in $results
+            set line (string trim "$line")
+            set line (string replace -r "^[']" "" "$line")
+            set line (string replace -r "[']" "" "$line")
+
+            if string match -q "plain *" "$line"
+                set line (string sub -s 7 "$line")
+                set -l cmd (string split -m 1 " " "$line")[1]
+                set -l desc (string split -m 1 " " "$line")[2..-1]
+                if test -n "$desc"
+                    echo "$cmd\t$desc"
+                else
+                    echo "$cmd"
+                end
+            else if string match -q "*:*" "$line"
+                set -l cmd (string split -m 1 ":" "$line")[1]
+                set -l desc (string split -m 1 ":" "$line")[2]
+                echo "$cmd\t$desc"
+            else
+                echo "$line"
+            end
+        end
     end
 
-    if test -n "$completion_script"
-        set -l patched_script (echo "$completion_script" | sed -E \
-            -e "s|(_IDF\\.PY_COMPLETE=fish_complete) idf\\.py|\1 IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 IDF_PATH='$idf_path' \"$python_bin\" \"$idf_py\"|g" \
-            -e "s|(_IDF\\.PY_COMPLETE=source_fish) idf\\.py|\1 IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 IDF_PATH='$idf_path' \"$python_bin\" \"$idf_py\"|g")
-
-        echo "$patched_script" | source
-        and printf '%s\n' "Registered idf.py tab completion (fish)."
-    end
+    # Register the function
+    complete -c idf.py -f -a '(_idf_py_completion)' 2>/dev/null
+    and printf '%s\n' "Registered idf.py tab completion (fish)."
 end
 
 # Check if the script is being sourced
