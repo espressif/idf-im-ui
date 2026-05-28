@@ -214,7 +214,11 @@ pub fn setup_gui_logging(
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run(settings: Option<Settings>, log_level_override: Option<log::LevelFilter>, do_not_track: bool) {
+pub fn run(
+    settings: Option<Settings>,
+    log_level_override: Option<log::LevelFilter>,
+    do_not_track: bool,
+) {
     // this is here because macos bundled .app does not inherit path
     #[cfg(target_os = "macos")]
     {
@@ -253,8 +257,17 @@ pub fn run(settings: Option<Settings>, log_level_override: Option<log::LevelFilt
             },
             None => AppState::default()
           };
+          // Initialize eim_idf.json at the configured path (not hardcoded default)
+          match app_state.settings.lock() {
+            Ok(settings) => {
+              match settings.initialize_esp_ide_json() {
+                Ok(_) => log::debug!("ESP-IDF JSON initialized at configured path."),
+                Err(e) => log::warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
+              }
+            }
+            Err(e) => log::warn!("Failed to lock settings: {}", e),
+          }
           app.manage(app_state);
-
           // Set usage_statistics based on do_not_track
           let config_dir = dirs::config_dir()
             .ok_or("Failed to get config directory")?

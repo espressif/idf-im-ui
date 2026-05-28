@@ -66,10 +66,8 @@ pub fn get_default_config_path() -> PathBuf {
     PathBuf::from(default_settings.esp_idf_json_path.unwrap_or_default()).join("eim_idf.json")
 }
 
-// todo: add optional path parameter enabling the user to specify a custom config file
-// or to search for it in a different location ( or whole filesystem)
-pub fn list_installed_versions() -> Result<Vec<IdfInstallation>> {
-    let config_path = get_default_config_path();
+pub fn list_installed_versions(config_path: Option<&PathBuf>) -> Result<Vec<IdfInstallation>> {
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     get_installed_versions_from_config_file(&config_path)
 }
 
@@ -96,21 +94,21 @@ pub fn get_installed_versions_from_config_file(
 
 /// Retrieves the selected ESP-IDF installation from the configuration file.
 ///
-/// This function reads the ESP-IDF configuration from the default location specified by the
-/// `get_default_config_path` function and returns the selected installation. If no installation is
-/// selected, it logs a warning and returns `None`.
+/// Reads the ESP-IDF configuration from the given path (or the default location if `None`)
+/// and returns the selected installation. If no installation is selected, it logs a warning
+/// and returns `None`.
 ///
 /// # Parameters
 ///
-/// None.
+/// * `config_path` - Optional path to the ESP-IDF configuration file. Falls back to the default path when `None`.
 ///
 /// # Returns
 ///
 /// * `Option<IdfInstallation>` - Returns `Some(IdfInstallation)` if a selected installation is found in the
 ///   configuration file. Returns `None` if no installation is selected or if an error occurs while reading
 ///   the configuration file.
-pub fn get_selected_version() -> Option<IdfInstallation> {
-    let config_path = get_default_config_path();
+pub fn get_selected_version(config_path: Option<&PathBuf>) -> Option<IdfInstallation> {
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let ide_config = IdfConfig::from_file(config_path).ok();
     if let Some(config) = ide_config {
         match config.get_selected_installation() {
@@ -123,21 +121,18 @@ pub fn get_selected_version() -> Option<IdfInstallation> {
     }
     None
 }
-/// Retrieves the ESP-IDF configuration from the default location.
-///
-/// This function reads the ESP-IDF configuration from the default location specified by the
-/// `get_default_config_path` function. The configuration is then returned as an `IdfConfig` struct.
+/// Retrieves the ESP-IDF configuration from the given path or the default location.
 ///
 /// # Parameters
 ///
-/// None.
+/// * `config_path` - Optional path to the ESP-IDF configuration file. Falls back to the default path when `None`.
 ///
 /// # Returns
 ///
 /// * `Result<IdfConfig, anyhow::Error>` - On success, returns a `Result` containing the `IdfConfig` struct
 ///   representing the ESP-IDF configuration. On error, returns an `anyhow::Error` with a description of the error.
-pub fn get_esp_ide_config() -> Result<IdfConfig> {
-    let config_path = get_default_config_path();
+pub fn get_esp_ide_config(config_path: Option<&PathBuf>) -> Result<IdfConfig> {
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     IdfConfig::from_file(&config_path)
 }
 
@@ -157,8 +152,8 @@ pub fn get_esp_ide_config() -> Result<IdfConfig> {
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been selected. On error, returns an `anyhow::Error` with a description of the error.
-pub fn select_idf_version(identifier: &str) -> Result<String> {
-    let config_path = get_default_config_path();
+pub fn select_idf_version(identifier: &str, config_path: Option<&PathBuf>) -> Result<String> {
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     if ide_config.select_installation(identifier) {
         ide_config.to_file(config_path, true, false)?;
@@ -185,8 +180,8 @@ pub fn select_idf_version(identifier: &str) -> Result<String> {
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been renamed. On error, returns an `anyhow::Error` with a description of the error.
-pub fn rename_idf_version(identifier: &str, new_name: String) -> Result<String> {
-    let config_path = get_default_config_path();
+pub fn rename_idf_version(identifier: &str, new_name: String, config_path: Option<&PathBuf>) -> Result<String> {
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     let res = ide_config.update_installation_name(identifier, new_name.to_string());
     if res {
@@ -262,9 +257,9 @@ pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been removed. On error, returns an `anyhow::Error` with a description of the error.
-pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool) -> Result<String> {
+pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool, config_path: Option<&PathBuf>) -> Result<String> {
     //TODO: remove also from path
-    let config_path = get_default_config_path();
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     if let Some(installation) = ide_config
         .idf_installed
@@ -386,8 +381,8 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn run_command_in_context(identifier: &str, command: &str) -> anyhow::Result<ExitStatus> {
-    let installation = match list_installed_versions() {
+pub fn run_command_in_context(identifier: &str, command: &str, config_path: Option<&PathBuf>) -> anyhow::Result<ExitStatus> {
+    let installation = match list_installed_versions(config_path) {
         Ok(versions) => versions.into_iter().find(|v| {
             v.id == identifier
                 || v.name == identifier
@@ -466,17 +461,17 @@ pub fn run_command_using_activation_script_headless(activation_script: &str, com
     }
   }
 
-pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf) -> anyhow::Result<Settings> {
+pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf, config_path: Option<&PathBuf>) -> anyhow::Result<Settings> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
     // The fix logic is just instalation with use of existing repository
     let mut version_name = None;
-    match list_installed_versions() {
+    match list_installed_versions(config_path) {
         Ok(versions) => {
             for v in versions {
                 if v.path == path_to_fix.to_str().unwrap() {
                     info!("Found existing IDF version: {}", v.name);
                     // Remove the existing activation script and eim_idf.json entry
-                    match remove_single_idf_version(&v.name, true) {
+                    match remove_single_idf_version(&v.name, true, config_path) {
                         Ok(_) => {
                             info!("Removed existing IDF version from eim_idf.json: {}", v.name);
                             version_name = Some(v.name.clone());
