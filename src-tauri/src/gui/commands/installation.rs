@@ -219,16 +219,16 @@ pub async fn install_single_version(
   }
 
 
-  let export_vars = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
+  let (export_paths,export_vars) = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
 
   idf_im_lib::single_version_post_install(
       &paths.activation_script_path.to_string_lossy().to_string(),
       &paths.idf_path.to_string_lossy().to_string(),
       &paths.actual_version,
       &paths.tool_install_directory.to_string_lossy().to_string(),
-      export_vars,
+      export_paths,
       paths.python_venv_path.to_str(),
-      None, // env_vars
+      Some(export_vars), // env_vars
       &paths.python_path.to_string_lossy().to_string(),
       false, // create_cmd_bat
       false, // offline_installation
@@ -1820,11 +1820,11 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: Some(idf_version.clone()),
             });
 
-            let export_vars = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version, Some(offline_archive_dir.path())).await {
-                Ok(vars) => {
+            let (export_paths, export_vars ) = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version, Some(offline_archive_dir.path())).await {
+                Ok((paths, vars)) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
                         rust_i18n::t!("gui.offline.tools_configured").to_string());
-                    vars
+                    (paths, vars)
                 }
                 Err(err) => {
                     let error_msg = rust_i18n::t!("gui.offline.tools_setup_failed", error = err.to_string()).to_string();
@@ -1855,9 +1855,9 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 &paths.idf_path.to_string_lossy().to_string(),
                 &paths.actual_version,
                 &paths.tool_install_directory.to_string_lossy().to_string(),
-                export_vars,
+                export_paths,
                 paths.python_venv_path.to_str(),
-                None,
+                Some(export_vars),
                 &paths.python_path.to_string_lossy(),
                 false, // create_cmd_bat
                 true,  // is_offline_install
