@@ -114,40 +114,67 @@ activate_venv() {
 
 register_idf_completions() {
     case "$-" in
-        *i*)
-           # Interactive shell - proceed with registration
-            ;;
-         *)
-            # Non-interactive shell - skip completion registration
-            return 0
-             ;;
+        *i*) ;;
+        *) return 0 ;;
     esac
 
+    idf_py="{{idf_path_escaped}}/tools/idf.py"
+    python_bin="{{python_bin_path}}"
+    idf_path="{{idf_path_escaped}}"
+    idf_venv="{{idf_python_env_path_escaped}}"
+
+    _is_valid_completion() {
+        case "$1" in
+            *"#compdef"*|*"complete -F"*|*"function "*|*"() {"*) return 0 ;;
+            *) return 1 ;;
+        esac
+    }
+
     if [ -n "$ZSH_VERSION" ]; then
-        if ! command -v compdef >/dev/null 2>&1; then
-            autoload -Uz compinit 2>/dev/null && compinit -u 2>/dev/null
+        if ! typeset -f compdef >/dev/null 2>&1; then
+            autoload -Uz compinit 2>/dev/null || return 1
+            compinit -u -C 2>/dev/null || return 1
         fi
 
-        _idf_completion="$(_IDF.PY_COMPLETE=zsh_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
-        if [ -z "$_idf_completion" ]; then
-            _idf_completion="$(_IDF.PY_COMPLETE=source_zsh "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
-        fi
-        if [ -n "$_idf_completion" ]; then
-            eval "$_idf_completion" && \
+        _idf_completion="$(cd /tmp && env _IDF.PY_COMPLETE=zsh_source \
+            IDF_PATH="$idf_path" \
+            IDF_PYTHON_ENV_PATH="$idf_venv" \
+            IDF_SKIP_DEPS=1 \
+            IDF_COMPONENT_MERGE=0 \
+            "$python_bin" "$idf_py" 2>/dev/null)"
+
+        if _is_valid_completion "$_idf_completion"; then
+            _idf_completion="$(echo "$_idf_completion" | sed \
+                -e '/(( ! \$+commands\[idf\.py\] )) && return 1/d' \
+                -e "s|env COMP_WORDS|env IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 IDF_PATH='${idf_path}' COMP_WORDS|" \
+                -e "s|idf\.py)|\"${python_bin}\" \"${idf_py}\")|g" \
+            )"
+
+            eval "$_idf_completion" 2>/dev/null
+            compdef '_idfpy_completion' 'idf.py' 2>/dev/null && \
                 printf '%s\n' "Registered idf.py tab completion (zsh)."
         fi
-        unset _idf_completion
     elif [ -n "$BASH_VERSION" ]; then
-        _idf_completion="$(_IDF.PY_COMPLETE=bash_source "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
-        if [ -z "$_idf_completion" ]; then
-            _idf_completion="$(_IDF.PY_COMPLETE=source_bash "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)"
-        fi
-        if [ -n "$_idf_completion" ]; then
-            eval "$_idf_completion" && \
-                printf '%s\n' "Registered idf.py tab completion (bash)."
-        fi
-        unset _idf_completion
+        _idf_py_custom_completion() {
+            local completions
+            completions=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD="${COMP_CWORD}" \
+                _IDF.PY_COMPLETE=bash_complete \
+                IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
+                IDF_PATH="{{idf_path_escaped}}" \
+                IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
+                "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+
+            completions=$(echo "$completions" | sed 's/^plain,//')
+            
+            COMPREPLY=( $completions )
+        }
+
+        complete -F _idf_py_custom_completion idf.py 2>/dev/null && \
+            printf '%s\n' "Registered idf.py tab completion (bash)."
     fi
+
+    unset _idf_completion
+    return 0
 }
 
 # Check if the script is being sourced or executed
