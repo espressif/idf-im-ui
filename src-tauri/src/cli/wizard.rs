@@ -828,8 +828,8 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             .map_err(|err| t!("wizard.error.create_python_env", error = err.to_string()))?;
 
         let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
-            tools,
-            installed_tools_list,
+            tools.clone(),
+            installed_tools_list.clone(),
             tool_install_directory.to_str().unwrap(),
         )
         .into_iter()
@@ -841,6 +841,11 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         })
         .collect();
+        let export_vars = idf_im_lib::idf_tools::get_tools_export_vars_from_list(
+            tools,
+            installed_tools_list,
+            tool_install_directory.to_str().unwrap(),
+        );
         idf_im_lib::single_version_post_install(
             &paths.activation_script_path.to_str().unwrap(),
             paths.idf_path.to_str().unwrap(),
@@ -848,7 +853,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             tool_install_directory.to_str().unwrap(),
             export_paths,
             paths.python_venv_path.to_str(),
-            None, // env_vars
+            Some(export_vars), // env_vars
             &paths.python_path.to_string_lossy(),
             config.create_bat_activation_script.unwrap_or(false),
             offline_mode,

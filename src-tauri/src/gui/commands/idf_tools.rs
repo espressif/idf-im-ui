@@ -97,7 +97,7 @@ pub async fn setup_tools(
     idf_path: &PathBuf,
     idf_version: &str,
     offline_archive_dir: Option<&Path>,
-) -> Result<Vec<String>> {
+) -> Result<(Vec<String>,Vec<(String,String)>)> {
     info!("Setting up tools...");
 
     let is_simple_installation = crate::gui::app_state::is_simple_installation(&app_handle);
@@ -467,7 +467,7 @@ pub async fn setup_tools(
 
     let paths = match settings.get_version_paths(&idf_version) {
       Ok(paths) => paths,
-      Err(err) => {
+      Err(_err) => {
         return Err(anyhow!("Failed to setup environment paths for idf versions"));
       }
     };
@@ -520,8 +520,8 @@ pub async fn setup_tools(
 
     // Generate export paths
     let export_paths = idf_im_lib::idf_tools::get_tools_export_paths_from_list(
-        tools,
-        installed_tools_list,
+        tools.clone(),
+        installed_tools_list.clone(),
         tools_install_folder.to_str().unwrap(),
     )
     .into_iter()
@@ -533,6 +533,12 @@ pub async fn setup_tools(
         }
     })
     .collect();
+
+    let export_vars = idf_im_lib::idf_tools::get_tools_export_vars_from_list(
+        tools,
+        installed_tools_list,
+        tools_install_folder.to_str().unwrap(),
+    );
 
     // Configuration phase (95%)
     emit_installation_event(app_handle, InstallationProgress {
@@ -546,7 +552,7 @@ pub async fn setup_tools(
     emit_log_message(app_handle, MessageLevel::Success,
         t!("gui.setup_tools.setup_completed").to_string());
 
-    Ok(export_paths)
+    Ok((export_paths,export_vars))
 }
 
 #[tauri::command]

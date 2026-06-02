@@ -699,6 +699,48 @@ pub fn get_tools_export_paths_from_list(
     paths
 }
 
+/// Returns a `Vec<(String, String)>` of export variables for the installed tools.
+///
+/// This function iterates through a map of installed tools, finds their export variables
+/// from the `ToolsFile` definition, and replaces any `${TOOL_PATH}` placeholder in the
+/// values with the actual `tools_install_path`. All collected key-value pairs are returned
+/// as a vector of tuples.
+///
+/// # Arguments
+///
+/// * `tools_file` - A `ToolsFile` struct containing the definitions of tools,
+///                  including their `export_vars`.
+/// * `installed_tools` - A `HashMap` where keys are tool names (`String`) and values
+///                       are tuples containing the tool's installed version (`String`)
+///                       and its `Download` information.
+/// * `tools_install_path` - A string slice representing the base directory where tools are installed.
+///
+/// # Returns
+///
+/// A `Vec<(String, String)>` containing the export variable names and their values
+/// for the specified installed tools.
+///
+pub fn get_tools_export_vars_from_list(
+  _tools_file: ToolsFile,
+  installed_tools: HashMap<String, (String, Download)>,
+  tools_install_path: &str,
+) -> Vec<(String, String)> {
+    let mut vars: Vec<(String, String)> = Vec::new();
+
+    for (tool_name, (_version, _download)) in installed_tools {
+        if let Some(tool) = _tools_file.tools.iter().find(|t| t.name == tool_name) {
+            for (var_name, var_value) in &tool.export_vars {
+                let single_tool_install_path = PathBuf::from(tools_install_path).join(tool.name.clone()).join(tool.versions.first().unwrap().name.clone());
+                let processed_value = var_value.replace("${TOOL_PATH}", &single_tool_install_path.to_string_lossy());
+                vars.push((var_name.clone(), processed_value));
+            }
+        }
+    }
+
+    log::debug!("Export vars from list: {:?}", vars);
+    vars
+}
+
 /// Recursively searches for directories named "bin" within the given path.
 ///
 /// # Parameters
