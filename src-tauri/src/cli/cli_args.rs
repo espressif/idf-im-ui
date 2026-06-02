@@ -4,6 +4,8 @@ use clap_complete::aot::Shell;
 use idf_im_lib::to_absolute_path;
 use std::path::PathBuf;
 
+use super::idf_tools::IdfToolsArgs;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 fn custom_styles() -> Styles {
@@ -140,6 +142,12 @@ pub enum Commands {
 
     /// Print help in JSON format for machine reading
     HelpJson,
+
+    /// Transitional shim that exposes the legacy `idf_tools.py` interface
+    /// (`eim idf-tools list | install | check | ...`). This will be
+    /// removed once every consumer has migrated to the regular `eim`
+    /// subcommands.
+    IdfTools(IdfToolsArgs),
 }
 
 #[derive(Parser, Debug, Clone, Default)]
