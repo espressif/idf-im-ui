@@ -730,8 +730,8 @@ pub fn get_tools_export_vars_from_list(
     for (tool_name, (_version, _download)) in installed_tools {
         if let Some(tool) = _tools_file.tools.iter().find(|t| t.name == tool_name) {
             for (var_name, var_value) in &tool.export_vars {
-                // Replace ${TOOL_PATH} with the actual tools_install_path
-                let processed_value = var_value.replace("${TOOL_PATH}", tools_install_path);
+                let single_tool_install_path = PathBuf::from(tools_install_path).join(tool.name.clone()).join(tool.versions.first().unwrap().name.clone());
+                let processed_value = var_value.replace("${TOOL_PATH}", &single_tool_install_path.to_string_lossy());
                 vars.push((var_name.clone(), processed_value));
             }
         }
