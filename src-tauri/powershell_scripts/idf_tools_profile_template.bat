@@ -9,11 +9,27 @@ for /f "delims=" %%i in ('where eim 2^>nul') do set "_EimBinPath=%%i" & goto :ei
 
 REM Parse IDF version from CMake
 set IdfVersion=
-for /f "usebackq tokens=1,2 delims==#" %%a in ("{{idf_path}}\tools\cmake\version.cmake") do (
+set IdfVersionMajor=
+set IdfVersionMinor=
+set IdfVersionPatch=
+for /f "usebackq tokens=1,2 delims==# " %%a in ("{{idf_path}}\tools\cmake\version.cmake") do (
     if "%%a"=="set(IDF_VERSION_MAJOR" call set "IdfVersionMajor=%%b"
     if "%%a"=="set(IDF_VERSION_MINOR" call set "IdfVersionMinor=%%b"
+    if "%%a"=="set(IDF_VERSION_PATCH" call set "IdfVersionPatch=%%b"
 )
-if defined IdfVersionMajor if defined IdfVersionMinor set IdfVersion=%IdfVersionMajor%.%IdfVersionMinor%
+if defined IdfVersionMajor if defined IdfVersionMinor (
+    set IdfVersionMajor=%IdfVersionMajor:~0,-1%
+    set IdfVersionMinor=%IdfVersionMinor:~0,-1%
+)
+if defined IdfVersionPatch set IdfVersionPatch=%IdfVersionPatch:~0,-1%
+
+if defined IdfVersionMajor if defined IdfVersionMinor (
+    if defined IdfVersionPatch (
+        set IdfVersion=%IdfVersionMajor%.%IdfVersionMinor%.%IdfVersionPatch%
+    ) else (
+        set IdfVersion=%IdfVersionMajor%.%IdfVersionMinor%
+    )
+)
 
 REM If -e parameter is provided, print variables and exit
 if "%~1"=="-e" goto print_env

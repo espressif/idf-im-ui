@@ -20,6 +20,7 @@ function Parse-CMakeVersion {
 
     $major = $null
     $minor = $null
+    $patch = $null
 
     try {
         # Read the file content
@@ -40,6 +41,12 @@ function Parse-CMakeVersion {
                     $minor = $matches[0]
                 }
             }
+            elseif ($line -match '^set\(IDF_VERSION_PATCH') {
+                # Extract first number from the line
+                if ($line -match '\d+') {
+                    $patch = $matches[0]
+                }
+            }
         }
 
         # Check if both versions were found
@@ -48,8 +55,12 @@ function Parse-CMakeVersion {
             return $null
         }
 
-        # Return the version
-        return "$major.$minor"
+        # Return the version (include patch if available)
+        if ($null -ne $patch) {
+            return "$major.$minor.$patch"
+        } else {
+            return "$major.$minor"
+        }
     }
     catch {
         Write-Error "Failed to read CMake version file: $($_.Exception.Message)"
