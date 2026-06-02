@@ -36,6 +36,7 @@ use crate::gui;
 
 pub mod cli_args;
 pub mod helpers;
+pub mod idf_tools;
 pub mod prompts;
 pub mod wizard;
 
@@ -732,6 +733,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
               return Err(anyhow::anyhow!(t!("drivers.windows_only")));
             }
           }
+        }
+        Commands::IdfTools(args) => {
+            crate::cli::idf_tools::run(args, config_path.as_ref()).await
         }
     }
 }
