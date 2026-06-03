@@ -111,6 +111,12 @@ activate_venv() {
         return 1
     fi
 }
+_is_valid_completion() {
+    case "$1" in
+        *"#compdef"*|*"complete -F"*|*"function "*|*"() {"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
 
 register_idf_completions() {
     case "$-" in
@@ -123,12 +129,6 @@ register_idf_completions() {
     idf_path="{{idf_path_escaped}}"
     idf_venv="{{idf_python_env_path_escaped}}"
 
-    _is_valid_completion() {
-        case "$1" in
-            *"#compdef"*|*"complete -F"*|*"function "*|*"() {"*) return 0 ;;
-            *) return 1 ;;
-        esac
-    }
 
     if [ -n "$ZSH_VERSION" ]; then
         if ! typeset -f compdef >/dev/null 2>&1; then
@@ -155,6 +155,7 @@ register_idf_completions() {
                 printf '%s\n' "Registered idf.py tab completion (zsh)."
         fi
     elif [ -n "$BASH_VERSION" ]; then
+        eval '
         _idf_py_custom_completion() {
             local completions
             completions=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD="${COMP_CWORD}" \
@@ -163,14 +164,12 @@ register_idf_completions() {
                 IDF_PATH="{{idf_path_escaped}}" \
                 IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
                 "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
-
-            completions=$(echo "$completions" | sed 's/^plain,//')
-            
+            completions=$(echo "$completions" | sed "s/^plain,//")
             COMPREPLY=( $completions )
         }
-
         complete -F _idf_py_custom_completion idf.py 2>/dev/null && \
-            printf '%s\n' "Registered idf.py tab completion (bash)."
+            printf "%s\n" "Registered idf.py tab completion (bash)."
+        ' 2>/dev/null
     fi
 
     unset _idf_completion
@@ -201,8 +200,6 @@ else
     fi
 fi
 
-# Define IDF tool functions/aliases depending on shell support for dots in names
-# dash does not support dots in function names, so fall back to aliases there
 if ( f.x() { :; }; f.x ) 2>/dev/null; then
 
     idf.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" "$@"; }

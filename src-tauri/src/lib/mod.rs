@@ -1831,22 +1831,26 @@ pub fn single_version_post_install(
     offline_installation: bool,
     is_gui: bool,
 ) {
-    let mut env_vars = match env_vars {
-        Some(vars) => vars,
-        None => {
-          let mut env_vars = setup_environment_variables(
-            &PathBuf::from(tool_install_directory),
-            &PathBuf::from(idf_path),
-        )
-        .unwrap_or_default();
-        env_vars.push((
-          // todo: move to setup_environment_variables
-          "IDF_PYTHON_ENV_PATH".to_string(),
-          idf_python_env_path.unwrap_or_default().to_string(),
-        ));
-        env_vars
-      }
-    };
+    let mut env_vars_merged = setup_environment_variables(
+        &PathBuf::from(tool_install_directory),
+        &PathBuf::from(idf_path),
+    )
+    .unwrap_or_default();
+    env_vars_merged.push((
+        // todo: move to setup_environment_variables
+        "IDF_PYTHON_ENV_PATH".to_string(),
+        idf_python_env_path.unwrap_or_default().to_string(),
+    ));
+    if let Some(extra_vars) = env_vars {
+        for (key, value) in extra_vars {
+            if let Some(pos) = env_vars_merged.iter().position(|(k, _)| k == &key) {
+                env_vars_merged[pos] = (key, value);
+            } else {
+                env_vars_merged.push((key, value));
+            }
+        }
+    }
+    let env_vars = env_vars_merged;
 
 
     let mut export_paths = export_paths.clone();
