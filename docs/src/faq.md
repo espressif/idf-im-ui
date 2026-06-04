@@ -153,7 +153,7 @@ You can either:
 ### What if I want to install a specific version of IDF that is not listed?
 You can install any tagged version of ESP-IDF using the `-i` or `--idf-version` flag:
 ```bash
-eim install -i v4.4.1
+eim install -i v5.3.1
 ```
 
 ### I am getting the error `/lib64/libm.so.6: version 'GLIBC_2.38' not found`. What should I do?
