@@ -249,6 +249,112 @@ export function runInstallVerification({
       }
     });
 
+    it("2.5- Activation script should run with -e flag and print env vars", async function () {
+      /**
+       * Regression test for the activation script `-e` execution path.
+       *
+       * The activation script has two modes:
+       *   1. Sourced into a shell (sets PATH, activates venv, registers
+       *      idf.py/esptool.py, etc.)
+       *   2. Invoked directly with `-e` — prints PATH/ESP_IDF_VERSION and
+       *      the env var pairs to stdout, then exits 0.
+       *
+       * Mode 2 is used by IDEs and the eim `select` integration. The two
+       * flows share most of the script body, so a regression in the
+       * `print_env_variables` path (or in the helpers it depends on, e.g.
+       * `get_env_var_pairs`) would still leave sourcing working but break
+       * `-e`. This test runs the script with `-e` in a fresh subshell
+       * (Bash on POSIX, PowerShell on Windows) and asserts on the captured
+       * exit code and that the key markers are present in the output.
+       *
+       * Runs before test "3-" so a broken `-e` path fails the suite before
+       * any test attempts to source the script.
+       */
+      this.timeout(120000);
+      logger.info(`Validating activation script runs with -e flag`);
+      const eimJsonContent = JSON.parse(
+        fs.readFileSync(eimJsonFilePath, "utf-8")
+      );
+
+      for (let idf of idfList) {
+        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
+          .be.null;
+
+        const activationScript = getActivationScriptPath(idf, eimJsonEntry);
+        expect(
+          fs.existsSync(activationScript),
+          `Activation script not found at ${activationScript} for IDF ${idf}`
+        ).to.be.true;
+
+        testRunner = new CLITestRunner();
+        // Unique sentinel per IDF so concurrent test cases (if any) do not
+        // collide, and so the helper trims the right tail of the buffer.
+        const sentinel = `EIM_DONE_${idf}_${Date.now()}`;
+
+        const isWin = os.platform() === "win32";
+        const quotedScript = isWin
+          ? `"${activationScript}"`
+          : `"${activationScript.replace(/"/g, '\\"')}"`;
+        const command = isWin
+          ? `& ${quotedScript} -e`
+          : `sh ${quotedScript} -e`;
+
+        let result;
+        try {
+          result = await testRunner.runAndCapture(command, sentinel);
+        } catch (error) {
+          logger.info(`Error running activation script with -e for IDF ${idf}`);
+          logger.info(`Terminal output: ${testRunner.output}`);
+          logger.info(` Error: ${error}`);
+          throw new Error(
+            `Error running activation script with -e for IDF ${idf}`
+          );
+        }
+        const { output, exitCode } = result;
+        logger.debug(
+          `-e flag output for IDF ${idf} (exit ${exitCode}): ${output}`
+        );
+
+        expect(
+          exitCode,
+          `-e flag should exit with code 0 for IDF ${idf}; got ${exitCode}. Output: ${output}`
+        ).to.equal(0);
+
+        // The print_env_variables function must emit a PATH= line and an
+        // ESP_IDF_VERSION= line. The exact set of additional env var pairs
+        // depends on the IDF version / installed tools, so we do not assert
+        // on individual keys here.
+        expect(
+          output,
+          `-e flag should print PATH= line for IDF ${idf}; output: ${output}`
+        ).to.include("PATH=");
+        expect(
+          output,
+          `-e flag should print ESP_IDF_VERSION= line for IDF ${idf}; output: ${output}`
+        ).to.include("ESP_IDF_VERSION=");
+
+        // Guard against accidentally exercising the source path (e.g. if
+        // the `-e` branch was removed). These messages are only printed
+        // when the script is sourced, never on the `-e` path.
+        expect(
+          output,
+          `-e flag should NOT print source-path messages for IDF ${idf}; output: ${output}`
+        ).to.not.match(
+          /Environment setup complete|These changes will be lost|You are now using IDF version|Python environment activated/
+        );
+
+        try {
+          await testRunner.stop();
+        } catch (error) {
+          logger.info("Error to stop terminal");
+          logger.debug(` Error: ${error}`);
+        } finally {
+          testRunner = null;
+        }
+      }
+    });
+
     it("3- Check python environment requirements", async function () {
       /**
        * This test checks if the Python environment is set up correctly.

@@ -12,6 +12,7 @@ import pty from "node-pty";
 import os from "os";
 import logger from "./logger.class.js";
 import stripAnsi from "strip-ansi";
+import { spawn } from "child_process";
 
 class CLITestRunner {
   constructor() {
@@ -52,6 +53,95 @@ class CLITestRunner {
       logger.debug("Error loading IDF terminal");
       return Promise.reject();
     }
+  }
+
+  // Run a single command in a fresh subshell, capture stdout and exit code.
+  // Used by verification tests that need to invoke (not source) a generated
+  // script and observe its output, e.g. the activation script's `-e` flag.
+  //
+  // On POSIX the command is run through the interactive bash pty: the
+  // command is followed by an exit-code probe (`echo "EXIT=$?"`) and a
+  // unique sentinel; both are used to detect completion and recover the
+  // exit code from the captured stream.
+  //
+  // On Windows the interactive PowerShell pty is unreliable for this:
+  // PSReadLine echoes typed commands (so the sentinel and the `EXIT=`
+  // probe text both appear in the buffer before the command runs) and
+  // shows history autosuggest from earlier tests, which pollutes the
+  // capture. We therefore spawn a fresh non-interactive PowerShell
+  // subprocess and capture stdout/stderr + exit code directly. The
+  // `sentinel` parameter is unused on the Windows path.
+  //
+  // Returns `{ output, exitCode }` where `output` is the captured buffer
+  // (also left on `this.output` for debugging) and `exitCode` is the
+  // integer the previous command exited with, or `null` if the sentinel
+  // never appeared / the subprocess was killed.
+  async runAndCapture(command, sentinel, timeout = 30000) {
+    if (os.platform() === "win32") {
+      logger.debug(
+        `runAndCapture (subprocess): powershell.exe -Command ${command}`
+      );
+      return new Promise((resolve) => {
+        let output = "";
+        let timer = null;
+        const child = spawn(
+          "powershell.exe",
+          ["-ExecutionPolicy", "Bypass", "-NoProfile", "-Command", command]
+        );
+        child.stdout.on("data", (data) => {
+          output += data.toString();
+        });
+        child.stderr.on("data", (data) => {
+          output += data.toString();
+        });
+        child.on("close", (exitCode) => {
+          if (timer) clearTimeout(timer);
+          this.output = output;
+          resolve({ output, exitCode });
+        });
+        child.on("error", (error) => {
+          if (timer) clearTimeout(timer);
+          logger.info(`runAndCapture subprocess error: ${error}`);
+          this.output = output;
+          resolve({ output, exitCode: null });
+        });
+        timer = setTimeout(() => {
+          try {
+            child.kill();
+          } catch (e) {
+            logger.info(`Failed to kill runAndCapture subprocess: ${e}`);
+          }
+        }, timeout);
+      });
+    }
+
+    await this.start();
+    // Drop any pre-existing output (start, prompt, etc.) so the returned
+    // buffer only contains what the command itself produced.
+    this.output = "";
+
+    const exitProbe = `echo "EXIT=$?"`;
+
+    this.sendInput(`${command} ; ${exitProbe} ; echo "${sentinel}"`);
+
+    const startTime = Date.now();
+    let exitCode = null;
+    while (Date.now() - startTime < timeout) {
+      if (this.output.includes(sentinel)) {
+        const match = this.output.match(/EXIT=(\d+)/);
+        if (match) exitCode = parseInt(match[1], 10);
+        break;
+      }
+      if (this.exited) break;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    // Trim the trailing probe + sentinel from the captured buffer so the
+    // caller sees only the command's own output.
+    const sentinelIdx = this.output.lastIndexOf(sentinel);
+    const captured =
+      sentinelIdx > 0 ? this.output.slice(0, sentinelIdx) : this.output;
+    return { output: captured, exitCode };
   }
 
   // Function to start a terminal instance, The process will be kept running in the background.
