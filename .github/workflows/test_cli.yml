@@ -101,12 +101,12 @@ jobs:
           swap-storage: true
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -117,7 +117,7 @@ jobs:
           python-version: "3.13.8"
 
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: eim-cli-${{ matrix.package_name }}-*
           path: ./artifacts
@@ -465,7 +465,7 @@ jobs:
 
       # Upload test results
       - name: Upload test results (non-windows)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: matrix.os != 'windows-latest'
         with:
           name: autotest-CLI-results-${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}-${{matrix.distro_name || ''}}
@@ -474,7 +474,7 @@ jobs:
             ./tests/*.log
 
       - name: Upload test results (windows)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: matrix.os == 'windows-latest'
         with:
           name: autotest-CLI-results-${{ matrix.package_name }}-${{matrix.distro_name || ''}}
@@ -491,7 +491,7 @@ jobs:
 
       # Publish test results
       - name: Publish Test Results
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: CLI-Autotests-${{ matrix.package_name }}-${{matrix.distro_name || ''}}

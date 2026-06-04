@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Close stale issues awaiting user response
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const STALE_DAYS = ${{ inputs.max_age_days || 7 }};

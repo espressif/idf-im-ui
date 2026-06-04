@@ -33,7 +33,7 @@ jobs:
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
 
       - name: Checkout homebrew repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: espressif/homebrew-eim
           token: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}

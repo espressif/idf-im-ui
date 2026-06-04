@@ -99,7 +99,7 @@ Use the [install-esp-idf-action](https://github.com/espressif/install-esp-idf-ac
 
 ```yaml
 steps:
-  - uses: actions/checkout@v4
+  - uses: actions/checkout@v6
   - name: Install ESP-IDF
     uses: espressif/install-esp-idf-action@v1
     with:

@@ -56,12 +56,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
@@ -221,7 +221,7 @@ jobs:
 
       # Upload test results
       - name: Upload test results (non-windows)
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: autotest-CLI-Offline-results-${{ matrix.package_name }}-python-${{ matrix.version }}
           path: |
@@ -230,7 +230,7 @@ jobs:
 
       # Publish test results
       - name: Publish Test Results
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@v3
         if: always()
         with:
           name: CLI-Offline-Autotests-${{ matrix.package_name }}-python-${{ matrix.version }}

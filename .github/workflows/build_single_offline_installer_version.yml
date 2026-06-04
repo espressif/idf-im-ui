@@ -79,7 +79,7 @@ jobs:
           echo "| Source run_id | \`${{ inputs.resolved_run_id }}\` |" >> $GITHUB_STEP_SUMMARY
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref }}
 
@@ -120,11 +120,11 @@ jobs:
           brew install gdk-pixbuf cairo pango libjpeg libpng zlib meson glib dbus-glib
 
       - name: Install UV
-        uses: astral-sh/setup-uv@v2
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
 
       # ── AWS ────────────────────────────────────────────────────────────────
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -298,7 +298,7 @@ jobs:
 
       - name: Save build-info artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-info-${{ inputs.idf_version }}-${{ matrix.package_name }}
           path: build-info/
@@ -306,7 +306,7 @@ jobs:
 
       - name: Save build log artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log-${{ inputs.idf_version }}-${{ matrix.package_name }}
           path: built_archives/*.log
@@ -327,7 +327,7 @@ jobs:
 
     steps:
       - name: Download all build-infos for this version
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: build-info-${{ inputs.idf_version }}-*
           path: ./build-infos/
