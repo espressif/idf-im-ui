@@ -9,7 +9,14 @@ use semver::{Version, VersionReq};
 use std::process::ExitCode;
 use std::{
     fs,
+    io::{Read, Write},
+    net::TcpListener,
     path::{Path, PathBuf},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
     time::{Duration, SystemTime},
     vec,
 };
@@ -827,6 +834,147 @@ fn run_install_python_env_script_with_features(
     output
 }
 
+/// A short-lived, single-shot HTTPS server used by the SSL sanity check.
+///
+/// It listens on `127.0.0.1:<random_port>`, serves exactly one request with a
+/// `200 OK` response, then shuts down. Dropping the handle signals the worker
+/// thread to exit and joins it.
+struct HttpsTestServer {
+    port: u16,
+    cert_pem: String,
+    stop: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Drop for HttpsTestServer {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(h) = self.handle.take() {
+            // Give the thread a moment to notice the stop flag and exit.
+            // We don't block forever here — worst case the OS reaps the
+            // thread when the process exits.
+            let _ = h.join();
+        }
+    }
+}
+
+/// Starts a local HTTPS server on `127.0.0.1` and returns a handle to it.
+///
+/// The server uses a freshly generated self-signed certificate (CN=localhost,
+/// SAN includes 127.0.0.1). The certificate PEM is returned alongside the
+/// bound port so the Python side can trust it explicitly. Returns `None` if
+/// anything fails to initialise (cert generation, TLS config, socket bind).
+///
+/// The server is one-shot: it accepts a single client, answers with
+/// `HTTP/1.0 200 OK` and the body `OK`, then exits. This is sufficient to
+/// exercise Python's full TLS stack (context, trust store, handshake, HTTP
+/// over TLS) without any network egress.
+fn start_local_https_test_server() -> Option<HttpsTestServer> {
+    use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
+    use rustls::ServerConfig;
+
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
+    // 1. Generate a self-signed cert good for localhost + 127.0.0.1.
+    let cert = rcgen::generate_simple_self_signed(vec![
+        "localhost".to_string(),
+        "127.0.0.1".to_string(),
+    ])
+    .ok()?;
+    let cert_pem = cert.cert.pem();
+    let cert_der = cert.cert.der().to_vec();
+    let key_der = cert.key_pair.serialize_der();
+
+    // 2. Build a rustls server config backed by the cert above.
+    let config = ServerConfig::builder()
+        .with_no_client_auth()
+        .with_single_cert(
+            vec![CertificateDer::from(cert_der)],
+            PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(key_der)),
+        )
+        .ok()?;
+    let config = Arc::new(config);
+
+    // 3. Bind to an OS-assigned free port on the loopback interface.
+    //    Port 0 is the standard "give me any free port" idiom and works
+    //    identically on Linux, macOS, and Windows.
+    let listener = TcpListener::bind("127.0.0.1:0").ok()?;
+    let port = listener.local_addr().ok()?.port();
+
+    // 4. Spawn the worker thread. It serves one client then exits, polling
+    //    the stop flag every ~100 ms so a hung client can't pin the thread.
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = stop.clone();
+    let config_clone = config.clone();
+    let handle = thread::spawn(move || {
+        if let Err(e) = listener.set_nonblocking(true) {
+            warn!("local TLS test server: set_nonblocking failed: {e}");
+            return;
+        }
+
+        loop {
+            if stop_clone.load(Ordering::SeqCst) {
+                break;
+            }
+
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let _ = stream.set_nonblocking(false);
+                    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+                    let _ = stream.set_write_timeout(Some(Duration::from_secs(5)));
+
+                    let mut conn = match rustls::ServerConnection::new(config_clone.clone()) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            warn!("rustls: failed to create server connection: {e}");
+                            continue;
+                        }
+                    };
+                    let mut tls = rustls::Stream::new(&mut conn, &mut stream);
+                    // Drain whatever the client sent (we don't care about
+                    // the request, just need to flush the handshake).
+                    let mut buf = [0u8; 1024];
+                    let _ = tls.read(&mut buf);
+                    let body = b"OK";
+                    let resp = format!(
+                        "HTTP/1.0 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = tls.write_all(resp.as_bytes());
+                    let _ = tls.write_all(body);
+                    let _ = tls.flush();
+                    // One-shot: we've served our single test client.
+                    break;
+                }
+                Err(e) => {
+                    let kind = e.kind();
+                    if kind == std::io::ErrorKind::WouldBlock
+                        || kind == std::io::ErrorKind::TimedOut
+                    {
+                        // No client yet — back off briefly and re-check
+                        // the stop flag.
+                        thread::sleep(Duration::from_millis(100));
+                        continue;
+                    }
+                    // Interrupted or hard error — give up cleanly.
+                    if kind == std::io::ErrorKind::Interrupted {
+                        continue;
+                    }
+                    warn!("local TLS test server: accept failed: {e}");
+                    break;
+                }
+            }
+        }
+    });
+
+    Some(HttpsTestServer {
+        port,
+        cert_pem,
+        stop,
+        handle: Some(handle),
+    })
+}
+
 /// Performs a series of sanity checks for the Python interpreter.
 ///
 /// Runs six checks (version, pip, venv, standard library, ctypes, SSL/HTTPS)
@@ -841,7 +989,7 @@ fn run_install_python_env_script_with_features(
 /// # Returns
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
-pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCheckResult<SanityCheck>> {
+pub fn python_sanity_check(python: Option<&str>, _offline: bool) -> Vec<GenericCheckResult<SanityCheck>> {
     let detected;
     let py = match python {
         Some(p) => p,
@@ -914,44 +1062,36 @@ pub fn python_sanity_check(python: Option<&str>, offline: bool) -> Vec<GenericCh
     let ctypes_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/ctypes_check.py")]);
     results.push(GenericCheckResult::from_command_output(SanityCheck::Ctypes, ctypes_output));
 
-    // ── 6. SSL/HTTPS ─────────────────────────────────────────────────
-    if !offline {
-      let connectivity_check = {
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let result = std::net::ToSocketAddrs::to_socket_addrs(&("dl.espressif.com", 443))
-                .ok()
-                .and_then(|mut addrs| addrs.next())
-                .map(|addr| {
-                    std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_secs(30)).is_ok()
-                })
-                .unwrap_or(false);
-            let _ = tx.send(result);
-        });
-        rx.recv_timeout(std::time::Duration::from_secs(32))
+    // ── 6. SSL/HTTPS (local-only) ───────────────────────────────────
+    // We always run this check, in both online and offline mode, by
+    // spinning up a tiny TLS server on 127.0.0.1 and asking Python to do a
+    // full HTTPS round-trip against it. No network egress at all.
+    let ssl_result = match start_local_https_test_server() {
+        None => GenericCheckResult {
+            check: SanityCheck::Ssl,
+            passed: false,
+            message: "Failed: could not start local TLS test server".to_string(),
+        },
+        Some(server) => {
+            let port_str = server.port.to_string();
+            // The cert PEM and port are handed to the Python child via env
+            // vars, so it can build a trust store that explicitly trusts
+            // our self-signed cert and connect to https://127.0.0.1:<port>/.
+            let envs: Vec<(&str, &str)> = vec![
+                ("EIM_HTTPS_TEST_PORT", port_str.as_str()),
+                ("EIM_HTTPS_TEST_CERT", server.cert_pem.as_str()),
+            ];
+            let ssl_output = command_executor::execute_command_direct_with_env(
+                py,
+                &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")],
+                envs,
+            );
+            // Dropping `server` here sets the stop flag and joins the thread.
+            drop(server);
+            GenericCheckResult::from_command_output(SanityCheck::Ssl, ssl_output)
+        }
     };
-
-      let ssl_result = match connectivity_check {
-          Ok(true) => {
-              let ssl_output = command_executor::execute_command_direct(
-                  py,
-                  &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")],
-              );
-              GenericCheckResult::from_command_output(SanityCheck::Ssl, ssl_output)
-          }
-          Ok(false) => GenericCheckResult {
-              check: SanityCheck::Ssl,
-              passed: false,
-              message: "Failed: cannot reach dl.espressif.com (connection refused or DNS resolution failed)".to_string(),
-          },
-          Err(_) => GenericCheckResult {
-              check: SanityCheck::Ssl,
-              passed: false,
-              message: "Failed: connectivity check timed out after 5 seconds".to_string(),
-          },
-      };
-      results.push(ssl_result);
-    }
+    results.push(ssl_result);
 
     results
 }
