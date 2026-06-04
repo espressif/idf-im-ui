@@ -191,6 +191,41 @@ To use PowerShell, simply run the generated PowerShell profile script - it is cr
 
 If clicking **Open IDF Terminal** in an older EIM build shows `File ... cannot be loaded because running scripts is disabled on this system` (`PSSecurityException` / `UnauthorizedAccess`), your PowerShell execution policy is `Restricted` or `AllSigned`. Either run once per user `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or launch the profile manually with `powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -File "<path-to>\Microsoft.{version}.PowerShell_profile.ps1"`. Newer EIM builds pass `-ExecutionPolicy Bypass` automatically, and the desktop shortcut and Windows Terminal profile created by EIM already do so.
 
+### "No space left on device" error despite having free disk space
+
+If installation fails with an error like:
+
+```
+Installation failed for version vX.Y.Z: Failed to setup tools: IO error: io error: No space left on device (os error 28)
+```
+
+or
+
+```
+IO error: io error: Disk quota exceeded (os error 122)
+```
+
+...even though you have plenty of free space, the likely cause is that your `/tmp` directory is on a separate, smaller partition (or a RAM-backed tmpfs) that runs out of space during extraction. EIM extracts tool archives to a temporary location before moving them to the final install path, and `/tmp` is used for this — but its available space is not checked beforehand.
+
+This commonly affects systems where `/tmp` is mounted as a small tmpfs (e.g. 1–2 GB backed by RAM), which is the default on many Linux distributions. The issue can appear even if your home partition has hundreds of gigabytes free.
+
+**Workaround**: redirect the temp directory to a location with more space before running EIM:
+
+```bash
+export TMPDIR=~/tmp_build
+mkdir -p $TMPDIR
+```
+
+Then run `eim` from the same terminal session. You can remove `~/tmp_build` after installation completes.
+
+To check how much space your `/tmp` has:
+
+```bash
+df -h /tmp
+```
+
+If it shows only 1–2 GB available, the workaround above is recommended, especially when installing large toolchains like `clang-esp32` or `riscv32`.
+
 ## More Questions?
 
 If you have additional questions, you can:
