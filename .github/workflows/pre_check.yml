@@ -12,7 +12,7 @@ jobs:
     steps:
       # Fetches full Git history to enable branch comparison
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 

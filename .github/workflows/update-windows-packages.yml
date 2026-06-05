@@ -20,16 +20,16 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download CLI windows-x64 artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: eim-cli-windows-x64-${{ inputs.version }}
           path: artifacts/cli/
 
       - name: Download GUI windows-x64 artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: eim-gui-windows-x64-${{ inputs.version }}
           path: artifacts/gui/
