@@ -31,6 +31,7 @@ use idf_im_lib::{
     setup_environment_variables, to_absolute_path, version_manager, DownloadProgress,
 };
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
@@ -302,13 +303,13 @@ pub async fn run(args: IdfToolsArgs, config_path: Option<&PathBuf>) -> Result<()
     let ctx = IdfContext::resolve(&args, config_path, &installations, selected.as_ref())?;
 
     if !args.quiet {
-        println!("IDF_PATH:          {}", ctx.idf_path.display());
-        println!("IDF_TOOLS_PATH:    {}", ctx.idf_tools_path.display());
-        println!("tools.json:        {}", ctx.tools_json_path.display());
+        eprintln!("IDF_PATH:          {}", ctx.idf_path.display());
+        eprintln!("IDF_TOOLS_PATH:    {}", ctx.idf_tools_path.display());
+        eprintln!("tools.json:        {}", ctx.tools_json_path.display());
         if !ctx.version.is_empty() {
-            println!("Selected version:  {}", ctx.version);
+            eprintln!("Selected version:  {}", ctx.version);
         }
-        println!();
+        eprintln!();
     }
 
     let tools_file = read_and_parse_tools_file(
@@ -552,7 +553,17 @@ fn cmd_export(
             for (k, v) in all_vars {
                 obj.insert(k, serde_json::Value::String(v));
             }
-            println!("{}", serde_json::to_string_pretty(&obj)?);
+            // Write the JSON object directly to stdout, bypassing the logger
+            // facade. This is the only thing that may land on stdout for
+            // `eim idf-tools export --format=json`; diagnostics, banners and
+            // WARN lines all go to stderr. Lock + flush guarantees the
+            // payload is visible to the parent process before exit.
+            let payload = serde_json::to_string_pretty(&obj)?;
+            let stdout = std::io::stdout();
+            let mut out = stdout.lock();
+            out.write_all(payload.as_bytes())?;
+            out.write_all(b"\n")?;
+            out.flush()?;
         }
         _ => {
             let path_sep = if std::env::consts::OS == "windows" {
