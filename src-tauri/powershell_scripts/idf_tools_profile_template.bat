@@ -35,7 +35,7 @@ REM If -e parameter is provided, print variables and exit
 if "%~1"=="-e" goto print_env
 
 REM Set environment variables
-set ESP_IDF_VERSION=%IdfVersion%
+set ESP_IDF_VERSION=%IdfVersionMajor%.%IdfVersionMinor%
 
 REM Set system PATH - add all IDF toolchain directories
 set PATH={{add_paths_extras}};{{idf_path}}\tools;%PATH%
@@ -85,7 +85,7 @@ goto :end
 
 :print_env
 echo PATH={{add_paths_extras}};{{idf_path}}\tools;%PATH%
-echo ESP_IDF_VERSION=%IdfVersion%
+echo ESP_IDF_VERSION=%IdfVersionMajor%.%IdfVersionMinor%
 echo SYSTEM_PATH={{current_system_path}}
 {{env_var_pairs_print}}
 goto :end

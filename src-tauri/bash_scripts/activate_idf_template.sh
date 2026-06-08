@@ -46,23 +46,26 @@ parse_cmake_version() {
         return 1
     fi
 
-    # Return the version (include patch if available)
     if [ -n "$patch" ]; then
         printf '%s.%s.%s\n' "$major" "$minor" "$patch"
     else
         printf '%s.%s\n' "$major" "$minor"
     fi
+    printf '%s.%s\n' "$major" "$minor"
     return 0
 }
 
-IDF_VERSION=$(parse_cmake_version)
+_IDF_VERSION_OUTPUT=$(parse_cmake_version)
+IDF_VERSION=$(printf '%s\n' "$_IDF_VERSION_OUTPUT" | sed -n '1p')
+IDF_VERSION_MAJOR_MINOR=$(printf '%s\n' "$_IDF_VERSION_OUTPUT" | sed -n '2p')
+unset _IDF_VERSION_OUTPUT
 ENV_VAR_PAIRS=$(get_env_var_pairs)
 
 # Function to print environment variables
 print_env_variables() {
     printf '%s\n' "PATH={{addition_to_path}}"
     printf '%s\n' "SYSTEM_PATH={{current_system_path}}"
-    printf '%s\n' "ESP_IDF_VERSION=$IDF_VERSION"
+    printf '%s\n' "ESP_IDF_VERSION=$IDF_VERSION_MAJOR_MINOR"
 
     # Process environment variables
     printf '%s\n' "$ENV_VAR_PAIRS" | while read -r pair; do
@@ -75,7 +78,7 @@ print_env_variables() {
 }
 
 add_env_variable() {
-    export ESP_IDF_VERSION="$IDF_VERSION"
+    export ESP_IDF_VERSION="$IDF_VERSION_MAJOR_MINOR"
     printf '%s\n' "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
 
     # Create a temporary file
