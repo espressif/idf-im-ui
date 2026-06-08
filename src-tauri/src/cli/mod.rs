@@ -93,7 +93,7 @@ pub fn setup_cli(
         .chain(
             Dispatch::new()
                 .level(console_level)
-                .chain(std::io::stdout())
+                .chain(std::io::stderr())
         )
         .apply()?;
 

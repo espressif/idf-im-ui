@@ -203,7 +203,7 @@ pub fn setup_gui_logging(
         dispatch = dispatch.chain(
             Dispatch::new()
                 .level(console_level)
-                .chain(std::io::stdout())
+                .chain(std::io::stderr())
         );
     }
 
