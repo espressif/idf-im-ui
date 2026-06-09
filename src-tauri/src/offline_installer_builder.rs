@@ -261,7 +261,7 @@ pub fn setup_offline_installer(
         .format(logging::formatter)
         .level(log_level)
         .chain(fern::log_file(&log_file_path)?)
-        .chain(std::io::stdout())
+        .chain(std::io::stderr())
         .apply()?;
 
     log::debug!("Offline installer logging initialized at level: {:?}", log_level);
