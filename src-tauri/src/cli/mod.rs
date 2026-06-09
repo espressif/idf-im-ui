@@ -36,6 +36,7 @@ use crate::gui;
 
 pub mod cli_args;
 pub mod helpers;
+pub mod idf_tools;
 pub mod prompts;
 pub mod wizard;
 
@@ -197,9 +198,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             if is_elevated {
                 log::warn!("Running as elevated user. This is not recommended but it is required if you want to install drivers.");
                 if cfg!(target_os = "windows") {
-                    println!("{}", t!("cli.running_as_elevated_windows"));
+                    eprintln!("{}", t!("cli.running_as_elevated_windows"));
                 } else {
-                    println!("{}", t!("cli.running_as_elevated_posix"));
+                    eprintln!("{}", t!("cli.running_as_elevated_posix"));
                 }
             }
         }
@@ -732,6 +733,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
               return Err(anyhow::anyhow!(t!("drivers.windows_only")));
             }
           }
+        }
+        Commands::IdfTools(args) => {
+            crate::cli::idf_tools::run(args, config_path.as_ref()).await
         }
     }
 }
