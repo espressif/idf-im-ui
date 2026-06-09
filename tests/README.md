@@ -272,6 +272,7 @@ then execute the tests by running the test npm script passing the test script fi
 
 `npm run test-CLI --file=CLI-basic`
 `npm run test-CLI --file=CLI-extended`
+`npm run test-CLI --file=CLI-deactivation`
 `npm run test-CLI --file=CLI-mirrors`
 
 `npm run test-GUI --file=GUI-basic`

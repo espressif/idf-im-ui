@@ -11,10 +11,9 @@ use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::process::Output;
 
-use log::warn;
-use lnk::ShellLink;
 use lnk::encoding::WINDOWS_1252;
-
+use lnk::ShellLink;
+use log::warn;
 
 use crate::utils::remove_directory_all;
 use crate::{
@@ -22,20 +21,33 @@ use crate::{
     settings::Settings,
 };
 
-/// Removes activation scripts (sh, fish, ps1, bat) for a given version from the activation script directory
-fn remove_activation_scripts(activation_script_path: &str, idf_version: &str) -> Result<(), String> {
+/// Removes activation and deactivation scripts (sh, fish, ps1, bat) for a
+/// given version from the activation script directory.
+///
+/// This must be kept in lock-step with the script names produced by
+/// `create_activation_shell_script`, `create_fish_script`,
+/// `create_powershell_profile`, `create_batch_profile` and their
+/// `deactivate` counterparts in `lib::mod`.
+fn remove_activation_scripts(
+    activation_script_path: &str,
+    idf_version: &str,
+) -> Result<(), String> {
     let path = PathBuf::from(activation_script_path);
     let parent_dir = path.parent().ok_or("No parent directory")?;
 
-    // Define all possible activation script names for this version
+    // Define all possible activation + deactivation script names for this version
     let scripts_to_remove = match std::env::consts::OS {
         "windows" => vec![
             format!("Microsoft.{}.PowerShell_profile.ps1", idf_version),
+            format!("Microsoft.{}.PowerShell_deactivate.ps1", idf_version),
             format!("Microsoft.{}_profile.bat", idf_version),
+            format!("Microsoft.{}_deactivate.bat", idf_version),
         ],
         _ => vec![
             format!("activate_idf_{}.sh", idf_version),
             format!("activate_idf_{}.fish", idf_version),
+            format!("deactivate_idf_{}.sh", idf_version),
+            format!("deactivate_idf_{}.fish", idf_version),
         ],
     };
 
@@ -180,7 +192,11 @@ pub fn select_idf_version(identifier: &str, config_path: Option<&PathBuf>) -> Re
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been renamed. On error, returns an `anyhow::Error` with a description of the error.
-pub fn rename_idf_version(identifier: &str, new_name: String, config_path: Option<&PathBuf>) -> Result<String> {
+pub fn rename_idf_version(
+    identifier: &str,
+    new_name: String,
+    config_path: Option<&PathBuf>,
+) -> Result<String> {
     let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     let res = ide_config.update_installation_name(identifier, new_name.to_string());
@@ -218,8 +234,13 @@ pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result
         // Check if the entry is a .lnk file
         if path.extension().map_or(false, |ext| ext == "lnk") {
             // Open and parse the .lnk file
-            let link = ShellLink::open(&path, WINDOWS_1252)
-                .map_err(|e| anyhow!("Failed to open or parse shortcut file '{}': {}", path.display(), e))?;
+            let link = ShellLink::open(&path, WINDOWS_1252).map_err(|e| {
+                anyhow!(
+                    "Failed to open or parse shortcut file '{}': {}",
+                    path.display(),
+                    e
+                )
+            })?;
 
             // The arguments are stored in the `string_data` field.
             // We access it via the `string_data()` method on the ShellLink struct.
@@ -239,8 +260,6 @@ pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result
     Ok(None)
 }
 
-
-
 /// Removes a single ESP-IDF version from the configuration file and its associated directories.
 ///
 /// This function reads the ESP-IDF configuration from the default location, removes the installation
@@ -257,14 +276,19 @@ pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result
 ///
 /// * `Result<String, anyhow::Error>` - On success, returns a `Result` containing a string message indicating
 ///   that the version has been removed. On error, returns an `anyhow::Error` with a description of the error.
-pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool, config_path: Option<&PathBuf>) -> Result<String> {
+pub fn remove_single_idf_version(
+    identifier: &str,
+    keep_idf_folder: bool,
+    config_path: Option<&PathBuf>,
+) -> Result<String> {
     //TODO: remove also from path
     let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
     if let Some(installation) = ide_config
         .idf_installed
         .iter()
-        .find(|install| install.id == identifier || install.name == identifier).cloned()
+        .find(|install| install.id == identifier || install.name == identifier)
+        .cloned()
     {
         let installation_folder_path = PathBuf::from(installation.path.clone());
         let installation_folder = installation_folder_path.parent().ok_or_else(|| {
@@ -308,7 +332,9 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool, config
         }
 
         // Also remove fish/bat activation scripts
-        if let Err(e) = remove_activation_scripts(&installation.clone().activation_script, &installation.name) {
+        if let Err(e) =
+            remove_activation_scripts(&installation.clone().activation_script, &installation.name)
+        {
             warn!("Failed to remove additional activation scripts: {}", e);
         }
 
@@ -322,13 +348,17 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool, config
             // On Windows, also remove the desktop icon associated with the installation
             match find_shortcut_by_profile(&installation.activation_script) {
                 Ok(Some(shortcut_name)) => {
-                    let desktop_path = match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
-                        Ok(path) => path,
-                        Err(e) => {
-                            error!("{}", e);
-                            return Ok(format!("Version {} removed, but failed to remove desktop shortcut", identifier));
-                        }
-                    };
+                    let desktop_path =
+                        match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
+                            Ok(path) => path,
+                            Err(e) => {
+                                error!("{}", e);
+                                return Ok(format!(
+                                    "Version {} removed, but failed to remove desktop shortcut",
+                                    identifier
+                                ));
+                            }
+                        };
                     let shortcut_path = desktop_path.join(shortcut_name);
                     if shortcut_path.exists() {
                         match fs::remove_file(&shortcut_path) {
@@ -336,13 +366,20 @@ pub fn remove_single_idf_version(identifier: &str, keep_idf_folder: bool, config
                                 info!("Removed desktop shortcut: {}", shortcut_path.display());
                             }
                             Err(e) => {
-                                error!("Failed to remove desktop shortcut {}: {}", shortcut_path.display(), e);
+                                error!(
+                                    "Failed to remove desktop shortcut {}: {}",
+                                    shortcut_path.display(),
+                                    e
+                                );
                             }
                         }
                     }
                 }
                 Ok(None) => {
-                    info!("No desktop shortcut found for profile: {}", installation.activation_script);
+                    info!(
+                        "No desktop shortcut found for profile: {}",
+                        installation.activation_script
+                    );
                 }
                 Err(e) => {
                     error!("Error searching for desktop shortcut: {}", e);
@@ -381,14 +418,18 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn run_command_in_context(identifier: &str, command: &str, config_path: Option<&PathBuf>) -> anyhow::Result<ExitStatus> {
+pub fn run_command_in_context(
+    identifier: &str,
+    command: &str,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<ExitStatus> {
     let installation = match list_installed_versions(config_path) {
         Ok(versions) => versions.into_iter().find(|v| {
-            v.id == identifier
-                || v.name == identifier
-                || { let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
-                     normalized_identifier.is_some() && normalized_identifier == crate::utils::normalize_path_for_comparison(&v.path)
-                }
+            v.id == identifier || v.name == identifier || {
+                let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
+                normalized_identifier.is_some()
+                    && normalized_identifier == crate::utils::normalize_path_for_comparison(&v.path)
+            }
         }),
         Err(e) => {
             return Err(anyhow!("Failed to list installed versions: {}", e));
@@ -411,42 +452,51 @@ fn build_activation_script(activation_script: &str, command: &str) -> String {
     #[cfg(not(target_os = "windows"))]
     let script = format!(
         "source \"{}\"\nshopt -s expand_aliases\n{}",
-        activation_script,
-        command
+        activation_script, command
     );
 
     #[cfg(target_os = "windows")]
-    let script = format!(
-        ". \"{}\"\n{}",
-        activation_script,
-        command
-    );
+    let script = format!(". \"{}\"\n{}", activation_script, command);
 
     script
 }
 
-pub fn run_command_using_activation_script(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+pub fn run_command_using_activation_script(
+    activation_script: &str,
+    command: &str,
+    dir: Option<&str>,
+) -> anyhow::Result<ExitStatus> {
     let script = build_activation_script(activation_script, command);
-    debug!("Running command using activation script {}", activation_script);
+    debug!(
+        "Running command using activation script {}",
+        activation_script
+    );
 
     let executor = crate::command_executor::get_executor();
     if dir.is_some() {
         debug!("Running command in directory {}", dir.unwrap());
         match executor.run_script_from_string_streaming_with_dir(&script, dir.unwrap()) {
-          Ok(status) => Ok(status),
-          Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+            Ok(status) => Ok(status),
+            Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
         }
     } else {
-      match executor.run_script_from_string_streaming(&script) {
-        Ok(status) => Ok(status),
-        Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
-      }
+        match executor.run_script_from_string_streaming(&script) {
+            Ok(status) => Ok(status),
+            Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+        }
     }
-  }
+}
 
-pub fn run_command_using_activation_script_headless(activation_script: &str, command: &str, dir: Option<&str>) -> anyhow::Result<ExitStatus> {
+pub fn run_command_using_activation_script_headless(
+    activation_script: &str,
+    command: &str,
+    dir: Option<&str>,
+) -> anyhow::Result<ExitStatus> {
     let script = build_activation_script(activation_script, command);
-    debug!("Running headless command using activation script {}", activation_script);
+    debug!(
+        "Running headless command using activation script {}",
+        activation_script
+    );
 
     let executor = crate::command_executor::get_executor();
     let result = if dir.is_some() {
@@ -456,12 +506,15 @@ pub fn run_command_using_activation_script_headless(activation_script: &str, com
         executor.run_script_from_string_streaming_headless(&script)
     };
     match result {
-      Ok(status) => Ok(status),
-      Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
+        Ok(status) => Ok(status),
+        Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
     }
-  }
+}
 
-pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf, config_path: Option<&PathBuf>) -> anyhow::Result<Settings> {
+pub async fn prepare_settings_for_fix_idf_installation(
+    path_to_fix: PathBuf,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<Settings> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
     // The fix logic is just instalation with use of existing repository
     let mut version_name = None;
@@ -495,7 +548,6 @@ pub async fn prepare_settings_for_fix_idf_installation(path_to_fix: PathBuf, con
     settings.install_all_prerequisites = Some(true);
     settings.config_file_save_path = None;
     return Ok(settings);
-
 }
 
 #[cfg(test)]
@@ -529,11 +581,8 @@ mod tests {
         #[cfg(not(target_os = "windows"))]
         let command = "echo $TEST_VAR";
 
-        let result = run_command_using_activation_script(
-            script_path.to_str().unwrap(),
-            command,
-            None,
-        );
+        let result =
+            run_command_using_activation_script(script_path.to_str().unwrap(), command, None);
 
         // This should succeed (may fail on Windows without cmd.exe, but that's okay)
         // The main purpose is to verify the function can be called
@@ -543,7 +592,10 @@ mod tests {
             }
             Err(e) => {
                 // This might fail in test environment without proper shell
-                info!("Command execution returned error (may be expected in test env): {:?}", e);
+                info!(
+                    "Command execution returned error (may be expected in test env): {:?}",
+                    e
+                );
             }
         }
     }

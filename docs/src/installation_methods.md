@@ -27,3 +27,5 @@ The CLI version is ideal for:
 
 1.  **Interactive Mode**: Run without parameters for a step-by-step wizard.
 2.  **Headless Mode**: Use command line arguments for automated installations.
+
+Regardless of the method used, every install produces a matching **deactivation script** alongside the activation script. See [After Installing](./after_installing.md#deactivating-the-environment) for the list of file names and the variables they revert. The deactivation script is removed automatically when you uninstall the matching version with `eim remove {version}`.
