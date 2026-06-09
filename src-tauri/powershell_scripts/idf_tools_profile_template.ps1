@@ -69,11 +69,12 @@ function Parse-CMakeVersion {
 }
 
 $IdfVersion = Parse-CMakeVersion
+$IdfVersionMajorMinor = if ($IdfVersion -and $IdfVersion -match '^\d+\.\d+') { $Matches[0] } else { "" }
 
 # Function to print environment variables
 function Print-EnvVariables {
     "PATH={{add_paths_extras}}"
-    "ESP_IDF_VERSION=$IdfVersion"
+    "ESP_IDF_VERSION=$IdfVersionMajorMinor"
     "SYSTEM_PATH={{current_system_path}}"
     $env_var_pairs.GetEnumerator() | ForEach-Object {
         Write-Host "$($_.Key)=$($_.Value)"
@@ -112,7 +113,7 @@ if ($e) {
 }
 
 # Set environment variables
-$env:ESP_IDF_VERSION = "$IdfVersion"
+$env:ESP_IDF_VERSION = "$IdfVersionMajorMinor"
 $env_var_pairs.GetEnumerator() | ForEach-Object {
     Set-Item -Path "env:$($_.Key)" -Value $_.Value
 }

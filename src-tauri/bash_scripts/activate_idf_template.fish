@@ -41,16 +41,19 @@ function parse_cmake_version
         return 1
     end
 
-    # Return the version (include patch if available)
     if test -n "$patch"
         echo "$major.$minor.$patch"
     else
         echo "$major.$minor"
     end
+    echo "$major.$minor"
     return 0
 end
 
-set IDF_VERSION (parse_cmake_version)
+set -l _idf_version_output (parse_cmake_version)
+set IDF_VERSION $_idf_version_output[1]
+set IDF_VERSION_MAJOR_MINOR $_idf_version_output[2]
+set -e _idf_version_output
 
 # Store env var pairs as a list (parse the semicolon-separated string)
 set -g ENV_VAR_PAIRS (string split ";" "$FISH_ENV_VAR_PAIRS")
@@ -59,7 +62,7 @@ set -g ENV_VAR_PAIRS (string split ";" "$FISH_ENV_VAR_PAIRS")
 function print_env_variables
     printf '%s\n' "PATH={{addition_to_path}}"
     printf '%s\n' "SYSTEM_PATH={{current_system_path}}"
-    printf '%s\n' "ESP_IDF_VERSION=$IDF_VERSION"
+    printf '%s\n' "ESP_IDF_VERSION=$IDF_VERSION_MAJOR_MINOR"
 
     # Process environment variables
     for pair in $ENV_VAR_PAIRS
@@ -72,7 +75,7 @@ function print_env_variables
 end
 
 function add_env_variable
-    set -gx ESP_IDF_VERSION "$IDF_VERSION"
+    set -gx ESP_IDF_VERSION "$IDF_VERSION_MAJOR_MINOR"
     printf '%s\n' "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
 
     # Process environment variables
