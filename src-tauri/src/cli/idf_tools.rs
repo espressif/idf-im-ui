@@ -20,6 +20,7 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{ArgAction, Parser, Subcommand, ValueHint};
 use idf_im_lib::{
+    compute_idf_export,
     idf_config::IdfInstallation,
     idf_tools::{
         filter_tools_by_target, get_list_of_tools_to_download, get_platform_identification,
@@ -28,7 +29,7 @@ use idf_im_lib::{
     },
     python_utils::{install_python_env, python_sanity_check},
     settings::VersionPaths,
-    setup_environment_variables, to_absolute_path, version_manager, DownloadProgress,
+    to_absolute_path, version_manager, DownloadProgress,
 };
 use std::collections::HashMap;
 use std::io::Write;
@@ -173,6 +174,10 @@ struct IdfContext {
     idf_tools_path: PathBuf,
     tools_dist_path: PathBuf,
     python_path: PathBuf,
+    /// Path to the Python virtual environment directory (the parent of
+    /// the `bin/` or `Scripts/` directory that contains `python_path`).
+    /// May be empty when no installation is selected.
+    python_env_path: PathBuf,
     version: String,
 }
 
@@ -256,6 +261,16 @@ impl IdfContext {
             Some(i) => (PathBuf::from(&i.python), i.name.clone()),
             None => (PathBuf::new(), String::new()),
         };
+        // The venv is the parent of the parent of the python executable
+        // (POSIX: <venv>/bin/python, Windows: <venv>/Scripts/python.exe).
+        // We avoid `unwrap` so a malformed `python` field simply produces
+        // an empty env path, which `compute_idf_export` treats as "no
+        // python venv to add to PATH".
+        let python_env_path = python_path
+            .parent()
+            .and_then(|p| p.parent())
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
 
         Ok(Self {
             idf_path,
@@ -263,6 +278,7 @@ impl IdfContext {
             idf_tools_path,
             tools_dist_path,
             python_path,
+            python_env_path,
             version,
         })
     }
@@ -519,24 +535,37 @@ fn cmd_export(
         .idf_tools_path
         .to_str()
         .ok_or_else(|| anyhow!("IDF_TOOLS_PATH is not valid UTF-8"))?;
-    let mut paths = get_tools_export_paths_from_list(
+    // 1. Collect the per-tool bin directories that need to be on PATH.
+    let tool_paths = get_tools_export_paths_from_list(
         tools_file.clone(),
         installed.clone(),
         install_path_str,
     );
-    let extra_env = setup_environment_variables(&ctx.idf_tools_path, &ctx.idf_path)
-        .map_err(|e| anyhow!("{e}"))?;
-    if !ctx.python_path.as_os_str().is_empty() {
-        if let Some(parent) = ctx.python_path.parent() {
-            let bin = parent.to_string_lossy().to_string();
-            if !bin.is_empty() && !paths.contains(&bin) {
-                paths.push(bin);
-            }
-        }
-    }
-    let vars = get_tools_export_vars_from_list(tools_file.clone(), installed, install_path_str);
-    let mut all_vars = extra_env;
-    all_vars.extend(vars);
+    // 2. Collect the per-tool env vars (e.g. ESP_ROM_ELF_DIR, OPENOCD_SCRIPTS).
+    let tool_vars =
+        get_tools_export_vars_from_list(tools_file.clone(), installed, install_path_str);
+    // 3. Delegate the final PATH/env construction to the lib so the
+    //    result is byte-for-byte the same set of values the activation
+    //    script would export. This is the single source of truth shared
+    //    with `single_version_post_install`.
+    let idf_path_str = ctx
+        .idf_path
+        .to_str()
+        .ok_or_else(|| anyhow!("IDF_PATH is not valid UTF-8"))?;
+    let python_env_path_str;
+    let python_env_path = if ctx.python_env_path.as_os_str().is_empty() {
+        None
+    } else {
+        python_env_path_str = ctx.python_env_path.to_string_lossy().into_owned();
+        Some(python_env_path_str.as_str())
+    };
+    let (paths, all_vars) = compute_idf_export(
+        idf_path_str,
+        install_path_str,
+        python_env_path,
+        Some(tool_vars),
+        tool_paths,
+    );
 
     match format {
         "json" => {

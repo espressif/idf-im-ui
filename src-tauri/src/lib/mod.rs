@@ -1805,6 +1805,87 @@ pub fn to_absolute_path(path: &str) -> Result<String, Box<dyn std::error::Error>
     Ok(resolved_path.to_string_lossy().to_string())
 }
 
+/// Computes the export `PATH` entries and the environment variables that
+/// EIM publishes for an ESP-IDF installation.
+///
+/// This is the single source of truth for the "what would a user have to
+/// `export` to use this IDF" question. It is shared between
+/// [`single_version_post_install`] (which uses the result to render the
+/// activation scripts) and the `eim idf-tools export` shim (which prints
+/// the same values to stdout / a JSON document).
+///
+/// The function is intentionally side-effect free: no files are written,
+/// no shortcuts are created, no processes are spawned. All filesystem
+/// checks are local to the function and only affect whether a given path
+/// entry is included in the result.
+///
+/// # Parameters
+///
+/// * `idf_path`: Path to the ESP-IDF repository.
+/// * `tool_install_directory`: Path to the IDF tools install directory
+///   (a.k.a. `IDF_TOOLS_PATH`).
+/// * `idf_python_env_path`: Path to the Python virtual environment
+///   directory. When `Some` and the per-OS `Scripts`/`bin` subdirectory
+///   exists, it is appended to `export_paths`.
+/// * `extra_env_vars`: Optional extra `KEY=VALUE` pairs merged into the
+///   result. Existing keys are overwritten.
+/// * `export_paths`: The list of PATH entries to extend (typically the
+///   bin directories of every installed tool).
+///
+/// # Returns
+///
+/// `(export_paths, env_vars)` — the augmented PATH list and the final
+/// `KEY=VALUE` map in the order they should be exported.
+pub fn compute_idf_export(
+    idf_path: &str,
+    tool_install_directory: &str,
+    idf_python_env_path: Option<&str>,
+    extra_env_vars: Option<Vec<(String, String)>>,
+    export_paths: Vec<String>,
+) -> (Vec<String>, Vec<(String, String)>) {
+    let mut env_vars = setup_environment_variables(
+        &PathBuf::from(tool_install_directory),
+        &PathBuf::from(idf_path),
+    )
+    .unwrap_or_default();
+    env_vars.push((
+        // todo: move to setup_environment_variables
+        "IDF_PYTHON_ENV_PATH".to_string(),
+        idf_python_env_path.unwrap_or_default().to_string(),
+    ));
+    if let Some(extra) = extra_env_vars {
+        for (key, value) in extra {
+            if let Some(pos) = env_vars.iter().position(|(k, _)| k == &key) {
+                env_vars[pos] = (key, value);
+            } else {
+                env_vars.push((key, value));
+            }
+        }
+    }
+
+    let mut export_paths = export_paths;
+    let python_env_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
+    match std::env::consts::OS {
+        "windows" => {
+            if python_env_path.exists() {
+                let scripts_path = python_env_path.join("Scripts");
+                if scripts_path.exists() {
+                    export_paths.push(scripts_path.to_string_lossy().to_string());
+                }
+            }
+        }
+        _ => {
+            let scripts_path = python_env_path.join("bin");
+            if scripts_path.exists() {
+                export_paths.push(scripts_path.to_string_lossy().to_string());
+            }
+            export_paths.insert(0, "/usr/bin".to_string()); // TODO: find ld
+        }
+    }
+
+    (export_paths, env_vars)
+}
+
 /// Performs post-installation tasks for a single version of ESP-IDF.
 ///
 /// This function creates a desktop shortcut on Windows systems and generates an activation shell script
@@ -1831,49 +1912,17 @@ pub fn single_version_post_install(
     offline_installation: bool,
     is_gui: bool,
 ) {
-    let mut env_vars_merged = setup_environment_variables(
-        &PathBuf::from(tool_install_directory),
-        &PathBuf::from(idf_path),
-    )
-    .unwrap_or_default();
-    env_vars_merged.push((
-        // todo: move to setup_environment_variables
-        "IDF_PYTHON_ENV_PATH".to_string(),
-        idf_python_env_path.unwrap_or_default().to_string(),
-    ));
-    if let Some(extra_vars) = env_vars {
-        for (key, value) in extra_vars {
-            if let Some(pos) = env_vars_merged.iter().position(|(k, _)| k == &key) {
-                env_vars_merged[pos] = (key, value);
-            } else {
-                env_vars_merged.push((key, value));
-            }
-        }
-    }
-    let env_vars = env_vars_merged;
-
-
-    let mut export_paths = export_paths.clone();
-    let python_env_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
-    match std::env::consts::OS {
-        "windows" => {
-            // On Windows, we need to add the Python Scripts directory to the PATH
-            if python_env_path.exists() {
-                let scripts_path = python_env_path.join("Scripts");
-                if scripts_path.exists() {
-                    export_paths.push(scripts_path.to_string_lossy().to_string());
-                }
-            }
-        }
-        _ => {
-            // On Unix-like systems, we can add the Python bin directory to the PATH
-            let scripts_path = python_env_path.join("bin");
-            if scripts_path.exists() {
-                export_paths.push(scripts_path.to_string_lossy().to_string());
-            }
-            export_paths.insert(0, "/usr/bin".to_string()); // TODO: find ld
-        }
-    }
+    // Compute the export PATH entries and env vars once. The activation
+    // scripts we write below must match exactly what `eim idf-tools
+    // export` would print, so both code paths go through
+    // `compute_idf_export`.
+    let (mut export_paths, mut env_vars) = compute_idf_export(
+        idf_path,
+        tool_install_directory,
+        idf_python_env_path,
+        env_vars,
+        export_paths,
+    );
 
     match std::env::consts::OS {
         "windows" => {

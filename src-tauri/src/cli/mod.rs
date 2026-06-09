@@ -198,9 +198,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             if is_elevated {
                 log::warn!("Running as elevated user. This is not recommended but it is required if you want to install drivers.");
                 if cfg!(target_os = "windows") {
-                    println!("{}", t!("cli.running_as_elevated_windows"));
+                    eprintln!("{}", t!("cli.running_as_elevated_windows"));
                 } else {
-                    println!("{}", t!("cli.running_as_elevated_posix"));
+                    eprintln!("{}", t!("cli.running_as_elevated_posix"));
                 }
             }
         }
