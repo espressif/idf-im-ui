@@ -1,0 +1,19 @@
+[
+  {
+    "id": 1,
+    "type": "deactivation",
+    "name": "CLI Deactivation Script Lifecycle",
+    "data": {
+      "targetList": "esp32",
+      "idfList": "default",
+      "installFolder": ".espext_deact",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  }
+]

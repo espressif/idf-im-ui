@@ -50,6 +50,8 @@ Running `eim wizard` starts an interactive wizard that guides you through the in
 5. Features selection
 6. Installation path configuration
 
+At the end of the install, the wizard writes both an activation and a deactivation script into the tool directory. Source the activation script to use ESP-IDF, and source the deactivation script to undo the environment changes when you are done. See [After Installing](./after_installing.md#deactivating-the-environment) for the exact file names per shell.
+
 ### Command Line Arguments
 For automated installations, use command line arguments:
 

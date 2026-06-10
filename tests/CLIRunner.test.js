@@ -3,7 +3,7 @@
  * Entries should follow this format:
  *     {
         "id": <number>,                 // an ID to correlate with the test report
-        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom" or "offline"
+        "type": "custom",               // test type is either "prerequisites", "arguments", "default", "custom", "deactivation" or "offline"
         "name": "<name>",               // A name for the test to correlate to logs and report
         "data": {                       // Only required for custom test type
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
@@ -32,6 +32,7 @@ import { runVersionManagementTest } from "./scripts/CLIVersionManagement.test.js
 import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
+import { runCLIDeactivationTest } from "./scripts/CLIDeactivation.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -241,6 +242,87 @@ function testRun(jsonScript) {
           installFolder,
         });
 
+        runCleanUp({
+          id: `${test.id}3`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "deactivation") {
+      //routine for deactivation script lifecycle tests. Mirrors the
+      //shape of the "custom" type: builds CLI args from `data`, then
+      //runs the deactivation scenario. The scenario does the install,
+      //verifies the deactivate script, sources activate+deactivate,
+      //and finally `eim remove`s the version. The runner then runs
+      //the standard clean-up to delete the install folder.
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      const installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
+      let installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
+      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
+      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
+      test.data.toolsMirror &&
+        installArgs.push(
+          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
+        );
+      test.data.idfMirror &&
+        installArgs.push(
+          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
+        );
+      test.data.pypiMirror &&
+        installArgs.push(
+          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
+        );
+      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
+      test.data.nonInteractive &&
+        installArgs.push(`-n ${test.data.nonInteractive}`);
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runCLIDeactivationTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+          idfVersion: idfUpdatedList[0],
+          installFolder,
+        });
+
+        // Verify the install layout (version folder exists, esp-idf
+        // folder inside it) like the custom install verification does.
+        runInstallVerification({
+          id: `${test.id}2`,
+          installFolder,
+          idfList: idfUpdatedList,
+          targetList,
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        // Clean up: remove the install folder + tools folder if the
+        // suite asks for it. Note that runCLIDeactivationTest already
+        // runs `eim remove` on the IDF version, which deletes the
+        // esp-idf subfolder. CleanUp removes the parent directory.
         runCleanUp({
           id: `${test.id}3`,
           installFolder,

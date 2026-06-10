@@ -91,6 +91,20 @@ eim select v5.3.2
 eim remove v5.3.2
 ```
 
+When you install an ESP-IDF version, EIM also writes a matching **deactivation** script next to the activation one. Inside a single shell session you can use it to undo the activation without removing the installation:
+
+```bash
+# Activate the toolchain for v5.3.2
+. /root/.espressif/tools/activate_idf_v5.3.2.sh
+
+# ... build / flash / etc ...
+
+# Undo the activation in the same shell (no need to exit)
+. /root/.espressif/tools/deactivate_idf_v5.3.2.sh
+```
+
+The deactivation script is removed automatically when the corresponding version is uninstalled via `eim remove`. See [After Installing](./after_installing.md#deactivating-the-environment) for the file names and the variables each deactivation script unsets.
+
 ## CI/CD Integration
 
 ### GitHub Actions
