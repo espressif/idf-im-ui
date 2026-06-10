@@ -100,6 +100,42 @@ The offline installation allows you to install ESP-IDF without an internet conne
 
 The `offline_installer_builder-*` binary is **not** required for performing offline installations. It is a separate tool that allows you to create custom offline installation archives for specific or all ESP-IDF versions. These archives contain everything needed for offline installation — ESP-IDF source, tools, Python wheels, and prerequisites — making them ideal for air-gapped environments, enterprise deployment, or ensuring your whole team has the same offline installable environment. You only need this tool if you want to create your own offline installer archives; for regular offline installation, you only need the pre-built offline installer artifacts available from the [Espressif Download Portal](https://dl.espressif.com/dl/eim/?tab=offline).
 
+### "No space left on device" error despite having free disk space
+
+If installation fails with an error like:
+
+```text
+Installation failed for version vX.Y.Z: Failed to setup tools: IO error: io error: No space left on device (os error 28)
+```
+
+or
+
+```text
+IO error: io error: Disk quota exceeded (os error 122)
+```
+
+...even though you have plenty of free space, the likely cause is that your `/tmp` directory is on a separate, smaller partition (or a RAM-backed tmpfs) that runs out of space during extraction. EIM extracts tool archives to a temporary location before moving them to the final install path, and `/tmp` is used for this — but its available space is not checked beforehand.
+
+This commonly affects systems where `/tmp` is mounted as a small tmpfs (e.g. 1–2 GB backed by RAM), which is the default on many Linux distributions. The issue can appear even if your home partition has hundreds of gigabytes free.
+
+**Workaround:** redirect the temp directory to a location with more space before running EIM:
+
+```bash
+export TMPDIR=~/tmp_build
+mkdir -p $TMPDIR
+```
+
+Then run `eim` from the same terminal session. You can remove `~/tmp_build` after installation completes.
+
+To check how much space your `/tmp` has:
+
+```bash
+df -h /tmp
+```
+
+If it shows only 1–2 GB available, the workaround above is recommended, especially when installing large toolchains like `clang-esp32` or `riscv32`.
+
+
 ### The installer says prerequisites are missing, but they are already installed
 In rare cases, the installer might fail to detect prerequisites even if they are properly installed on your system.
 If this happens, you can use the CLI version of the installer with the following flag to skip the check:
