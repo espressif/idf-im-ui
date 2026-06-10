@@ -640,8 +640,18 @@ pub fn list_idf_tools(
         ));
     }
 
-    let tools_file = crate::idf_tools::read_and_parse_tools_file(tools_json_path.to_str().unwrap())
-        .map_err(|e| format!("Failed to read tools.json: {}", e))?;
+    let tools_file = tools_json_path
+        .to_str()
+        .ok_or_else(|| {
+            format!(
+                "tools.json path is not valid UTF-8: {}",
+                tools_json_path.display()
+            )
+        })
+        .and_then(|s| {
+            crate::idf_tools::read_and_parse_tools_file(s)
+                .map_err(|e| format!("Failed to read tools.json: {}", e))
+        })?;
 
     let recommended_versions: std::collections::HashMap<String, String> = tools_file
         .tools
@@ -762,26 +772,33 @@ fn enumerate_on_disk_versions(tool_dir: &std::path::Path) -> Vec<(String, String
     out
 }
 
-/// Returns true when `candidate` parses as a valid semver and is strictly
-/// greater than `current` (or `current` is `None` / not parseable as semver).
+/// Returns true when `candidate` is strictly greater than `current`.
+///
+/// Prefers semver comparison when both sides parse, but falls back to a
+/// plain lexicographic string comparison as the final tiebreaker. This
+/// matches the rest of the ESP-IDF tooling, where tool versions can carry a
+/// non-semver suffix such as `v0.12.0-esp32-20260304`. When `current` is
+/// `None`, any non-empty candidate is treated as newer than nothing.
 fn is_newer_semver(candidate: &str, current: Option<&str>) -> bool {
     let cand = semver::Version::parse(candidate);
     let curr = current.and_then(|c| semver::Version::parse(c).ok());
     match (cand, curr) {
         (Ok(c), Some(cur)) => c > cur,
-        (Ok(c), None) => true,
-        _ => false,
+        _ => match current {
+            Some(cur) => candidate > cur,
+            None => !candidate.is_empty(),
+        },
     }
 }
 
-/// `max_by` comparator that uses semver when both sides parse, otherwise
-/// falls back to lexicographic order so a non-semver string never wins.
+/// `max_by` comparator that prefers semver when both sides parse, with a
+/// plain lexicographic string comparison as the final tiebreaker so that
+/// non-semver versions (e.g. `v0.12.0-esp32-20260304`) still order
+/// deterministically and consistently with `is_newer_semver`.
 fn semver_order(a: &str, b: &str) -> std::cmp::Ordering {
     match (semver::Version::parse(a), semver::Version::parse(b)) {
         (Ok(av), Ok(bv)) => av.cmp(&bv),
-        (Ok(_), Err(_)) => std::cmp::Ordering::Greater,
-        (Err(_), Ok(_)) => std::cmp::Ordering::Less,
-        (Err(_), Err(_)) => a.cmp(b),
+        _ => a.cmp(b),
     }
 }
 
@@ -1263,5 +1280,111 @@ mod tests {
         assert_eq!(report.tools[0].version_inspections[0].has_platform_download, true);
         // We only assert the first one (always true). The second's value
         // depends on whether current_platform happens to be "any".
+    }
+
+    // ----- is_newer_semver / semver_order fall back to plain string -----
+
+    #[test]
+    fn test_is_newer_semver_plain_string_when_neither_parses() {
+        // Both sides are non-semver (e.g. ESP-IDF tool versions with a
+        // `-esp32-YYYYMMDD` suffix). The lexicographic tiebreaker must pick
+        // the higher string.
+        assert!(is_newer_semver(
+            "v0.12.0-esp32-20260304",
+            Some("v0.11.0-esp32-20240304")
+        ));
+        assert!(!is_newer_semver(
+            "v0.11.0-esp32-20240304",
+            Some("v0.12.0-esp32-20260304")
+        ));
+    }
+
+    #[test]
+    fn test_is_newer_semver_plain_string_when_only_current_parses() {
+        // Candidate is non-semver, current is semver. The plain-string
+        // tiebreaker compares them lexically: '1' < 'v', so the candidate
+        // is NOT newer.
+        assert!(!is_newer_semver(
+            "14.2.0",
+            Some("v0.12.0-esp32-20260304")
+        ));
+        // And the reverse direction holds lexically: 'v' > '1'.
+        assert!(is_newer_semver(
+            "v0.12.0-esp32-20260304",
+            Some("14.2.0")
+        ));
+    }
+
+    #[test]
+    fn test_is_newer_semver_semver_when_both_parse() {
+        // Sanity check: the semver path is still preferred when both sides
+        // parse.
+        assert!(is_newer_semver("14.2.0", Some("13.2.0")));
+        assert!(!is_newer_semver("13.2.0", Some("14.2.0")));
+    }
+
+    #[test]
+    fn test_is_newer_semver_with_no_current() {
+        // When `current` is None, any non-empty candidate is newer than
+        // nothing, regardless of whether it parses as semver.
+        assert!(is_newer_semver("v0.12.0-esp32-20260304", None));
+        assert!(is_newer_semver("14.2.0", None));
+        assert!(!is_newer_semver("", None));
+    }
+
+    #[test]
+    fn test_semver_order_plain_string_when_either_does_not_parse() {
+        // Both non-semver: plain lex order.
+        assert_eq!(
+            semver_order("v0.11.0-esp32-20240304", "v0.12.0-esp32-20260304"),
+            std::cmp::Ordering::Less
+        );
+        // Mixed: plain lex order too.
+        assert_eq!(
+            semver_order("14.2.0", "v0.12.0-esp32-20260304"),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_list_idf_tools_outdated_detected_with_non_semver_versions() {
+        // End-to-end check: with a non-semver suffix, the older installed
+        // version must still be reported as outdated by the newer available
+        // one. The semver-only path would have missed this because neither
+        // version parses.
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let tool = make_tool(
+            "esp32ulp-elf",
+            "ULP toolchain",
+            "always",
+            vec![
+                make_version("v0.11.0-esp32-20240304", "supported", &["any"]),
+                make_version("v0.12.0-esp32-20260304", "recommended", &["any"]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        // Install the older non-semver version.
+        let installed = tools_path
+            .join("esp32ulp-elf")
+            .join("v0.11.0-esp32-20240304");
+        fs::create_dir_all(&installed).unwrap();
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        assert_eq!(report.outdated.len(), 1);
+        assert_eq!(report.outdated[0].name, "esp32ulp-elf");
+        assert_eq!(report.outdated[0].installed, "v0.11.0-esp32-20240304");
+        assert_eq!(report.outdated[0].available, "v0.12.0-esp32-20260304");
     }
 }

@@ -9,13 +9,19 @@ import os from "os";
 // Default EIM tool install / activation-script directory. Mirrors
 // `Settings::default()` in src-tauri/src/lib/settings.rs: on POSIX
 // it's $HOME/.espressif/tools, on Windows it's C:\\Espressif\\tools.
-function getActivationScriptDir(installFolder) {
+// The `-p` flag passed to `eim install` controls the IDF source-tree
+// path (e.g. `~/.espressif/<version>/esp-idf`); it does NOT control
+// where the activation scripts are written. Those are always placed
+// under `esp_idf_json_path`, which defaults to `$HOME/.espressif/tools`
+// on POSIX. Computing the path from `installFolder` via `path.dirname`
+// is therefore wrong: the install folder is *not* the activation-script
+// folder, and any non-default `installFolder` (e.g. `.espext_deact`)
+// produces an incorrect path.
+function getActivationScriptDir(_installFolder) {
   if (os.platform() === "win32") {
     return "C:\\Espressif\\tools";
   }
-  // `installFolder` is $HOME/.espressif by default, so the tools dir is a
-  // sibling at $HOME/.espressif/tools.
-  return path.join(path.dirname(installFolder), "tools");
+  return path.join(os.homedir(), ".espressif", "tools");
 }
 
 // Returns the file paths of the activate / deactivate scripts for a
@@ -154,86 +160,98 @@ export function runCLIDeactivationTest({
       testRunner = new CLITestRunner();
       await testRunner.start();
 
-      // Source the activation script first. On POSIX the runner is
-      // bash; on Windows it's powershell. Both `source` / `.` work.
-      const sourceCmd =
-        os.platform() === "win32"
-          ? `. "${scriptPaths.activate}"`
-          : `source "${scriptPaths.activate}"`;
-      const deactCmd =
-        os.platform() === "win32"
-          ? `. "${scriptPaths.deactivate}"`
-          : `source "${scriptPaths.deactivate}"`;
+      // Each value is followed by `||` as an explicit delimiter. The
+      // pty strips \r/\n from onData (CLITestRunner.class.js), so
+      // multi-statement output concatenates into a single buffer
+      // line; without a delimiter, the regex bleeds across field
+      // boundaries. Env-var paths never contain `|`, so `||` is a
+      // safe boundary.
+      //
+      // The negative lookahead `(?!%s)` skips the printf format
+      // string itself: the pty echoes the typed command back, and
+      // that echo contains literal `IDF_PATH=%s` etc. We want the
+      // value after the LAST `IDF_PATH=` (the printf output), not
+      // the one in the format string. On Windows the buffer is just
+      // the subprocess stdout (no pty echo), so the lookahead is a
+      // harmless no-op there.
+      const isWin = os.platform() === "win32";
+      const envProbeFormat = isWin
+        ? null
+        : `printf 'IDF_PATH=%s||IDF_TOOLS_PATH=%s||ESP_IDF_VERSION=%s||VIRTUAL_ENV=%s||\\n' "$IDF_PATH" "$IDF_TOOLS_PATH" "$ESP_IDF_VERSION" "$VIRTUAL_ENV"`;
+      const envProbeWriteHost = isWin
+        ? `Write-Host "IDF_PATH=$env:IDF_PATH||"; Write-Host "IDF_TOOLS_PATH=$env:IDF_TOOLS_PATH||"; Write-Host "ESP_IDF_VERSION=$env:ESP_IDF_VERSION||"; Write-Host "VIRTUAL_ENV=$env:VIRTUAL_ENV||"`
+        : null;
 
-      testRunner.sendInput(sourceCmd);
-      // The activate script prints "Environment setup complete..." or
-      // powershell "IDF PowerShell Environment" once it finishes. Wait
-      // for either, with a generous timeout.
-      const activated =
-        (await testRunner.waitForOutput(
-          "Environment setup complete for the current shell session",
-          60000
-        )) ||
-        (await testRunner.waitForOutput(
-          "IDF PowerShell Environment",
-          60000
-        ));
-      expect(activated, "Activation script did not produce expected banner").to.be.true;
-
-      // Verify IDF_TOOLS_PATH is set after activation. We use the
-      // runner's runAndCapture which uses a sentinel to delimit the
-      // output and is reliable on both POSIX and Windows.
+      // Source the activate script AND probe the env vars in a single
+      // command. Two reasons:
+      //   * On Windows, runAndCapture spawns a fresh powershell that
+      //     does NOT inherit env vars from the parent terminal, so
+      //     source + probe must happen in the same subprocess.
+      //   * On Linux, even though runAndCapture reuses the pty, doing
+      //     both in one call avoids the race where the banner and
+      //     the probe could be interleaved with the runAndCapture
+      //     output-clear.
+      const sourceCmd = isWin
+        ? `. "${scriptPaths.activate}"`
+        : `source "${scriptPaths.activate}"`;
+      const activateCombined = isWin
+        ? `${sourceCmd}; ${envProbeWriteHost}`
+        : `${sourceCmd} && ${envProbeFormat}`;
       const activateCheck = await testRunner.runAndCapture(
-        os.platform() === "win32"
-          ? `Write-Host "IDF_PATH=$env:IDF_PATH"; Write-Host "IDF_TOOLS_PATH=$env:IDF_TOOLS_PATH"; Write-Host "ESP_IDF_VERSION=$env:ESP_IDF_VERSION"; Write-Host "VIRTUAL_ENV=$env:VIRTUAL_ENV"`
-          : `echo "IDF_PATH=$IDF_PATH" ; echo "IDF_TOOLS_PATH=$IDF_TOOLS_PATH" ; echo "ESP_IDF_VERSION=$ESP_IDF_VERSION" ; echo "VIRTUAL_ENV=$VIRTUAL_ENV"`,
+        activateCombined,
         "ACTIVATE_DONE",
-        30000
+        60000
       );
+      // The activate script prints "Environment setup complete..."
+      // (POSIX) or "IDF PowerShell Environment" (Windows). The
+      // banner is written to stdout before the probe, so it
+      // appears in the same captured buffer.
       expect(
         activateCheck.output,
-        "IDF_TOOLS_PATH should be set after activation"
-      ).to.include("IDF_TOOLS_PATH=");
-      // The output buffer strips newlines, so look for the marker
-      // followed by an actual value. IDF_TOOLS_PATH must not be empty.
+        `Activation script did not produce expected banner. Output: ${activateCheck.output}`
+      ).to.match(/Environment setup complete|IDF PowerShell Environment/);
       const idfToolsPathMatch = activateCheck.output.match(
-        /IDF_TOOLS_PATH=([^\s;]*)/
+        /IDF_TOOLS_PATH=(?!%s)([^|]*)/
       );
       expect(
         idfToolsPathMatch && idfToolsPathMatch[1].length > 0,
         `IDF_TOOLS_PATH should be non-empty after activation. Output: ${activateCheck.output}`
       ).to.be.true;
 
-      // Now source the deactivate script and re-check the same vars.
-      testRunner.sendInput(deactCmd);
-      const deactDone = await testRunner.runAndCapture(
-        "echo DEACT_DONE",
-        "DEACT_DONE",
-        30000
-      );
-      expect(
-        deactDone.output,
-        `Deactivation script did not finish. Output: ${deactDone.output}`
-      ).to.include("ESP-IDF environment deactivated.");
-
+      // Now source the deactivate script and re-check the same vars,
+      // again in a single command for the same reasons as above.
+      const deactCmd = isWin
+        ? `. "${scriptPaths.deactivate}"`
+        : `source "${scriptPaths.deactivate}"`;
+      const deactCombined = isWin
+        ? `${deactCmd}; ${envProbeWriteHost}`
+        : `${deactCmd} && ${envProbeFormat}`;
       const deactCheck = await testRunner.runAndCapture(
-        os.platform() === "win32"
-          ? `Write-Host "IDF_PATH=$env:IDF_PATH"; Write-Host "IDF_TOOLS_PATH=$env:IDF_TOOLS_PATH"; Write-Host "ESP_IDF_VERSION=$env:ESP_IDF_VERSION"; Write-Host "VIRTUAL_ENV=$env:VIRTUAL_ENV"`
-          : `echo "IDF_PATH=$IDF_PATH" ; echo "IDF_TOOLS_PATH=$IDF_TOOLS_PATH" ; echo "ESP_IDF_VERSION=$ESP_IDF_VERSION" ; echo "VIRTUAL_ENV=$VIRTUAL_ENV"`,
+        deactCombined,
         "POST_DONE",
         30000
       );
+      // The deactivate script prints "ESP-IDF environment
+      // deactivated." to stdout. It appears in the captured buffer
+      // alongside the probe output.
+      expect(
+        deactCheck.output,
+        `Deactivation script did not finish. Output: ${deactCheck.output}`
+      ).to.include("ESP-IDF environment deactivated.");
 
       // After deactivation:
       //   - IDF_PATH / IDF_TOOLS_PATH / VIRTUAL_ENV must be empty
       //     (var set to nothing, or not set at all).
       //   - ESP_IDF_VERSION must not look like a version (e.g. "5.3").
+      //
+      // The `(?!%s)` lookahead skips the printf format string in
+      // the pty echo on POSIX; on Windows it is a no-op.
       for (const varName of [
         "IDF_PATH",
         "IDF_TOOLS_PATH",
         "VIRTUAL_ENV",
       ]) {
-        const re = new RegExp(`${varName}=([^\\s;]*)`);
+        const re = new RegExp(`${varName}=(?!%s)([^|]*)`);
         const m = deactCheck.output.match(re);
         const value = m ? m[1] : null;
         expect(
@@ -241,7 +259,9 @@ export function runCLIDeactivationTest({
           `After deactivation, ${varName} should be empty, got '${value}'.\nOutput: ${deactCheck.output}`
         ).to.be.true;
       }
-      const espMatch = deactCheck.output.match(/ESP_IDF_VERSION=([^\s;]*)/);
+      const espMatch = deactCheck.output.match(
+        /ESP_IDF_VERSION=(?!%s)([^|]*)/
+      );
       const espValue = espMatch ? espMatch[1] : null;
       expect(
         !espValue || !/^\d/.test(espValue),

@@ -310,22 +310,22 @@ function testRun(jsonScript) {
           installFolder,
         });
 
-        // Verify the install layout (version folder exists, esp-idf
-        // folder inside it) like the custom install verification does.
-        runInstallVerification({
-          id: `${test.id}2`,
-          installFolder,
-          idfList: idfUpdatedList,
-          targetList,
-          toolsFolder: TOOLSFOLDER,
-        });
-
-        // Clean up: remove the install folder + tools folder if the
-        // suite asks for it. Note that runCLIDeactivationTest already
-        // runs `eim remove` on the IDF version, which deletes the
-        // esp-idf subfolder. CleanUp removes the parent directory.
+        // The deactivation scenario ends with `eim remove` (step 4 of
+        // runCLIDeactivationTest), which deletes the IDF entry from
+        // eim_idf.json. runInstallVerification reads eim_idf.json and
+        // expects the entry to still be there, so it can only run
+        // BEFORE the deactivation lifecycle -- and the lifecycle
+        // itself already verifies the install layout (script
+        // existence, activation, deactivation, removal). Skipping the
+        // standalone verification step avoids an unavoidable failure
+        // for the deactivation test type.
+        //
+        // Clean up still runs: runCLIDeactivationTest already removed
+        // the esp-idf subfolder via `eim remove`; CleanUp removes
+        // the parent directory and the tools folder when
+        // deleteAfterTest is true.
         runCleanUp({
-          id: `${test.id}3`,
+          id: `${test.id}2`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
