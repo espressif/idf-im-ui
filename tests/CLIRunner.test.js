@@ -33,6 +33,7 @@ import { runCLIPythonCheckTest } from "./scripts/CLIPythonCheck.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
 import { runCLIDeactivationTest } from "./scripts/CLIDeactivation.test.js";
+import { runListToolsTest } from "./scripts/CLIListTools.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -411,6 +412,73 @@ function testRun(jsonScript) {
 
         runCleanUp({
           id: `${test.id}4`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "list-tools") {
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) =>
+        idf === "default" ? IDFDefaultVersion : idf
+      );
+
+      let installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
+      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
+      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
+      test.data.toolsMirror &&
+        installArgs.push(
+          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
+        );
+      test.data.idfMirror &&
+        installArgs.push(
+          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
+        );
+      test.data.pypiMirror &&
+        installArgs.push(
+          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
+        );
+      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
+      test.data.nonInteractive &&
+        installArgs.push(`-n ${test.data.nonInteractive}`);
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runCLICustomInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+          testProxyMode,
+          proxyBlockList,
+        });
+
+        runListToolsTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMCLI,
+          idfList: idfUpdatedList,
+          installFolder,
+        });
+
+        runCleanUp({
+          id: `${test.id}3`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
