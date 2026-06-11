@@ -110,6 +110,38 @@ eim install --skip-prerequisites-check=true
 
 > ⚠️ **Warning:** Use this flag only if you are certain that all required prerequisites are correctly installed, as skipping the check may lead to installation failures later.
 
+### Python SSL sanity check fails when using a system-wide proxy
+
+If EIM reports:
+
+```text
+[FAIL] SSL/HTTPS
+Hint: Check your network and proxy settings...
+````
+
+but Python itself works correctly, and you are using a system-wide HTTP/HTTPS proxy, the proxy configuration may be intercepting connections to `localhost` (`127.0.0.1`).
+
+Starting with EIM v0.13.x, the Python SSL sanity check uses a temporary local HTTPS server to verify that Python's SSL support is working correctly. This allows the check to work even when the machine has no internet access.
+
+Some proxy configurations attempt to route **all** HTTPS connections through the proxy, including connections to `127.0.0.1` or `localhost`. When this happens, the SSL sanity check can fail even though Python's SSL support is functioning correctly.
+
+**Solution:** configure your proxy to bypass local addresses. Most proxy implementations support the `NO_PROXY` (or `no_proxy`) environment variable:
+
+```bash
+export NO_PROXY=localhost,127.0.0.1,::1
+export no_proxy=localhost,127.0.0.1,::1
+```
+
+You can verify whether the proxy is the cause by temporarily unsetting the proxy variables and rerunning EIM:
+
+```bash
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+eim install
+```
+
+If the sanity check passes after unsetting the proxy variables, update your proxy configuration to exclude localhost addresses rather than disabling the proxy entirely.
+
+
 
 ## GUI-Specific Questions
 
