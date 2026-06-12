@@ -77,6 +77,14 @@ pub enum Commands {
     /// List installed ESP-IDF versions
     List,
 
+    /// List tools declared in an installed ESP-IDF's tools.json, with on-disk status
+    ListTools {
+        #[arg(help = "ID, name or path of the IDF installation")]
+        identifier: Option<String>,
+        #[arg(long, help = "Show only tools whose installed version is older than the latest available in tools.json")]
+        outdated: bool,
+    },
+
     /// Select an ESP-IDF version as active
     Select {
         #[arg(help = "Version to select as active")]

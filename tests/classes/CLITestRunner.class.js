@@ -115,7 +115,14 @@ class CLITestRunner {
       });
     }
 
-    await this.start();
+    // Only spawn a fresh pty if there isn't one yet. If a test set
+    // up state with sendInput() (e.g. sourcing an activate script)
+    // and then calls runAndCapture() to query that state, starting a
+    // new bash would discard the sourced env vars. Reusing the
+    // existing pty preserves the state.
+    if (!this.process || this.exited) {
+      await this.start();
+    }
     // Drop any pre-existing output (start, prompt, etc.) so the returned
     // buffer only contains what the command itself produced.
     this.output = "";

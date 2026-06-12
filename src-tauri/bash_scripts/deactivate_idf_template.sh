@@ -120,12 +120,17 @@ fi
 
 # --- Deactivate the Python virtual environment --------------------------
 # If a venv was activated by the matching activate script, VIRTUAL_ENV
-# will be set. We delegate to the standard venv deactivate function.
+# will be set. We delegate to the standard venv deactivate function
+# (which restores PATH/PYTHONHOME/PS1 and unsets its own helper vars)
+# and then explicitly unset VIRTUAL_ENV -- the standard venv
+# `deactivate` function does NOT clear it, so the caller's shell
+# would otherwise still look "active" after sourcing this script.
 if [ -n "${VIRTUAL_ENV:-}" ] && [ -f "${VIRTUAL_ENV}/bin/deactivate" ]; then
     # shellcheck disable=SC1090
     . "${VIRTUAL_ENV}/bin/deactivate"
     printf '%s\n' "Deactivated virtual environment at ${VIRTUAL_ENV}"
 fi
+unset VIRTUAL_ENV 2>/dev/null || true
 # Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
 # does not match a live venv.
 unset IDF_PYTHON_ENV_PATH 2>/dev/null || true

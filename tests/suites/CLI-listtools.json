@@ -1,0 +1,18 @@
+[
+  {
+    "id": 1,
+    "type": "list-tools",
+    "name": "CLI List Tools",
+    "data": {
+      "idfList": "default",
+      "targetList": "esp32",
+      "toolsMirror": "github",
+      "idfMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  }
+]
