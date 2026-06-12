@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="theme">
+  <n-config-provider :theme="theme" :theme-overrides="themeOverrides">
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
@@ -90,6 +90,30 @@ import WarningBanner from './components/WarningBanner.vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
 import { useAppStore } from './store'
+
+const ESPRESSIF_RED = '#E8362D'
+const ESPRESSIF_RED_HOVER = '#f04a42'
+const ESPRESSIF_RED_PRESSED = '#c62f28'
+
+const themeOverrides = {
+  common: {
+    primaryColor: ESPRESSIF_RED,
+    primaryColorHover: ESPRESSIF_RED_HOVER,
+    primaryColorPressed: ESPRESSIF_RED_PRESSED,
+    primaryColorSuppl: ESPRESSIF_RED_HOVER
+  },
+  Button: {
+    borderPrimary: `1px solid ${ESPRESSIF_RED}`,
+    borderHoverPrimary: `1px solid ${ESPRESSIF_RED_HOVER}`,
+    borderPressedPrimary: `1px solid ${ESPRESSIF_RED_PRESSED}`,
+    borderFocusPrimary: `1px solid ${ESPRESSIF_RED_HOVER}`,
+    rippleColorPrimary: 'rgba(232, 54, 45, 0.28)',
+    textColorPrimary: '#ffffff',
+    textColorHoverPrimary: '#ffffff',
+    textColorPressedPrimary: '#ffffff',
+    textColorFocusPrimary: '#ffffff'
+  }
+}
 
 export default {
   name: 'App',
@@ -226,6 +250,7 @@ export default {
 
     return {
       theme,
+      themeOverrides,
       showBreadcrumb,
       breadcrumbs,
       goTo,

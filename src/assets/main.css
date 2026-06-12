@@ -30,14 +30,11 @@
   font-style: normal;
 }
 .n-result .n-result-icon .n-base-icon {
-  color: #1290d8;
+  color: var(--espressif-red-color);
 }
 .n-checkbox.n-checkbox--checked .n-checkbox-box,
 .n-checkbox.n-checkbox--indeterminate .n-checkbox-box {
-  background-color: #1290d8;
-}
-.n-button {
-  background-color: var(--espressif-red-color)
+  background-color: var(--espressif-red-color);
 }
 .n-card {
   border: none;
