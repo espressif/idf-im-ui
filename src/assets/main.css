@@ -55,7 +55,6 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  zoom: 0.8;
 }
 
 .n-layout-header {
@@ -167,13 +166,6 @@ h2 {
 .header h2 {
   margin: 0;
   font-size: 1.25rem;
-}
-
-#app {
-  background-color: #f5f5f5;
-  background-image: url('./bg.png');
-  background-size: cover;
-  background-position: center;
 }
 
 .main-content {

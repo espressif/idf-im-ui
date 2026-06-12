@@ -1,9 +1,9 @@
 <template>
-  <n-config-provider :theme="theme">
+  <n-config-provider :theme="theme" abstract>
     <n-message-provider>
       <n-dialog-provider>
         <n-notification-provider>
-          <div id="app">
+          <div class="app-shell">
             <!-- Splash Screen -->
             <transition name="splash-fade">
               <div v-if="showSplash" class="splash-screen">
@@ -28,9 +28,12 @@
                   <n-dropdown
                     :options="languageOptions"
                     @select="handleLanguageChange"
+                    :to="false"
+                    :width="144"
+                    placement="bottom-end"
                     trigger="click"
                   >
-                    <n-button text style="color: white; font-size: 16px;">
+                    <n-button text class="language-trigger">
                       <template #icon>
                         <n-icon>
                           <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -261,7 +264,12 @@ html, body {
 
 #app {
   height: 100%;
-  min-height: 100%;
+  min-height: 0;
+}
+
+.app-shell {
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background-color: #f5f5f5;
@@ -269,7 +277,7 @@ html, body {
   background-size: cover;
   background-position: center;
   background-attachment: fixed;
-  overflow-y: auto;
+  overflow-y: hidden;
   overflow-x: hidden;
   position: relative;
 }
@@ -278,9 +286,7 @@ html, body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 60px;
   position: relative;
-  height: calc(100vh - 60px - 60px);
   min-height: 0;
 }
 
@@ -288,9 +294,11 @@ html, body {
 .app-header {
   background: linear-gradient(135deg, #E8362D 0%, #dc2626 100%);
   color: white;
-  padding: 1rem 1.5rem;
+  padding: 0.875rem clamp(1rem, 2vw, 1.5rem);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  z-index: 200;
+  position: relative;
+  z-index: 300;
+  flex: 0 0 auto;
 }
 
 .header-content {
@@ -299,16 +307,20 @@ html, body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 1rem;
+  min-width: 0;
 }
 
 .header-brand {
   display: flex;
   align-items: center;
   gap: 1rem;
+  min-width: 0;
 }
 
 .header-brand .logo {
   height: 32px;
+  flex: 0 0 auto;
   width: auto;
 }
 
@@ -316,11 +328,28 @@ html, body {
   font-family: 'Trueno-bold', sans-serif;
   font-size: 1.25rem;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
+  flex: 0 0 auto;
+}
+
+.language-trigger {
+  color: white !important;
+  font-size: 1rem;
+  padding: 0 0.25rem;
+  white-space: nowrap;
+}
+
+.language-trigger,
+.language-trigger:hover,
+.language-trigger:focus {
+  background: transparent !important;
 }
 
 /* Breadcrumb in header */
@@ -336,8 +365,8 @@ html, body {
 .app-main {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 60px;
   position: relative;
+  min-height: 0;
 }
 
 /* Page Transitions */
@@ -386,17 +415,23 @@ html, body {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .header-content {
-    flex-direction: column;
-    gap: 1rem;
-  }
-
   .header-brand {
-    justify-content: center;
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-header {
+    padding: 0.75rem 1rem;
   }
 
-  .app-main {
-    padding: 1rem;
+  .header-title {
+    font-size: 1rem;
+    max-width: calc(100vw - 11rem);
+  }
+
+  .language-trigger {
+    font-size: 0.9rem;
   }
 }
 

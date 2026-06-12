@@ -44,7 +44,7 @@
 
     <!-- About Modal -->
     <n-modal v-model:show="showAboutModal" preset="card"
-             :title="$t('footer.modal.about.title')" style="width: 500px" data-id="about-modal">
+             :title="$t('footer.modal.about.title')" style="width: min(500px, calc(100vw - 32px))" data-id="about-modal">
       <div class="about-content">
         <div class="about-logo">
           <img src="../assets/espressif_logo.svg" alt="Espressif" />
@@ -73,7 +73,7 @@
 
     <!-- Report Issue Modal -->
     <n-modal v-model:show="showReportModal" preset="card"
-             :title="$t('footer.modal.report.title')" style="width: 600px" data-id="report-issue-modal">
+             :title="$t('footer.modal.report.title')" style="width: min(600px, calc(100vw - 32px))" data-id="report-issue-modal">
       <div class="report-content">
         <n-alert type="info" :bordered="false" style="margin-bottom: 1rem;">
           {{ $t('footer.modal.report.info') }}
@@ -277,10 +277,8 @@ Please attach logs from the app logs folder.
 
 <style scoped>
 .app-footer {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  flex: 0 0 auto;
+  position: relative;
   background: white;
   border-top: 1px solid #e5e7eb;
   padding: 0.75rem 1.5rem;
@@ -288,22 +286,30 @@ Please attach logs from the app logs folder.
 }
 
 .footer-content {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 1rem;
   align-items: center;
   max-width: 1400px;
   margin: 0 auto;
+  min-width: 0;
 }
 
 .footer-section {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
 .footer-section.center {
-  flex: 1;
   justify-content: center;
+  flex-wrap: wrap;
+}
+
+.footer-section:last-child {
+  justify-content: flex-end;
+  text-align: right;
 }
 
 /* Fix footer button styling */
@@ -313,6 +319,7 @@ Please attach logs from the app logs folder.
   color: #6b7280 !important;
   font-size: 0.875rem;
   padding: 0.25rem 0.5rem;
+  margin-right: 0 !important;
   transition: color 0.2s ease;
 }
 
@@ -329,6 +336,9 @@ Please attach logs from the app logs folder.
 .version-info, .copyright {
   font-size: 0.875rem;
   color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .n-divider {
@@ -403,6 +413,7 @@ Please attach logs from the app logs folder.
 .modal-actions {
   display: flex;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #e5e7eb;
@@ -416,5 +427,47 @@ Please attach logs from the app logs folder.
 .about-content .n-button[type="primary"],
 .modal-actions .n-button[type="primary"] {
   background-color: #E8362D;
+}
+
+@media (max-width: 860px) {
+  .app-footer {
+    padding: 0.75rem 1rem;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .footer-section,
+  .footer-section.center,
+  .footer-section:last-child {
+    justify-content: center;
+    text-align: center;
+  }
+}
+
+@media (max-width: 520px) {
+  .footer-section.center {
+    gap: 0.25rem 0.5rem;
+  }
+
+  .n-divider {
+    display: none;
+  }
+
+  .version-info,
+  .copyright {
+    white-space: normal;
+  }
+
+  .modal-actions {
+    justify-content: stretch;
+  }
+
+  .modal-actions .n-button {
+    flex: 1 1 100%;
+    margin-right: 0 !important;
+  }
 }
 </style>
