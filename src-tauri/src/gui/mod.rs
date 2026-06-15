@@ -348,6 +348,7 @@ pub fn run(
             set_selected_tools_per_version,
             get_selected_tools_per_version,
             generate_installation_config_for_version,
+            list_idf_tools,
             write_text_file,
         ])
         .run(tauri::generate_context!())
