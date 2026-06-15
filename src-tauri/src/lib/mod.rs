@@ -2178,7 +2178,6 @@ pub fn single_version_post_install(
             if scripts_path.exists() {
                 export_paths.push(scripts_path.to_string_lossy().to_string());
             }
-            export_paths.insert(0, "/usr/bin".to_string()); // TODO: find ld
         }
     }
 
