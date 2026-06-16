@@ -56,6 +56,11 @@ Specify where ESP-IDF should be installed. The default path is `C:\esp` on Windo
 
 > **Important:** If you select a path that already contains an existing ESP-IDF Git repository, the installer will use that repository directly and will not rewrite its contents.
 
+The same step also exposes two **advanced / optional** settings that mirror long-standing CLI flags:
+
+  * **Delete temporary installation files after the install completes** — Removes the downloaded tool archives once the installation finishes. Equivalent to the CLI's `--cleanup` flag. Recommended for Docker images, CI runners, and other single-use environments; leave it off if you plan to add more ESP-IDF versions later, since those will have to be re-downloaded.
+  * **Use custom tool download / install folder locations (advanced)** — Off by default. When enabled, two extra fields let you rename the **Tool download folder** (default `dist`) and the **Tool install folder** (default `tools`). The folders are created under the chosen installation path. The installer warns that moving the tool folders away from the defaults prevents it from deduplicating tools across ESP-IDF versions, so installing multiple versions will use significantly more disk space and download time. These fields correspond to the `tool_download_folder_name` and `tool_install_folder_name` settings in the configuration file.
+
 ## Configuration Files
 
 The ESP-IDF Installation Manager supports using configuration files to specify installation settings. This is particularly useful for:

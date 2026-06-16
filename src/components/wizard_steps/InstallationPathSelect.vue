@@ -175,8 +175,8 @@ export default {
     // folder names so we don't accidentally persist edited-then-abandoned values.
     onCustomFoldersToggle(checked) {
       if (!checked) {
-        this.toolDownloadFolderName = this.toolDownloadFolderDefault;
-        this.toolInstallFolderName = this.toolInstallFolderDefault;
+        this.toolDownloadFolderName = 'dist';
+        this.toolInstallFolderName = 'tools';
       }
     },
     // Open a directory picker for a tool folder. These settings are folder
@@ -229,10 +229,14 @@ export default {
     // Load current tool folder names + cleanup so the UI reflects existing settings.
     const downloadFolder = await invoke("get_tool_download_folder_name");
     const installFolder = await invoke("get_tool_install_folder_name");
-    if (downloadFolder) this.toolDownloadFolderDefault = downloadFolder;
-    if (installFolder) this.toolInstallFolderDefault = installFolder;
-    this.toolDownloadFolderName = this.toolDownloadFolderDefault;
-    this.toolInstallFolderName = this.toolInstallFolderDefault;
+
+    this.toolDownloadFolderName = downloadFolder || 'dist';
+    this.toolInstallFolderName = installFolder || 'tools';
+
+    // If custom folders are configured in the backend, enable the checkbox
+    if ((downloadFolder && downloadFolder !== 'dist') || (installFolder && installFolder !== 'tools')) {
+      this.customToolFolders = true;
+    }
 
     this.cleanup = await invoke("get_cleanup");
   }
