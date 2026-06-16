@@ -761,6 +761,15 @@ gui.settings.pypi_mirror_updated:
 gui.settings.no_idf_versions_selected:
   en: "No IDF versions selected. Please select at least one version to continue."
   cn: "未选择 IDF 版本，请至少选择一个版本以继续。"
+gui.settings.tool_download_folder_name_updated:
+  en: "Tools download folder setting updated"
+  cn: "工具下载文件夹设置已更新"
+gui.settings.tool_install_folder_name_updated:
+  en: "Tools install folder setting updated"
+  cn: "工具安装文件夹设置已更新"
+gui.settings.cleanup_updated:
+  en: "Tools download folder cleanup setting updated"
+  cn: "工具下载文件夹清理设置已更新"
 gui.installation.folder_created:
   en: "IDF installation folder created at: %{path}"
   cn: "IDF 安装文件夹已创建： %{path}"

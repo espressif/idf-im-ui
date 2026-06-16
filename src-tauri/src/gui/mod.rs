@@ -350,6 +350,12 @@ pub fn run(
             generate_installation_config_for_version,
             list_idf_tools,
             write_text_file,
+            get_tool_download_folder_name,
+            set_tool_download_folder_name,
+            get_tool_install_folder_name,
+            set_tool_install_folder_name,
+            get_cleanup,
+            set_cleanup,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
