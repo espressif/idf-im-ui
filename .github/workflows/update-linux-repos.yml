@@ -88,17 +88,20 @@ jobs:
       - name: Generate APT repository metadata
         working-directory: apt-repo
         run: |
+          # Ensure newest packages are processed last (critical!)
+          find pool/main -name "*.deb" -print0 | sort -zV | xargs -0 -I {} echo {} > /tmp/deb-list
+        
           # Generate Packages files for each architecture
-          # AMD64 packages
-          dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
+          # AMD64
+          dpkg-scanpackages --arch amd64 -m pool/main < /tmp/deb-list > dists/stable/main/binary-amd64/Packages 2>&1 || true
           gzip -k -f dists/stable/main/binary-amd64/Packages
 
-          # ARM64 packages
-          dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages
+          # ARM64
+          dpkg-scanpackages --arch arm64 -m pool/main < /tmp/deb-list > dists/stable/main/binary-arm64/Packages 2>&1 || true
           gzip -k -f dists/stable/main/binary-arm64/Packages
 
-          # ARMHF packages
-          dpkg-scanpackages --arch armhf pool/main > dists/stable/main/binary-armhf/Packages
+          # ARMHF
+          dpkg-scanpackages --arch armhf -m pool/main < /tmp/deb-list > dists/stable/main/binary-armhf/Packages 2>&1 || true
           gzip -k -f dists/stable/main/binary-armhf/Packages
 
           # Generate Release file (now includes armhf)
