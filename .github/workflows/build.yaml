@@ -649,6 +649,7 @@ jobs:
           cargo generate-rpm \
             --target ${{ matrix.target }} \
             --payload-compress gzip \
+            --set-metadata 'release = "1"' \
             --set-metadata 'requires = {git = "*", wget = "*", flex = "*", cmake = "*", bison = "*", gperf = "*", ccache = "*", libffi-devel = "*", openssl-devel = "*", dfu-util = "*", libusb = "*"}'
 
           echo "Generated RPM files:"
@@ -1532,6 +1533,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          RELEASE="1"
 
           # Find the original RPM from the Tauri build
           ORIG_RPM=$(find gui-rpm-input -name "*.rpm" -type f -print -quit)
