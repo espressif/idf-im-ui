@@ -375,7 +375,8 @@
         "openFolder": "打开文件夹",
         "openTerminal": "打开 IDF 终端",
         "remove": "移除",
-        "exportConfig": "导出配置"
+        "exportConfig": "导出配置",
+        "listTools": "查看工具"
       }
     },
     "quickActions": {
@@ -411,6 +412,28 @@
         "confirmation": "我明白此操作无法撤销",
         "confirmButton": "全部清除",
         "cancelButton": "取消"
+      },
+      "listTools": {
+        "title": "{name} 的工具",
+        "loading": "正在加载工具...",
+        "empty": "此安装没有可用的工具。",
+        "idfPath": "IDF 路径",
+        "toolsPath": "工具路径",
+        "optional": "可选",
+        "recommended": "推荐",
+        "installedVersion": "已安装 {version}",
+        "notInstalled": "未安装",
+        "outdated": {
+          "title": "已过时的工具",
+          "line": "{name}：已安装 {installed}，可用 {available}"
+        },
+        "columns": {
+          "version": "版本",
+          "status": "状态",
+          "installed": "已安装",
+          "tool": "工具",
+          "description": "描述"
+        }
       }
     },
     "messages": {
@@ -439,7 +462,8 @@
         "checkUpdates": "检查更新失败",
         "openTerminal": "无法打开 IDF 终端",
         "exportConfig": "导出配置失败",
-        "noConfigToExport": "没有可导出的配置"
+        "noConfigToExport": "没有可导出的配置",
+        "listTools": "加载工具失败"
       },
       "warning": {
         "confirmAction": "请确认操作"

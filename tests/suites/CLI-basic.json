@@ -51,6 +51,39 @@
   },
   {
     "id": 7,
+    "type": "list-tools",
+    "name": "CLI List Tools",
+    "data": {
+      "idfList": "default",
+      "targetList": "esp32",
+      "toolsMirror": "github",
+      "idfMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  },
+  {
+    "id": 8,
+    "type": "deactivation",
+    "name": "CLI Deactivation Script Lifecycle",
+    "data": {
+      "targetList": "esp32",
+      "idfList": "default",
+      "installFolder": ".espext_deact",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  },
+  {
+    "id": 9,
     "type": "offline",
     "name": "CLI Offline Installation",
     "deleteAfterTest": true,

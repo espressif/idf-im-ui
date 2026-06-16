@@ -376,7 +376,8 @@
         "openFolder": "Open Folder",
         "openTerminal": "Open IDF Terminal",
         "remove": "Remove",
-        "exportConfig": "Export Configuration"
+        "exportConfig": "Export Configuration",
+        "listTools": "List Tools"
       }
     },
     "quickActions": {
@@ -412,6 +413,28 @@
         "confirmation": "I understand this action cannot be undone",
         "confirmButton": "Purge All",
         "cancelButton": "Cancel"
+      },
+      "listTools": {
+        "title": "Tools for {name}",
+        "loading": "Loading tools...",
+        "empty": "No tools available for this installation.",
+        "idfPath": "IDF path",
+        "toolsPath": "Tools path",
+        "optional": "Optional",
+        "recommended": "Recommended",
+        "installedVersion": "{version} installed",
+        "notInstalled": "Not installed",
+        "outdated": {
+          "title": "Outdated tools",
+          "line": "{name}: installed {installed}, available {available}"
+        },
+        "columns": {
+          "version": "Version",
+          "status": "Status",
+          "installed": "Installed",
+          "tool": "Tool",
+          "description": "Description"
+        }
       }
     },
     "messages": {
@@ -440,7 +463,8 @@
         "checkUpdates": "Failed to check for updates",
         "openTerminal": "IDF terminal could not be opened",
         "exportConfig": "Failed to export configuration",
-        "noConfigToExport": "No configuration available to export"
+        "noConfigToExport": "No configuration available to export",
+        "listTools": "Failed to load tools"
       },
       "warning": {
         "confirmAction": "Please confirm the action"

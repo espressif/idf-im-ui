@@ -80,7 +80,10 @@ if ($env_var_pairs) {
 
 # --- Deactivate the Python virtual environment --------------------------
 # If the matching activation script sourced the venv's Activate.ps1,
-# VIRTUAL_ENV will be set. We call the venv's `deactivate` function.
+# VIRTUAL_ENV will be set. We call the venv's `deactivate` function
+# and then drop VIRTUAL_ENV explicitly -- the venv's deactivate.ps1
+# does NOT clear it, so the caller's session would otherwise still
+# look "active" after dot-sourcing this script.
 if ($env:VIRTUAL_ENV) {
     $venvRoot = $env:VIRTUAL_ENV
     $deactivateScript = Join-Path $venvRoot 'Scripts\deactivate.ps1'
@@ -89,9 +92,15 @@ if ($env:VIRTUAL_ENV) {
             & $deactivateScript
             Write-Host "Deactivated virtual environment at $venvRoot"
         } catch {
-            Write-Warning "Failed to deactivate virtual environment at $venvRoot: $_"
+            # Use ${name} to delimit the variable -- bare "$venvRoot: $_"
+            # is parsed as a scoped variable reference ($var:Scope) which
+            # is a parse error when the scope starts with whitespace.
+            Write-Warning "Failed to deactivate virtual environment at ${venvRoot}: $_"
         }
     }
+}
+if (Test-Path 'Env:VIRTUAL_ENV') {
+    Remove-Item 'Env:VIRTUAL_ENV' -ErrorAction SilentlyContinue
 }
 # Drop a stray IDF_PYTHON_ENV_PATH that doesn't match a live venv.
 if (Test-Path 'Env:IDF_PYTHON_ENV_PATH') {

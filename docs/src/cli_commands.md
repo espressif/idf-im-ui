@@ -27,6 +27,7 @@ These options can be used with any command:
 | `install` | Install ESP-IDF versions |
 | `wizard` | Run the ESP-IDF Installer Wizard (interactive mode) |
 | `list` | List installed ESP-IDF versions |
+| `list-tools` | List tools declared in an installed ESP-IDF's `tools.json`, with their on-disk installation status |
 | `select` | Select an ESP-IDF version as active |
 | `rename` | Rename a specific ESP-IDF version |
 | `remove` | Remove a specific ESP-IDF version |
@@ -96,6 +97,28 @@ eim list
 ```
 
 This command displays all ESP-IDF versions installed on your system, with the currently selected version marked.
+
+### List Tools Command
+
+List the tools declared in an installed ESP-IDF's `tools/tools.json`, together with their on-disk installation status.
+
+```bash
+eim list-tools [IDENTIFIER] [--outdated]
+```
+
+Arguments:
+- `IDENTIFIER`: ID, name, or path of the IDF installation to inspect (optional). If omitted, the command prompts you to choose from the installed IDFs.
+
+Options:
+- `--outdated`: Show only the tools whose on-disk version is older than the latest non-deprecated version declared in `tools.json`. Prints a header line `Outdated tools:` followed by `<name>: version <installed> is outdated by <available>`, or `No outdated tools.` when everything is up to date.
+
+For each tool, the output reports:
+- The tool's name and description. Tools with `install: on_request` in `tools.json` are marked with `(optional)`. Tools with `install: never` are filtered out.
+- For every version of the tool that has a download for the current platform, a line like `  - <version> (<status>)` followed by either `[installed: <version>]` or `[not installed]`.
+
+The IDF installation is resolved from `IDENTIFIER` by matching its `id`, then its `name`, and finally its normalized `path` in `eim_idf.json`.
+
+This command is intended for inspecting the on-disk state of a toolchain — for example, to confirm which tool versions are present after a fresh install, or to detect tools that can be upgraded in place. The report is also serialized in the underlying library (`version_manager::ToolListReport`) so it can be reused by future GUI commands.
 
 ### Select Command
 
@@ -255,6 +278,12 @@ eim wizard -i v5.3.2,v5.4
 
 # List installed versions
 eim list
+
+# List the tools for an installed IDF and their on-disk status
+eim list-tools v5.3.2
+
+# Show only tools whose on-disk version is older than what tools.json declares
+eim list-tools v5.3.2 --outdated
 
 # Select a specific version
 eim select v5.3.2

@@ -81,6 +81,10 @@ if set -q FISH_ENV_VAR_PAIRS; and test -n "$FISH_ENV_VAR_PAIRS"
 end
 
 # --- Deactivate the Python virtual environment --------------------------
+# The venv's `deactivate.fish` (or the bash-style fallback) restores
+# PATH/PYTHONHOME/PS1 and removes its own helper functions, but it
+# does NOT clear VIRTUAL_ENV. We have to drop it explicitly so the
+# caller's shell is no longer flagged as venv-active.
 if set -q VIRTUAL_ENV; and test -n "$VIRTUAL_ENV"
     if test -f "$VIRTUAL_ENV/bin/deactivate.fish"
         source "$VIRTUAL_ENV/bin/deactivate.fish"
@@ -90,6 +94,7 @@ if set -q VIRTUAL_ENV; and test -n "$VIRTUAL_ENV"
         echo "Deactivated virtual environment at $VIRTUAL_ENV (bash-style)"
     end
 end
+set -e VIRTUAL_ENV 2>/dev/null
 # Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
 # does not match a live venv.
 set -e IDF_PYTHON_ENV_PATH 2>/dev/null

@@ -97,6 +97,16 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
+                <n-button @click="openListTools(version)" quaternary circle :data-id="`list-tools-button-${version.id}`">
+                  <template #icon>
+                    <n-icon><UnorderedListOutlined /></n-icon>
+                  </template>
+                </n-button>
+              </template>
+              {{ t('versionManagement.version.actions.listTools') }}
+            </n-tooltip>
+            <n-tooltip trigger="hover">
+              <template #trigger>
                 <n-button @click="removeVersion(version)" quaternary circle :data-id="`remove-version-button-${version.id}`" type="error">
                   <template #icon>
                     <n-icon><DeleteOutlined /></n-icon>
@@ -250,6 +260,87 @@
         {{ t('versionManagement.modals.purge.confirmation') }}
       </n-checkbox>
     </n-modal>
+
+    <n-modal
+      v-model:show="showListToolsModal"
+      preset="card"
+      :title="t('versionManagement.modals.listTools.title', { name: listToolsVersion?.name })"
+      style="max-width: 900px;"
+      :bordered="false"
+      size="huge"
+      data-id="list-tools-modal"
+    >
+      <div v-if="listToolsLoading" class="list-tools-loading" data-id="list-tools-loading">
+        <n-spin :size="32" />
+        <p>{{ t('versionManagement.modals.listTools.loading') }}</p>
+      </div>
+
+      <div v-else-if="listToolsReport" class="list-tools-content" data-id="list-tools-content">
+        <!-- Meta strip -->
+        <div class="list-tools-meta">
+          <div class="meta-row">
+            <span class="meta-label">{{ t('versionManagement.modals.listTools.idfPath') }}:</span>
+            <code class="meta-value">{{ listToolsReport.idf.path }}</code>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">{{ t('versionManagement.modals.listTools.toolsPath') }}:</span>
+            <code class="meta-value">{{ listToolsReport.idf_tools_path }}</code>
+          </div>
+        </div>
+
+        <!-- Outdated — now a single compact warning line -->
+        <div v-if="listToolsReport.outdated.length > 0" class="outdated-strip" data-id="list-tools-outdated-alert">
+          <n-icon :size="14"><WarningOutlined /></n-icon>
+          {{ t('versionManagement.modals.listTools.outdated.title') }}:
+          <span v-for="(o, i) in listToolsReport.outdated" :key="o.name">
+            <strong>{{ o.name }}</strong> ({{ o.installed }} → {{ o.available }})<span v-if="i < listToolsReport.outdated.length - 1">, </span>
+          </span>
+        </div>
+
+        <!-- Flat tools table -->
+        <table class="tools-table" :data-id="`list-tools-table`">
+          <thead>
+            <tr>
+              <th class="col-name">{{ t('versionManagement.modals.listTools.columns.tool') }}</th>
+              <th class="col-desc">{{ t('versionManagement.modals.listTools.columns.description') }}</th>
+              <th class="col-ver">{{ t('versionManagement.modals.listTools.columns.version') }}</th>
+              <th class="col-status">{{ t('versionManagement.modals.listTools.columns.status') }}</th>
+              <th class="col-inst">{{ t('versionManagement.modals.listTools.columns.installed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-for="entry in listToolsReport.tools" :key="entry.tool.name">
+              <tr
+                v-for="vi in entry.version_inspections.filter(v => v.has_platform_download)"
+                :key="vi.version.name"
+                :data-id="`list-tools-tool-${entry.tool.name}-version-${vi.version.name}`"
+              >
+                <td class="tool-name-cell">
+                  {{ entry.tool.name }}
+                  <n-tag v-if="entry.tool.install === 'on_request'" size="tiny" type="info">
+                    {{ t('versionManagement.modals.listTools.optional') }}
+                  </n-tag>
+                </td>
+                <td class="desc-cell" :title="entry.tool.description">{{ entry.tool.description }}</td>
+                <td class="ver-cell">{{ vi.version.name }}</td>
+                <td>
+                  <n-tag :type="statusTagType(vi.version.status)" size="small">{{ vi.version.status }}</n-tag>
+                </td>
+                <td>
+                  <span v-if="vi.installed" class="installed-yes">
+                    {{ vi.installed.version }}
+                    <n-tag v-if="vi.installed.is_recommended_match" size="tiny" type="success">✓</n-tag>
+                  </span>
+                  <span v-else class="not-installed">—</span>
+                </td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+
+        <n-empty v-if="listToolsReport.tools.length === 0" :description="t('versionManagement.modals.listTools.empty')" data-id="list-tools-empty" />
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -262,7 +353,7 @@ import { listen } from '@tauri-apps/api/event'
 import { save } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
-  NCheckbox, NAlert, NTooltip, useMessage
+  NCheckbox, NAlert, NTooltip, NSpin, useMessage
 } from 'naive-ui'
 import {
   FolderOutlined,
@@ -275,7 +366,8 @@ import {
   ReloadOutlined,
   UsbOutlined,
   LaptopOutlined,
-  SaveOutlined
+  SaveOutlined,
+  UnorderedListOutlined
 } from '@vicons/antd'
 import { useAppStore } from '../store'
 
@@ -283,11 +375,11 @@ export default {
   name: 'VersionManagement',
   components: {
     NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
-    NCheckbox, NAlert, NTooltip,
+    NCheckbox, NAlert, NTooltip, NSpin,
     FolderOutlined, FolderOpenOutlined, EditOutlined,
     DeleteOutlined, ToolOutlined, PlusCircleOutlined,
     ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined,
-    SaveOutlined
+    SaveOutlined, UnorderedListOutlined
   },
   setup() {
     const router = useRouter()
@@ -307,9 +399,15 @@ export default {
     const showRemoveModal = ref(false)
     const showFixModal = ref(false)
     const showPurgeModal = ref(false)
+    const showListToolsModal = ref(false)
     const selectedVersion = ref(null)
     const newVersionName = ref('')
     const purgeConfirmed = ref(false)
+
+    // List-tools modal state
+    const listToolsVersion = ref(null)
+    const listToolsReport = ref(null)
+    const listToolsLoading = ref(false)
     const appStore = useAppStore()
 
     const loadInstalledVersions = async () => {
@@ -444,6 +542,41 @@ export default {
       }
     }
 
+    const openListTools = async (version) => {
+      listToolsVersion.value = version
+      listToolsReport.value = null
+      listToolsLoading.value = true
+      showListToolsModal.value = true
+      try {
+        const report = await invoke('list_idf_tools', { id: version.id })
+        if (!report) {
+          message.error(t('versionManagement.messages.error.listTools'))
+          showListToolsModal.value = false
+          return
+        }
+        listToolsReport.value = report
+      } catch (error) {
+        console.error('Failed to list tools:', error)
+        message.error(t('versionManagement.messages.error.listTools', { error }))
+        showListToolsModal.value = false
+      } finally {
+        listToolsLoading.value = false
+      }
+    }
+
+    const statusTagType = (status) => {
+      switch (status) {
+        case 'recommended':
+          return 'success'
+        case 'supported':
+          return 'info'
+        case 'deprecated':
+          return 'warning'
+        default:
+          return 'default'
+      }
+    }
+
     const purgeAll = () => {
       purgeConfirmed.value = false
       showPurgeModal.value = true
@@ -568,9 +701,13 @@ export default {
       showRemoveModal,
       showFixModal,
       showPurgeModal,
+      showListToolsModal,
       selectedVersion,
       newVersionName,
       purgeConfirmed,
+      listToolsVersion,
+      listToolsReport,
+      listToolsLoading,
       formatDate,
       formatSize,
       renameVersion,
@@ -581,6 +718,8 @@ export default {
       confirmFix,
       fixVersion,
       openInExplorer,
+      openListTools,
+      statusTagType,
       purgeAll,
       confirmPurge,
       installPrerequisites,
@@ -732,4 +871,66 @@ export default {
 .n-button__content {
   color: #e5e7eb;
 }
+
+.list-tools-content {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.outdated-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: #fefce8;
+  color: #854d0e;
+  border-top: 1px solid #fde68a;
+  border-bottom: 1px solid #fde68a;
+}
+
+.tools-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  table-layout: fixed;
+}
+
+.tools-table th {
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.tools-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+
+.tools-table tbody tr:hover td { background: #f9fafb; }
+.tools-table tbody tr:last-child td { border-bottom: none; }
+
+.col-name  { width: 20%; }
+.col-desc  { width: 35%; }
+.col-ver   { width: 18%; }
+.col-status{ width: 14%; }
+.col-inst  { width: 13%; }
+
+.tool-name-cell { font-weight: 500; font-size: 13px; }
+.desc-cell { color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ver-cell  { font-family: monospace; font-size: 12px; color: #374151; }
+.installed-yes { color: #16a34a; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
+.not-installed { color: #9ca3af; }
 </style>

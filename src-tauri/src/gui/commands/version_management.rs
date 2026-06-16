@@ -2,6 +2,7 @@ use std::path::PathBuf;
 
 use idf_im_lib::idf_config::{IdfInstallation, IDF_CONFIG_FILE_NAME};
 use idf_im_lib::settings::Settings;
+use idf_im_lib::version_manager::ToolListReport;
 use log::{debug, error, info};
 use tauri::{AppHandle, Manager};
 
@@ -158,6 +159,28 @@ pub fn generate_installation_config_for_version(app_handle: AppHandle, id: Strin
     }
     Err(e) => {
       error!("Failed to serialize settings to TOML: {}", e);
+      None
+    }
+  }
+}
+
+#[tauri::command]
+pub fn list_idf_tools(app_handle: AppHandle, id: String) -> Option<ToolListReport> {
+  debug!("Listing tools for installation {}", id);
+  let config_path = get_config_path_from_state(&app_handle);
+
+  match idf_im_lib::version_manager::list_idf_tools(Some(&id), false, config_path.as_ref()) {
+    Ok(report) => {
+      debug!(
+        "Successfully listed {} tools ({} outdated) for {}",
+        report.tools.len(),
+        report.outdated.len(),
+        id
+      );
+      Some(report)
+    }
+    Err(e) => {
+      error!("Failed to list tools for {}: {}", id, e);
       None
     }
   }

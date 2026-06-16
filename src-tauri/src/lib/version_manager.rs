@@ -19,7 +19,9 @@ use crate::utils::remove_directory_all;
 use crate::{
     idf_config::{IdfConfig, IdfInstallation},
     settings::Settings,
+    idf_tools::{Tool, Version},
 };
+use serde::{Deserialize, Serialize};
 
 /// Removes activation and deactivation scripts (sh, fish, ps1, bat) for a
 /// given version from the activation script directory.
@@ -550,6 +552,279 @@ pub async fn prepare_settings_for_fix_idf_installation(
     return Ok(settings);
 }
 
+// ============================================================================
+// Tools inspection (eim list-tools)
+// ============================================================================
+
+/// A report of the tools declared in an installed ESP-IDF's `tools/tools.json`,
+/// together with their on-disk installation status.
+///
+/// Produced by [`list_idf_tools`]. Serializable so that a future GUI command can
+/// re-use the same shape without re-parsing.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolListReport {
+    pub idf: ToolListIdfContext,
+    pub tools_json_path: String,
+    pub idf_tools_path: String,
+    pub outdated_only: bool,
+    pub tools: Vec<ToolListEntry>,
+    pub outdated: Vec<ToolListOutdatedEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolListIdfContext {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolListEntry {
+    pub tool: Tool,
+    pub version_inspections: Vec<ToolVersionInspection>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolVersionInspection {
+    pub version: Version,
+    pub has_platform_download: bool,
+    pub installed: Option<ToolListInstalled>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolListInstalled {
+    pub version: String,
+    pub install_path: String,
+    pub is_recommended_match: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolListOutdatedEntry {
+    pub name: String,
+    pub installed: String,
+    pub available: String,
+}
+
+/// Lists the tools declared in an installed ESP-IDF's `tools/tools.json`,
+/// together with their on-disk installation status.
+///
+/// Resolves the IDF by `id`, then `name`, then a normalized `path` match
+/// against `IdfConfig.idf_installed`. When `identifier` is `None`, returns an
+/// error — the CLI does its own interactive selection before calling this
+/// function, keeping the library headless-callable.
+///
+/// `outdated_only` is echoed back in the report but does not currently affect
+/// the populated data; both `tools` and `outdated` are always computed.
+pub fn list_idf_tools(
+    identifier: Option<&str>,
+    outdated_only: bool,
+    config_path: Option<&std::path::PathBuf>,
+) -> Result<ToolListReport, String> {
+    let identifier = identifier.ok_or_else(|| {
+        "no identifier provided; pass an IDF id, name or path".to_string()
+    })?;
+
+    let config_path = config_path
+        .cloned()
+        .unwrap_or_else(get_default_config_path);
+    let ide_config = IdfConfig::from_file(&config_path)
+        .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
+
+    let installation = find_installation(&ide_config, identifier)?;
+
+    let tools_json_path = std::path::Path::new(&installation.path).join("tools/tools.json");
+    if !tools_json_path.exists() {
+        return Err(format!(
+            "tools.json not found at {}",
+            tools_json_path.display()
+        ));
+    }
+
+    let tools_file = tools_json_path
+        .to_str()
+        .ok_or_else(|| {
+            format!(
+                "tools.json path is not valid UTF-8: {}",
+                tools_json_path.display()
+            )
+        })
+        .and_then(|s| {
+            crate::idf_tools::read_and_parse_tools_file(s)
+                .map_err(|e| format!("Failed to read tools.json: {}", e))
+        })?;
+
+    let recommended_versions: std::collections::HashMap<String, String> = tools_file
+        .tools
+        .iter()
+        .filter_map(|t| {
+            t.versions
+                .iter()
+                .find(|v| v.status == "recommended")
+                .map(|v| (t.name.clone(), v.name.clone()))
+        })
+        .collect();
+
+    let platform = crate::idf_tools::get_platform_identification().ok();
+
+    let mut tools: Vec<ToolListEntry> = Vec::new();
+    let mut outdated: Vec<ToolListOutdatedEntry> = Vec::new();
+
+    for tool in tools_file.tools.into_iter() {
+        if tool.install == "never" {
+            continue;
+        }
+
+        let tool_dir = std::path::Path::new(&installation.idf_tools_path).join(&tool.name);
+        let on_disk_versions = enumerate_on_disk_versions(&tool_dir);
+        let recommended_name = recommended_versions.get(&tool.name).cloned();
+
+        let mut version_inspections: Vec<ToolVersionInspection> = Vec::new();
+        let mut biggest_installed: Option<String> = None;
+
+        for v in &tool.versions {
+            let has_platform_download = match &platform {
+                Some(p) => v.downloads.contains_key(p) || v.downloads.contains_key("any"),
+                None => v.downloads.contains_key("any"),
+            };
+            let on_disk_match = on_disk_versions.iter().find(|(n, _)| n == &v.name);
+            let installed = on_disk_match.map(|(dir_name, install_path)| ToolListInstalled {
+                version: dir_name.clone(),
+                install_path: install_path.clone(),
+                is_recommended_match: recommended_name
+                    .as_deref()
+                    .map(|r| r == dir_name.as_str())
+                    .unwrap_or(false),
+            });
+            if let Some((dir_name, _)) = on_disk_match {
+                if is_newer_semver(dir_name, biggest_installed.as_deref()) {
+                    biggest_installed = Some(dir_name.clone());
+                }
+            }
+            version_inspections.push(ToolVersionInspection {
+                version: v.clone(),
+                has_platform_download,
+                installed,
+            });
+        }
+
+        let biggest_available = tool
+            .versions
+            .iter()
+            .filter(|v| v.status != "deprecated")
+            .map(|v| v.name.clone())
+            .max_by(|a, b| semver_order(a, b))
+            .or_else(|| {
+                tool.versions
+                    .iter()
+                    .map(|v| v.name.clone())
+                    .max_by(|a, b| semver_order(a, b))
+            })
+            .unwrap_or_default();
+        if let Some(bi) = &biggest_installed {
+            if !biggest_available.is_empty() && is_newer_semver(&biggest_available, Some(bi)) {
+                outdated.push(ToolListOutdatedEntry {
+                    name: tool.name.clone(),
+                    installed: bi.clone(),
+                    available: biggest_available,
+                });
+            }
+        }
+
+        tools.push(ToolListEntry {
+            tool,
+            version_inspections,
+        });
+    }
+
+    Ok(ToolListReport {
+        idf: ToolListIdfContext {
+            id: installation.id.clone(),
+            name: installation.name.clone(),
+            path: installation.path.clone(),
+        },
+        tools_json_path: tools_json_path.to_string_lossy().to_string(),
+        idf_tools_path: installation.idf_tools_path.clone(),
+        outdated_only,
+        tools,
+        outdated,
+    })
+}
+
+/// Enumerates the immediate subdirectories of `tool_dir` and returns
+/// `(name, absolute_path)` pairs. Missing or non-directory entries are
+/// ignored. Order is whatever the filesystem returns; the caller filters
+/// further by name.
+fn enumerate_on_disk_versions(tool_dir: &std::path::Path) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    let Ok(rd) = std::fs::read_dir(tool_dir) else {
+        return out;
+    };
+    for entry in rd.flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(name) = entry.file_name().to_str().map(|s| s.to_string()) else {
+            continue;
+        };
+        out.push((name, path.to_string_lossy().to_string()));
+    }
+    out
+}
+
+/// Returns true when `candidate` is strictly greater than `current`.
+///
+/// Prefers semver comparison when both sides parse, but falls back to a
+/// plain lexicographic string comparison as the final tiebreaker. This
+/// matches the rest of the ESP-IDF tooling, where tool versions can carry a
+/// non-semver suffix such as `v0.12.0-esp32-20260304`. When `current` is
+/// `None`, any non-empty candidate is treated as newer than nothing.
+fn is_newer_semver(candidate: &str, current: Option<&str>) -> bool {
+    let cand = semver::Version::parse(candidate);
+    let curr = current.and_then(|c| semver::Version::parse(c).ok());
+    match (cand, curr) {
+        (Ok(c), Some(cur)) => c > cur,
+        _ => match current {
+            Some(cur) => candidate > cur,
+            None => !candidate.is_empty(),
+        },
+    }
+}
+
+/// `max_by` comparator that prefers semver when both sides parse, with a
+/// plain lexicographic string comparison as the final tiebreaker so that
+/// non-semver versions (e.g. `v0.12.0-esp32-20260304`) still order
+/// deterministically and consistently with `is_newer_semver`.
+fn semver_order(a: &str, b: &str) -> std::cmp::Ordering {
+    match (semver::Version::parse(a), semver::Version::parse(b)) {
+        (Ok(av), Ok(bv)) => av.cmp(&bv),
+        _ => a.cmp(b),
+    }
+}
+
+/// Finds the installation in `ide_config` matching `identifier` by id, then
+/// name, then normalized path. Returns an error if no match is found.
+fn find_installation<'a>(
+    ide_config: &'a IdfConfig,
+    identifier: &str,
+) -> Result<&'a IdfInstallation, String> {
+    if let Some(install) = ide_config
+        .idf_installed
+        .iter()
+        .find(|i| i.id == identifier || i.name == identifier)
+    {
+        return Ok(install);
+    }
+    let normalized = crate::utils::normalize_path_for_comparison(identifier);
+    if let Some(install) = ide_config.idf_installed.iter().find(|i| {
+        let n = crate::utils::normalize_path_for_comparison(&i.path);
+        n.is_some() && n == normalized
+    }) {
+        return Ok(install);
+    }
+    Err(format!("IDF installation '{}' not found", identifier))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,5 +873,518 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ----- helpers for list_idf_tools tests -----
+
+    use crate::idf_config::IdfConfig;
+    use crate::idf_config::IdfInstallation;
+
+    /// Builds a minimal `IdfInstallation` for tests.
+    fn make_idf_installation(idf_path: &str, tools_path: &str) -> IdfInstallation {
+        IdfInstallation {
+            activation_script: format!("{}/activate.sh", idf_path),
+            id: "esp-idf-test-id".to_string(),
+            idf_tools_path: tools_path.to_string(),
+            name: "TestIDF".to_string(),
+            path: idf_path.to_string(),
+            python: format!("{}/tools/python/bin/python3", tools_path),
+            installation_config: None,
+        }
+    }
+
+    /// Writes a real `IdfConfig` JSON file under `dir/eim_idf.json` pointing at
+    /// `idf_path` and `tools_path`. Returns the path to the written file.
+    fn write_fake_idf_config(
+        dir: &std::path::Path,
+        idf_path: &str,
+        tools_path: &str,
+    ) -> std::path::PathBuf {
+        let mut config = IdfConfig {
+            git_path: "/usr/bin/git".to_string(),
+            idf_installed: vec![make_idf_installation(idf_path, tools_path)],
+            idf_selected_id: "esp-idf-test-id".to_string(),
+            eim_path: None,
+            version: Some("2.0".to_string()),
+        };
+        let path = dir.join("eim_idf.json");
+        config.to_file(&path, true, false).unwrap();
+        path
+    }
+
+    /// Builds a minimal `Tool` for tests with the given install mode, name,
+    /// description and versions.
+    fn make_tool(
+        name: &str,
+        description: &str,
+        install: &str,
+        versions: Vec<crate::idf_tools::Version>,
+    ) -> Tool {
+        Tool {
+            description: description.to_string(),
+            export_paths: vec![],
+            export_vars: std::collections::HashMap::new(),
+            info_url: String::new(),
+            install: install.to_string(),
+            license: None,
+            name: name.to_string(),
+            platform_overrides: None,
+            supported_targets: None,
+            strip_container_dirs: None,
+            version_cmd: vec![],
+            version_regex: String::new(),
+            version_regex_replace: None,
+            versions,
+        }
+    }
+
+    /// Builds a minimal `Version` for tests. `download_keys` are the keys
+    /// added to the empty `downloads` map (with placeholder `Download` values).
+    fn make_version(
+        name: &str,
+        status: &str,
+        download_keys: &[&str],
+    ) -> crate::idf_tools::Version {
+        use crate::idf_tools::Download;
+        use std::collections::HashMap;
+        let mut downloads: HashMap<String, Download> = HashMap::new();
+        for k in download_keys {
+            downloads.insert(
+                k.to_string(),
+                Download {
+                    sha256: String::new(),
+                    size: 0,
+                    url: String::new(),
+                    rename_dist: None,
+                },
+            );
+        }
+        crate::idf_tools::Version {
+            name: name.to_string(),
+            status: status.to_string(),
+            downloads,
+        }
+    }
+
+    /// Writes a real `ToolsFile` JSON at `<idf_path>/tools/tools.json`.
+    /// Returns the path of the written file.
+    fn write_fake_tools_json(
+        idf_path: &std::path::Path,
+        tools: Vec<Tool>,
+    ) -> std::path::PathBuf {
+        use crate::idf_tools::ToolsFile;
+        let tools_dir = idf_path.join("tools");
+        fs::create_dir_all(&tools_dir).unwrap();
+        let path = tools_dir.join("tools.json");
+        let file = ToolsFile { tools, version: 3 };
+        let json = serde_json::to_string_pretty(&file).unwrap();
+        fs::write(&path, json).unwrap();
+        path
+    }
+
+    #[test]
+    fn test_list_idf_tools_resolves_installation_by_id() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+        write_fake_tools_json(&idf_path, vec![]);
+
+        let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path))
+            .expect("list_idf_tools should succeed");
+
+        assert_eq!(report.idf.id, "esp-idf-test-id");
+        assert_eq!(report.idf.name, "TestIDF");
+        assert_eq!(report.idf.path, idf_path.to_str().unwrap());
+        assert_eq!(
+            report.tools_json_path,
+            idf_path.join("tools/tools.json").to_str().unwrap()
+        );
+        assert_eq!(report.idf_tools_path, tools_path.to_str().unwrap());
+        assert!(!report.outdated_only);
+        assert!(report.tools.is_empty());
+    }
+
+    #[test]
+    fn test_list_idf_tools_filters_never_install_tools() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let keep = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![make_version("14.2.0", "recommended", &["any"])],
+        );
+        let skip = make_tool(
+            "deprecated-tool",
+            "Should be filtered out",
+            "never",
+            vec![make_version("1.0.0", "supported", &["any"])],
+        );
+        let optional = make_tool(
+            "optional-tool",
+            "On request",
+            "on_request",
+            vec![make_version("2.0.0", "supported", &["any"])],
+        );
+        write_fake_tools_json(&idf_path, vec![keep, skip, optional]);
+
+        let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path))
+            .expect("list_idf_tools should succeed");
+
+        let names: Vec<&str> = report.tools.iter().map(|e| e.tool.name.as_str()).collect();
+        assert_eq!(names, vec!["xtensa-esp-elf", "optional-tool"]);
+    }
+
+    #[test]
+    fn test_list_idf_tools_detects_installed_recommended_version() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let tool = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![make_version("14.2.0", "recommended", &["any"])],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        // Create <idf_tools_path>/xtensa-esp-elf/14.2.0/ on disk
+        let installed = tools_path.join("xtensa-esp-elf").join("14.2.0");
+        fs::create_dir_all(&installed).unwrap();
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        assert_eq!(report.tools.len(), 1);
+        let entry = &report.tools[0];
+        assert_eq!(entry.version_inspections.len(), 1);
+        let installed_info = entry.version_inspections[0]
+            .installed
+            .as_ref()
+            .expect("should detect install");
+        assert_eq!(installed_info.version, "14.2.0");
+        assert!(installed_info.is_recommended_match);
+        assert_eq!(installed_info.install_path, installed.to_string_lossy());
+    }
+
+    #[test]
+    fn test_list_idf_tools_reports_recommended_match_false_for_older_install() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let tool = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![
+                make_version("13.2.0", "supported", &["any"]),
+                make_version("14.2.0", "recommended", &["any"]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        // Install the older, non-recommended one
+        let installed = tools_path.join("xtensa-esp-elf").join("13.2.0");
+        fs::create_dir_all(&installed).unwrap();
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        // Find the inspection for the older version
+        let older = report.tools[0]
+            .version_inspections
+            .iter()
+            .find(|vi| vi.version.name == "13.2.0")
+            .expect("missing 13.2.0 inspection");
+        let info = older.installed.as_ref().expect("should detect 13.2.0 install");
+        assert!(!info.is_recommended_match);
+    }
+
+    #[test]
+    fn test_list_idf_tools_outdated_when_older_version_is_installed() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        // Available: 13.2.0 (older, supported) and 14.2.0 (newer, recommended)
+        let tool = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![
+                make_version("13.2.0", "supported", &["any"]),
+                make_version("14.2.0", "recommended", &["any"]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        // Install the older one
+        let installed = tools_path.join("xtensa-esp-elf").join("13.2.0");
+        fs::create_dir_all(&installed).unwrap();
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        assert!(report.outdated_only);
+        assert_eq!(report.outdated.len(), 1);
+        assert_eq!(report.outdated[0].name, "xtensa-esp-elf");
+        assert_eq!(report.outdated[0].installed, "13.2.0");
+        assert_eq!(report.outdated[0].available, "14.2.0");
+    }
+
+    #[test]
+    fn test_list_idf_tools_outdated_empty_when_nothing_installed() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let tool = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![
+                make_version("13.2.0", "supported", &["any"]),
+                make_version("14.2.0", "recommended", &["any"]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+        // Nothing installed on disk
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        assert!(report.outdated.is_empty());
+    }
+
+    #[test]
+    fn test_list_idf_tools_errors_on_unknown_identifier() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let result = list_idf_tools(Some("does-not-exist"), false, Some(&config_path));
+        let err = result.expect_err("expected error for unknown identifier");
+        assert!(
+            err.contains("does-not-exist"),
+            "error should mention identifier: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_list_idf_tools_errors_on_missing_tools_json() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        // Intentionally do NOT write tools/tools.json
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let result = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path));
+        let err = result.expect_err("expected error for missing tools.json");
+        assert!(
+            err.contains("tools.json not found"),
+            "error should mention tools.json: {}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_list_idf_tools_marks_has_platform_download_using_current_platform() {
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        // Current platform key + an unrelated one.
+        let current_platform = crate::idf_tools::get_platform_identification()
+            .unwrap_or_else(|_| "any".to_string());
+        let unrelated_platform = if current_platform == "any" {
+            "win64"
+        } else {
+            "any"
+        };
+        let tool = make_tool(
+            "xtensa-esp-elf",
+            "Xtensa toolchain",
+            "always",
+            vec![
+                make_version("14.2.0", "recommended", &[&current_platform]),
+                make_version("13.2.0", "supported", &[unrelated_platform]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        assert_eq!(report.tools[0].version_inspections[0].has_platform_download, true);
+        // We only assert the first one (always true). The second's value
+        // depends on whether current_platform happens to be "any".
+    }
+
+    // ----- is_newer_semver / semver_order fall back to plain string -----
+
+    #[test]
+    fn test_is_newer_semver_plain_string_when_neither_parses() {
+        // Both sides are non-semver (e.g. ESP-IDF tool versions with a
+        // `-esp32-YYYYMMDD` suffix). The lexicographic tiebreaker must pick
+        // the higher string.
+        assert!(is_newer_semver(
+            "v0.12.0-esp32-20260304",
+            Some("v0.11.0-esp32-20240304")
+        ));
+        assert!(!is_newer_semver(
+            "v0.11.0-esp32-20240304",
+            Some("v0.12.0-esp32-20260304")
+        ));
+    }
+
+    #[test]
+    fn test_is_newer_semver_plain_string_when_only_current_parses() {
+        // Candidate is non-semver, current is semver. The plain-string
+        // tiebreaker compares them lexically: '1' < 'v', so the candidate
+        // is NOT newer.
+        assert!(!is_newer_semver(
+            "14.2.0",
+            Some("v0.12.0-esp32-20260304")
+        ));
+        // And the reverse direction holds lexically: 'v' > '1'.
+        assert!(is_newer_semver(
+            "v0.12.0-esp32-20260304",
+            Some("14.2.0")
+        ));
+    }
+
+    #[test]
+    fn test_is_newer_semver_semver_when_both_parse() {
+        // Sanity check: the semver path is still preferred when both sides
+        // parse.
+        assert!(is_newer_semver("14.2.0", Some("13.2.0")));
+        assert!(!is_newer_semver("13.2.0", Some("14.2.0")));
+    }
+
+    #[test]
+    fn test_is_newer_semver_with_no_current() {
+        // When `current` is None, any non-empty candidate is newer than
+        // nothing, regardless of whether it parses as semver.
+        assert!(is_newer_semver("v0.12.0-esp32-20260304", None));
+        assert!(is_newer_semver("14.2.0", None));
+        assert!(!is_newer_semver("", None));
+    }
+
+    #[test]
+    fn test_semver_order_plain_string_when_either_does_not_parse() {
+        // Both non-semver: plain lex order.
+        assert_eq!(
+            semver_order("v0.11.0-esp32-20240304", "v0.12.0-esp32-20260304"),
+            std::cmp::Ordering::Less
+        );
+        // Mixed: plain lex order too.
+        assert_eq!(
+            semver_order("14.2.0", "v0.12.0-esp32-20260304"),
+            std::cmp::Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_list_idf_tools_outdated_detected_with_non_semver_versions() {
+        // End-to-end check: with a non-semver suffix, the older installed
+        // version must still be reported as outdated by the newer available
+        // one. The semver-only path would have missed this because neither
+        // version parses.
+        let temp = TempDir::new().unwrap();
+        let idf_path = temp.path().join("v5.4/esp-idf");
+        let tools_path = temp.path().join("v5.4/tools");
+        fs::create_dir_all(&idf_path).unwrap();
+        fs::create_dir_all(&tools_path).unwrap();
+        let config_path = write_fake_idf_config(
+            temp.path(),
+            idf_path.to_str().unwrap(),
+            tools_path.to_str().unwrap(),
+        );
+
+        let tool = make_tool(
+            "esp32ulp-elf",
+            "ULP toolchain",
+            "always",
+            vec![
+                make_version("v0.11.0-esp32-20240304", "supported", &["any"]),
+                make_version("v0.12.0-esp32-20260304", "recommended", &["any"]),
+            ],
+        );
+        write_fake_tools_json(&idf_path, vec![tool]);
+
+        // Install the older non-semver version.
+        let installed = tools_path
+            .join("esp32ulp-elf")
+            .join("v0.11.0-esp32-20240304");
+        fs::create_dir_all(&installed).unwrap();
+
+        let report =
+            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        assert_eq!(report.outdated.len(), 1);
+        assert_eq!(report.outdated[0].name, "esp32ulp-elf");
+        assert_eq!(report.outdated[0].installed, "v0.11.0-esp32-20240304");
+        assert_eq!(report.outdated[0].available, "v0.12.0-esp32-20260304");
     }
 }

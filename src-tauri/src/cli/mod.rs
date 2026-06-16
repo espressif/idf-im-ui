@@ -101,6 +101,69 @@ pub fn setup_cli(
     Ok(())
 }
 
+fn format_tool_list_report(report: &idf_im_lib::version_manager::ToolListReport) {
+    println!(
+        "{}",
+        t!(
+            "list_tools.title",
+            name = report.idf.name,
+            path = report.idf.path
+        )
+    );
+    println!();
+    for entry in &report.tools {
+        if entry.tool.install == "on_request" {
+            println!(
+                "{}: {}{}",
+                entry.tool.name,
+                entry.tool.description,
+                t!("list_tools.optional_marker")
+            );
+        } else {
+            println!("{}: {}", entry.tool.name, entry.tool.description);
+        }
+        for vi in &entry.version_inspections {
+            if !vi.has_platform_download {
+                continue;
+            }
+            if let Some(info) = &vi.installed {
+                println!(
+                    "  - {} ({}){}",
+                    vi.version.name,
+                    vi.version.status,
+                    t!("list_tools.installed", version = info.version)
+                );
+            } else {
+                println!(
+                    "  - {} ({}){}",
+                    vi.version.name,
+                    vi.version.status,
+                    t!("list_tools.not_installed")
+                );
+            }
+        }
+    }
+    if report.outdated_only {
+        println!();
+        if report.outdated.is_empty() {
+            println!("{}", t!("list_tools.no_outdated"));
+        } else {
+            println!("{}", t!("list_tools.outdated_header"));
+            for o in &report.outdated {
+                println!(
+                    "{}",
+                    t!(
+                        "list_tools.outdated_line",
+                        name = o.name,
+                        installed = o.installed,
+                        available = o.available
+                    )
+                );
+            }
+        }
+    }
+}
+
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
   let do_not_track = cli.do_not_track;
     // Initial tracking of CLI start
@@ -315,6 +378,48 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     info!("{}", t!("cli.hint.custom_json_path"));
                     debug!("Error: {}", err);
                     Ok(())
+                }
+            }
+        }
+        Commands::ListTools { identifier, outdated } => {
+            let identifier = if let Some(id) = identifier {
+                Some(id)
+            } else {
+                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
+                    Ok(versions) if versions.is_empty() => {
+                        warn!("{}", t!("list.no_versions"));
+                        return Ok(());
+                    }
+                    Ok(versions) => {
+                        let options: Vec<String> =
+                            versions.iter().map(|v| v.name.clone()).collect();
+                        match generic_select(&t!("list_tools.idf_prompt"), &options) {
+                            Ok(selected) => Some(selected),
+                            Err(err) => return Err(anyhow::anyhow!(err)),
+                        }
+                    }
+                    Err(err) => {
+                        debug!("Error: {}", err);
+                        warn!("{}", t!("list.no_versions"));
+                        info!("{}", t!("cli.hint.custom_json_path"));
+                        return Ok(());
+                    }
+                }
+            };
+
+            let report = idf_im_lib::version_manager::list_idf_tools(
+                identifier.as_deref(),
+                outdated,
+                config_path.as_ref(),
+            );
+            match report {
+                Ok(report) => {
+                    format_tool_list_report(&report);
+                    Ok(())
+                }
+                Err(err) => {
+                    error!("{}", err);
+                    Err(anyhow::anyhow!(err))
                 }
             }
         }

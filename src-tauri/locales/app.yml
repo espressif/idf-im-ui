@@ -1445,3 +1445,33 @@ wizard.tools.cleanup.failure:
 gui.settings.tools_updated:
   en: "Tool selection has been updated"
   cn: "工具选择已更新"
+list_tools.title:
+  en: "Tools for IDF: %{name} (%{path})"
+  cn: "IDF 工具：%{name}（%{path}）"
+list_tools.idf_prompt:
+  en: "Which IDF installation do you want to list tools for?"
+  cn: "你想列出哪个 IDF 安装的工具？"
+list_tools.idf_not_found:
+  en: "IDF installation '%{id}' not found"
+  cn: "未找到 IDF 安装 '%{id}'"
+list_tools.tools_json_missing:
+  en: "tools.json not found at %{path}"
+  cn: "未找到 %{path} 处的 tools.json"
+list_tools.no_outdated:
+  en: "No outdated tools."
+  cn: "没有过时的工具。"
+list_tools.outdated_header:
+  en: "Outdated tools:"
+  cn: "已过时的工具："
+list_tools.outdated_line:
+  en: "%{name}: version %{installed} is outdated by %{available}"
+  cn: "%{name}：已安装版本 %{installed}，可用更新版本 %{available}"
+list_tools.optional_marker:
+  en: " (optional)"
+  cn: "（可选）"
+list_tools.installed:
+  en: " [installed: %{version}]"
+  cn: " [已安装：%{version}]"
+list_tools.not_installed:
+  en: " [not installed]"
+  cn: " [未安装]"

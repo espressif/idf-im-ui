@@ -84,6 +84,12 @@ You can also use other commands:
 # List installed versions
 eim list
 
+# List the tools for an installed IDF and their on-disk status
+eim list-tools v5.3.2
+
+# Show only tools whose on-disk version is older than what tools.json declares
+eim list-tools v5.3.2 --outdated
+
 # Select a specific version
 eim select v5.3.2
 
