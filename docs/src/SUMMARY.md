@@ -13,6 +13,7 @@
   - [GUI Configuration](./gui_configuration.md)
   - [CLI Configuration](./cli_configuration.md)
   - [CLI Commands](./cli_commands.md)
+- [Handling Incomplete or Broken Installations](./broken_installation.md)
 - [After Installing](./after_installing.md)
 - [Using EIM with git bisect](./git_bisect.md)
 - [Report issue](./issue_reporting.md)

@@ -77,7 +77,7 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       }
       logger.info(`Starting test - confirm requirements are missing`);
       const promptRequisites = await testRunner.waitForOutput(
-        "Do you want to install prerequisites?",
+        "Do you want to install",
         30000
       );
 
@@ -92,8 +92,10 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
 
       testRunner.process.write("n");
 
+      // EIM reports failure differently depending on which check (prerequisites
+      // vs. python sanity) triggered the prompt — accept either wording.
       const terminalExited = await testRunner.waitForOutput(
-        "Please install the missing prerequisites and try again"
+        "Please install"
       );
       expect(
         terminalExited,

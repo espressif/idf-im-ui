@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "type": "installation-status",
+    "name": "CLI Installation Status Tracking",
+    "data": {
+      "targetList": "esp32",
+      "idfList": "default",
+      "installFolder": ".espstatus",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "pypiMirror": "pypi_org"
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  }
+]

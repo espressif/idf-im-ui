@@ -649,12 +649,13 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
 
         let installation = IdfInstallation {
             id: tool_set.id.to_string(),
-            activation_script: paths.activation_script.to_string_lossy().into_owned(),
+            activation_script: Some(paths.activation_script.to_string_lossy().into_owned()),
             path: tool_set.idf_location,
             name: tool_set.idf_version,
-            python: paths.python_path.to_string_lossy().into_owned(),
+            python: Some(paths.python_path.to_string_lossy().into_owned()),
             idf_tools_path: new_idf_tools_path,
             installation_config: None,
+            status: crate::idf_config::InstallationStatus::Finished,
         };
 
         current_config.idf_installed.push(installation);
