@@ -711,11 +711,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         return Err(e);
     }
 
-    let settings = get_locked_settings(&app_handle)?;
+    let mut settings = get_locked_settings(&app_handle)?;
 
     // Check if versions are selected
-    let versions = match &settings.idf_versions {
-        Some(versions) if !versions.is_empty() => versions,
+    let versions: Vec<String> = match &settings.idf_versions {
+        Some(versions) if !versions.is_empty() => versions.clone(),
         _ => {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Error,
@@ -755,6 +755,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         rust_i18n::t!("gui.installation.batch_log",
             count = total_versions,
             versions = versions.join(", ")).to_string());
+
+    // Create pending entries in eim_idf.json before installation starts
+    if let Err(e) = settings.create_pending_esp_ide_json() {
+        warn!("Failed to create pending installation entries: {}", e);
+    }
 
     // Install each version with progress tracking
     for (index, version) in versions.iter().enumerate() {
@@ -805,6 +810,20 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             }
             Err(e) => {
                 error!("Failed to install version {}: {}", version, e);
+
+                // Mark the pending entry as Failed
+                if let Some(ids) = &settings.pending_installation_ids {
+                    let config_path = settings.esp_idf_json_path.as_ref()
+                        .map(|p| std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME))
+                        .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
+                    if let Some(id) = ids.get(version.as_str()) {
+                        let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
+                            &config_path,
+                            id,
+                            idf_im_lib::idf_config::InstallationStatus::Failed,
+                        );
+                    }
+                }
 
                 emit_installation_event(&app_handle, InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1303,6 +1322,18 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
             });
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
+
+            // Mark the installation as Broken
+            if let Some(ids) = &settings.pending_installation_ids {
+                if let Some(pending_id) = ids.get(&installation.name) {
+                    let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
+                        &config_path,
+                        pending_id,
+                        idf_im_lib::idf_config::InstallationStatus::Broken,
+                    );
+                }
+            }
+
             set_installation_status(&app_handle, false)?;
             return Err(error_msg);
         }
@@ -1467,6 +1498,46 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     set_installation_status(&app_handle, false)?;
 
     Ok(())
+}
+
+/// Lightweight projection of an incomplete IdfInstallation for the frontend modal.
+/// Only the fields the UI actually needs — avoids shipping the base64 installation_config
+/// payload (potentially MBs of binary data) across the IPC boundary on every app start.
+#[derive(serde::Serialize, Clone)]
+pub struct IncompleteInstallationDto {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub status: idf_im_lib::idf_config::InstallationStatus,
+}
+
+#[tauri::command]
+pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<IncompleteInstallationDto> {
+    let config_path = {
+        let settings = match app_state::get_settings_non_blocking(&app_handle) {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        settings.esp_idf_json_path.as_ref().map(|p| {
+            std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME)
+        })
+    };
+
+    let path = config_path.unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
+
+    match idf_im_lib::idf_config::IdfConfig::from_file(&path) {
+        Ok(config) => config
+            .get_incomplete_installations()
+            .into_iter()
+            .map(|i| IncompleteInstallationDto {
+                id: i.id.clone(),
+                name: i.name.clone(),
+                path: i.path.clone(),
+                status: i.status.clone(),
+            })
+            .collect(),
+        Err(_) => vec![],
+    }
 }
 
 #[tauri::command]

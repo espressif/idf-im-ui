@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use struct_iterable::Iterable;
 use uuid::Uuid;
 
-use crate::idf_config::{Base64Bytes, IdfConfig, IdfInstallation, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
+use crate::idf_config::{Base64Bytes, IdfConfig, IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
 use crate::system_dependencies::PYTHON_NAME_TO_INSTALL;
 use crate::utils::{get_git_path, is_valid_idf_directory};
 
@@ -55,6 +55,10 @@ pub struct Settings {
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
     pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
+    /// Maps version name → pre-generated installation ID, set during create_pending_esp_ide_json.
+    /// Skipped during serialization so it never lands in config files.
+    #[serde(skip)]
+    pub pending_installation_ids: Option<HashMap<String, String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -133,6 +137,7 @@ impl Default for Settings {
             activation_script_path_override: Some(default_activation_script_path_override),
             python_version_override: Some(PYTHON_NAME_TO_INSTALL.to_string()),
             create_bat_activation_script: Some(false),
+            pending_installation_ids: None,
         }
     }
 }
@@ -347,47 +352,126 @@ impl Settings {
             .unwrap_or(false)
     }
 
+    /// Creates pending (InProgress) entries in eim_idf.json at the start of installation.
+    /// Generates IDs for each version and stores them in `self.pending_installation_ids`.
+    /// Existing finished entries are preserved; any entry at the same path is replaced.
+    /// Call this at install start; call `save_esp_ide_json` on success.
+    pub fn create_pending_esp_ide_json(&mut self) -> Result<()> {
+        let json_path =
+            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
+
+        let git_path = get_git_path().map_err(|e| anyhow!("Failed to get git path: {}", e))?;
+
+        // Load existing config so finished entries are not clobbered
+        let mut config = IdfConfig::from_file(&json_path).unwrap_or_else(|_| IdfConfig {
+            git_path,
+            idf_selected_id: String::new(),
+            idf_installed: Vec::new(),
+            eim_path: None,
+            version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+        });
+
+        let mut pending_ids = HashMap::new();
+
+        if let Some(versions) = &self.idf_versions {
+            for version in versions {
+                let paths = self.get_version_paths(version)?;
+                let pending_path = paths.idf_path.to_string_lossy().into_owned();
+                let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
+
+                pending_ids.insert(paths.actual_version.clone(), id.clone());
+
+                // Replace any existing entry at the same path; otherwise append
+                config.idf_installed.retain(|e| e.path != pending_path);
+                config.idf_installed.push(IdfInstallation {
+                    id,
+                    name: paths.actual_version,
+                    path: pending_path,
+                    idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
+                    activation_script: None,
+                    python: None,
+                    installation_config: None,
+                    status: InstallationStatus::InProgress,
+                });
+            }
+        }
+
+        self.pending_installation_ids = Some(pending_ids);
+
+        config.to_file(json_path, true, false)
+    }
+
     pub fn save_esp_ide_json(&self) -> Result<()> {
-        let mut idf_installations = Vec::new();
+        let json_path =
+            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
 
         // Serialize the Settings itself to binary using bincode for installation_config
         let settings_binary = bincode::serialize(self)
             .map_err(|e| anyhow!("Failed to serialize settings: {}", e))?;
 
         if let Some(versions) = &self.idf_versions {
+            let mut idf_config = IdfConfig::from_file(&json_path).unwrap_or_else(|_| {
+                let git_path = get_git_path().unwrap_or_default();
+                IdfConfig {
+                    git_path,
+                    idf_selected_id: String::new(),
+                    idf_installed: Vec::new(),
+                    eim_path: None,
+                    version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+                }
+            });
 
             for version in versions {
-              let paths = self.get_version_paths(&version)?;
-              let id = format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""));
+                let paths = self.get_version_paths(version)?;
+                let installation_config = Some(Base64Bytes::new(settings_binary.clone()));
 
-              idf_installations.push(IdfInstallation {
-                id,
-                name: paths.actual_version,
-                path: paths.idf_path.to_string_lossy().into_owned(),
-                python: paths.python_path.to_string_lossy().into_owned(),
-                idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
-                activation_script: paths.activation_script.to_string_lossy().into_owned(),
-                installation_config: Some(Base64Bytes::new(settings_binary.clone())),
-              });
+                // Look up pending ID if available, otherwise generate a new one
+                let id = self
+                    .pending_installation_ids
+                    .as_ref()
+                    .and_then(|ids| ids.get(&paths.actual_version))
+                    .cloned();
+
+                if let Some(ref existing_id) = id {
+                    if idf_config.complete_installation(
+                        existing_id,
+                        paths.activation_script.to_string_lossy().into_owned(),
+                        paths.python_path.to_string_lossy().into_owned(),
+                        installation_config.clone(),
+                    ) {
+                        // Update selected ID to the first completed installation
+                        if idf_config.idf_selected_id.is_empty() {
+                            idf_config.idf_selected_id = existing_id.clone();
+                        }
+                        continue;
+                    }
+                }
+
+                // Fallback: no pending entry found — replace same-path entry or append
+                let new_id = id.unwrap_or_else(|| {
+                    format!("esp-idf-{}", Uuid::new_v4().to_string().replace("-", ""))
+                });
+                if idf_config.idf_selected_id.is_empty() {
+                    idf_config.idf_selected_id = new_id.clone();
+                }
+                let install_path = paths.idf_path.to_string_lossy().into_owned();
+                idf_config.idf_installed.retain(|e| e.path != install_path);
+                idf_config.idf_installed.push(IdfInstallation {
+                    id: new_id,
+                    name: paths.actual_version,
+                    path: install_path,
+                    idf_tools_path: paths.tool_install_directory.to_string_lossy().into_owned(),
+                    activation_script: Some(paths.activation_script.to_string_lossy().into_owned()),
+                    python: Some(paths.python_path.to_string_lossy().into_owned()),
+                    installation_config,
+                    status: InstallationStatus::Finished,
+                });
             }
+
+            idf_config.to_file(json_path, true, false)
+        } else {
+            Ok(())
         }
-
-        let git_path = get_git_path().map_err(|e| anyhow!("Failed to get git path: {}", e))?;
-        let mut config = IdfConfig {
-            git_path,
-            idf_selected_id: idf_installations
-                .first()
-                .map(|install| install.id.clone())
-                .unwrap_or_default(),
-            idf_installed: idf_installations,
-            eim_path: None, // this will be autofilled on file save
-            version: Some(IDF_CONFIG_FILE_VERSION.to_string()), // Set the version of the config file
-        };
-
-        let json_path =
-            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
-
-        config.to_file(json_path, true, true)
     }
 
     pub fn initialize_esp_ide_json(&self) -> Result<()> {

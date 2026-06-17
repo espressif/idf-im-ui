@@ -34,6 +34,7 @@ import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
 import { runCLIDeactivationTest } from "./scripts/CLIDeactivation.test.js";
 import { runListToolsTest } from "./scripts/CLIListTools.test.js";
+import { runInstallationStatusTest } from "./scripts/CLIInstallationStatus.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -470,6 +471,57 @@ function testRun(jsonScript) {
           pathToEIM: pathToEIMCLI,
           idfList: idfUpdatedList,
           installFolder,
+        });
+
+        runCleanUp({
+          id: `${test.id}3`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "installation-status") {
+      // Tests for eim_idf.json status tracking and interactive dialog status labels
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
+      let installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
+
+      let installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
+      test.data.targetList && installArgs.push(`-t ${test.data.targetList.split("|").join(",")}`);
+      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
+      test.data.toolsMirror &&
+        installArgs.push(`-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`);
+      test.data.idfMirror &&
+        installArgs.push(`--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`);
+      test.data.pypiMirror &&
+        installArgs.push(`--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`);
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runCLICustomInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+        });
+
+        runInstallationStatusTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMCLI,
+          idfList: idfUpdatedList,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
         });
 
         runCleanUp({
