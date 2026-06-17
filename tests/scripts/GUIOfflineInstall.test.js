@@ -5,7 +5,7 @@ import TestProxy from "../classes/TestProxy.class.js";
 import { downloadOfflineArchive } from "../helper.js";
 import { tGui } from "../helpers/i18n.js";
 import logger from "../classes/logger.class.js";
-import { By } from "selenium-webdriver";
+import { By, Key } from "selenium-webdriver";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -322,7 +322,11 @@ export function runGUIOfflineInstallTest({
 
       // Typing a custom value should stick; the composable does not
       // overwrite the input value while the option is on.
-      await downloadInputEl.clear();
+      // WebDriver's `clear()` does not work on the inner <input> of a
+      // naive-ui `n-input`; the existing pattern (see GUICustomInstall /
+      // GUIVersionManagement) is select-all + backspace.
+      await downloadInputEl.sendKeys(Key.CONTROL + "a");
+      await downloadInputEl.sendKeys(Key.BACK_SPACE);
       await downloadInputEl.sendKeys("custom-dist");
       expect(await downloadInputEl.getAttribute("value")).to.equal(
         "custom-dist",

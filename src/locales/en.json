@@ -484,7 +484,10 @@
       "selectTools": "Select Tools",
       "selectPath": "Select Installation Path",
       "installationProgress": "Installation Progress",
-      "installationComplete": "Installation Complete"
+      "installationComplete": "Installation Complete",
+      "python": {
+        "installPython": "Install Python"
+      }
     }
   },
   "versionSelect": {
@@ -655,6 +658,20 @@
       "title": "Preparing Installation",
       "checking": "Checking system requirements and prerequisites..."
     },
+    "loading": {
+      "packages": "Loading available packages…"
+    },
+    "select": {
+      "version": "ESP-IDF version",
+      "pathPlaceholder": "Installation path",
+      "browse": "Browse",
+      "useDefault": "Use default installation path",
+      "estimatedTime": "10–45 minutes",
+      "offlineAlert": "Installs from a tested offline package — no per-tool downloads."
+    },
+    "path": {
+      "warning": "This path already exists and is not empty."
+    },
     "ready": {
       "title": "Ready to Install",
       "summary": {
@@ -669,7 +686,9 @@
       "startButton": "Start Installation"
     },
     "installation": {
+      "title": "Installing ESP-IDF",
       "defaultTitle": "Installing ESP-IDF",
+      "downloadingTitle": "Downloading package",
       "preparing": "Preparing installation...",
       "steps": {
         "check": {
@@ -687,6 +706,10 @@
         "extract": {
           "title": "Extract",
           "description": "Extracting files"
+        },
+        "install": {
+          "title": "Installing",
+          "description": "Installing"
         },
         "tools": {
           "title": "Tools",
@@ -730,7 +753,32 @@
         "step4": "Run '{command}' to build your project"
       }
     },
+    "archive": {
+      "title": "Keep the downloaded package?",
+      "question": "Keeping it lets you reinstall or repair offline later without downloading again.",
+      "keep": "Keep",
+      "delete": "Delete",
+      "kept": "Archive kept at:",
+      "deleted": "Downloaded archive deleted.",
+      "deleteFailed": "Failed to delete the archive."
+    },
+    "drive":{
+      "installLocation": "Install location",
+      "acknowledge": "Install on a different drive (I understand future installations may not be able to reuse/deduplicate shared tools and components).",
+      "label": "Installation drive",
+      "warning": "ESP-IDF and its tools will be installed on {drive}. The registry and activation scripts stay on the default drive."
+    },
     "error": {
+      "pathNotEmpty": {
+        "title": "Install location not empty",
+        "message": "{path} already exists and is not empty.",
+        "detail": "Use expert installation to choose a different path."
+      },
+      "noArchive": {
+        "title": "No offline package available",
+        "message": "There is no offline package for your platform.",
+        "detail": "Platform {platform} has no prebuilt archive. Use expert installation instead."
+      },
       "details": "Error Details:",
       "title": "Installation Failed",
       "wizard": "Use Custom Installation",
@@ -894,6 +942,20 @@
       "features_updated": "Selected features have been updated",
       "idf_mirror_updated": "IDF mirror has been updated",
       "tools_updated": "Tool selection has been updated"
+    },
+    "simple_offline": {
+      "using_drive": "Installing on drive %{drive}",
+      "manifest_failed": "Failed to load offline package list: %{error}",
+      "no_archive_for_version": "No offline package for %{version} on %{platform}",
+      "preparing_download": "Preparing download of %{version}…",
+      "using_cached": "Using previously downloaded archive: %{path}",
+      "archive_ready": "Archive ready",
+      "downloading": "Downloading offline package…",
+      "download_detail": "Total size: %{size}",
+      "download_progress": "%{downloaded} / %{total}",
+      "download_complete": "Download complete",
+      "download_failed": "Download failed",
+      "download_failed_detail": "Download failed: %{error}"
     }
   },
   "wizard": {

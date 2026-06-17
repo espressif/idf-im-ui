@@ -265,6 +265,7 @@ class GUITestRunner {
         `Selected element ${await element.getTagName()} with text ${await element.getText()}`
       );
       await this.driver.executeScript("arguments[0].click();", element);
+      return true;
     } catch (error) {
       logger.debug(`Error during selection: ${error}`);
       return false;
