@@ -480,9 +480,13 @@
       "selectVersion": "选择 IDF 版本",
       "selectMirror": "选择镜像",
       "selectFeatures": "选择功能",
+      "selectTools": "选择工具",
       "selectPath": "选择安装路径",
       "installationProgress": "安装进度",
-      "installationComplete": "安装完成"
+      "installationComplete": "安装完成",
+      "python": {
+        "installPython": "安装 Python"
+      }
     }
   },
   "versionSelect": {
@@ -653,6 +657,20 @@
       "title": "准备安装",
       "checking": "正在检查系统要求和依赖项..."
     },
+    "loading": {
+      "packages": "正在加载可用的软件包…"
+    },
+    "select": {
+      "version": "ESP-IDF 版本",
+      "pathPlaceholder": "安装路径",
+      "browse": "浏览",
+      "useDefault": "使用默认安装路径",
+      "estimatedTime": "10–45 分钟",
+      "offlineAlert": "使用经过测试的离线软件包进行安装——无需逐个下载工具。"
+    },
+    "path": {
+      "warning": "此路径已存在且不为空。"
+    },
     "ready": {
       "title": "准备安装",
       "summary": {
@@ -667,7 +685,9 @@
       "startButton": "开始安装"
     },
     "installation": {
+      "title": "正在安装 ESP-IDF",
       "defaultTitle": "正在安装 ESP-IDF",
+      "downloadingTitle": "正在下载软件包",
       "preparing": "正在准备安装...",
       "steps": {
         "check": {
@@ -685,6 +705,10 @@
         "extract": {
           "title": "提取",
           "description": "提取文件"
+        },
+        "install": {
+          "title": "安装",
+          "description": "安装"
         },
         "tools": {
           "title": "工具",
@@ -728,7 +752,32 @@
         "step4": "运行 '{command}' 构建项目"
       }
     },
+    "archive": {
+      "title": "保留已下载的软件包？",
+      "question": "保留后可以在以后离线重新安装或修复，无需再次下载。",
+      "keep": "保留",
+      "delete": "删除",
+      "kept": "存档保留位置：",
+      "deleted": "已删除下载的存档。",
+      "deleteFailed": "删除存档失败。"
+    },
+    "drive":{
+      "installLocation": "安装位置",
+      "acknowledge": "安装到其他驱动器（我了解未来的安装可能无法重用/去重共享的工具和组件）。",
+      "label": "安装驱动器",
+      "warning": "ESP-IDF 及其工具将安装在 {drive} 上。注册表和激活脚本将保留在默认驱动器上。"
+    },
     "error": {
+      "pathNotEmpty": {
+        "title": "安装位置不为空",
+        "message": "{path} 已存在且不为空。",
+        "detail": "请使用专家安装模式选择不同的路径。"
+      },
+      "noArchive": {
+        "title": "没有可用的离线软件包",
+        "message": "您的平台没有可用的离线软件包。",
+        "detail": "平台 {platform} 没有预构建的存档。请改用专家安装。"
+      },
       "details": "错误详情",
       "title": "安装失败",
       "wizard": "使用自定义安装",
@@ -892,6 +941,20 @@
       "features_updated": "已更新所选功能",
       "idf_mirror_updated": "ESP-IDF 镜像源已更新",
       "tools_updated": "工具选择已更新"
+    },
+    "simple_offline": {
+      "using_drive": "安装到硬盘 %{drive}",
+      "manifest_failed": "加载离线软件包列表失败：%{error}",
+      "no_archive_for_version": "%{version} 在 %{platform} 上没有可用的离线软件包",
+      "preparing_download": "正在准备下载 %{version}…",
+      "using_cached": "正在使用之前下载的存档：%{path}",
+      "archive_ready": "存档就绪",
+      "downloading": "正在下载离线软件包…",
+      "download_detail": "总大小：%{size}",
+      "download_progress": "%{downloaded} / %{total}",
+      "download_complete": "下载完成",
+      "download_failed": "下载失败",
+      "download_failed_detail": "下载失败：%{error}"
     }
   },
   "wizard": {

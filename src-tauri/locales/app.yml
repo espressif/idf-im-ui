@@ -1424,6 +1424,93 @@ gui.offline.processed_archives:
 gui.offline.all_completed:
   en: "All offline installations completed successfully"
   cn: "所有离线安装成功"
+gui.simple_offline.manifest_failed:
+  en: "Failed to load offline package list: %{error}"
+  cn: "加载离线包列表失败：%{error}"
+gui.simple_offline.no_archive_for_version:
+  en: "No offline package for %{version} on %{platform}"
+  cn: "%{platform} 上没有适用于 %{version} 的离线包"
+gui.simple_offline.preparing_download:
+  en: "Preparing download of %{version}…"
+  cn: "正在准备下载 %{version}…"
+gui.simple_offline.using_cached:
+  en: "Using previously downloaded archive: %{path}"
+  cn: "正在使用先前下载的存档：%{path}"
+gui.simple_offline.archive_ready:
+  en: "Archive ready"
+  cn: "存档已就绪"
+gui.simple_offline.downloading:
+  en: "Downloading offline package…"
+  cn: "正在下载离线包…"
+gui.simple_offline.download_detail:
+  en: "Total size: %{size}"
+  cn: "总大小：%{size}"
+gui.simple_offline.download_progress:
+  en: "%{downloaded} / %{total}"
+  cn: "%{downloaded} / %{total}"
+gui.simple_offline.download_complete:
+  en: "Download complete"
+  cn: "下载完成"
+gui.simple_offline.download_failed:
+  en: "Download failed"
+  cn: "下载失败"
+gui.simple_offline.download_failed_detail:
+  en: "Download failed: %{error}"
+  cn: "下载失败：%{error}"
+simpleSetup.loading.packages:
+  en: "Loading available packages…"
+  cn: "正在加载可用软件包…"
+simpleSetup.select.version:
+  en: "ESP-IDF version"
+  cn: "ESP-IDF 版本"
+simpleSetup.select.pathPlaceholder:
+  en: "Installation path"
+  cn: "安装路径"
+simpleSetup.select.browse:
+  en: "Browse"
+  cn: "浏览"
+simpleSetup.select.useDefault:
+  en: "Use default installation path"
+  cn: "使用默认安装路径"
+simpleSetup.select.estimatedTime:
+  en: "10–45 minutes"
+  cn: "10–45 分钟"
+simpleSetup.select.offlineAlert:
+  en: "Installs from a tested offline package — no per-tool downloads."
+  cn: "从经过测试的离线包进行安装 — 无需单独下载各个工具。"
+simpleSetup.path.warning:
+  en: "This path already exists and is not empty."
+  cn: "此路径已存在且不为空。"
+simpleSetup.error.noArchive.title:
+  en: "No offline package available"
+  cn: "没有可用的离线包"
+simpleSetup.error.noArchive.message:
+  en: "There is no offline package for your platform."
+  cn: "您的平台没有离线包。"
+simpleSetup.error.noArchive.detail:
+  en: "Platform %{platform} has no prebuilt archive. Use expert installation instead."
+  cn: "平台 %{platform} 没有预构建的存档。请改用专家安装模式。"
+simpleSetup.archive.title:
+  en: "Keep the downloaded package?"
+  cn: "保留下载的软件包吗？"
+simpleSetup.archive.question:
+  en: "Keeping it lets you reinstall or repair offline later without downloading again."
+  cn: "保留它可以让您以后在离线状态下重新安装或修复，而无需再次下载。"
+simpleSetup.archive.keep:
+  en: "Keep"
+  cn: "保留"
+simpleSetup.archive.delete:
+  en: "Delete"
+  cn: "删除"
+simpleSetup.archive.kept:
+  en: "Archive kept at:"
+  cn: "存档保留在："
+simpleSetup.archive.deleted:
+  en: "Downloaded archive deleted."
+  cn: "已删除下载的存档。"
+simpleSetup.archive.deleteFailed:
+  en: "Failed to delete the archive."
+  cn: "删除存档失败。"
 cli.select.activation_instructions:
   en: "To activate this environment, run the following command in your terminal:"
   cn: "要激活此环境，请在终端中运行以下命令："

@@ -368,7 +368,7 @@ pub fn get_platform_identification() -> Result<String, String> {
 /// # Returns
 ///
 /// A `String` in the format "os-arch" (e.g., "linux-x86_64", "macos-aarch64").
-fn get_platform_definition() -> String {
+pub fn get_platform_definition() -> String {
     let os = get_os_name();
     let arch = get_arch_name();
 

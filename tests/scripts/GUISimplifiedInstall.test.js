@@ -1,17 +1,23 @@
 import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
+import { By, Key, until } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import TestProxy from "../classes/TestProxy.class.js";
 import logger from "../classes/logger.class.js";
-import { tGui } from "../helpers/i18n.js";
+import { tGui, matchable } from "../helpers/i18n.js";
+import os from "os";
 
-// This function executes the simplified installation functionality of the EIM GUI
-// No parameter is changed as part of this test
+// This function executes the simplified installation functionality of the EIM GUI.
+// When `drive` is provided (Windows only), the test exercises the per-install
+// drive override — the user ticks the "install on a different drive" checkbox,
+// picks `drive` (e.g. "D:") in the naive-ui select, and the verification step
+// is later asked to look for the install at the drive-swapped path.
 export function runGUISimplifiedInstallTest({
   id = 0,
   pathToEIM,
   testProxyMode = false,
   proxyBlockList = [],
+  drive = null,
 }) {
   describe("1- Run simplified mode", () => {
     let eimRunner = null;
@@ -131,16 +137,104 @@ export function runGUISimplifiedInstallTest({
       ).to.be.true;
     });
 
-    it("4- Should install IDF using simplified setup", async function () {
+    it("4- Should select drive for installation", async function () {
+      // Drive override is Windows-only and only runs when the suite asks for it.
+      if (!drive || os.platform() !== "win32") {
+        this.skip();
+      }
+      this.timeout(20000);
+
+      // Tick the "install on a different drive" acknowledge checkbox. naive-ui
+      // renders n-checkbox as a <label> wrapping the box + text; clicking the
+      // label text toggles the bound ref.
+      const ackText = tGui("simpleSetup.drive.acknowledge");
+      const ackLabel = await eimRunner.findByText(ackText);
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        ackLabel,
+      );
+
+      // The drive picker (v-if=allowDriveChange) appears once the box is ticked.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const drivePicker = await eimRunner.findByClass("drive-picker");
+      expect(drivePicker, "Expected drive picker to appear").to.not.be.false;
+
+      // Open the naive-ui n-select. naive-ui's n-select ignores a plain
+      // `click()` (it listens for `mousedown` on the inner n-base-selection
+      // and toggles the popup there), and synthetic mousedown events fired on
+      // the outer n-select sometimes don't trigger the inner handler because
+      // the listener is on a different element. The most reliable path is a
+      // real WebElement `click()` which the browser dispatches as a full
+      // mousedown+mouseup+click sequence through the focused element. If that
+      // still doesn't open the popup, fall back to focusing + sending Enter
+      // (the keyboard activation path).
+      const selectTrigger = await drivePicker.findElement(
+        By.className("n-select"),
+      );
+      await selectTrigger.click();
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
+      // Verify the popup actually opened. naive-ui renders the popup in a
+      // teleport at the document root, so we search the whole document
+      // (not just the drive-picker subtree) for the v-binder-follower
+      // wrapper. If the popup is not present, fall back to a keyboard
+      // activation (focus + Enter) which naive-ui also supports.
+      let popupOpen = true;
+      try {
+        await eimRunner.driver.wait(
+          until.elementLocated(By.css(".v-binder-follower-content")),
+          2000,
+          "n-select popup did not open after WebElement click",
+        );
+      } catch (_) {
+        popupOpen = false;
+      }
+      if (!popupOpen) {
+        await eimRunner.driver.executeScript(
+          "arguments[0].focus();",
+          selectTrigger,
+        );
+        await selectTrigger.sendKeys(Key.ENTER);
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+
+      // The drive label is the same string as the value ("D:"). naive-ui option
+      // labels end up as plain text in the popup; clickElement finds the first
+      // visible match.
+      const optionClicked = await eimRunner.clickElement(drive);
+      expect(optionClicked, `Expected to select drive ${drive}`).to.be.true;
+
+      // Sanity-check: the drive warning should now mention the picked drive.
+      // Use matchable() to grab the portion of the locale string before the
+      // {drive} placeholder, since Selenium's getText() returns the rendered
+      // text including the interpolated value.
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const warningPrefix = matchable("simpleSetup.drive.warning");
+      const warningNode = await eimRunner.findByText(warningPrefix);
+      expect(warningNode, "Expected drive warning to be visible").to.not.be
+        .false;
+      const warningText = await warningNode.getText();
+      expect(
+        warningText,
+        `Expected drive warning to mention ${drive}`,
+      ).to.include(drive);
+    });
+
+    it("5- Should install IDF using simplified setup", async function () {
       this.timeout(2730000);
       await eimRunner.clickButton(tGui("simpleSetup.ready.startButton"));
       await new Promise((resolve) => setTimeout(resolve, 5000));
+      // The new simplified flow renders a dedicated download phase with its
+      // own h2 ("Downloading package" / "Downloading 软件包") before the
+      // install phase kicks in. Match on that title rather than the old
+      // `steps.download.description` text, which is no longer visible on
+      // the page.
       const installing = await eimRunner.findByText(
-        tGui("simpleSetup.installation.steps.download.description"),
+        tGui("simpleSetup.installation.downloadingTitle"),
         20000
       );
 
-      expect(installing, "Expected installation to start Downloading ESP-IDF")
+      expect(installing, "Expected installation to start Downloading package")
         .to.not.be.false;
       expect(
         await installing.isDisplayed(),
@@ -175,7 +269,7 @@ export function runGUISimplifiedInstallTest({
       ).to.be.true;
     });
 
-    it("5- Should show installation complete summary", async function () {
+    it("6- Should show installation complete summary", async function () {
       this.timeout(10000);
       const documentationButton = await eimRunner.findByText(
         tGui("simpleSetup.complete.buttons.documentation")

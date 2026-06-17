@@ -2,8 +2,7 @@
   <div class="simple-setup">
     <div class="setup-header">
       <h1 class="title">{{ $t('simpleSetup.title') }}</h1>
-      <n-button @click="goBack" quaternary v-if="currentState !== 'checking' && currentState !== 'installing'"
-        text-color="white">
+      <n-button @click="goBack" quaternary v-if="currentState !== 'installing'" text-color="white">
         <template #icon>
           <n-icon>
             <ArrowLeftOutlined />
@@ -13,7 +12,7 @@
       </n-button>
     </div>
 
-    <!-- Pre-installation Check -->
+    <!-- Pre-installation Check (prerequisites + python) -->
     <n-card v-if="currentState === 'checking'" class="status-card">
       <div class="checking-status">
         <n-spin size="large" />
@@ -22,55 +21,105 @@
       </div>
     </n-card>
 
-    <!-- Ready to Install -->
-    <n-card v-else-if="currentState === 'ready'" class="status-card">
+    <!-- Loading available packages -->
+    <n-card v-else-if="currentState === 'loading'" class="status-card">
+      <div class="checking-status">
+        <n-spin size="large" />
+        <h2>{{ $t('simpleSetup.preparation.title') }}</h2>
+        <p>{{ $t('simpleSetup.loading.packages') }}</p>
+      </div>
+    </n-card>
+
+    <!-- Choose package (+ drive on Windows) -->
+    <n-card v-else-if="currentState === 'select'" class="status-card">
       <div class="ready-status">
         <n-icon :size="64" color="#52c41a">
           <CheckCircleOutlined />
         </n-icon>
         <h2>{{ $t('simpleSetup.ready.title') }}</h2>
+
+        <div class="select-block">
+          <label class="field-label">{{ $t('simpleSetup.select.version') }}</label>
+          <n-select v-model:value="selectedVersion" :options="versionOptions" />
+        </div>
+
+        <!-- Windows-only: change the install DRIVE -->
+        <div class="select-block" v-if="appStore.os === 'windows' && drives.length > 1">
+          <n-checkbox v-model:checked="allowDriveChange">
+            {{ $t('simpleSetup.drive.acknowledge') }}
+          </n-checkbox>
+          <div v-if="allowDriveChange" class="drive-picker">
+            <label class="field-label">{{ $t('simpleSetup.drive.label') }}</label>
+            <n-select v-model:value="selectedDrive" :options="driveOptions" />
+            <n-alert type="warning" :bordered="false" style="margin-top: 0.5rem;">
+              {{ $t('simpleSetup.drive.warning', { drive: selectedDrive }) }}
+            </n-alert>
+          </div>
+        </div>
+
         <div class="installation-summary">
           <div class="summary-item">
-            <span class="summary-label">{{ $t('simpleSetup.ready.summary.version') }}:</span>
-            <span class="summary-value">{{ selectedVersion }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">{{ $t('simpleSetup.ready.summary.path') }}:</span>
-            <span class="summary-value">{{ installPath }}</span>
+            <span class="summary-label">{{ $t('simpleSetup.drive.installLocation') }}:</span>
+            <span class="summary-value mono">{{ displayPath }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">{{ $t('simpleSetup.ready.summary.size') }}:</span>
-            <span class="summary-value">~3.5 GB</span>
+            <span class="summary-value">{{ selectedArchive ? formatSize(selectedArchive.size) : '—' }}</span>
           </div>
           <div class="summary-item">
             <span class="summary-label">{{ $t('simpleSetup.ready.summary.time') }}:</span>
-            <span class="summary-value">10-45 minutes</span>
+            <span class="summary-value">{{ $t('simpleSetup.select.estimatedTime') }}</span>
           </div>
         </div>
+
         <n-alert type="info" :bordered="false" style="margin: 1.5rem 0;">
-          {{ $t('simpleSetup.ready.alert') }}
+          {{ $t('simpleSetup.select.offlineAlert') }}
         </n-alert>
-        <n-button @click="startInstallation" type="primary" size="large" block>
+
+        <n-button @click="startInstallation" type="primary" size="large" block
+          :disabled="!selectedVersion" data-id="start-simple-offline-button">
           {{ $t('simpleSetup.ready.startButton') }}
         </n-button>
       </div>
     </n-card>
 
-    <!-- Installation Progress -->
+    <!-- Installation Progress (two phases: download, then install with detailed steps) -->
     <n-card v-else-if="currentState === 'installing'" class="status-card">
       <div class="installing-status">
         <div class="status-header">
           <n-icon :size="48" :class="getStatusIconClass">
             <component :is="getStatusIcon" />
           </n-icon>
-          <h2>{{ installationTitle }}</h2>
+          <h2>{{ phaseTitle }}</h2>
+        </div>
+
+        <!-- Two coarse phases -->
+        <div class="phase-track">
+          <div class="phase-chip" :class="{ active: phase === 'download', done: phase === 'install' }">
+            <span class="phase-dot">1</span>{{ $t('simpleSetup.installation.steps.download.title') }}
+          </div>
+          <div class="phase-sep"></div>
+          <div class="phase-chip" :class="{ active: phase === 'install' }">
+            <span class="phase-dot">2</span>{{ $t('simpleSetup.installation.steps.install.title') }}
+          </div>
         </div>
 
         <p class="status-description">{{ installationMessage }}</p>
 
-        <GlobalProgress :initial-message="installationMessage" :initial-progress="installationProgress"
-          :show-details="true" :color-scheme="getProgressColorScheme" :steps="installationSteps"
-          event-channel="installation-progress" />
+        <!-- Show simple progress bar during DOWNLOAD -->
+        <n-progress v-if="!installPhaseStarted" type="line" :percentage="downloadProgress"
+          :processing="downloadProgress < 100" :indicator-placement="'inside'" color="#E8362D" />
+
+        <!-- Show detailed GlobalProgress during INSTALL -->
+        <GlobalProgress
+          v-else
+          :initial-message="installationMessage"
+          :initial-progress="installProgress"
+          :show-details="true"
+          :color-scheme="getProgressColorScheme"
+          :steps="installationSteps"
+          event-channel="installation-progress"
+        />
 
         <n-collapse v-if="installMessages.length > 0" style="margin-top: 2rem;">
           <n-collapse-item :title="$t('simpleSetup.installation.log')" name="1">
@@ -104,6 +153,27 @@
           </template>
         </n-result>
 
+        <!-- Keep / delete the downloaded archive -->
+        <div class="archive-prompt" v-if="downloadedArchivePath && archiveDecision === ''">
+          <h3>{{ $t('simpleSetup.archive.title') }}</h3>
+          <p>{{ $t('simpleSetup.archive.question') }}</p>
+          <p class="archive-path">{{ downloadedArchivePath }}</p>
+          <div class="archive-actions">
+            <n-button @click="keepArchive" :disabled="isDeletingArchive" size="large">
+              {{ $t('simpleSetup.archive.keep') }}
+            </n-button>
+            <n-button @click="deleteArchive" :loading="isDeletingArchive" type="warning" size="large">
+              {{ $t('simpleSetup.archive.delete') }}
+            </n-button>
+          </div>
+        </div>
+        <n-alert v-else-if="archiveDecision === 'kept'" type="info" :bordered="false" style="margin-top: 1rem;">
+          {{ $t('simpleSetup.archive.kept') }} {{ downloadedArchivePath }}
+        </n-alert>
+        <n-alert v-else-if="archiveDecision === 'deleted'" type="success" :bordered="false" style="margin-top: 1rem;">
+          {{ $t('simpleSetup.archive.deleted') }}
+        </n-alert>
+
         <div class="post-install-info" v-if="appStore.os == 'windows'">
           <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
@@ -125,98 +195,73 @@
       </div>
     </n-card>
 
-    <!-- Installation Failed -->
+    <!-- Error State (including prereq/python issues) -->
     <n-card v-else-if="currentState === 'error'" class="status-card">
       <div class="error-status">
-        <n-result :status="verificationFailed ? 'warning' : 'error'" :title="errorTitle" :description="errorMessage">
+        <n-result :status="warningLike ? 'warning' : 'error'" :title="errorTitle" :description="errorMessage">
           <template #icon>
-            <n-icon :size="72" :color="verificationFailed ? '#faad14' : '#ff4d4f'">
+            <n-icon :size="72" :color="warningLike ? '#faad14' : '#ff4d4f'">
               <CloseCircleOutlined />
             </n-icon>
           </template>
           <template #footer>
             <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
-              <n-button v-if="pythonFailed && appStore.os === 'windows' && !isInstallingPython" @click="installPython" type="primary" size="large" data-id="install-python-button">
-                {{ $t('wizard.steps.python.installPython') }}
-              </n-button>
-              <n-button v-if="verificationFailed && appStore.os === 'windows' && !isInstallingPrerequisites" @click="installPrerequisites" type="primary" size="large" data-id="install-prerequisites-button">
-                {{ $t('basicInstaller.prerequisites.installButton') }}
-              </n-button>
-              <n-button v-if="verificationFailed" :disabled="isInstallingPrerequisites" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
+              <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="viewLogs" type="info" size="large">
+              <n-button v-if="!noArchive" @click="viewLogs" type="info" size="large">
                 {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="retry" type="warning" size="large">
+              <n-button @click="retry" type="warning" size="large">
                 {{ $t('simpleSetup.error.retry') }}
               </n-button>
-              <n-button :disabled="isInstallingPrerequisites || isInstallingPython" @click="useWizard" type="info" size="large">
+              <n-button @click="useWizard" type="info" size="large">
                 {{ $t('simpleSetup.error.wizard') }}
               </n-button>
             </div>
           </template>
         </n-result>
 
-        <n-alert v-if="errorDetails && pythonCheckResults.length === 0" :type="verificationFailed ? 'warning' : 'error'" style="margin-top: 2rem;">
+        <n-alert v-if="errorDetails" :type="warningLike ? 'warning' : 'error'" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
           <pre class="error-details">{{ errorDetails }}</pre>
         </n-alert>
-      </div>
-    </n-card>
-
-    <!-- Installing Prerequisites Loading State -->
-    <n-card v-if="isInstallingPrerequisites" class="status-card">
-      <div class="checking-status">
-        <n-spin size="large" />
-        <h2>{{ $t('basicInstaller.loading.installingPrerequisites') }}</h2>
-        <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
-      </div>
-    </n-card>
-
-    <!-- Installing Python Loading State -->
-    <n-card v-if="isInstallingPython" class="status-card">
-      <div class="checking-status">
-        <n-spin size="large" />
-        <h2>{{ $t('basicInstaller.loading.installingPython') }}</h2>
-        <p>{{ $t('basicInstaller.loading.pleaseWait') }}</p>
       </div>
     </n-card>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import {
-  NButton, NCard, NIcon, NSpin, NResult, NAlert,
-  NCollapse, NCollapseItem, NScrollbar, useMessage
+  NButton, NCard, NIcon, NSpin, NResult, NAlert, NProgress,
+  NCollapse, NCollapseItem, NScrollbar, NSelect, NCheckbox, useMessage
 } from 'naive-ui'
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  LoadingOutlined,
   DownloadOutlined,
-  ToolOutlined
+  ToolOutlined,
+  LoadingOutlined
 } from '@vicons/antd'
 import GlobalProgress from './GlobalProgress.vue'
 import CheckResultsList from './CheckResultsList.vue'
 import { useAppStore } from '../store'
-import { openUrl } from '@tauri-apps/plugin-opener';
-import { app } from '@tauri-apps/api'
 
 export default {
   name: 'SimpleSetup',
   components: {
-    NButton, NCard, NIcon, NSpin, NResult, NAlert,
-    NCollapse, NCollapseItem, NScrollbar,
+    NButton, NCard, NIcon, NSpin, NResult, NAlert, NProgress,
+    NCollapse, NCollapseItem, NScrollbar, NSelect, NCheckbox,
     ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
-    LoadingOutlined, DownloadOutlined, ToolOutlined,
+    DownloadOutlined, ToolOutlined, LoadingOutlined,
     GlobalProgress,
     CheckResultsList
   },
@@ -226,29 +271,39 @@ export default {
     const appStore = useAppStore()
     const { t } = useI18n()
 
-    // State management
-    const currentState = ref('checking') // checking, ready, installing, complete, error
-    const selectedVersion = ref('latest')
+    // States: checking -> loading -> select -> installing -> complete | error
+    const currentState = ref('checking')
+
+    // Package selection
+    const archives = ref([])
+    const selectedVersion = ref('')
+
+    // Default install location
     const installPath = ref('')
-    const currentStep = ref(0)
-    const timeStarted = ref(null)
-    const isInstallingPrerequisites = ref(false)
 
+    // Windows drive override
+    const drives = ref([])
+    const allowDriveChange = ref(false)
+    const selectedDrive = ref('')
+    const defaultDrive = ref('')
 
-    // Installation progress
-    const installationTitle = ref('Installing ESP-IDF')
-    const installationMessage = ref('Preparing installation...')
-    const installationProgress = ref(0)
+    // Post-install archive handling
+    const downloadedArchivePath = ref('')
+    const archiveDecision = ref('')
+    const isDeletingArchive = ref(false)
+
+    // Two-phase progress
+    const installPhaseStarted = ref(false)
+    const downloadProgress = ref(0)
+    const installProgress = ref(0)
+    const installationMessage = ref('')
     const installMessages = ref([])
+    const timeStarted = ref(null)
+
+    // Detailed install steps (for GlobalProgress)
     const installationSteps = ref([
-      {
-        title: t('simpleSetup.installation.steps.check.title'),
-        description: t('simpleSetup.installation.steps.check.description')
-      },
-      {
-        title: t('simpleSetup.installation.steps.prerequisites.title'),
-        description: t('simpleSetup.installation.steps.prerequisites.description')
-      },
+      { title: t('simpleSetup.installation.steps.check.title'), description: t('simpleSetup.installation.steps.check.description') },
+      { title: t('simpleSetup.installation.steps.prerequisites.title'), description: t('simpleSetup.installation.steps.prerequisites.description') },
       { title: t('simpleSetup.installation.steps.download.title'), description: t('simpleSetup.installation.steps.download.description') },
       { title: t('simpleSetup.installation.steps.extract.title'), description: t('simpleSetup.installation.steps.extract.description') },
       { title: t('simpleSetup.installation.steps.tools.title'), description: t('simpleSetup.installation.steps.tools.description') },
@@ -258,142 +313,119 @@ export default {
     ])
 
     // Error handling
-    const errorTitle = ref('Installation Failed')
+    const errorTitle = ref('')
     const errorMessage = ref('')
     const errorDetails = ref('')
+    const noArchive = ref(false)
+    const warningLike = ref(false)
     const pythonCheckResults = ref([])
     const verificationFailed = ref(false)
-    const pythonFailed = ref(false)
-    const isInstallingPython = ref(false)
 
-    // Helper function to fetch settings, versions, and validate installation path
-    const prepareForInstallation = async () => {
-      try {
-        const settings = await invoke('get_settings')
-        installPath.value = settings?.path
-        console.log('Default installation path:', installPath.value)
-
-        const versions = await invoke('get_idf_versions', { includeUnstable: false })
-        if (!versions || versions.length === 0 || !versions[0]?.name) {
-          throw new Error(t('simpleSetup.error.versions.message'))
-        }
-        selectedVersion.value = versions[0].name
-
-        const pathValid = await invoke('is_path_empty_or_nonexistent_command', {
-          path: installPath.value,
-          versions: [selectedVersion.value]
-        })
-        console.log('Installation path check result:', pathValid)
-
-        if (!pathValid) {
-          errorTitle.value = 'Installation Path Not Empty'
-          errorMessage.value = `The default installation path (${installPath.value}/${selectedVersion.value}) is not empty.`
-          errorDetails.value = 'Please use custom installation to select a different path.'
-          currentState.value = 'error'
-          return false
-        }
-
-        currentState.value = 'ready'
-        return true
-      } catch (error) {
-        console.error('Failed to prepare for installation:', error)
-        errorTitle.value = t('simpleSetup.error.system.title')
-        errorMessage.value = t('simpleSetup.error.system.message')
-        errorDetails.value = error.toString()
-        currentState.value = 'error'
-        return false
-      }
-    }
-
-    // Event listeners
     let unlistenProgress = null
-    let unlistenComplete = null
-    let unlistenError = null
     let unlistenLog = null
 
+    // Computed
+    const versionOptions = computed(() =>
+      archives.value.map(a => ({ label: `${a.version}  (${formatSize(a.size)})`, value: a.version }))
+    )
+    const selectedArchive = computed(() =>
+      archives.value.find(a => a.version === selectedVersion.value) || null
+    )
+    const driveOptions = computed(() => drives.value.map(d => ({ label: d, value: d })))
+    const driveChanged = computed(() =>
+      appStore.os === 'windows' &&
+      allowDriveChange.value &&
+      !!selectedDrive.value &&
+      selectedDrive.value !== defaultDrive.value
+    )
+    const displayPath = computed(() =>
+      driveChanged.value ? swapDrive(installPath.value, selectedDrive.value) : installPath.value
+    )
+
+    const phase = computed(() => (installPhaseStarted.value ? 'install' : 'download'))
+    const phaseProgress = computed(() => (installPhaseStarted.value ? installProgress.value : downloadProgress.value))
+    const phaseTitle = computed(() =>
+      installPhaseStarted.value
+        ? (t('simpleSetup.installation.title') || 'Installing ESP-IDF')
+        : t('simpleSetup.installation.downloadingTitle')
+    )
+
     const getStatusIcon = computed(() => {
-      if (installationProgress.value < 30) return DownloadOutlined
-      if (installationProgress.value < 70) return ToolOutlined
-      if (installationProgress.value < 100) return LoadingOutlined
+      if (!installPhaseStarted.value) return DownloadOutlined
+      if (installProgress.value < 100) return ToolOutlined
       return CheckCircleOutlined
     })
-
-    const getStatusIconClass = computed(() => { // TODO
-      return installationProgress.value < 100 ? 'rotating' : ''
-    })
-
+    const getStatusIconClass = computed(() => (phaseProgress.value < 100 ? 'rotating' : ''))
     const getProgressColorScheme = computed(() => {
       if (currentState.value === 'error') return 'error'
-      if (installationProgress.value === 100) return 'success'
+      if (installProgress.value === 100) return 'success'
       return 'primary'
     })
 
-    const checkPrerequisites = async (force) => {
+    // Utils
+    const swapDrive = (p, drive) => {
+      if (!p || !drive) return p
+      return p.replace(/^[A-Za-z]:/, drive.replace(/:?$/, ':'))
+    }
+
+    const formatSize = (bytes) => {
+      if (!bytes) return '—'
+      const gb = bytes / 1_073_741_824
+      if (gb >= 1) return `${gb.toFixed(2)} GB`
+      return `${Math.round(bytes / 1_048_576)} MB`
+    }
+
+    const trackEvent = async (name, additional_data) => {
+      try { await invoke('track_event_command', additional_data ? { name, additional_data } : { name }) }
+      catch (e) { console.warn('Failed to track event:', e) }
+    }
+
+    // === Prerequisites & Python Checks ===
+    // Windows: prerequisites (git, python) are auto-installed during the offline
+    // install, so we skip the up-front check. Non-Windows: prerequisites must
+    // already be present; if missing, the user is steered to the wizard.
+    const checkPrerequisites = async (force = false) => {
       try {
         currentState.value = 'checking'
         verificationFailed.value = false
-        if (appStore.prerequisitesLastChecked === null || force) {
-          await appStore.checkPrerequisites(force);
-        }
-        // Check prerequisites
-        let prereqResult = appStore.prerequisitesStatus;
+        pythonCheckResults.value = []
 
-        // Check if verification itself failed (shell or other error)
-        if (!prereqResult.canVerify) {
-          verificationFailed.value = true
-          errorTitle.value = t('common.prerequisites.verificationFailedTitle')
-          if (prereqResult.shellFailed) {
-            errorMessage.value = t('common.prerequisites.shellFailed')
-          } else {
-            errorMessage.value = t('common.prerequisites.verificationError')
+        if (appStore.os !== 'windows') {
+          if (appStore.prerequisitesLastChecked === null || force) {
+            await appStore.checkPrerequisites(force)
           }
-          errorDetails.value = t('common.prerequisites.verificationFailedHint')
-          currentState.value = 'error'
-          return false
-        }
 
-        if (!prereqResult.allOk) {
-          if (appStore.os === 'windows') {
-            // On Windows, show prerequisites info and offer to install
-            errorTitle.value = t('simpleSetup.error.prerequisites.title')
-            errorMessage.value = t('simpleSetup.error.prerequisites.message')
-            errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' + t('common.prerequisites.windowsHint', { list: prereqResult.missing.join(', ') })
-            currentState.value = 'error'
-            verificationFailed.value = true // Use this to show the install button
+          const prereqResult = appStore.prerequisitesStatus
+
+          if (!prereqResult.canVerify) {
+            handleVerificationError(prereqResult.shellFailed)
             return false
-          } else {
-            // On macOS/Linux, show error and manual install instructions
-            errorTitle.value = t('simpleSetup.error.prerequisites.title')
-            errorMessage.value = t('simpleSetup.error.prerequisites.message')
-            if (appStore.os === 'macos') {
-              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.macosHint', { list: prereqResult.missing.join(' ') })
-            } else if (appStore.os === 'linux') {
-              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + t('common.prerequisites.linuxHint', { list: prereqResult.missing.join(' ') })
-            } else {
-              errorDetails.value = t('common.prerequisites.manualHint') + '\n' + prereqResult.missing.join(', ')
-            }
+          }
+
+          if (!prereqResult.allOk) {
+            handlePrerequisitesMissing(prereqResult.missing)
+            return false
+          }
+
+          // Python sanity check
+          const results = await invoke('python_sanity_check', {})
+          const pythonSane = Array.isArray(results) && results.length > 0 && results.every(r => r.passed)
+
+          if (!pythonSane) {
+            pythonCheckResults.value = Array.isArray(results) ? results : []
+            errorTitle.value = t('simpleSetup.error.prerequisites.python.title')
+            errorMessage.value = t('simpleSetup.error.prerequisites.python.message')
+            errorDetails.value = ''
             currentState.value = 'error'
             return false
           }
         }
-        let results = await invoke("python_sanity_check", {});
-        let python_sane = Array.isArray(results) && results.length > 0 && results.every((r) => r.passed);
-        if (!python_sane) {
-          // Python check failed - show error with install button
-          pythonFailed.value = true;
-          pythonCheckResults.value = Array.isArray(results) ? results : [];
-          errorTitle.value = t('simpleSetup.error.prerequisites.python.title');
-          errorMessage.value = t('simpleSetup.error.prerequisites.python.message');
-          errorDetails.value = '';
-          currentState.value = 'error';
-          return false;
-        } else {
-          console.log("Python sanity check passed");
-        }
 
-        return await prepareForInstallation()
+        // If everything passes (or Windows, where we skipped the check), load archives.
+        await loadArchives()
+        return true
       } catch (error) {
-        console.error('Failed to check prerequisites:', error)
+        console.error('Prerequisite check failed:', error)
         errorTitle.value = t('simpleSetup.error.system.title')
         errorMessage.value = t('simpleSetup.error.system.message')
         errorDetails.value = error.toString()
@@ -402,282 +434,208 @@ export default {
       }
     }
 
-    const installPrerequisites = async () => {
-      const store = appStore
-      let unlistenFn = null
+    const handleVerificationError = (shellFailed) => {
+      verificationFailed.value = true
+      warningLike.value = true
+      errorTitle.value = t('common.prerequisites.verificationFailedTitle')
+      errorMessage.value = shellFailed
+        ? t('common.prerequisites.shellFailed')
+        : t('common.prerequisites.verificationError')
+      errorDetails.value = t('common.prerequisites.verificationFailedHint')
+      currentState.value = 'error'
+    }
+
+    const handlePrerequisitesMissing = (missing) => {
+      warningLike.value = true
+      errorTitle.value = t('simpleSetup.error.prerequisites.title')
+      errorMessage.value = t('simpleSetup.error.prerequisites.message')
+
+      if (appStore.os === 'windows') {
+        errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' +
+          t('common.prerequisites.windowsHint', { list: missing.join(', ') })
+      } else {
+        errorDetails.value = t('common.prerequisites.manualHint') + '\n' +
+          (appStore.os === 'macos'
+            ? t('common.prerequisites.macosHint', { list: missing.join(' ') })
+            : t('common.prerequisites.linuxHint', { list: missing.join(' ') }))
+      }
+      currentState.value = 'error'
+    }
+
+    // === Load Archives ===
+    const loadArchives = async () => {
+      currentState.value = 'loading'
+      noArchive.value = false
       try {
-        isInstallingPrerequisites.value = true
-        message.info(t('basicInstaller.messages.startingPrerequisites'))
+        const list = await invoke('get_offline_archives')
+        archives.value = Array.isArray(list) ? list : []
 
-        const eventPromise = new Promise(async (resolve) => {
-          let isResolved = false
-          const doResolve = () => {
-            if (!isResolved) {
-              isResolved = true
-              resolve()
-            }
-          }
-
-          unlistenFn = await listen('prerequisites-install-complete', async (event) => {
-            console.log('Event received:', event.payload)
-            try {
-              // Use local function to properly update UI state
-              await checkPrerequisites(true)
-            } catch (e) {
-              console.error('Error:', e)
-            }
-            doResolve()
-          })
-
-          // Timeout after 5 minutes
-          setTimeout(() => {
-            console.log('Timeout - resolving anyway')
-            doResolve()
-          }, 300000)
-        })
-
-        await invoke('install_prerequisites')
-
-        await eventPromise
-
-        if (unlistenFn) {
-          unlistenFn()
-        }
-
-        await new Promise(r => setTimeout(r, 200))
-
-        isInstallingPrerequisites.value = false
-
-        const prereqResult = store.prerequisitesStatus
-        console.log('Final result:', prereqResult)
-
-        if (prereqResult.allOk) {
-          await prepareForInstallation()
-        } else {
-          errorTitle.value = t('simpleSetup.error.prerequisites.title')
-          errorMessage.value = t('simpleSetup.error.prerequisites.message')
-          errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' + t('common.prerequisites.windowsHint', { list: prereqResult.missing.join(', ') })
+        if (archives.value.length === 0) {
+          noArchive.value = true
+          warningLike.value = true
+          errorTitle.value = t('simpleSetup.error.noArchive.title')
+          errorMessage.value = t('simpleSetup.error.noArchive.message')
+          errorDetails.value = t('simpleSetup.error.noArchive.detail', { platform: appStore.os })
           currentState.value = 'error'
-          verificationFailed.value = true
+          return
         }
+
+        selectedVersion.value = archives.value[0].version
+
+        const settings = await invoke('get_settings')
+        installPath.value = settings?.path || ''
+
+        if (appStore.os === 'windows') {
+          const m = installPath.value.match(/^([A-Za-z]):/)
+          defaultDrive.value = m ? `${m[1]}:` : ''
+          selectedDrive.value = defaultDrive.value
+          try {
+            drives.value = await invoke('get_available_drives')
+          } catch (e) {
+            drives.value = []
+          }
+        }
+
+        currentState.value = 'select'
       } catch (error) {
-        console.error('Error:', error)
-        if (unlistenFn) unlistenFn()
-        isInstallingPrerequisites.value = false
-        message.error(t('basicInstaller.messages.errors.prerequisites'))
+        console.error('Failed to load offline archives:', error)
+        errorTitle.value = t('simpleSetup.error.system.title')
+        errorMessage.value = t('simpleSetup.error.system.message')
+        errorDetails.value = error.toString()
+        currentState.value = 'error'
       }
     }
 
-    const installPython = async () => {
-      try {
-        isInstallingPython.value = true;
-        pythonFailed.value = false;
-        message.info(t('basicInstaller.messages.installingPython'));
+    // === Event Listeners ===
+    const attachListeners = async () => {
+      unlistenProgress = await listen('installation-progress', async (event) => {
+        const { stage, percentage, message: msg, detail, version } = event.payload
+        if (msg) installationMessage.value = msg
 
-        // Wait for python install to complete via event
-        const installResult = await new Promise(async (resolve) => {
-          let timeoutId = null;
-          const unlisten = await listen('python-install-complete', async (event) => {
-            console.log('Python install event received:', event.payload);
-            unlisten();
-            if (timeoutId) clearTimeout(timeoutId);
-            if (event.payload.success) {
-              // Re-check Python after installation
-              const newResults = await invoke("python_sanity_check", {});
-              const newPythonSane = Array.isArray(newResults) && newResults.length > 0 && newResults.every((r) => r.passed);
-              resolve({ success: event.payload.success, pythonSane: newPythonSane, results: newResults });
-            } else {
-              resolve({ success: false, pythonSane: false, results: [] });
-            }
-          });
-
-          // Timeout after 5 minutes
-          timeoutId = setTimeout(() => {
-            unlisten();
-            resolve({ success: false, pythonSane: false, results: [] });
-          }, 300000);
-
-          await invoke("python_install", {});
-        });
-
-        isInstallingPython.value = false;
-
-        if (installResult.pythonSane) {
-          // Python installed successfully, retry the full check
-          message.success(t('basicInstaller.messages.pythonInstalled'));
-          pythonFailed.value = false;
-          await checkPrerequisites(true);
-        } else {
-          // Python installation failed
-          pythonFailed.value = true;
-          pythonCheckResults.value = installResult.results;
-          errorTitle.value = t('simpleSetup.error.prerequisites.python.title');
-          errorMessage.value = t('simpleSetup.error.prerequisites.python.message');
-          errorDetails.value = '';
-          currentState.value = 'error';
+        if (stage === 'error') {
+          currentState.value = 'error'
+          warningLike.value = false
+          errorTitle.value = t('simpleSetup.error.start.title')
+          errorMessage.value = msg || t('simpleSetup.error.system.message')
+          errorDetails.value = detail || ''
+          trackEvent('GUI simple installation failed', {
+            duration_seconds: (new Date() - timeStarted.value) / 1000,
+            version, errorMessage: msg, errorDetails: detail
+          })
+          return
         }
-      } catch (error) {
-        console.error('Error installing Python:', error);
-        isInstallingPython.value = false;
-        pythonFailed.value = true;
-        message.error(t('basicInstaller.messages.errors.python'));
-      }
+
+        if (stage === 'complete') {
+          installPhaseStarted.value = true
+          installProgress.value = 100
+          if (currentState.value === 'installing') currentState.value = 'complete'
+          trackEvent('GUI simple installation succeeded', {
+            duration_seconds: (new Date() - timeStarted.value) / 1000, version
+          })
+          return
+        }
+
+        if (installPhaseStarted.value) {
+          if (percentage != null) installProgress.value = percentage
+        } else if (stage === 'download') {
+          if (percentage != null) downloadProgress.value = percentage
+        } else if (stage) {
+          installPhaseStarted.value = true
+          if (percentage != null) installProgress.value = percentage
+        }
+      })
+
+      unlistenLog = await listen('log-message', (event) => {
+        const { level, message: msg } = event.payload
+        installMessages.value.push(`[${level}] ${msg}`)
+      })
     }
 
+    // === Actions ===
     const startInstallation = async () => {
+      try {
+        const ok = await invoke('is_path_empty_or_nonexistent_command', {
+          path: displayPath.value,
+          versions: [selectedVersion.value]
+        })
+        if (!ok) {
+          warningLike.value = true
+          noArchive.value = false
+          errorTitle.value = t('simpleSetup.error.pathNotEmpty.title')
+          errorMessage.value = t('simpleSetup.error.pathNotEmpty.message', { path: `${displayPath.value}/${selectedVersion.value}` })
+          errorDetails.value = t('simpleSetup.error.pathNotEmpty.detail')
+          currentState.value = 'error'
+          return
+        }
+      } catch (e) {
+        console.warn('Path check failed:', e)
+      }
+
       currentState.value = 'installing'
-      installationProgress.value = 0
-      currentStep.value = 0
+      installPhaseStarted.value = false
+      downloadProgress.value = 0
+      installProgress.value = 0
+      installationMessage.value = ''
       installMessages.value = []
+      downloadedArchivePath.value = ''
+      archiveDecision.value = ''
       timeStarted.value = new Date()
 
-
-      try { // tracking should never fail installation
-        await invoke("track_event_command", { name: "GUI simple installation started" });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
+      await trackEvent('GUI simple installation started')
 
       try {
-        unlistenProgress = await listen('installation-progress', async (event) => {
-          const { stage, percentage, message, detail, version } = event.payload;
-
-          installationProgress.value = percentage;
-          installationMessage.value = message;
-
-          if (percentage !== undefined) {
-            // Ensure progress only moves forward (avoid jumping backwards)
-            if (percentage >= installationProgress.value) {
-              installationProgress.value = percentage
-            }
-          }
-
-          if (message) {
-            installationMessage.value = message
-          }
-
-          // Map stage to step for UI
-          const stageToStep = {
-            'checking': 0,
-            'prerequisites': 1,
-            'download': 2,
-            'extract': 3,
-            'tools': 4,
-            'python': 5,
-            'configure': 6,
-            'complete': 7
-          };
-
-          // For download stage, show submodules step when progress > 10%
-          if (stage === 'download' && percentage > 10) {
-            currentStep.value = 3 // Show submodules step
-            if (stageToStep[stage] !== undefined) {
-              updateInstallationStep(stage)
-            }
-          } else if (stageToStep[stage] !== undefined) {
-            // Only update step if we're moving forward
-            if (stageToStep[stage] >= currentStep.value) {
-              currentStep.value = stageToStep[stage]
-              updateInstallationStep(stage) // Update title based on stage
-            }
-          }
-
-          if (stage === 'error') {
-            currentState.value = 'error'
-            errorMessage.value = message || 'Installation failed'
-            errorDetails.value = detail || ''
-            try { // tracking should never fail installation
-              await invoke("track_event_command", { name: "GUI simple installation failed", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version, errorMessage: message, errorDetails: detail } });
-            } catch (error) {
-              console.warn('Failed to track event:', error);
-            }
-          } else if (stage === 'complete' || percentage === 100) {
-            currentState.value = 'complete'
-            installationProgress.value = 100 // Ensure we show 100%
-            try { // tracking should never fail installation
-              await invoke("track_event_command", { name: "GUI simple installation succeeded", additional_data: { duration_seconds: (new Date() - timeStarted.value) / 1000, version: version } });
-            } catch (error) {
-              console.warn('Failed to track event:', error);
-            }
-          }
-
-          // Auto-advance to complete state when we reach 100%
-          if (percentage >= 100 && stage !== 'error') {
-            setTimeout(() => {
-              if (currentState.value === 'installing') {
-                currentState.value = 'complete'
-              }
-            }, 1000) // Give a moment to show 100% before completing
-          }
-        });
-
-        unlistenLog = await listen('log-message', (event) => {
-          const { level, message } = event.payload;
-          installMessages.value.push(`[${level}] ${message}`);
-        });
-
-        // Start installation
-
-        await invoke('start_simple_setup', {
+        await attachListeners()
+        const path = await invoke('start_simple_offline_setup', {
           version: selectedVersion.value,
-          path: installPath.value
+          drive: driveChanged.value ? selectedDrive.value : null
         })
+        downloadedArchivePath.value = path
       } catch (error) {
-        currentState.value = 'error'
-        errorTitle.value = t('simpleSetup.error.start.title')
-        errorMessage.value = error.toString()
+        if (currentState.value !== 'error') {
+          currentState.value = 'error'
+          warningLike.value = false
+          errorTitle.value = t('simpleSetup.error.start.title')
+          errorMessage.value = error.toString()
+        }
       }
     }
 
-    const updateInstallationStep = (step) => {
-      // Update installation title based on step
-      const titles = {
-        'checking': t('simpleSetup.installation.steps.check.title'),
-        'prerequisites': t('simpleSetup.installation.steps.prerequisites.title'),
-        'download': t('simpleSetup.installation.steps.download.title'),
-        'extract': t('simpleSetup.installation.steps.extract.title'),
-        'tools': t('simpleSetup.installation.steps.tools.title'),
-        'python': t('simpleSetup.installation.steps.python.title'),
-        'configure': t('simpleSetup.installation.steps.configure.title'),
-        'complete': t('simpleSetup.installation.steps.complete.title')
-      }
+    const skipAndContinue = async () => {
+      verificationFailed.value = false
+      errorMessage.value = ''
+      errorDetails.value = ''
+      await loadArchives()
+    }
 
-      if (titles[step]) {
-        installationTitle.value = titles[step]
+    const keepArchive = () => { archiveDecision.value = 'kept' }
+    const deleteArchive = async () => {
+      if (!downloadedArchivePath.value) return
+      isDeletingArchive.value = true
+      try {
+        await invoke('delete_offline_archive', { path: downloadedArchivePath.value })
+        archiveDecision.value = 'deleted'
+      } catch (error) {
+        message.error(t('simpleSetup.archive.deleteFailed'))
+      } finally {
+        isDeletingArchive.value = false
       }
     }
 
     const retry = async () => {
-      currentState.value = 'checking'
       errorMessage.value = ''
       errorDetails.value = ''
-      pythonCheckResults.value = []
-      installationProgress.value = 0
-      currentStep.value = 0
+      installPhaseStarted.value = false
+      downloadProgress.value = 0
+      installProgress.value = 0
       installMessages.value = []
-      nextTick(() => {
-        setTimeout(() => {
-          checkPrerequisites(true);
-        }, 300);
-      });
-    }
-
-    const skipAndContinue = async () => {
-      // Skip prerequisites verification and proceed with setup
-      verificationFailed.value = false
-      errorMessage.value = ''
-      errorDetails.value = ''
-      currentState.value = 'checking'
-
-      // Fetch settings, versions, and validate installation path
-      await prepareForInstallation()
+      pythonCheckResults.value = []
+      await checkPrerequisites(true)
     }
 
     const viewLogs = async () => {
       try {
-        // await invoke('open_logs_folder')
-        let logPath = await invoke("get_logs_folder", {});
-        invoke("show_in_folder", { path: logPath });
+        const logPath = await invoke('get_logs_folder', {})
+        invoke('show_in_folder', { path: logPath })
       } catch (error) {
         message.error(t('simpleSetup.messages.errors.logs'))
       }
@@ -691,73 +649,32 @@ export default {
       }
     }
 
-    const openIDE = async () => {
-      try {
-        await invoke('open_vscode')
-      } catch (error) {
-        message.info('Please install VS Code with ESP-IDF extension')
-      }
-    }
+    const useWizard = () => router.push('/wizard/1')
+    const goToManagement = () => router.push('/version-management')
+    const goBack = () => router.push('/basic-installer')
 
-    const useWizard = () => {
-      router.push('/wizard/1')
-    }
-
-    const goToManagement = () => {
-      router.push('/version-management')
-    }
-
-    const goBack = () => {
-      router.push('/basic-installer')
-    }
-
-    onMounted(() => {
-      nextTick(() => {
-        setTimeout(() => {
-          checkPrerequisites();
-        }, 300);
-      });
-    })
-
+    onMounted(() => { checkPrerequisites() })
     onUnmounted(() => {
       if (unlistenProgress) unlistenProgress()
-      if (unlistenComplete) unlistenComplete()
-      if (unlistenError) unlistenError()
       if (unlistenLog) unlistenLog()
     })
 
     return {
       currentState,
-      currentStep,
-      selectedVersion,
-      installPath,
-      installationTitle,
-      installationMessage,
-      installationProgress,
-      installMessages,
-      installationSteps,
-      errorTitle,
-      errorMessage,
-      errorDetails,
-      pythonCheckResults,
-      verificationFailed,
-      pythonFailed,
-      isInstallingPrerequisites,
-      isInstallingPython,
-      getStatusIcon,
-      getStatusIconClass,
-      getProgressColorScheme,
-      startInstallation,
-      installPrerequisites,
-      installPython,
-      retry,
-      skipAndContinue,
-      viewLogs,
-      viewDocumentation,
-      openIDE,
-      useWizard,
-      goToManagement,
-      goBack,
+      archives, selectedVersion, versionOptions, selectedArchive,
+      installPath, displayPath,
+      drives, driveOptions, allowDriveChange, selectedDrive, defaultDrive,
+      downloadedArchivePath, archiveDecision, isDeletingArchive,
+      installPhaseStarted, downloadProgress, installProgress,
+      installationMessage, installMessages, installationSteps,
+      errorTitle, errorMessage, errorDetails, noArchive, warningLike,
+      pythonCheckResults, verificationFailed,
+      phase, phaseProgress, phaseTitle,
+      getStatusIcon, getStatusIconClass, getProgressColorScheme,
+      formatSize,
+      startInstallation, skipAndContinue,
+      keepArchive, deleteArchive,
+      retry, viewLogs, viewDocumentation, useWizard, goToManagement, goBack,
       appStore
     }
   }
@@ -767,7 +684,6 @@ export default {
 <style scoped>
 .simple-setup {
   padding: 2rem;
-  /* max-width: 900px; */
   margin: 0 auto;
 }
 
@@ -790,7 +706,6 @@ export default {
   padding: 2rem;
 }
 
-/* Checking Status */
 .checking-status {
   display: flex;
   flex-direction: column;
@@ -812,7 +727,6 @@ export default {
   font-size: 1rem;
 }
 
-/* Ready Status */
 .ready-status {
   display: flex;
   flex-direction: column;
@@ -828,17 +742,35 @@ export default {
   margin: 0;
 }
 
+.select-block {
+  width: 100%;
+  max-width: 560px;
+  text-align: left;
+}
+
+.drive-picker {
+  margin-top: 0.75rem;
+}
+
+.field-label {
+  display: block;
+  font-weight: 500;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
 .installation-summary {
   background: #f9fafb;
   border-radius: 8px;
   padding: 1.5rem;
   width: 100%;
-  max-width: 500px;
+  max-width: 560px;
 }
 
 .summary-item {
   display: flex;
   justify-content: space-between;
+  gap: 1rem;
   padding: 0.5rem 0;
   border-bottom: 1px solid #e5e7eb;
 }
@@ -850,14 +782,21 @@ export default {
 .summary-label {
   font-weight: 500;
   color: #6b7280;
+  white-space: nowrap;
 }
 
 .summary-value {
   color: #1f2937;
   font-weight: 600;
+  text-align: right;
+  word-break: break-all;
 }
 
-/* Installing Status */
+.mono {
+  font-family: monospace;
+  font-weight: 500;
+}
+
 .installing-status {
   display: flex;
   flex-direction: column;
@@ -878,6 +817,57 @@ export default {
   margin: 0;
 }
 
+/* Two-phase track */
+.phase-track {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.phase-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.phase-chip.active {
+  border-color: #E8362D;
+  color: #E8362D;
+  background: #fdeceb;
+}
+
+.phase-chip.done {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f0fdf4;
+}
+
+.phase-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: currentColor;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+}
+
+.phase-sep {
+  width: 2rem;
+  height: 2px;
+  background: #e5e7eb;
+}
+
 .status-description {
   text-align: center;
   color: #6b7280;
@@ -889,16 +879,10 @@ export default {
 }
 
 @keyframes rotate {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-/* Complete/Error Status */
 .complete-status,
 .error-status {
   display: flex;
@@ -912,6 +896,40 @@ export default {
   gap: 1rem;
   justify-content: center;
   flex-wrap: wrap;
+}
+
+.archive-prompt {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.archive-prompt h3 {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 1.125rem;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.archive-prompt p {
+  color: #4b5563;
+  margin: 0 0 0.5rem 0;
+}
+
+.archive-path {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #6b7280;
+  word-break: break-all;
+}
+
+.archive-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin-top: 1rem;
 }
 
 .post-install-info {
@@ -932,14 +950,6 @@ export default {
   padding-left: 1.5rem;
   color: #4b5563;
   line-height: 1.8;
-}
-
-.post-install-info code {
-  background: #e5e7eb;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.875rem;
 }
 
 .log-content,

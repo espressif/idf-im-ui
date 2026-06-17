@@ -1,6 +1,27 @@
 use tauri::{AppHandle, Emitter, Manager};
 use tempfile::TempDir;
-use crate::gui::{app_state::{self, update_settings}, commands::idf_tools::setup_tools, get_installed_versions, ui::{emit_installation_event, emit_log_message, InstallationProgress, InstallationStage, MessageLevel}, utils::{is_path_empty_or_nonexistent, MirrorType, get_mirror_to_use}};
+use crate::gui::{
+    app_state::{self, update_settings},
+    commands::idf_tools::setup_tools,
+    get_installed_versions,
+    ui::{
+        emit_installation_event,
+        emit_log_message,
+        InstallationProgress,
+        InstallationStage,
+        MessageLevel,
+    },
+    utils::{
+      get_mirror_to_use,
+      is_path_empty_or_nonexistent,
+      format_bytes,
+      swap_windows_drive,
+      get_offline_archive_cache_dir,
+      get_file_name,
+      compare_versions,
+      MirrorType
+    },
+};
 use std::{
   fs,
   io::{BufRead, BufReader},
@@ -40,6 +61,19 @@ use super::{
     prequisites::{install_prerequisites, python_install, python_sanity_check},
     settings,
 };
+
+/// Offline package as presented to the GUI (one build for the current platform).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OfflineArchive {
+    pub version: String,
+    pub platform: String,
+    pub filename: String,
+    pub size: u64,
+    pub url: String,
+}
+
+const OFFLINE_MANIFEST_URL: &str = "https://dl.espressif.com/dl/eim/offline_archives.json";
+const OFFLINE_ARCHIVE_BASE_URL: &str = "https://dl.espressif.com/dl/eim/";
 
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -1952,7 +1986,383 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
     Ok(())
 }
 
-// Helper function to extract filename from path
-fn get_file_name(path: &str) -> &str {
-    path.split(&['/', '\\'][..]).last().unwrap_or(path)
+async fn platform_archives() -> Result<Vec<OfflineArchive>, String> {
+    // Reuse the app's runtime platform detection (consistent with online tool
+    // selection). None => no offline build for this platform.
+    let platform = match idf_im_lib::offline_installer::current_offline_platform() {
+        Some(p) => p,
+        None => return Ok(vec![]),
+    };
+    let entries =
+        idf_im_lib::offline_installer::fetch_offline_archive_manifest(OFFLINE_MANIFEST_URL).await?;
+
+    let mut archives: Vec<OfflineArchive> = entries
+        .into_iter()
+        .filter(|e| e.status == "success" && e.platform == platform)
+        .map(|e| OfflineArchive {
+            url: format!("{}{}", OFFLINE_ARCHIVE_BASE_URL, e.filename),
+            version: e.version,
+            platform: e.platform,
+            filename: e.filename,
+            size: e.size,
+        })
+        .collect();
+
+    archives.sort_by(|a, b| compare_versions(&b.version, &a.version));
+    Ok(archives)
+}
+
+/// Lists the offline packages available for the running platform.
+/// Empty => no offline build for this OS/arch (e.g. windows-aarch64); the GUI
+/// should steer the user to expert install.
+#[tauri::command]
+pub async fn get_offline_archives(_app_handle: AppHandle) -> Result<Vec<OfflineArchive>, String> {
+    platform_archives().await
+}
+
+/// Lists available drive roots on Windows (e.g. `["C:", "D:"]`).
+/// Returns an empty list on non-Windows platforms (drive selection is hidden there).
+#[tauri::command]
+pub fn get_available_drives() -> Vec<String> {
+    if std::env::consts::OS != "windows" {
+        return vec![];
+    }
+    let mut drives = Vec::new();
+    for letter in b'C'..=b'Z' { // A: and B: are floppy disks
+        let root = format!("{}:\\", letter as char);
+        if std::path::Path::new(&root).exists() {
+            drives.push(format!("{}:", letter as char));
+        }
+    }
+    drives
+}
+
+/// Snapshot of the install-location settings we temporarily rewrite for a
+/// drive override, so they can be restored afterwards. NOTE: `esp_idf_json_path`
+/// (the registry) and `activation_script_path_override` are intentionally NOT
+/// here — they stay on the default drive so version management keeps working.
+#[derive(Clone)]
+struct OriginalInstallPaths {
+    path: Option<PathBuf>,
+    tool_install_folder_name: Option<String>,
+    tool_download_folder_name: Option<String>,
+}
+
+/// Rewrites only the drive letter of `path` + the two tool-folder names, so the
+/// IDF dir, version dir, tool download dir and tool install dir all land on the
+/// chosen drive. Returns the previous values for later restore.
+fn apply_drive_override(
+    app_handle: &AppHandle,
+    drive: &str,
+) -> Result<OriginalInstallPaths, String> {
+    let current = get_settings_non_blocking(app_handle)?;
+    let original = OriginalInstallPaths {
+        path: current.path.clone(),
+        tool_install_folder_name: current.tool_install_folder_name.clone(),
+        tool_download_folder_name: current.tool_download_folder_name.clone(),
+    };
+
+    let drive = drive.to_string();
+    update_settings(app_handle, move |settings| {
+        if let Some(p) = settings.path.as_ref().and_then(|p| p.to_str()) {
+            settings.path = Some(PathBuf::from(swap_windows_drive(p, &drive)));
+        }
+        if let Some(v) = settings.tool_install_folder_name.clone() {
+            settings.tool_install_folder_name = Some(swap_windows_drive(&v, &drive));
+        }
+        if let Some(v) = settings.tool_download_folder_name.clone() {
+            settings.tool_download_folder_name = Some(swap_windows_drive(&v, &drive));
+        }
+    })?;
+
+    Ok(original)
+}
+
+fn restore_install_paths(
+    app_handle: &AppHandle,
+    orig: OriginalInstallPaths,
+) -> Result<(), String> {
+    update_settings(app_handle, move |settings| {
+        settings.path = orig.path.clone();
+        settings.tool_install_folder_name = orig.tool_install_folder_name.clone();
+        settings.tool_download_folder_name = orig.tool_download_folder_name.clone();
+    })
+}
+
+/// Bridges the library's `DownloadProgress` (std mpsc) onto the
+/// `installation-progress` channel as the Download stage (0-100%).
+async fn download_archive_with_progress(
+    app_handle: &AppHandle,
+    archive: &OfflineArchive,
+    dest_dir: &str,
+) -> Result<(), String> {
+    let (tx, rx) = mpsc::channel::<idf_im_lib::DownloadProgress>();
+
+    let handle = app_handle.clone();
+    let version = archive.version.clone();
+    let total_size = archive.size;
+
+    let progress_thread = tokio::task::spawn_blocking(move || {
+        let mut last_pct: i32 = -1;
+        while let Ok(msg) = rx.recv() {
+            match msg {
+                idf_im_lib::DownloadProgress::Start(_) => {
+                    emit_installation_event(&handle, InstallationProgress {
+                        stage: InstallationStage::Download,
+                        percentage: 0,
+                        message: rust_i18n::t!("gui.simple_offline.downloading").to_string(),
+                        detail: Some(rust_i18n::t!("gui.simple_offline.download_detail",
+                            size = format_bytes(total_size)).to_string()),
+                        version: Some(version.clone()),
+                    });
+                }
+                idf_im_lib::DownloadProgress::Progress(downloaded, total) => {
+                    let total = if total > 0 { total } else { total_size.max(1) };
+                    let pct = ((downloaded.min(total) * 100) / total) as i32;
+                    if pct != last_pct {
+                        last_pct = pct;
+                        emit_installation_event(&handle, InstallationProgress {
+                            stage: InstallationStage::Download,
+                            percentage: pct.clamp(0, 100) as u32,
+                            message: rust_i18n::t!("gui.simple_offline.downloading").to_string(),
+                            detail: Some(rust_i18n::t!("gui.simple_offline.download_progress",
+                                downloaded = format_bytes(downloaded),
+                                total = format_bytes(total)).to_string()),
+                            version: Some(version.clone()),
+                        });
+                    }
+                }
+                idf_im_lib::DownloadProgress::Indeterminate(downloaded) => {
+                    emit_installation_event(&handle, InstallationProgress {
+                        stage: InstallationStage::Download,
+                        percentage: 0,
+                        message: rust_i18n::t!("gui.simple_offline.downloading").to_string(),
+                        detail: Some(format_bytes(downloaded)),
+                        version: Some(version.clone()),
+                    });
+                }
+                idf_im_lib::DownloadProgress::Complete => {
+                    emit_installation_event(&handle, InstallationProgress {
+                        stage: InstallationStage::Download,
+                        percentage: 100,
+                        message: rust_i18n::t!("gui.simple_offline.download_complete").to_string(),
+                        detail: None,
+                        version: Some(version.clone()),
+                    });
+                }
+                idf_im_lib::DownloadProgress::Error(e) => {
+                    emit_log_message(&handle, MessageLevel::Error, e);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let result = idf_im_lib::download_file_and_rename(
+        &archive.url,
+        dest_dir,
+        Some(tx), // dropped inside the fn when it returns -> receiver thread ends
+        Some(&archive.filename),
+        3,
+    )
+    .await;
+
+    let _ = progress_thread.await;
+
+    result.map_err(|e| {
+        let msg = rust_i18n::t!("gui.simple_offline.download_failed_detail", error = e.to_string()).to_string();
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error,
+            percentage: 0,
+            message: rust_i18n::t!("gui.simple_offline.download_failed").to_string(),
+            detail: Some(msg.clone()),
+            version: Some(archive.version.clone()),
+        });
+        msg
+    })
+}
+
+/// Non-Windows prerequisite + Python pre-check, run BEFORE downloading.
+///
+/// On Windows the offline pipeline installs git/python FROM the archive, so the
+/// archive must be downloaded first. On macOS/Linux it can only *verify* them,
+/// and doing that after a multi-GB download is a poor experience — so we run the
+/// same verification up-front and fail fast. Mirrors the non-Windows branch of
+/// `start_offline_installation` (same i18n keys); emits events only on failure.
+fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
+    let prereq_result = idf_im_lib::system_dependencies::check_prerequisites_with_result()
+        .map_err(|err| {
+            let msg = rust_i18n::t!("gui.system_dependencies.verification_error", error = err.clone()).to_string();
+            emit_installation_event(app_handle, InstallationProgress {
+                stage: InstallationStage::Error, percentage: 0,
+                message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
+                detail: Some(msg.clone()), version: None,
+            });
+            msg
+        })?;
+
+    if prereq_result.shell_failed || !prereq_result.can_verify {
+        let msg = if prereq_result.shell_failed {
+            rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
+        } else {
+            rust_i18n::t!("gui.system_dependencies.verification_error", error = "unknown").to_string()
+        };
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error, percentage: 0,
+            message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
+            detail: Some(msg.clone()), version: None,
+        });
+        return Err(msg);
+    }
+
+    let missing: Vec<String> = prereq_result.missing.into_iter().map(|p| p.to_string()).collect();
+    if !missing.is_empty() {
+        let msg = rust_i18n::t!("gui.offline.missing_prerequisites", items = missing.join(", ")).to_string();
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error, percentage: 0,
+            message: rust_i18n::t!("gui.offline.prerequisites_missing").to_string(),
+            detail: Some(msg.clone()), version: None,
+        });
+        return Err(msg);
+    }
+
+    // Python sanity check — user sees check name + hint; raw output logged only.
+    let mut python_sane = true;
+    for result in &idf_im_lib::python_utils::python_sanity_check(None, true) {
+        if !result.passed {
+            python_sane = false;
+            let name = rust_i18n::t!(result.check.display_key()).to_string();
+            let hint = rust_i18n::t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string();
+            warn!("[FAIL] {}: {}", name, result.message);
+            emit_log_message(app_handle, MessageLevel::Warning, format!("{} — {}", name, hint));
+        }
+    }
+    if !python_sane {
+        let msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
+        emit_installation_event(app_handle, InstallationProgress {
+            stage: InstallationStage::Error, percentage: 0,
+            message: msg.clone(),
+            detail: Some(rust_i18n::t!("gui.offline.python_not_configured").to_string()),
+            version: None,
+        });
+        return Err(msg);
+    }
+
+    Ok(())
+}
+
+/// Simple installation via the offline package.
+///
+/// 1. Resolve the `.zst` for `version` on the current platform.
+/// 2. Download it to the persistent cache (skipped if a complete copy with the
+///    expected byte size is already present).
+/// 3. Optionally (Windows only) relocate IDF + tools to another drive by
+///    rewriting the drive letter of `path`/tool folders for the duration of the
+///    install, restoring defaults afterwards (registry + activation scripts stay
+///    on the default drive).
+/// 4. Hand the archive to the existing, e2e-tested `start_offline_installation`.
+///
+/// Returns the on-disk archive path so the GUI can offer to keep or delete it.
+#[tauri::command]
+pub async fn start_simple_offline_setup(
+    app_handle: AppHandle,
+    version: String,
+    drive: Option<String>,
+) -> Result<String, String> {
+    let platform = idf_im_lib::offline_installer::current_offline_platform()
+        .unwrap_or_else(|| "unsupported".to_string());
+
+    let archives: Vec<OfflineArchive> = platform_archives().await?;
+    let archive = archives
+        .into_iter()
+        .find(|a| a.version == version)
+        .ok_or_else(|| {
+            rust_i18n::t!("gui.simple_offline.no_archive_for_version",
+                version = version.clone(), platform = platform.clone()).to_string()
+        })?;
+
+    // Non-Windows: verify prerequisites + Python BEFORE downloading several GB.
+    // (Windows installs these from the archive, so it must download first.)
+    if std::env::consts::OS != "windows" {
+        precheck_posix_prerequisites(&app_handle)?;
+    }
+
+    let cache_dir = get_offline_archive_cache_dir()?;
+    let archive_path = cache_dir.join(&archive.filename);
+    let archive_path_str = archive_path.to_string_lossy().to_string();
+
+    emit_installation_event(&app_handle, InstallationProgress {
+        stage: InstallationStage::Download,
+        percentage: 0,
+        message: rust_i18n::t!("gui.simple_offline.preparing_download", version = version.clone()).to_string(),
+        detail: Some(archive.filename.clone()),
+        version: Some(version.clone()),
+    });
+
+    // Reuse a previously downloaded archive when it is fully present.
+    let already_present = std::fs::metadata(&archive_path)
+        .map(|m| m.len() == archive.size)
+        .unwrap_or(false);
+
+    if already_present {
+        emit_log_message(&app_handle, MessageLevel::Info,
+            rust_i18n::t!("gui.simple_offline.using_cached", path = archive_path_str.clone()).to_string());
+        emit_installation_event(&app_handle, InstallationProgress {
+            stage: InstallationStage::Download,
+            percentage: 100,
+            message: rust_i18n::t!("gui.simple_offline.archive_ready").to_string(),
+            detail: Some(archive_path_str.clone()),
+            version: Some(version.clone()),
+        });
+    } else {
+        download_archive_with_progress(&app_handle, &archive, cache_dir.to_str().unwrap()).await?;
+        if let Ok(m) = std::fs::metadata(&archive_path) {
+            if m.len() != archive.size {
+                return Err(format!(
+                    "Downloaded archive size mismatch for {}: expected {}, got {}",
+                    archive.filename, archive.size, m.len()
+                ));
+            }
+        }
+    }
+
+    // Windows-only: relocate IDF + tools to a different drive for THIS install.
+    let restore_after = if std::env::consts::OS == "windows" {
+        match drive.as_deref().map(str::trim).filter(|d| !d.is_empty()) {
+            Some(d) => {
+                emit_log_message(&app_handle, MessageLevel::Info,
+                    rust_i18n::t!("gui.simple_offline.using_drive", drive = d).to_string());
+                Some(apply_drive_override(&app_handle, d)?)
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+
+    // Hand off to the existing offline pipeline (single archive, default path
+    // = current settings, which we may have just drive-swapped).
+    let install_result =
+        start_offline_installation(app_handle.clone(), vec![archive_path_str.clone()], String::new()).await;
+
+    // Always restore the default install location after a drive override so the
+    // next default install goes back to the standard drive.
+    if let Some(orig) = restore_after {
+        if let Err(e) = restore_install_paths(&app_handle, orig) {
+            warn!("Failed to restore default install paths after drive override: {}", e);
+        }
+    }
+
+    install_result?;
+    Ok(archive_path_str)
+}
+
+/// Deletes a downloaded offline archive (the post-install "delete" choice).
+#[tauri::command]
+pub fn delete_offline_archive(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if p.exists() {
+        std::fs::remove_file(p).map_err(|e| format!("Failed to delete archive: {}", e))?;
+    }
+    Ok(())
 }

@@ -356,6 +356,10 @@ pub fn run(
             set_tool_install_folder_name,
             get_cleanup,
             set_cleanup,
+            get_offline_archives,
+            get_available_drives,
+            start_simple_offline_setup,
+            delete_offline_archive,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
