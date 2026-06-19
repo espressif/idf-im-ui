@@ -97,6 +97,14 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { homeDir } from '@tauri-apps/api/path';
 import { NButton, NInput, NInputGroup, NSpace, NCard, NCheckbox } from 'naive-ui';
 import { path } from '@tauri-apps/api';
+import {
+  createAdvancedPathOptionsState,
+  loadAdvancedPathOptions,
+  onCleanupChange,
+  onCustomFoldersToggle,
+  browseToolFolder,
+  persistAdvancedPathOptions,
+} from '../composables/useAdvancedPathOptions.js';
 
 export default {
   name: 'InstallPathSelect',
@@ -114,16 +122,9 @@ export default {
       pathError: '',
       pathIsValid: false,
       pathSelected: false,
-      // Advanced tool-folder options
-      customToolFolders: false,
-      toolDownloadFolderName: '',
-      toolInstallFolderName: '',
-      // Defaults loaded from the backend, used to restore when the user
-      // disables the custom-folder option.
-      toolDownloadFolderDefault: 'dist',
-      toolInstallFolderDefault: 'tools',
-      // Cleanup temporary files after install
-      cleanup: false
+      // Advanced tool-folder + cleanup options; see composable for
+      // the canonical state shape and load/persist helpers.
+      ...createAdvancedPathOptionsState(),
     };
   },
   watch: {
@@ -166,37 +167,17 @@ export default {
         this.pathSelected = true;
       }
     },
-    // Persist cleanup immediately so the choice survives even if the user
-    // navigates without pressing Continue.
-    async onCleanupChange(checked) {
-      await invoke("set_cleanup", { cleanup: checked });
+
+    onCleanupChange(checked) {
+      return onCleanupChange(this, checked);
     },
-    // When the user turns the custom-folder option off, restore the default
-    // folder names so we don't accidentally persist edited-then-abandoned values.
+
     onCustomFoldersToggle(checked) {
-      if (!checked) {
-        this.toolDownloadFolderName = 'dist';
-        this.toolInstallFolderName = 'tools';
-      }
+      onCustomFoldersToggle(this, checked);
     },
-    // Open a directory picker for a tool folder. These settings are folder
-    // NAMES (appended under the install path), so we keep only the final path
-    // component. If your backend actually accepts a full path, replace
-    // `await path.basename(selected)` with `selected`.
-    async browseToolFolder(which) {
-      if (!this.customToolFolders) return;
-      const selected = await open({
-        directory: true,
-        multiple: false,
-      });
-      if (selected) {
-        const name = await path.basename(selected);
-        if (which === 'download') {
-          this.toolDownloadFolderName = name;
-        } else {
-          this.toolInstallFolderName = name;
-        }
-      }
+
+    browseToolFolder(which) {
+      return browseToolFolder(this, which);
     },
     async processInstallPath() {
       if (!this.isValidPath) {
@@ -205,19 +186,7 @@ export default {
       }
       console.log("Selected installation path:", this.installPath);
       await invoke("set_installation_path", { path: this.installPath });
-
-      // Only push custom folder names when the user explicitly opted in.
-      if (this.customToolFolders) {
-        await invoke("set_tool_download_folder_name", {
-          name: this.toolDownloadFolderName || this.toolDownloadFolderDefault
-        });
-        await invoke("set_tool_install_folder_name", {
-          name: this.toolInstallFolderName || this.toolInstallFolderDefault
-        });
-      }
-
-      // Always persist the cleanup choice.
-      await invoke("set_cleanup", { cleanup: this.cleanup });
+      await persistAdvancedPathOptions(this);
 
       this.nextstep();
     }
@@ -225,20 +194,7 @@ export default {
   async mounted() {
     const path = await invoke("get_installation_path");
     this.installPath = path;
-
-    // Load current tool folder names + cleanup so the UI reflects existing settings.
-    const downloadFolder = await invoke("get_tool_download_folder_name");
-    const installFolder = await invoke("get_tool_install_folder_name");
-
-    this.toolDownloadFolderName = downloadFolder || 'dist';
-    this.toolInstallFolderName = installFolder || 'tools';
-
-    // If custom folders are configured in the backend, enable the checkbox
-    if ((downloadFolder && downloadFolder !== 'dist') || (installFolder && installFolder !== 'tools')) {
-      this.customToolFolders = true;
-    }
-
-    this.cleanup = await invoke("get_cleanup");
+    await loadAdvancedPathOptions(this);
   }
 }
 </script>
