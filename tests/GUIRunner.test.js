@@ -41,6 +41,7 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   prerequisites,
+  resolveIdfToken,
 } from "./config.js";
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
@@ -145,9 +146,7 @@ function testRun(script) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       const toolsMirror = test.data.toolsMirror || "github";
 
@@ -202,9 +201,7 @@ function testRun(script) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)

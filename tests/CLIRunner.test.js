@@ -46,6 +46,7 @@ import {
   TOOLSFOLDER,
   runInDebug,
   prerequisites,
+  resolveIdfToken,
 } from "./config.js";
 import os from "os";
 import path from "path";
@@ -148,9 +149,7 @@ function testRun(jsonScript) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       // set the arguments for unattended test
       let installArgs = [];
@@ -224,9 +223,7 @@ function testRun(jsonScript) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       let installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
@@ -274,9 +271,7 @@ function testRun(jsonScript) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       let installArgs = [];
       runInDebug && installArgs.push("-vvv");
@@ -366,7 +361,9 @@ function testRun(jsonScript) {
       });
     } else if (test.type === "existing-git-clone") {
       const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
-      const gitRepoBranch = test.data.gitRepoBranch ?? "v5.5.4";
+      const gitRepoBranch = test.data.gitRepoBranch
+        ? resolveIdfToken(test.data.gitRepoBranch)
+        : IDFDefaultVersion;
       const installFolder = test.data.installFolder
         ? path.join(os.homedir(), test.data.installFolder)
         : INSTALLFOLDER;
@@ -434,9 +431,7 @@ function testRun(jsonScript) {
         ? test.data.idfList.split("|")
         : [IDFDefaultVersion];
 
-      const idfUpdatedList = idfVersionList.map((idf) =>
-        idf === "default" ? IDFDefaultVersion : idf
-      );
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
 
       let installArgs = [];
       runInDebug && installArgs.push("-vvv");

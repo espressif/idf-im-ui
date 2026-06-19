@@ -2,10 +2,10 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "CLI Non-Interactive v5.3.4 and v5.4.4",
+    "name": "CLI Non-Interactive previousPrevious and previous",
     "data": {
       "targetList": "esp32s2|esp32h2",
-      "idfList": "v5.3.4|v5.4.4",
+      "idfList": "previousPrevious|previous",
       "installFolder": ".espext1",
       "idfMirror": "github",
       "toolsMirror": "github",
@@ -19,9 +19,9 @@
   {
     "id": 2,
     "type": "custom",
-    "name": "CLI Non-Interactive v5.2.6",
+    "name": "CLI Non-Interactive old",
     "data": {
-      "idfList": "v5.2.6",
+      "idfList": "old",
       "targetList": "all",
       "installFolder": ".espext2",
       "idfMirror": "github",

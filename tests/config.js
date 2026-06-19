@@ -11,6 +11,9 @@ import path from "path";
 
 // Define default values for offline tests
 let IDFDefaultVersion = "v5.5.1";
+let IDFPreviousStable = "v5.4.4";
+let IDFPreviousPreviousStable = "v5.3.4";
+let IDFOldStable = "v5.2.6";
 let IDFAvailableVersions = { development: "master" };
 let IDFDefaultVersionIndex = 0;
 let availableTargets = [
@@ -24,6 +27,23 @@ let availableTargets = [
   "esp32h2",
   "esp32p4",
 ];
+
+// Map suite JSON sentinel tokens to actual IDF versions. Recognised tokens:
+//   "default"         -> latest stable
+//   "previous"        -> previous stable
+//   "previousPrevious"-> two stables back
+//   "old"             -> three stables back
+// Anything else is returned unchanged (treated as a literal version string).
+const IDF_TOKEN_MAP = {
+  default: () => IDFDefaultVersion,
+  previous: () => IDFPreviousStable,
+  previousPrevious: () => IDFPreviousPreviousStable,
+  old: () => IDFOldStable,
+};
+const resolveIdfToken = (token) => {
+  const resolver = IDF_TOKEN_MAP[token];
+  return resolver ? resolver() : token;
+};
 
 
 // IDF versions are provided by json file available at https://dl.espressif.com/dl/esp-idf/idf_versions.json
@@ -60,6 +80,19 @@ try {
       );
       logger.info(
         `IDF Default Version Index set to: ${IDFDefaultVersionIndex}`,
+      );
+
+      if (IDFValidVersions.length > 1) {
+        IDFPreviousStable = IDFValidVersions[1] || IDFPreviousStable;
+      }
+      if (IDFValidVersions.length > 2) {
+        IDFPreviousPreviousStable = IDFValidVersions[2] || IDFPreviousPreviousStable;
+      }
+      if (IDFValidVersions.length > 3) {
+        IDFOldStable = IDFValidVersions[3] || IDFOldStable;
+      }
+      logger.info(
+        `IDF previous: ${IDFPreviousStable}, previousPrevious: ${IDFPreviousPreviousStable}, old: ${IDFOldStable}`,
       );
     } else {
       logger.info("No IDF versions found in the response.");
@@ -167,6 +200,9 @@ export {
   TOOLSMIRRORS,
   PYPIMIRRORS,
   IDFDefaultVersion,
+  IDFPreviousStable,
+  IDFPreviousPreviousStable,
+  IDFOldStable,
   IDFDefaultVersionIndex,
   IDFAvailableVersions,
   availableTargets,
@@ -180,4 +216,5 @@ export {
   runInDebug,
   pythonWheelsVersion,
   prerequisites,
+  resolveIdfToken,
 };

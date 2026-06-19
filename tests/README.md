@@ -52,6 +52,19 @@ The test runners will read these files and execute the tests in order, providing
 
 Just by adding or removing entries to the suites json files it is possible to modify the test coverage and the scenarios to be tested.
 
+#### IDF version tokens in `idfList` and `gitRepoBranch`
+
+To keep suite files decoupled from specific ESP-IDF releases, the `idfList` and `gitRepoBranch` fields accept the following tokens in addition to literal version strings. Tokens are resolved by `config.js` at test-load time using the latest `idf_versions.json` from Espressif:
+
+| Token              | Resolves to                                      |
+| ------------------ | ------------------------------------------------ |
+| `default`          | Latest stable IDF release                        |
+| `previous`         | Previous stable IDF release                      |
+| `previousPrevious` | Stable release two majors back                   |
+| `old`              | Stable release three majors back                 |
+
+Tokens are pipe-combined for multi-version installs, e.g. `"default|previous"`. Any value that is not a known token is passed through unchanged as a literal version.
+
 
 ### Test Runners
 
@@ -393,6 +406,9 @@ const {
   TOOLSMIRRORS,
   PYPIMIRRORS,
   IDFDefaultVersion,
+  IDFPreviousStable,
+  IDFPreviousPreviousStable,
+  IDFOldStable,
   IDFDefaultVersionIndex,
   IDFAvailableVersions,
   availableTargets,
@@ -406,6 +422,7 @@ const {
   runInDebug,
   pythonWheelsVersion,
   prerequisites,
+  resolveIdfToken,
 } = await import("./config.js");
 
 const {
