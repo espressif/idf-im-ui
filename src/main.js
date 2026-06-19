@@ -6,7 +6,6 @@ import router from "./router";
 import naive from "naive-ui";
 import "./assets/main.css"; // Import the CSS file
 import { useAppStore } from './store'
-import { useMirrorsStore } from "./store";
 
 // Translation files
 import en from "./locales/en.json";
@@ -41,8 +40,4 @@ setTimeout(() => {
   }).catch(err => {
     console.error("Failed to initialize system info:", err);
   });
-
-  // Bootstrap mirrors in background (lazy load)
-  const mirrorsStore = useMirrorsStore();
-  mirrorsStore.bootstrapMirrorsBackground();
 }, 100);
