@@ -609,6 +609,18 @@
       "pathUpdated": "安装路径更新成功！",
       "invalidPath": "无效路径，请选择有效的目录。"
     },
+    "cleanup": {
+      "label": "安装完成后删除临时安装文件",
+      "warning": "启用清理功能后，已下载的压缩包将在安装完成后被删除。稍后重新安装或添加更多 ESP-IDF 版本时，将需要重新下载大量数据。"
+    },
+    "toolFolders": {
+      "enableLabel": "使用自定义的工具下载/安装文件夹位置（高级）",
+      "warning": "将工具文件夹移出默认位置会阻止安装程序在不同版本间对工具进行去重。安装多个 ESP-IDF 版本将显著增加磁盘空间占用和下载时间。",
+      "downloadLabel": "工具下载文件夹名称",
+      "downloadPlaceholder": "dist",
+      "installLabel": "工具安装文件夹名称",
+      "installPlaceholder": "tools"
+    },
     "continueButton": "继续"
   },
   "complete": {

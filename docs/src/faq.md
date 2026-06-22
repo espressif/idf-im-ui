@@ -57,7 +57,9 @@ Yes, you can install ESP-IDF to any location where you have full write permissio
 
 EIM writes to multiple directories beyond just the IDF path. If any of these directories point to locations where you don't have full write permissions, the installation will fail with an "Access is denied" error.
 
-To install to a completely custom location, configure **all** relevant paths:
+**GUI users:** the Expert wizard's **Select Installation Path** step lets you rename the **Tool download** (default `dist`) and **Tool install** (default `tools`) folders via the *Use custom tool download / install folder locations (advanced)* option. The folders are created under the path you choose at the top of the step. There is also a *Delete temporary installation files after the install completes* option that mirrors the CLI's `--cleanup` flag.
+
+To install to a completely custom location from the CLI, configure **all** relevant paths:
 
 ```bash
 eim install -p D:\YourCustomPath\.espressif \

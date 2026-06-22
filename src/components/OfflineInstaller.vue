@@ -95,15 +95,16 @@
       </div>
 
       <!-- Installation Path -->
-      <div class="section">
-        <h3>{{ $t('offlineInstaller.config.path.title') }}</h3>
-        <n-input-group>
+      <div class="section" data-id="installation-path-section">
+        <h3 data-id="installation-path-title">{{ $t('offlineInstaller.config.path.title') }}</h3>
+        <n-input-group data-id="installation-path-input-group">
           <n-input
             v-model:value="installPath"
             :placeholder="$t('offlineInstaller.config.path.placeholder')"
             :disabled="useDefaultPath"
+            data-id="installation-path-input"
           />
-          <n-button @click="browsePath" :disabled="useDefaultPath">
+          <n-button @click="browsePath" :disabled="useDefaultPath" data-id="installation-path-browse-button">
             <template #icon>
               <n-icon><FolderOpenOutlined /></n-icon>
             </template>
@@ -113,6 +114,7 @@
         <n-checkbox
           v-model:checked="useDefaultPath"
           style="margin-top: 0.5rem;"
+          data-id="installation-path-use-default-checkbox"
         >
           {{ $t('offlineInstaller.config.path.useDefault') }}
         </n-checkbox>
@@ -120,9 +122,83 @@
           v-if="!pathValid && installPath"
           type="warning"
           style="margin-top: 1rem;"
+          data-id="installation-path-warning"
         >
           {{ $t('offlineInstaller.config.path.warning') }}
         </n-alert>
+
+        <div class="advanced-section" data-id="advanced-options-section">
+          <div class="option-row" data-id="cleanup-option-row">
+            <n-checkbox
+              v-model:checked="cleanup"
+              @update:checked="onCleanupChange"
+              data-id="cleanup-checkbox"
+            >
+              {{ $t('installationPathSelect.cleanup.label') }}
+            </n-checkbox>
+            <p class="option-warning" v-if="cleanup" data-id="cleanup-warning">
+              {{ $t('installationPathSelect.cleanup.warning') }}
+            </p>
+          </div>
+
+          <div class="option-row" data-id="custom-folders-option-row">
+            <n-checkbox
+              v-model:checked="customToolFolders"
+              @update:checked="onCustomFoldersToggle"
+              data-id="custom-folders-checkbox"
+            >
+              {{ $t('installationPathSelect.toolFolders.enableLabel') }}
+            </n-checkbox>
+            <p class="option-warning" v-if="customToolFolders" data-id="custom-folders-warning">
+              {{ $t('installationPathSelect.toolFolders.warning') }}
+            </p>
+          </div>
+
+          <div class="folder-inputs" data-id="custom-folders-inputs">
+            <div class="folder-field" data-id="tool-download-folder-field">
+              <label class="folder-label">
+                {{ $t('installationPathSelect.toolFolders.downloadLabel') }}
+              </label>
+              <n-input-group>
+                <n-input
+                  v-model:value="toolDownloadFolderName"
+                  :placeholder="$t('installationPathSelect.toolFolders.downloadPlaceholder')"
+                  :disabled="!customToolFolders"
+                  data-id="tool-download-folder-input"
+                />
+                <n-button
+                  @click="browseToolFolder('download')"
+                  type="error"
+                  :disabled="!customToolFolders"
+                  data-id="tool-download-browse-button"
+                >
+                  {{ $t('offlineInstaller.config.archive.browse') }}
+                </n-button>
+              </n-input-group>
+            </div>
+            <div class="folder-field" data-id="tool-install-folder-field">
+              <label class="folder-label">
+                {{ $t('installationPathSelect.toolFolders.installLabel') }}
+              </label>
+              <n-input-group>
+                <n-input
+                  v-model:value="toolInstallFolderName"
+                  :placeholder="$t('installationPathSelect.toolFolders.installPlaceholder')"
+                  :disabled="!customToolFolders"
+                  data-id="tool-install-folder-input"
+                />
+                <n-button
+                  @click="browseToolFolder('install')"
+                  type="error"
+                  :disabled="!customToolFolders"
+                  data-id="tool-install-browse-button"
+                >
+                  {{ $t('offlineInstaller.config.archive.browse') }}
+                </n-button>
+              </n-input-group>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Action Buttons -->
@@ -134,6 +210,7 @@
           @click="startInstallation"
           type="primary"
           size="large"
+          data-id="start-installation-button"
           :disabled="archives.length === 0 || !installPath || missing_prerequisities.length > 0"
         >
           {{ $t('offlineInstaller.config.startButton') }}
@@ -285,6 +362,14 @@ import {
 } from '@vicons/antd'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '../store'
+import {
+  createAdvancedPathOptionsState,
+  loadAdvancedPathOptions,
+  onCleanupChange,
+  onCustomFoldersToggle,
+  browseToolFolder,
+  persistAdvancedPathOptions,
+} from './composables/useAdvancedPathOptions.js'
 
 export default {
   name: 'OfflineInstaller',
@@ -305,6 +390,11 @@ export default {
       useDefaultPath: true,
       pathValid: true,
       operating_system: '',
+
+      // Advanced tool-folder + cleanup options; see composable for
+      // the canonical state shape and load/persist helpers. Same
+      // surface as InstallationPathSelect.vue (EIM-863).
+      ...createAdvancedPathOptionsState(),
 
       // Installation state
       installationStarted: false,
@@ -474,6 +564,18 @@ export default {
       } catch (error) {
         this.pathValid = false
       }
+    },
+
+    onCleanupChange(checked) {
+      return onCleanupChange(this, checked);
+    },
+
+    onCustomFoldersToggle(checked) {
+      onCustomFoldersToggle(this, checked);
+    },
+
+    browseToolFolder(which) {
+      return browseToolFolder(this, which);
     },
 
     async startListening() {
@@ -699,6 +801,12 @@ export default {
       this.startIndex = 0;
 
       try {
+        await persistAdvancedPathOptions(this);
+      } catch (error) {
+        console.warn('Failed to persist advanced path options:', error);
+      }
+
+      try {
         await invoke('start_offline_installation', {
           archives: this.archives,
           installPath: this.useDefaultPath ? "" : this.installPath,
@@ -752,7 +860,7 @@ export default {
       });
     },
 
-    cleanup() {
+    cleanupComponent() {
       if (this._progressThrottle) {
         clearTimeout(this._progressThrottle);
         this._progressThrottle = null;
@@ -804,6 +912,7 @@ export default {
     if (this.useDefaultPath) {
       await this.getDefaultPath();
     }
+    await loadAdvancedPathOptions(this);
     await this.startListening();
     this.measureContainer();
     window.addEventListener('resize', this.measureContainer);
@@ -811,7 +920,7 @@ export default {
   },
 
   beforeUnmount() {
-    this.cleanup();
+    this.cleanupComponent();
     window.removeEventListener('resize', this.measureContainer);
   }
 }
@@ -862,6 +971,50 @@ export default {
   font-size: 1.125rem;
   color: #4b5563;
   margin-bottom: 1rem;
+}
+
+.advanced-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+  margin-top: 1.25rem;
+}
+
+.option-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.option-warning {
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.folder-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-left: 1.75rem;
+}
+
+.folder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.folder-label {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
 }
 
 .archive-list {

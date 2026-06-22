@@ -547,3 +547,87 @@ pub fn reset_settings_to_default(app_handle: AppHandle) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Gets the tool download folder name
+#[tauri::command]
+pub fn get_tool_download_folder_name(app_handle: AppHandle) -> String {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return String::new();
+        }
+    };
+    settings.tool_download_folder_name.clone().unwrap_or_default()
+}
+
+/// Sets the tool download folder name
+#[tauri::command]
+pub fn set_tool_download_folder_name(app_handle: AppHandle, name: String) -> Result<(), String> {
+    info!("Setting tool download folder name: {}", name);
+    update_settings(&app_handle, |settings| {
+        settings.tool_download_folder_name = Some(name);
+    })?;
+    send_message(
+        &app_handle,
+        t!("gui.settings.tool_download_folder_name_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}
+
+/// Gets the tool install folder name
+#[tauri::command]
+pub fn get_tool_install_folder_name(app_handle: AppHandle) -> String {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return String::new();
+        }
+    };
+    settings.tool_install_folder_name.clone().unwrap_or_default()
+}
+
+/// Sets the tool install folder name
+#[tauri::command]
+pub fn set_tool_install_folder_name(app_handle: AppHandle, name: String) -> Result<(), String> {
+    info!("Setting tool install folder name: {}", name);
+    update_settings(&app_handle, |settings| {
+        settings.tool_install_folder_name = Some(name);
+    })?;
+    send_message(
+        &app_handle,
+        t!("gui.settings.tool_install_folder_name_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}
+
+/// Gets the cleanup flag (delete temporary files after install)
+#[tauri::command]
+pub fn get_cleanup(app_handle: AppHandle) -> bool {
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(s) => s,
+        Err(e) => {
+            send_message(&app_handle, e, "error".to_string());
+            return false;
+        }
+    };
+    settings.cleanup.unwrap_or(false)
+}
+
+/// Sets the cleanup flag (delete temporary files after install)
+#[tauri::command]
+pub fn set_cleanup(app_handle: AppHandle, cleanup: bool) -> Result<(), String> {
+    info!("Setting cleanup: {}", cleanup);
+    update_settings(&app_handle, |settings| {
+        settings.cleanup = Some(cleanup);
+    })?;
+    send_message(
+        &app_handle,
+        t!("gui.settings.cleanup_updated").to_string(),
+        "info".to_string(),
+    );
+    Ok(())
+}

@@ -193,7 +193,181 @@ export function runGUIOfflineInstallTest({
       ).to.be.true;
     });
 
-    it("4- Should install IDF using offline file", async function () {
+    it("4- Should show advanced path options", async function () {
+      this.timeout(20000);
+
+      // The advanced-options section is the same surface as the
+      // expert wizard's path step (EIM-863). It must be present in the
+      // offline flow too so the user can opt into cleanup / custom
+      // tool folders without leaving the page.
+      const advancedSection = await eimRunner.findByDataId(
+        "advanced-options-section",
+      );
+      expect(advancedSection, "Expected advanced options section").to.not.be
+        .false;
+      expect(
+        await advancedSection.isDisplayed(),
+        "Expected advanced options section to be visible",
+      ).to.be.true;
+
+      // naive-ui renders n-checkbox as a <div class="n-checkbox"> with
+      // the data-id forwarded. When checked, the class becomes
+      // "n-checkbox n-checkbox--checked". The simpler `checked`
+      // substring matches every checkbox (the n-checkbox class always
+      // contains it), so we assert on the --checked modifier instead.
+      const cleanupCheckbox = await eimRunner.findByDataId("cleanup-checkbox");
+      expect(cleanupCheckbox, "Expected cleanup checkbox").to.not.be.false;
+      expect(
+        await cleanupCheckbox.isDisplayed(),
+        "Expected cleanup checkbox to be visible",
+      ).to.be.true;
+      expect(
+        await cleanupCheckbox.getAttribute("class"),
+        "Expected cleanup checkbox to start unchecked",
+      ).to.not.include("n-checkbox--checked");
+
+      const customFoldersCheckbox = await eimRunner.findByDataId(
+        "custom-folders-checkbox",
+      );
+      expect(customFoldersCheckbox, "Expected custom folders checkbox").to.not
+        .be.false;
+      expect(
+        await customFoldersCheckbox.getAttribute("class"),
+        "Expected custom folders checkbox to start unchecked",
+      ).to.not.include("n-checkbox--checked");
+
+      // Folder-name inputs are rendered as n-input; the inner <input>
+      // is what gets the `disabled` attribute. They should be disabled
+      // until the user opts in.
+      let downloadInput = await eimRunner.findByDataId(
+        "tool-download-folder-input",
+      );
+      let downloadInputEl = await downloadInput.findElement(By.css("input"));
+      expect(
+        await downloadInputEl.getAttribute("disabled"),
+        "Expected download folder input to start disabled",
+      ).to.not.be.null;
+      let installInput = await eimRunner.findByDataId(
+        "tool-install-folder-input",
+      );
+      let installInputEl = await installInput.findElement(By.css("input"));
+      expect(
+        await installInputEl.getAttribute("disabled"),
+        "Expected install folder input to start disabled",
+      ).to.not.be.null;
+
+      // Toggle the cleanup checkbox on; the warning paragraph is
+      // rendered conditionally and must show up.
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        cleanupCheckbox,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(
+        await cleanupCheckbox.getAttribute("class"),
+        "Expected cleanup checkbox to be checked after click",
+      ).to.include("n-checkbox--checked");
+      const cleanupWarning = await eimRunner.findByDataId("cleanup-warning");
+      expect(
+        await cleanupWarning.isDisplayed(),
+        "Expected cleanup warning to appear when cleanup is enabled",
+      ).to.be.true;
+
+      // Opt in to custom tool folders and verify the inputs enable,
+      // are pre-populated with the defaults, and that the warning
+      // paragraph shows up.
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        customFoldersCheckbox,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(
+        await customFoldersCheckbox.getAttribute("class"),
+        "Expected custom folders checkbox to be checked after click",
+      ).to.include("n-checkbox--checked");
+
+      const customFoldersWarning = await eimRunner.findByDataId(
+        "custom-folders-warning",
+      );
+      expect(
+        await customFoldersWarning.isDisplayed(),
+        "Expected custom folders warning to appear when enabled",
+      ).to.be.true;
+
+      downloadInput = await eimRunner.findByDataId("tool-download-folder-input");
+      downloadInputEl = await downloadInput.findElement(By.css("input"));
+      expect(
+        await downloadInputEl.getAttribute("disabled"),
+        "Expected download folder input to be enabled after opting in",
+      ).to.be.null;
+      expect(
+        await downloadInputEl.getAttribute("value"),
+        "Expected download folder input to default to 'dist'",
+      ).to.equal(
+        tGui("installationPathSelect.toolFolders.downloadPlaceholder"),
+      );
+
+      installInput = await eimRunner.findByDataId("tool-install-folder-input");
+      installInputEl = await installInput.findElement(By.css("input"));
+      expect(
+        await installInputEl.getAttribute("disabled"),
+        "Expected install folder input to be enabled after opting in",
+      ).to.be.null;
+      expect(
+        await installInputEl.getAttribute("value"),
+        "Expected install folder input to default to 'tools'",
+      ).to.equal(
+        tGui("installationPathSelect.toolFolders.installPlaceholder"),
+      );
+
+      // Typing a custom value should stick; the composable does not
+      // overwrite the input value while the option is on.
+      await downloadInputEl.clear();
+      await downloadInputEl.sendKeys("custom-dist");
+      expect(await downloadInputEl.getAttribute("value")).to.equal(
+        "custom-dist",
+      );
+
+      // Toggling the option back off must reset the folder names to
+      // the defaults — the composable is responsible for that, and
+      // leaving stale values would silently persist them on install.
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        customFoldersCheckbox,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      expect(
+        await customFoldersCheckbox.getAttribute("class"),
+        "Expected custom folders checkbox to be unchecked after second click",
+      ).to.not.include("n-checkbox--checked");
+
+      downloadInput = await eimRunner.findByDataId("tool-download-folder-input");
+      downloadInputEl = await downloadInput.findElement(By.css("input"));
+      expect(
+        await downloadInputEl.getAttribute("value"),
+        "Expected download folder input to reset to 'dist' after opting out",
+      ).to.equal(
+        tGui("installationPathSelect.toolFolders.downloadPlaceholder"),
+      );
+      installInput = await eimRunner.findByDataId("tool-install-folder-input");
+      installInputEl = await installInput.findElement(By.css("input"));
+      expect(
+        await installInputEl.getAttribute("value"),
+        "Expected install folder input to reset to 'tools' after opting out",
+      ).to.equal(
+        tGui("installationPathSelect.toolFolders.installPlaceholder"),
+      );
+
+      // Turn the cleanup flag back off so the actual install that
+      // follows runs with the default behaviour.
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        cleanupCheckbox,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    it("5- Should install IDF using offline file", async function () {
       this.timeout(2730000);
       await eimRunner.clickButton(tGui("offlineInstaller.config.startButton"));
       await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -253,7 +427,7 @@ export function runGUIOfflineInstallTest({
       ).to.be.true;
     });
 
-    it("5- Should return to dashboard once completed.", async function () {
+    it("6- Should return to dashboard once completed.", async function () {
       this.timeout(10000);
       await eimRunner.clickButton(
         tGui("offlineInstaller.installation.success.complete"),

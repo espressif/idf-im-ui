@@ -611,6 +611,18 @@
       "pathUpdated": "Installation path updated successfully!",
       "invalidPath": "Invalid path. Please choose a valid directory."
     },
+    "cleanup": {
+      "label": "Delete temporary installation files after the install completes",
+      "warning": "With cleanup enabled, downloaded archives are removed once installation finishes. Reinstalling or adding more ESP-IDF versions later will re-download a large amount of data."
+    },
+    "toolFolders": {
+      "enableLabel": "Use custom tool download / install folder locations (advanced)",
+      "warning": "Moving tool folders away from the defaults prevents the installer from deduplicating tools across versions. Installing multiple ESP-IDF versions will use significantly more disk space and download time.",
+      "downloadLabel": "Tool download folder name",
+      "downloadPlaceholder": "dist",
+      "installLabel": "Tool install folder name",
+      "installPlaceholder": "tools"
+    },
     "continueButton": "Continue"
   },
   "complete": {

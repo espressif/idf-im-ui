@@ -8,6 +8,19 @@ The installer will first verify that all prerequisites are met.
 
 ![Python check](./screenshots/expert_python_check.png)
 
+## Select Installation Path
+
+The **Select Installation Path** step lets you choose the base directory where ESP-IDF and its tools will be installed. The default is `C:\esp` on Windows and `~/.espressif` on POSIX systems. Use the **Browse** button to pick a different location.
+
+> **Important:** If you select a path that already contains an existing ESP-IDF Git repository, the installer will use that repository directly and will not rewrite its contents.
+
+Below the main path field, the step also exposes two **advanced / optional** settings:
+
+  * **Delete temporary installation files after the install completes** — When enabled, the downloaded tool archives are removed once the installation finishes. This is the same behavior as the CLI's `--cleanup` flag and is useful for CI, Docker, and other single-use environments. Reinstalling or adding more ESP-IDF versions later will re-download a large amount of data, so leave this off if you plan to add more versions.
+  * **Use custom tool download / install folder locations (advanced)** — Off by default. When enabled, two extra fields appear so you can rename the **Tool download folder** (default `dist`) and the **Tool install folder** (default `tools`). Use **Browse** to pick a directory; only the final folder name is kept and the folder is created under the chosen installation path. The installer warns that moving the tool folders away from the defaults prevents it from deduplicating tools across ESP-IDF versions, which will significantly increase disk space and download time when multiple versions are installed.
+
+![Expert installation path](./screenshots/expert_install_path.png)
+
 ## Installation Progress
 
 After configuring the installation options, you can start the process. The new installation progress view provides a clear, detailed overview of the current activity and overall progress. The installation process is broken down into a series of steps:
