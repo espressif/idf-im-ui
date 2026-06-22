@@ -71,7 +71,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useI18n } from 'vue-i18n';
 import { NButton, NSpin, NProgress, NCard } from 'naive-ui' // Added NCard here
-import { useAppStore } from '../../store'
+import { useAppStore, useMirrorsStore } from '../../store'
 
 export default {
   name: 'PrerequisitiesCheck',
@@ -94,6 +94,7 @@ export default {
     shell_failed: false,
     os: undefined,
     appStore: useAppStore(),
+    mirrorsStore: useMirrorsStore(),
     unlistenInstallComplete: null
   }),
   watch: {
@@ -165,6 +166,8 @@ export default {
 
     await this.get_os();
     await this.check_prerequisites();
+
+    this.mirrorsStore.bootstrapMirrorsBackground();
   },
   unmounted() {
     if (this.unlistenInstallComplete) {
