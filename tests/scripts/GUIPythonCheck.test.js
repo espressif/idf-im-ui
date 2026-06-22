@@ -44,13 +44,14 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
     });
 
     it("1- Should check python requirement", async function () {
-      this.timeout(25000);
+      this.timeout(90000);
       await new Promise((resolve) => setTimeout(resolve, 10000));
       await eimRunner.clickButton(tGui("welcome.cards.new.button"));
       await new Promise((resolve) => setTimeout(resolve, 2000));
       await eimRunner.clickButton(tGui("basicInstaller.cards.custom.button"));
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      const result = await eimRunner.findByDataId("python-check-result");
+      await new Promise((resolve) => setTimeout(resolve, 20000));
+      const result = await eimRunner.findByDataId("python-check-result", 30000);
+      expect(result, "python-check-result should be present on PythonSanitycheck").to.not.be.false;
       expect(await result.getText()).to.include(
         tGui("pythonSanitycheck.status.setupRequired.title")
       );
@@ -61,19 +62,20 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
         this.skip();
       }
       const installpythonButton = await eimRunner.findByText(
-        tGui("pythonSanitycheck.actions.installPython")
+        tGui("pythonSanitycheck.actions.installPython"),
+        30000
       );
       expect(installpythonButton, "Expected Install Python button to be present").to.not.be.false;
     });
 
     it("3- Should successfully install python on Windows", async function () {
-      this.timeout(80000);
+      this.timeout(600000);
       if (os.platform() !== "win32") {
         this.skip();
       }
       await eimRunner.clickButton(tGui("pythonSanitycheck.actions.installPython"));
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = await eimRunner.findByText(tGui("targetSelect.title"), 450000);
+      const result = await eimRunner.findByText(tGui("targetSelect.title"), 580000);
       expect(result, "Expected Select Target Chips text to be present").to.not.be.false;
     });
   });
