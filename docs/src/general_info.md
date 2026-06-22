@@ -173,8 +173,13 @@ brew upgrade --cask eim-gui
 For **Debian-based** distributions (Ubuntu, Debian, Linux Mint, etc.), use the official Espressif APT repository:
 
 ```bash
-# Add the Espressif APT repository
-echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
+# Install the Espressif signing key
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://dl.espressif.com/dl/eim/eim.gpg -o /etc/apt/keyrings/eim.gpg
+sudo chmod 0644 /etc/apt/keyrings/eim.gpg
+
+# Add the Espressif APT repository (deb822 with signed-by)
+sudo curl -fsSL https://dl.espressif.com/dl/eim/eim.sources -o /etc/apt/sources.list.d/espressif.sources
 
 # Update package lists
 sudo apt update
@@ -200,14 +205,11 @@ sudo apt update && sudo apt upgrade eim
 For **RPM-based** distributions (Fedora, RHEL, CentOS, openSUSE, etc.), use the official Espressif RPM repository:
 
 ```bash
+# Import the Espressif signing key
+sudo rpm --import https://dl.espressif.com/dl/eim/eim.asc
+
 # Add the Espressif RPM repository
-sudo tee /etc/yum.repos.d/espressif-eim.repo << 'EOF'
-[eim]
-name=ESP-IDF Installation Manager
-baseurl=https://dl.espressif.com/dl/eim/rpm/$basearch
-enabled=1
-gpgcheck=0
-EOF
+sudo curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/espressif-eim.repo
 
 # Install CLI only
 sudo dnf install eim-cli
@@ -215,6 +217,8 @@ sudo dnf install eim-cli
 # Or install GUI (includes CLI)
 sudo dnf install eim
 ```
+
+> **Note:** `eim.repo` enables both `gpgcheck=1` (verifies each package) and `repo_gpgcheck=1` (verifies repository metadata). If you previously set up this repo manually with `gpgcheck=0`, you can keep using it as-is — the change only affects new installs.
 
 To update EIM later:
 ```bash

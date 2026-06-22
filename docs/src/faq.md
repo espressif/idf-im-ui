@@ -36,8 +36,13 @@ No, EIM does not currently support Windows on ARM. This is because ESP-IDF itsel
 On Ubuntu-based WSL (which is the most common), you can install EIM CLI via APT:
 
 ```bash
-# Add the Espressif APT repository
-echo "deb [trusted=yes] https://dl.espressif.com/dl/eim/apt/ stable main" | sudo tee /etc/apt/sources.list.d/espressif.list
+# Install the Espressif signing key
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://dl.espressif.com/dl/eim/eim.gpg -o /etc/apt/keyrings/eim.gpg
+sudo chmod 0644 /etc/apt/keyrings/eim.gpg
+
+# Add the Espressif APT repository (deb822 with signed-by)
+sudo curl -fsSL https://dl.espressif.com/dl/eim/eim.sources -o /etc/apt/sources.list.d/espressif.sources
 
 # Update package lists
 sudo apt update
