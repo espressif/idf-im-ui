@@ -1,8 +1,9 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use dialoguer::FolderSelect;
-use idf_im_lib::idf_features::FeatureInfo;
+use idf_im_lib::git_tools::ProgressMessage;
 use idf_im_lib::idf_features::get_requirements_json_url;
+use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_features::RequirementsMetadata;
 use idf_im_lib::idf_tools::Tool;
 use idf_im_lib::idf_tools::ToolsFile;
@@ -15,11 +16,11 @@ use idf_im_lib::settings::Settings;
 use idf_im_lib::tool_selection::fetch_tools_file;
 use idf_im_lib::tool_selection::get_required_tool_names;
 use idf_im_lib::tool_selection::get_tool_names;
+use idf_im_lib::idf_tools::get_tools_export_vars_from_list;
 use idf_im_lib::tool_selection::get_tools_json_url;
 use idf_im_lib::utils::copy_dir_contents;
 use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::{ensure_path, DownloadProgress};
-use idf_im_lib::git_tools::ProgressMessage;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
@@ -324,6 +325,93 @@ async fn download_and_extract_tools(
     .await
 }
 
+/// Checks for incomplete (non-Finished) installations and interactively offers fix or delete.
+/// Only called in interactive mode (non_interactive == false).
+pub async fn check_and_handle_incomplete_installations(
+    settings: &Settings,
+    config_path: Option<&std::path::PathBuf>,
+) {
+    use idf_im_lib::idf_config::{IdfConfig, InstallationStatus};
+    use idf_im_lib::version_manager::{get_default_config_path, remove_single_idf_version};
+
+    let resolved = config_path
+        .cloned()
+        .unwrap_or_else(get_default_config_path);
+
+    let config = match IdfConfig::from_file(&resolved) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let incomplete: Vec<_> = config.get_incomplete_installations().into_iter().cloned().collect();
+    if incomplete.is_empty() {
+        return;
+    }
+
+    println!("{}", t!("wizard.incomplete.found", count = incomplete.len()));
+
+    for installation in &incomplete {
+        let status_label = match installation.status {
+            InstallationStatus::InProgress => t!("list.status.in_progress").to_string(),
+            InstallationStatus::Failed => t!("list.status.failed").to_string(),
+            InstallationStatus::BeingRepaired => t!("list.status.being_repaired").to_string(),
+            InstallationStatus::Broken => t!("list.status.broken").to_string(),
+            InstallationStatus::Finished => continue,
+        };
+
+        println!(
+            "{}",
+            t!(
+                "wizard.incomplete.entry",
+                name = installation.name.clone(),
+                status = status_label,
+                path = installation.path.clone()
+            )
+        );
+
+        let options = vec![
+            t!("wizard.incomplete.action.fix").to_string(),
+            t!("wizard.incomplete.action.delete").to_string(),
+            t!("wizard.incomplete.action.skip").to_string(),
+        ];
+
+        let choice = match crate::cli::helpers::generic_select(
+            "wizard.incomplete.action_prompt",
+            &options,
+        ) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+
+        if choice == t!("wizard.incomplete.action.fix").to_string() {
+            info!("User chose to fix incomplete installation: {}", installation.name);
+            let fix_settings = match idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation(
+                std::path::PathBuf::from(&installation.path),
+                Some(&resolved),
+            )
+            .await
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    error!("Failed to prepare fix: {}", e);
+                    continue;
+                }
+            };
+
+            match run_wizzard_run(fix_settings).await {
+                Ok(_) => info!("Successfully fixed installation: {}", installation.name),
+                Err(e) => error!("Failed to fix installation {}: {}", installation.name, e),
+            }
+        } else if choice == t!("wizard.incomplete.action.delete").to_string() {
+            match remove_single_idf_version(&installation.name, true, Some(&resolved)) {
+                Ok(_) => info!("Deleted incomplete installation: {}", installation.name),
+                Err(e) => error!("Failed to delete installation {}: {}", installation.name, e),
+            }
+        }
+        // skip: do nothing
+    }
+}
+
 pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     debug!(
         "{}",
@@ -592,7 +680,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
           }
         }
 
-
         // Save tools to per-version map
         if !selected_tools.is_empty() {
             if config.idf_tools_per_version.is_none() {
@@ -692,7 +779,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
           }
         }
         if let Some(ref per_version) = config.idf_tools_per_version {
-
             if let Some(selected_tool_names) = per_version.get(&idf_version) {
               info!("{}: {}",
                   t!("wizard.tools.filtering.selected_tools"),
@@ -841,7 +927,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         })
         .collect();
-        let export_vars = idf_im_lib::idf_tools::get_tools_export_vars_from_list(
+        let export_vars = get_tools_export_vars_from_list(
             tools,
             installed_tools_list,
             tool_install_directory.to_str().unwrap(),
@@ -853,7 +939,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             tool_install_directory.to_str().unwrap(),
             export_paths,
             paths.python_venv_path.to_str(),
-            Some(export_vars), // env_vars
+            Some(export_vars),
             &paths.python_path.to_string_lossy(),
             config.create_bat_activation_script.unwrap_or(false),
             offline_mode,

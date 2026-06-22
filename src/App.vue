@@ -60,6 +60,7 @@
             <!-- Footer -->
             <AppFooter v-if="!showSplash" />
             <UpdateNotification v-if="!showSplash" />
+            <IncompleteInstallationsNotification v-if="!showSplash" />
           </div>
         </n-notification-provider>
       </n-dialog-provider>
@@ -86,6 +87,7 @@ import {
 } from 'naive-ui'
 import AppFooter from './components/AppFooter.vue'
 import UpdateNotification from './components/UpdateNotification.vue'
+import IncompleteInstallationsNotification from './components/IncompleteInstallationsNotification.vue'
 import WarningBanner from './components/WarningBanner.vue'
 import { useRouter } from 'vue-router'
 import { invoke } from '@tauri-apps/api/core'
@@ -106,6 +108,7 @@ export default {
     NIcon,
     AppFooter,
     UpdateNotification,
+    IncompleteInstallationsNotification,
     WarningBanner
   },
   setup() {
