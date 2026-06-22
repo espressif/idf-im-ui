@@ -29,6 +29,49 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-east-1
 
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+          echo "pinentry-mode loopback"   >> "$GNUPGHOME/gpg.conf"
+          gpgconf --kill gpg-agent || true
+          KEY_FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+          echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
+          echo "Imported signing key: $KEY_FPR"
+
+      - name: Export and publish public signing key
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          # Armored key for dnf/yum (gpgkey=) and pacman-key import.
+          gpg --armor --export "$GPG_KEY_FPR" > eim.asc
+          # Dearmored key for APT signed-by keyrings (/etc/apt/keyrings/eim.gpg).
+          gpg --export "$GPG_KEY_FPR" > eim.gpg
+
+          # Ready-to-use deb822 source for new users who want verification.
+          cat > eim.sources <<'EOF'
+          Types: deb
+          URIs: https://dl.espressif.com/dl/eim/apt
+          Suites: stable
+          Components: main
+          Signed-By: /etc/apt/keyrings/eim.gpg
+          EOF
+
+          aws s3 cp eim.asc     s3://espdldata/dl/eim/eim.asc     --acl public-read
+          aws s3 cp eim.gpg     s3://espdldata/dl/eim/eim.gpg     --acl public-read
+          aws s3 cp eim.sources s3://espdldata/dl/eim/eim.sources --acl public-read
+
+          aws cloudfront create-invalidation \
+            --distribution-id "${DL_DISTRIBUTION_ID}" \
+            --paths "/dl/eim/eim.asc" "/dl/eim/eim.gpg" "/dl/eim/eim.sources"
+
       - name: Install dependencies for APT repo tools
         run: |
           sudo apt-get update
@@ -120,6 +163,23 @@ jobs:
           echo "Generated Release file:"
           cat Release
 
+      - name: Sign APT Release files
+        working-directory: apt-repo/dists/stable
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          PASS_FILE="$HOME/.gpgpass"
+          printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$PASS_FILE"
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+              --local-user "$GPG_KEY_FPR" --clearsign -o InRelease Release
+          gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+              --local-user "$GPG_KEY_FPR" -abs -o Release.gpg Release
+          rm -f "$PASS_FILE"
+          echo "Signed Release files:"
+          ls -la InRelease Release.gpg
+
       - name: Upload repository to S3
         run: |
           # Upload the entire repository structure
@@ -153,7 +213,23 @@ jobs:
       - name: Install createrepo-c for RPM repo management
         run: |
           sudo apt-get update
-          sudo apt-get install -y createrepo-c rpm
+          sudo apt-get install -y createrepo-c rpm gnupg
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+          echo "pinentry-mode loopback"   >> "$GNUPGHOME/gpg.conf"
+          gpgconf --kill gpg-agent || true
+          KEY_FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+          echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
+          echo "Imported signing key: $KEY_FPR"
 
       - name: Download CLI linux-x64 .rpm artifact
         uses: actions/download-artifact@v8
@@ -227,44 +303,71 @@ jobs:
             echo "No RPM artifacts downloaded"
           fi
 
+      - name: Sign RPM packages
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          command -v rpmsign >/dev/null || { echo "rpmsign not available" >&2; exit 1; }
+
+          PASS_FILE="$HOME/.gpgpass"
+          printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$PASS_FILE"
+
+          cat > "$HOME/.rpmmacros" <<RPMMACROS
+          %_signature gpg
+          %_gpg_name ${GPG_KEY_FPR}
+          %__gpg /usr/bin/gpg
+          %__gpg_sign_cmd %{__gpg} gpg --no-verbose --no-armor --batch --pinentry-mode loopback --passphrase-file ${PASS_FILE} --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+          RPMMACROS
+
+          for arch in x86_64 aarch64 armv7hl; do
+            shopt -s nullglob
+            rpms=(rpm-repo/$arch/*.rpm)
+            shopt -u nullglob
+            if [ ${#rpms[@]} -gt 0 ]; then
+              echo "Signing ${#rpms[@]} RPM(s) for $arch..."
+              rpmsign --addsign "${rpms[@]}"
+              for r in "${rpms[@]}"; do rpm -K "$r" || true; done
+            else
+              echo "No RPMs to sign for $arch"
+            fi
+          done
+
       - name: Generate RPM repository metadata
         working-directory: rpm-repo
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          # Generate metadata for x86_64
-          if [ -d "x86_64" ] && [ "$(ls -A x86_64/*.rpm 2>/dev/null)" ]; then
-            echo "Generating metadata for x86_64 RPMs..."
-            createrepo_c x86_64/ --update
-            echo "x86_64 metadata generated successfully"
-          else
-            echo "No x86_64 RPMs found, skipping metadata generation"
-          fi
+          set -euo pipefail
+          PASS_FILE="$HOME/.gpgpass"
+          printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$PASS_FILE"
 
-          # Generate metadata for aarch64
-          if [ -d "aarch64" ] && [ "$(ls -A aarch64/*.rpm 2>/dev/null)" ]; then
-            echo "Generating metadata for aarch64 RPMs..."
-            createrepo_c aarch64/ --update
-            echo "aarch64 metadata generated successfully"
-          else
-            echo "No aarch64 RPMs found, skipping metadata generation"
-          fi
-
-          # Generate metadata for armv7hl
-          if [ -d "armv7hl" ] && [ "$(ls -A armv7hl/*.rpm 2>/dev/null)" ]; then
-            echo "Generating metadata for armv7hl RPMs..."
-            createrepo_c armv7hl/ --update
-            echo "armv7hl metadata generated successfully"
-          else
-            echo "No armv7hl RPMs found, skipping metadata generation"
-          fi
+          for arch in x86_64 aarch64 armv7hl; do
+            if [ -d "$arch" ] && [ "$(ls -A $arch/*.rpm 2>/dev/null)" ]; then
+              echo "Generating metadata for $arch RPMs..."
+              createrepo_c "$arch"/ --update
+              echo "Signing repomd.xml for $arch..."
+              gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+                  --local-user "$GPG_KEY_FPR" --detach-sign --armor "$arch"/repodata/repomd.xml
+              echo "$arch metadata generated and signed"
+            else
+              echo "No $arch RPMs found, skipping metadata generation"
+            fi
+          done
+          rm -f "$PASS_FILE"
 
       - name: Create repo file
         run: |
-          cat > rpm-repo/eim.repo << EOF
+          cat > rpm-repo/eim.repo << 'EOF'
           [eim]
           name=ESP-IDF Installation Manager
-          baseurl=https://dl.espressif.com/dl/eim/rpm/\$basearch
+          baseurl=https://dl.espressif.com/dl/eim/rpm/$basearch
           enabled=1
-          gpgcheck=0
+          gpgcheck=1
+          repo_gpgcheck=1
+          gpgkey=https://dl.espressif.com/dl/eim/eim.asc
           EOF
 
           echo "Generated eim.repo:"
@@ -294,7 +397,7 @@ jobs:
     steps:
       - name: Install Arch dependencies
         run: |
-          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip
+          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip gnupg
           # awscli isn't in Arch's official repos; install via pip
           pip install --break-system-packages awscli
 
@@ -313,6 +416,22 @@ jobs:
           [default]
           region = ap-east-1
           EOF
+
+      - name: Import GPG signing key
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          GNUPGHOME="$(mktemp -d)"
+          export GNUPGHOME
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+          echo "pinentry-mode loopback"   >> "$GNUPGHOME/gpg.conf"
+          gpgconf --kill gpg-agent || true
+          KEY_FPR="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/{print $10; exit}')"
+          echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
+          echo "Imported signing key: $KEY_FPR"
 
       - name: Download CLI linux-x64 pacman artifact
         uses: actions/download-artifact@v8
@@ -357,7 +476,8 @@ jobs:
           mkdir -p pacman-repo/aarch64
           mkdir -p pacman-repo/armv7h
 
-          # Sync existing packages from S3 (so previous versions stay available)
+          # Sync existing packages from S3 (so previous versions stay available).
+          # Include .sig files so older signatures are preserved too.
           aws s3 sync s3://espdldata/dl/eim/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing x86_64 pacman packages"
           aws s3 sync s3://espdldata/dl/eim/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing aarch64 pacman packages"
           aws s3 sync s3://espdldata/dl/eim/pacman/armv7h/  pacman-repo/armv7h/  --exclude "*" --include "*.pkg.tar.*" || echo "No existing armv7h pacman packages"
@@ -381,23 +501,51 @@ jobs:
 
       - name: Generate Pacman repository databases
         shell: bash
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           set -euo pipefail
 
-          # repo-add builds the .db / .files databases pacman needs
+          PASS_FILE="$HOME/.gpgpass"
+          printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
+          chmod 600 "$PASS_FILE"
+
           for ARCH in x86_64 aarch64 armv7h; do
             DIR="pacman-repo/$ARCH"
+
+            # Collect package files, excluding any existing .sig files.
             shopt -s nullglob
-            PKGS=("$DIR"/*.pkg.tar.*)
+            ALL=("$DIR"/*.pkg.tar.*)
             shopt -u nullglob
+            PKGS=()
+            for p in "${ALL[@]}"; do
+              case "$p" in
+                *.sig) ;;            # skip signatures
+                *) PKGS+=("$p") ;;
+              esac
+            done
 
             if [ ${#PKGS[@]} -eq 0 ]; then
               echo "No packages for $ARCH, skipping db generation"
               continue
             fi
 
+            # Sign each package (detached .sig) BEFORE repo-add, so the database
+            # records the signature in its %PGPSIG% field.
+            for pkg in "${PKGS[@]}"; do
+              gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+                  --local-user "$GPG_KEY_FPR" --detach-sign --no-armor --output "${pkg}.sig" "$pkg"
+            done
+
             echo "Building eim.db.tar.gz for $ARCH from ${#PKGS[@]} package(s)..."
-            (cd "$DIR" && repo-add -n -R eim.db.tar.gz *.pkg.tar.*)
+            PKG_BASENAMES=()
+            for pkg in "${PKGS[@]}"; do PKG_BASENAMES+=("$(basename "$pkg")"); done
+            ( cd "$DIR" && repo-add -n -R eim.db.tar.gz "${PKG_BASENAMES[@]}" )
+
+            # Sign the database tarball.
+            gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
+                --local-user "$GPG_KEY_FPR" --detach-sign --no-armor \
+                --output "$DIR/eim.db.tar.gz.sig" "$DIR/eim.db.tar.gz"
 
             # repo-add creates symlinks (eim.db -> eim.db.tar.gz, eim.files -> ...).
             # S3 doesn't preserve symlinks, so materialize them as real files.
@@ -409,18 +557,21 @@ jobs:
               fi
             done
 
+            cp "$DIR/eim.db.tar.gz.sig" "$DIR/eim.db.sig"
+
             echo "Contents of $DIR:"
             ls -la "$DIR"
           done
+          rm -f "$PASS_FILE"
 
       - name: Create pacman.conf snippet for end users
         run: |
           cat > pacman-repo/eim.pacman.conf << 'EOF'
-          # Add this snippet to /etc/pacman.conf
           [eim]
           SigLevel = Optional TrustAll
           Server = https://dl.espressif.com/dl/eim/pacman/$arch
           EOF
+          sed -i "s/<KEY_FINGERPRINT>/$GPG_KEY_FPR/g" pacman-repo/eim.pacman.conf
           echo "Generated eim.pacman.conf:"
           cat pacman-repo/eim.pacman.conf
 
