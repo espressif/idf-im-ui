@@ -33,11 +33,6 @@ Open **List Tools** for a version to see its full tool catalog, including option
 
 Open **List Features** for a version the same way. The required `core` feature is always shown as installed; any optional feature (e.g. `docs`, `pytest`) that isn't yet part of the version's configuration appears as a candidate under **Add more features**. Click it, check the features you want, and confirm — like **Add more tools**, this triggers a repair that reinstalls the version with the newly selected features added on top of what's already installed.
 
-At the bottom of the page, you'll also find options to:
-
-* **Install New Version**: Launch a new installation wizard.
-* **Purge All**: Delete all installed ESP-IDF versions.
-
 ![Version management dashboard](./screenshots/version_management.png)
 
 ## Incomplete Installation Detection
