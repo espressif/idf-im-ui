@@ -331,6 +331,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                   } else {
                       debug!("No path provided in settings, skipping installed version check");
                   }
+                  // Create InProgress entries before installation starts so interruptions are detectable
+                  if let Err(e) = settings.create_pending_esp_ide_json() {
+                      warn!("Failed to create pending installation entries: {}", e);
+                  }
+
                   let time = std::time::SystemTime::now();
                   if !do_not_track {
                       track_cli_event("CLI installation started", Some(json!({
@@ -738,6 +743,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
                     // Check for incomplete installations and offer fix/delete
                     wizard::check_and_handle_incomplete_installations(&settings, config_path.as_ref()).await;
+
+                    // Create InProgress entries before installation starts so interruptions are detectable
+                    if let Err(e) = settings.create_pending_esp_ide_json() {
+                        warn!("Failed to create pending installation entries: {}", e);
+                    }
 
                     let time = std::time::SystemTime::now();
                     if !do_not_track {

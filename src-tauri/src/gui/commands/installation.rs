@@ -813,17 +813,15 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
                 // Mark the pending entry as Failed
                 if let Some(ids) = &settings.pending_installation_ids {
-                    let config_path = settings.esp_idf_json_path.as_ref().map(|p| {
-                        std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME)
-                    });
+                    let config_path = settings.esp_idf_json_path.as_ref()
+                        .map(|p| std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME))
+                        .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
                     if let Some(id) = ids.get(version.as_str()) {
-                        if let Some(ref cp) = config_path {
-                            let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
-                                cp,
-                                id,
-                                idf_im_lib::idf_config::InstallationStatus::Failed,
-                            );
-                        }
+                        let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
+                            &config_path,
+                            id,
+                            idf_im_lib::idf_config::InstallationStatus::Failed,
+                        );
                     }
                 }
 
@@ -1502,8 +1500,19 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
     Ok(())
 }
 
+/// Lightweight projection of an incomplete IdfInstallation for the frontend modal.
+/// Only the fields the UI actually needs — avoids shipping the base64 installation_config
+/// payload (potentially MBs of binary data) across the IPC boundary on every app start.
+#[derive(serde::Serialize, Clone)]
+pub struct IncompleteInstallationDto {
+    pub id: String,
+    pub name: String,
+    pub path: String,
+    pub status: idf_im_lib::idf_config::InstallationStatus,
+}
+
 #[tauri::command]
-pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<idf_im_lib::idf_config::IdfInstallation> {
+pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<IncompleteInstallationDto> {
     let config_path = {
         let settings = match app_state::get_settings_non_blocking(&app_handle) {
             Ok(s) => s,
@@ -1520,7 +1529,12 @@ pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<idf_im_lib::
         Ok(config) => config
             .get_incomplete_installations()
             .into_iter()
-            .cloned()
+            .map(|i| IncompleteInstallationDto {
+                id: i.id.clone(),
+                name: i.name.clone(),
+                path: i.path.clone(),
+                status: i.status.clone(),
+            })
             .collect(),
         Err(_) => vec![],
     }

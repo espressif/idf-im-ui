@@ -118,7 +118,9 @@ export default {
     const handleFix = (inst) => {
       showModal.value = false
       // Fire and forget — progress is tracked on the installation progress page
-      invoke('fix_installation', { id: inst.id })
+      invoke('fix_installation', { id: inst.id }).catch((e) => {
+        message.error(`Failed to start repair: ${e}`)
+      })
       message.success(t('app.incompleteInstallations.fixStarted', { name: inst.name }))
       router.push({
         path: '/installation-progress',

@@ -43,7 +43,8 @@ const DEFAULT_TOOLS_JSON_LOCATION: &str = "tools/tools.json";
 const DEFAULT_IDF_TOOLS_PY_LOCATION: &str = "./tools/idf_tools.py";
 
 use crate::cli::helpers::{
-    create_progress_bar, create_theme, generic_confirm, generic_input, update_progress_bar_number,
+    create_progress_bar, create_theme, generic_confirm, generic_input, generic_select_index,
+    update_progress_bar_number,
 };
 
 use crate::cli::prompts::*;
@@ -375,40 +376,43 @@ pub async fn check_and_handle_incomplete_installations(
             t!("wizard.incomplete.action.skip").to_string(),
         ];
 
-        let choice = match crate::cli::helpers::generic_select(
+        let choice_idx = match generic_select_index(
             "wizard.incomplete.action_prompt",
             &options,
         ) {
-            Ok(c) => c,
+            Ok(i) => i,
             Err(_) => continue,
         };
 
-        if choice == t!("wizard.incomplete.action.fix").to_string() {
-            info!("User chose to fix incomplete installation: {}", installation.name);
-            let fix_settings = match idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation(
-                std::path::PathBuf::from(&installation.path),
-                Some(&resolved),
-            )
-            .await
-            {
-                Ok(s) => s,
-                Err(e) => {
-                    error!("Failed to prepare fix: {}", e);
-                    continue;
-                }
-            };
+        match choice_idx {
+            0 => {
+                info!("User chose to fix incomplete installation: {}", installation.name);
+                let fix_settings = match idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation(
+                    std::path::PathBuf::from(&installation.path),
+                    Some(&resolved),
+                )
+                .await
+                {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!("Failed to prepare fix: {}", e);
+                        continue;
+                    }
+                };
 
-            match run_wizzard_run(fix_settings).await {
-                Ok(_) => info!("Successfully fixed installation: {}", installation.name),
-                Err(e) => error!("Failed to fix installation {}: {}", installation.name, e),
+                match run_wizzard_run(fix_settings).await {
+                    Ok(_) => info!("Successfully fixed installation: {}", installation.name),
+                    Err(e) => error!("Failed to fix installation {}: {}", installation.name, e),
+                }
             }
-        } else if choice == t!("wizard.incomplete.action.delete").to_string() {
-            match remove_single_idf_version(&installation.name, true, Some(&resolved)) {
-                Ok(_) => info!("Deleted incomplete installation: {}", installation.name),
-                Err(e) => error!("Failed to delete installation {}: {}", installation.name, e),
+            1 => {
+                match remove_single_idf_version(&installation.name, true, Some(&resolved)) {
+                    Ok(_) => info!("Deleted incomplete installation: {}", installation.name),
+                    Err(e) => error!("Failed to delete installation {}: {}", installation.name, e),
+                }
             }
+            _ => {} // skip: do nothing
         }
-        // skip: do nothing
     }
 }
 
