@@ -895,7 +895,6 @@ export default {
         addingFeatures.value = false
       }
     }
-
     const installationStatusLabel = (status) => {
       const map = {
         in_progress: t('app.incompleteInstallations.statusInProgress'),
