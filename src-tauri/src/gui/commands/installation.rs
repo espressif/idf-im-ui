@@ -1585,30 +1585,6 @@ pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<IncompleteIn
 }
 
 #[tauri::command]
-pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<idf_im_lib::idf_config::IdfInstallation> {
-    let config_path = {
-        let settings = match app_state::get_settings_non_blocking(&app_handle) {
-            Ok(s) => s,
-            Err(_) => return vec![],
-        };
-        settings.esp_idf_json_path.as_ref().map(|p| {
-            std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME)
-        })
-    };
-
-    let path = config_path.unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
-
-    match idf_im_lib::idf_config::IdfConfig::from_file(&path) {
-        Ok(config) => config
-            .get_incomplete_installations()
-            .into_iter()
-            .cloned()
-            .collect(),
-        Err(_) => vec![],
-    }
-}
-
-#[tauri::command]
 pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<String>, install_path: String) -> Result<(), String> {
     // Set installation flag
     if let Err(e) = set_installation_status(&app_handle, true) {
