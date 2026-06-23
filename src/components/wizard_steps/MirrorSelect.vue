@@ -91,7 +91,7 @@
         </div>
 
         <div class="action-footer" data-id="mirror-action-footer">
-          <n-button @click="processChoices" type="error" size="large" :disabled="!canProceed"
+          <n-button @click="processChoices" type="primary" size="large" :disabled="!canProceed"
             data-id="continue-mirrors-button">
             {{ t('mirrorSelect.continueButton') }}
           </n-button>

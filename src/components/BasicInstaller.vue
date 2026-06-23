@@ -22,7 +22,7 @@
             :percentage="loadingProgress"
             :show-indicator="false"
             processing
-            color="#E8362D"
+            color="var(--espressif-red-color)"
           />
         </div>
       </n-card>
@@ -544,7 +544,7 @@ export default {
 }
 
 .easy-mode-card:hover {
-  border-color: #E8362D;
+  border-color: var(--espressif-red-color);
 }
 
 .custom-mode-card:hover {
@@ -575,7 +575,7 @@ export default {
 }
 
 .option-icon.easy {
-  background: linear-gradient(135deg, #ff6b6b, #E8362D);
+  background: linear-gradient(135deg, #ff6b6b, var(--espressif-red-color));
   color: white;
 }
 
@@ -656,10 +656,6 @@ export default {
   gap: 1rem;
   padding-top: 1rem;
   border-top: 1px solid #e5e7eb;
-}
-
-.n-button[type="primary"] {
-  background-color: #E8362D;
 }
 
 /* Fade transition */

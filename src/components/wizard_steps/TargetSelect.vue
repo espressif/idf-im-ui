@@ -28,7 +28,7 @@
         </div>
 
         <div class="action-footer" data-id="target-action-footer">
-          <n-button @click="processTargets" type="error" size="large" :disabled="!hasSelectedTargets"
+          <n-button @click="processTargets" type="primary" size="large" :disabled="!hasSelectedTargets"
             data-id="continue-targets-button">
             {{ t('targetSelect.continueButton') }}
           </n-button>

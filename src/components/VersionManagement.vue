@@ -848,10 +848,6 @@ export default {
   border-top: 1px solid #e5e7eb;
 }
 
-.n-button[type="primary"] {
-  background-color: #E8362D;
-}
-
 .n-modal code {
   background: #f3f4f6;
   padding: 0.25rem 0.5rem;

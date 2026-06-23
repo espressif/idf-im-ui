@@ -241,7 +241,7 @@
             :percentage="currentProgress"
             :processing="installation_running"
             :indicator-placement="'inside'"
-            color="#E8362D"
+            color="var(--espressif-red-color)"
           />
         </div>
 
@@ -272,7 +272,7 @@
       <div v-if="installation_failed" class="error-message" data-id="error-message">
         <h3 data-id="error-title">{{ $t('offlineInstaller.installation.error.title') }}</h3>
         <p data-id="error-message-text">{{ error_message }} <br> {{ $t('offlineInstaller.installation.error.info') }}</p>
-        <n-button @click="retry" type="error" size="large" data-id="retry-installation-button">
+        <n-button @click="retry" type="primary" size="large" data-id="retry-installation-button">
           {{ $t('offlineInstaller.installation.error.retry') }}
         </n-button>
         <n-button @click="goBack" type="default" size="large" style="margin-left: 1rem;" data-id="back-installation-button">
@@ -282,7 +282,7 @@
 
       <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
-        <n-button @click="finish" type="error" size="large" data-id="complete-installation-button-footer">
+        <n-button @click="finish" type="primary" size="large" data-id="complete-installation-button-footer">
           {{ $t('offlineInstaller.installation.success.complete') }}
         </n-button>
       </div>
@@ -1159,7 +1159,7 @@ export default {
 /* Error State */
 .error-message {
   margin-top: 1rem;
-  border: 1px dotted #E8362D;
+  border: 1px dotted var(--espressif-red-color);
   padding: 1rem;
 }
 
@@ -1255,7 +1255,7 @@ export default {
 .log-message.highlight {
   background-color: #fff9c2;
   font-weight: 500;
-  border-left: 3px solid #E8362D;
+  border-left: 3px solid var(--espressif-red-color);
 }
 
 .log-count {
@@ -1291,12 +1291,6 @@ export default {
 /* Button styling */
 .n-button {
   color: #e5e7eb;
-  background: #E8362D;
-}
-
-.n-button[type="primary"] {
-  color: #e5e7eb;
-  background-color: #E8362D;
 }
 
 .n-card {

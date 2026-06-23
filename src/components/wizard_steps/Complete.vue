@@ -209,11 +209,11 @@ export default {
 
 .n-result-icon svg {
   width: 40px;
-  color: #E8362D;
+  color: var(--espressif-red-color);
 }
 
 .home-button {
-  color: #E8362D;
+  color: var(--espressif-red-color);
 }
 
 .n-result-header {

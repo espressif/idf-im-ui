@@ -2,7 +2,7 @@
   --background-color: #f0f0f0;
   --text-color: #333333;
   --primary-color: #f0f0f0;
-  --n-primary-color-suppl: #ecf5fe;
+  --n-primary-color-suppl: #fdeaea;
   --secondary-color: #5AC8FA;
   --espressif-red-color: #E8362D;
   --border-color: #d1d1d1;
@@ -31,10 +31,6 @@
 }
 .n-result .n-result-icon .n-base-icon {
   color: var(--espressif-red-color);
-}
-.n-checkbox.n-checkbox--checked .n-checkbox-box,
-.n-checkbox.n-checkbox--indeterminate .n-checkbox-box {
-  background-color: var(--espressif-red-color);
 }
 .n-card {
   border: none;

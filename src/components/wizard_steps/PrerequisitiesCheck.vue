@@ -35,7 +35,7 @@
 
         <!-- All prerequisites satisfied -->
         <div v-else-if="missing_prerequisities.length === 0">
-          <n-button @click="nextstep" type="error" data-id="continue-button">
+          <n-button @click="nextstep" type="primary" data-id="continue-button">
             {{ t('prerequisitiesCheck.actions.continue') }}
           </n-button>
         </div>
@@ -57,7 +57,7 @@
         </div>
       </div>
       <div v-if="missing_prerequisities.length > 0 || !did_the_check_run">
-        <n-button @click="check_prerequisites(true)" type="error" :loading="loading" data-id="check-prerequisites-button">
+        <n-button @click="check_prerequisites(true)" type="primary" :loading="loading" data-id="check-prerequisites-button">
           {{ loading ? t('prerequisitiesCheck.status.checkingButton') : t('prerequisitiesCheck.actions.checkPrerequisites') }}
         </n-button>
       </div>

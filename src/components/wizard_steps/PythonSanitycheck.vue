@@ -17,11 +17,11 @@
                   </n-button>
                   <p class="install-note" data-id="install-python-note">{{ t('pythonSanitycheck.installNote') }}</p>
                 </div>
-                <n-button v-if="python_sane" @click="nextstep" type="error" :disabled="loading"
+                <n-button v-if="python_sane" @click="nextstep" type="primary" :disabled="loading"
                   data-id="continue-button">
                   {{ t('pythonSanitycheck.actions.continueNext') }}
                 </n-button>
-                <n-button v-if="!python_sane" @click="check_python_sanity" type="error" data-id="recheck-python-button">
+                <n-button v-if="!python_sane" @click="check_python_sanity" type="primary" data-id="recheck-python-button">
                   {{ t('pythonSanitycheck.actions.recheckInstallation') }}
                 </n-button>
               </div>
@@ -232,9 +232,5 @@ export default {
 
 .n-result .n-result-icon .n-base-icon {
   color: blue;
-}
-
-.n-button {
-  background-color: #E8362D;
 }
 </style>
