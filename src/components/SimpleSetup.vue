@@ -957,11 +957,6 @@ export default {
   color: #991b1b;
 }
 
-.n-button[type="primary"] {
-  background-color: #E8362D;
-  color: #e5e7eb;
-}
-
 .setup-header .n-button {
   color: white !important;
 }

@@ -412,9 +412,4 @@ Please attach logs from the app logs folder.
   color: #e5e7eb;
 }
 
-/* Modal button styles - only apply to buttons inside modals */
-.about-content .n-button[type="primary"],
-.modal-actions .n-button[type="primary"] {
-  background-color: #E8362D;
-}
 </style>

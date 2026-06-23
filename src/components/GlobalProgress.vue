@@ -133,7 +133,7 @@ export default {
 
     const progressColor = computed(() => {
       const colors = {
-        primary: '#E8362D',
+        primary: 'var(--espressif-red-color)',
         success: '#52c41a',
         warning: '#faad14',
         error: '#ff4d4f',

@@ -41,7 +41,7 @@
 
         <!-- Start Installation Button - Only show when appropriate -->
         <div data-id="start-button-container" v-if="shouldShowStartButton()">
-          <n-button @click="startInstallation()" type="error" size="large" :loading="installation_running"
+          <n-button @click="startInstallation()" type="primary" size="large" :loading="installation_running"
             :disabled="installation_running" data-id="start-installation-button">
             {{ installation_running ? t('installationProgress.buttons.installing') : t('installationProgress.buttons.startInstallation') }}
           </n-button>
@@ -77,7 +77,7 @@
             :percentage="currentProgress"
             :processing="installation_running"
             :indicator-placement="'inside'"
-            color="#E8362D"
+            color="var(--espressif-red-color)"
           />
         </div>
 
@@ -108,12 +108,12 @@
       <div v-if="installation_failed" class="error-message" data-id="error-message">
         <h3 data-id="error-title">{{ t('installationProgress.error.title', { mode: is_fix_mode ? t('installationProgress.title.repair').toLowerCase() : t('installationProgress.title.installation').toLowerCase() }) }}</h3>
         <p data-id="error-message-text">{{ error_message }} <br> {{ t('installationProgress.error.seeLog') }}</p>
-        <n-button @click="goHome()" type="error" size="large" data-id="home-installation-button">{{ t('installationProgress.buttons.goBack') }}</n-button>
+        <n-button @click="goHome()" type="primary" size="large" data-id="home-installation-button">{{ t('installationProgress.buttons.goBack') }}</n-button>
       </div>
 
       <!-- Completion Actions -->
       <div class="action-footer" v-if="installation_finished && !installation_failed" data-id="action-footer">
-        <n-button @click="handleCompletion()" type="error" size="large" data-id="complete-installation-button-footer">
+        <n-button @click="handleCompletion()" type="primary" size="large" data-id="complete-installation-button-footer">
           {{ is_fix_mode ? t('installationProgress.buttons.completeRepair') : t('installationProgress.buttons.completeInstallation') }}
         </n-button>
       </div>
@@ -1029,7 +1029,7 @@ export default {
 
 .error-message {
   margin-top: 1rem;
-  border: 1px dotted #E8362D;
+  border: 1px dotted var(--espressif-red-color);
   padding: 1rem;
 }
 
@@ -1121,7 +1121,7 @@ export default {
 .log-message.highlight {
   background-color: #fff9c2;
   font-weight: 500;
-  border-left: 3px solid #E8362D;
+  border-left: 3px solid var(--espressif-red-color);
 }
 
 .log-count {
@@ -1198,10 +1198,6 @@ export default {
   margin: 0;
   color: #92400e;
   font-size: 0.9rem;
-}
-
-.n-button {
-  background: #E8362D;
 }
 
 .n-card {

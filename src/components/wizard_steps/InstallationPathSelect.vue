@@ -13,7 +13,7 @@
           <n-input-group data-id="path-input-group">
             <n-input v-model:value="installPath" :placeholder="t('installationPathSelect.input.placeholder')" class="path-field"
               data-id="installation-path-input" />
-            <n-button @click="openFolderDialog" type="error" data-id="browse-button">
+            <n-button @click="openFolderDialog" type="primary" data-id="browse-button">
               {{ t('installationPathSelect.input.browseButton') }}
             </n-button>
           </n-input-group>
@@ -28,7 +28,7 @@
       </div>
 
       <div class="action-footer" data-id="path-action-footer">
-        <n-button @click="processInstallPath" :disabled="!pathIsValid" type="error" size="large"
+        <n-button @click="processInstallPath" :disabled="!pathIsValid" type="primary" size="large"
           data-id="continue-path-button">
           {{ t('installationPathSelect.continueButton') }}
         </n-button>
@@ -220,10 +220,6 @@ export default {
   height: 100%;
 }
 
-.n-button {
-  background: #E8362D;
-}
-
 .n-card {
   border: none;
   border-top: 1px solid #e5e7eb;
@@ -239,7 +235,7 @@ export default {
 
 .error-message-false {
   background-color: #fdeae8;
-  border-left: 4px solid #E8362D;
+  border-left: 4px solid var(--espressif-red-color);
 }
 
 .error-message-true {

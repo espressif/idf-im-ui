@@ -54,7 +54,7 @@
             </span>
             <n-button
               @click="processChoices"
-              type="error"
+              type="primary"
               size="large"
               :disabled="!canProceed"
               data-id="continue-tools-button"
@@ -290,14 +290,7 @@ export default {
   padding: 0px;
 }
 
-.n-button[type="primary"] {
-  background-color: #E8362D;
-  color: #e5e7eb;
-}
-
 .n-button {
   padding: 5px;
-  background-color: #E8362D;
-  color: #ffffff;
 }
 </style>

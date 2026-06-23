@@ -311,7 +311,7 @@ html, body {
 
 /* Header Styles */
 .app-header {
-  background: linear-gradient(135deg, #E8362D 0%, #dc2626 100%);
+  background: linear-gradient(135deg, var(--espressif-red-color) 0%, #dc2626 100%);
   color: white;
   padding: 1rem 1.5rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
@@ -443,7 +443,7 @@ html, body {
 .splash-screen {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #667eea 0%, #E8362D 100%);
+  background: linear-gradient(135deg, #667eea 0%, var(--espressif-red-color) 100%);
   display: flex;
   align-items: center;
   justify-content: center;

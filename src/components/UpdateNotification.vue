@@ -74,7 +74,7 @@
             {{ t('app.updateAvailable.orDownload') }}
           </p>
           <n-button
-            type="error"
+            type="primary"
             size="large"
             @click="openDownloadPage"
             data-id="download-update-btn"

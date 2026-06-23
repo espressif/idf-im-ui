@@ -9,7 +9,7 @@
             {{ $t('welcome.cpuError') }}
           </n-alert>
           <p>{{ $t('welcome.sorry') }}</p>
-          <n-button @click="quit" type="error" size="large" data-id="exit-installer-button">
+          <n-button @click="quit" type="primary" size="large" data-id="exit-installer-button">
             {{ $t('welcome.exitInstaller') }}
           </n-button>
         </div>
@@ -41,7 +41,7 @@
               data-id="manage-versions-card"
             >
               <div class="card-content">
-                <n-icon :size="48" color="#E8362D">
+                <n-icon :size="48" color="var(--espressif-red-color)">
                   <DashboardOutlined />
                 </n-icon>
                 <h3>{{ $t('welcome.cards.manage.title') }}</h3>
@@ -325,7 +325,7 @@ export default {
 .splash-screen {
   position: fixed;
   inset: 0;
-  background: linear-gradient(135deg, #667eea 0%, #E8362D 100%);
+  background: linear-gradient(135deg, #667eea 0%, var(--espressif-red-color) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -408,7 +408,7 @@ export default {
 }
 
 .welcome-card h1 span {
-  color: #E8362D;
+  color: var(--espressif-red-color);
 }
 
 .subtitle {
@@ -454,7 +454,7 @@ export default {
 }
 
 .decision-card.primary-action:hover {
-  border-color: #E8362D;
+  border-color: var(--espressif-red-color);
 }
 
 .decision-card.offline-action:hover {
@@ -503,10 +503,6 @@ export default {
   padding-top: 2rem;
   border-top: 1px solid #e5e7eb;
   text-align: center;
-}
-
-.n-button[type="primary"] {
-  background-color: #E8362D;
 }
 
 .n-button[type="success"] {
