@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::AppHandle;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::telemetry::InstallationContext;
 use idf_im_lib::utils::MirrorEntry;
 
 use tauri::Manager; // dep: fork = "0.1"
@@ -25,6 +26,8 @@ pub struct AppState {
     pub idf_mirror_latency_entries: Mutex<Option<Vec<MirrorEntry>>>,
     pub tools_mirror_latency_entries: Mutex<Option<Vec<MirrorEntry>>>,
     pub pypi_mirror_latency_entries: Mutex<Option<Vec<MirrorEntry>>>,
+    #[serde(skip)]
+    pub telemetry_session: Mutex<Option<InstallationContext>>,
 }
 
 pub fn set_idf_mirror_latency_entries(app_handle: &AppHandle, entries: &Vec<MirrorEntry>) -> Result<(), String> {
