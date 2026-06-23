@@ -551,20 +551,33 @@ To help us improve the ESP-IDF Installation Manager, we collect some anonymous u
 We collect the following information to understand how the installer is used and to identify areas for improvement:
 
 - **Environment / System Info**
-  - OS & version (Windows, macOS, Linux)
-  - Architecture (x64, ARM, etc.)
+  - OS & version (Windows, macOS, Linux distribution)
+  - Architecture (x64, ARM, etc.) and kernel version
   - App version (EIM version)
-- **User Flows**
-  - Online Installation
-  - Offline Installation
-- **Usage Tracking**
-  - Which ESP-IDF version was selected for installation
-  - Time taken for the installation
+  - Whether the system is already running elevated
+- **Install context**
+  - Which installation flow was used: **wizard**, **simple**, **offline**, **fix**, or **cli** (incl. whether the GUI or CLI was used)
+  - Requested ESP-IDF version(s) (e.g. `v5.3.1`) — public, released tags
+  - Counts of selected features, tools, and targets (not the names)
+  - Whether the run was interactive and whether an existing IDF directory was reused
+  - A per-run session ID and per-version installation ID for correlation between the start and finish of an install
+- **Outcome**
+  - Whether the install **succeeded** or **failed**
+  - Duration of the install (in seconds)
 - **Error & Failure Tracking**
-  - Installation step that failed
-  - Error message related to the failure
+  - A coarse error **kind** (network, filesystem, git, python, dependency, configuration, user-cancelled, unknown)
+  - A short 16-character **fingerprint** (SHA-256 prefix) of the error message, used to deduplicate recurring failures without storing the text itself
+  - The error message itself, with filesystem paths, home-directory segments, and email addresses automatically redacted
 
-This data is completely anonymous and does not contain any personal information.
+### What we explicitly do **not** collect
+
+- No filesystem paths (installation paths, IDF directories, tool folders, etc.) — these can contain your username
+- No command-line arguments or subcommand values
+- No environment variables
+- No raw, unredacted error messages
+- No personally identifiable information of any kind
+
+The data is sent to Azure Application Insights using the instrumentation key compiled into the release build. It is used solely for aggregate analysis (e.g. "how many installs failed on macOS this week") and to debug reported issues.
 
 ### How to disable data collection?
 
@@ -572,3 +585,4 @@ You have full control over data collection.
 
 - **GUI**: On the welcome page of the installer, you will find a checkbox to disable telemetry. Unchecking this box will completely prevent any data from being sent.
 - **CLI**: When using the command-line interface, you can use the `--do-not-track true` flag to disable telemetry for that session.
+- **GUI launched from the CLI**: The GUI subcommand (`eim gui`) honours `--do-not-track`; passing it ensures the GUI also starts with telemetry disabled.

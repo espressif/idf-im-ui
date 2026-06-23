@@ -329,8 +329,10 @@ export default {
       this.timeStarted = new Date();
 
       try {
-        const eventName = this.is_fix_mode ? "GUI fix installation started" : "GUI wizard installation started";
-        await invoke("track_event_command", { name: eventName });
+        await invoke("track_event_command", {
+          event: "install_started",
+          mode: this.is_fix_mode ? "fix" : "wizard"
+        });
       } catch (error) {
         console.warn('Failed to track event:', error);
       }
@@ -606,13 +608,11 @@ export default {
       }
 
       try {
-        const eventName = this.is_fix_mode ? "GUI fix installation succeeded" : "GUI wizard installation succeeded";
         invoke("track_event_command", {
-          name: eventName,
-          additional_data: {
-            duration_seconds: (new Date() - this.timeStarted) / 1000,
-            version: version || this.current_version
-          }
+          event: "install_finished",
+          mode: this.is_fix_mode ? "fix" : "wizard",
+          outcome: "success",
+          versions: [version || this.current_version]
         });
       } catch (error) {
         console.warn('Failed to track event:', error);
@@ -629,15 +629,12 @@ export default {
       }
 
       try {
-        const eventName = this.is_fix_mode ? "GUI fix installation failed" : "GUI wizard installation failed";
         invoke("track_event_command", {
-          name: eventName,
-          additional_data: {
-            duration_seconds: (new Date() - this.timeStarted) / 1000,
-            version: this.current_version,
-            errorMessage: message,
-            errorDetails: detail
-          }
+          event: "install_finished",
+          mode: this.is_fix_mode ? "fix" : "wizard",
+          outcome: "failure",
+          versions: [this.current_version],
+          error_message: detail || message
         });
       } catch (error) {
         console.warn('Failed to track event:', error);

@@ -733,14 +733,12 @@ export default {
         this.installed_versions.push(version);
       }
 
-      // Add this tracking block
       try {
         invoke("track_event_command", {
-          name: "GUI offline installation succeeded",
-          additional_data: {
-            duration_seconds: (new Date() - this.timeStarted) / 1000,
-            version: version
-          }
+          event: "install_finished",
+          mode: "offline",
+          outcome: "success",
+          versions: [version]
         });
       } catch (error) {
         console.warn('Failed to track event:', error);
@@ -754,12 +752,10 @@ export default {
 
       try {
         invoke("track_event_command", {
-          name: "GUI offline installation failed",
-          additional_data: {
-            duration_seconds: (new Date() - this.timeStarted) / 1000,
-            errorMessage: message,
-            errorDetails: detail
-          }
+          event: "install_finished",
+          mode: "offline",
+          outcome: "failure",
+          error_message: detail || message
         });
       } catch (error) {
         console.warn('Failed to track event:', error);
@@ -775,8 +771,11 @@ export default {
       this.installed_versions = [];
       this.timeStarted = new Date();
 
-      try { // tracking should never fail installation
-        await invoke("track_event_command", { name: "GUI offline installation started" });
+      try {
+        await invoke("track_event_command", {
+          event: "install_started",
+          mode: "offline"
+        });
       } catch (error) {
         console.warn('Failed to track event:', error);
       }

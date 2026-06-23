@@ -27,12 +27,15 @@ use log::info;
 use log::warn;
 use log::LevelFilter;
 use semver::Op;
-use serde_json::json;
 use rust_i18n::t;
 
-use crate::cli::helpers::track_cli_event;
 #[cfg(feature = "gui")]
 use crate::gui;
+
+use idf_im_lib::telemetry::{
+    self as telemetry, ErrorKind, InstallMode, InstallOutcome, InstallationContext, Interface,
+    OutcomeExtras,
+};
 
 pub mod cli_args;
 pub mod helpers;
@@ -176,6 +179,7 @@ fn format_tool_list_report(report: &idf_im_lib::version_manager::ToolListReport)
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
   let do_not_track = cli.do_not_track;
+  telemetry::set_enabled(!do_not_track);
     // Initial tracking of CLI start
     #[cfg(feature = "gui")]
     let command = cli
@@ -278,9 +282,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
     }
     if !do_not_track {
-        track_cli_event("CLI started", Some(json!({
-          "command": format!("{:?}", command)
-        }))).await;
+        telemetry::track_cli_invoked(subcommand_name(&command));
     }
     let cli_esp_idf_json_path = cli.esp_idf_json_path;
     let config_path = cli_esp_idf_json_path.as_ref().map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME));
@@ -336,11 +338,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       warn!("Failed to create pending installation entries: {}", e);
                   }
 
-                  let time = std::time::SystemTime::now();
+                  let ctx = build_cli_context(&settings, InstallMode::Cli);
+                  let extras = build_cli_extras(&settings);
                   if !do_not_track {
-                      track_cli_event("CLI installation started", Some(json!({
-                        "versions": format!("{:?}", settings.idf_versions),
-                      }))).await;
+                      telemetry::track_install_started(&ctx);
                   }
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
@@ -349,18 +350,26 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             info!("{}", t!("install.success"));
                             info!("{}", t!("install.ready"));
                             if !do_not_track {
-                              track_cli_event("CLI installation finished", Some(json!({
-                                "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
-                              }))).await;
+                              telemetry::track_install_outcome(
+                                  &ctx,
+                                  InstallOutcome::Success,
+                                  None,
+                                  None,
+                                  extras,
+                              );
                             }
                             Ok(())
                         }
                         Err(err) => {
                           if !do_not_track {
-                            track_cli_event("CLI installation failed", Some(json!({
-                              "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
-                              "error": format!("{:?}", err),
-                            }))).await;
+                            let wrapped = anyhow::anyhow!(err.clone());
+                            telemetry::track_install_outcome(
+                                &ctx,
+                                InstallOutcome::Failure,
+                                Some(ErrorKind::from_message(&err)),
+                                Some(&wrapped),
+                                extras,
+                            );
                           }
                             Err(anyhow::anyhow!(err))
                         }
@@ -749,9 +758,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         warn!("Failed to create pending installation entries: {}", e);
                     }
 
-                    let time = std::time::SystemTime::now();
+                    let ctx = build_cli_context(&settings, InstallMode::Cli);
+                    let extras = build_cli_extras(&settings);
                     if !do_not_track {
-                      track_cli_event("CLI wizard started", Some(json!({}))).await;
+                      telemetry::track_install_started(&ctx);
                     }
                     let result = wizard::run_wizzard_run(settings).await;
                     match result {
@@ -760,18 +770,26 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             info!("{}", t!("install.success"));
                             info!("{}", t!("install.ready"));
                             if !do_not_track {
-                              track_cli_event("CLI wizard finished", Some(json!({
-                                "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
-                              }))).await;
+                              telemetry::track_install_outcome(
+                                  &ctx,
+                                  InstallOutcome::Success,
+                                  None,
+                                  None,
+                                  extras,
+                              );
                             }
                             Ok(())
                         }
                         Err(err) => {
                           if !do_not_track {
-                            track_cli_event("CLI wizard failed", Some(json!({
-                              "duration": format!("{:?}", time.elapsed().unwrap_or_default()),
-                              "error": format!("{:?}", err),
-                            }))).await;
+                            let wrapped = anyhow::anyhow!(err.clone());
+                            telemetry::track_install_outcome(
+                                &ctx,
+                                InstallOutcome::Failure,
+                                Some(ErrorKind::from_message(&err)),
+                                Some(&wrapped),
+                                extras,
+                            );
                           }
                           Err(anyhow::anyhow!(err))
                         }
@@ -879,5 +897,73 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
           }
         }
+    }
+}
+
+fn subcommand_name(cmd: &Commands) -> &'static str {
+    match cmd {
+        Commands::Install(_) => "install",
+        Commands::List => "list",
+        Commands::ListTools { .. } => "list-tools",
+        Commands::Select { .. } => "select",
+        Commands::Discover => "discover",
+        Commands::Remove { .. } => "remove",
+        Commands::Rename { .. } => "rename",
+        Commands::Run { .. } => "run",
+        Commands::Import { .. } => "import",
+        Commands::Purge => "purge",
+        Commands::Wizard(_) => "wizard",
+        Commands::Fix { .. } => "fix",
+        Commands::InstallDrivers => "install-drivers",
+        Commands::Completions { .. } => "completions",
+        Commands::HelpJson => "help-json",
+        #[cfg(feature = "gui")]
+        Commands::Gui(_) => "gui",
+    }
+}
+
+fn build_cli_context(settings: &Settings, mode: InstallMode) -> InstallationContext {
+    let installation_ids: Vec<String> = settings
+        .pending_installation_ids
+        .as_ref()
+        .map(|m| m.values().cloned().collect())
+        .unwrap_or_default();
+    let versions = settings.idf_versions.clone().unwrap_or_default();
+    telemetry::new_session(Interface::Cli, mode, versions, installation_ids)
+}
+
+fn build_cli_extras(settings: &Settings) -> OutcomeExtras {
+    let feature_count = settings
+        .idf_features
+        .as_ref()
+        .map(|v| v.len())
+        .or_else(|| {
+            settings
+                .idf_features_per_version
+                .as_ref()
+                .map(|m| m.values().map(|v| v.len()).sum())
+        });
+    let tool_count = settings
+        .idf_tools
+        .as_ref()
+        .map(|v| v.len())
+        .or_else(|| {
+            settings
+                .idf_tools_per_version
+                .as_ref()
+                .map(|m| m.values().map(|v| v.len()).sum())
+        });
+    let target_count = settings.target.as_ref().map(|v| v.len());
+    let non_interactive = settings.non_interactive;
+    let used_existing_idf = settings
+        .path
+        .as_ref()
+        .and_then(|p| is_valid_idf_directory(p.to_str().unwrap_or_default()).then_some(true));
+    OutcomeExtras {
+        feature_count,
+        tool_count,
+        target_count,
+        non_interactive,
+        used_existing_idf,
     }
 }

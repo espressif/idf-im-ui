@@ -227,6 +227,8 @@ pub fn run(
 
     let _ = setup_gui_logging(log_level_override);
 
+    idf_im_lib::telemetry::set_enabled(!do_not_track);
+
     // Workaround for WebKitGTK DMA-BUF renderer issues on Nvidia (#421, #523).
     // GBM buffer allocation fails when using the DMA-BUF renderer with
     // Nvidia's proprietary driver, causing a blank window or crash.
