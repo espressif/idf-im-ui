@@ -375,8 +375,8 @@ export default {
       return `${Math.round(bytes / 1_048_576)} MB`
     }
 
-    const trackEvent = async (name, additional_data) => {
-      try { await invoke('track_event_command', additional_data ? { name, additional_data } : { name }) }
+    const trackEvent = async (event, fields = {}) => {
+      try { await invoke('track_event_command', { event, mode: 'simple', ...fields }) }
       catch (e) { console.warn('Failed to track event:', e) }
     }
 
@@ -518,9 +518,10 @@ export default {
           errorTitle.value = t('simpleSetup.error.start.title')
           errorMessage.value = msg || t('simpleSetup.error.system.message')
           errorDetails.value = detail || ''
-          trackEvent('GUI simple installation failed', {
-            duration_seconds: (new Date() - timeStarted.value) / 1000,
-            version, errorMessage: msg, errorDetails: detail
+          trackEvent('install_finished', {
+            outcome: 'failure',
+            versions: [version],
+            error_message: detail || msg
           })
           return
         }
@@ -529,8 +530,9 @@ export default {
           installPhaseStarted.value = true
           installProgress.value = 100
           if (currentState.value === 'installing') currentState.value = 'complete'
-          trackEvent('GUI simple installation succeeded', {
-            duration_seconds: (new Date() - timeStarted.value) / 1000, version
+          trackEvent('install_finished', {
+            outcome: 'success',
+            versions: [version]
           })
           return
         }
@@ -581,7 +583,7 @@ export default {
       archiveDecision.value = ''
       timeStarted.value = new Date()
 
-      await trackEvent('GUI simple installation started')
+      await trackEvent('install_started', { versions: [selectedVersion.value] })
 
       try {
         await attachListeners()

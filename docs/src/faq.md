@@ -7,16 +7,16 @@
 To help us improve the ESP-IDF Installation Manager, we collect some anonymous usage data. We are transparent about what we collect and you can opt-out at any time.
 
 We collect:
-- **Environment / System Info**: OS & version, architecture, and app version.
-- **User Flows**: Whether you used online or offline installation.
-- **Usage Tracking**: Selected ESP-IDF version and installation time.
-- **Error & Failure Tracking**: Failed installation steps and error messages.
+- **Environment / System Info**: OS & version, distribution, architecture, kernel version, and EIM version.
+- **Install context**: Which install flow was used (wizard / simple / offline / fix / CLI), whether the GUI or CLI was used, requested ESP-IDF version(s), and counts of selected features, tools, and targets.
+- **Outcome**: Whether the install succeeded or failed and how long it took.
+- **Error & Failure Tracking**: A coarse error kind (network, filesystem, git, python, dependency, configuration, user-cancelled, unknown), a 16-character SHA-256 fingerprint of the error message, and the error message with any filesystem paths, home-directory segments, and email addresses automatically redacted.
 
-This data is anonymous and helps us debug issues and prioritize features.
+We **do not** collect filesystem paths, command-line arguments, environment variables, raw unredacted error messages, or any other personally identifiable information.
 
 **How to disable it:**
 - **GUI**: Uncheck the telemetry checkbox on the welcome screen.
-- **CLI**: Use the `--do-not-track true` flag.
+- **CLI**: Use the `--do-not-track true` flag. The GUI subcommand (`eim gui`) honours this flag as well.
 
 For more details, see the "Privacy and Data Collection" section in our documentation.
 
