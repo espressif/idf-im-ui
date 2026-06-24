@@ -5,6 +5,80 @@ use tempfile::TempDir;
 
 use crate::{add_path_to_path, command_executor::{self, execute_command}, python_utils::detect_default_python, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
 
+/// One entry of the offline archive manifest served at
+/// `https://dl.espressif.com/dl/eim/offline_archives.json`.
+///
+/// The manifest is a flat array of these. `size` is the exact byte length of
+/// the `.zst` (used to detect a complete, reusable download) and `status` is
+/// `"success"` for builds that are actually available.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OfflineArchiveEntry {
+    pub version: String,
+    pub platform: String,
+    pub filename: String,
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub status: String,
+}
+
+/// Maps the running platform to an offline-archive platform token, e.g.
+/// `windows-x64`, `macos-aarch64`, `linux-x64`, `linux-aarch64`.
+///
+/// Reuses `idf_tools::get_platform_definition()` (runtime sysinfo detection, the
+/// same source used for online tool selection) and only remaps the arch segment
+/// to the manifest's spelling (`x86_64` -> `x64`). Returns `None` for platforms
+/// with no offline build (e.g. windows-aarch64, linux-armv7, freebsd-*), so the
+/// caller can fall back to the expert/online path.
+pub fn current_offline_platform() -> Option<String> {
+    let definition = crate::idf_tools::get_platform_definition(); // "{os}-{arch}"
+    let (os, arch) = definition.split_once('-')?;
+
+    let os = match os {
+        "windows" | "macos" | "linux" => os,
+        _ => return None,
+    };
+    let arch = match arch {
+        "x86_64" => "x64",
+        "aarch64" => "aarch64",
+        _ => return None,
+    };
+    Some(format!("{}-{}", os, arch))
+}
+
+/// Fetches and parses the offline archive manifest.
+///
+/// Returns every entry as-is (no platform filtering) so the caller can decide
+/// how to filter/sort. Network and parse errors are surfaced as `String` so
+/// they can be forwarded straight to a Tauri command result.
+pub async fn fetch_offline_archive_manifest(
+    manifest_url: &str,
+) -> Result<Vec<OfflineArchiveEntry>, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .get(manifest_url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch offline archive manifest: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Failed to fetch offline archive manifest: HTTP {}",
+            response.status()
+        ));
+    }
+
+    // text()+serde_json avoids requiring reqwest's "json" feature.
+    let body = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read offline archive manifest: {}", e))?;
+
+    serde_json::from_str(&body)
+        .map_err(|e| format!("Failed to parse offline archive manifest: {}", e))
+}
+
+
 /// Installs prerequisite software packages from an offline archive.
 ///
 /// This function handles the installation of development prerequisites on different

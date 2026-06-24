@@ -27,9 +27,22 @@ function getScriptPaths(installFolder, idfVersion) {
   };
 }
 
-function extractProbeOutput(buffer, marker) {
-  const idx = buffer.indexOf(marker);
-  return idx >= 0 ? buffer.slice(idx) : buffer;
+
+function assertIdfVarsCleared(probeOutput) {
+  for (const varName of ["IDF_PATH", "IDF_TOOLS_PATH", "VIRTUAL_ENV"]) {
+    const m = probeOutput.match(new RegExp(`${varName}=([^|]*)`));
+    const value = m ? m[1] : null;
+    expect(
+      !value || value.length === 0,
+      `After deactivation, ${varName} should be empty, got '${value}'.\nOutput: ${probeOutput}`
+    ).to.be.true;
+  }
+  const espMatch = probeOutput.match(/ESP_IDF_VERSION=([^|]*)/);
+  const espValue = espMatch ? espMatch[1] : null;
+  expect(
+    !espValue || !/^\d/.test(espValue),
+    `After deactivation, ESP_IDF_VERSION should be empty, got '${espValue}'.\nOutput: ${probeOutput}`
+  ).to.be.true;
 }
 
 export function runCLIDeactivationTest({
@@ -139,92 +152,91 @@ export function runCLIDeactivationTest({
       await testRunner.start();
 
       const isWin = os.platform() === "win32";
-      const envProbeFormat = isWin
-        ? null
-        : `printf 'IDF_PATH=%s||IDF_TOOLS_PATH=%s||ESP_IDF_VERSION=%s||VIRTUAL_ENV=%s||\\n' "$IDF_PATH" "$IDF_TOOLS_PATH" "$ESP_IDF_VERSION" "$VIRTUAL_ENV"`;
-      const envProbeWriteHost = isWin
-        ? `Write-Host "IDF_PATH=$env:IDF_PATH||"; Write-Host "IDF_TOOLS_PATH=$env:IDF_TOOLS_PATH||"; Write-Host "ESP_IDF_VERSION=$env:ESP_IDF_VERSION||"; Write-Host "VIRTUAL_ENV=$env:VIRTUAL_ENV||"`
-        : null;
+
+const envProbe = isWin
+        ? `foreach ($n in 'IDF_PATH','IDF_TOOLS_PATH','ESP_IDF_VERSION','VIRTUAL_ENV') { Write-Host ("$n=$([System.Environment]::GetEnvironmentVariable($n))||") }`
+        : `for v in IDF_PATH IDF_TOOLS_PATH ESP_IDF_VERSION VIRTUAL_ENV; do printf '%s=%s||' "$v" "\${!v}"; done; echo`;
 
 
-      const sourceCmd = isWin
-        ? `. "${scriptPaths.activate}"`
-        : `source "${scriptPaths.activate}"`;
-      const activateCombined = isWin
-        ? `${sourceCmd}; ${envProbeWriteHost}`
-        : `${sourceCmd} && ${envProbeFormat}`;
-      const activateCheck = await testRunner.runAndCapture(
-        activateCombined,
-        "ACTIVATE_DONE",
-        60000
-      );
-
-      expect(
-        activateCheck.output,
-        `Activation script did not produce expected banner. Output: ${activateCheck.output}`
-      ).to.match(/Environment setup complete|IDF PowerShell Environment/);
-
-      const activateMarker = isWin
-        ? "IDF PowerShell Environment"
-        : "Environment setup complete";
-      const postActivateOutput = extractProbeOutput(
-        activateCheck.output,
-        activateMarker
-      );
-      const idfToolsPathMatch = postActivateOutput.match(
-        /IDF_TOOLS_PATH=(?!%s)([^|]*)/
-      );
-      expect(
-        idfToolsPathMatch && idfToolsPathMatch[1].length > 0,
-        `IDF_TOOLS_PATH should be non-empty after activation. Output: ${postActivateOutput}`
-      ).to.be.true;
-
-      // Now source the deactivate script and re-check the same vars,
-      // again in a single command for the same reasons as above.
-      const deactCmd = isWin
-        ? `. "${scriptPaths.deactivate}"`
-        : `source "${scriptPaths.deactivate}"`;
-      const deactCombined = isWin
-        ? `${deactCmd}; ${envProbeWriteHost}`
-        : `${deactCmd} && ${envProbeFormat}`;
-      const deactCheck = await testRunner.runAndCapture(
-        deactCombined,
-        "POST_DONE",
-        30000
-      );
-      // The deactivate script prints "ESP-IDF environment
-      // deactivated." to stdout. It appears in the captured buffer
-      // alongside the probe output.
-      expect(
-        deactCheck.output,
-        `Deactivation script did not finish. Output: ${deactCheck.output}`
-      ).to.include("ESP-IDF environment deactivated.");
-
-      const postDeactOutput = extractProbeOutput(
-        deactCheck.output,
-        "ESP-IDF environment deactivated."
-      );
-      for (const varName of [
-        "IDF_PATH",
-        "IDF_TOOLS_PATH",
-        "VIRTUAL_ENV",
-      ]) {
-        const re = new RegExp(`${varName}=(?!%s)([^|]*)`);
-        const m = postDeactOutput.match(re);
-        const value = m ? m[1] : null;
+      if (isWin) {
+        const activateCombined = `. "${scriptPaths.activate}" ; ${envProbe}`;
+        const activateCheck = await testRunner.runAndCapture(
+          activateCombined,
+          "ACTIVATE_DONE",
+          60000
+        );
         expect(
-          !value || value.length === 0,
-          `After deactivation, ${varName} should be empty, got '${value}'.\nOutput: ${postDeactOutput}`
+          activateCheck.output,
+          `Activation script did not run. Output: ${activateCheck.output}`
+        ).to.match(/IDF PowerShell Environment/);
+        const idfToolsPathMatch = activateCheck.output.match(
+          /IDF_TOOLS_PATH=([^|]*)/
+        );
+        expect(
+          idfToolsPathMatch && idfToolsPathMatch[1].length > 0,
+          `IDF_TOOLS_PATH should be non-empty after activation. Output: ${activateCheck.output}`
+        ).to.be.true;
+      } else {
+        // 1. Source the activate script as a short, standalone
+        //    command (well under 80 cols).
+        testRunner.sendInput(`source "${scriptPaths.activate}"`);
+
+        const activated = await testRunner.waitForOutput("(venv)", 60000);
+        expect(
+          activated,
+          `Activation script did not activate venv within 60s. Output: ${testRunner.output.slice(-2000)}`
+        ).to.be.true;
+
+        // 2. Probe the env vars in a separate, short command.
+        const activateCheck = await testRunner.runAndCapture(
+          envProbe,
+          "ACTIVATE_DONE",
+          30000
+        );
+        expect(
+          activateCheck.output,
+          `Activation probe did not run. Output: ${activateCheck.output}`
+        ).to.include("IDF_TOOLS_PATH=");
+        const idfToolsPathMatch = activateCheck.output.match(
+          /IDF_TOOLS_PATH=([^|]*)/
+        );
+        expect(
+          idfToolsPathMatch && idfToolsPathMatch[1].length > 0,
+          `IDF_TOOLS_PATH should be non-empty after activation. Output: ${activateCheck.output}`
         ).to.be.true;
       }
-      const espMatch = postDeactOutput.match(
-        /ESP_IDF_VERSION=(?!%s)([^|]*)/
-      );
-      const espValue = espMatch ? espMatch[1] : null;
-      expect(
-        !espValue || !/^\d/.test(espValue),
-        `After deactivation, ESP_IDF_VERSION should be empty, got '${espValue}'.\nOutput: ${postDeactOutput}`
-      ).to.be.true;
+
+      if (isWin) {
+        const deactCombined = `. "${scriptPaths.deactivate}" ; ${envProbe}`;
+        const deactCheck = await testRunner.runAndCapture(
+          deactCombined,
+          "POST_DONE",
+          30000
+        );
+        expect(
+          deactCheck.output,
+          `Deactivation script did not finish. Output: ${deactCheck.output}`
+        ).to.include("ESP-IDF environment deactivated.");
+        assertIdfVarsCleared(deactCheck.output);
+      } else {
+        testRunner.sendInput(`source "${scriptPaths.deactivate}"`);
+        const deactDone = await testRunner.runAndCapture(
+          "echo DEACT_DONE",
+          "DEACT_DONE",
+          30000
+        );
+        expect(
+          deactDone.output,
+          `Deactivation script did not finish. Output: ${deactDone.output}`
+        ).to.include("ESP-IDF environment deactivated.");
+
+        const deactCheck = await testRunner.runAndCapture(
+          envProbe,
+          "POST_DONE",
+          30000
+        );
+        assertIdfVarsCleared(deactCheck.output);
+      }
     });
 
     it("4- eim remove should delete both activate and deactivate scripts", async function () {

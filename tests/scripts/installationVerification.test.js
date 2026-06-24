@@ -14,6 +14,7 @@ export function runInstallVerification({
   idfList,
   targetList = ["esp32"],
   toolsFolder,
+  espIdfJsonPath,
   existingGitClone = false,
 }) {
   describe(`${id}- Installation verification test |`, function () {
@@ -21,7 +22,14 @@ export function runInstallVerification({
     let testRunner = null;
     let verificationStepFailed = false;
 
-    const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
+    // `toolsFolder` follows the install drive (e.g. D:\Espressif when the
+    // user picks a non-default drive). `espIdfJsonPath` is where the app
+    // stores eim_idf.json + activation scripts, which stay on the default
+    // drive (C:\Espressif\tools on Windows) per the install warning: "the
+    // registry and activation scripts stay on the default drive." Default to
+    // <toolsFolder>/tools so non-drive tests keep working unchanged.
+    const espIdfJsonFolder = espIdfJsonPath || path.join(toolsFolder, "tools");
+    const eimJsonFilePath = path.join(espIdfJsonFolder, "eim_idf.json");
     const installFolderResolved = path.resolve(installFolder);
 
     /** Returns the eim_idf entry for the given idf (name or, when existingGitClone, by path). */
@@ -55,8 +63,8 @@ export function runInstallVerification({
     function getActivationScriptPath(idf, entry) {
       if (existingGitClone && entry) return entry.activationScript;
       return os.platform() !== "win32"
-        ? path.join(toolsFolder, "tools", `activate_idf_${idf}.sh`)
-        : path.join(toolsFolder, "tools", `Microsoft.${idf}.PowerShell_profile.ps1`);
+        ? path.join(espIdfJsonFolder, `activate_idf_${idf}.sh`)
+        : path.join(espIdfJsonFolder, `Microsoft.${idf}.PowerShell_profile.ps1`);
     }
 
     // The beforeEach function should skip the next tests if the previous test failed

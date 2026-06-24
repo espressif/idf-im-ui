@@ -1,4 +1,4 @@
-use std::{ fs, path::Path};
+use std::{ fs, path::{ Path, PathBuf } };
 
 use idf_im_lib::settings::Settings;
 use tauri::AppHandle;
@@ -104,6 +104,77 @@ pub async fn get_mirror_to_use(app_handle: &AppHandle, mirror_type: MirrorType, 
             app_state::get_pypi_mirror_latency_entries(app_handle), idf_im_lib::get_pypi_mirrors_list()).await
         }
     }
+}
+
+pub fn parse_version(v: &str) -> Vec<u32> {
+    v.trim_start_matches('v')
+        .split('.')
+        .map(|p| {
+            p.chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse()
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
+    let (pa, pb) = (parse_version(a), parse_version(b));
+    for i in 0..pa.len().max(pb.len()) {
+        let x = pa.get(i).copied().unwrap_or(0);
+        let y = pb.get(i).copied().unwrap_or(0);
+        match x.cmp(&y) {
+            std::cmp::Ordering::Equal => continue,
+            non_eq => return non_eq,
+        }
+    }
+    std::cmp::Ordering::Equal
+}
+
+pub fn format_bytes(bytes: u64) -> String {
+    const GB: f64 = 1_073_741_824.0;
+    const MB: f64 = 1_048_576.0;
+    let b = bytes as f64;
+    if b >= GB {
+        format!("{:.2} GB", b / GB)
+    } else {
+        format!("{:.0} MB", b / MB)
+    }
+}
+
+pub fn get_file_name(path: &str) -> &str {
+  Path::new(path)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or(path)
+}
+
+/// Replaces only the leading `X:` drive letter of a Windows path, keeping the
+/// rest verbatim. Non-drive paths are returned unchanged.
+pub fn swap_windows_drive(path: &str, new_drive: &str) -> String {
+    let letter = match new_drive.trim().trim_end_matches(':').chars().next() {
+        Some(l) => l.to_ascii_uppercase(),
+        None => return path.to_string(),
+    };
+    if path.as_bytes().get(1) == Some(&b':') && path.is_char_boundary(1) {
+        format!("{}{}", letter, &path[1..])
+    } else {
+        path.to_string()
+    }
+}
+
+/// Persistent, findable cache dir for downloaded `.zst` archives:
+/// `<data_local>/eim/offline_archives` (sibling of the logs dir). Not a
+/// TempDir, so an interrupted/closed install leaves the archive for reuse.
+pub fn get_offline_archive_cache_dir() -> Result<PathBuf, String> {
+    let log_dir = idf_im_lib::get_log_directory()
+        .ok_or_else(|| "Could not determine local data directory".to_string())?;
+    let eim_dir = log_dir.parent().unwrap_or(&log_dir).to_path_buf();
+    let cache_dir = eim_dir.join("offline_archives");
+    let cache_dir_str = cache_dir.to_str().ok_or_else(|| "Cache directory path is not valid UTF-8".to_string())?;
+    idf_im_lib::ensure_path(cache_dir_str).map_err(|e| e.to_string())?;
+    Ok(cache_dir)
 }
 
 #[cfg(test)]

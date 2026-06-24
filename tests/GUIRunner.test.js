@@ -55,6 +55,15 @@ const jsonFilePath = path.join(
 const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
 logger.info(`Running test script: ${jsonFilePath}`);
 
+// Replace the leading drive letter of a Windows path so verification/cleanup
+// can target the same location EIM installed to. Returns the input unchanged
+// on non-Windows or when the path has no drive letter to swap.
+function swapWindowsDrive(p, newDrive) {
+  if (os.platform() !== "win32" || !p || !newDrive) return p;
+  const drive = newDrive.replace(/:?$/, ":");
+  return p.replace(/^[A-Za-z]:/, drive);
+}
+
 // Run the tests
 testRun(testScript);
 
@@ -102,12 +111,23 @@ function testRun(script) {
       const testProxyMode = test.testProxyMode ?? false;
       const proxyBlockList = test.proxyBlockList ?? [];
 
+      // Optional Windows-only per-install drive override (e.g. "D:"). When set,
+      // the simplified flow ticks the acknowledge box and picks this drive in
+      // the n-select; the install lands on the drive-swapped path, so
+      // verification and cleanup have to look there too.
+      const drive = test.data?.drive ?? null;
+      const installFolder = drive
+        ? swapWindowsDrive(INSTALLFOLDER, drive)
+        : INSTALLFOLDER;
+      const toolsFolder = drive ? swapWindowsDrive(TOOLSFOLDER, drive) : TOOLSFOLDER;
+
       describe(`Test${test.id}- ${test.name} |`, function () {
         runGUISimplifiedInstallTest({
           id: `${test.id}1`,
           pathToEIM: pathToEIMGUI,
           testProxyMode,
           proxyBlockList,
+          drive,
         });
 
         runGUIAfterInstallTest({
@@ -118,15 +138,16 @@ function testRun(script) {
 
         runInstallVerification({
           id: `${test.id}3`,
-          installFolder: INSTALLFOLDER,
+          installFolder,
           idfList: [IDFDefaultVersion],
-          toolsFolder: TOOLSFOLDER,
+          toolsFolder,
+          espIdfJsonPath: path.join(TOOLSFOLDER, "tools"),
         });
 
         runCleanUp({
           id: `${test.id}4`,
-          installFolder: INSTALLFOLDER,
-          toolsFolder: TOOLSFOLDER,
+          installFolder,
+          toolsFolder,
           deleteAfterTest,
         });
       });

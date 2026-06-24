@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1,
+    "type": "default",
+    "name": "GUI Simplified on D: drive",
+    "data": {
+      "drive": "D:"
+    },
+    "deleteAfterTest": true
+  }
+]
