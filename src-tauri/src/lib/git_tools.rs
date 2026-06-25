@@ -496,7 +496,7 @@ pub fn clone_repository(
     info!("Starting submodule update...");
     if options.recurse_submodules {
         info!("Recurse submodules is TRUE");
-        match update_submodules_shallow(&repo, tx.clone()) {
+        match update_submodules_shallow(&repo, tx.clone(), options.mirror.as_deref()) {
             Ok(_) => info!("Submodules updated successfully"),
             Err(e) => {
                 let _ = tx.send(ProgressMessage::Finish);
@@ -529,6 +529,7 @@ pub fn clone_repository(
 pub fn update_submodules_shallow(
     repo: &gix::Repository,
     tx: Sender<ProgressMessage>,
+    mirror: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
 
     let workdir = repo.work_dir()
@@ -552,9 +553,11 @@ pub fn update_submodules_shallow(
 
     let git_dir = repo.git_dir();
 
-    // Get the parent repository's remote URL for resolving relative URLs
+    // Resolve relative submodule URLs against the logical GitHub parent URL,
+    // then apply the mirror prefix — equivalent to git's url.insteadOf.
     let parent_url = get_remote_url(repo)?;
-    debug!("Parent repository URL: {}", parent_url);
+    let resolution_base = reverse_github_mirror(&parent_url, mirror);
+    debug!("Parent repository URL: {} (resolution base: {})", parent_url, resolution_base);
 
     // Get HEAD tree to find submodule commit SHAs
     let head_commit = repo.head_commit()?;
@@ -573,8 +576,9 @@ pub fn update_submodules_shallow(
         let normalized_path = path.replace('\\', "/");
         let url_raw = submodule.url()?.to_bstring().to_string();
 
-        // Resolve relative URLs
-        let url = resolve_submodule_url(&url_raw, &parent_url)?;
+        // Resolve relative URLs against GitHub, then rewrite to the mirror.
+        let url = resolve_submodule_url(&url_raw, &resolution_base)?;
+        let url = apply_github_mirror(&url, mirror);
 
         debug!("Processing submodule: {} at path: {}", name, path);
         if url != url_raw {
@@ -625,7 +629,7 @@ pub fn update_submodules_shallow(
 
         // Recursively handle nested submodules
         if let Ok(sub_repo) = gix::open(&submodule_dir) {
-            let _ = update_submodules_shallow(&sub_repo, tx.clone());
+            let _ = update_submodules_shallow(&sub_repo, tx.clone(), mirror);
         }
     }
 
@@ -1755,6 +1759,8 @@ pub struct CloneOptions {
     pub recurse_submodules: bool,
     /// If `true`, a shallow clone (`depth=1`) will be performed.
     pub shallow: bool,
+    /// Optional GitHub mirror prefix, equivalent to `git config url.<mirror>/.insteadOf https://github.com/`.
+    pub mirror: Option<String>,
 }
 
 /// Checks out a specific `GitReference` (branch, tag, or commit) in a `gix` repository.
@@ -1975,12 +1981,14 @@ pub fn get_esp_idf(
         GitReference::Tag(version.to_string())
     };
 
+    let mirror_owned = mirror.map(|s| s.to_string());
     let clone_options = CloneOptions {
         url,
         path: path.to_string(),
         reference,
         recurse_submodules: with_submodules,
         shallow,
+        mirror: mirror_owned,
     };
 
     // First attempt: pure-Rust gix-based clone. This is faster and more efficient and result is smaller, but may fail on some platforms or network conditions.
@@ -1994,6 +2002,7 @@ pub fn get_esp_idf(
         reference: clone_options.reference.clone(),
         recurse_submodules: clone_options.recurse_submodules,
         shallow: clone_options.shallow,
+        mirror: clone_options.mirror.clone(),
       },
       tx.clone(),
     );
@@ -2047,6 +2056,72 @@ pub fn get_esp_idf(
         }
       }
     }
+}
+
+/// Rewrites a mirror URL back to the equivalent `https://github.com/` URL.
+///
+/// Relative submodule paths in `.gitmodules` are defined against the GitHub
+/// layout; resolving them against a mirror prefix (e.g. `/esp-mirror/`) yields
+/// incorrect URLs. This function restores the logical GitHub parent first.
+pub fn reverse_github_mirror(url: &str, mirror: Option<&str>) -> String {
+    let Some(mirror) = mirror else {
+        return url.to_string();
+    };
+    if mirror == "https://github.com" {
+        return url.to_string();
+    }
+    let mirror_prefix = format!("{}/", mirror.trim_end_matches('/'));
+    if url.starts_with(&mirror_prefix) {
+        url.replacen(&mirror_prefix, "https://github.com/", 1)
+    } else {
+        url.to_string()
+    }
+}
+
+/// Rewrites `https://github.com/` URLs to use the configured mirror prefix.
+///
+/// Equivalent to `git config url.<mirror>/.insteadOf https://github.com/`.
+pub fn apply_github_mirror(url: &str, mirror: Option<&str>) -> String {
+    let Some(mirror) = mirror else {
+        return url.to_string();
+    };
+    if mirror == "https://github.com" {
+        return url.to_string();
+    }
+    let mirror_base = mirror.trim_end_matches('/');
+    let mirror_prefix = format!("{}/", mirror_base);
+    url.replace("https://github.com/", &mirror_prefix)
+        .replace("https://github.com", mirror_base)
+}
+
+fn git_instead_of_config_pair(mirror: Option<&str>) -> Option<(String, String)> {
+    let mirror = mirror?;
+    if mirror == "https://github.com" {
+        return None;
+    }
+    let mirror_prefix = format!("{}/", mirror.trim_end_matches('/'));
+    Some((
+        format!("url.{}.insteadOf", mirror_prefix),
+        "https://github.com/".to_string(),
+    ))
+}
+
+fn configure_local_github_mirror(
+    repo_path: &str,
+    mirror: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some((key, value)) = git_instead_of_config_pair(mirror) {
+        let output = execute_command_with_dir("git", &["config", &key, &value], repo_path)?;
+        if !output.status.success() {
+            return Err(format!(
+                "git config {} failed: {}",
+                key,
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+    }
+    Ok(())
 }
 
 /// Constructs the full git repository URL from optional repository and mirror parts.
@@ -2233,10 +2308,15 @@ pub fn clone_with_git_cli(
     // Build `git clone` arguments based on the requested reference.
     // For commits we cannot point clone directly at the SHA, so we clone the
     // default branch first and resolve the commit afterwards.
+    let clone_url = reverse_github_mirror(&options.url, options.mirror.as_deref());
     let mut clone_args: Vec<String> = vec![
         "clone".to_string(),
         "--progress".to_string(),
     ];
+    if let Some((key, value)) = git_instead_of_config_pair(options.mirror.as_deref()) {
+        clone_args.push("-c".to_string());
+        clone_args.push(format!("{}={}", key, value));
+    }
 
     if options.shallow {
         clone_args.push("--depth".to_string());
@@ -2276,7 +2356,7 @@ pub fn clone_with_git_cli(
         }
     }
 
-    clone_args.push(options.url.clone());
+    clone_args.push(clone_url);
     clone_args.push(dest_str.to_string());
 
     // 0% - starting
@@ -2307,6 +2387,8 @@ pub fn clone_with_git_cli(
     }
 
     let _ = tx.send(ProgressMessage::Update(80));
+
+    configure_local_github_mirror(dest_str, options.mirror.as_deref())?;
 
     // If the user asked for a specific commit, fetch + checkout it now.
     if let Some(sha) = needs_post_checkout_commit.as_deref() {
@@ -2428,4 +2510,49 @@ fn parse_submodule_name(line: &str) -> Option<String> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod mirror_url_tests {
+    use super::*;
+
+    const JIHULAB_MIRROR: &str = "https://jihulab.com/esp-mirror";
+
+    #[test]
+    fn apply_github_mirror_rewrites_absolute_urls() {
+        let url = "https://github.com/espressif/esp32-bt-lib.git";
+        assert_eq!(
+            apply_github_mirror(url, Some(JIHULAB_MIRROR)),
+            "https://jihulab.com/esp-mirror/espressif/esp32-bt-lib.git"
+        );
+    }
+
+    #[test]
+    fn reverse_github_mirror_restores_github_prefix() {
+        let url = "https://jihulab.com/esp-mirror/espressif/esp-idf.git";
+        assert_eq!(
+            reverse_github_mirror(url, Some(JIHULAB_MIRROR)),
+            "https://github.com/espressif/esp-idf.git"
+        );
+    }
+
+    #[test]
+    fn relative_submodule_url_uses_github_base_then_mirror() {
+        let parent = "https://jihulab.com/esp-mirror/espressif/esp-idf.git";
+        let resolution_base = reverse_github_mirror(parent, Some(JIHULAB_MIRROR));
+        let resolved =
+            resolve_submodule_url("../../espressif/esp32-bt-lib.git", &resolution_base).unwrap();
+        let mirrored = apply_github_mirror(&resolved, Some(JIHULAB_MIRROR));
+        assert_eq!(
+            mirrored,
+            "https://jihulab.com/esp-mirror/espressif/esp32-bt-lib.git"
+        );
+    }
+
+    #[test]
+    fn relative_submodule_url_without_mirror_fix_is_wrong() {
+        let parent = "https://jihulab.com/esp-mirror/espressif/esp-idf.git";
+        let wrong = resolve_submodule_url("../../espressif/esp32-bt-lib.git", parent).unwrap();
+        assert_eq!(wrong, "https://jihulab.com/espressif/esp32-bt-lib.git");
+    }
 }
