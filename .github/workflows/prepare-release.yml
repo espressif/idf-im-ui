@@ -1,10 +1,6 @@
 name: Prepare Release
 
 on:
-  # TODO: Remove push trigger after testing -- only workflow_dispatch should remain
-  push:
-    branches:
-      - EIM-751-release-workflow-automation-improvement
   workflow_dispatch:
     inputs:
       version:
