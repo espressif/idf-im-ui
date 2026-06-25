@@ -1,0 +1,151 @@
+name: Prepare Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (semver, e.g. 0.15.0)"
+        required: true
+        type: string
+        default: "99.0.0-test.1"
+      source_branch:
+        description: "Branch to base the release from"
+        required: false
+        default: "master"
+        type: string
+      target_branch:
+        description: "Branch to merge the release PR into"
+        required: false
+        default: "master"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare-release:
+    name: Prepare Release PR
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_VERSION: ${{ inputs.version || '99.0.0-test.1' }}
+      SOURCE_BRANCH: ${{ inputs.source_branch || 'master' }}
+      TARGET_BRANCH: ${{ inputs.target_branch || 'master' }}
+    steps:
+      - name: Validate version format
+        run: |
+          VERSION="$RELEASE_VERSION"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: '$VERSION'. Expected semver (e.g. 0.15.0 or 1.0.0-rc.1)"
+            exit 1
+          fi
+          echo "Version '$VERSION' is valid"
+
+      - name: Checkout source branch
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Check release branch does not already exist
+        run: |
+          BRANCH="release-v${{ env.RELEASE_VERSION }}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch '$BRANCH' already exists on remote. Delete it first or use a different version."
+            exit 1
+          fi
+          echo "Branch '$BRANCH' does not exist, proceeding"
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release branch
+        run: git checkout -b "release-v${{ env.RELEASE_VERSION }}"
+
+      - name: Bump version in Cargo.toml
+        run: |
+          FILE="src-tauri/Cargo.toml"
+          OLD_VERSION=$(grep -m1 '^version = ' "$FILE" | sed 's/version = "\(.*\)"/\1/')
+          echo "Current Cargo.toml version: $OLD_VERSION"
+
+          sed -i "0,/^version = \".*\"/s//version = \"${{ env.RELEASE_VERSION }}\"/" "$FILE"
+
+          NEW_VERSION=$(grep -m1 '^version = ' "$FILE" | sed 's/version = "\(.*\)"/\1/')
+          echo "Updated Cargo.toml version: $NEW_VERSION"
+
+          if [ "$NEW_VERSION" != "${{ env.RELEASE_VERSION }}" ]; then
+            echo "::error::Failed to update version in $FILE"
+            exit 1
+          fi
+
+      - name: Bump version in package.json
+        run: |
+          FILE="package.json"
+          OLD_VERSION=$(jq -r '.version' "$FILE")
+          echo "Current package.json version: $OLD_VERSION"
+
+          jq --arg v "${{ env.RELEASE_VERSION }}" '.version = $v' "$FILE" > tmp.json && mv tmp.json "$FILE"
+
+          NEW_VERSION=$(jq -r '.version' "$FILE")
+          echo "Updated package.json version: $NEW_VERSION"
+
+          if [ "$NEW_VERSION" != "${{ env.RELEASE_VERSION }}" ]; then
+            echo "::error::Failed to update version in $FILE"
+            exit 1
+          fi
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Update Cargo.lock
+        run: |
+          cd src-tauri
+          cargo update --workspace
+
+      - name: Check for changes
+        id: changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "::error::No changes detected. Version may already be ${{ env.RELEASE_VERSION }}."
+            exit 1
+          fi
+          echo "Changes detected, proceeding with commit"
+
+      - name: Commit version bump
+        run: |
+          git add -A
+          git commit -m "chore: bump version to v${{ env.RELEASE_VERSION }}"
+
+      - name: Push release branch
+        run: git push origin "release-v${{ env.RELEASE_VERSION }}"
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr create \
+            --title "Release Commit from workflow for release-v${{ env.RELEASE_VERSION }}" \
+            --base "${{ env.TARGET_BRANCH }}" \
+            --head "release-v${{ env.RELEASE_VERSION }}" \
+            --body "$(cat <<'PREOF'
+          ## Release v${{ env.RELEASE_VERSION }}
+
+          This PR was automatically created by the **Prepare Release** workflow.
+
+          ### Changes
+          - Bumped version in `src-tauri/Cargo.toml` to `${{ env.RELEASE_VERSION }}`
+          - Bumped version in `package.json` to `${{ env.RELEASE_VERSION }}`
+          - Updated `Cargo.lock` via `cargo update --workspace`
+          - Updated `yarn.lock` via `yarn install`
+
+          ### Review checklist
+          - [ ] Version numbers are correct in both files
+          - [ ] `Cargo.lock` changes look reasonable (no unexpected dependency updates)
+          - [ ] CI passes on this branch
+
+          ---
+          *Triggered from `${{ env.SOURCE_BRANCH }}` targeting `${{ env.TARGET_BRANCH }}`*
+          PREOF
+          )"
