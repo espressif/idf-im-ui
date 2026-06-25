@@ -108,14 +108,6 @@ jobs:
           cd src-tauri
           cargo update --workspace
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: lts/*
-
-      - name: Update yarn.lock
-        run: yarn install
-
       - name: Check for changes
         id: changes
         run: |
