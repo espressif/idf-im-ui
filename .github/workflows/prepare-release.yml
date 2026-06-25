@@ -143,7 +143,6 @@ jobs:
           ### Review checklist
           - [ ] Version numbers are correct in both files
           - [ ] `Cargo.lock` changes look reasonable (no unexpected dependency updates)
-          - [ ] `yarn.lock` changes look reasonable
           - [ ] CI passes on this branch
 
           ---
