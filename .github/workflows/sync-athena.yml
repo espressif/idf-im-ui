@@ -1,0 +1,57 @@
+name: 🔷 Sync to Athena (EIM)
+
+run-name: >
+  Sync to Athena (EIM) -
+  ${{ github.event_name == 'pull_request' && 'New Pull Request' ||
+      github.event_name == 'issues' && 'New Issue' ||
+      github.event_name == 'workflow_dispatch' && 'Manual Sync' }}
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      issue-numbers:
+        description: "Issue numbers to backfill (comma-separated)"
+        required: true
+
+jobs:
+  issue-to-task:
+    if: github.event_name == 'issues' || github.event_name == 'workflow_dispatch'
+    name: Create EIM ticket from GitHub issue
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Sync issue to Athena
+        uses: hahihula/sync-athena@v1
+        with:
+          mode: issue_to_task
+          repo: ${{ github.repository }}
+          ticket_prefix: EIM
+          athena_project_uuid: ${{ vars.ATHENA_PROJECT_UUID }}
+          athena_db_path: ${{ vars.ATHENA_DB_PATH }}
+          athena_base_url: ${{ secrets.ATHENA_BASE_URL }}
+          athena_token: ${{ secrets.ATHENA_TOKEN }}
+
+  pr-to-task:
+    if: github.event_name == 'pull_request'
+    name: Link PR to its EIM ticket
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Sync PR to Athena
+        uses: hahihula/sync-athena@v1
+        with:
+          mode: pr_to_comment
+          repo: ${{ github.repository }}
+          ticket_prefix: EIM
+          athena_project_uuid: ${{ vars.ATHENA_PROJECT_UUID }}
+          athena_db_path: ${{ vars.ATHENA_DB_PATH }}
+          athena_base_url: ${{ secrets.ATHENA_BASE_URL }}
+          athena_token: ${{ secrets.ATHENA_TOKEN }}
