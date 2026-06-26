@@ -1,6 +1,6 @@
 [package]
 name = "eim"
-version = "0.14.1"
+version = "0.15.0"
 description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
@@ -178,4 +178,3 @@ features = ["native-tls"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 winapi = { version = "0.3", features = ["wincon", "consoleapi", "processenv", "winbase", "handleapi", "processthreadsapi", "securitybaseapi", "winnt", "fileapi", "minwinbase"] }
-
