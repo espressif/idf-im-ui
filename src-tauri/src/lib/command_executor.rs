@@ -116,8 +116,9 @@ impl CommandExecutor for DefaultExecutor {
 #[cfg(target_os = "windows")]
 struct WindowsExecutor;
 
+#[cfg(target_os = "windows")]
 pub fn get_powershell_version() -> std::io::Result<i32> {
-    let mut binding = Command::new("powershell");
+    let mut binding = Command::new(find_powershell());
     let mut cmd = binding.args(["-Command", "$PSVersionTable.PSVersion.Major"]);
 
     #[cfg(target_os = "windows")]
@@ -134,6 +135,39 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
         .unwrap_or(5);
 
     Ok(version)
+}
+
+#[cfg(target_os = "windows")]
+fn find_powershell() -> std::path::PathBuf {
+    // Query App Paths via reg.exe — reg.exe itself is always findable
+    // because it's registered under App Paths in the registry
+    for exe in &["pwsh.exe", "powershell.exe"] {
+        let key = format!(
+            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{}",
+            exe
+        );
+        if let Ok(output) = std::process::Command::new("reg")
+            .args(["query", &key, "/ve"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Output format: "    (Default)    REG_SZ    C:\path\to\exe"
+                for line in stdout.lines() {
+                    if line.contains("REG_SZ") {
+                        if let Some(path) = line.split("REG_SZ").nth(1) {
+                            let path = path.trim();
+                            if !path.is_empty() {
+                                return std::path::PathBuf::from(path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    std::path::PathBuf::from("powershell")
 }
 
 #[cfg(target_os = "windows")]
@@ -157,7 +191,7 @@ impl WindowsExecutor {
 
         std::fs::write(&script_path, script_content.as_bytes())?;
 
-        let mut cmd = Command::new("powershell");
+        let mut cmd = Command::new(find_powershell());
         cmd.args([
             "-NoLogo",
             "-NoProfile",
