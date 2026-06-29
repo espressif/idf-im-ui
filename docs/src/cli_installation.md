@@ -27,15 +27,21 @@ brew install eim
 
 Or on Arch Linux via pacman:
 ```bash
-# Check if repository already exists, then add if not
+# 1. Import and locally sign the Espressif signing key (required once)
+curl -fsSL https://dl.espressif.com/dl/eim/eim.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key 06E9A6C0325E124198C685F18B1F38BDC9383E1D
+
+# 2. Add the EIM repository (if not already present)
 if ! grep -q "\[eim\]" /etc/pacman.conf; then
   sudo tee -a /etc/pacman.conf << 'EOF'
 [eim]
-SigLevel = Optional TrustAll
+SigLevel = Required DatabaseOptional TrustAll
 Server = https://dl.espressif.com/dl/eim/pacman/$arch
 EOF
 fi
-sudo pacman -S eim-cli
+
+# 3. Sync and install
+sudo pacman -Syu eim-cli
 ```
 
 ## Installation Methods
