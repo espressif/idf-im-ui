@@ -22,17 +22,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download CLI windows-x64 artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-windows-x64-${{ inputs.version }}
-          path: artifacts/cli/
-
-      - name: Download GUI windows-x64 artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-windows-x64-${{ inputs.version }}
-          path: artifacts/gui/
+      - name: Download Windows binaries from release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts/cli artifacts/gui
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "eim-cli-windows-x64.exe" \
+            --dir artifacts/cli/
+          mv artifacts/cli/eim-cli-windows-x64.exe artifacts/cli/eim.exe
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "eim-gui-windows-x64.exe" \
+            --dir artifacts/gui/
+          mv artifacts/gui/eim-gui-windows-x64.exe artifacts/gui/eim.exe
+          echo "Downloaded Windows binaries:"
+          ls -la artifacts/cli/ artifacts/gui/
 
       - name: Generate Scoop manifests
         shell: powershell

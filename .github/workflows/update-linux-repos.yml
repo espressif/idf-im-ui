@@ -77,38 +77,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y dpkg-dev apt-utils gzip
 
-      - name: Download GUI linux-x64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-deb
-          path: new-debs/
-
-      - name: Download GUI linux-aarch64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
-
-      - name: Download CLI linux-x64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-deb
-          path: new-debs/
-
-      - name: Download CLI linux-aarch64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
+      - name: Download .deb packages from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-debs
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.deb" \
+            --dir new-debs/ || echo "::warning::Some .deb downloads may have failed"
+          echo "Downloaded .deb files:"
+          ls -la new-debs/ || echo "No .deb files downloaded"
 
       - name: Create proper APT repository structure
         run: |
@@ -231,39 +210,17 @@ jobs:
           echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
           echo "Imported signing key: $KEY_FPR"
 
-      - name: Download CLI linux-x64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-rpm
-          path: new-rpms/
-
-      - name: Download CLI linux-aarch64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download GUI linux-x64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download GUI linux-aarch64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
+      - name: Download .rpm packages from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-rpms
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.rpm" \
+            --dir new-rpms/ || echo "::warning::Some .rpm downloads may have failed"
+          echo "Downloaded .rpm files:"
+          ls -la new-rpms/ || echo "No .rpm files downloaded"
 
       - name: Create RPM repository structure
         run: |
@@ -397,7 +354,7 @@ jobs:
     steps:
       - name: Install Arch dependencies
         run: |
-          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip gnupg
+          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip gnupg github-cli
           # awscli isn't in Arch's official repos; install via pip
           pip install --break-system-packages awscli
 
@@ -433,39 +390,18 @@ jobs:
           echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
           echo "Imported signing key: $KEY_FPR"
 
-      - name: Download CLI linux-x64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download CLI linux-aarch64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download GUI linux-x64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-
-      - name: Download GUI linux-aarch64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
+      - name: Download pacman packages from release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-pkgs
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.pkg.tar.*" \
+            --dir new-pkgs/ || echo "::warning::Some pacman downloads may have failed"
+          echo "Downloaded pacman files:"
+          ls -la new-pkgs/ || echo "No pacman files downloaded"
 
       - name: Create Pacman repository structure
         shell: bash

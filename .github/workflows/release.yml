@@ -1,0 +1,247 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (semver, e.g. 0.15.0)"
+        required: true
+        type: string
+      ref:
+        description: "Branch to release from (e.g. master)"
+        required: true
+        type: string
+        default: "master"
+      dry_run:
+        description: "Build everything but do not create a release"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  validate-inputs:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref }}
+
+      - name: Validate version and tag
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+          TAG="v${VERSION}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: '$VERSION'. Expected semver (e.g. 0.15.0 or 0.15.0-beta.1)."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "Validated version: $VERSION (tag: $TAG)"
+
+      - name: Check tag does not already exist
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if git ls-remote --tags origin "${{ steps.validate.outputs.tag }}" | grep -q .; then
+            echo "::error::Tag ${{ steps.validate.outputs.tag }} already exists on remote"
+            exit 1
+          fi
+
+  call-build:
+    name: Build All Platforms
+    needs: [validate-inputs]
+    uses: ./.github/workflows/build.yaml
+    with:
+      is_release: true
+      version: ${{ needs.validate-inputs.outputs.version }}
+    secrets: inherit
+
+  create-draft-release:
+    name: Create Draft Release
+    needs: [validate-inputs, call-build]
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.validate-inputs.outputs.version }}
+      TAG: ${{ needs.validate-inputs.outputs.tag }}
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release_assets
+          VER="${VERSION}"
+
+          prepare_asset() {
+            local artifact_dir="$1"
+            local asset_name="$2"
+            local file_pattern="$3"
+
+            if [[ ! -d "$artifact_dir" ]]; then
+              echo "SKIP: $artifact_dir not found"
+              return
+            fi
+
+            local found_file
+            found_file=$(find "$artifact_dir" -name "$file_pattern" -type f | head -1)
+            if [[ -z "$found_file" ]]; then
+              echo "SKIP: no file matching '$file_pattern' in $artifact_dir"
+              return
+            fi
+
+            cp "$found_file" "release_assets/$asset_name"
+            echo "OK: $asset_name"
+          }
+
+          zip_binary() {
+            local artifact_dir="$1"
+            local asset_name="$2"
+            local binary_name="$3"
+
+            if [[ ! -d "$artifact_dir" ]]; then
+              echo "SKIP: $artifact_dir not found"
+              return
+            fi
+
+            local found_file
+            found_file=$(find "$artifact_dir" -name "$binary_name" -type f | head -1)
+            if [[ -z "$found_file" ]]; then
+              echo "SKIP: no $binary_name in $artifact_dir"
+              return
+            fi
+
+            (cd "$(dirname "$found_file")" && zip -j "/tmp/_asset.zip" "$(basename "$found_file")")
+            mv /tmp/_asset.zip "release_assets/$asset_name"
+            echo "OK: $asset_name (zipped)"
+          }
+
+          echo "=== CLI binaries (Linux musl) ==="
+          for pkg in linux-x64 linux-aarch64; do
+            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}.zip" "eim"
+            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}.zip" "offline_installer_builder"
+          done
+
+          echo "=== CLI binary (Linux armv7) ==="
+          zip_binary "artifacts/eim-cli-linux-armv7-${VER}" "eim-cli-linux-armv7.zip" "eim"
+          zip_binary "artifacts/offline_installer_builder-linux-armv7-${VER}" "offline_installer_builder-linux-armv7.zip" "offline_installer_builder"
+
+          echo "=== CLI binaries (macOS) ==="
+          for pkg in macos-aarch64 macos-x64; do
+            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}.zip" "eim"
+            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}.zip" "offline_installer_builder"
+          done
+
+          echo "=== CLI binary (Windows) ==="
+          prepare_asset "artifacts/eim-cli-windows-x64-${VER}" "eim-cli-windows-x64.exe" "eim.exe"
+          prepare_asset "artifacts/offline_installer_builder-windows-x64-${VER}" "offline_installer_builder-windows-x64.exe" "offline_installer_builder.exe"
+
+          echo "=== CLI .deb packages ==="
+          for pkg in linux-x64 linux-aarch64; do
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-deb" "eim-cli-${pkg}.deb" "*.deb"
+          done
+          prepare_asset "artifacts/eim-cli-linux-armv7-${VER}-deb" "eim-cli-linux-armv7.deb" "*.deb"
+
+          echo "=== CLI .rpm packages ==="
+          for pkg in linux-x64 linux-aarch64 linux-armv7; do
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-rpm" "eim-cli-${pkg}.rpm" "*.rpm"
+          done
+
+          echo "=== CLI pacman packages ==="
+          for dir in artifacts/eim-cli-*-${VER}-pacman; do
+            if [[ -d "$dir" ]]; then
+              pkg_file=$(find "$dir" -name "*.pkg.tar.*" -not -name "*.sig" -type f | head -1)
+              if [[ -n "$pkg_file" ]]; then
+                base=$(basename "$dir" | sed "s/-${VER}-pacman//")
+                ext="${pkg_file##*.pkg.tar.}"
+                cp "$pkg_file" "release_assets/${base}.pkg.tar.${ext}"
+                echo "OK: ${base}.pkg.tar.${ext}"
+              fi
+            fi
+          done
+
+          echo "=== GUI binaries ==="
+          prepare_asset "artifacts/eim-gui-windows-x64-${VER}" "eim-gui-windows-x64.exe" "eim.exe"
+
+          for pkg in linux-x64 linux-aarch64; do
+            zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "eim.zip" -type f 2>/dev/null | head -1)
+            if [[ -n "$zip_file" ]]; then
+              cp "$zip_file" "release_assets/eim-gui-${pkg}.zip"
+              echo "OK: eim-gui-${pkg}.zip"
+            fi
+          done
+
+          for pkg in macos-aarch64 macos-x64; do
+            zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "*.zip" -type f 2>/dev/null | head -1)
+            if [[ -n "$zip_file" ]]; then
+              cp "$zip_file" "release_assets/eim-gui-${pkg}.zip"
+              echo "OK: eim-gui-${pkg}.zip"
+            fi
+          done
+
+          echo "=== GUI .deb packages ==="
+          for pkg in linux-x64 linux-aarch64; do
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-deb" "eim-gui-${pkg}.deb" "*.deb"
+          done
+
+          echo "=== GUI .msi packages ==="
+          prepare_asset "artifacts/eim-gui-windows-x64-${VER}-msi" "eim-gui-windows-x64.msi" "*.msi"
+
+          echo "=== GUI .dmg packages ==="
+          for pkg in macos-aarch64 macos-x64; do
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-dmg" "eim-gui-${pkg}.dmg" "*.dmg"
+          done
+
+          echo "=== GUI .rpm packages ==="
+          for pkg in linux-x64 linux-aarch64; do
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-rpm" "eim-gui-${pkg}.rpm" "*.rpm"
+          done
+
+          echo "=== GUI pacman packages ==="
+          for dir in artifacts/eim-gui-*-${VER}-pacman; do
+            if [[ -d "$dir" ]]; then
+              pkg_file=$(find "$dir" -name "*.pkg.tar.*" -not -name "*.sig" -type f | head -1)
+              if [[ -n "$pkg_file" ]]; then
+                base=$(basename "$dir" | sed "s/-${VER}-pacman//")
+                ext="${pkg_file##*.pkg.tar.}"
+                cp "$pkg_file" "release_assets/${base}.pkg.tar.${ext}"
+                echo "OK: ${base}.pkg.tar.${ext}"
+              fi
+            fi
+          done
+
+          echo ""
+          echo "=== Final release assets ==="
+          ls -lh release_assets/
+
+      - name: Generate checksums
+        working-directory: release_assets
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          echo "=== SHA256SUMS.txt ==="
+          cat SHA256SUMS.txt
+
+      - name: Create draft pre-release
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" \
+            --draft \
+            --prerelease \
+            --generate-notes \
+            --target "${{ inputs.ref }}" \
+            --title "$TAG" \
+            release_assets/*
+          echo "Draft pre-release $TAG created successfully"
+          echo "URL: $(gh release view "$TAG" --json url -q .url)"

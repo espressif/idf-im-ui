@@ -15,9 +15,14 @@ on:
       - "docs/**"
       - ".github/workflows/dl_page.yml"
       - ".github/workflows/docs_build.yml"
-  release:
-    types:
-      - created
+  workflow_call:
+    inputs:
+      is_release:
+        type: boolean
+        default: false
+      version:
+        type: string
+        default: ''
   workflow_dispatch:
 
 concurrency:
@@ -261,16 +266,8 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-cli-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim
-
-      - name: Upload Release Asset - Unix
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -290,19 +287,11 @@ jobs:
       - name: Upload offline_installer_builder artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/offline_installer_builder
 
-      - name: Upload offline_installer_builder Release Asset - Unix
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.zip --clobber
-
       - name: Prepare manpage for deb package
-        if: github.event_name == 'release' && github.event.action == 'created'
+        if: inputs.is_release
         run: |
           mkdir -p src-tauri/man
           cp man/eim.1 src-tauri/man/
@@ -313,9 +302,9 @@ jobs:
           cd src-tauri
           # Install cargo-deb if not present
           cargo install cargo-deb || true
-          # Build .deb with version from tag
-          # Use tag version only when ref is a tag
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0-${GITHUB_SHA:0:7}"
@@ -331,24 +320,15 @@ jobs:
       - name: Upload CLI .deb artifact
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
+          name: eim-cli-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-deb
           path: src-tauri/target/debian/eim*.deb
           if-no-files-found: warn
-
-      - name: Upload CLI .deb Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
-          cp "$DEB_FILE" "eim-cli-${{ matrix.package_name }}.deb"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.deb" --clobber
 
       # Upload the built binary + Cargo.toml for the Fedora RPM job
       - name: Upload source and binary for RPM build
         uses: actions/upload-artifact@v7
         with:
-          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             release_cli/${{ matrix.package_name }}/eim
             src-tauri/Cargo.toml
@@ -419,7 +399,7 @@ jobs:
       - name: Download completions from linux-x64 build
         uses: actions/download-artifact@v8
         with:
-          name: eim-cli-linux-x64-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-cli-linux-x64-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: /tmp/x64-cli-artifact/
 
       - name: Generate Completions from x64 binary
@@ -446,16 +426,8 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-cli-linux-armv7-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/linux-armv7/eim
-
-      - name: Upload Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/linux-armv7/eim.zip eim-cli-linux-armv7.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-linux-armv7.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -482,20 +454,12 @@ jobs:
       - name: Upload offline_installer_builder artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: offline_installer_builder-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: offline_installer_builder-linux-armv7-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/linux-armv7/offline_installer_builder
-
-      - name: Upload offline_installer_builder Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/linux-armv7/offline_installer_builder.zip offline_installer_builder-linux-armv7.zip
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-linux-armv7.zip --clobber
 
       # .deb package
       - name: Prepare manpage for deb package
-        if: github.event_name == 'release' && github.event.action == 'created'
+        if: inputs.is_release
         run: |
           mkdir -p src-tauri/man
           cp man/eim.1 src-tauri/man/
@@ -506,7 +470,9 @@ jobs:
           cd src-tauri
           cargo install cargo-deb || true
 
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0-${GITHUB_SHA:0:7}"
@@ -522,24 +488,15 @@ jobs:
       - name: Upload CLI .deb artifact
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
+          name: eim-cli-linux-armv7-${{ (inputs.is_release && inputs.version) || github.run_number }}-deb
           path: src-tauri/target/debian/eim*.deb
           if-no-files-found: warn
-
-      - name: Upload CLI .deb Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DEB_FILE=$(ls src-tauri/target/debian/eim*.deb | head -1)
-          cp "$DEB_FILE" "eim-cli-linux-armv7.deb"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-linux-armv7.deb" --clobber
 
       # Upload the built binary + Cargo.toml for the Fedora RPM job
       - name: Upload source and binary for RPM build
         uses: actions/upload-artifact@v7
         with:
-          name: rpm-build-input-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: rpm-build-input-linux-armv7-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             release_cli/linux-armv7/eim
             src-tauri/Cargo.toml
@@ -596,7 +553,7 @@ jobs:
       - name: Download built binary artifact
         uses: actions/download-artifact@v8
         with:
-          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: rpm-input/
 
       - name: Prepare build tree for cargo-generate-rpm
@@ -630,7 +587,9 @@ jobs:
         id: version
         shell: bash
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0-${GITHUB_SHA:0:7}"
@@ -677,18 +636,9 @@ jobs:
         if: steps.find-rpms.outputs.rpm_files_found == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          name: eim-cli-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-rpm
           path: rpm_output/*.rpm
           if-no-files-found: warn
-
-      - name: Upload CLI .rpm Release Assets
-        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-rpms.outputs.rpm_files_found == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RPM_FILE=$(ls rpm_output/*.rpm | head -1)
-          cp "$RPM_FILE" "eim-cli-${{ matrix.package_name }}.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
   # ============================================================
   # Build CLI pacman packages inside Arch container
@@ -729,14 +679,16 @@ jobs:
       - name: Download built binary artifact
         uses: actions/download-artifact@v8
         with:
-          name: rpm-build-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: rpm-build-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: pacman-input/
 
       - name: Determine version
         id: version
         shell: bash
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0.${GITHUB_SHA:0:7}"
@@ -847,19 +799,9 @@ jobs:
       - name: Upload pacman artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          name: eim-cli-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-pacman
           path: pacman_output/*.pkg.tar.*
           if-no-files-found: warn
-
-      - name: Upload pacman Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          PACMAN_FILE=$(ls pacman_output/*.pkg.tar.* | head -1)
-          EXT="${PACMAN_FILE##*.pkg.tar.}"
-          cp "$PACMAN_FILE" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-cli-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}" --repo "${{ github.repository }}" --clobber
 
   build-cli:
     name: Build CLI (${{ matrix.package_name }})
@@ -1027,7 +969,7 @@ jobs:
 
       - name: Sign files
         uses: espressif/release-sign@master
-        if: startsWith(matrix.os, 'macos') && github.event_name == 'release' && github.event.action == 'created'
+        if: startsWith(matrix.os, 'macos') && inputs.is_release
         with:
           path: ./release_cli/${{ matrix.package_name }}
           macos-signing-identity: ${{ secrets.MACOS_CS_IDENTITY_ID }}
@@ -1041,32 +983,8 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-cli-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim${{ runner.os == 'Windows' && '.exe' || '' }}
-
-      - name: Install gh (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install gh
-
-      - name: Upload Release Asset - MacOs
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd release_cli/${{ matrix.package_name }}
-          zip -r eim.zip eim
-          cd ../..
-          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
-
-      - name: Upload Release Asset (Windows)
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.exe --clobber
 
       - name: Build offline_installer_builder (Windows)
         if: runner.os == 'Windows'
@@ -1137,7 +1055,7 @@ jobs:
 
       - name: Codesign macOS offline_installer_builder Binary
         uses: espressif/release-sign@master
-        if: startsWith(matrix.os, 'macos') && github.event_name == 'release' && github.event.action == 'created'
+        if: startsWith(matrix.os, 'macos') && inputs.is_release
         with:
           path: ./release_cli/${{ matrix.package_name }}/offline_installer_builder
           macos-signing-identity: ${{ secrets.MACOS_CS_IDENTITY_ID }}
@@ -1151,31 +1069,13 @@ jobs:
       - name: Upload offline_installer_builder build artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: offline_installer_builder-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: offline_installer_builder-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/offline_installer_builder${{ runner.os == 'Windows' && '.exe' || '' }}
-
-      - name: Upload offline_installer_builder Release Asset - MacOs
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          (cd release_cli/${{ matrix.package_name }} && zip offline_installer_builder.zip offline_installer_builder)
-          gh release upload "${{ github.event.release.tag_name }}" \
-            release_cli/${{ matrix.package_name }}/offline_installer_builder.zip \
-            --clobber
-
-      - name: Upload offline_installer_builder Release Asset (Windows)
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.exe --clobber
 
   build-offline-archives:
     name: Build Offline Archives
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
-    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && (needs.build-cli-linux-armv7.result == 'success' || needs.build-cli-linux-armv7.result == 'skipped') && github.event_name == 'release'
+    if: (needs.build-cli.result == 'success' || needs.build-cli.result == 'skipped') && (needs.build-cli-linux.result == 'success' || needs.build-cli-linux.result == 'skipped') && (needs.build-cli-linux-armv7.result == 'success' || needs.build-cli-linux-armv7.result == 'skipped') && inputs.is_release
     permissions:
       contents: write
       actions: read
@@ -1289,7 +1189,7 @@ jobs:
           Get-Content "src-tauri/Cargo.toml"
 
       - name: Build GUI (macOS) - release
-        if: startsWith(matrix.os, 'macos') && github.event_name == 'release'
+        if: startsWith(matrix.os, 'macos') && inputs.is_release
         env:
           APPLE_ID: ${{ secrets.MACOS_CS_APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.MACOS_CS_APP_SPECIFIC_PASSWORD }}
@@ -1304,7 +1204,7 @@ jobs:
           unset PKG_CONFIG_PATH && export ZLIB_STATIC=1 && export LZMA_API_STATIC=1 && export LIBZ_SYS_STATIC=1 && yarn tauri build
 
       - name: Build GUI (macOS) - non-release
-        if: startsWith(matrix.os, 'macos') && github.event_name != 'release'
+        if: startsWith(matrix.os, 'macos') && !inputs.is_release
         env:
           LIBZ_SYS_STATIC: 1
           ZLIB_STATIC: 1
@@ -1381,7 +1281,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             src-tauri/target/release/eim
           if-no-files-found: warn
@@ -1390,7 +1290,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-deb
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-deb
           path: |
             src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: warn
@@ -1399,7 +1299,7 @@ jobs:
         if: startsWith(matrix.os, 'ubuntu')
         uses: actions/upload-artifact@v7
         with:
-          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/eim
@@ -1409,7 +1309,7 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             src-tauri/target/release/bundle/macos/*.app
           if-no-files-found: warn
@@ -1418,7 +1318,7 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-dmg
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-dmg
           path: |
             src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: warn
@@ -1427,7 +1327,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: |
             src-tauri/target/release/eim.exe
           if-no-files-found: warn
@@ -1436,64 +1336,10 @@ jobs:
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-msi
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-msi
           path: |
             src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
-
-      - name: Upload Release Assets (Windows)
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}.exe"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.exe" --clobber
-
-      - name: Upload Release Assets (Windows msi)
-        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          MSI_FILE=$(ls src-tauri/target/release/bundle/msi/*.msi | head -1)
-          cp "$MSI_FILE" "eim-gui-${{ matrix.package_name }}.msi"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.msi" --clobber
-
-      - name: Upload Release Assets (Linux)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp src-tauri/target/release/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
-
-      - name: Upload Release Assets (Linux - .deb)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DEB_FILE=$(ls src-tauri/target/release/bundle/deb/*.deb | head -1)
-          cp "$DEB_FILE" "eim-gui-${{ matrix.package_name }}.deb"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.deb" --clobber
-
-      - name: Upload Release Assets (macOS)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cp src-tauri/target/release/bundle/macos/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
-
-      - name: Upload Release Assets (macOS - dmg)
-        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DMG_FILE=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
-          cp "$DMG_FILE" "eim-gui-${{ matrix.package_name }}.dmg"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.dmg" --clobber
 
   # ============================================================
   # Repackage GUI RPMs inside Fedora container
@@ -1526,7 +1372,7 @@ jobs:
       - name: Download Tauri-generated RPM
         uses: actions/download-artifact@v8
         with:
-          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: gui-rpm-input/
 
       - name: Repackage RPM without python upper bound
@@ -1663,18 +1509,9 @@ jobs:
         if: steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-rpm
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-rpm
           path: gui_rpm_output/*.rpm
           if-no-files-found: warn
-
-      - name: Upload GUI RPM Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created' && steps.find-gui-rpms.outputs.gui_rpm_files_found == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          RPM_FILE=$(ls gui_rpm_output/*.rpm | head -1)
-          cp "$RPM_FILE" "eim-gui-${{ matrix.package_name }}.rpm"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.rpm" --repo "${{ github.repository }}" --clobber
 
   # ============================================================
   # Build GUI pacman packages inside Arch container
@@ -1711,14 +1548,16 @@ jobs:
       - name: Download built GUI artifact
         uses: actions/download-artifact@v8
         with:
-          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+          name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}
           path: pacman-input/
 
       - name: Determine version
         id: version
         shell: bash
         run: |
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+          if [[ -n "${{ inputs.version }}" ]]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="0.0.0.${GITHUB_SHA:0:7}"
@@ -1816,23 +1655,9 @@ jobs:
       - name: Upload pacman artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: eim-gui-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}-pacman
+          name: eim-gui-${{ matrix.package_name }}-${{ (inputs.is_release && inputs.version) || github.run_number }}-pacman
           path: pacman_output/*.pkg.tar.*
           if-no-files-found: warn
-
-      - name: Upload pacman Release Asset
-        if: github.event_name == 'release' && github.event.action == 'created'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          PACMAN_FILE=$(ls "$GITHUB_WORKSPACE"/pacman_output/*.pkg.tar.* | head -1)
-          # Preserve the actual extension (zst or gz)
-          EXT="${PACMAN_FILE##*.pkg.tar.}"
-          DEST="eim-gui-${{ matrix.package_name }}-${{ matrix.pacman_arch }}.pkg.tar.${EXT}"
-          cp "$PACMAN_FILE" "$DEST"
-          gh release upload "${{ github.event.release.tag_name }}" "$DEST" --repo "${{ github.repository }}" --clobber
 
   Autotest-CLI:
     name: Autotest CLI
@@ -1844,8 +1669,8 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release')}}
-      run_self_hosted: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER'))}}
+      run_extended: ${{ inputs.is_release || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release') }}
+      run_self_hosted: ${{ inputs.is_release || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'CNRUNNER')) }}
 
   Autotest-GUI:
     name: Autotest GUI
@@ -1857,71 +1682,7 @@ jobs:
     with:
       run_id: ${{ github.run_id }}
       ref: ${{ github.event.pull_request.head.ref || github.ref }}
-      run_extended: ${{(github.event_name == 'release' && github.event.action == 'created') || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release')}}
-
-  update-release-info:
-    name: Update Release Information
-    needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
-    permissions:
-      contents: read
-    steps:
-      - name: Fetch latest release info
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-east-1
-          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
-        run: |
-          # GUI release info
-          curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/espressif/idf-im-ui/releases/latest > eim_unified_release.json
-          echo "Latest GUI release tag: $(jq -r .tag_name eim_unified_release.json)"
-          aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/dl/eim/eim_unified_release.json
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/eim_unified_release.json"
-
-  update-homebrew:
-    name: Update Homebrew Formula and Cask
-    needs: [build-cli, build-cli-linux, build-cli-linux-armv7, build-gui, update-release-info]
-    permissions:
-      contents: write
-    uses: ./.github/workflows/update-homebrew.yml
-    with:
-      version: ${{ github.ref_name }}
-    if: github.event_name == 'release' && github.event.action == 'created'
-    secrets: inherit
-
-  update-linux-repos:
-    name: Update APT and RPM Repositories
-    needs: [build-cli-linux, build-cli-linux-armv7, build-gui, build-cli-rpm, build-gui-rpm, build-cli-pacman, build-gui-pacman, update-release-info]
-    permissions:
-      contents: write
-    uses: ./.github/workflows/update-linux-repos.yml
-    if: github.event_name == 'release' && github.event.action == 'created'
-    with:
-      version: ${{ github.ref_name }}
-    secrets: inherit
-
-  update-windows-packages:
-    name: Generate Windows Packages and Publish to WinGet
-    needs: [build-cli, build-gui, update-release-info]
-    permissions:
-      contents: write
-    uses: ./.github/workflows/update-windows-packages.yml
-    if: github.event_name == 'release' && github.event.action == 'created'
-    with:
-      version: ${{ github.ref_name }}
-    secrets: inherit
-
-  Autotest-PkgManagers:
-    name: Autotest Package Manager Installation
-    needs: [update-linux-repos, update-homebrew, update-windows-packages]
-    uses: ./.github/workflows/test_pkg_managers.yml
-    if: github.event_name == 'release' && github.event.action == 'created'
-    with:
-      version: ${{ github.ref_name }}
-      run_mode: release
-    secrets: inherit
+      run_extended: ${{ inputs.is_release || github.event_name == 'schedule' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'EXTENDEDTEST')) || startsWith(github.event.pull_request.head.ref, 'release') }}
 
   Autotest-PkgManagers-Nightly:
     name: Autotest Package Manager Installation (Nightly)
