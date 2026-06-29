@@ -9,7 +9,7 @@
             "targetList": "esp32s2",    // Which targets to install "esp32|esp32c6"
             "idfList": "v5.3.2",        // Which IDF version to install "v5.4|v.5.3.2"
             "installFolder": "<folder>" // Folder name to install idf (inside USER folder)
-            "idfMirror": "github",      // Mirror to download IDF "github" or "jihulab"
+            "idfMirror": "github",      // Mirror to download IDF "github" or "gitmirror"
             "toolsMirror": "github",    // Mirror to download tools "github", "dl_com" or "dl_cn"
             "pypiMirror": "pypi_org",   // Mirror to download python packages "pypi_org", "pypi_aliyun", "pypi_tsinghua", "pypi_ustc"
             "recursive": false,         // Whether to prevent downloading submodules (set to true if omitted)
