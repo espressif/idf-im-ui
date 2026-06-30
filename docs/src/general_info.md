@@ -234,29 +234,28 @@ sudo dnf upgrade eim
 For **Arch-based** distributions (Arch Linux, Manjaro, EndeavourOS, CachyOS, etc.), use the official EIM pacman repository:
 
 ```bash
-# Add the EIM pacman repository
-# Edit /etc/pacman.conf and add the following at the end:
+# 1. Import and locally sign the Espressif signing key (required once)
+curl -fsSL https://dl.espressif.com/dl/eim/eim.asc | sudo pacman-key --add -
+sudo pacman-key --lsign-key 06E9A6C0325E124198C685F18B1F38BDC9383E1D
 
-[eim]
-SigLevel = Optional TrustAll
-Server = https://dl.espressif.com/dl/eim/pacman/$arch
-
-# Or use the shell command below (requires sudo):
+# 2. Add the EIM pacman repository to /etc/pacman.conf
 sudo tee -a /etc/pacman.conf << 'EOF'
 [eim]
-SigLevel = Optional TrustAll
+SigLevel = Required DatabaseOptional TrustAll
 Server = https://dl.espressif.com/dl/eim/pacman/$arch
 EOF
 
-# Update package databases
-sudo pacman -Sy
+# 3. Update package databases
+sudo pacman -Syu
 
-# Install CLI only
+# 4. Install CLI only
 sudo pacman -S eim-cli
 
 # Or install GUI (includes CLI)
 sudo pacman -S eim-gui
 ```
+
+> **Important:** Step 1 (key import) must be done **before** running `pacman -Syu`. Without it, pacman cannot verify the repository database and will refuse to sync. The key fingerprint is `06E9A6C0325E124198C685F18B1F38BDC9383E1D`.
 
 > **Note:** The GUI package depends on `gtk4`, `libadwaita`, and `webkit2gtk-4.1`, which may require additional setup on some distributions.
 
