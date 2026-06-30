@@ -10,6 +10,22 @@ use std::path::Path;
 
 use crate::ensure_path;
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum InstallationStatus {
+    InProgress,
+    Failed,
+    Finished,
+    BeingRepaired,
+    Broken,
+}
+
+impl Default for InstallationStatus {
+    fn default() -> Self {
+        InstallationStatus::Finished
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Base64Bytes(pub Vec<u8>);
 
@@ -62,20 +78,23 @@ where
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdfInstallation {
-    #[serde(rename = "activationScript")]
-    pub activation_script: String,
+    #[serde(rename = "activationScript", default, skip_serializing_if = "Option::is_none")]
+    pub activation_script: Option<String>,
     pub id: String,
     #[serde(rename = "idfToolsPath")]
     pub idf_tools_path: String,
     pub name: String,
     pub path: String,
-    pub python: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub python: Option<String>,
     #[serde(rename = "installationConfig", default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_base64_bytes")]
     pub installation_config: Option<Base64Bytes>,
+    #[serde(default)]
+    pub status: InstallationStatus,
 }
 
 pub const IDF_CONFIG_FILE_NAME: &str = "eim_idf.json";
-pub const IDF_CONFIG_FILE_VERSION: &str = "2.0";
+pub const IDF_CONFIG_FILE_VERSION: &str = "3.0";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdfConfig {
@@ -325,6 +344,62 @@ impl IdfConfig {
     pub fn is_path_in_config(self, path:String) -> bool {
       self.idf_installed.iter().find(|i| i.path == path).is_some()
     }
+
+    /// Updates the status of an installation identified by ID, name, or path.
+    pub fn update_installation_status(&mut self, identifier: &str, status: InstallationStatus) -> bool {
+        if let Some(installation) = self.idf_installed.iter_mut().find(|i| {
+            i.id == identifier || i.name == identifier || i.path == identifier
+        }) {
+            installation.status = status;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Marks an installation as complete: sets activation_script, python,
+    /// optionally updates installation_config, and sets status to Finished.
+    /// Looks up the installation by ID first, then name, then path.
+    pub fn complete_installation(
+        &mut self,
+        identifier: &str,
+        activation_script: String,
+        python: String,
+        installation_config: Option<Base64Bytes>,
+    ) -> bool {
+        if let Some(installation) = self.idf_installed.iter_mut().find(|i| {
+            i.id == identifier || i.name == identifier || i.path == identifier
+        }) {
+            installation.activation_script = Some(activation_script);
+            installation.python = Some(python);
+            if installation_config.is_some() {
+                installation.installation_config = installation_config;
+            }
+            installation.status = InstallationStatus::Finished;
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns references to all installations that are not in the Finished state.
+    pub fn get_incomplete_installations(&self) -> Vec<&IdfInstallation> {
+        self.idf_installed
+            .iter()
+            .filter(|i| i.status != InstallationStatus::Finished)
+            .collect()
+    }
+
+    /// Convenience: reads the config file, updates a status, and writes it back.
+    pub fn update_status_in_file<P: AsRef<Path>>(
+        config_path: P,
+        identifier: &str,
+        status: InstallationStatus,
+    ) -> Result<()> {
+        let mut config = IdfConfig::from_file(config_path.as_ref())?;
+        config.update_installation_status(identifier, status);
+        config.to_file(config_path, true, false)
+    }
 }
 
 pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {
@@ -344,28 +419,29 @@ mod tests {
             git_path: String::from("/opt/homebrew/bin/git"),
             idf_installed: vec![
                 IdfInstallation {
-                    activation_script: String::from("/tmp/esp-new/activate_idf_v5.4.sh"),
+                    activation_script: Some(String::from("/tmp/esp-new/activate_idf_v5.4.sh")),
                     id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
                     idf_tools_path: String::from("/tmp/esp-new/v5.4/tools"),
                     name: String::from("ESP-IDF v5.4"),
                     path: String::from("/tmp/esp-new/v5.4/esp-idf"),
-                    python: String::from("/tmp/esp-new/v5.4/tools/python/bin/python3"),
+                    python: Some(String::from("/tmp/esp-new/v5.4/tools/python/bin/python3")),
                     installation_config: None,
-
+                    status: InstallationStatus::Finished,
                 },
                 IdfInstallation {
-                    activation_script: String::from("/tmp/esp-new/activate_idf_v5.1.5.sh"),
+                    activation_script: Some(String::from("/tmp/esp-new/activate_idf_v5.1.5.sh")),
                     id: String::from("esp-idf-5f014e6764904e4c914eeb365325bfcd"),
                     idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"),
                     name: String::from("v5.1.5"),
                     path: String::from("/tmp/esp-new/v5.1.5/esp-idf"),
-                    python: String::from("/tmp/esp-new/v5.1.5/tools/python/bin/python3"),
+                    python: Some(String::from("/tmp/esp-new/v5.1.5/tools/python/bin/python3")),
                     installation_config: None,
+                    status: InstallationStatus::Finished,
                 },
             ],
             idf_selected_id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
             eim_path: None,
-            version: Some("2.0".to_string()),
+            version: Some("3.0".to_string()),
         }
     }
 
@@ -377,22 +453,24 @@ mod tests {
             git_path: String::from("/opt/homebrew/bin/git"),
             idf_installed: vec![
                 IdfInstallation {
-                    activation_script: String::from("/tmp/esp-new/activate_idf_v5.4.sh"),
+                    activation_script: Some(String::from("/tmp/esp-new/activate_idf_v5.4.sh")),
                     id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
                     idf_tools_path: String::from("/tmp/esp-new/v5.4/tools"),
                     name: String::from("ESP-IDF v5.4"),
                     path: String::from("/tmp/esp-new/v5.4/esp-idf"),
-                    python: String::from("/tmp/esp-new/v5.4/tools/python/bin/python3"),
+                    python: Some(String::from("/tmp/esp-new/v5.4/tools/python/bin/python3")),
                     installation_config: Some(Base64Bytes::new(settings_binary.clone())),
+                    status: InstallationStatus::Finished,
                 },
                 IdfInstallation {
-                    activation_script: String::from("/tmp/esp-new/activate_idf_v5.1.5.sh"),
+                    activation_script: Some(String::from("/tmp/esp-new/activate_idf_v5.1.5.sh")),
                     id: String::from("esp-idf-5f014e6764904e4c914eeb365325bfcd"),
                     idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"),
                     name: String::from("v5.1.5"),
                     path: String::from("/tmp/esp-new/v5.1.5/esp-idf"),
-                    python: String::from("/tmp/esp-new/v5.1.5/tools/python/bin/python3"),
+                    python: Some(String::from("/tmp/esp-new/v5.1.5/tools/python/bin/python3")),
                     installation_config: Some(Base64Bytes::new(settings_binary)),
+                    status: InstallationStatus::Finished,
                 },
             ],
             idf_selected_id: String::from("esp-idf-5705c12db93b4d1a8b084c6986173c1b"),
@@ -485,13 +563,14 @@ mod tests {
 
         // Test appending to existing config
         let new_installation = IdfInstallation {
-            activation_script: String::from("/esp/idf/v5.1/export.sh"),
+            activation_script: Some(String::from("/esp/idf/v5.1/export.sh")),
             id: String::from("5.1"),
             idf_tools_path: String::from("/home/user/.espressif/tools"),
             name: String::from("ESP-IDF v5.1"),
             path: String::from("/esp/idf/v5.1.0"),
-            python: String::from("/usr/bin/python3"),
+            python: Some(String::from("/usr/bin/python3")),
             installation_config: None,
+            status: InstallationStatus::Finished,
         };
 
         config.idf_installed = vec![new_installation.clone()];
@@ -576,13 +655,14 @@ fn test_append_with_same_path_replacement() -> Result<()> {
         git_path: String::from("/usr/bin/git"),
         idf_installed: vec![
             IdfInstallation {
-                activation_script: String::from("/tmp/esp/v5.0/updated-export.sh"),
+                activation_script: Some(String::from("/tmp/esp/v5.0/updated-export.sh")),
                 id: String::from("esp-idf-new-id"),
                 idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the first installation in initial_config
                 name: String::from("ESP-IDF v5.0 (Updated)"),
                 path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the first installation in initial_config
-                python: String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3"),
+                python: Some(String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3")),
                 installation_config: None,
+                status: InstallationStatus::Finished,
             },
         ],
         idf_selected_id: String::from("esp-idf-new-id"),
@@ -606,7 +686,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
     // Verify it's the updated one, not the original
     assert_eq!(v5_0_install.id, "esp-idf-new-id");
     assert_eq!(v5_0_install.name, "ESP-IDF v5.0 (Updated)");
-    assert_eq!(v5_0_install.activation_script, "/tmp/esp/v5.0/updated-export.sh");
+    assert_eq!(v5_0_install.activation_script, Some("/tmp/esp/v5.0/updated-export.sh".to_string()));
 
     // Verify the unique installation is still there unchanged
     let v5_1_install = result_config.idf_installed.iter()
@@ -670,7 +750,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
     // Read it back
     let read_config = IdfConfig::from_file(&config_path)?;
 
-    assert_eq!(read_config.version, Some("2.0".to_string()));
+    assert_eq!(read_config.version, Some("3.0".to_string()));
     assert_eq!(read_config.idf_installed.len(), 2);
 
     // Verify installation_config is preserved
@@ -718,7 +798,7 @@ fn test_append_with_same_path_replacement() -> Result<()> {
 
     // Verify the v2 file
     let final_config = IdfConfig::from_file(&v2_path)?;
-    assert_eq!(final_config.version, Some("2.0".to_string()));
+    assert_eq!(final_config.version, Some("3.0".to_string()));
     assert_eq!(final_config.idf_installed.len(), 1);
     assert!(final_config.idf_installed[0].installation_config.is_none()); // No installation_config since original didn't have it
 
@@ -743,13 +823,14 @@ fn test_append_with_same_path_replacement() -> Result<()> {
 
     // Now append a new installation (without installation_config)
     let new_installation = IdfInstallation {
-      activation_script: String::from("/new/esp/activate.sh"),
+      activation_script: Some(String::from("/new/esp/activate.sh")),
       id: String::from("esp-idf-new"),
       idf_tools_path: String::from("/new/esp/tools"),
       name: String::from("ESP-IDF New"),
       path: String::from("/new/esp/new/esp-idf"),
-      python: String::from("/new/esp/tools/python/bin/python3"),
+      python: Some(String::from("/new/esp/tools/python/bin/python3")),
       installation_config: None,
+      status: InstallationStatus::Finished,
     };
 
     config.idf_installed.push(new_installation);

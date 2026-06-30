@@ -27,7 +27,7 @@ async function findByAnyText(eimRunner, texts, timeout = 30000) {
 // This function executes the simplified installation functionality of the EIM GUI.
 // When `drive` is provided (Windows only), the test exercises the per-install
 // drive override — the user ticks the "install on a different drive" checkbox,
-// picks `drive` (e.g. "D:") in the naive-ui select, and the verification step
+// picks `drive` (e.g. "D:\") in the naive-ui select, and the verification step
 // is later asked to look for the install at the drive-swapped path.
 export function runGUISimplifiedInstallTest({
   id = 0,

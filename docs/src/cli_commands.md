@@ -88,6 +88,16 @@ The wizard command accepts the same options as the install command but runs in i
 
 When installing multiple ESP-IDF versions, the wizard will prompt you to select features for each version independently, allowing you to customize the installation per version.
 
+#### Incomplete Installation Check
+
+Before starting the wizard, EIM checks whether any previously started installations did not finish successfully. If such installations are found, the wizard pauses and presents each one with its name, status, and path. For each entry you can choose:
+
+- **Fix** — run the repair flow for that installation.
+- **Delete** — remove the incomplete installation.
+- **Skip** — leave it as-is and continue.
+
+This check only runs in interactive mode (`--non-interactive false` or `eim wizard`). It does not run when using `eim fix` directly.
+
 ### List Command
 
 List all installed ESP-IDF versions.
@@ -96,7 +106,15 @@ List all installed ESP-IDF versions.
 eim list
 ```
 
-This command displays all ESP-IDF versions installed on your system, with the currently selected version marked.
+This command displays all ESP-IDF versions installed on your system, with the currently selected version marked. Each entry also shows the installation **status**:
+
+| Status | Meaning |
+|---|---|
+| `Finished` | Installation completed successfully |
+| `In Progress` | Installation was interrupted or never finished |
+| `Failed` | Installation failed before completing |
+| `Being Repaired` | A repair is currently in progress |
+| `Broken` | A repair attempt failed |
 
 ### List Tools Command
 
@@ -107,7 +125,7 @@ eim list-tools [IDENTIFIER] [--outdated]
 ```
 
 Arguments:
-- `IDENTIFIER`: ID, name, or path of the IDF installation to inspect (optional). If omitted, the command prompts you to choose from the installed IDFs.
+- `IDENTIFIER`: ID, name, or path of the IDF installation to inspect (optional). If omitted, the command prompts you to choose from the installed IDFs. Each entry in the interactive list includes its current status in brackets, e.g. `v5.4.0 [Finished]`.
 
 Options:
 - `--outdated`: Show only the tools whose on-disk version is older than the latest non-deprecated version declared in `tools.json`. Prints a header line `Outdated tools:` followed by `<name>: version <installed> is outdated by <available>`, or `No outdated tools.` when everything is up to date.
@@ -128,7 +146,7 @@ Select an ESP-IDF version as active.
 eim select [VERSION]
 ```
 
-If `VERSION` is not provided, the command will prompt you to select from available versions. Selecting version means setting the `idfSelectedId` in the `eim_idf.json` file. This is used by the IDEs to know which of the IDF versions you prefer to use.
+If `VERSION` is not provided, the command will prompt you to select from available versions. Each entry in the interactive list includes its current status in brackets, e.g. `v5.4.0 [Finished]`. Selecting a version sets the `idfSelectedId` in the `eim_idf.json` file, which IDEs use to determine the preferred IDF version.
 
 ### Rename Command
 
@@ -138,8 +156,7 @@ Rename a specific ESP-IDF version.
 eim rename [VERSION] [NEW_NAME]
 ```
 
-If `VERSION` is not provided, the command will prompt you to select from available versions.
-If `NEW_NAME` is not provided, the command will prompt you to enter a new name.
+If `VERSION` is not provided, the command will prompt you to select from available versions. Each entry in the interactive list includes its current status in brackets. If `NEW_NAME` is not provided, the command will prompt you to enter a new name.
 
 ### Remove Command
 
@@ -149,7 +166,7 @@ Remove a specific ESP-IDF version.
 eim remove [VERSION]
 ```
 
-If `VERSION` is not provided, the command will prompt you to select from available versions.
+If `VERSION` is not provided, the command will prompt you to select from available versions. Each entry in the interactive list includes its current status in brackets.
 
 ### Purge Command
 
@@ -221,7 +238,7 @@ Fix the ESP-IDF installation by reinstalling the tools and dependencies
 eim fix [PATH]
 ```
 
-If no `PATH` is provided, the user will be presented with selection of all known IDF installation to select from.
+If no `PATH` is provided, the user will be presented with an interactive list of all known IDF installations to select from. Each entry shows the installation name, path, and current status in brackets, e.g. `v5.3.0 (/home/user/.espressif/v5.3.0) [Broken]`.
 
 ### Completions Command
 

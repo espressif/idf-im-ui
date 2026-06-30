@@ -438,11 +438,44 @@ list.installed_title:
   en: "Installed versions:"
   cn: "已安装的版本："
 list.version_selected:
-  en: "- %{name} (selected) [%{path}]"
-  cn: "- %{name} (已选) [%{path}]"
+  en: "- %{name} (selected) [%{status}] [%{path}]"
+  cn: "- %{name} (已选) [%{status}] [%{path}]"
 list.version:
-  en: "- %{name} [%{path}]"
-  cn: "- %{name} [%{path}]"
+  en: "- %{name} [%{status}] [%{path}]"
+  cn: "- %{name} [%{status}] [%{path}]"
+list.status.finished:
+  en: "ok"
+  cn: "正常"
+list.status.in_progress:
+  en: "in progress"
+  cn: "安装中"
+list.status.failed:
+  en: "failed"
+  cn: "失败"
+list.status.being_repaired:
+  en: "being repaired"
+  cn: "修复中"
+list.status.broken:
+  en: "broken"
+  cn: "损坏"
+wizard.incomplete.found:
+  en: "Found %{count} incomplete installation(s):"
+  cn: "发现 %{count} 个未完成的安装："
+wizard.incomplete.entry:
+  en: "  - %{name} [%{status}] at %{path}"
+  cn: "  - %{name} [%{status}] 位于 %{path}"
+wizard.incomplete.action_prompt:
+  en: "What would you like to do with this installation?"
+  cn: "您希望如何处理此安装？"
+wizard.incomplete.action.fix:
+  en: "Fix/Reinstall"
+  cn: "修复/重新安装"
+wizard.incomplete.action.delete:
+  en: "Delete"
+  cn: "删除"
+wizard.incomplete.action.skip:
+  en: "Skip"
+  cn: "跳过"
 select.no_versions:
   en: No versions installed
   cn: 未安装版本

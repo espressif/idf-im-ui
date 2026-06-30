@@ -41,9 +41,9 @@
           <div class="version-card-content">
             <div class="version-info">
               <h3 :data-id="`version-name-${version.id}`">{{ version.name }}</h3>
-              <!-- <n-tag :type="version.active ? 'success' : 'default'" size="small">
-                {{ version.version }}
-              </n-tag> -->
+              <n-tag v-if="version.status && version.status !== 'finished'" :type="installationStatusTagType(version.status)" size="small" :data-id="`version-status-${version.id}`">
+                {{ installationStatusLabel(version.status) }}
+              </n-tag>
             </div>
             <div class="version-path" :data-id="`version-path-${version.id}`">
               <n-icon><FolderOutlined /></n-icon>
@@ -564,6 +564,28 @@ export default {
       }
     }
 
+    const installationStatusLabel = (status) => {
+      const map = {
+        in_progress: t('app.incompleteInstallations.statusInProgress'),
+        failed: t('app.incompleteInstallations.statusFailed'),
+        being_repaired: t('app.incompleteInstallations.statusBeingRepaired'),
+        broken: t('app.incompleteInstallations.statusBroken'),
+        finished: t('app.incompleteInstallations.statusFinished'),
+      }
+      return map[status] ?? status
+    }
+
+    const installationStatusTagType = (status) => {
+      const map = {
+        in_progress: 'warning',
+        failed: 'error',
+        being_repaired: 'warning',
+        broken: 'error',
+        finished: 'success',
+      }
+      return map[status] ?? 'default'
+    }
+
     const statusTagType = (status) => {
       switch (status) {
         case 'recommended':
@@ -677,11 +699,14 @@ export default {
       router.push('/basic-installer')
     }
 
+    const onInstallationsChanged = () => loadInstalledVersions()
+
     onMounted(async () => {
       unlistenInstallComplete.value = await listen('prerequisites-install-complete', async () => {
         await recheckPrerequisites();
       });
 
+      window.addEventListener('installations-changed', onInstallationsChanged)
       checkOS()
       loadInstalledVersions()
     })
@@ -690,6 +715,7 @@ export default {
       if (unlistenInstallComplete.value) {
         unlistenInstallComplete.value();
       }
+      window.removeEventListener('installations-changed', onInstallationsChanged)
     })
 
     return {
@@ -720,6 +746,8 @@ export default {
       openInExplorer,
       openListTools,
       statusTagType,
+      installationStatusLabel,
+      installationStatusTagType,
       purgeAll,
       confirmPurge,
       installPrerequisites,

@@ -10,6 +10,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
 use std::process::Output;
+use std::collections::HashMap;
 
 use lnk::encoding::WINDOWS_1252;
 use lnk::ShellLink;
@@ -17,7 +18,7 @@ use log::warn;
 
 use crate::utils::remove_directory_all;
 use crate::{
-    idf_config::{IdfConfig, IdfInstallation},
+    idf_config::{IdfConfig, IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME},
     settings::Settings,
     idf_tools::{Tool, Version},
 };
@@ -326,18 +327,18 @@ pub fn remove_single_idf_version(
             }
         }
 
-        match remove_directory_all(installation.clone().activation_script) {
-            Ok(_) => {}
-            Err(e) => {
-                return Err(anyhow!("Failed to remove activation script: {}", e));
+        if let Some(ref script) = installation.activation_script {
+            match remove_directory_all(script) {
+                Ok(_) => {}
+                Err(e) => {
+                    return Err(anyhow!("Failed to remove activation script: {}", e));
+                }
             }
-        }
 
-        // Also remove fish/bat activation scripts
-        if let Err(e) =
-            remove_activation_scripts(&installation.clone().activation_script, &installation.name)
-        {
-            warn!("Failed to remove additional activation scripts: {}", e);
+            // Also remove fish/bat activation scripts
+            if let Err(e) = remove_activation_scripts(script, &installation.name) {
+                warn!("Failed to remove additional activation scripts: {}", e);
+            }
         }
 
         if ide_config.remove_installation(identifier) {
@@ -348,7 +349,8 @@ pub fn remove_single_idf_version(
         ide_config.to_file(config_path, true, false)?;
         if std::env::consts::OS == "windows" {
             // On Windows, also remove the desktop icon associated with the installation
-            match find_shortcut_by_profile(&installation.activation_script) {
+            let script_ref = installation.activation_script.as_deref().unwrap_or("");
+            match find_shortcut_by_profile(script_ref) {
                 Ok(Some(shortcut_name)) => {
                     let desktop_path =
                         match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
@@ -379,7 +381,7 @@ pub fn remove_single_idf_version(
                 }
                 Ok(None) => {
                     info!(
-                        "No desktop shortcut found for profile: {}",
+                        "No desktop shortcut found for profile: {:?}",
                         installation.activation_script
                     );
                 }
@@ -445,7 +447,9 @@ pub fn run_command_in_context(
         }
     };
 
-    let activation_script = &installation.activation_script;
+    let activation_script = installation.activation_script.as_deref().ok_or_else(|| {
+        anyhow!("Installation {} has no activation script set", identifier)
+    })?;
 
     run_command_using_activation_script(activation_script, command, None)
 }
@@ -518,22 +522,30 @@ pub async fn prepare_settings_for_fix_idf_installation(
     config_path: Option<&PathBuf>,
 ) -> anyhow::Result<Settings> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
-    // The fix logic is just instalation with use of existing repository
+
     let mut version_name = None;
+    let mut pending_ids = HashMap::new();
+
+    let resolved_config_path = config_path
+        .cloned()
+        .unwrap_or_else(get_default_config_path);
+
     match list_installed_versions(config_path) {
         Ok(versions) => {
             for v in versions {
                 if v.path == path_to_fix.to_str().unwrap() {
-                    info!("Found existing IDF version: {}", v.name);
-                    // Remove the existing activation script and eim_idf.json entry
-                    match remove_single_idf_version(&v.name, true, config_path) {
-                        Ok(_) => {
-                            info!("Removed existing IDF version from eim_idf.json: {}", v.name);
-                            version_name = Some(v.name.clone());
-                        }
-                        Err(err) => {
-                            error!("Failed to remove existing IDF version {}: {}", v.name, err);
-                        }
+                    info!("Found existing IDF version: {} (id: {})", v.name, v.id);
+                    version_name = Some(v.name.clone());
+                    pending_ids.insert(v.name.clone(), v.id.clone());
+
+                    // Mark the entry as BeingRepaired instead of deleting it
+                    match IdfConfig::update_status_in_file(
+                        &resolved_config_path,
+                        &v.id,
+                        InstallationStatus::BeingRepaired,
+                    ) {
+                        Ok(_) => info!("Marked installation {} as being repaired", v.name),
+                        Err(err) => error!("Failed to mark installation as being repaired: {}", err),
                     }
                 }
             }
@@ -549,6 +561,7 @@ pub async fn prepare_settings_for_fix_idf_installation(
     settings.version_name = version_name;
     settings.install_all_prerequisites = Some(true);
     settings.config_file_save_path = None;
+    settings.pending_installation_ids = if pending_ids.is_empty() { None } else { Some(pending_ids) };
     return Ok(settings);
 }
 
@@ -883,13 +896,14 @@ mod tests {
     /// Builds a minimal `IdfInstallation` for tests.
     fn make_idf_installation(idf_path: &str, tools_path: &str) -> IdfInstallation {
         IdfInstallation {
-            activation_script: format!("{}/activate.sh", idf_path),
+            activation_script: Some(format!("{}/activate.sh", idf_path)),
             id: "esp-idf-test-id".to_string(),
             idf_tools_path: tools_path.to_string(),
             name: "TestIDF".to_string(),
             path: idf_path.to_string(),
-            python: format!("{}/tools/python/bin/python3", tools_path),
+            python: Some(format!("{}/tools/python/bin/python3", tools_path)),
             installation_config: None,
+            status: crate::idf_config::InstallationStatus::Finished,
         }
     }
 

@@ -1,0 +1,13 @@
+[
+  {
+    "id": 1,
+    "type": "incomplete-installations",
+    "name": "GUI Incomplete Installations Modal",
+    "data": {
+      "idfList": "default",
+      "installFolder": ".espincomplete"
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  }
+]

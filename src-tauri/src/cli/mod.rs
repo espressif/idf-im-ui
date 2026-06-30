@@ -12,7 +12,7 @@ use helpers::generic_input;
 use helpers::generic_select;
 use idf_im_lib::get_log_directory;
 use idf_im_lib::logging::formatter;
-use idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME;
+use idf_im_lib::idf_config::{IDF_CONFIG_FILE_NAME, InstallationStatus};
 use idf_im_lib::settings::Settings;
 use idf_im_lib::utils::is_valid_idf_directory;
 use idf_im_lib::version_manager::get_selected_version;
@@ -99,6 +99,16 @@ pub fn setup_cli(
 
     log::trace!("CLI logging initialized. Console: {:?}, File: {:?}", console_level, file_level);
     Ok(())
+}
+
+fn status_label(status: &InstallationStatus) -> String {
+    match status {
+        InstallationStatus::Finished => t!("list.status.finished").to_string(),
+        InstallationStatus::InProgress => t!("list.status.in_progress").to_string(),
+        InstallationStatus::Failed => t!("list.status.failed").to_string(),
+        InstallationStatus::BeingRepaired => t!("list.status.being_repaired").to_string(),
+        InstallationStatus::Broken => t!("list.status.broken").to_string(),
+    }
 }
 
 fn format_tool_list_report(report: &idf_im_lib::version_manager::ToolListReport) {
@@ -321,6 +331,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                   } else {
                       debug!("No path provided in settings, skipping installed version check");
                   }
+                  // Create InProgress entries before installation starts so interruptions are detectable
+                  if let Err(e) = settings.create_pending_esp_ide_json() {
+                      warn!("Failed to create pending installation entries: {}", e);
+                  }
+
                   let time = std::time::SystemTime::now();
                   if !do_not_track {
                       track_cli_event("CLI installation started", Some(json!({
@@ -364,10 +379,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     } else {
                         println!("{}", t!("list.installed_title"));
                         for version in config.idf_installed {
+                            let sl = status_label(&version.status);
                             if version.id == config.idf_selected_id {
-                                println!("{}", t!("list.version_selected", name = version.name, path = version.path));
+                                println!("{}", t!("list.version_selected", name = version.name, path = version.path, status = sl));
                             } else {
-                                println!("{}", t!("list.version", name = version.name, path = version.path));
+                                println!("{}", t!("list.version", name = version.name, path = version.path, status = sl));
                             }
                         }
                         Ok(())
@@ -391,10 +407,12 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         return Ok(());
                     }
                     Ok(versions) => {
-                        let options: Vec<String> =
-                            versions.iter().map(|v| v.name.clone()).collect();
-                        match generic_select(&t!("list_tools.idf_prompt"), &options) {
-                            Ok(selected) => Some(selected),
+                        let options: Vec<String> = versions
+                            .iter()
+                            .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
+                            .collect();
+                        match helpers::generic_select_index(&t!("list_tools.idf_prompt"), &options) {
+                            Ok(i) => Some(versions[i].name.clone()),
                             Err(err) => return Err(anyhow::anyhow!(err)),
                         }
                     }
@@ -432,17 +450,21 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             Ok(())
                         } else {
                             println!("{}", t!("select.available_title"));
-                            let options = versions.iter().map(|v| v.name.clone()).collect();
-                            match generic_select(&t!("select.prompt"), &options) {
-                                Ok(selected) => match select_idf_version(&selected, config_path.as_ref()) {
+                            let options: Vec<String> = versions
+                                .iter()
+                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
+                                .collect();
+                            match helpers::generic_select_index(&t!("select.prompt"), &options) {
+                                Ok(i) => match select_idf_version(&versions[i].name, config_path.as_ref()) {
                                     Ok(_) => {
-                                        println!("{}", t!("select.success", version = selected));
+                                        println!("{}", t!("select.success", version = versions[i].name));
                                         if let Some(selected) = get_selected_version(config_path.as_ref()) {
                                           println!("{}", t!("wizard.separator.line"));
                                           println!("{}", t!("cli.select.activation_instructions"));
+                                          let script = selected.activation_script.as_deref().unwrap_or("");
                                           match std::env::consts::OS {
-                                            "windows" => println!(". \"{}\"",selected.activation_script ),
-                                            _ => println!("source \"{}\"",selected.activation_script ),
+                                            "windows" => println!(". \"{}\"", script),
+                                            _ => println!("source \"{}\"", script),
                                           }
                                           println!("{}", t!("wizard.separator.line"));
                                         } else {
@@ -470,9 +492,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         if let Some(selected) = get_selected_version(config_path.as_ref()) {
                           info!("{}", t!("wizard.separator.line"));
                           info!("{}", t!("cli.select.activation_instructions"));
+                          let script = selected.activation_script.as_deref().unwrap_or("");
                           match std::env::consts::OS {
-                            "windows" => info!(". {}",selected.activation_script ),
-                            _ => info!("source {}",selected.activation_script ),
+                            "windows" => info!(". {}", script),
+                            _ => info!("source {}", script),
                           };
                           info!("{}", t!("wizard.separator.line"));
                         } else {
@@ -512,12 +535,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             warn!("{}", t!("rename.no_versions"));
                             Ok(())
                         } else {
-                            let options = versions.iter().map(|v| v.name.clone()).collect();
-                            let version = match helpers::generic_select(
+                            let options: Vec<String> = versions
+                                .iter()
+                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
+                                .collect();
+                            let version = match helpers::generic_select_index(
                                 &t!("rename.prompt"),
                                 &options,
                             ) {
-                                Ok(selected) => selected,
+                                Ok(i) => versions[i].name.clone(),
                                 Err(err) => {
                                     error!("Error: {}", err);
                                     return Err(anyhow::anyhow!(err));
@@ -637,11 +663,14 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                             Ok(())
                         } else {
                             println!("{}", t!("remove.available_title"));
-                            let options = versions.iter().map(|v| v.name.clone()).collect();
-                            match generic_select(&t!("remove.prompt"), &options) {
-                                Ok(selected) => match remove_single_idf_version(&selected, false, config_path.as_ref()) {
+                            let options: Vec<String> = versions
+                                .iter()
+                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
+                                .collect();
+                            match helpers::generic_select_index(&t!("remove.prompt"), &options) {
+                                Ok(i) => match remove_single_idf_version(&versions[i].name, false, config_path.as_ref()) {
                                     Ok(_) => {
-                                        info!("{}", t!("remove.success", version = selected));
+                                        info!("{}", t!("remove.success", version = versions[i].name));
                                         Ok(())
                                     }
                                     Err(err) => Err(anyhow::anyhow!(err)),
@@ -711,6 +740,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       Ok(_) => debug!("ESP-IDF JSON initialized at configured path."),
                       Err(e) => warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
                     }
+
+                    // Check for incomplete installations and offer fix/delete
+                    wizard::check_and_handle_incomplete_installations(&settings, config_path.as_ref()).await;
+
+                    // Create InProgress entries before installation starts so interruptions are detectable
+                    if let Err(e) = settings.create_pending_esp_ide_json() {
+                        warn!("Failed to create pending installation entries: {}", e);
+                    }
+
                     let time = std::time::SystemTime::now();
                     if !do_not_track {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
@@ -759,12 +797,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       warn!("{}", t!("fix.no_versions"));
                       return Ok(());
                   } else {
-                    let options = versions.iter().map(|v| v.path.clone()).collect();
-                    let version_path = match helpers::generic_select(
+                    let options: Vec<String> = versions
+                        .iter()
+                        .map(|v| format!("{} ({}) [{}]", v.name, v.path, status_label(&v.status)))
+                        .collect();
+                    let version_path = match helpers::generic_select_index(
                         &t!("fix.prompt"),
                         &options,
                     ) {
-                        Ok(selected) => selected,
+                        Ok(i) => versions[i].path.clone(),
                         Err(err) => {
                             error!("Error: {}", err);
                             return Err(anyhow::anyhow!(err));
