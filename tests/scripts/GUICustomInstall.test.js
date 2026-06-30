@@ -237,8 +237,8 @@ export function runGUICustomInstallTest({
       let githubMirror = await eimRunner.findByDataId(
         "idf-mirror-option-https://github.com",
       );
-      let jihulabMirror = await eimRunner.findByDataId(
-        "idf-mirror-option-https://jihulab.com/esp-mirror",
+      let espressifCnMirror = await eimRunner.findByDataId(
+        "idf-mirror-option-https://git.espressif.com.cn",
       );
 
       await eimRunner.driver.executeScript(
@@ -246,27 +246,27 @@ export function runGUICustomInstallTest({
         githubMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.include("selected");
-      expect(await jihulabMirror.getAttribute("class")).to.not.include(
+      expect(await espressifCnMirror.getAttribute("class")).to.not.include(
         "selected",
       );
       await eimRunner.driver.executeScript(
         "arguments[0].click();",
-        jihulabMirror,
+        espressifCnMirror,
       );
       expect(await githubMirror.getAttribute("class")).to.not.include(
         "selected",
       );
-      expect(await jihulabMirror.getAttribute("class")).to.include("selected");
+      expect(await espressifCnMirror.getAttribute("class")).to.include("selected");
 
       idfMirror === "github" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
           githubMirror,
         ));
-      idfMirror === "jihulab" &&
+      idfMirror === "gitmirror" &&
         (await eimRunner.driver.executeScript(
           "arguments[0].click();",
-          jihulabMirror,
+          espressifCnMirror,
         ));
     });
 

@@ -2410,7 +2410,7 @@ pub fn single_version_post_install(
 /// A reference to a static array of static strings, where each string represents a mirror URL.
 ///
 pub fn get_idf_mirrors_list() -> &'static [&'static str] {
-    &["https://github.com", "https://jihulab.com/esp-mirror"]
+    &["https://github.com", "https://git.espressif.com.cn"]
 }
 
 /// Returns a list of available IDF tools mirrors.

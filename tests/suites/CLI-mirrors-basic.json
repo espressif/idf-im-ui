@@ -2,10 +2,10 @@
   {
     "id": 1,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com Default",
+    "name": "Mirrors gitmirror and dl_com Default",
     "data": {
       "idfList": "default",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_com",
       "pypiMirror": "pypi_aliyun",
       "recursive": true,
@@ -18,10 +18,10 @@
   {
     "id": 2,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn Default",
+    "name": "Mirrors gitmirror and dl_cn Default",
     "data": {
       "idfList": "default",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_cn",
       "pypiMirror": "pypi_tsinghua",
       "recursive": true,

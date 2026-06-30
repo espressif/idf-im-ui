@@ -113,7 +113,7 @@ try {
 // List mirrors available for IDF installation
 const IDFMIRRORS = {
   github: "https://github.com",
-  jihulab: "https://jihulab.com/esp-mirror",
+  gitmirror: "https://git.espressif.com.cn",
 };
 
 // List mirrors available for IDF tools installation

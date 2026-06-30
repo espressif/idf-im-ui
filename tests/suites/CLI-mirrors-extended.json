@@ -2,10 +2,10 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com previous",
+    "name": "Mirrors gitmirror and dl_com previous",
     "data": {
       "idfList": "previous",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_com",
       "pypiMirror": "pypi_aliyun",
       "recursive": true,
@@ -17,10 +17,10 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn previous",
+    "name": "Mirrors gitmirror and dl_cn previous",
     "data": {
       "idfList": "previous",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_cn",
       "pypiMirror": "pypi_aliyun",
       "recursive": true,
@@ -32,10 +32,10 @@
   {
     "id": 3,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_com previousPrevious",
+    "name": "Mirrors gitmirror and dl_com previousPrevious",
     "data": {
       "idfList": "previousPrevious",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_com",
       "pypiMirror": "pypi_tsinghua",
       "recursive": true,
@@ -47,10 +47,10 @@
   {
     "id": 4,
     "type": "custom",
-    "name": "Mirrors jihulab and dl_cn previousPrevious",
+    "name": "Mirrors gitmirror and dl_cn previousPrevious",
     "data": {
       "idfList": "previousPrevious",
-      "idfMirror": "jihulab",
+      "idfMirror": "gitmirror",
       "toolsMirror": "dl_cn",
       "pypiMirror": "pypi_ustc",
       "recursive": true,
