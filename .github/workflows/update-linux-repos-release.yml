@@ -477,16 +477,44 @@ jobs:
           done
           rm -f "$PASS_FILE"
 
+      - name: Publish signing key to keyserver (if not already present)
+        run: |
+          set -euo pipefail
+          KEY_ON_SERVER=false
+          if gpg --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY_FPR" 2>/dev/null; then
+            KEY_ON_SERVER=true
+            echo "Key already present on keys.openpgp.org, skipping upload."
+          fi
+          if [ "$KEY_ON_SERVER" = "false" ]; then
+            echo "Key not found on keyserver, uploading..."
+            gpg --keyserver hkps://keys.openpgp.org --send-keys "$GPG_KEY_FPR" || \
+            gpg --keyserver hkps://keyserver.ubuntu.com --send-keys "$GPG_KEY_FPR" || \
+            echo "Warning: could not push key to any keyserver (non-fatal, key is available via eim.asc)"
+          fi
+
       - name: Create pacman.conf snippet for end users
         run: |
           cat > pacman-repo/eim.pacman.conf << 'EOF'
           [eim]
-          SigLevel = Optional TrustAll
+          SigLevel = Required DatabaseOptional TrustAll
           Server = https://dl.espressif.com/dl/eim/pacman/$arch
           EOF
-          sed -i "s/<KEY_FINGERPRINT>/$GPG_KEY_FPR/g" pacman-repo/eim.pacman.conf
+
+          # Write a setup script that imports the key before the repo is added
+          cat > pacman-repo/eim-keysetup.sh << EOF
+          #!/usr/bin/env bash
+          # Run this once before adding the [eim] repo to pacman.conf
+          set -euo pipefail
+          curl -fsSL https://dl.espressif.com/dl/eim/eim.asc | pacman-key --add -
+          pacman-key --lsign-key ${GPG_KEY_FPR}
+          echo "EIM signing key imported and locally signed."
+          EOF
+          chmod +x pacman-repo/eim-keysetup.sh
+
           echo "Generated eim.pacman.conf:"
           cat pacman-repo/eim.pacman.conf
+          echo "Generated eim-keysetup.sh:"
+          cat pacman-repo/eim-keysetup.sh
 
       - name: Upload Pacman repository to S3
         run: |
