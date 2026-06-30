@@ -711,44 +711,118 @@ fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
     }
 }
 
+const S3_TOOLS_BASE_URL: &str = "https://dl.espressif.com/dl/eim/tools";
+const PYTHON_GITHUB_BASE_URL: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414";
+
+/// Returns the Python standalone archive filename for the current OS/arch combination.
+fn python_filename() -> anyhow::Result<&'static str> {
+    match (std::env::consts::OS, std::env::consts::ARCH) {
+        ("windows", "x86_64") => Ok("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz"),
+        ("windows", "aarch64") => Ok("cpython-3.11.15+20260414-aarch64-pc-windows-msvc-install_only.tar.gz"),
+        (os, arch) => Err(anyhow!("Unsupported OS/arch for Python standalone: {}/{}", os, arch)),
+    }
+}
+
 /// Fetches the download URL for the latest Git for Windows tar.bz2 archive.
 ///
-/// This function queries the GitHub API to find the latest release of git-for-windows/git
-/// and extracts the URL for the tar.bz2 archive matching the current system architecture.
+/// Tries the Espressif S3/CloudFront mirror first (preferred for users in mainland China),
+/// then falls back to the GitHub API.
 ///
 /// # Returns
 ///
 /// * `Ok((String, String))` - A tuple of (url, filename) for the latest Git archive.
 /// * `Err(anyhow::Error)` - If an error occurs during the HTTP request or parsing.
 pub async fn get_latest_git_for_windows_url() -> anyhow::Result<(String, String)> {
-    const API_URL: &str = "https://api.github.com/repos/git-for-windows/git/releases/latest";
-
-    // Determine architecture suffix based on system architecture
-    let arch_suffix = match std::env::consts::ARCH {
-        "x86_64" => "64-bit",
+    let arch_key = match std::env::consts::ARCH {
+        "x86_64" => "x86_64",
         "aarch64" | "arm64" => "arm64",
         arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
     };
 
-    let client = reqwest::Client::builder()
-        .user_agent("esp-idf-installer")
-        .build()?;
+    // Try S3 manifest first
+    match get_git_for_windows_url_from_s3(arch_key).await {
+        Ok(result) => {
+            debug!("Using S3 mirror for Git for Windows download");
+            return Ok(result);
+        }
+        Err(e) => {
+            debug!("S3 Git manifest unavailable ({}), falling back to GitHub API", e);
+        }
+    }
 
-    let response = client.get(API_URL).send().await?;
-    let json: serde_json::Value = response.json().await?;
+    get_git_for_windows_url_from_github(arch_key).await
+}
+
+/// Fetches the Git for Windows download URL from the Espressif S3 manifest.
+async fn get_git_for_windows_url_from_s3(arch_key: &str) -> anyhow::Result<(String, String)> {
+    let manifest_url = format!("{}/git/git-windows-latest.json", S3_TOOLS_BASE_URL);
+
+    let tmp_dir = tempfile::tempdir()?;
+    download_file_and_rename(
+        &manifest_url,
+        &tmp_dir.path().to_string_lossy(),
+        None,
+        Some("git-windows-latest.json"),
+        1,
+    )
+    .await
+    .map_err(|e| anyhow!("Failed to download Git manifest from S3: {}", e))?;
+
+    let manifest_path = tmp_dir.path().join("git-windows-latest.json");
+    let content = std::fs::read_to_string(&manifest_path)?;
+    let json: serde_json::Value = serde_json::from_str(&content)?;
+
+    let entry = &json[arch_key];
+    let filename = entry["filename"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("No filename for arch '{}' in S3 manifest", arch_key))?
+        .to_string();
+    let url = entry["url"]
+        .as_str()
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| anyhow!("No url for arch '{}' in S3 manifest", arch_key))?
+        .to_string();
+
+    Ok((url, filename))
+}
+
+/// Fetches the Git for Windows download URL from the GitHub releases API.
+async fn get_git_for_windows_url_from_github(arch_key: &str) -> anyhow::Result<(String, String)> {
+    const API_URL: &str = "https://api.github.com/repos/git-for-windows/git/releases/latest";
+
+    // Map our arch key to the suffix used in GitHub asset names
+    let arch_suffix = match arch_key {
+        "x86_64" => "64-bit",
+        "arm64" => "arm64",
+        arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
+    };
+
+    let tmp_dir = tempfile::tempdir()?;
+    download_file_and_rename(
+        API_URL,
+        &tmp_dir.path().to_string_lossy(),
+        None,
+        Some("git-for-windows-latest.json"),
+        3,
+    )
+    .await
+    .map_err(|e| anyhow!("Failed to fetch Git for Windows release from GitHub: {}", e))?;
+
+    let content = std::fs::read_to_string(tmp_dir.path().join("git-for-windows-latest.json"))?;
+    let json: serde_json::Value = serde_json::from_str(&content)?;
 
     let assets = json["assets"]
         .as_array()
         .ok_or_else(|| anyhow!("No assets found in GitHub release response"))?;
 
-    // Look for Git-X.Y.Z-arch.tar.bz2 pattern matching our architecture
     for asset in assets {
         let name = asset["name"].as_str().unwrap_or("");
-        let browser_download_url = asset["browser_download_url"].as_str().unwrap_or("");
+        let url = asset["browser_download_url"].as_str().unwrap_or("");
 
         if name.starts_with("Git-") && name.ends_with(".tar.bz2") && name.contains(arch_suffix) {
-            debug!("Found latest Git for Windows: {}", name);
-            return Ok((browser_download_url.to_string(), name.to_string()));
+            debug!("Found latest Git for Windows on GitHub: {}", name);
+            return Ok((url.to_string(), name.to_string()));
         }
     }
 
@@ -911,30 +985,40 @@ pub async fn download_python(
 ) -> anyhow::Result<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            const PYTHON_URL: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414/cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
+            let filename = python_filename()?;
+            let python_s3_url = format!("{}/python/{}", S3_TOOLS_BASE_URL, filename);
+            let python_github_url = format!("{}/{}", PYTHON_GITHUB_BASE_URL, filename);
 
-            const PYTHON_FILENAME: &str = "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
+            // Try S3 mirror first (better availability in mainland China), fall back to GitHub.
+            let urls = [python_s3_url.as_str(), python_github_url.as_str()];
+            let mut last_err = anyhow!("No download URLs available");
 
-            debug!("Downloading Python from {}", PYTHON_URL);
+            for url in &urls {
+                debug!("Downloading Python from {}", url);
+                match download_file_and_rename(
+                    url,
+                    &tools_dir.to_string_lossy(),
+                    progress_sender.clone(),
+                    Some(filename),
+                    3,
+                )
+                .await
+                {
+                    Ok(_) => {
+                        let python_archive_path = tools_dir.join(filename);
+                        debug!("Python downloaded to {}", python_archive_path.display());
+                        return Ok(python_archive_path);
+                    }
+                    Err(e) => {
+                        debug!("Failed to download Python from {}: {}", url, e);
+                        last_err = anyhow!("Failed to download Python from {}: {}", url, e);
+                    }
+                }
+            }
 
-            // Download python archive
-            download_file_and_rename(
-                PYTHON_URL,
-                &tools_dir.to_string_lossy(),
-                progress_sender,
-                Some(PYTHON_FILENAME),
-                3,
-            )
-            .await
-            .map_err(|e| anyhow!("Failed to download Python: {}", e))?;
-
-            let python_archive_path = tools_dir.join(PYTHON_FILENAME);
-            debug!("Python downloaded to {}", python_archive_path.display());
-            Ok(python_archive_path)
+            Err(last_err)
         }
-        _ => {
-            Err(anyhow!("download_python is only supported on Windows"))
-        }
+        _ => Err(anyhow!("download_python is only supported on Windows")),
     }
 }
 
@@ -957,9 +1041,10 @@ pub async fn install_python_from_downloaded(
 ) -> anyhow::Result<PathBuf> {
     match std::env::consts::OS {
         "windows" => {
-            const PYTHON_FILENAME: &str = "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz";
-
-            let python_archive = python_archive_path.unwrap_or_else(|| tools_dir.join(PYTHON_FILENAME));
+            let python_archive = match python_archive_path {
+                Some(p) => p,
+                None => tools_dir.join(python_filename()?),
+            };
 
             debug!("Extracting Python to {}", tools_dir.display());
 

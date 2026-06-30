@@ -1,0 +1,161 @@
+name: Sync Git and Python Installers to S3
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 02:00 UTC
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  sync-python:
+    name: Sync Python Installer to S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Check and sync Python installers
+        env:
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+
+          GITHUB_BASE="https://github.com/astral-sh/python-build-standalone/releases/download/20260414"
+          INVALIDATION_PATHS=()
+
+          sync_python() {
+            local filename="$1"
+            local s3_key="dl/eim/tools/python/${filename}"
+
+            if aws s3api head-object --bucket espdldata --key "${s3_key}" 2>/dev/null; then
+              echo "✅ ${filename} already present in S3, skipping."
+            else
+              echo "⬇️ Downloading ${filename} from GitHub..."
+              curl -fL --retry 3 --retry-delay 5 -o "${filename}" "${GITHUB_BASE}/${filename}"
+              echo "⬆️ Uploading ${filename} to S3..."
+              aws s3 cp "${filename}" "s3://espdldata/${s3_key}" --acl public-read
+              echo "✅ ${filename} uploaded."
+            fi
+            INVALIDATION_PATHS+=("/dl/eim/tools/python/${filename}")
+          }
+
+          sync_python "cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz"
+          sync_python "cpython-3.11.15+20260414-aarch64-pc-windows-msvc-install_only.tar.gz"
+
+          aws cloudfront create-invalidation \
+            --distribution-id "${DL_DISTRIBUTION_ID}" \
+            --paths "${INVALIDATION_PATHS[@]}"
+
+  sync-git:
+    name: Sync Git for Windows to S3
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Check and sync Git for Windows installer
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+
+          echo "🔍 Fetching latest Git for Windows release from GitHub..."
+          RELEASE_JSON=$(curl -fsSL \
+            -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/git-for-windows/git/releases/latest")
+
+          GIT_VERSION=$(echo "${RELEASE_JSON}" | jq -r '.tag_name')
+
+          # x86_64 tar.bz2 (matches "Git-X.Y.Z-64-bit.tar.bz2")
+          GIT_FILENAME_X64=$(echo "${RELEASE_JSON}" | jq -r \
+            '.assets[] | select(.name | startswith("Git-") and endswith(".tar.bz2") and contains("64-bit")) | .name' \
+            | head -1)
+          GIT_URL_X64=$(echo "${RELEASE_JSON}" | jq -r \
+            '.assets[] | select(.name | startswith("Git-") and endswith(".tar.bz2") and contains("64-bit")) | .browser_download_url' \
+            | head -1)
+
+          # arm64 tar.bz2
+          GIT_FILENAME_ARM64=$(echo "${RELEASE_JSON}" | jq -r \
+            '.assets[] | select(.name | startswith("Git-") and endswith(".tar.bz2") and contains("arm64")) | .name' \
+            | head -1)
+          GIT_URL_ARM64=$(echo "${RELEASE_JSON}" | jq -r \
+            '.assets[] | select(.name | startswith("Git-") and endswith(".tar.bz2") and contains("arm64")) | .browser_download_url' \
+            | head -1)
+
+          if [ -z "${GIT_FILENAME_X64}" ]; then
+            echo "::error::Could not find x86_64 Git tar.bz2 asset in the latest release."
+            exit 1
+          fi
+
+          echo "Latest Git for Windows: ${GIT_VERSION}"
+          echo "  x86_64 : ${GIT_FILENAME_X64}"
+          echo "  arm64  : ${GIT_FILENAME_ARM64:-not found}"
+
+          # ── Upload x86_64 ───────────────────────────────────────────────────
+          S3_KEY_X64="dl/eim/tools/git/${GIT_FILENAME_X64}"
+          if aws s3api head-object --bucket espdldata --key "${S3_KEY_X64}" 2>/dev/null; then
+            echo "✅ x86_64 Git installer already in S3."
+          else
+            echo "⬇️ Downloading x86_64 Git installer..."
+            curl -fL --retry 3 --retry-delay 5 -o "${GIT_FILENAME_X64}" "${GIT_URL_X64}"
+            echo "⬆️ Uploading x86_64 to S3..."
+            aws s3 cp "${GIT_FILENAME_X64}" "s3://espdldata/${S3_KEY_X64}" --acl public-read
+            echo "✅ x86_64 Git installer uploaded."
+          fi
+
+          # ── Upload arm64 (optional — continue on error) ─────────────────────
+          if [ -n "${GIT_FILENAME_ARM64}" ]; then
+            S3_KEY_ARM64="dl/eim/tools/git/${GIT_FILENAME_ARM64}"
+            if aws s3api head-object --bucket espdldata --key "${S3_KEY_ARM64}" 2>/dev/null; then
+              echo "✅ arm64 Git installer already in S3."
+            else
+              echo "⬇️ Downloading arm64 Git installer..."
+              curl -fL --retry 3 --retry-delay 5 -o "${GIT_FILENAME_ARM64}" "${GIT_URL_ARM64}" || {
+                echo "::warning::Failed to download arm64 Git installer, skipping."
+                GIT_FILENAME_ARM64=""
+              }
+              if [ -n "${GIT_FILENAME_ARM64}" ]; then
+                echo "⬆️ Uploading arm64 to S3..."
+                aws s3 cp "${GIT_FILENAME_ARM64}" "s3://espdldata/${S3_KEY_ARM64}" --acl public-read
+                echo "✅ arm64 Git installer uploaded."
+              fi
+            fi
+          fi
+
+          # ── Update latest-version manifest ──────────────────────────────────
+          # Always refresh the manifest so it reflects the current latest version.
+          echo "📝 Updating git-windows-latest.json manifest..."
+          cat > git-windows-latest.json << EOF
+          {
+            "version": "${GIT_VERSION}",
+            "x86_64": {
+              "filename": "${GIT_FILENAME_X64}",
+              "url": "https://dl.espressif.com/dl/eim/tools/git/${GIT_FILENAME_X64}"
+            },
+            "arm64": {
+              "filename": "${GIT_FILENAME_ARM64:-}",
+              "url": "https://dl.espressif.com/dl/eim/tools/git/${GIT_FILENAME_ARM64:-}"
+            }
+          }
+          EOF
+
+          aws s3 cp git-windows-latest.json \
+            s3://espdldata/dl/eim/tools/git/git-windows-latest.json \
+            --acl public-read
+
+          aws cloudfront create-invalidation \
+            --distribution-id "${DL_DISTRIBUTION_ID}" \
+            --paths "/dl/eim/tools/git/*"
+
+          echo "✅ Git for Windows sync complete (version ${GIT_VERSION})."
