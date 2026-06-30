@@ -1619,8 +1619,10 @@ jobs:
             echo "%files"
             # List every file and symlink
             find . -type f -o -type l | sed 's|^\./|/|'
-            # List directories (excluding root)
-            find . -mindepth 1 -type d | sed 's|^\./|%dir /|'
+            # List only package-owned directories; skip system dirs owned by 'filesystem'
+            find . -mindepth 1 -type d | sed 's|^\./||' | grep -Ev \
+              '^(usr|usr/bin|usr/sbin|usr/lib|usr/lib64|usr/libexec|usr/include|usr/share|usr/share/doc|usr/share/man|usr/share/man/man1|usr/share/applications|usr/share/icons|usr/share/icons/hicolor|usr/share/icons/hicolor/[^/]+|usr/share/icons/hicolor/[^/]+/apps|etc|var|opt|run|tmp|home|root|boot|srv|proc|sys|dev)$' \
+              | sed 's|^|%dir /|'
           } > "$SPEC_FILE"
 
           echo "=== Generated spec file ==="
