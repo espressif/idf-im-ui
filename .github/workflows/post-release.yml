@@ -125,9 +125,10 @@ jobs:
     if: needs.check-origin.outputs.should_run == 'true'
     permissions:
       contents: write
-    uses: ./.github/workflows/update-homebrew.yml
+    uses: ./.github/workflows/update-homebrew-release.yml
     with:
       version: ${{ needs.backup-repos.outputs.tag }}
+      staging: ${{ github.event_name == 'workflow_dispatch' && inputs.staging || false }}
     secrets: inherit
 
   update-linux-repos:
@@ -177,7 +178,7 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-east-1
 
-      - name: Rollback Homebrew
+      - name: Rollback Homebrew (production)
         if: needs.backup-repos.outputs.homebrew_sha != '' && env.S3_PREFIX == 'dl/eim'
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
@@ -189,6 +190,21 @@ jobs:
           gh api repos/espressif/homebrew-eim/git/refs/heads/${DEFAULT_BRANCH} \
             -X PATCH -f sha="$BACKUP_SHA" -F force=true || echo "::warning::Homebrew rollback failed"
           echo "Homebrew rolled back"
+
+      - name: Rollback Homebrew (staging — close PR and delete branch)
+        if: needs.backup-repos.outputs.homebrew_sha != '' && env.S3_PREFIX != 'dl/eim'
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          echo "Closing staging Homebrew PR and deleting branch..."
+          BRANCH="staging/${TAG}"
+          PR_NUMBER=$(gh pr list --repo espressif/homebrew-eim --head "$BRANCH" --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [[ -n "$PR_NUMBER" ]]; then
+            gh pr close "$PR_NUMBER" --repo espressif/homebrew-eim --delete-branch || echo "::warning::Failed to close staging PR #$PR_NUMBER"
+            echo "Closed staging PR #$PR_NUMBER and deleted branch $BRANCH"
+          else
+            echo "::notice::No staging PR found for branch $BRANCH"
+          fi
 
       - name: Rollback S3 APT repo
         run: |
