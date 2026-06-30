@@ -1,4 +1,4 @@
-name: Update APT, RPM, and Pacman Repositories
+name: Update APT, RPM, and Pacman Repositories (Release)
 
 on:
   workflow_call:
@@ -7,12 +7,22 @@ on:
         description: 'The release version/tag (e.g., v1.2.3) for artifact names'
         required: true
         type: string
+      s3_prefix:
+        description: 'S3 path prefix (e.g. dl/eim or dl/eim-staging)'
+        required: false
+        type: string
+        default: 'dl/eim'
   workflow_dispatch:
     inputs:
       version:
         description: 'The release version/tag (e.g., v1.2.3) for artifact names'
         required: true
         type: string
+      s3_prefix:
+        description: 'S3 path prefix (e.g. dl/eim or dl/eim-staging)'
+        required: false
+        type: string
+        default: 'dl/eim'
 
 jobs:
   update-apt-repo:
@@ -46,16 +56,14 @@ jobs:
           echo "Imported signing key: $KEY_FPR"
 
       - name: Export and publish public signing key
+        if: inputs.s3_prefix == 'dl/eim'
         env:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           set -euo pipefail
-          # Armored key for dnf/yum (gpgkey=) and pacman-key import.
           gpg --armor --export "$GPG_KEY_FPR" > eim.asc
-          # Dearmored key for APT signed-by keyrings (/etc/apt/keyrings/eim.gpg).
           gpg --export "$GPG_KEY_FPR" > eim.gpg
 
-          # Ready-to-use deb822 source for new users who want verification.
           cat > eim.sources <<'EOF'
           Types: deb
           URIs: https://dl.espressif.com/dl/eim/apt
@@ -64,87 +72,57 @@ jobs:
           Signed-By: /etc/apt/keyrings/eim.gpg
           EOF
 
-          aws s3 cp eim.asc     s3://espdldata/dl/eim/eim.asc     --acl public-read
-          aws s3 cp eim.gpg     s3://espdldata/dl/eim/eim.gpg     --acl public-read
-          aws s3 cp eim.sources s3://espdldata/dl/eim/eim.sources --acl public-read
+          aws s3 cp eim.asc     s3://espdldata/${{ inputs.s3_prefix }}/eim.asc     --acl public-read
+          aws s3 cp eim.gpg     s3://espdldata/${{ inputs.s3_prefix }}/eim.gpg     --acl public-read
+          aws s3 cp eim.sources s3://espdldata/${{ inputs.s3_prefix }}/eim.sources --acl public-read
 
           aws cloudfront create-invalidation \
             --distribution-id "${DL_DISTRIBUTION_ID}" \
-            --paths "/dl/eim/eim.asc" "/dl/eim/eim.gpg" "/dl/eim/eim.sources"
+            --paths "/${{ inputs.s3_prefix }}/eim.asc" "/${{ inputs.s3_prefix }}/eim.gpg" "/${{ inputs.s3_prefix }}/eim.sources"
 
       - name: Install dependencies for APT repo tools
         run: |
           sudo apt-get update
           sudo apt-get install -y dpkg-dev apt-utils gzip
 
-      - name: Download GUI linux-x64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-deb
-          path: new-debs/
-
-      - name: Download GUI linux-aarch64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
-
-      - name: Download CLI linux-x64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-deb
-          path: new-debs/
-
-      - name: Download CLI linux-aarch64 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 .deb artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-deb
-          path: new-debs/
-        continue-on-error: true
+      - name: Download .deb packages from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-debs
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.deb" \
+            --dir new-debs/ || echo "::warning::Some .deb downloads may have failed"
+          echo "Downloaded .deb files:"
+          ls -la new-debs/ || echo "No .deb files downloaded"
 
       - name: Create proper APT repository structure
         run: |
-          # Create proper directory structure (now includes armhf)
           mkdir -p apt-repo/pool/main
           mkdir -p apt-repo/dists/stable/main/binary-amd64
           mkdir -p apt-repo/dists/stable/main/binary-arm64
           mkdir -p apt-repo/dists/stable/main/binary-armhf
 
-          # Sync existing .deb files from S3 pool
-          aws s3 sync s3://espdldata/dl/eim/apt/pool/main/ apt-repo/pool/main/ --exclude "*" --include "*.deb" || echo "No existing pool found"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/apt/pool/main/ apt-repo/pool/main/ --exclude "*" --include "*.deb" || echo "No existing pool found"
 
-          # Copy new .deb files to pool
           find new-debs -name "*.deb" -exec cp {} apt-repo/pool/main/ \; || echo "Warning: Some .deb files could not be copied"
 
-          # Debug: Show what's in the pool
           echo "Pool contents:"
           ls -la apt-repo/pool/main/
 
       - name: Generate APT repository metadata
         working-directory: apt-repo
         run: |
-          # Generate Packages files for each architecture
-          # AMD64 packages
           dpkg-scanpackages --arch amd64 pool/main > dists/stable/main/binary-amd64/Packages
           gzip -k -f dists/stable/main/binary-amd64/Packages
 
-          # ARM64 packages
           dpkg-scanpackages --arch arm64 pool/main > dists/stable/main/binary-arm64/Packages
           gzip -k -f dists/stable/main/binary-arm64/Packages
 
-          # ARMHF packages
           dpkg-scanpackages --arch armhf pool/main > dists/stable/main/binary-armhf/Packages
           gzip -k -f dists/stable/main/binary-armhf/Packages
 
-          # Generate Release file (now includes armhf)
           cd dists/stable
           cat > Release << EOF
           Origin: Espressif Systems
@@ -157,7 +135,6 @@ jobs:
           Date: $(date -Ru)
           EOF
 
-          # Add file hashes to Release
           apt-ftparchive release . >> Release
 
           echo "Generated Release file:"
@@ -182,18 +159,17 @@ jobs:
 
       - name: Upload repository to S3
         run: |
-          # Upload the entire repository structure
-          aws s3 sync apt-repo/ s3://espdldata/dl/eim/apt/ --acl public-read --delete
+          aws s3 sync apt-repo/ s3://espdldata/${{ inputs.s3_prefix }}/apt/ --acl public-read --delete
 
-          # Verify upload
           echo "Uploaded repository structure:"
-          aws s3 ls s3://espdldata/dl/eim/apt/ --recursive
+          aws s3 ls s3://espdldata/${{ inputs.s3_prefix }}/apt/ --recursive
 
       - name: Invalidate CloudFront cache
+        if: inputs.s3_prefix == 'dl/eim'
         env:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/apt/*"
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/${{ inputs.s3_prefix }}/apt/*"
 
   update-rpm-repo:
     name: Update RPM Repository on S3
@@ -231,65 +207,34 @@ jobs:
           echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
           echo "Imported signing key: $KEY_FPR"
 
-      - name: Download CLI linux-x64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-rpm
-          path: new-rpms/
-
-      - name: Download CLI linux-aarch64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download GUI linux-x64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
-
-      - name: Download GUI linux-aarch64 .rpm artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-rpm
-          path: new-rpms/
-        continue-on-error: true
+      - name: Download .rpm packages from release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-rpms
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.rpm" \
+            --dir new-rpms/ || echo "::warning::Some .rpm downloads may have failed"
+          echo "Downloaded .rpm files:"
+          ls -la new-rpms/ || echo "No .rpm files downloaded"
 
       - name: Create RPM repository structure
         run: |
-          # Create directory structure (now includes armv7hl)
           mkdir -p rpm-repo/x86_64
           mkdir -p rpm-repo/aarch64
           mkdir -p rpm-repo/armv7hl
 
-          # Sync existing .rpm files from S3
-          aws s3 sync s3://espdldata/dl/eim/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
-          aws s3 sync s3://espdldata/dl/eim/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
-          aws s3 sync s3://espdldata/dl/eim/rpm/armv7hl/ rpm-repo/armv7hl/ --exclude "*" --include "*.rpm" || echo "No existing armv7hl RPMs found"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/rpm/x86_64/ rpm-repo/x86_64/ --exclude "*" --include "*.rpm" || echo "No existing x86_64 RPMs found"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/rpm/aarch64/ rpm-repo/aarch64/ --exclude "*" --include "*.rpm" || echo "No existing aarch64 RPMs found"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/rpm/armv7hl/ rpm-repo/armv7hl/ --exclude "*" --include "*.rpm" || echo "No existing armv7hl RPMs found"
 
-          # Debug: Show contents of downloaded RPMs
           echo "Downloaded RPM artifacts:"
           find new-rpms -type f -name "*.rpm" -exec ls -la {} \;
 
-          # Copy new .rpm files to appropriate architecture directories
           if [ -d "new-rpms" ] && [ "$(ls -A new-rpms)" ]; then
-            # Copy x86_64 RPMs
             find new-rpms -type f \( -name "*x86_64*.rpm" -o -name "*amd64*.rpm" -o -name "*linux-x64*.rpm" \) -exec cp {} rpm-repo/x86_64/ \; || echo "No x86_64 RPMs to copy"
-
-            # Copy aarch64 RPMs
             find new-rpms -type f \( -name "*aarch64*.rpm" -o -name "*arm64*.rpm" -o -name "*linux-aarch64*.rpm" \) -exec cp {} rpm-repo/aarch64/ \; || echo "No aarch64 RPMs to copy"
-
-            # Copy armv7hl RPMs
             find new-rpms -type f \( -name "*armv7*.rpm" -o -name "*armhf*.rpm" -o -name "*linux-armv7*.rpm" \) -exec cp {} rpm-repo/armv7hl/ \; || echo "No armv7hl RPMs to copy"
 
             echo "Copied RPM files:"
@@ -375,18 +320,17 @@ jobs:
 
       - name: Upload repository to S3
         run: |
-          # Upload the entire repository structure
-          aws s3 sync rpm-repo/ s3://espdldata/dl/eim/rpm/ --acl public-read --delete
+          aws s3 sync rpm-repo/ s3://espdldata/${{ inputs.s3_prefix }}/rpm/ --acl public-read --delete
 
-          # Verify upload
           echo "Uploaded repository structure:"
-          aws s3 ls s3://espdldata/dl/eim/rpm/ --recursive
+          aws s3 ls s3://espdldata/${{ inputs.s3_prefix }}/rpm/ --recursive
 
       - name: Invalidate CloudFront cache
+        if: inputs.s3_prefix == 'dl/eim'
         env:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/rpm/*"
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/${{ inputs.s3_prefix }}/rpm/*"
 
   update-pacman-repo:
     name: Update Pacman Repository on S3
@@ -397,8 +341,7 @@ jobs:
     steps:
       - name: Install Arch dependencies
         run: |
-          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip gnupg
-          # awscli isn't in Arch's official repos; install via pip
+          pacman -Syu --noconfirm --overwrite '*' base-devel git zstd python-pip gnupg github-cli
           pip install --break-system-packages awscli
 
       - name: Checkout repository
@@ -433,39 +376,18 @@ jobs:
           echo "GPG_KEY_FPR=$KEY_FPR" >> "$GITHUB_ENV"
           echo "Imported signing key: $KEY_FPR"
 
-      - name: Download CLI linux-x64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-x64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download CLI linux-aarch64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download CLI linux-armv7 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-linux-armv7-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
-
-      - name: Download GUI linux-x64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-x64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-
-      - name: Download GUI linux-aarch64 pacman artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-linux-aarch64-${{ inputs.version }}-pacman
-          path: new-pkgs/
-        continue-on-error: true
+      - name: Download pacman packages from release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p new-pkgs
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.pkg.tar.*" \
+            --dir new-pkgs/ || echo "::warning::Some pacman downloads may have failed"
+          echo "Downloaded pacman files:"
+          ls -la new-pkgs/ || echo "No pacman files downloaded"
 
       - name: Create Pacman repository structure
         shell: bash
@@ -476,17 +398,14 @@ jobs:
           mkdir -p pacman-repo/aarch64
           mkdir -p pacman-repo/armv7h
 
-          # Sync existing packages from S3 (so previous versions stay available).
-          # Include .sig files so older signatures are preserved too.
-          aws s3 sync s3://espdldata/dl/eim/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing x86_64 pacman packages"
-          aws s3 sync s3://espdldata/dl/eim/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing aarch64 pacman packages"
-          aws s3 sync s3://espdldata/dl/eim/pacman/armv7h/  pacman-repo/armv7h/  --exclude "*" --include "*.pkg.tar.*" || echo "No existing armv7h pacman packages"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/pacman/x86_64/ pacman-repo/x86_64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing x86_64 pacman packages"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/pacman/aarch64/ pacman-repo/aarch64/ --exclude "*" --include "*.pkg.tar.*" || echo "No existing aarch64 pacman packages"
+          aws s3 sync s3://espdldata/${{ inputs.s3_prefix }}/pacman/armv7h/  pacman-repo/armv7h/  --exclude "*" --include "*.pkg.tar.*" || echo "No existing armv7h pacman packages"
 
           echo "Downloaded artifacts:"
           find new-pkgs -type f -name "*.pkg.tar.*" -exec ls -la {} \; || true
 
           if [ -d "new-pkgs" ] && [ -n "$(ls -A new-pkgs 2>/dev/null || true)" ]; then
-            # Route packages to the correct arch directory based on filename
             find new-pkgs -type f \( -name "*-x86_64.pkg.tar.*"  -o -name "*linux-x64*.pkg.tar.*" \)  -exec cp {} pacman-repo/x86_64/  \; || true
             find new-pkgs -type f \( -name "*-aarch64.pkg.tar.*" -o -name "*linux-aarch64*.pkg.tar.*" \) -exec cp {} pacman-repo/aarch64/ \; || true
             find new-pkgs -type f \( -name "*-armv7h.pkg.tar.*"  -o -name "*linux-armv7*.pkg.tar.*"  -o -name "*-armv7hl.pkg.tar.*" \) -exec cp {} pacman-repo/armv7h/ \; || true
@@ -513,14 +432,13 @@ jobs:
           for ARCH in x86_64 aarch64 armv7h; do
             DIR="pacman-repo/$ARCH"
 
-            # Collect package files, excluding any existing .sig files.
             shopt -s nullglob
             ALL=("$DIR"/*.pkg.tar.*)
             shopt -u nullglob
             PKGS=()
             for p in "${ALL[@]}"; do
               case "$p" in
-                *.sig) ;;            # skip signatures
+                *.sig) ;;
                 *) PKGS+=("$p") ;;
               esac
             done
@@ -530,8 +448,6 @@ jobs:
               continue
             fi
 
-            # Sign each package (detached .sig) BEFORE repo-add, so the database
-            # records the signature in its %PGPSIG% field.
             for pkg in "${PKGS[@]}"; do
               gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
                   --local-user "$GPG_KEY_FPR" --detach-sign --no-armor --output "${pkg}.sig" "$pkg"
@@ -542,13 +458,10 @@ jobs:
             for pkg in "${PKGS[@]}"; do PKG_BASENAMES+=("$(basename "$pkg")"); done
             ( cd "$DIR" && repo-add -n -R eim.db.tar.gz "${PKG_BASENAMES[@]}" )
 
-            # Sign the database tarball.
             gpg --batch --yes --pinentry-mode loopback --passphrase-file "$PASS_FILE" \
                 --local-user "$GPG_KEY_FPR" --detach-sign --no-armor \
                 --output "$DIR/eim.db.tar.gz.sig" "$DIR/eim.db.tar.gz"
 
-            # repo-add creates symlinks (eim.db -> eim.db.tar.gz, eim.files -> ...).
-            # S3 doesn't preserve symlinks, so materialize them as real files.
             for link in "$DIR"/eim.db "$DIR"/eim.files; do
               if [ -L "$link" ]; then
                 target="$(readlink "$link")"
@@ -564,53 +477,26 @@ jobs:
           done
           rm -f "$PASS_FILE"
 
-      - name: Publish signing key to keyserver (if not already present)
-        run: |
-          set -euo pipefail
-          KEY_ON_SERVER=false
-          if gpg --keyserver hkps://keys.openpgp.org --recv-keys "$GPG_KEY_FPR" 2>/dev/null; then
-            KEY_ON_SERVER=true
-            echo "Key already present on keys.openpgp.org, skipping upload."
-          fi
-          if [ "$KEY_ON_SERVER" = "false" ]; then
-            echo "Key not found on keyserver, uploading..."
-            gpg --keyserver hkps://keys.openpgp.org --send-keys "$GPG_KEY_FPR" || \
-            gpg --keyserver hkps://keyserver.ubuntu.com --send-keys "$GPG_KEY_FPR" || \
-            echo "Warning: could not push key to any keyserver (non-fatal, key is available via eim.asc)"
-          fi
-
       - name: Create pacman.conf snippet for end users
         run: |
           cat > pacman-repo/eim.pacman.conf << 'EOF'
           [eim]
-          SigLevel = Required DatabaseOptional TrustAll
+          SigLevel = Optional TrustAll
           Server = https://dl.espressif.com/dl/eim/pacman/$arch
           EOF
-
-          # Write a setup script that imports the key before the repo is added
-          cat > pacman-repo/eim-keysetup.sh << EOF
-          #!/usr/bin/env bash
-          # Run this once before adding the [eim] repo to pacman.conf
-          set -euo pipefail
-          curl -fsSL https://dl.espressif.com/dl/eim/eim.asc | pacman-key --add -
-          pacman-key --lsign-key ${GPG_KEY_FPR}
-          echo "EIM signing key imported and locally signed."
-          EOF
-          chmod +x pacman-repo/eim-keysetup.sh
-
+          sed -i "s/<KEY_FINGERPRINT>/$GPG_KEY_FPR/g" pacman-repo/eim.pacman.conf
           echo "Generated eim.pacman.conf:"
           cat pacman-repo/eim.pacman.conf
-          echo "Generated eim-keysetup.sh:"
-          cat pacman-repo/eim-keysetup.sh
 
       - name: Upload Pacman repository to S3
         run: |
-          aws s3 sync pacman-repo/ s3://espdldata/dl/eim/pacman/ --acl public-read --delete
+          aws s3 sync pacman-repo/ s3://espdldata/${{ inputs.s3_prefix }}/pacman/ --acl public-read --delete
           echo "Uploaded pacman repo:"
-          aws s3 ls s3://espdldata/dl/eim/pacman/ --recursive
+          aws s3 ls s3://espdldata/${{ inputs.s3_prefix }}/pacman/ --recursive
 
       - name: Invalidate CloudFront cache
+        if: inputs.s3_prefix == 'dl/eim'
         env:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/pacman/*"
+          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/${{ inputs.s3_prefix }}/pacman/*"

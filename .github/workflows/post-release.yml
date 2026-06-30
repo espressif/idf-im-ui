@@ -9,13 +9,46 @@ on:
         description: "Release tag (e.g. v0.15.0)"
         required: true
         type: string
+      staging:
+        description: "Use staging S3 prefix and skip WinGet/CloudFront"
+        required: false
+        type: boolean
+        default: false
 
 env:
   TAG: ${{ github.event.release.tag_name || inputs.tag }}
+  S3_PREFIX: ${{ (github.event_name == 'workflow_dispatch' && inputs.staging && 'dl/eim-staging') || 'dl/eim' }}
 
 jobs:
+  check-origin:
+    name: Verify Release Origin
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check release origin
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "Manual dispatch, proceeding"
+            exit 0
+          fi
+          BODY=$(gh api repos/${{ github.repository }}/releases/tags/${{ github.event.release.tag_name }} --jq '.body')
+          if echo "$BODY" | grep -q '<!-- created-by: release-workflow -->'; then
+            echo "should_run=true" >> $GITHUB_OUTPUT
+            echo "Release created by release workflow, proceeding"
+          else
+            echo "should_run=false" >> $GITHUB_OUTPUT
+            echo "::notice::Skipping: release not created by release workflow (old flow)"
+          fi
+
   backup-repos:
     name: Backup Current Repositories
+    needs: [check-origin]
+    if: needs.check-origin.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     outputs:
       homebrew_sha: ${{ steps.backup.outputs.homebrew_sha }}
@@ -44,25 +77,27 @@ jobs:
           echo "Homebrew HEAD: $HOMEBREW_SHA"
 
           echo "=== Backup S3 APT repo ==="
-          aws s3 sync s3://espdldata/dl/eim/apt/ s3://espdldata/dl/eim/.backup/apt/ --quiet || echo "No existing APT repo"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/apt/ s3://espdldata/${{ env.S3_PREFIX }}/.backup/apt/ --quiet || echo "No existing APT repo"
 
           echo "=== Backup S3 RPM repo ==="
-          aws s3 sync s3://espdldata/dl/eim/rpm/ s3://espdldata/dl/eim/.backup/rpm/ --quiet || echo "No existing RPM repo"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/rpm/ s3://espdldata/${{ env.S3_PREFIX }}/.backup/rpm/ --quiet || echo "No existing RPM repo"
 
           echo "=== Backup S3 Pacman repo ==="
-          aws s3 sync s3://espdldata/dl/eim/pacman/ s3://espdldata/dl/eim/.backup/pacman/ --quiet || echo "No existing Pacman repo"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/pacman/ s3://espdldata/${{ env.S3_PREFIX }}/.backup/pacman/ --quiet || echo "No existing Pacman repo"
 
           echo "=== Backup eim_unified_release.json ==="
-          aws s3 cp s3://espdldata/dl/eim/eim_unified_release.json s3://espdldata/dl/eim/.backup/eim_unified_release.json --quiet || echo "No existing release JSON"
+          aws s3 cp s3://espdldata/${{ env.S3_PREFIX }}/eim_unified_release.json s3://espdldata/${{ env.S3_PREFIX }}/.backup/eim_unified_release.json --quiet || echo "No existing release JSON"
 
           echo "Backup complete"
 
   update-release-info:
     name: Update Release Information
-    needs: [backup-repos]
+    needs: [check-origin, backup-repos]
+    if: needs.check-origin.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Set up AWS credentials
+        if: env.S3_PREFIX == 'dl/eim'
         uses: aws-actions/configure-aws-credentials@v6.1.0
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -74,14 +109,20 @@ jobs:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            https://api.github.com/repos/${{ github.repository }}/releases/latest > eim_unified_release.json
-          echo "Latest release tag: $(jq -r .tag_name eim_unified_release.json)"
-          aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/dl/eim/eim_unified_release.json
-          aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/eim_unified_release.json"
+            https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG} > eim_unified_release.json
+          echo "Release tag: $(jq -r .tag_name eim_unified_release.json)"
+
+          if [[ "${{ env.S3_PREFIX }}" == "dl/eim" ]]; then
+            aws s3 cp --acl=public-read "eim_unified_release.json" s3://espdldata/${{ env.S3_PREFIX }}/eim_unified_release.json
+            aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/${{ env.S3_PREFIX }}/eim_unified_release.json"
+          else
+            echo "::notice::Staging mode: skipping S3 upload and CloudFront invalidation for release info"
+          fi
 
   update-homebrew:
     name: Update Homebrew Formula and Cask
-    needs: [backup-repos, update-release-info]
+    needs: [check-origin, backup-repos, update-release-info]
+    if: needs.check-origin.outputs.should_run == 'true'
     permissions:
       contents: write
     uses: ./.github/workflows/update-homebrew.yml
@@ -91,27 +132,32 @@ jobs:
 
   update-linux-repos:
     name: Update APT, RPM, and Pacman Repositories
-    needs: [backup-repos, update-release-info]
+    needs: [check-origin, backup-repos, update-release-info]
+    if: needs.check-origin.outputs.should_run == 'true'
     permissions:
       contents: write
-    uses: ./.github/workflows/update-linux-repos.yml
+    uses: ./.github/workflows/update-linux-repos-release.yml
     with:
       version: ${{ needs.backup-repos.outputs.tag }}
+      s3_prefix: ${{ (github.event_name == 'workflow_dispatch' && inputs.staging && 'dl/eim-staging') || 'dl/eim' }}
     secrets: inherit
 
   update-windows-packages:
     name: Generate Windows Packages and Publish to WinGet
-    needs: [backup-repos, update-release-info]
+    needs: [check-origin, backup-repos, update-release-info]
+    if: needs.check-origin.outputs.should_run == 'true'
     permissions:
       contents: write
-    uses: ./.github/workflows/update-windows-packages.yml
+    uses: ./.github/workflows/update-windows-packages-release.yml
     with:
       version: ${{ needs.backup-repos.outputs.tag }}
+      staging: ${{ github.event_name == 'workflow_dispatch' && inputs.staging || false }}
     secrets: inherit
 
   test-pkg-managers:
     name: Test Package Managers
-    needs: [backup-repos, update-homebrew, update-linux-repos, update-windows-packages]
+    needs: [check-origin, backup-repos, update-homebrew, update-linux-repos, update-windows-packages]
+    if: needs.check-origin.outputs.should_run == 'true'
     uses: ./.github/workflows/test_pkg_managers.yml
     with:
       version: ${{ needs.backup-repos.outputs.tag }}
@@ -120,8 +166,8 @@ jobs:
 
   rollback:
     name: Rollback on Failure
-    needs: [backup-repos, update-release-info, update-homebrew, update-linux-repos, update-windows-packages, test-pkg-managers]
-    if: failure()
+    needs: [check-origin, backup-repos, update-release-info, update-homebrew, update-linux-repos, update-windows-packages, test-pkg-managers]
+    if: failure() && needs.backup-repos.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Set up AWS credentials
@@ -132,7 +178,7 @@ jobs:
           aws-region: ap-east-1
 
       - name: Rollback Homebrew
-        if: needs.backup-repos.outputs.homebrew_sha != ''
+        if: needs.backup-repos.outputs.homebrew_sha != '' && env.S3_PREFIX == 'dl/eim'
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
@@ -147,29 +193,31 @@ jobs:
       - name: Rollback S3 APT repo
         run: |
           echo "Restoring APT repo from backup..."
-          aws s3 sync s3://espdldata/dl/eim/.backup/apt/ s3://espdldata/dl/eim/apt/ --acl public-read --delete --quiet || echo "::warning::APT rollback failed"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/.backup/apt/ s3://espdldata/${{ env.S3_PREFIX }}/apt/ --acl public-read --delete --quiet || echo "::warning::APT rollback failed"
 
       - name: Rollback S3 RPM repo
         run: |
           echo "Restoring RPM repo from backup..."
-          aws s3 sync s3://espdldata/dl/eim/.backup/rpm/ s3://espdldata/dl/eim/rpm/ --acl public-read --delete --quiet || echo "::warning::RPM rollback failed"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/.backup/rpm/ s3://espdldata/${{ env.S3_PREFIX }}/rpm/ --acl public-read --delete --quiet || echo "::warning::RPM rollback failed"
 
       - name: Rollback S3 Pacman repo
         run: |
           echo "Restoring Pacman repo from backup..."
-          aws s3 sync s3://espdldata/dl/eim/.backup/pacman/ s3://espdldata/dl/eim/pacman/ --acl public-read --delete --quiet || echo "::warning::Pacman rollback failed"
+          aws s3 sync s3://espdldata/${{ env.S3_PREFIX }}/.backup/pacman/ s3://espdldata/${{ env.S3_PREFIX }}/pacman/ --acl public-read --delete --quiet || echo "::warning::Pacman rollback failed"
 
       - name: Rollback eim_unified_release.json
+        if: env.S3_PREFIX == 'dl/eim'
         run: |
           echo "Restoring eim_unified_release.json from backup..."
-          aws s3 cp s3://espdldata/dl/eim/.backup/eim_unified_release.json s3://espdldata/dl/eim/eim_unified_release.json --acl public-read --quiet || echo "::warning::Release JSON rollback failed"
+          aws s3 cp s3://espdldata/${{ env.S3_PREFIX }}/.backup/eim_unified_release.json s3://espdldata/${{ env.S3_PREFIX }}/eim_unified_release.json --acl public-read --quiet || echo "::warning::Release JSON rollback failed"
 
       - name: Invalidate CloudFront caches
+        if: env.S3_PREFIX == 'dl/eim'
         env:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
         run: |
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} \
-            --paths "/dl/eim/apt/*" "/dl/eim/rpm/*" "/dl/eim/pacman/*" "/dl/eim/eim_unified_release.json"
+            --paths "/${{ env.S3_PREFIX }}/apt/*" "/${{ env.S3_PREFIX }}/rpm/*" "/${{ env.S3_PREFIX }}/pacman/*" "/${{ env.S3_PREFIX }}/eim_unified_release.json"
 
       - name: Rollback summary
         run: |

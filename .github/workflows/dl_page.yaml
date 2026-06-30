@@ -2,7 +2,7 @@ name: Publish dl page
 on:
   release:
     types:
-      - published
+      - created
   push:
     branches:
       - master

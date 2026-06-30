@@ -1,4 +1,4 @@
-name: Generate Windows Packages and Publish to WinGet
+name: Generate Windows Packages and Publish to WinGet (Release)
 
 on:
   workflow_call:
@@ -7,12 +7,22 @@ on:
         description: 'The release version/tag (e.g., v1.2.3) for artifact names and publishing'
         required: true
         type: string
+      staging:
+        description: 'Skip WinGet publishing when true'
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       version:
         description: 'The release version/tag (e.g., v1.2.3) for artifact names and publishing'
         required: true
         type: string
+      staging:
+        description: 'Skip WinGet publishing when true'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   generate-windows-packages:
@@ -22,17 +32,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Download CLI windows-x64 artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-cli-windows-x64-${{ inputs.version }}
-          path: artifacts/cli/
-
-      - name: Download GUI windows-x64 artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: eim-gui-windows-x64-${{ inputs.version }}
-          path: artifacts/gui/
+      - name: Download Windows binaries from release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p artifacts/cli artifacts/gui
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "eim-cli-windows-x64.exe" \
+            --dir artifacts/cli/
+          mv artifacts/cli/eim-cli-windows-x64.exe artifacts/cli/eim.exe
+          gh release download "${{ inputs.version }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "eim-gui-windows-x64.exe" \
+            --dir artifacts/gui/
+          mv artifacts/gui/eim-gui-windows-x64.exe artifacts/gui/eim.exe
+          echo "Downloaded Windows binaries:"
+          ls -la artifacts/cli/ artifacts/gui/
 
       - name: Generate Scoop manifests
         shell: powershell
@@ -111,6 +128,7 @@ jobs:
   publish-winget-cli:
     name: Publish CLI to WinGet
     needs: generate-windows-packages
+    if: ${{ !inputs.staging }}
     runs-on: ubuntu-latest
     steps:
       - name: Sync WinGet fork
@@ -131,6 +149,7 @@ jobs:
   publish-winget-gui:
     name: Publish GUI to WinGet
     needs: generate-windows-packages
+    if: ${{ !inputs.staging }}
     runs-on: ubuntu-latest
     steps:
       - name: Sync WinGet fork

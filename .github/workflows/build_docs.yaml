@@ -2,7 +2,7 @@ name: Build GUI docs
 on:
   release:
     types:
-      - published
+      - created
   push:
     branches:
       - master

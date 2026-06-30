@@ -57,7 +57,7 @@ jobs:
   call-build:
     name: Build All Platforms
     needs: [validate-inputs]
-    uses: ./.github/workflows/build.yaml
+    uses: ./.github/workflows/build-release.yaml
     with:
       is_release: true
       version: ${{ needs.validate-inputs.outputs.version }}
@@ -90,14 +90,14 @@ jobs:
             local file_pattern="$3"
 
             if [[ ! -d "$artifact_dir" ]]; then
-              echo "SKIP: $artifact_dir not found"
+              echo "::warning::SKIP: $artifact_dir not found"
               return
             fi
 
             local found_file
             found_file=$(find "$artifact_dir" -name "$file_pattern" -type f | head -1)
             if [[ -z "$found_file" ]]; then
-              echo "SKIP: no file matching '$file_pattern' in $artifact_dir"
+              echo "::warning::SKIP: no file matching '$file_pattern' in $artifact_dir"
               return
             fi
 
@@ -111,14 +111,14 @@ jobs:
             local binary_name="$3"
 
             if [[ ! -d "$artifact_dir" ]]; then
-              echo "SKIP: $artifact_dir not found"
+              echo "::warning::SKIP: $artifact_dir not found"
               return
             fi
 
             local found_file
             found_file=$(find "$artifact_dir" -name "$binary_name" -type f | head -1)
             if [[ -z "$found_file" ]]; then
-              echo "SKIP: no $binary_name in $artifact_dir"
+              echo "::warning::SKIP: no $binary_name in $artifact_dir"
               return
             fi
 
@@ -149,13 +149,13 @@ jobs:
 
           echo "=== CLI .deb packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-deb" "eim-cli-${pkg}.deb" "*.deb"
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-deb" "eim-cli-${pkg}.deb" "eim*.deb"
           done
-          prepare_asset "artifacts/eim-cli-linux-armv7-${VER}-deb" "eim-cli-linux-armv7.deb" "*.deb"
+          prepare_asset "artifacts/eim-cli-linux-armv7-${VER}-deb" "eim-cli-linux-armv7.deb" "eim*.deb"
 
           echo "=== CLI .rpm packages ==="
           for pkg in linux-x64 linux-aarch64 linux-armv7; do
-            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-rpm" "eim-cli-${pkg}.rpm" "*.rpm"
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-rpm" "eim-cli-${pkg}.rpm" "eim*.rpm"
           done
 
           echo "=== CLI pacman packages ==="
@@ -183,7 +183,7 @@ jobs:
           done
 
           for pkg in macos-aarch64 macos-x64; do
-            zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "*.zip" -type f 2>/dev/null | head -1)
+            zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "eim.zip" -type f 2>/dev/null | head -1)
             if [[ -n "$zip_file" ]]; then
               cp "$zip_file" "release_assets/eim-gui-${pkg}.zip"
               echo "OK: eim-gui-${pkg}.zip"
@@ -192,20 +192,20 @@ jobs:
 
           echo "=== GUI .deb packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-deb" "eim-gui-${pkg}.deb" "*.deb"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-deb" "eim-gui-${pkg}.deb" "eim*.deb"
           done
 
           echo "=== GUI .msi packages ==="
-          prepare_asset "artifacts/eim-gui-windows-x64-${VER}-msi" "eim-gui-windows-x64.msi" "*.msi"
+          prepare_asset "artifacts/eim-gui-windows-x64-${VER}-msi" "eim-gui-windows-x64.msi" "eim*.msi"
 
           echo "=== GUI .dmg packages ==="
           for pkg in macos-aarch64 macos-x64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-dmg" "eim-gui-${pkg}.dmg" "*.dmg"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-dmg" "eim-gui-${pkg}.dmg" "eim*.dmg"
           done
 
           echo "=== GUI .rpm packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-rpm" "eim-gui-${pkg}.rpm" "*.rpm"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-rpm" "eim-gui-${pkg}.rpm" "eim*.rpm"
           done
 
           echo "=== GUI pacman packages ==="
@@ -225,6 +225,66 @@ jobs:
           echo "=== Final release assets ==="
           ls -lh release_assets/
 
+      - name: Validate all required assets exist
+        run: |
+          MISSING=()
+          REQUIRED=(
+            "eim-cli-linux-x64.zip"
+            "eim-cli-linux-aarch64.zip"
+            "eim-cli-linux-armv7.zip"
+            "eim-cli-macos-aarch64.zip"
+            "eim-cli-macos-x64.zip"
+            "eim-cli-windows-x64.exe"
+            "eim-cli-linux-x64.deb"
+            "eim-cli-linux-x64.rpm"
+            "eim-gui-windows-x64.exe"
+            "eim-gui-windows-x64.msi"
+            "eim-gui-linux-x64.zip"
+            "eim-gui-linux-x64.deb"
+            "eim-gui-linux-x64.rpm"
+            "eim-gui-macos-aarch64.zip"
+            "eim-gui-macos-x64.zip"
+            "eim-gui-macos-aarch64.dmg"
+            "eim-gui-macos-x64.dmg"
+          )
+          OPTIONAL=(
+            "eim-cli-linux-aarch64.deb"
+            "eim-cli-linux-aarch64.rpm"
+            "eim-cli-linux-armv7.deb"
+            "eim-cli-linux-armv7.rpm"
+            "eim-gui-linux-aarch64.zip"
+            "eim-gui-linux-aarch64.deb"
+            "eim-gui-linux-aarch64.rpm"
+            "offline_installer_builder-linux-x64.zip"
+            "offline_installer_builder-linux-aarch64.zip"
+            "offline_installer_builder-linux-armv7.zip"
+            "offline_installer_builder-macos-aarch64.zip"
+            "offline_installer_builder-macos-x64.zip"
+            "offline_installer_builder-windows-x64.exe"
+          )
+          for asset in "${REQUIRED[@]}"; do
+            if [[ ! -f "release_assets/$asset" ]]; then
+              MISSING+=("$asset")
+            fi
+          done
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "::error::Missing ${#MISSING[@]} required release assets:"
+            printf '  - %s\n' "${MISSING[@]}"
+            exit 1
+          fi
+          echo "All ${#REQUIRED[@]} required assets present"
+
+          MISSING_OPT=()
+          for asset in "${OPTIONAL[@]}"; do
+            if [[ ! -f "release_assets/$asset" ]]; then
+              MISSING_OPT+=("$asset")
+            fi
+          done
+          if [[ ${#MISSING_OPT[@]} -gt 0 ]]; then
+            echo "::warning::Missing ${#MISSING_OPT[@]} optional assets (non-blocking):"
+            printf '  - %s\n' "${MISSING_OPT[@]}"
+          fi
+
       - name: Generate checksums
         working-directory: release_assets
         run: |
@@ -232,16 +292,20 @@ jobs:
           echo "=== SHA256SUMS.txt ==="
           cat SHA256SUMS.txt
 
-      - name: Create draft pre-release
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
         run: |
           gh release create "$TAG" \
             --draft \
-            --prerelease \
             --generate-notes \
             --target "${{ inputs.ref }}" \
             --title "$TAG" \
             release_assets/*
-          echo "Draft pre-release $TAG created successfully"
+
+          BODY=$(gh release view "$TAG" --json body -q .body)
+          gh release edit "$TAG" --notes "${BODY}
+          <!-- created-by: release-workflow -->"
+
+          echo "Draft release $TAG created successfully"
           echo "URL: $(gh release view "$TAG" --json url -q .url)"
