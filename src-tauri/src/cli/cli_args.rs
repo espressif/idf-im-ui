@@ -133,8 +133,8 @@ pub enum Commands {
 
     /// Fix the ESP-IDF installation by reinstalling the tools and dependencies
     Fix {
-        #[arg(help = "Fix IDF on a specific path")]
-        path: Option<String>,
+        #[command(flatten)]
+        install_args: InstallArgs,
     },
 
     /// Install drivers for ESP-IDF. This is only available on Windows platforms.
@@ -155,12 +155,12 @@ pub struct InstallArgs {
     #[arg(
         short,
         long,
-        help = "Base Path to which all the files and folder will be installed",
+        help = "Base Path to which all the files and folder will be installed. For the `fix` command, this is the path of the existing installation to fix.",
         value_parser = |s: &str| -> Result<String, String> {
             to_absolute_path(s).map_err(|e| e.to_string())
         }
     )]
-    path: Option<String>,
+    pub path: Option<String>,
 
     #[arg(short, long, value_name = "FILE")]
     pub config: Option<PathBuf>,
