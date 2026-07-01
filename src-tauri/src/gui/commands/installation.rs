@@ -1167,8 +1167,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), String> {
-    debug!("Fixing installation with id {}", id);
+pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Option<Vec<String>>) -> Result<(), String> {
+    debug!("Fixing installation with id {}, extra_tools: {:?}", id, extra_tools);
 
     // Set installation flag to indicate installation is running
     set_installation_status(&app_handle, true)?;
@@ -1266,6 +1266,24 @@ pub async fn fix_installation(app_handle: AppHandle, id: String) -> Result<(), S
             return Err(error_msg);
         }
     };
+
+    // If the user picked additional (previously not-installed, on_request) tools in the
+    // "add more tools" picker, merge them into whatever tools this version was already
+    // configured with, keyed the same way `setup_tools` looks them up (by the installation's
+    // current name). The "always" required tools are re-derived by `setup_tools` regardless
+    // of what's in this list, so we only need to add the newly requested ones here.
+    if let Some(extra) = extra_tools.filter(|t| !t.is_empty()) {
+        let version_key = installation.name.clone();
+        let mut per_version = settings.idf_tools_per_version.clone().unwrap_or_default();
+        let mut tools_for_version = per_version.get(&version_key).cloned().unwrap_or_default();
+        for tool in extra {
+            if !tools_for_version.contains(&tool) {
+                tools_for_version.push(tool);
+            }
+        }
+        per_version.insert(version_key, tools_for_version);
+        settings.idf_tools_per_version = Some(per_version);
+    }
 
     let config_path = fix_config_path.clone()
         .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
