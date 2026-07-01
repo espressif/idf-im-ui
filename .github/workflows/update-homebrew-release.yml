@@ -75,21 +75,21 @@ jobs:
             wget -q "$url" -O "$output"
           }
 
-          download_asset "eim-cli-macos-x64.zip" "eim-cli-macos-x64.zip"
+          download_asset "eim-cli-macos-x64_${TAG_NAME}.zip" "eim-cli-macos-x64.zip"
           macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
-          macos_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url')
+          macos_x64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-macos-x64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
 
-          download_asset "eim-cli-macos-aarch64.zip" "eim-cli-macos-aarch64.zip"
+          download_asset "eim-cli-macos-aarch64_${TAG_NAME}.zip" "eim-cli-macos-aarch64.zip"
           macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
-          macos_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url')
+          macos_arm64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-macos-aarch64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
 
-          download_asset "eim-cli-linux-x64.zip" "eim-cli-linux-x64.zip"
+          download_asset "eim-cli-linux-x64_${TAG_NAME}.zip" "eim-cli-linux-x64.zip"
           linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
-          linux_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-x64.zip") | .browser_download_url')
+          linux_x64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-linux-x64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
 
-          download_asset "eim-cli-linux-aarch64.zip" "eim-cli-linux-aarch64.zip"
+          download_asset "eim-cli-linux-aarch64_${TAG_NAME}.zip" "eim-cli-linux-aarch64.zip"
           linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)
-          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-aarch64.zip") | .browser_download_url')
+          linux_arm64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-linux-aarch64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
 
           echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
           echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
@@ -120,13 +120,13 @@ jobs:
             wget -q "$url" -O "$output"
           }
 
-          download_asset "eim-gui-macos-x64.dmg" "eim-gui-macos-x64.dmg"
+          download_asset "eim-gui-macos-x64_${TAG_NAME}.dmg" "eim-gui-macos-x64.dmg"
           macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)
-          macos_x64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url')
+          macos_x64_gui_url=$(echo "$ASSETS" | jq -r --arg n "eim-gui-macos-x64_${TAG_NAME}.dmg" '.[] | select(.name == $n) | .browser_download_url')
 
-          download_asset "eim-gui-macos-aarch64.dmg" "eim-gui-macos-aarch64.dmg"
+          download_asset "eim-gui-macos-aarch64_${TAG_NAME}.dmg" "eim-gui-macos-aarch64.dmg"
           macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)
-          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url')
+          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r --arg n "eim-gui-macos-aarch64_${TAG_NAME}.dmg" '.[] | select(.name == $n) | .browser_download_url')
 
           echo "macos_x64_gui_url=$macos_x64_gui_url" >> $GITHUB_OUTPUT
           echo "macos_x64_gui_sha=$macos_x64_gui_sha" >> $GITHUB_OUTPUT

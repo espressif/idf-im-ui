@@ -129,33 +129,33 @@ jobs:
 
           echo "=== CLI binaries (Linux musl) ==="
           for pkg in linux-x64 linux-aarch64; do
-            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}.zip" "eim"
-            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}.zip" "offline_installer_builder"
+            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}_${TAG}.zip" "eim"
+            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}_${TAG}.zip" "offline_installer_builder"
           done
 
           echo "=== CLI binary (Linux armv7) ==="
-          zip_binary "artifacts/eim-cli-linux-armv7-${VER}" "eim-cli-linux-armv7.zip" "eim"
-          zip_binary "artifacts/offline_installer_builder-linux-armv7-${VER}" "offline_installer_builder-linux-armv7.zip" "offline_installer_builder"
+          zip_binary "artifacts/eim-cli-linux-armv7-${VER}" "eim-cli-linux-armv7_${TAG}.zip" "eim"
+          zip_binary "artifacts/offline_installer_builder-linux-armv7-${VER}" "offline_installer_builder-linux-armv7_${TAG}.zip" "offline_installer_builder"
 
           echo "=== CLI binaries (macOS) ==="
           for pkg in macos-aarch64 macos-x64; do
-            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}.zip" "eim"
-            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}.zip" "offline_installer_builder"
+            zip_binary "artifacts/eim-cli-${pkg}-${VER}" "eim-cli-${pkg}_${TAG}.zip" "eim"
+            zip_binary "artifacts/offline_installer_builder-${pkg}-${VER}" "offline_installer_builder-${pkg}_${TAG}.zip" "offline_installer_builder"
           done
 
           echo "=== CLI binary (Windows) ==="
-          prepare_asset "artifacts/eim-cli-windows-x64-${VER}" "eim-cli-windows-x64.exe" "eim.exe"
-          prepare_asset "artifacts/offline_installer_builder-windows-x64-${VER}" "offline_installer_builder-windows-x64.exe" "offline_installer_builder.exe"
+          prepare_asset "artifacts/eim-cli-windows-x64-${VER}" "eim-cli-windows-x64_${TAG}.exe" "eim.exe"
+          prepare_asset "artifacts/offline_installer_builder-windows-x64-${VER}" "offline_installer_builder-windows-x64_${TAG}.exe" "offline_installer_builder.exe"
 
           echo "=== CLI .deb packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-deb" "eim-cli-${pkg}.deb" "eim*.deb"
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-deb" "eim-cli-${pkg}_${TAG}.deb" "eim*.deb"
           done
-          prepare_asset "artifacts/eim-cli-linux-armv7-${VER}-deb" "eim-cli-linux-armv7.deb" "eim*.deb"
+          prepare_asset "artifacts/eim-cli-linux-armv7-${VER}-deb" "eim-cli-linux-armv7_${TAG}.deb" "eim*.deb"
 
           echo "=== CLI .rpm packages ==="
           for pkg in linux-x64 linux-aarch64 linux-armv7; do
-            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-rpm" "eim-cli-${pkg}.rpm" "eim*.rpm"
+            prepare_asset "artifacts/eim-cli-${pkg}-${VER}-rpm" "eim-cli-${pkg}_${TAG}.rpm" "eim*.rpm"
           done
 
           echo "=== CLI pacman packages ==="
@@ -165,47 +165,47 @@ jobs:
               if [[ -n "$pkg_file" ]]; then
                 base=$(basename "$dir" | sed "s/-${VER}-pacman//")
                 ext="${pkg_file##*.pkg.tar.}"
-                cp "$pkg_file" "release_assets/${base}.pkg.tar.${ext}"
-                echo "OK: ${base}.pkg.tar.${ext}"
+                cp "$pkg_file" "release_assets/${base}_${TAG}.pkg.tar.${ext}"
+                echo "OK: ${base}_${TAG}.pkg.tar.${ext}"
               fi
             fi
           done
 
           echo "=== GUI binaries ==="
-          prepare_asset "artifacts/eim-gui-windows-x64-${VER}" "eim-gui-windows-x64.exe" "eim.exe"
+          prepare_asset "artifacts/eim-gui-windows-x64-${VER}" "eim-gui-windows-x64_${TAG}.exe" "eim.exe"
 
           for pkg in linux-x64 linux-aarch64; do
             zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "eim.zip" -type f 2>/dev/null | head -1)
             if [[ -n "$zip_file" ]]; then
-              cp "$zip_file" "release_assets/eim-gui-${pkg}.zip"
-              echo "OK: eim-gui-${pkg}.zip"
+              cp "$zip_file" "release_assets/eim-gui-${pkg}_${TAG}.zip"
+              echo "OK: eim-gui-${pkg}_${TAG}.zip"
             fi
           done
 
           for pkg in macos-aarch64 macos-x64; do
             zip_file=$(find "artifacts/eim-gui-${pkg}-${VER}" -name "eim.zip" -type f 2>/dev/null | head -1)
             if [[ -n "$zip_file" ]]; then
-              cp "$zip_file" "release_assets/eim-gui-${pkg}.zip"
-              echo "OK: eim-gui-${pkg}.zip"
+              cp "$zip_file" "release_assets/eim-gui-${pkg}_${TAG}.zip"
+              echo "OK: eim-gui-${pkg}_${TAG}.zip"
             fi
           done
 
           echo "=== GUI .deb packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-deb" "eim-gui-${pkg}.deb" "eim*.deb"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-deb" "eim-gui-${pkg}_${TAG}.deb" "eim*.deb"
           done
 
           echo "=== GUI .msi packages ==="
-          prepare_asset "artifacts/eim-gui-windows-x64-${VER}-msi" "eim-gui-windows-x64.msi" "eim*.msi"
+          prepare_asset "artifacts/eim-gui-windows-x64-${VER}-msi" "eim-gui-windows-x64_${TAG}.msi" "eim*.msi"
 
           echo "=== GUI .dmg packages ==="
           for pkg in macos-aarch64 macos-x64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-dmg" "eim-gui-${pkg}.dmg" "eim*.dmg"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-dmg" "eim-gui-${pkg}_${TAG}.dmg" "eim*.dmg"
           done
 
           echo "=== GUI .rpm packages ==="
           for pkg in linux-x64 linux-aarch64; do
-            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-rpm" "eim-gui-${pkg}.rpm" "eim*.rpm"
+            prepare_asset "artifacts/eim-gui-${pkg}-${VER}-rpm" "eim-gui-${pkg}_${TAG}.rpm" "eim*.rpm"
           done
 
           echo "=== GUI pacman packages ==="
@@ -215,8 +215,8 @@ jobs:
               if [[ -n "$pkg_file" ]]; then
                 base=$(basename "$dir" | sed "s/-${VER}-pacman//")
                 ext="${pkg_file##*.pkg.tar.}"
-                cp "$pkg_file" "release_assets/${base}.pkg.tar.${ext}"
-                echo "OK: ${base}.pkg.tar.${ext}"
+                cp "$pkg_file" "release_assets/${base}_${TAG}.pkg.tar.${ext}"
+                echo "OK: ${base}_${TAG}.pkg.tar.${ext}"
               fi
             fi
           done
@@ -229,38 +229,38 @@ jobs:
         run: |
           MISSING=()
           REQUIRED=(
-            "eim-cli-linux-x64.zip"
-            "eim-cli-linux-aarch64.zip"
-            "eim-cli-linux-armv7.zip"
-            "eim-cli-macos-aarch64.zip"
-            "eim-cli-macos-x64.zip"
-            "eim-cli-windows-x64.exe"
-            "eim-cli-linux-x64.deb"
-            "eim-cli-linux-x64.rpm"
-            "eim-gui-windows-x64.exe"
-            "eim-gui-windows-x64.msi"
-            "eim-gui-linux-x64.zip"
-            "eim-gui-linux-x64.deb"
-            "eim-gui-linux-x64.rpm"
-            "eim-gui-macos-aarch64.zip"
-            "eim-gui-macos-x64.zip"
-            "eim-gui-macos-aarch64.dmg"
-            "eim-gui-macos-x64.dmg"
+            "eim-cli-linux-x64_${TAG}.zip"
+            "eim-cli-linux-aarch64_${TAG}.zip"
+            "eim-cli-linux-armv7_${TAG}.zip"
+            "eim-cli-macos-aarch64_${TAG}.zip"
+            "eim-cli-macos-x64_${TAG}.zip"
+            "eim-cli-windows-x64_${TAG}.exe"
+            "eim-cli-linux-x64_${TAG}.deb"
+            "eim-cli-linux-x64_${TAG}.rpm"
+            "eim-gui-windows-x64_${TAG}.exe"
+            "eim-gui-windows-x64_${TAG}.msi"
+            "eim-gui-linux-x64_${TAG}.zip"
+            "eim-gui-linux-x64_${TAG}.deb"
+            "eim-gui-linux-x64_${TAG}.rpm"
+            "eim-gui-macos-aarch64_${TAG}.zip"
+            "eim-gui-macos-x64_${TAG}.zip"
+            "eim-gui-macos-aarch64_${TAG}.dmg"
+            "eim-gui-macos-x64_${TAG}.dmg"
           )
           OPTIONAL=(
-            "eim-cli-linux-aarch64.deb"
-            "eim-cli-linux-aarch64.rpm"
-            "eim-cli-linux-armv7.deb"
-            "eim-cli-linux-armv7.rpm"
-            "eim-gui-linux-aarch64.zip"
-            "eim-gui-linux-aarch64.deb"
-            "eim-gui-linux-aarch64.rpm"
-            "offline_installer_builder-linux-x64.zip"
-            "offline_installer_builder-linux-aarch64.zip"
-            "offline_installer_builder-linux-armv7.zip"
-            "offline_installer_builder-macos-aarch64.zip"
-            "offline_installer_builder-macos-x64.zip"
-            "offline_installer_builder-windows-x64.exe"
+            "eim-cli-linux-aarch64_${TAG}.deb"
+            "eim-cli-linux-aarch64_${TAG}.rpm"
+            "eim-cli-linux-armv7_${TAG}.deb"
+            "eim-cli-linux-armv7_${TAG}.rpm"
+            "eim-gui-linux-aarch64_${TAG}.zip"
+            "eim-gui-linux-aarch64_${TAG}.deb"
+            "eim-gui-linux-aarch64_${TAG}.rpm"
+            "offline_installer_builder-linux-x64_${TAG}.zip"
+            "offline_installer_builder-linux-aarch64_${TAG}.zip"
+            "offline_installer_builder-linux-armv7_${TAG}.zip"
+            "offline_installer_builder-macos-aarch64_${TAG}.zip"
+            "offline_installer_builder-macos-x64_${TAG}.zip"
+            "offline_installer_builder-windows-x64_${TAG}.exe"
           )
           for asset in "${REQUIRED[@]}"; do
             if [[ ! -f "release_assets/$asset" ]]; then
