@@ -1275,7 +1275,10 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
     if let Some(extra) = extra_tools.filter(|t| !t.is_empty()) {
         let version_key = installation.name.clone();
         let mut per_version = settings.idf_tools_per_version.clone().unwrap_or_default();
-        let mut tools_for_version = per_version.get(&version_key).cloned().unwrap_or_default();
+        let mut tools_for_version = per_version
+            .get(&version_key)
+            .cloned()
+            .unwrap_or_else(|| settings.idf_tools.clone().unwrap_or_default());
         for tool in extra {
             if !tools_for_version.contains(&tool) {
                 tools_for_version.push(tool);
