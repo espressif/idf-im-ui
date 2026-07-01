@@ -58,27 +58,38 @@ jobs:
       - name: Download and calculate checksums for CLI
         id: cli-checksums
         run: |
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "${{ github.event.release.assets_url || format('https://api.github.com/repos/{0}/releases/tags/{1}', github.repository, steps.tag.outputs.tag_name) }}")
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
+          RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}")
+          ASSETS=$(echo "$RELEASE_JSON" | jq '.assets')
 
-          # macOS x64 CLI
-          macos_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url')
-          wget -q "$macos_x64_url" -O eim-cli-macos-x64.zip
+          download_asset() {
+            local name="$1"
+            local output="$2"
+            local url
+            url=$(echo "$ASSETS" | jq -r --arg n "$name" '.[] | select(.name == $n) | .browser_download_url')
+            if [[ -z "$url" || "$url" == "null" ]]; then
+              echo "::error::Asset '$name' not found in release $TAG_NAME"
+              exit 1
+            fi
+            wget -q "$url" -O "$output"
+          }
+
+          download_asset "eim-cli-macos-x64.zip" "eim-cli-macos-x64.zip"
           macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
+          macos_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url')
 
-          # macOS ARM64 CLI
-          macos_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url')
-          wget -q "$macos_arm64_url" -O eim-cli-macos-aarch64.zip
+          download_asset "eim-cli-macos-aarch64.zip" "eim-cli-macos-aarch64.zip"
           macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
+          macos_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url')
 
-          # Linux x64 CLI
-          linux_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-x64.zip") | .browser_download_url')
-          wget -q "$linux_x64_url" -O eim-cli-linux-x64.zip
+          download_asset "eim-cli-linux-x64.zip" "eim-cli-linux-x64.zip"
           linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
+          linux_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-x64.zip") | .browser_download_url')
 
-          # Linux ARM64 CLI
-          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-aarch64.zip") | .browser_download_url')
-          wget -q "$linux_arm64_url" -O eim-cli-linux-aarch64.zip
+          download_asset "eim-cli-linux-aarch64.zip" "eim-cli-linux-aarch64.zip"
           linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)
+          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-aarch64.zip") | .browser_download_url')
 
           echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
           echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
@@ -92,17 +103,30 @@ jobs:
       - name: Download and calculate checksums for GUI
         id: gui-checksums
         run: |
-          ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "${{ github.event.release.assets_url || format('https://api.github.com/repos/{0}/releases/tags/{1}', github.repository, steps.tag.outputs.tag_name) }}")
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
+          RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}")
+          ASSETS=$(echo "$RELEASE_JSON" | jq '.assets')
 
-          # macOS x64 GUI (DMG)
-          macos_x64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url')
-          wget -q "$macos_x64_gui_url" -O eim-gui-macos-x64.dmg
+          download_asset() {
+            local name="$1"
+            local output="$2"
+            local url
+            url=$(echo "$ASSETS" | jq -r --arg n "$name" '.[] | select(.name == $n) | .browser_download_url')
+            if [[ -z "$url" || "$url" == "null" ]]; then
+              echo "::error::Asset '$name' not found in release $TAG_NAME"
+              exit 1
+            fi
+            wget -q "$url" -O "$output"
+          }
+
+          download_asset "eim-gui-macos-x64.dmg" "eim-gui-macos-x64.dmg"
           macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)
+          macos_x64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-x64.dmg") | .browser_download_url')
 
-          # macOS ARM64 GUI (DMG)
-          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url')
-          wget -q "$macos_arm64_gui_url" -O eim-gui-macos-aarch64.dmg
+          download_asset "eim-gui-macos-aarch64.dmg" "eim-gui-macos-aarch64.dmg"
           macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)
+          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-gui-macos-aarch64.dmg") | .browser_download_url')
 
           echo "macos_x64_gui_url=$macos_x64_gui_url" >> $GITHUB_OUTPUT
           echo "macos_x64_gui_sha=$macos_x64_gui_sha" >> $GITHUB_OUTPUT

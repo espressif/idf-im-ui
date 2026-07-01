@@ -122,7 +122,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ inputs.version }} manifests-scoop/*.json --clobber
+          gh release upload "${{ inputs.version }}" manifests-scoop/*.json --clobber
         shell: bash
 
   publish-winget-cli:
