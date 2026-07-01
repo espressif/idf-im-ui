@@ -520,11 +520,29 @@ pub async fn prepare_settings_for_fix_idf_installation(
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
     // The fix logic is just instalation with use of existing repository
     let mut version_name = None;
+    let mut original_settings: Option<Settings> = None;
     match list_installed_versions(config_path) {
         Ok(versions) => {
             for v in versions {
                 if v.path == path_to_fix.to_str().unwrap() {
                     info!("Found existing IDF version: {}", v.name);
+                    // Recover the settings the installation was originally created with
+                    match &v.installation_config {
+                        Some(config_bytes) => {
+                            match bincode::deserialize::<Settings>(config_bytes.as_slice()) {
+                                Ok(settings) => {
+                                    info!("Recovered original installation settings for {}", v.name);
+                                    original_settings = Some(settings);
+                                }
+                                Err(err) => {
+                                    warn!("Failed to deserialize installation_config for {}: {}. Falling back to defaults.", v.name, err);
+                                }
+                            }
+                        }
+                        None => {
+                            warn!("No installation_config stored for {}. Falling back to defaults.", v.name);
+                        }
+                    }
                     // Remove the existing activation script and eim_idf.json entry
                     match remove_single_idf_version(&v.name, true, config_path) {
                         Ok(_) => {
@@ -543,7 +561,7 @@ pub async fn prepare_settings_for_fix_idf_installation(
         }
     }
 
-    let mut settings = Settings::default();
+    let mut settings = original_settings.unwrap_or_default();
     settings.path = Some(path_to_fix.clone());
     settings.non_interactive = Some(true);
     settings.version_name = version_name;
