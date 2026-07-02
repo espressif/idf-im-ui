@@ -1571,3 +1571,18 @@ list_tools.installed:
 list_tools.not_installed:
   en: " [not installed]"
   cn: " [未安装]"
+list_features.title:
+  en: "Features for IDF: %{name} (%{path})"
+  cn: "IDF 功能：%{name}（%{path}）"
+list_features.idf_prompt:
+  en: "Which IDF installation do you want to list features for?"
+  cn: "你想列出哪个 IDF 安装的功能？"
+list_features.optional_marker:
+  en: " (optional)"
+  cn: "（可选）"
+list_features.installed:
+  en: " [installed]"
+  cn: " [已安装]"
+list_features.not_installed:
+  en: " [not installed]"
+  cn: " [未安装]"

@@ -164,6 +164,35 @@ fn format_tool_list_report(report: &idf_im_lib::version_manager::ToolListReport)
     }
 }
 
+fn format_feature_list_report(report: &idf_im_lib::version_manager::FeatureListReport) {
+    println!(
+        "{}",
+        t!(
+            "list_features.title",
+            name = report.idf.name,
+            path = report.idf.path
+        )
+    );
+    println!();
+    for entry in &report.features {
+        let name_and_desc = match &entry.feature.description {
+            Some(description) => format!("{}: {}", entry.feature.name, description),
+            None => entry.feature.name.clone(),
+        };
+        let optional_marker = if entry.feature.optional {
+            t!("list_features.optional_marker").to_string()
+        } else {
+            String::new()
+        };
+        let installed_marker = if entry.installed {
+            t!("list_features.installed").to_string()
+        } else {
+            t!("list_features.not_installed").to_string()
+        };
+        println!("{}{}{}", name_and_desc, optional_marker, installed_marker);
+    }
+}
+
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
   let do_not_track = cli.do_not_track;
     // Initial tracking of CLI start
@@ -415,6 +444,47 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             match report {
                 Ok(report) => {
                     format_tool_list_report(&report);
+                    Ok(())
+                }
+                Err(err) => {
+                    error!("{}", err);
+                    Err(anyhow::anyhow!(err))
+                }
+            }
+        }
+        Commands::ListFeatures { identifier } => {
+            let identifier = if let Some(id) = identifier {
+                Some(id)
+            } else {
+                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
+                    Ok(versions) if versions.is_empty() => {
+                        warn!("{}", t!("list.no_versions"));
+                        return Ok(());
+                    }
+                    Ok(versions) => {
+                        let options: Vec<String> =
+                            versions.iter().map(|v| v.name.clone()).collect();
+                        match generic_select(&t!("list_features.idf_prompt"), &options) {
+                            Ok(selected) => Some(selected),
+                            Err(err) => return Err(anyhow::anyhow!(err)),
+                        }
+                    }
+                    Err(err) => {
+                        debug!("Error: {}", err);
+                        warn!("{}", t!("list.no_versions"));
+                        info!("{}", t!("cli.hint.custom_json_path"));
+                        return Ok(());
+                    }
+                }
+            };
+
+            let report = idf_im_lib::version_manager::list_idf_features(
+                identifier.as_deref(),
+                config_path.as_ref(),
+            );
+            match report {
+                Ok(report) => {
+                    format_feature_list_report(&report);
                     Ok(())
                 }
                 Err(err) => {
