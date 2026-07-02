@@ -944,11 +944,11 @@ export default {
   gap: 0.5rem;
   padding-top: 1rem;
   border-top: 1px solid #f3f4f6;
-  color: #e5e7eb;
+  color: var(--espressif-red-color);
 }
 
 .version-actions .n-button {
-  color: #e5e7eb;
+  color: var(--espressif-red-color);
 }
 .version-actions .n-button:hover {
   color: #1f2937;
