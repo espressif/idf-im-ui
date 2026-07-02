@@ -55,8 +55,8 @@ jobs:
           echo "version=${{ steps.tag.outputs.tag_name }}" >> $GITHUB_OUTPUT
           echo "release_url=${{ github.event.release.html_url || format('https://github.com/{0}/releases/tag/{1}', github.repository, steps.tag.outputs.tag_name) }}" >> $GITHUB_OUTPUT
 
-      - name: Download and calculate checksums for CLI
-        id: cli-checksums
+      - name: Download and calculate checksums
+        id: checksums
         run: |
           TAG_NAME="${{ steps.tag.outputs.tag_name }}"
           RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
@@ -75,75 +75,47 @@ jobs:
             wget -q "$url" -O "$output"
           }
 
+          get_url() {
+            echo "$ASSETS" | jq -r --arg n "$1" '.[] | select(.name == $n) | .browser_download_url'
+          }
+
+          echo "=== CLI assets ==="
           download_asset "eim-cli-macos-x64_${TAG_NAME}.zip" "eim-cli-macos-x64.zip"
-          macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
-          macos_x64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-macos-x64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
+          echo "macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_x64_url=$(get_url "eim-cli-macos-x64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
 
           download_asset "eim-cli-macos-aarch64_${TAG_NAME}.zip" "eim-cli-macos-aarch64.zip"
-          macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
-          macos_arm64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-macos-aarch64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
+          echo "macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_arm64_url=$(get_url "eim-cli-macos-aarch64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
 
           download_asset "eim-cli-linux-x64_${TAG_NAME}.zip" "eim-cli-linux-x64.zip"
-          linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
-          linux_x64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-linux-x64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
+          echo "linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "linux_x64_url=$(get_url "eim-cli-linux-x64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
 
           download_asset "eim-cli-linux-aarch64_${TAG_NAME}.zip" "eim-cli-linux-aarch64.zip"
-          linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)
-          linux_arm64_url=$(echo "$ASSETS" | jq -r --arg n "eim-cli-linux-aarch64_${TAG_NAME}.zip" '.[] | select(.name == $n) | .browser_download_url')
+          echo "linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "linux_arm64_url=$(get_url "eim-cli-linux-aarch64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
 
-          echo "macos_x64_url=$macos_x64_url" >> $GITHUB_OUTPUT
-          echo "macos_x64_sha=$macos_x64_sha" >> $GITHUB_OUTPUT
-          echo "macos_arm64_url=$macos_arm64_url" >> $GITHUB_OUTPUT
-          echo "macos_arm64_sha=$macos_arm64_sha" >> $GITHUB_OUTPUT
-          echo "linux_x64_url=$linux_x64_url" >> $GITHUB_OUTPUT
-          echo "linux_x64_sha=$linux_x64_sha" >> $GITHUB_OUTPUT
-          echo "linux_arm64_url=$linux_arm64_url" >> $GITHUB_OUTPUT
-          echo "linux_arm64_sha=$linux_arm64_sha" >> $GITHUB_OUTPUT
-
-      - name: Download and calculate checksums for GUI
-        id: gui-checksums
-        run: |
-          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
-          RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}")
-          ASSETS=$(echo "$RELEASE_JSON" | jq '.assets')
-
-          download_asset() {
-            local name="$1"
-            local output="$2"
-            local url
-            url=$(echo "$ASSETS" | jq -r --arg n "$name" '.[] | select(.name == $n) | .browser_download_url')
-            if [[ -z "$url" || "$url" == "null" ]]; then
-              echo "::error::Asset '$name' not found in release $TAG_NAME"
-              exit 1
-            fi
-            wget -q "$url" -O "$output"
-          }
-
+          echo "=== GUI assets ==="
           download_asset "eim-gui-macos-x64_${TAG_NAME}.dmg" "eim-gui-macos-x64.dmg"
-          macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)
-          macos_x64_gui_url=$(echo "$ASSETS" | jq -r --arg n "eim-gui-macos-x64_${TAG_NAME}.dmg" '.[] | select(.name == $n) | .browser_download_url')
+          echo "macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_x64_gui_url=$(get_url "eim-gui-macos-x64_${TAG_NAME}.dmg")" >> $GITHUB_OUTPUT
 
           download_asset "eim-gui-macos-aarch64_${TAG_NAME}.dmg" "eim-gui-macos-aarch64.dmg"
-          macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)
-          macos_arm64_gui_url=$(echo "$ASSETS" | jq -r --arg n "eim-gui-macos-aarch64_${TAG_NAME}.dmg" '.[] | select(.name == $n) | .browser_download_url')
-
-          echo "macos_x64_gui_url=$macos_x64_gui_url" >> $GITHUB_OUTPUT
-          echo "macos_x64_gui_sha=$macos_x64_gui_sha" >> $GITHUB_OUTPUT
-          echo "macos_arm64_gui_url=$macos_arm64_gui_url" >> $GITHUB_OUTPUT
-          echo "macos_arm64_gui_sha=$macos_arm64_gui_sha" >> $GITHUB_OUTPUT
+          echo "macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_arm64_gui_url=$(get_url "eim-gui-macos-aarch64_${TAG_NAME}.dmg")" >> $GITHUB_OUTPUT
 
       - name: Generate Homebrew Formula for CLI
         env:
           VERSION: ${{ steps.release-info.outputs.version }}
-          MACOS_X64_URL: ${{ steps.cli-checksums.outputs.macos_x64_url }}
-          MACOS_X64_SHA: ${{ steps.cli-checksums.outputs.macos_x64_sha }}
-          MACOS_ARM64_URL: ${{ steps.cli-checksums.outputs.macos_arm64_url }}
-          MACOS_ARM64_SHA: ${{ steps.cli-checksums.outputs.macos_arm64_sha }}
-          LINUX_X64_URL: ${{ steps.cli-checksums.outputs.linux_x64_url }}
-          LINUX_X64_SHA: ${{ steps.cli-checksums.outputs.linux_x64_sha }}
-          LINUX_ARM64_URL: ${{ steps.cli-checksums.outputs.linux_arm64_url }}
-          LINUX_ARM64_SHA: ${{ steps.cli-checksums.outputs.linux_arm64_sha }}
+          MACOS_X64_URL: ${{ steps.checksums.outputs.macos_x64_url }}
+          MACOS_X64_SHA: ${{ steps.checksums.outputs.macos_x64_sha }}
+          MACOS_ARM64_URL: ${{ steps.checksums.outputs.macos_arm64_url }}
+          MACOS_ARM64_SHA: ${{ steps.checksums.outputs.macos_arm64_sha }}
+          LINUX_X64_URL: ${{ steps.checksums.outputs.linux_x64_url }}
+          LINUX_X64_SHA: ${{ steps.checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_URL: ${{ steps.checksums.outputs.linux_arm64_url }}
+          LINUX_ARM64_SHA: ${{ steps.checksums.outputs.linux_arm64_sha }}
         run: |
           mkdir -p homebrew-repo/Formula
 
@@ -223,10 +195,10 @@ jobs:
       - name: Generate Homebrew Cask for GUI
         env:
           VERSION: ${{ steps.release-info.outputs.version }}
-          MACOS_X64_GUI_URL: ${{ steps.gui-checksums.outputs.macos_x64_gui_url }}
-          MACOS_X64_GUI_SHA: ${{ steps.gui-checksums.outputs.macos_x64_gui_sha }}
-          MACOS_ARM64_GUI_URL: ${{ steps.gui-checksums.outputs.macos_arm64_gui_url }}
-          MACOS_ARM64_GUI_SHA: ${{ steps.gui-checksums.outputs.macos_arm64_gui_sha }}
+          MACOS_X64_GUI_URL: ${{ steps.checksums.outputs.macos_x64_gui_url }}
+          MACOS_X64_GUI_SHA: ${{ steps.checksums.outputs.macos_x64_gui_sha }}
+          MACOS_ARM64_GUI_URL: ${{ steps.checksums.outputs.macos_arm64_gui_url }}
+          MACOS_ARM64_GUI_SHA: ${{ steps.checksums.outputs.macos_arm64_gui_sha }}
         run: |
           mkdir -p homebrew-repo/Casks
 
