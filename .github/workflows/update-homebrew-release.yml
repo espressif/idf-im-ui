@@ -1,0 +1,281 @@
+name: Update Homebrew Formula and Cask (Release)
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: 'The release tag name (e.g., v1.2.3) to update for'
+        required: true
+        type: string
+      staging:
+        description: 'Create a PR instead of pushing directly to master'
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'The release tag name (e.g., v1.2.3) to update for'
+        required: true
+        type: string
+      staging:
+        description: 'Create a PR instead of pushing directly to master'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  update-homebrew:
+    name: Update Homebrew Formula and Cask
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine tag name
+        id: tag
+        run: |
+          TAG_NAME="${{ inputs.version }}"
+          if [[ "${TAG_NAME}" == refs/tags/* ]]; then
+            TAG_NAME="${TAG_NAME#refs/tags/}"
+          fi
+          if [[ -z "${TAG_NAME}" ]]; then
+            echo "::error::Version input is empty. Cannot publish Homebrew formula with an empty version."
+            exit 1
+          fi
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew repository
+        uses: actions/checkout@v6
+        with:
+          repository: espressif/homebrew-eim
+          token: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          path: homebrew-repo
+
+      - name: Get release information
+        id: release-info
+        run: |
+          echo "version=${{ steps.tag.outputs.tag_name }}" >> $GITHUB_OUTPUT
+          echo "release_url=${{ github.event.release.html_url || format('https://github.com/{0}/releases/tag/{1}', github.repository, steps.tag.outputs.tag_name) }}" >> $GITHUB_OUTPUT
+
+      - name: Download and calculate checksums
+        id: checksums
+        run: |
+          TAG_NAME="${{ steps.tag.outputs.tag_name }}"
+          RELEASE_JSON=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/${TAG_NAME}")
+          ASSETS=$(echo "$RELEASE_JSON" | jq '.assets')
+
+          download_asset() {
+            local name="$1"
+            local output="$2"
+            local url
+            url=$(echo "$ASSETS" | jq -r --arg n "$name" '.[] | select(.name == $n) | .browser_download_url')
+            if [[ -z "$url" || "$url" == "null" ]]; then
+              echo "::error::Asset '$name' not found in release $TAG_NAME"
+              exit 1
+            fi
+            wget -q "$url" -O "$output"
+          }
+
+          get_url() {
+            echo "$ASSETS" | jq -r --arg n "$1" '.[] | select(.name == $n) | .browser_download_url'
+          }
+
+          echo "=== CLI assets ==="
+          download_asset "eim-cli-macos-x64_${TAG_NAME}.zip" "eim-cli-macos-x64.zip"
+          echo "macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_x64_url=$(get_url "eim-cli-macos-x64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
+
+          download_asset "eim-cli-macos-aarch64_${TAG_NAME}.zip" "eim-cli-macos-aarch64.zip"
+          echo "macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_arm64_url=$(get_url "eim-cli-macos-aarch64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
+
+          download_asset "eim-cli-linux-x64_${TAG_NAME}.zip" "eim-cli-linux-x64.zip"
+          echo "linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "linux_x64_url=$(get_url "eim-cli-linux-x64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
+
+          download_asset "eim-cli-linux-aarch64_${TAG_NAME}.zip" "eim-cli-linux-aarch64.zip"
+          echo "linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "linux_arm64_url=$(get_url "eim-cli-linux-aarch64_${TAG_NAME}.zip")" >> $GITHUB_OUTPUT
+
+          echo "=== GUI assets ==="
+          download_asset "eim-gui-macos-x64_${TAG_NAME}.dmg" "eim-gui-macos-x64.dmg"
+          echo "macos_x64_gui_sha=$(sha256sum eim-gui-macos-x64.dmg | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_x64_gui_url=$(get_url "eim-gui-macos-x64_${TAG_NAME}.dmg")" >> $GITHUB_OUTPUT
+
+          download_asset "eim-gui-macos-aarch64_${TAG_NAME}.dmg" "eim-gui-macos-aarch64.dmg"
+          echo "macos_arm64_gui_sha=$(sha256sum eim-gui-macos-aarch64.dmg | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "macos_arm64_gui_url=$(get_url "eim-gui-macos-aarch64_${TAG_NAME}.dmg")" >> $GITHUB_OUTPUT
+
+      - name: Generate Homebrew Formula for CLI
+        env:
+          VERSION: ${{ steps.release-info.outputs.version }}
+          MACOS_X64_URL: ${{ steps.checksums.outputs.macos_x64_url }}
+          MACOS_X64_SHA: ${{ steps.checksums.outputs.macos_x64_sha }}
+          MACOS_ARM64_URL: ${{ steps.checksums.outputs.macos_arm64_url }}
+          MACOS_ARM64_SHA: ${{ steps.checksums.outputs.macos_arm64_sha }}
+          LINUX_X64_URL: ${{ steps.checksums.outputs.linux_x64_url }}
+          LINUX_X64_SHA: ${{ steps.checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_URL: ${{ steps.checksums.outputs.linux_arm64_url }}
+          LINUX_ARM64_SHA: ${{ steps.checksums.outputs.linux_arm64_sha }}
+        run: |
+          mkdir -p homebrew-repo/Formula
+
+          # Remove 'v' prefix from version for formula
+          CLEAN_VERSION="${VERSION#v}"
+
+          cat > homebrew-repo/Formula/eim.rb << 'FORMULA_EOF'
+          # typed: false
+          # frozen_string_literal: true
+
+          class Eim < Formula
+            desc "ESP-IDF Installation Manager - CLI tool for setting up ESP-IDF development environment"
+            homepage "https://github.com/espressif/idf-im-ui"
+          FORMULA_EOF
+
+          cat >> homebrew-repo/Formula/eim.rb << FORMULA_EOF
+            version "${CLEAN_VERSION}"
+            license "MIT"
+
+            on_macos do
+              on_intel do
+                url "${MACOS_X64_URL}"
+                sha256 "${MACOS_X64_SHA}"
+              end
+              on_arm do
+                url "${MACOS_ARM64_URL}"
+                sha256 "${MACOS_ARM64_SHA}"
+              end
+            end
+
+            on_linux do
+              on_intel do
+                url "${LINUX_X64_URL}"
+                sha256 "${LINUX_X64_SHA}"
+              end
+              on_arm do
+                url "${LINUX_ARM64_URL}"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+              # Homebrew on Linux (Linuxbrew) doesn't support ARMv7 at all, so ARMv7 is not considered here
+            end
+
+            # DFU utility for flashing
+            depends_on "dfu-util"
+
+            # ESP-IDF requires Python 3.9-3.14. We install python@3.12 as default.
+            # If user already has python@3.12, Homebrew won't reinstall it.
+            depends_on "python"
+
+            def install
+              bin.install "eim"
+              generate_completions_from_executable(bin/"eim", "completions")
+            end
+
+            def caveats
+              <<~EOS
+                ESP-IDF Installation Manager (EIM) has been installed.
+
+                Shell completions have been installed.
+                They will be available in new terminal sessions.
+                If they don't work immediately, restart your shell, e.g.:
+                  exec zsh # in zsh
+
+                Run 'eim' to install ESP-IDF.
+              EOS
+            end
+
+            test do
+              assert_match "eim", shell_output("#{bin}/eim --version")
+            end
+          end
+          FORMULA_EOF
+
+          echo "Generated CLI formula:"
+          cat homebrew-repo/Formula/eim.rb
+
+      - name: Generate Homebrew Cask for GUI
+        env:
+          VERSION: ${{ steps.release-info.outputs.version }}
+          MACOS_X64_GUI_URL: ${{ steps.checksums.outputs.macos_x64_gui_url }}
+          MACOS_X64_GUI_SHA: ${{ steps.checksums.outputs.macos_x64_gui_sha }}
+          MACOS_ARM64_GUI_URL: ${{ steps.checksums.outputs.macos_arm64_gui_url }}
+          MACOS_ARM64_GUI_SHA: ${{ steps.checksums.outputs.macos_arm64_gui_sha }}
+        run: |
+          mkdir -p homebrew-repo/Casks
+
+          # Remove 'v' prefix from version for cask
+          CLEAN_VERSION="${VERSION#v}"
+
+          cat > homebrew-repo/Casks/eim-gui.rb << CASK_EOF
+          cask "eim-gui" do
+            version "${CLEAN_VERSION}"
+
+            on_intel do
+              url "${MACOS_X64_GUI_URL}"
+              sha256 "${MACOS_X64_GUI_SHA}"
+            end
+            on_arm do
+              url "${MACOS_ARM64_GUI_URL}"
+              sha256 "${MACOS_ARM64_GUI_SHA}"
+            end
+
+            name "ESP-IDF Installation Manager"
+            desc "GUI application for installing and managing ESP-IDF development environment"
+            homepage "https://github.com/espressif/idf-im-ui"
+
+            app "eim.app"
+
+            caveats <<~EOS
+              ESP-IDF Installation Manager (EIM) has been installed.
+
+              IMPORTANT: ESP-IDF requires Python 3.9, 3.10, 3.11, 3.12, 3.13 or 3.14.
+
+              If you don't have a compatible Python version, install one with:
+                brew install python
+
+              For QEMU emulation support, you may also need:
+                brew install libgcrypt glib pixman sdl2 libslirp dfu-util
+            EOS
+
+            zap trash: [
+              "~/Library/Application Support/com.espressif.eim",
+              "~/Library/Caches/com.espressif.eim",
+              "~/Library/Preferences/com.espressif.eim.plist",
+              "~/Library/Saved Application State/com.espressif.eim.savedState",
+            ]
+          end
+          CASK_EOF
+
+          echo "Generated GUI cask:"
+          cat homebrew-repo/Casks/eim-gui.rb
+
+      - name: Commit and push changes
+        if: ${{ !inputs.staging }}
+        run: |
+          cd homebrew-repo
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add Formula/eim.rb Casks/eim-gui.rb
+          git diff --staged --quiet || git commit -m "Update eim to version ${{ steps.release-info.outputs.version }}"
+          git push
+
+      - name: Create staging PR
+        if: ${{ inputs.staging }}
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+        run: |
+          cd homebrew-repo
+          BRANCH="staging/${{ steps.release-info.outputs.version }}"
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git checkout -b "$BRANCH"
+          git add Formula/eim.rb Casks/eim-gui.rb
+          git diff --staged --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Update eim to version ${{ steps.release-info.outputs.version }}"
+          git push -u origin "$BRANCH"
+          PR_URL=$(gh pr create \
+            --repo espressif/homebrew-eim \
+            --base master \
+            --head "$BRANCH" \
+            --title "[Staging] Update eim to ${{ steps.release-info.outputs.version }}" \
+            --body "Staging PR for release workflow testing. Close this PR and delete the branch when done.")
+          echo "::notice::Staging PR created: $PR_URL"
