@@ -169,15 +169,19 @@ export function runGUIVersionManagementTest({
       expect(content, "Expected list-tools modal content to load").to.not.be
         .false;
 
-      const modalText = await content.getText();
+      // Tool/version rows are filtered by platform-download availability
+      // (`has_platform_download`), which varies by CI runner OS/arch (e.g.
+      // a "recommended" version may have no download for this platform
+      // while an older "supported" one does). So we don't assert on
+      // specific status text or on the "optional" marker being present -
+      // only that real row data actually rendered for this installation.
+      const toolRows = await eimRunner.driver.findElements(
+        By.css(`[data-id^="list-tools-tool-"]`)
+      );
       expect(
-        modalText.includes("recommended"),
-        "Expected at least one tool version marked as recommended"
-      ).to.be.true;
-      expect(
-        modalText.includes(tGui("versionManagement.modals.listTools.optional")),
-        "Expected at least one optional tool to be listed"
-      ).to.be.true;
+        toolRows.length,
+        "Expected at least one tool/version row to be rendered"
+      ).to.be.greaterThan(0);
 
       const installedMarker = await eimRunner
         .findByClass("installed-yes", 10000)
@@ -277,27 +281,36 @@ export function runGUIVersionManagementTest({
       );
       expect(coreRow, "Expected the required 'core' feature to be listed").to
         .not.be.false;
-      const coreRowText = await coreRow.getText();
-      expect(
-        coreRowText.includes(
-          tGui("versionManagement.modals.listFeatures.requiredStatus")
-        ),
-        "Expected 'core' feature to be marked as required"
-      ).to.be.true;
-      expect(
-        coreRowText.includes(
-          tGui("versionManagement.modals.listFeatures.installedMarker")
-        ),
-        "Expected 'core' feature to be marked as installed"
-      ).to.be.true;
 
-      const modalText = await content.getText();
-      expect(
-        modalText.includes(
-          tGui("versionManagement.modals.listFeatures.optional")
-        ),
+      // The row element can be located as soon as its <tr> exists, slightly
+      // ahead of naive-ui's nested <n-tag>/conditional cell content actually
+      // painting its text - so poll getText() rather than reading it once,
+      // to avoid a race against that inner render.
+      const requiredStatusText = tGui(
+        "versionManagement.modals.listFeatures.requiredStatus"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(coreRow, requiredStatusText),
+        5000,
+        "Expected 'core' feature to be marked as required"
+      );
+      const installedMarkerText = tGui(
+        "versionManagement.modals.listFeatures.installedMarker"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(coreRow, installedMarkerText),
+        5000,
+        "Expected 'core' feature to be marked as installed"
+      );
+
+      const optionalMarkerText = tGui(
+        "versionManagement.modals.listFeatures.optional"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(content, optionalMarkerText),
+        5000,
         "Expected at least one optional feature to be listed"
-      ).to.be.true;
+      );
 
       const addFeaturesButton = await eimRunner.findByDataId(
         "show-add-features-button",

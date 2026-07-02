@@ -99,17 +99,19 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 - **Utilize that existing repository**: It will not download a new copy or overwrite your existing files.
 - **Ignore selected ESP-IDF versions**: Any specific ESP-IDF version you may have chosen in the GUI or via CLI arguments will be disregarded, as EIM will work with the version already present in your existing repository.
 
-### How do I add more tools to an existing installation?
+### How do I add more tools or features to an existing installation?
 
-You don't need to reinstall from scratch to add a tool you skipped the first time around.
+You don't need to reinstall from scratch to add a tool or optional feature (e.g. `docs`, `pytest`) you skipped the first time around.
 
-**GUI:** Open the **Version Management** dashboard, click **List Tools** on the version you want to change. The modal shows every tool declared in that version's `tools.json`, including optional ones that aren't installed yet. If there are any available to add, an **Add more tools** button appears next to the paths at the top of the modal — click it, check the tools you want, and confirm. This reinstalls the version with the newly selected tools added on top of what's already there; your existing tools and features are left untouched.
+**GUI:** Open the **Version Management** dashboard, then click **List Tools** or **List Features** on the version you want to change. The modal shows everything declared in that version's `tools.json`/`requirements.json`, including optional ones that aren't installed yet. If there are any available to add, an **Add more tools** / **Add more features** button appears next to the paths at the top of the modal — click it, check what you want, and confirm. This reinstalls the version with the newly selected tools/features added on top of what's already there; everything else is left untouched.
 
-**CLI:** Use `eim fix` with `--idf-tools` (or `--idf-features` for optional features), pointing at the existing installation:
+**CLI:** Use `eim fix` with `--idf-tools` and/or `--idf-features`, pointing at the existing installation:
 
 ```bash
-eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
+eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd --idf-features docs,pytest
 ```
+
+You can also inspect what's currently installed first with [`eim list-tools`](./cli_commands.md#list-tools-command) and [`eim list-features`](./cli_commands.md#list-features-command).
 
 `eim fix` preserves the configuration the version was originally installed with and only overrides what you explicitly pass, so any tools/features you don't mention stay as they were. See [CLI Commands](./cli_commands.md#fix-command) for details.
 
