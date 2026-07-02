@@ -1167,8 +1167,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
 }
 
 #[tauri::command]
-pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Option<Vec<String>>) -> Result<(), String> {
-    debug!("Fixing installation with id {}, extra_tools: {:?}", id, extra_tools);
+pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Option<Vec<String>>, extra_features: Option<Vec<String>>) -> Result<(), String> {
+    debug!("Fixing installation with id {}, extra_tools: {:?}, extra_features: {:?}", id, extra_tools, extra_features);
 
     // Set installation flag to indicate installation is running
     set_installation_status(&app_handle, true)?;
@@ -1286,6 +1286,26 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         }
         per_version.insert(version_key, tools_for_version);
         settings.idf_tools_per_version = Some(per_version);
+    }
+
+    // Same idea, but for optional (non-core) features picked in the "add more features"
+    // picker: merge them into whatever features this version was already configured with.
+    // The required "core" feature is always installed regardless of this list (see
+    // `install_python_env`), so we only need to add the newly requested optional ones here.
+    if let Some(extra) = extra_features.filter(|f| !f.is_empty()) {
+        let version_key = installation.name.clone();
+        let mut per_version = settings.idf_features_per_version.clone().unwrap_or_default();
+        let mut features_for_version = per_version
+            .get(&version_key)
+            .cloned()
+            .unwrap_or_else(|| settings.idf_features.clone().unwrap_or_default());
+        for feature in extra {
+            if !features_for_version.contains(&feature) {
+                features_for_version.push(feature);
+            }
+        }
+        per_version.insert(version_key, features_for_version);
+        settings.idf_features_per_version = Some(per_version);
     }
 
     let config_path = fix_config_path.clone()

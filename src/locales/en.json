@@ -377,7 +377,8 @@
         "openTerminal": "Open IDF Terminal",
         "remove": "Remove",
         "exportConfig": "Export Configuration",
-        "listTools": "List Tools"
+        "listTools": "List Tools",
+        "listFeatures": "List Features"
       }
     },
     "quickActions": {
@@ -442,6 +443,30 @@
           "cancel": "Cancel",
           "confirm": "Install selected tools"
         }
+      },
+      "listFeatures": {
+        "title": "Features for {name}",
+        "loading": "Loading features...",
+        "empty": "No features available for this installation.",
+        "idfPath": "IDF path",
+        "requirementsPath": "Requirements path",
+        "optional": "Optional",
+        "optionalStatus": "Optional",
+        "requiredStatus": "Required",
+        "installedMarker": "Installed",
+        "columns": {
+          "feature": "Feature",
+          "description": "Description",
+          "status": "Status",
+          "installed": "Installed"
+        },
+        "addFeatures": {
+          "button": "Add more features",
+          "title": "Select optional features to install",
+          "none": "All optional features are already installed.",
+          "cancel": "Cancel",
+          "confirm": "Install selected features"
+        }
       }
     },
     "messages": {
@@ -471,7 +496,8 @@
         "openTerminal": "IDF terminal could not be opened",
         "exportConfig": "Failed to export configuration",
         "noConfigToExport": "No configuration available to export",
-        "listTools": "Failed to load tools"
+        "listTools": "Failed to load tools",
+        "listFeatures": "Failed to load features"
       },
       "warning": {
         "confirmAction": "Please confirm the action"

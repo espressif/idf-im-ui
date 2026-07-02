@@ -107,6 +107,16 @@
             </n-tooltip>
             <n-tooltip trigger="hover">
               <template #trigger>
+                <n-button @click="openListFeatures(version)" quaternary circle :data-id="`list-features-button-${version.id}`">
+                  <template #icon>
+                    <n-icon><AppstoreOutlined /></n-icon>
+                  </template>
+                </n-button>
+              </template>
+              {{ t('versionManagement.version.actions.listFeatures') }}
+            </n-tooltip>
+            <n-tooltip trigger="hover">
+              <template #trigger>
                 <n-button @click="removeVersion(version)" quaternary circle :data-id="`remove-version-button-${version.id}`" type="error">
                   <template #icon>
                     <n-icon><DeleteOutlined /></n-icon>
@@ -396,6 +406,130 @@
         <n-empty v-if="listToolsReport.tools.length === 0" :description="t('versionManagement.modals.listTools.empty')" data-id="list-tools-empty" />
       </div>
     </n-modal>
+
+    <n-modal
+      v-model:show="showListFeaturesModal"
+      preset="card"
+      :title="t('versionManagement.modals.listFeatures.title', { name: listFeaturesVersion?.name })"
+      style="max-width: 900px;"
+      :bordered="false"
+      size="huge"
+      data-id="list-features-modal"
+    >
+      <div v-if="listFeaturesLoading" class="list-tools-loading" data-id="list-features-loading">
+        <n-spin :size="32" />
+        <p>{{ t('versionManagement.modals.listFeatures.loading') }}</p>
+      </div>
+
+      <div v-else-if="listFeaturesReport" class="list-tools-content" data-id="list-features-content">
+        <!-- Meta strip + add-features trigger, aligned on the same row -->
+        <div class="list-tools-header">
+          <div class="list-tools-meta">
+            <div class="meta-row">
+              <span class="meta-label">{{ t('versionManagement.modals.listFeatures.idfPath') }}:</span>
+              <code class="meta-value">{{ listFeaturesReport.idf.path }}</code>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">{{ t('versionManagement.modals.listFeatures.requirementsPath') }}:</span>
+              <code class="meta-value">{{ listFeaturesReport.requirements_json_path }}</code>
+            </div>
+          </div>
+
+          <n-button
+            v-if="!showAddFeaturesPanel"
+            size="small"
+            type="primary"
+            secondary
+            @click="openAddFeaturesPanel"
+            data-id="show-add-features-button"
+          >
+            <template #icon><n-icon><PlusCircleOutlined /></n-icon></template>
+            {{ t('versionManagement.modals.listFeatures.addFeatures.button') }}
+          </n-button>
+        </div>
+
+        <!-- Add more features panel -->
+        <div v-if="showAddFeaturesPanel" class="add-tools-panel" data-id="add-features-panel">
+          <h4>{{ t('versionManagement.modals.listFeatures.addFeatures.title') }}</h4>
+
+          <n-empty
+            v-if="availableFeaturesToAdd.length === 0"
+            :description="t('versionManagement.modals.listFeatures.addFeatures.none')"
+            size="small"
+            data-id="add-features-none"
+          />
+
+          <n-checkbox-group v-else v-model:value="selectedExtraFeatures" data-id="add-features-checkbox-group">
+            <n-space vertical>
+              <n-checkbox
+                v-for="entry in availableFeaturesToAdd"
+                :key="entry.feature.name"
+                :value="entry.feature.name"
+                :data-id="`add-features-checkbox-${entry.feature.name}`"
+              >
+                <strong>{{ entry.feature.name }}</strong><span v-if="entry.feature.description"> — {{ entry.feature.description }}</span>
+              </n-checkbox>
+            </n-space>
+          </n-checkbox-group>
+
+          <div class="add-tools-actions">
+            <n-button size="small" @click="cancelAddFeaturesPanel" data-id="add-features-cancel-button">
+              {{ t('versionManagement.modals.listFeatures.addFeatures.cancel') }}
+            </n-button>
+            <n-button
+              size="small"
+              type="primary"
+              :disabled="selectedExtraFeatures.length === 0"
+              :loading="addingFeatures"
+              @click="confirmAddFeatures"
+              data-id="add-features-confirm-button"
+            >
+              {{ t('versionManagement.modals.listFeatures.addFeatures.confirm') }}
+            </n-button>
+          </div>
+        </div>
+
+        <!-- Flat features table -->
+        <table class="tools-table" data-id="list-features-table">
+          <thead>
+            <tr>
+              <th class="col-fname">{{ t('versionManagement.modals.listFeatures.columns.feature') }}</th>
+              <th class="col-fdesc">{{ t('versionManagement.modals.listFeatures.columns.description') }}</th>
+              <th class="col-fstatus">{{ t('versionManagement.modals.listFeatures.columns.status') }}</th>
+              <th class="col-finst">{{ t('versionManagement.modals.listFeatures.columns.installed') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="entry in listFeaturesReport.features"
+              :key="entry.feature.name"
+              :data-id="`list-features-feature-${entry.feature.name}`"
+            >
+              <td class="tool-name-cell">
+                {{ entry.feature.name }}
+                <n-tag v-if="entry.feature.optional" size="tiny" type="info">
+                  {{ t('versionManagement.modals.listFeatures.optional') }}
+                </n-tag>
+              </td>
+              <td class="desc-cell" :title="entry.feature.description">{{ entry.feature.description }}</td>
+              <td>
+                <n-tag :type="entry.feature.optional ? 'info' : 'default'" size="small">
+                  {{ entry.feature.optional
+                    ? t('versionManagement.modals.listFeatures.optionalStatus')
+                    : t('versionManagement.modals.listFeatures.requiredStatus') }}
+                </n-tag>
+              </td>
+              <td>
+                <span v-if="entry.installed" class="installed-yes">{{ t('versionManagement.modals.listFeatures.installedMarker') }}</span>
+                <span v-else class="not-installed">—</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <n-empty v-if="listFeaturesReport.features.length === 0" :description="t('versionManagement.modals.listFeatures.empty')" data-id="list-features-empty" />
+      </div>
+    </n-modal>
   </div>
 </template>
 
@@ -422,7 +556,8 @@ import {
   UsbOutlined,
   LaptopOutlined,
   SaveOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  AppstoreOutlined
 } from '@vicons/antd'
 import { useAppStore } from '../store'
 
@@ -434,7 +569,7 @@ export default {
     FolderOutlined, FolderOpenOutlined, EditOutlined,
     DeleteOutlined, ToolOutlined, PlusCircleOutlined,
     ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined,
-    SaveOutlined, UnorderedListOutlined
+    SaveOutlined, UnorderedListOutlined, AppstoreOutlined
   },
   setup() {
     const router = useRouter()
@@ -455,6 +590,7 @@ export default {
     const showFixModal = ref(false)
     const showPurgeModal = ref(false)
     const showListToolsModal = ref(false)
+    const showListFeaturesModal = ref(false)
     const selectedVersion = ref(null)
     const newVersionName = ref('')
     const purgeConfirmed = ref(false)
@@ -468,6 +604,14 @@ export default {
     const addingTools = ref(false)
     const appStore = useAppStore()
 
+    // List-features modal state
+    const listFeaturesVersion = ref(null)
+    const listFeaturesReport = ref(null)
+    const listFeaturesLoading = ref(false)
+    const showAddFeaturesPanel = ref(false)
+    const selectedExtraFeatures = ref([])
+    const addingFeatures = ref(false)
+
     // Optional (on_request) tools that are not currently installed for this version -
     // candidates the user can pick to add on top of the existing fix/install.
     const availableToolsToAdd = computed(() => {
@@ -476,6 +620,15 @@ export default {
         entry.tool.install === 'on_request' &&
         entry.version_inspections.some(vi => vi.has_platform_download) &&
         !entry.version_inspections.some(vi => vi.installed)
+      )
+    })
+
+    // Optional features that are not currently installed for this version -
+    // candidates the user can pick to add on top of the existing fix/install.
+    const availableFeaturesToAdd = computed(() => {
+      if (!listFeaturesReport.value) return []
+      return listFeaturesReport.value.features.filter(entry =>
+        entry.feature.optional && !entry.installed
       )
     })
 
@@ -677,6 +830,72 @@ export default {
       }
     }
 
+    const openListFeatures = async (version) => {
+      listFeaturesVersion.value = version
+      listFeaturesReport.value = null
+      listFeaturesLoading.value = true
+      showListFeaturesModal.value = true
+      showAddFeaturesPanel.value = false
+      selectedExtraFeatures.value = []
+      try {
+        const report = await invoke('list_idf_features', { id: version.id })
+        if (!report) {
+          message.error(t('versionManagement.messages.error.listFeatures'))
+          showListFeaturesModal.value = false
+          return
+        }
+        listFeaturesReport.value = report
+      } catch (error) {
+        console.error('Failed to list features:', error)
+        message.error(t('versionManagement.messages.error.listFeatures', { error }))
+        showListFeaturesModal.value = false
+      } finally {
+        listFeaturesLoading.value = false
+      }
+    }
+
+    const openAddFeaturesPanel = () => {
+      selectedExtraFeatures.value = []
+      showAddFeaturesPanel.value = true
+    }
+
+    const cancelAddFeaturesPanel = () => {
+      showAddFeaturesPanel.value = false
+      selectedExtraFeatures.value = []
+    }
+
+    const confirmAddFeatures = async () => {
+      if (selectedExtraFeatures.value.length === 0) {
+        return
+      }
+      addingFeatures.value = true
+      try {
+        const version = listFeaturesVersion.value
+        await invoke('fix_installation', { id: version.id, extraFeatures: selectedExtraFeatures.value })
+
+        message.success(t('versionManagement.messages.success.repairStarted'))
+        showListFeaturesModal.value = false
+        showAddFeaturesPanel.value = false
+
+        // Navigate to installation progress with fix mode parameters, same as confirmFix
+        router.push({
+          path: '/installation-progress',
+          query: {
+            mode: 'fix',
+            id: version.id,
+            name: version.name,
+            path: version.path,
+            autotrack: 'true'
+          }
+        })
+      } catch (error) {
+        console.error('Add features error:', error)
+        message.error(t('versionManagement.messages.error.repair', { error }))
+      } finally {
+        addingFeatures.value = false
+      }
+    }
+
     const statusTagType = (status) => {
       switch (status) {
         case 'recommended':
@@ -815,6 +1034,7 @@ export default {
       showFixModal,
       showPurgeModal,
       showListToolsModal,
+      showListFeaturesModal,
       selectedVersion,
       newVersionName,
       purgeConfirmed,
@@ -825,6 +1045,13 @@ export default {
       selectedExtraTools,
       addingTools,
       availableToolsToAdd,
+      listFeaturesVersion,
+      listFeaturesReport,
+      listFeaturesLoading,
+      showAddFeaturesPanel,
+      selectedExtraFeatures,
+      addingFeatures,
+      availableFeaturesToAdd,
       formatDate,
       formatSize,
       renameVersion,
@@ -839,6 +1066,10 @@ export default {
       openAddToolsPanel,
       cancelAddToolsPanel,
       confirmAddTools,
+      openListFeatures,
+      openAddFeaturesPanel,
+      cancelAddFeaturesPanel,
+      confirmAddFeatures,
       statusTagType,
       purgeAll,
       confirmPurge,
@@ -941,7 +1172,7 @@ export default {
 
 .version-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.25rem;
   padding-top: 1rem;
   border-top: 1px solid #f3f4f6;
   color: #e5e7eb;
@@ -1043,6 +1274,11 @@ export default {
 .col-ver   { width: 18%; }
 .col-status{ width: 14%; }
 .col-inst  { width: 13%; }
+
+.col-fname   { width: 25%; }
+.col-fdesc   { width: 45%; }
+.col-fstatus { width: 15%; }
+.col-finst   { width: 15%; }
 
 .tool-name-cell { font-weight: 500; font-size: 13px; }
 .desc-cell { color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
