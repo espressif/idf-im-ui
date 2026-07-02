@@ -85,6 +85,12 @@ pub enum Commands {
         outdated: bool,
     },
 
+    /// List features declared in an installed ESP-IDF's requirements.json, with install status
+    ListFeatures {
+        #[arg(help = "ID, name or path of the IDF installation")]
+        identifier: Option<String>,
+    },
+
     /// Select an ESP-IDF version as active
     Select {
         #[arg(help = "Version to select as active")]

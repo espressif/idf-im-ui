@@ -20,6 +20,7 @@ use crate::{
     idf_config::{IdfConfig, IdfInstallation},
     settings::Settings,
     idf_tools::{Tool, Version},
+    idf_features::{FeatureInfo, RequirementsMetadata},
 };
 use serde::{Deserialize, Serialize};
 
@@ -765,6 +766,112 @@ pub fn list_idf_tools(
         outdated_only,
         tools,
         outdated,
+    })
+}
+
+// ============================================================================
+// Features inspection (eim list-features)
+// ============================================================================
+
+/// A report of the features declared in an installed ESP-IDF's `tools/requirements.json`,
+/// together with whether each one is currently configured to be installed for that version.
+///
+/// Produced by [`list_idf_features`]. Serializable so it can be reused by GUI commands.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureListReport {
+    pub idf: ToolListIdfContext,
+    pub requirements_json_path: String,
+    pub features: Vec<FeatureListEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureListEntry {
+    pub feature: FeatureInfo,
+    pub installed: bool,
+}
+
+/// Lists the features declared in an installed ESP-IDF's `tools/requirements.json`,
+/// together with whether each one is currently configured to be installed.
+///
+/// Resolves the IDF the same way [`list_idf_tools`] does (by `id`, then `name`, then a
+/// normalized `path` match against `IdfConfig.idf_installed`). Unlike tools, features have
+/// no per-feature install directory to inspect on disk (they're just pip packages merged
+/// into one shared venv), so "installed" is derived from the installation's recovered
+/// configuration instead:
+///
+/// - Required features (`optional: false`, e.g. `core`) are always reported as installed,
+///   mirroring how "always"-install tools are treated regardless of any stored selection.
+/// - Optional features are reported as installed if their name appears in the recovered
+///   `idf_features_per_version` entry for this version, falling back to the global
+///   `idf_features` list when no per-version entry exists (the same fallback used when
+///   merging new tool/feature selections into a `fix` run).
+///
+/// Requires no network access — `tools/requirements.json` is read directly from the local
+/// IDF checkout, the same file `install_python_env` derives feature requirement files from.
+pub fn list_idf_features(
+    identifier: Option<&str>,
+    config_path: Option<&std::path::PathBuf>,
+) -> Result<FeatureListReport, String> {
+    let identifier = identifier.ok_or_else(|| {
+        "no identifier provided; pass an IDF id, name or path".to_string()
+    })?;
+
+    let config_path = config_path
+        .cloned()
+        .unwrap_or_else(get_default_config_path);
+    let ide_config = IdfConfig::from_file(&config_path)
+        .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
+
+    let installation = find_installation(&ide_config, identifier)?;
+
+    let requirements_json_path =
+        std::path::Path::new(&installation.path).join("tools/requirements.json");
+    if !requirements_json_path.exists() {
+        return Err(format!(
+            "requirements.json not found at {}",
+            requirements_json_path.display()
+        ));
+    }
+
+    let metadata = RequirementsMetadata::from_file(&requirements_json_path)
+        .map_err(|e| format!("Failed to read requirements.json: {}", e))?;
+
+    // Recover the originally-selected optional features for this version, the same way
+    // `fix_installation` recovers tool selections: per-version entry first, falling back
+    // to the global list when the installation never got a per-version entry (e.g. offline
+    // installs never populate idf_features_per_version for tools, though features do get
+    // one on every wizard run today — this fallback keeps us correct either way).
+    let selected_optional_features: Vec<String> = installation
+        .installation_config
+        .as_ref()
+        .and_then(|bytes| bincode::deserialize::<Settings>(bytes.as_slice()).ok())
+        .map(|settings| {
+            settings
+                .idf_features_per_version
+                .as_ref()
+                .and_then(|per_version| per_version.get(&installation.name).cloned())
+                .unwrap_or_else(|| settings.idf_features.clone().unwrap_or_default())
+        })
+        .unwrap_or_default();
+
+    let features: Vec<FeatureListEntry> = metadata
+        .features
+        .into_iter()
+        .map(|feature| {
+            let installed =
+                !feature.optional || selected_optional_features.contains(&feature.name);
+            FeatureListEntry { feature, installed }
+        })
+        .collect();
+
+    Ok(FeatureListReport {
+        idf: ToolListIdfContext {
+            id: installation.id.clone(),
+            name: installation.name.clone(),
+            path: installation.path.clone(),
+        },
+        requirements_json_path: requirements_json_path.to_string_lossy().to_string(),
+        features,
     })
 }
 

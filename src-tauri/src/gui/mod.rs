@@ -349,6 +349,7 @@ pub fn run(
             get_selected_tools_per_version,
             generate_installation_config_for_version,
             list_idf_tools,
+            list_idf_features,
             write_text_file,
             get_tool_download_folder_name,
             set_tool_download_folder_name,

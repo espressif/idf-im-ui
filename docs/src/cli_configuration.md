@@ -179,6 +179,8 @@ The `eim fix` command (see [CLI Commands](./cli_commands.md#fix-command)) accept
 eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 ```
 
+Use [`eim list-tools`](./cli_commands.md#list-tools-command) and [`eim list-features`](./cli_commands.md#list-features-command) to see what's currently installed for a version before deciding what to add.
+
 ### Interactive Tool Selection
 
 When using the wizard command, you'll be prompted to select tools for each ESP-IDF version:
