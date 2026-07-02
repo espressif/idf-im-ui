@@ -169,15 +169,19 @@ export function runGUIVersionManagementTest({
       expect(content, "Expected list-tools modal content to load").to.not.be
         .false;
 
-      const modalText = await content.getText();
+      // Tool/version rows are filtered by platform-download availability
+      // (`has_platform_download`), which varies by CI runner OS/arch (e.g.
+      // a "recommended" version may have no download for this platform
+      // while an older "supported" one does). So we don't assert on
+      // specific status text or on the "optional" marker being present -
+      // only that real row data actually rendered for this installation.
+      const toolRows = await eimRunner.driver.findElements(
+        By.css(`[data-id^="list-tools-tool-"]`)
+      );
       expect(
-        modalText.includes("recommended"),
-        "Expected at least one tool version marked as recommended"
-      ).to.be.true;
-      expect(
-        modalText.includes(tGui("versionManagement.modals.listTools.optional")),
-        "Expected at least one optional tool to be listed"
-      ).to.be.true;
+        toolRows.length,
+        "Expected at least one tool/version row to be rendered"
+      ).to.be.greaterThan(0);
 
       const installedMarker = await eimRunner
         .findByClass("installed-yes", 10000)
