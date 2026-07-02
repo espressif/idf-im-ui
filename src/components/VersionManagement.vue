@@ -276,15 +276,70 @@
       </div>
 
       <div v-else-if="listToolsReport" class="list-tools-content" data-id="list-tools-content">
-        <!-- Meta strip -->
-        <div class="list-tools-meta">
-          <div class="meta-row">
-            <span class="meta-label">{{ t('versionManagement.modals.listTools.idfPath') }}:</span>
-            <code class="meta-value">{{ listToolsReport.idf.path }}</code>
+        <!-- Meta strip + add-tools trigger, aligned on the same row -->
+        <div class="list-tools-header">
+          <div class="list-tools-meta">
+            <div class="meta-row">
+              <span class="meta-label">{{ t('versionManagement.modals.listTools.idfPath') }}:</span>
+              <code class="meta-value">{{ listToolsReport.idf.path }}</code>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">{{ t('versionManagement.modals.listTools.toolsPath') }}:</span>
+              <code class="meta-value">{{ listToolsReport.idf_tools_path }}</code>
+            </div>
           </div>
-          <div class="meta-row">
-            <span class="meta-label">{{ t('versionManagement.modals.listTools.toolsPath') }}:</span>
-            <code class="meta-value">{{ listToolsReport.idf_tools_path }}</code>
+
+          <n-button
+            v-if="!showAddToolsPanel"
+            size="small"
+            type="primary"
+            secondary
+            @click="openAddToolsPanel"
+            data-id="show-add-tools-button"
+          >
+            <template #icon><n-icon><PlusCircleOutlined /></n-icon></template>
+            {{ t('versionManagement.modals.listTools.addTools.button') }}
+          </n-button>
+        </div>
+
+        <!-- Add more tools panel -->
+        <div v-if="showAddToolsPanel" class="add-tools-panel" data-id="add-tools-panel">
+          <h4>{{ t('versionManagement.modals.listTools.addTools.title') }}</h4>
+
+          <n-empty
+            v-if="availableToolsToAdd.length === 0"
+            :description="t('versionManagement.modals.listTools.addTools.none')"
+            size="small"
+            data-id="add-tools-none"
+          />
+
+          <n-checkbox-group v-else v-model:value="selectedExtraTools" data-id="add-tools-checkbox-group">
+            <n-space vertical>
+              <n-checkbox
+                v-for="entry in availableToolsToAdd"
+                :key="entry.tool.name"
+                :value="entry.tool.name"
+                :data-id="`add-tools-checkbox-${entry.tool.name}`"
+              >
+                <strong>{{ entry.tool.name }}</strong> — {{ entry.tool.description }}
+              </n-checkbox>
+            </n-space>
+          </n-checkbox-group>
+
+          <div class="add-tools-actions">
+            <n-button size="small" @click="cancelAddToolsPanel" data-id="add-tools-cancel-button">
+              {{ t('versionManagement.modals.listTools.addTools.cancel') }}
+            </n-button>
+            <n-button
+              size="small"
+              type="primary"
+              :disabled="selectedExtraTools.length === 0"
+              :loading="addingTools"
+              @click="confirmAddTools"
+              data-id="add-tools-confirm-button"
+            >
+              {{ t('versionManagement.modals.listTools.addTools.confirm') }}
+            </n-button>
           </div>
         </div>
 
@@ -345,7 +400,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, version } from 'vue'
+import { ref, computed, onMounted, onUnmounted, version } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { invoke } from '@tauri-apps/api/core'
@@ -353,7 +408,7 @@ import { listen } from '@tauri-apps/api/event'
 import { save } from '@tauri-apps/plugin-dialog'
 import {
   NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
-  NCheckbox, NAlert, NTooltip, NSpin, useMessage
+  NCheckbox, NCheckboxGroup, NSpace, NAlert, NTooltip, NSpin, useMessage
 } from 'naive-ui'
 import {
   FolderOutlined,
@@ -375,7 +430,7 @@ export default {
   name: 'VersionManagement',
   components: {
     NButton, NCard, NIcon, NTag, NEmpty, NModal, NInput,
-    NCheckbox, NAlert, NTooltip, NSpin,
+    NCheckbox, NCheckboxGroup, NSpace, NAlert, NTooltip, NSpin,
     FolderOutlined, FolderOpenOutlined, EditOutlined,
     DeleteOutlined, ToolOutlined, PlusCircleOutlined,
     ClearOutlined, ReloadOutlined, UsbOutlined, LaptopOutlined,
@@ -408,7 +463,21 @@ export default {
     const listToolsVersion = ref(null)
     const listToolsReport = ref(null)
     const listToolsLoading = ref(false)
+    const showAddToolsPanel = ref(false)
+    const selectedExtraTools = ref([])
+    const addingTools = ref(false)
     const appStore = useAppStore()
+
+    // Optional (on_request) tools that are not currently installed for this version -
+    // candidates the user can pick to add on top of the existing fix/install.
+    const availableToolsToAdd = computed(() => {
+      if (!listToolsReport.value) return []
+      return listToolsReport.value.tools.filter(entry =>
+        entry.tool.install === 'on_request' &&
+        entry.version_inspections.some(vi => vi.has_platform_download) &&
+        !entry.version_inspections.some(vi => vi.installed)
+      )
+    })
 
     const loadInstalledVersions = async () => {
       try {
@@ -547,6 +616,8 @@ export default {
       listToolsReport.value = null
       listToolsLoading.value = true
       showListToolsModal.value = true
+      showAddToolsPanel.value = false
+      selectedExtraTools.value = []
       try {
         const report = await invoke('list_idf_tools', { id: version.id })
         if (!report) {
@@ -561,6 +632,48 @@ export default {
         showListToolsModal.value = false
       } finally {
         listToolsLoading.value = false
+      }
+    }
+
+    const openAddToolsPanel = () => {
+      selectedExtraTools.value = []
+      showAddToolsPanel.value = true
+    }
+
+    const cancelAddToolsPanel = () => {
+      showAddToolsPanel.value = false
+      selectedExtraTools.value = []
+    }
+
+    const confirmAddTools = async () => {
+      if (selectedExtraTools.value.length === 0) {
+        return
+      }
+      addingTools.value = true
+      try {
+        const version = listToolsVersion.value
+        await invoke('fix_installation', { id: version.id, extraTools: selectedExtraTools.value })
+
+        message.success(t('versionManagement.messages.success.repairStarted'))
+        showListToolsModal.value = false
+        showAddToolsPanel.value = false
+
+        // Navigate to installation progress with fix mode parameters, same as confirmFix
+        router.push({
+          path: '/installation-progress',
+          query: {
+            mode: 'fix',
+            id: version.id,
+            name: version.name,
+            path: version.path,
+            autotrack: 'true'
+          }
+        })
+      } catch (error) {
+        console.error('Add tools error:', error)
+        message.error(t('versionManagement.messages.error.repair', { error }))
+      } finally {
+        addingTools.value = false
       }
     }
 
@@ -708,6 +821,10 @@ export default {
       listToolsVersion,
       listToolsReport,
       listToolsLoading,
+      showAddToolsPanel,
+      selectedExtraTools,
+      addingTools,
+      availableToolsToAdd,
       formatDate,
       formatSize,
       renameVersion,
@@ -719,6 +836,9 @@ export default {
       fixVersion,
       openInExplorer,
       openListTools,
+      openAddToolsPanel,
+      cancelAddToolsPanel,
+      confirmAddTools,
       statusTagType,
       purgeAll,
       confirmPurge,
@@ -929,4 +1049,42 @@ export default {
 .ver-cell  { font-family: monospace; font-size: 12px; color: #374151; }
 .installed-yes { color: #16a34a; font-size: 12px; display: inline-flex; align-items: center; gap: 4px; }
 .not-installed { color: #9ca3af; }
+
+.list-tools-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.list-tools-header button {
+  color:red
+}
+
+.list-tools-header .list-tools-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.add-tools-panel {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #93c5fd;
+  border-radius: 6px;
+  background: #eff6ff;
+}
+
+.add-tools-panel h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  color: #1f2937;
+}
+
+.add-tools-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
 </style>

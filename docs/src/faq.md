@@ -99,6 +99,20 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 - **Utilize that existing repository**: It will not download a new copy or overwrite your existing files.
 - **Ignore selected ESP-IDF versions**: Any specific ESP-IDF version you may have chosen in the GUI or via CLI arguments will be disregarded, as EIM will work with the version already present in your existing repository.
 
+### How do I add more tools to an existing installation?
+
+You don't need to reinstall from scratch to add a tool you skipped the first time around.
+
+**GUI:** Open the **Version Management** dashboard, click **List Tools** on the version you want to change. The modal shows every tool declared in that version's `tools.json`, including optional ones that aren't installed yet. If there are any available to add, an **Add more tools** button appears next to the paths at the top of the modal — click it, check the tools you want, and confirm. This reinstalls the version with the newly selected tools added on top of what's already there; your existing tools and features are left untouched.
+
+**CLI:** Use `eim fix` with `--idf-tools` (or `--idf-features` for optional features), pointing at the existing installation:
+
+```bash
+eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
+```
+
+`eim fix` preserves the configuration the version was originally installed with and only overrides what you explicitly pass, so any tools/features you don't mention stay as they were. See [CLI Commands](./cli_commands.md#fix-command) for details.
+
 ### How does offline installation work?
 
 The offline installation allows you to install ESP-IDF without an internet connection. You need to download an offline installer artifact (a zip file) for your specific OS and ESP-IDF version. This artifact contains the installer and a `.zst` archive with all the necessary data. You then run the installer with the `--use-local-archive` flag, pointing to the `.zst` file. Remember **not** to unpack the `.zst` archive. Also, the offline installation currently requires **Python 3.11 to 3.13**. For detailed instructions, please see the [Offline Installation](./offline_installation.md) guide.

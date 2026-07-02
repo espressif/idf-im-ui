@@ -434,6 +434,13 @@
           "installed": "Installed",
           "tool": "Tool",
           "description": "Description"
+        },
+        "addTools": {
+          "button": "Add more tools",
+          "title": "Select optional tools to install",
+          "none": "All optional tools are already installed.",
+          "cancel": "Cancel",
+          "confirm": "Install selected tools"
         }
       }
     },

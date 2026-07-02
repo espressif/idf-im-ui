@@ -31,6 +31,7 @@ These options can be used with any command:
 | `select` | Select an ESP-IDF version as active |
 | `rename` | Rename a specific ESP-IDF version |
 | `remove` | Remove a specific ESP-IDF version |
+| `fix` | Fix (repair/reinstall) an existing ESP-IDF installation, preserving its original tools/features unless overridden |
 | `purge` | Purge all ESP-IDF installations |
 | `import` | Import existing ESP-IDF installation using tools_set_config.json |
 | `run` | Run a command in the context of a specific ESP-IDF version |
@@ -215,13 +216,27 @@ This command is planned to discover ESP-IDF installations on your system but is 
 
 ### Fix Command
 
-Fix the ESP-IDF installation by reinstalling the tools and dependencies
+Fix (repair/reinstall) an existing ESP-IDF installation by reinstalling its tools and dependencies.
 
 ```bash
-eim fix [PATH]
+eim fix [OPTIONS]
 ```
 
-If no `PATH` is provided, the user will be presented with selection of all known IDF installation to select from.
+Options:
+- `-p, --path <PATH>`: Path of the existing installation to fix. If omitted, you will be presented with a selection of all known IDF installations to choose from.
+
+`fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
+
+```bash
+# Fix (repair) an installation, keeping its original tools/features
+eim fix -p /path/to/existing/esp-idf
+
+# Fix an installation and additionally install the cmake and openocd tools
+eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
+
+# Fix an installation, choosing interactively from all installed versions
+eim fix
+```
 
 ### Completions Command
 
@@ -293,6 +308,12 @@ eim rename v5.3.2 "ESP-IDF 5.3.2 Stable"
 
 # Remove a specific version
 eim remove v5.3.2
+
+# Fix (repair) an installation, keeping its original tools/features
+eim fix -p /path/to/existing/esp-idf
+
+# Fix an installation while also adding tools that weren't installed originally
+eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 
 # Purge all installations
 eim purge

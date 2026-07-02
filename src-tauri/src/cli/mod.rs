@@ -742,10 +742,9 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 Err(err) => Err(anyhow::anyhow!(err)),
             }
         }
-        Commands::Fix { path } => {
-          let path_to_fix = if path.is_some() {
+        Commands::Fix { install_args } => {
+          let path_to_fix = if let Some(path) = install_args.path.clone() {
               // If a path is provided, fix the IDF installation at that path
-              let path = path.unwrap();
                if is_valid_idf_directory(&path) {
                 PathBuf::from(path)
                } else {
@@ -780,8 +779,12 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
           };
           info!("{}", t!("fix.fixing", path = path_to_fix.display()));
-          // The fix logic is just instalation with use of existing repository
-          let settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
+          // The fix logic is just instalation with use of existing repository.
+          // Start from the settings the installation was originally created with (so tools,
+          // features, target etc. are preserved), then let any CLI args the user explicitly
+          // passed to `fix` override those preserved values (and the defaults).
+          let mut settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
+          settings.apply_cli_overrides(install_args.into_iter())?;
           let result = wizard::run_wizzard_run(settings).await;
           match result {
             Ok(r) => {

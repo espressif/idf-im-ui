@@ -433,6 +433,13 @@
           "installed": "已安装",
           "tool": "工具",
           "description": "描述"
+        },
+        "addTools": {
+          "button": "添加更多工具",
+          "title": "选择要安装的可选工具",
+          "none": "所有可选工具均已安装。",
+          "cancel": "取消",
+          "confirm": "安装所选工具"
         }
       }
     },

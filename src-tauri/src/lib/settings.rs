@@ -145,6 +145,42 @@ impl Settings {
         // Start with default settings
         let mut settings = Self::default();
 
+        // If a config file is provided, load it
+        if let Some(config_path) = config_path.clone() {
+          if config_path.exists() {
+            log::info!("Loading config from file: {:?}", config_path);
+            match settings.load(config_path.to_str().unwrap_or_default()) {
+              Ok(_) => log::info!("Config loaded successfully"),
+              Err(e) => log::warn!("Failed to load config from file: {}", e),
+            }
+          } else {
+            log::warn!("Config file does not exist: {:?}", config_path);
+          }
+        }
+        log::debug!("Settings after file load {:?}", settings);
+
+        log::debug!("Settings after config load - idf_features: {:?}", settings.idf_features);
+
+        settings.apply_cli_overrides(cli_settings)?;
+
+        // Set the config file field if not already set
+        if settings.config_file.is_none() {
+            settings.config_file = config_path;
+        }
+        log::debug!("Final settings: {:?}", settings);
+
+
+        Ok(settings)
+    }
+
+    /// Applies explicitly-provided CLI values on top of the current settings, overriding
+    /// whatever was there before (defaults, a loaded config file, or a recovered installation
+    /// config). Fields absent from `cli_settings` (i.e. not explicitly passed on the CLI) are
+    /// left untouched.
+    pub fn apply_cli_overrides(
+        &mut self,
+        cli_settings: impl IntoIterator<Item = (String, Option<config::Value>)>,
+    ) -> Result<(), ConfigError> {
         // Collect CLI settings and track which were EXPLICITLY provided (not None)
         let cli_items: Vec<_> = cli_settings.into_iter().collect();
         let mut cli_overrides: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -164,22 +200,6 @@ impl Settings {
 
         log::debug!("CLI overrides: {:?}", cli_overrides);
 
-        // If a config file is provided, load it
-        if let Some(config_path) = config_path.clone() {
-          if config_path.exists() {
-            log::info!("Loading config from file: {:?}", config_path);
-            match settings.load(config_path.to_str().unwrap_or_default()) {
-              Ok(_) => log::info!("Config loaded successfully"),
-              Err(e) => log::warn!("Failed to load config from file: {}", e),
-            }
-          } else {
-            log::warn!("Config file does not exist: {:?}", config_path);
-          }
-        }
-        log::debug!("Settings after file load {:?}", settings);
-
-        log::debug!("Settings after config load - idf_features: {:?}", settings.idf_features);
-
         let cli_config = cli_config.build()?;
         if let Ok(cli_settings_struct) = cli_config.try_deserialize::<Settings>() {
           macro_rules! apply_if_overridden {
@@ -187,7 +207,7 @@ impl Settings {
               $(
                 if cli_overrides.contains(stringify!($field)) {
                   log::debug!("Applying CLI override for {}: {:?}", stringify!($field), cli_settings_struct.$field);
-                  settings.$field = cli_settings_struct.$field.clone();
+                  self.$field = cli_settings_struct.$field.clone();
                 }
               )*
             };
@@ -224,14 +244,7 @@ impl Settings {
           );
         }
 
-        // Set the config file field if not already set
-        if settings.config_file.is_none() {
-            settings.config_file = config_path;
-        }
-        log::debug!("Final settings: {:?}", settings);
-
-
-        Ok(settings)
+        Ok(())
     }
 
     pub fn save(&self) -> Result<(), ConfigError> {

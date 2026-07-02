@@ -171,6 +171,14 @@ The installer determines which tools to use for each version in the following or
 3. **Interactive selection**: In wizard mode, you'll be prompted to select tools for each version
 4. **Required only**: In non-interactive mode without any tool configuration, only required tools are installed
 
+### Changing Tools or Features on an Existing Installation
+
+The `eim fix` command (see [CLI Commands](./cli_commands.md#fix-command)) accepts the same `--idf-features` / `--idf-tools` (and per-version equivalents) as `install`/`wizard`. By default it reinstalls using the configuration the version was originally installed with, so nothing is lost. Passing `--idf-features`/`--idf-tools` explicitly to `eim fix` overrides the preserved configuration for that run, letting you add (or change) tools/features without redoing the whole installation:
+
+```bash
+eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
+```
+
 ### Interactive Tool Selection
 
 When using the wizard command, you'll be prompted to select tools for each ESP-IDF version:
