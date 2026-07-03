@@ -56,10 +56,10 @@ jobs:
           echo "stripped=${STRIPPED}" >> $GITHUB_OUTPUT
           echo "Resolved version: ${STRIPPED:-<none>}"
 
-  # ── 2. Linux — native container, inline YAML matrix ──
+  # ── 2. Linux — native container, inline YAML matrix (CLI + GUI) ──
 
   test-linux:
-    name: PkgMgr (${{ matrix.pkg_manager }}) ${{ matrix.distro_name }}
+    name: PkgMgr (${{ matrix.pkg_manager }}-${{ matrix.package_type }}) ${{ matrix.distro_name }}
     needs: resolve-version
     runs-on: ubuntu-latest
     container:
@@ -71,9 +71,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Ubuntu / APT — CLI
           - image: ubuntu:latest
             pkg_manager: apt
             distro_name: ubuntu
+            package_type: cli
             package_name: eim-cli
             install_cmd: apt-get install -y eim-cli
             uninstall_cmd: apt-get remove -y eim-cli
@@ -82,13 +84,38 @@ jobs:
               echo 'deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main' \
                 | tee /etc/apt/sources.list.d/eim.list
               apt-get update
+          # Ubuntu / APT — GUI (includes CLI functionality per docs)
+          - image: ubuntu:latest
+            pkg_manager: apt
+            distro_name: ubuntu
+            package_type: gui
+            package_name: eim
+            install_cmd: apt-get install -y eim
+            uninstall_cmd: apt-get remove -y eim
+            meta_cmd: dpkg -l eim
+            repo_setup: |
+              echo 'deb [trusted=yes] https://dl.espressif.com/dl/eim/apt stable main' \
+                | tee /etc/apt/sources.list.d/eim.list
+              apt-get update
+          # Fedora / DNF — CLI
           - image: fedora:latest
             pkg_manager: dnf
             distro_name: fedora
+            package_type: cli
             package_name: eim-cli
             install_cmd: dnf install -y eim-cli
             uninstall_cmd: dnf remove -y eim-cli
             meta_cmd: rpm -qi eim-cli
+            repo_setup: curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo
+          # Fedora / DNF — GUI
+          - image: fedora:latest
+            pkg_manager: dnf
+            distro_name: fedora
+            package_type: gui
+            package_name: eim
+            install_cmd: dnf install -y eim
+            uninstall_cmd: dnf remove -y eim
+            meta_cmd: rpm -qi eim
             repo_setup: curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo
     steps:
       - name: Install prerequisites
@@ -141,6 +168,15 @@ jobs:
       - name: Verify package metadata
         run: ${{ matrix.meta_cmd }}
 
+      - name: Verify GUI desktop entry
+        if: matrix.package_type == 'gui'
+        run: |
+          if ! find /usr/share/applications /usr/local/share/applications -iname "*eim*" 2>/dev/null | grep -q .; then
+            echo "FAIL: no desktop entry found for GUI package '${{ matrix.package_name }}'"
+            exit 1
+          fi
+          echo "Desktop entry found for GUI package"
+
       - name: Uninstall package
         run: ${{ matrix.uninstall_cmd }}
 
@@ -148,19 +184,34 @@ jobs:
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.distro_name }}
+          name: pkg-manager-logs-${{ matrix.pkg_manager }}-${{ matrix.package_type }}-${{ matrix.distro_name }}
           path: /root/.local/share/eim/logs/
           if-no-files-found: ignore
 
-  # ── 3. macOS — Homebrew ──
+  # ── 3. macOS — Homebrew (formula = CLI, cask = GUI) ──
 
   test-brew:
-    name: PkgMgr (brew)
+    name: PkgMgr (brew-${{ matrix.package_type }})
     needs: resolve-version
     runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_type: cli
+            install_cmd: brew install espressif/eim/eim
+            uninstall_cmd: brew uninstall espressif/eim/eim
+            list_cmd: brew list espressif/eim/eim
+          - package_type: gui
+            install_cmd: brew install --cask espressif/eim/eim-gui
+            uninstall_cmd: brew uninstall --cask espressif/eim/eim-gui
+            list_cmd: brew list --cask espressif/eim/eim-gui
     steps:
+      - name: Tap Espressif repository
+        run: brew tap espressif/eim
+
       - name: Install package
-        run: brew install espressif/eim/eim
+        run: ${{ matrix.install_cmd }}
 
       - name: Verify binary on PATH
         run: which eim
@@ -176,26 +227,43 @@ jobs:
         run: eim --do-not-track true --help | grep -i install
 
       - name: Verify package metadata
-        run: brew list espressif/eim/eim
+        run: ${{ matrix.list_cmd }}
+
+      - name: Verify GUI app bundle
+        if: matrix.package_type == 'gui'
+        run: |
+          if ! find /Applications -maxdepth 1 -iname "*eim*" | grep -q .; then
+            echo "FAIL: no .app bundle found in /Applications for eim-gui cask"
+            exit 1
+          fi
+          echo "GUI app bundle found in /Applications"
 
       - name: Uninstall package
-        run: brew uninstall espressif/eim/eim
+        run: ${{ matrix.uninstall_cmd }}
 
       - name: Upload EIM logs
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: pkg-manager-logs-brew-macos
+          name: pkg-manager-logs-brew-${{ matrix.package_type }}-macos
           path: ~/Library/Application Support/eim/logs/
           if-no-files-found: ignore
 
-  # ── 4. Windows — WinGet (nightly / PR only) ──
+  # ── 4. Windows — WinGet (nightly / PR only), CLI + GUI ──
 
   test-winget:
-    name: PkgMgr (winget)
+    name: PkgMgr (winget-${{ matrix.package_type }})
     needs: resolve-version
     if: inputs.run_mode != 'release'
     runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_type: cli
+            winget_id: Espressif.EIM-CLI
+          - package_type: gui
+            winget_id: Espressif.EIM
     steps:
       - name: Exclude workspace from Defender
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
@@ -203,9 +271,38 @@ jobs:
       - name: Install package
         shell: pwsh
         run: |
-          winget install --id Espressif.EIM-CLI --accept-package-agreements --accept-source-agreements
+          winget install --id ${{ matrix.winget_id }} --accept-package-agreements --accept-source-agreements
           $wingetLinks = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
           if (Test-Path $wingetLinks) { echo $wingetLinks >> $env:GITHUB_PATH }
+
+      - name: Locate GUI binary and add to PATH
+        if: matrix.package_type == 'gui'
+        shell: pwsh
+        run: |
+          if (Get-Command eim.exe -ErrorAction SilentlyContinue) {
+            Write-Host "eim.exe already on PATH, nothing to do"
+            exit 0
+          }
+          $searchRoots = @(
+            "$env:ProgramFiles",
+            "${env:ProgramFiles(x86)}",
+            "$env:LOCALAPPDATA\Programs",
+            "$env:LOCALAPPDATA"
+          ) | Where-Object { $_ -and (Test-Path $_) }
+
+          $found = $null
+          foreach ($root in $searchRoots) {
+            $match = Get-ChildItem -Path $root -Recurse -Filter "eim.exe" -ErrorAction SilentlyContinue -File | Select-Object -First 1
+            if ($match) { $found = $match; break }
+          }
+
+          if (-not $found) {
+            Write-Error "Could not locate eim.exe under Program Files or LocalAppData after GUI install"
+            exit 1
+          }
+
+          Write-Host "Found eim.exe at: $($found.FullName)"
+          Add-Content -Path $env:GITHUB_PATH -Value $found.DirectoryName
 
       - name: Verify binary on PATH
         shell: pwsh
@@ -232,17 +329,27 @@ jobs:
 
       - name: Verify package metadata
         shell: pwsh
-        run: winget list --id Espressif.EIM-CLI
+        run: winget list --id ${{ matrix.winget_id }}
+
+      - name: Verify GUI Start Menu shortcut
+        if: matrix.package_type == 'gui'
+        shell: pwsh
+        run: |
+          $shortcuts = Get-ChildItem -Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs","$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Recurse -Filter "*eim*" -ErrorAction SilentlyContinue
+          if (-not $shortcuts) {
+            Write-Error "FAIL: no Start Menu shortcut found for GUI package"; exit 1
+          }
+          Write-Host "Start Menu shortcut found: $($shortcuts[0].FullName)"
 
       - name: Uninstall package
         shell: pwsh
-        run: winget uninstall --id Espressif.EIM-CLI --accept-source-agreements
+        run: winget uninstall --id ${{ matrix.winget_id }} --accept-source-agreements
 
       - name: Upload EIM logs
         uses: actions/upload-artifact@v7
         if: always()
         with:
-          name: pkg-manager-logs-winget-windows
+          name: pkg-manager-logs-winget-${{ matrix.package_type }}-windows
           path: ${{ env.LOCALAPPDATA }}\eim\logs\
           if-no-files-found: ignore
 
