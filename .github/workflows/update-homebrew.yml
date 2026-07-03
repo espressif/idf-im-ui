@@ -219,8 +219,18 @@ jobs:
 
             app "eim.app"
 
+            # The GUI binary is CLI-capable (invoked as \`eim <command>\`), but a
+            # cask only installs the .app bundle by default — nothing lands on
+            # PATH unless we say so explicitly. This symlinks the executable
+            # embedded in the bundle into \$(brew --prefix)/bin, so GUI users
+            # get the same \`eim\` command CLI-only users get, without needing
+            # to separately \`brew install eim\`.
+            binary "#{appdir}/eim.app/Contents/MacOS/eim"
+
             caveats <<~EOS
               ESP-IDF Installation Manager (EIM) has been installed.
+
+              The \`eim\` command is now also available in your terminal.
 
               IMPORTANT: ESP-IDF requires Python 3.9, 3.10, 3.11, 3.12, 3.13 or 3.14.
 
