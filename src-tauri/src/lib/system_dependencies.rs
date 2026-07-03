@@ -553,12 +553,35 @@ fn check_tools_with_package_manager(
             }
         }
         "windows" => {
+            let executor = command_executor::get_executor();
+
+            // Verify that we can actually run PowerShell before any other test
+            const CANARY: &str = "IDF_SHELL_CANARY_OK";
+            match executor.run_script_from_string(&format!("Write-Output '{}'", CANARY)) {
+                Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).contains(CANARY) => {
+                    debug!("PowerShell execution verified successfully");
+                }
+                Ok(o) => {
+                    return Err(format!(
+                        "Unable to execute PowerShell to verify prerequisites: command ran but produced unexpected output (stdout: {:?}, stderr: {:?}). PowerShell may be restricted (e.g. by execution policy or group policy).",
+                        String::from_utf8_lossy(&o.stdout),
+                        String::from_utf8_lossy(&o.stderr)
+                    ));
+                }
+                Err(e) => {
+                    return Err(format!(
+                        "Unable to execute PowerShell to verify prerequisites: {}. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.",
+                        e
+                    ));
+                }
+            }
+
             for tool in list_of_required_tools {
                 // First try using where.exe which searches PATH
-                let output = command_executor::execute_command(
-                    "powershell",
-                    &vec!["-Command", &format!("where.exe {} 2>$null; if ($LASTEXITCODE -ne 0) {{ Get-Command {} -ErrorAction SilentlyContinue }}", tool, tool)],
-                );
+                let output = executor.run_script_from_string(&format!(
+                    "where.exe {} 2>$null; if ($LASTEXITCODE -ne 0) {{ Get-Command {} -ErrorAction SilentlyContinue }}",
+                    tool, tool
+                ));
                 match output {
                     Ok(o) => {
                         if o.status.success() {
