@@ -1529,7 +1529,7 @@ jobs:
           name: gui-rpm-repackage-input-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: gui-rpm-input/
 
-      - name: Repackage RPM without python upper bound
+      - name: Repackage RPM (fix /usr/bin bug and python upper bound)
         shell: bash
         run: |
           set -euo pipefail
@@ -1549,21 +1549,46 @@ jobs:
           echo "Original dependencies:"
           rpm -qpR "$ORIG_RPM" || true
 
-          # Check if the RPM actually has the python upper bound issue
-          if ! rpm -qpR "$ORIG_RPM" 2>/dev/null | grep -i "python.*<"; then
-            echo "RPM does not have python upper bound issue, using as-is"
+          HAS_PYTHON_BOUND=false
+          if rpm -qpR "$ORIG_RPM" 2>/dev/null | grep -qi "python.*<"; then
+            HAS_PYTHON_BOUND=true
+          fi
+
+          HAS_BIN_BUG=false
+          if rpm -qp --queryformat '[%{FILEMODES:perms} %{FILENAMES}\n]' "$ORIG_RPM" 2>/dev/null \
+              | grep -qE '^-.*[[:space:]]/usr/bin$'; then
+            HAS_BIN_BUG=true
+            echo "Detected known Tauri bug: /usr/bin is packaged as a regular file, not a directory."
+          fi
+
+          if [ "$HAS_PYTHON_BOUND" = "false" ] && [ "$HAS_BIN_BUG" = "false" ]; then
+            echo "RPM looks clean, using as-is"
             mkdir -p "$GITHUB_WORKSPACE/gui_rpm_output"
             cp "$ORIG_RPM" "$GITHUB_WORKSPACE/gui_rpm_output/"
             echo "gui_rpm_available=true" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          echo "Found python upper bound in RPM, repackaging..."
+          echo "Repackaging (python upper bound: $HAS_PYTHON_BOUND, /usr/bin bug: $HAS_BIN_BUG)..."
 
           # Extract RPM contents into a staging directory
           WORK_DIR=$(mktemp -d)
           cd "$WORK_DIR"
           rpm2cpio "$ORIG_RPM" | cpio -idmv
+
+          if [ -f "usr/bin" ] && [ ! -d "usr/bin" ]; then
+            echo "Repairing extracted tree: moving usr/bin -> usr/bin/eim"
+            mv usr/bin usr/bin.eim-tmp
+            mkdir -p usr/bin
+            mv usr/bin.eim-tmp usr/bin/eim
+            chmod 755 usr/bin/eim
+          fi
+
+          if [ "$HAS_BIN_BUG" = "true" ] && [ ! -f "usr/bin/eim" ]; then
+            echo "FAIL: expected usr/bin/eim to exist after repair, but it doesn't." >&2
+            find usr -maxdepth 2 >&2
+            exit 1
+          fi
 
           # Helper: read an RPM tag, return a fallback if the value is empty or "(none)"
           rpm_tag() {
@@ -1636,8 +1661,11 @@ jobs:
             --define "_rpmdir $GITHUB_WORKSPACE/gui_rpm_output" \
             --target "$ARCH"
 
-          echo "Repackaged RPM dependencies:"
+          echo "Repackaged RPM file listing (confirming /usr/bin is now a directory):"
           NEWRPM=$(find "$GITHUB_WORKSPACE/gui_rpm_output" -name "*.rpm" -type f -print -quit)
+          rpm -qp --queryformat '[%{FILEMODES:perms} %{FILENAMES}\n]' "$NEWRPM" | grep -E '/usr/bin(/eim)?$'
+
+          echo "Repackaged RPM dependencies:"
           rpm -qpR "$NEWRPM" || true
 
           echo "gui_rpm_available=true" >> $GITHUB_OUTPUT
