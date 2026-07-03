@@ -28,6 +28,7 @@ These options can be used with any command:
 | `wizard` | Run the ESP-IDF Installer Wizard (interactive mode) |
 | `list` | List installed ESP-IDF versions |
 | `list-tools` | List tools declared in an installed ESP-IDF's `tools.json`, with their on-disk installation status |
+| `list-features` | List features declared in an installed ESP-IDF's `requirements.json`, with their install status |
 | `select` | Select an ESP-IDF version as active |
 | `rename` | Rename a specific ESP-IDF version |
 | `remove` | Remove a specific ESP-IDF version |
@@ -119,7 +120,24 @@ For each tool, the output reports:
 
 The IDF installation is resolved from `IDENTIFIER` by matching its `id`, then its `name`, and finally its normalized `path` in `eim_idf.json`.
 
-This command is intended for inspecting the on-disk state of a toolchain — for example, to confirm which tool versions are present after a fresh install, or to detect tools that can be upgraded in place. The report is also serialized in the underlying library (`version_manager::ToolListReport`) so it can be reused by future GUI commands.
+This command is intended for inspecting the on-disk state of a toolchain — for example, to confirm which tool versions are present after a fresh install, or to detect tools that can be upgraded in place. The report is also serialized in the underlying library (`version_manager::ToolListReport`), which the GUI's **List Tools** dashboard action (see [Version Management](./version_management.md)) reuses directly.
+
+### List Features Command
+
+List the features declared in an installed ESP-IDF's `tools/requirements.json`, together with whether each one is currently configured to be installed.
+
+```bash
+eim list-features [IDENTIFIER]
+```
+
+Arguments:
+- `IDENTIFIER`: ID, name, or path of the IDF installation to inspect (optional). If omitted, the command prompts you to choose from the installed IDFs.
+
+For each feature, the output reports:
+- The feature's name and description. Features with `optional: true` in `requirements.json` (e.g. `ci`, `docs`, `pytest`, `gdbgui`, `ide`) are marked with `(optional)`.
+- `[installed]` or `[not installed]`. The required `core` feature is always reported as installed. Optional features are reported as installed if they're part of the version's recorded feature selection — the same selection [`fix`](#fix-command) recovers and preserves.
+
+The IDF installation is resolved from `IDENTIFIER` the same way as `list-tools`: by matching its `id`, then its `name`, and finally its normalized `path` in `eim_idf.json`. Unlike `list-tools`, this command requires no network access — `requirements.json` is read directly from the local ESP-IDF checkout. The underlying report (`version_manager::FeatureListReport`) is what powers the GUI's **List Features** dashboard action (see [Version Management](./version_management.md)).
 
 ### Select Command
 
@@ -234,6 +252,9 @@ eim fix -p /path/to/existing/esp-idf
 # Fix an installation and additionally install the cmake and openocd tools
 eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 
+# Fix an installation and additionally install the docs and pytest features
+eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
+
 # Fix an installation, choosing interactively from all installed versions
 eim fix
 ```
@@ -300,6 +321,9 @@ eim list-tools v5.3.2
 # Show only tools whose on-disk version is older than what tools.json declares
 eim list-tools v5.3.2 --outdated
 
+# List the features for an installed IDF and their install status
+eim list-features v5.3.2
+
 # Select a specific version
 eim select v5.3.2
 
@@ -314,6 +338,9 @@ eim fix -p /path/to/existing/esp-idf
 
 # Fix an installation while also adding tools that weren't installed originally
 eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
+
+# Fix an installation while also adding features that weren't installed originally
+eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
 
 # Purge all installations
 eim purge

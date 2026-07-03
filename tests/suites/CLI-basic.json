@@ -67,6 +67,22 @@
   },
   {
     "id": 8,
+    "type": "list-features",
+    "name": "CLI List Features",
+    "data": {
+      "idfList": "default",
+      "targetList": "esp32",
+      "toolsMirror": "github",
+      "idfMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  },
+  {
+    "id": 9,
     "type": "deactivation",
     "name": "CLI Deactivation Script Lifecycle",
     "data": {
@@ -83,7 +99,7 @@
     "testProxyMode": false
   },
   {
-    "id": 9,
+    "id": 10,
     "type": "offline",
     "name": "CLI Offline Installation",
     "deleteAfterTest": true,

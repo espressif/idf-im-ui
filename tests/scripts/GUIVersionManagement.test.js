@@ -149,7 +149,230 @@ export function runGUIVersionManagementTest({
       }
     });
 
-    it("4- Should allow renaming existing installation", async function () {
+    it("4- Should show tool list for an installation, with add-more-tools option", async function () {
+      this.timeout(20000);
+      const cards = await eimRunner.findMultipleByClass("n-card");
+      const listToolsButton = await cards[0]
+        .findElement(By.css(`[data-id^="list-tools-button"]`))
+        .catch(() => false);
+      expect(listToolsButton, "Expected to find list tools button").to.not.be
+        .false;
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        listToolsButton
+      );
+
+      const content = await eimRunner.findByDataId(
+        "list-tools-content",
+        20000
+      );
+      expect(content, "Expected list-tools modal content to load").to.not.be
+        .false;
+
+      // Tool/version rows are filtered by platform-download availability
+      // (`has_platform_download`), which varies by CI runner OS/arch (e.g.
+      // a "recommended" version may have no download for this platform
+      // while an older "supported" one does). So we don't assert on
+      // specific status text or on the "optional" marker being present -
+      // only that real row data actually rendered for this installation.
+      const toolRows = await eimRunner.driver.findElements(
+        By.css(`[data-id^="list-tools-tool-"]`)
+      );
+      expect(
+        toolRows.length,
+        "Expected at least one tool/version row to be rendered"
+      ).to.be.greaterThan(0);
+
+      const installedMarker = await eimRunner
+        .findByClass("installed-yes", 10000)
+        .catch(() => false);
+      expect(
+        installedMarker,
+        "Expected at least one tool version to be marked installed"
+      ).to.not.be.false;
+
+      const addToolsButton = await eimRunner.findByDataId(
+        "show-add-tools-button",
+        10000
+      );
+      expect(addToolsButton, "Expected to find 'Add more tools' button").to
+        .not.be.false;
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        addToolsButton
+      );
+
+      const addToolsPanel = await eimRunner.findByDataId(
+        "add-tools-panel",
+        10000
+      );
+      expect(addToolsPanel, "Expected 'add more tools' panel to open").to.not
+        .be.false;
+
+      // Whether there are on_request tools left to add depends on the
+      // default (non-interactive) tool selection for this target/version -
+      // either outcome (a checkbox list, or the "all installed" empty
+      // state) is valid; the panel just needs to render one of them.
+      const [checkboxGroup, emptyState] = await Promise.all([
+        eimRunner
+          .findByDataId("add-tools-checkbox-group", 3000)
+          .catch(() => false),
+        eimRunner.findByDataId("add-tools-none", 3000).catch(() => false),
+      ]);
+      expect(
+        Boolean(checkboxGroup) || Boolean(emptyState),
+        "Expected either an 'add tools' checkbox list or the empty-state message"
+      ).to.be.true;
+
+      // Close the panel without triggering an actual reinstall
+      const cancelButton = await eimRunner.findByDataId(
+        "add-tools-cancel-button",
+        5000
+      );
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        cancelButton
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const panelAfterCancel = await eimRunner.driver
+        .findElement(By.css(`[data-id="add-tools-panel"]`))
+        .catch(() => false);
+      expect(
+        panelAfterCancel,
+        "Expected 'add more tools' panel to close after cancel"
+      ).to.be.false;
+
+      // Close the list-tools modal itself before the next test interacts
+      // with the dashboard cards again.
+      const closeButton = await eimRunner.findByClass(
+        "n-card-header__close",
+        5000
+      );
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        closeButton
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    it("5- Should show feature list for an installation, with add-more-features option", async function () {
+      this.timeout(20000);
+      const cards = await eimRunner.findMultipleByClass("n-card");
+      const listFeaturesButton = await cards[0]
+        .findElement(By.css(`[data-id^="list-features-button"]`))
+        .catch(() => false);
+      expect(listFeaturesButton, "Expected to find list features button").to
+        .not.be.false;
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        listFeaturesButton
+      );
+
+      const content = await eimRunner.findByDataId(
+        "list-features-content",
+        20000
+      );
+      expect(content, "Expected list-features modal content to load").to.not
+        .be.false;
+
+      const coreRow = await eimRunner.findByDataId(
+        "list-features-feature-core",
+        10000
+      );
+      expect(coreRow, "Expected the required 'core' feature to be listed").to
+        .not.be.false;
+
+      // The row element can be located as soon as its <tr> exists, slightly
+      // ahead of naive-ui's nested <n-tag>/conditional cell content actually
+      // painting its text - so poll getText() rather than reading it once,
+      // to avoid a race against that inner render.
+      const requiredStatusText = tGui(
+        "versionManagement.modals.listFeatures.requiredStatus"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(coreRow, requiredStatusText),
+        5000,
+        "Expected 'core' feature to be marked as required"
+      );
+      const installedMarkerText = tGui(
+        "versionManagement.modals.listFeatures.installedMarker"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(coreRow, installedMarkerText),
+        5000,
+        "Expected 'core' feature to be marked as installed"
+      );
+
+      const optionalMarkerText = tGui(
+        "versionManagement.modals.listFeatures.optional"
+      );
+      await eimRunner.driver.wait(
+        until.elementTextContains(content, optionalMarkerText),
+        5000,
+        "Expected at least one optional feature to be listed"
+      );
+
+      const addFeaturesButton = await eimRunner.findByDataId(
+        "show-add-features-button",
+        10000
+      );
+      expect(addFeaturesButton, "Expected to find 'Add more features' button")
+        .to.not.be.false;
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        addFeaturesButton
+      );
+
+      const addFeaturesPanel = await eimRunner.findByDataId(
+        "add-features-panel",
+        10000
+      );
+      expect(addFeaturesPanel, "Expected 'add more features' panel to open")
+        .to.not.be.false;
+
+      // A freshly, non-interactively installed IDF only has the required
+      // "core" feature installed, so every optional feature should be
+      // offered as a candidate to add.
+      const checkboxGroup = await eimRunner
+        .findByDataId("add-features-checkbox-group", 5000)
+        .catch(() => false);
+      expect(
+        checkboxGroup,
+        "Expected optional features available to add on a freshly installed (required-only) IDF"
+      ).to.not.be.false;
+
+      // Close the panel without triggering an actual reinstall
+      const cancelButton = await eimRunner.findByDataId(
+        "add-features-cancel-button",
+        5000
+      );
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        cancelButton
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      const panelAfterCancel = await eimRunner.driver
+        .findElement(By.css(`[data-id="add-features-panel"]`))
+        .catch(() => false);
+      expect(
+        panelAfterCancel,
+        "Expected 'add more features' panel to close after cancel"
+      ).to.be.false;
+
+      // Close the list-features modal itself before the next test interacts
+      // with the dashboard cards again.
+      const closeButton = await eimRunner.findByClass(
+        "n-card-header__close",
+        5000
+      );
+      await eimRunner.driver.executeScript(
+        "arguments[0].click();",
+        closeButton
+      );
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    });
+
+    it("6- Should allow renaming existing installation", async function () {
       this.timeout(10000);
       const cards = await eimRunner.findMultipleByClass("n-card");
       const renameButton = await cards[0]
@@ -199,7 +422,7 @@ export function runGUIVersionManagementTest({
       ).to.be.true;
     });
 
-    it("5- Should allow deleting existing installation", async function () {
+    it("7- Should allow deleting existing installation", async function () {
       this.timeout(60000);
       const cards = await eimRunner.findMultipleByClass("n-card");
       const IDFToDelete = await cards[0].findElement(
@@ -256,7 +479,7 @@ export function runGUIVersionManagementTest({
       ).to.not.be.true;
     });
 
-    it("6- Should allow purging all installation", async function () {
+    it("8- Should allow purging all installation", async function () {
       this.timeout(60000);
       const cards = await eimRunner.findMultipleByClass("n-card");
       expect(
