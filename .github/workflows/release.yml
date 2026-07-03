@@ -57,6 +57,10 @@ jobs:
   call-build:
     name: Build All Platforms
     needs: [validate-inputs]
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
     uses: ./.github/workflows/build-release.yaml
     with:
       is_release: true
