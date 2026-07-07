@@ -72,8 +72,7 @@
           "glib2",
           "pixman",
           "SDL2",
-          "libslirp",
-          "python3 >= 3.10"
+          "libslirp"
         ]
       }
     },
