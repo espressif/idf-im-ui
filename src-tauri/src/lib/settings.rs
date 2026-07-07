@@ -242,6 +242,13 @@ impl Settings {
             python_version_override,
             create_bat_activation_script
           );
+
+          if cli_overrides.contains("idf_tools") {
+            self.idf_tools_per_version = None;
+          }
+          if cli_overrides.contains("idf_features") {
+            self.idf_features_per_version = None;
+          }
         }
 
         Ok(())
