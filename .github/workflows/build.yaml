@@ -1530,12 +1530,12 @@ jobs:
           path: gui-rpm-input/
 
       - name: Repackage RPM (fix /usr/bin bug and python upper bound)
+        id: repackage
         shell: bash
         run: |
           set -euo pipefail
           RELEASE="1"
 
-          # Find the original RPM from the Tauri build
           ORIG_RPM=$(find gui-rpm-input -name "*.rpm" -type f -print -quit)
 
           if [ -z "$ORIG_RPM" ]; then
@@ -1550,7 +1550,7 @@ jobs:
           rpm -qpR "$ORIG_RPM" || true
 
           HAS_PYTHON_BOUND=false
-          if rpm -qpR "$ORIG_RPM" 2>/dev/null | grep -qi "python.*<"; then
+          if rpm -qpR "$ORIG_RPM" 2>/dev/null | grep -qi "python.*[<>=]"; then
             HAS_PYTHON_BOUND=true
           fi
 
@@ -1569,9 +1569,8 @@ jobs:
             exit 0
           fi
 
-          echo "Repackaging (python upper bound: $HAS_PYTHON_BOUND, /usr/bin bug: $HAS_BIN_BUG)..."
+          echo "Repackaging (python bound: $HAS_PYTHON_BOUND, /usr/bin bug: $HAS_BIN_BUG)..."
 
-          # Extract RPM contents into a staging directory
           WORK_DIR=$(mktemp -d)
           cd "$WORK_DIR"
           rpm2cpio "$ORIG_RPM" | cpio -idmv
@@ -1590,12 +1589,11 @@ jobs:
             exit 1
           fi
 
-          # Helper: read an RPM tag, return a fallback if the value is empty or "(none)"
           rpm_tag() {
             local val
             val=$(rpm -qp --queryformat "%{$1}" "$ORIG_RPM" 2>/dev/null || true)
             if [ -z "$val" ] || [ "$val" = "(none)" ]; then
-              echo "$2"   # fallback
+              echo "$2"
             else
               echo "$val"
             fi
@@ -1609,15 +1607,15 @@ jobs:
           ARCH=$(rpm_tag ARCH "x86_64")
           DESCRIPTION=$(rpm_tag DESCRIPTION "Espressif IDF Installation Manager GUI application")
 
-          # Collect dependencies, filtering out python upper bounds and rpmlib() auto-deps
+          # Collect dependencies, strip ALL python deps (we'll add the correct one below),
+          # and strip rpmlib() auto-deps
           mapfile -t REQ_LINES < <(
             rpm -qpR "$ORIG_RPM" 2>/dev/null \
-              | grep -v "python.*<" \
+              | grep -vi "python" \
               | grep -v "^rpmlib(" \
               | sort -u
           )
 
-          # Build the spec file
           rpmdev-setuptree
           SPEC_FILE="$HOME/rpmbuild/SPECS/eim-gui.spec"
 
@@ -1629,11 +1627,12 @@ jobs:
             echo "License:        ${LICENSE}"
             echo "AutoReqProv:    no"
             echo ""
-            # Write each cleaned-up Requires line
             for req in "${REQ_LINES[@]}"; do
-              req=$(echo "$req" | xargs)  # trim whitespace
+              req=$(echo "$req" | xargs)
               [ -n "$req" ] && echo "Requires:       ${req}"
             done
+            # Add the versioned python3 dependency with CORRECT RPM syntax
+            echo "Requires:       python3 >= 3.10"
             echo ""
             echo "%description"
             echo "${DESCRIPTION}"
@@ -1642,9 +1641,7 @@ jobs:
             echo "cp -a ${WORK_DIR}/* %{buildroot}/"
             echo ""
             echo "%files"
-            # List every file and symlink
             find . -type f -o -type l | sed 's|^\./|/|'
-            # List only package-owned directories; skip system dirs owned by 'filesystem'
             find . -mindepth 1 -type d | sed 's|^\./||' | grep -Ev \
               '^(usr|usr/bin|usr/sbin|usr/lib|usr/lib64|usr/libexec|usr/include|usr/share|usr/share/doc|usr/share/man|usr/share/man/man1|usr/share/applications|usr/share/icons|usr/share/icons/hicolor|usr/share/icons/hicolor/[^/]+|usr/share/icons/hicolor/[^/]+/apps|etc|var|opt|run|tmp|home|root|boot|srv|proc|sys|dev)$' \
               | sed 's|^|%dir /|'
@@ -1656,15 +1653,11 @@ jobs:
 
           mkdir -p "$GITHUB_WORKSPACE/gui_rpm_output"
 
-          # Build the new RPM
           rpmbuild -bb "$SPEC_FILE" \
             --define "_rpmdir $GITHUB_WORKSPACE/gui_rpm_output" \
             --target "$ARCH"
 
-          echo "Repackaged RPM file listing (confirming /usr/bin is now a directory):"
           NEWRPM=$(find "$GITHUB_WORKSPACE/gui_rpm_output" -name "*.rpm" -type f -print -quit)
-          rpm -qp --queryformat '[%{FILEMODES:perms} %{FILENAMES}\n]' "$NEWRPM" | grep -E '/usr/bin(/eim)?$'
-
           echo "Repackaged RPM dependencies:"
           rpm -qpR "$NEWRPM" || true
 
