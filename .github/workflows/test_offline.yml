@@ -115,7 +115,7 @@ jobs:
         if: matrix.os != 'windows-latest' && inputs.eim_cli_run_id == 'release'
         run: |
           latest_release=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" https://api.github.com/repos/espressif/idf-im-ui/releases/latest)
-          eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}.zip")) | .browser_download_url')
+          eim_cli_url=$(echo "$latest_release" | jq -r '.assets[] | select(.name | test("eim-cli-${{matrix.package_name}}_.*\\.zip$")) | .browser_download_url')
           curl -L -o ./artifacts/eim-cli.zip "$eim_cli_url"
           unzip ./artifacts/eim-cli.zip -d ./artifacts/
 
@@ -166,7 +166,7 @@ jobs:
         if: matrix.os == 'windows-latest' && inputs.eim_cli_run_id == 'release'
         run: |
           $latest_release = Invoke-RestMethod -Uri "https://api.github.com/repos/espressif/idf-im-ui/releases/latest"
-          $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}.exe" } | Select-Object -ExpandProperty browser_download_url
+          $eim_cli_url = $latest_release.assets | Where-Object { $_.name -like "eim-cli-${{ matrix.package_name }}_*.exe" } | Select-Object -ExpandProperty browser_download_url
           Invoke-WebRequest -Uri $eim_cli_url -OutFile ".\artifacts\eim.exe"
 
       - name: Remove python and git from PATH (Windows)
