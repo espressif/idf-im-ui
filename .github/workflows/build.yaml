@@ -269,8 +269,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
+          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -298,8 +298,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.zip --clobber
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip --clobber
 
       - name: Prepare manpage for deb package
         if: github.event_name == 'release' && github.event.action == 'created'
@@ -454,8 +454,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/linux-armv7/eim.zip eim-cli-linux-armv7.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-linux-armv7.zip --clobber
+          cp release_cli/linux-armv7/eim.zip eim-cli-linux-armv7_${{ github.event.release.tag_name }}.zip
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-linux-armv7_${{ github.event.release.tag_name }}.zip --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -490,8 +490,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/linux-armv7/offline_installer_builder.zip offline_installer_builder-linux-armv7.zip
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-linux-armv7.zip --clobber
+          cp release_cli/linux-armv7/offline_installer_builder.zip offline_installer_builder-linux-armv7_${{ github.event.release.tag_name }}.zip
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-linux-armv7_${{ github.event.release.tag_name }}.zip --clobber
 
       # .deb package
       - name: Prepare manpage for deb package
@@ -1057,16 +1057,16 @@ jobs:
           cd release_cli/${{ matrix.package_name }}
           zip -r eim.zip eim
           cd ../..
-          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
+          cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip --clobber
 
       - name: Upload Release Asset (Windows)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe --clobber
 
       - name: Build offline_installer_builder (Windows)
         if: runner.os == 'Windows'
@@ -1160,8 +1160,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           (cd release_cli/${{ matrix.package_name }} && zip offline_installer_builder.zip offline_installer_builder)
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.zip offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip
           gh release upload "${{ github.event.release.tag_name }}" \
-            release_cli/${{ matrix.package_name }}/offline_installer_builder.zip \
+            offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip \
             --clobber
 
       - name: Upload offline_installer_builder Release Asset (Windows)
@@ -1169,8 +1170,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe --clobber
 
   build-offline-archives:
     name: Build Offline Archives
@@ -1446,8 +1447,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}.exe"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.exe" --clobber
+          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe" --clobber
 
       - name: Upload Release Assets (Windows msi)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
@@ -1464,8 +1465,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/release/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
+          cp src-tauri/target/release/eim.zip "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip" --clobber
 
       - name: Upload Release Assets (Linux - .deb)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
@@ -1482,8 +1483,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/release/bundle/macos/eim.zip "eim-gui-${{ matrix.package_name }}.zip"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.zip" --clobber
+          cp src-tauri/target/release/bundle/macos/eim.zip "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.zip" --clobber
 
       - name: Upload Release Assets (macOS - dmg)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'macos')

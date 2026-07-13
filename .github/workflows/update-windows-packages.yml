@@ -51,7 +51,7 @@ jobs:
               license = "MIT"
               architecture = @{
                   "64bit" = @{
-                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-cli-windows-x64.exe#/eim.exe"
+                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-cli-windows-x64_${env:VERSION}.exe#/eim.exe"
                       hash = $cliHash
                   }
               }
@@ -62,7 +62,7 @@ jobs:
               autoupdate = @{
                   architecture = @{
                       "64bit" = @{
-                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-cli-windows-x64.exe#/eim.exe"
+                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-cli-windows-x64_v`$version.exe#/eim.exe"
                       }
                   }
               }
@@ -78,7 +78,7 @@ jobs:
               license = "MIT"
               architecture = @{
                   "64bit" = @{
-                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-gui-windows-x64.exe#/eim-gui.exe"
+                      url = "https://github.com/espressif/idf-im-ui/releases/download/${env:VERSION}/eim-gui-windows-x64_${env:VERSION}.exe#/eim-gui.exe"
                       hash = $guiHash
                   }
               }
@@ -92,7 +92,7 @@ jobs:
               autoupdate = @{
                   architecture = @{
                       "64bit" = @{
-                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-gui-windows-x64.exe#/eim-gui.exe"
+                          url = "https://github.com/espressif/idf-im-ui/releases/download/v`$version/eim-gui-windows-x64_v`$version.exe#/eim-gui.exe"
                       }
                   }
               }
@@ -123,7 +123,7 @@ jobs:
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: Espressif.EIM-CLI
-          installers-regex: 'eim-cli-windows-x64\.exe$'
+          installers-regex: 'eim-cli-windows-x64_.*\.exe$'
           version-filter: ${{ inputs.version }}
           token: ${{ secrets.WINGET_PAT }}
           fork-user: Hahihula

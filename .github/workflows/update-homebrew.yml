@@ -51,23 +51,26 @@ jobs:
           # Authenticate the request to get proper asset URLs
           ASSETS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "${{ github.event.release.assets_url || format('https://api.github.com/repos/{0}/releases/tags/{1}', github.repository, steps.tag.outputs.tag_name) }}")
 
+          # Release assets carry the version tag in their filename (e.g. eim-cli-macos-x64_v0.15.0.zip)
+          TAG="${{ steps.tag.outputs.tag_name }}"
+
           # macOS x64 CLI
-          macos_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-x64.zip") | .browser_download_url')
+          macos_x64_url=$(echo "$ASSETS" | jq -r --arg name "eim-cli-macos-x64_${TAG}.zip" '.[] | select(.name == $name) | .browser_download_url')
           wget -q "$macos_x64_url" -O eim-cli-macos-x64.zip
           macos_x64_sha=$(sha256sum eim-cli-macos-x64.zip | cut -d' ' -f1)
 
           # macOS ARM64 CLI
-          macos_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-macos-aarch64.zip") | .browser_download_url')
+          macos_arm64_url=$(echo "$ASSETS" | jq -r --arg name "eim-cli-macos-aarch64_${TAG}.zip" '.[] | select(.name == $name) | .browser_download_url')
           wget -q "$macos_arm64_url" -O eim-cli-macos-aarch64.zip
           macos_arm64_sha=$(sha256sum eim-cli-macos-aarch64.zip | cut -d' ' -f1)
 
           # Linux x64 CLI
-          linux_x64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-x64.zip") | .browser_download_url')
+          linux_x64_url=$(echo "$ASSETS" | jq -r --arg name "eim-cli-linux-x64_${TAG}.zip" '.[] | select(.name == $name) | .browser_download_url')
           wget -q "$linux_x64_url" -O eim-cli-linux-x64.zip
           linux_x64_sha=$(sha256sum eim-cli-linux-x64.zip | cut -d' ' -f1)
 
           # Linux ARM64 CLI
-          linux_arm64_url=$(echo "$ASSETS" | jq -r '.[] | select(.name == "eim-cli-linux-aarch64.zip") | .browser_download_url')
+          linux_arm64_url=$(echo "$ASSETS" | jq -r --arg name "eim-cli-linux-aarch64_${TAG}.zip" '.[] | select(.name == $name) | .browser_download_url')
           wget -q "$linux_arm64_url" -O eim-cli-linux-aarch64.zip
           linux_arm64_sha=$(sha256sum eim-cli-linux-aarch64.zip | cut -d' ' -f1)
 
