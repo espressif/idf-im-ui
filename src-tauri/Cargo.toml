@@ -17,7 +17,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies
 the setup process for ESP-IDF and integrated development environments (IDEs)
 across multiple platforms. This package contains the command-line interface."""
 license-file = ["../LICENSE"]
-depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, python3 (>= 3.10)"
+depends = "git, wget, flex, cmake, bison, gperf, ccache, libffi-dev, libssl-dev, dfu-util, libusb-1.0-0, python3 (>= 3.10), python3-pip, python3-venv"
 assets = [
     ["target/release/eim", "usr/bin/", "755"],
     ["../README.md", "usr/share/doc/eim-cli/", "644"],

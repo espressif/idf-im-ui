@@ -1631,8 +1631,10 @@ jobs:
               req=$(echo "$req" | xargs)
               [ -n "$req" ] && echo "Requires:       ${req}"
             done
-            # Add the versioned python3 dependency with CORRECT RPM syntax
+            # Add the versioned python3 dependency with CORRECT RPM syntax.
+            # python3-pip is a separate package on RPM distros; venv ships with python3.
             echo "Requires:       python3 >= 3.10"
+            echo "Requires:       python3-pip"
             echo ""
             echo "%description"
             echo "${DESCRIPTION}"
