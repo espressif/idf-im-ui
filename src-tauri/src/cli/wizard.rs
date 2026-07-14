@@ -205,7 +205,16 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
         }
         Err(err) => {
             if config.non_interactive == Some(true) {
-                Ok(())
+                // No user to prompt in non-interactive mode. Preserve the
+                // idempotent "already exists" behaviour, but surface real
+                // download/network failures instead of silently continuing
+                // (which previously masked the cause with downstream errors).
+                if err.contains("exists") || err.contains("not empty") {
+                    warn!("IDF path already present; continuing (non-interactive): {}", err);
+                    Ok(())
+                } else {
+                    Err(DownloadError::DownloadFailed(err))
+                }
             } else {
                 handle_download_error(err)
             }

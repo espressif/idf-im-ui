@@ -2365,6 +2365,7 @@ pub fn clone_with_git_cli(
     // Spawn `git clone` and stream stderr for progress (best-effort).
     let clone_args_ref: Vec<&str> = clone_args.iter().map(|s| s.as_str()).collect();
     let mut child = spawn_with_dir("git", &clone_args_ref, cwd_str)?;
+    let mut stderr_tail: Vec<String> = Vec::new();
     if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
@@ -2373,15 +2374,32 @@ pub fn clone_with_git_cli(
                 // post-clone work (commit checkout / submodules).
                 let scaled = (percentage * 80) / 100;
                 let _ = tx.send(ProgressMessage::Update(scaled));
+            } else {
+                // Non-progress lines carry git's actual diagnostics (e.g.
+                // "fatal: unable to access '...': Could not resolve host: github.com").
+                // Keep a bounded tail so we can report the real cause on failure.
+                let trimmed = line.trim();
+                if !trimmed.is_empty() {
+                    stderr_tail.push(trimmed.to_string());
+                    if stderr_tail.len() > 20 {
+                        stderr_tail.remove(0);
+                    }
+                }
             }
         }
     }
     let status = child.wait()?;
     if !status.success() {
+        let details = stderr_tail.join("; ");
         return Err(format!(
-            "git clone failed (exit code {:?}) for {}",
+            "git clone failed (exit code {:?}) for {}{}",
             status.code(),
-            options.url
+            options.url,
+            if details.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", details)
+            }
         )
         .into());
     }
