@@ -209,7 +209,9 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                 // idempotent "already exists" behaviour, but surface real
                 // download/network failures instead of silently continuing
                 // (which previously masked the cause with downstream errors).
-                if err.contains("exists") || err.contains("not empty") {
+                if (err.contains("exists") && !err.contains("does not exist"))
+                    || err.contains("not empty")
+                {
                     warn!("IDF path already present; continuing (non-interactive): {}", err);
                     Ok(())
                 } else {

@@ -75,6 +75,7 @@ impl CommandExecutor for DefaultExecutor {
         Command::new(command)
             .args(args)
             .current_dir(dir)
+            .stderr(std::process::Stdio::piped())
             .spawn()
     }
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
@@ -252,6 +253,7 @@ impl CommandExecutor for WindowsExecutor {
             .args(args)
             .current_dir(dir)
             .creation_flags(CREATE_NO_WINDOW)
+            .stderr(std::process::Stdio::piped())
             .spawn()
     }
 
