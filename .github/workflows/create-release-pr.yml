@@ -1,0 +1,219 @@
+name: Create Release PR
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Target version (e.g. 0.11.2 or v0.11.2). Leading 'v' is stripped."
+        required: true
+        type: string
+      source_branch:
+        description: "Branch to cut the release branch from."
+        required: true
+        type: string
+        default: master
+      target_branch:
+        description: "Base branch the generated PR will merge into."
+        required: true
+        type: string
+        default: master
+
+concurrency:
+  group: create-release-pr-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CARGO_EDIT_VERSION: 0.13.0
+
+jobs:
+  create-release-pr:
+    name: Create release branch and PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Validate inputs and compute names
+        id: vars
+        env:
+          RAW_VERSION: ${{ inputs.version }}
+          SOURCE_BRANCH: ${{ inputs.source_branch }}
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          set -euo pipefail
+
+          CLEAN_VERSION="${RAW_VERSION#v}"
+          if [[ ! "$CLEAN_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$ ]]; then
+            echo "::error::Invalid version '${RAW_VERSION}'. Expected semver like 0.11.2 or v0.11.2-rc.1."
+            exit 1
+          fi
+          if [[ -z "$SOURCE_BRANCH" ]]; then
+            echo "::error::source_branch is required."
+            exit 1
+          fi
+          if [[ -z "$TARGET_BRANCH" ]]; then
+            echo "::error::target_branch is required."
+            exit 1
+          fi
+
+          BRANCH_NAME="release-v${CLEAN_VERSION}"
+          TAG_NAME="v${CLEAN_VERSION}"
+          COMMIT_MSG="release commit v${CLEAN_VERSION}"
+
+          echo "clean_version=${CLEAN_VERSION}" >> "$GITHUB_OUTPUT"
+          echo "branch_name=${BRANCH_NAME}" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+          echo "commit_msg=${COMMIT_MSG}" >> "$GITHUB_OUTPUT"
+          echo "source_branch=${SOURCE_BRANCH}" >> "$GITHUB_OUTPUT"
+          echo "target_branch=${TARGET_BRANCH}" >> "$GITHUB_OUTPUT"
+
+      - name: Pre-flight checks (branch and tag must not exist)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          BRANCH_NAME: ${{ steps.vars.outputs.branch_name }}
+          TAG_NAME: ${{ steps.vars.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          REMOTE_URL="https://github.com/${REPO}.git"
+
+          if git ls-remote --exit-code --heads "$REMOTE_URL" "refs/heads/${BRANCH_NAME}" >/dev/null 2>&1; then
+            echo "::error::Remote branch ${BRANCH_NAME} already exists. Delete it or pick a new version."
+            exit 1
+          fi
+          if git ls-remote --exit-code --tags "$REMOTE_URL" "refs/tags/${TAG_NAME}" >/dev/null 2>&1; then
+            echo "::error::Tag ${TAG_NAME} already exists. Pick a new version."
+            exit 1
+          fi
+
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.vars.outputs.source_branch }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release branch
+        env:
+          BRANCH_NAME: ${{ steps.vars.outputs.branch_name }}
+        run: git checkout -b "$BRANCH_NAME"
+
+      - name: Bump package.json version
+        env:
+          CLEAN_VERSION: ${{ steps.vars.outputs.clean_version }}
+        run: |
+          set -euo pipefail
+          npm pkg set version="$CLEAN_VERSION"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo-edit binary
+        id: cache-cargo-edit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-set-version
+          key: cargo-edit-${{ runner.os }}-${{ env.CARGO_EDIT_VERSION }}
+
+      - name: Install cargo-edit
+        if: steps.cache-cargo-edit.outputs.cache-hit != 'true'
+        run: cargo install cargo-edit --version "$CARGO_EDIT_VERSION" --locked
+
+      - name: Bump Cargo.toml and Cargo.lock
+        env:
+          CLEAN_VERSION: ${{ steps.vars.outputs.clean_version }}
+        run: |
+          set -euo pipefail
+          cargo set-version --manifest-path src-tauri/Cargo.toml "$CLEAN_VERSION"
+
+      - name: Verify only expected files changed
+        run: |
+          set -euo pipefail
+          mapfile -t CHANGED < <(git diff --name-only | sort)
+          EXPECTED=$(printf '%s\n' \
+            "package.json" \
+            "src-tauri/Cargo.lock" \
+            "src-tauri/Cargo.toml" | sort)
+          ACTUAL=$(printf '%s\n' "${CHANGED[@]}")
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Unexpected files modified by version bump."
+            echo "Expected:"
+            echo "$EXPECTED"
+            echo "Actual:"
+            echo "$ACTUAL"
+            exit 1
+          fi
+
+      - name: Commit version bump
+        env:
+          COMMIT_MSG: ${{ steps.vars.outputs.commit_msg }}
+        run: |
+          set -euo pipefail
+          git add package.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "$COMMIT_MSG"
+
+      - name: Push release branch
+        env:
+          BRANCH_NAME: ${{ steps.vars.outputs.branch_name }}
+        run: git push -u origin "$BRANCH_NAME"
+
+      - name: Create pull request
+        id: open_pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH_NAME: ${{ steps.vars.outputs.branch_name }}
+          TARGET_BRANCH: ${{ steps.vars.outputs.target_branch }}
+          SOURCE_BRANCH: ${{ steps.vars.outputs.source_branch }}
+          CLEAN_VERSION: ${{ steps.vars.outputs.clean_version }}
+          COMMIT_MSG: ${{ steps.vars.outputs.commit_msg }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          BODY=$(cat <<EOF
+          Automated release PR generated by the \`Create Release PR\` workflow.
+
+          - Version: \`v${CLEAN_VERSION}\`
+          - Source branch: \`${SOURCE_BRANCH}\`
+          - Target branch: \`${TARGET_BRANCH}\`
+
+          ### Files changed
+          - \`package.json\`
+          - \`src-tauri/Cargo.toml\`
+          - \`src-tauri/Cargo.lock\`
+
+          Triggered by @${{ github.actor }} via [workflow run](${RUN_URL}).
+
+          After merge, create the GitHub Release tagged \`v${CLEAN_VERSION}\` to kick off the build pipeline.
+          EOF
+          )
+
+          PR_URL=$(gh pr create \
+            --base "$TARGET_BRANCH" \
+            --head "$BRANCH_NAME" \
+            --title "$COMMIT_MSG" \
+            --body "$BODY")
+
+          echo "pr_url=${PR_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Write job summary
+        env:
+          PR_URL: ${{ steps.open_pr.outputs.pr_url }}
+          BRANCH_NAME: ${{ steps.vars.outputs.branch_name }}
+          TARGET_BRANCH: ${{ steps.vars.outputs.target_branch }}
+          SOURCE_BRANCH: ${{ steps.vars.outputs.source_branch }}
+          CLEAN_VERSION: ${{ steps.vars.outputs.clean_version }}
+        run: |
+          {
+            echo "## Release PR created"
+            echo ""
+            echo "- **Version:** \`v${CLEAN_VERSION}\`"
+            echo "- **Branch:** \`${BRANCH_NAME}\` (cut from \`${SOURCE_BRANCH}\`)"
+            echo "- **Target:** \`${TARGET_BRANCH}\`"
+            echo "- **PR:** ${PR_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
