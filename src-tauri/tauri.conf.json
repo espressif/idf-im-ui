@@ -52,7 +52,9 @@
           "libpixman-1-0",
           "libsdl2-2.0-0",
           "libslirp0",
-          "python3 (>= 3.10)"
+          "python3 (>= 3.10)",
+          "python3-pip",
+          "python3-venv"
         ]
       },
       "rpm": {
