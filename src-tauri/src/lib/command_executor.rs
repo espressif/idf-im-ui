@@ -139,27 +139,52 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 
 #[cfg(target_os = "windows")]
 fn find_powershell() -> std::path::PathBuf {
-    // Query App Paths via reg.exe — reg.exe itself is always findable
-    // because it's registered under App Paths in the registry
+    // 1. Well-known fixed install paths.
+    let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+    let program_files_x86 = std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
+    let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
+
+    let known_paths = [
+        // PowerShell 7 MSI default (plus WOW6432Node fallback).
+        format!(r"{}\PowerShell\7\pwsh.exe", program_files),
+        format!(r"{}\PowerShell\7\pwsh.exe", program_files_x86),
+        // In-box Windows PowerShell 5.1 on Windows 10/11.
+        format!(r"{}\System32\WindowsPowerShell\v1.0\powershell.exe", system_root),
+        format!(r"{}\SysWOW64\WindowsPowerShell\v1.0\powershell.exe", system_root),
+    ];
+
+    for path in &known_paths {
+        if std::path::Path::new(path).is_file() {
+            return std::path::PathBuf::from(path);
+        }
+    }
+
+    // 2. App Paths in both HKLM (machine-wide) and HKCU (per-user installs).
     for exe in &["pwsh.exe", "powershell.exe"] {
-        let key = format!(
-            r"HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{}",
-            exe
-        );
-        if let Ok(output) = std::process::Command::new("reg")
-            .args(["query", &key, "/ve"])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-        {
-            if output.status.success() {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                // Output format: "    (Default)    REG_SZ    C:\path\to\exe"
-                for line in stdout.lines() {
-                    if line.contains("REG_SZ") {
-                        if let Some(path) = line.split("REG_SZ").nth(1) {
-                            let path = path.trim();
-                            if !path.is_empty() {
-                                return std::path::PathBuf::from(path);
+        for hive in &["HKLM", "HKCU"] {
+            let key = format!(
+                r"{}\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{}",
+                hive, exe
+            );
+            if let Ok(output) = std::process::Command::new("reg")
+                .args(["query", &key, "/ve"])
+                .creation_flags(CREATE_NO_WINDOW)
+                .output()
+            {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    // Output format: "    (Default)    REG_SZ    C:\path\to\exe"
+                    for line in stdout.lines() {
+                        if line.contains("REG_SZ") {
+                            if let Some(path) = line.split("REG_SZ").nth(1) {
+                                let path = path.trim().trim_matches('"');
+                                // Ignore empty/stale entries — only return a
+                                // path that still resolves on disk.
+                                if !path.is_empty()
+                                    && std::path::Path::new(path).is_file()
+                                {
+                                    return std::path::PathBuf::from(path);
+                                }
                             }
                         }
                     }
@@ -167,6 +192,28 @@ fn find_powershell() -> std::path::PathBuf {
             }
         }
     }
+
+    for exe in &["pwsh.exe", "powershell.exe"] {
+        if let Ok(output) = std::process::Command::new("where.exe")
+            .arg(exe)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    let path = line.trim();
+                    if !path.is_empty()
+                        && std::path::Path::new(path).is_file()
+                    {
+                        return std::path::PathBuf::from(path);
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. Last resort: bare name (Command::new resolves it through PATH).
     std::path::PathBuf::from("powershell")
 }
 
@@ -731,6 +778,21 @@ mod tests {
         assert!(version.is_ok());
         let ver = version.unwrap();
         assert!(ver >= 5); // Windows should have at least PowerShell 5
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_find_powershell_returns_executable_path() {
+        let path = find_powershell();
+        let result = std::process::Command::new(&path)
+            .args(["-NoLogo", "-NoProfile", "-Command", "exit 0"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .output();
+        assert!(
+            result.is_ok(),
+            "find_powershell() returned {:?} which could not be executed",
+            path
+        );
     }
 
     #[test]
