@@ -200,7 +200,50 @@ eim install
 
 If the sanity check passes after unsetting the proxy variables, update your proxy configuration to exclude localhost addresses rather than disabling the proxy entirely.
 
+### Why does EIM find the wrong Python on macOS?
 
+If EIM reports that it found an unsupported Python version (typically Apple's built-in Python 3.9) even though running `python3 --version` in your terminal shows a newer version, this is usually caused by the difference between **terminal applications** and **GUI applications** on macOS.
+
+When you open a terminal, your shell (Zsh, Bash, etc.) reads your shell configuration (`.zprofile`, `.zshrc`, etc.) and updates your `PATH`. Package managers such as **Homebrew** and **MacPorts** typically install Python into locations like:
+
+* `/opt/homebrew/bin` (Apple Silicon Homebrew)
+* `/usr/local/bin` (Intel Homebrew)
+* `/opt/local/bin` (MacPorts)
+
+and add these directories to your shell's `PATH`.
+
+However, applications launched from **Finder** (including the EIM GUI) are started by macOS's `launchd` service, which **does not inherit your shell configuration**. As a result, the GUI may see a different `PATH` and resolve `python3` to Apple's system Python located at:
+
+```text
+/usr/bin/python3
+```
+
+instead of the newer Python installed by your package manager.
+
+You can verify whether this is the issue by comparing:
+
+```bash
+which python3
+python3 --version
+```
+
+in your terminal with the version reported by EIM.
+
+If the CLI detects the correct Python but the GUI does not, this is almost certainly the cause.
+
+* Run the **EIM CLI** from the same terminal session. It inherits your shell environment and will use the same Python that your terminal does.
+
+  If you installed EIM via **Homebrew**, you already have the `eim` CLI available. You can launch the GUI from your terminal by running:
+
+  ```bash
+  eim gui
+  ```
+
+  This starts the GUI with the same environment and `PATH` as your current shell, allowing it to discover Python installations provided by Homebrew, MacPorts, `pyenv`, and other tools that modify your shell's `PATH`.
+
+* Install Python using the official python.org installer if you want it to be available system-wide to GUI applications.
+
+* Alternatively, configure your macOS environment so GUI applications launched from Finder inherit the same `PATH` as your shell. This is a macOS configuration issue rather than an EIM-specific one.
 
 ## GUI-Specific Questions
 
