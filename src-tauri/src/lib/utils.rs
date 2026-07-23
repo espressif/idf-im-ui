@@ -636,7 +636,7 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
         single_version_post_install(
             &paths.activation_script_path.to_string_lossy().into_owned(),
             &tool_set.idf_location,
-            &tool_set.idf_version,
+            &paths.actual_version,
             &new_idf_tools_path,
             new_export_paths,
             idf_python_env_path.as_deref(),
@@ -651,7 +651,7 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
             id: tool_set.id.to_string(),
             activation_script: paths.activation_script.to_string_lossy().into_owned(),
             path: tool_set.idf_location,
-            name: tool_set.idf_version,
+            name: paths.actual_version.clone(),
             python: paths.python_path.to_string_lossy().into_owned(),
             idf_tools_path: new_idf_tools_path,
             installation_config: None,

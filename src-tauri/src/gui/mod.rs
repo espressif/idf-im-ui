@@ -5,7 +5,7 @@ use fork::{daemon, Fork};
 use idf_im_lib::get_log_directory;
 use idf_im_lib::logging::formatter;
 use idf_im_lib::{
-    add_path_to_path, ensure_path,
+    add_path_to_path, ensure_path, sanitize_version_name,
     logging,
     settings::Settings,
 };
@@ -34,7 +34,7 @@ fn prepare_installation_directories(
     settings: &Settings,
     version: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let version_path = settings.path.as_ref().unwrap().as_path().join(version);
+    let version_path = settings.path.as_ref().unwrap().as_path().join(sanitize_version_name(version));
 
     ensure_path(version_path.to_str().unwrap())?;
     send_message(

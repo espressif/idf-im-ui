@@ -459,10 +459,12 @@ impl Settings {
         (idf_path.clone(), idf_path, actual_version)
       } else {
         // New installation
-        let actual_version = match self.version_name {
+        // Sanitize the version/tag so a slash (e.g. "release/v6.0") does not create
+        // unintended nested directories or break the derived activation-script path.
+        let actual_version = crate::sanitize_version_name(&match self.version_name {
           Some(ref name) => name.to_string(),
           None => version.to_string(),
-        };
+        });
         let version_installation_path = base_path.join(&actual_version);
         let idf_path = version_installation_path.join("esp-idf");
         (idf_path, version_installation_path, actual_version)

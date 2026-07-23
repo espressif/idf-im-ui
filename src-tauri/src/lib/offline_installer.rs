@@ -285,7 +285,14 @@ pub fn copy_idf_from_offline_archive(
     let mut everything_copied = true;
     for archive_version in config.clone().idf_versions.unwrap() {
         let src_path = archive_dir.path().join(&archive_version);
-        let dst_path = config.clone().path.unwrap().join(&archive_version);
+        // Sanitize the destination so a slashed version (e.g. "release/v6.0") lands in a
+        // single directory matching what `get_version_paths` builds. The src keeps the raw
+        // form because the archive's internal layout is built with the raw version.
+        let dst_path = config
+            .clone()
+            .path
+            .unwrap()
+            .join(crate::sanitize_version_name(&archive_version));
 
         if let Some(parent) = dst_path.parent() {
             if !parent.exists() {

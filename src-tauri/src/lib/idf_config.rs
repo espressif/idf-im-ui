@@ -244,7 +244,11 @@ impl IdfConfig {
         if let Some(installation) = self
             .idf_installed
             .iter_mut()
-            .find(|install| install.id == identifier || install.name == identifier)
+            .find(|install| {
+                install.id == identifier
+                    || install.name == identifier
+                    || install.name == crate::sanitize_version_name(identifier)
+            })
         {
             installation.name = new_name;
             true
@@ -275,6 +279,7 @@ impl IdfConfig {
             .find(|install| {
                 install.id == identifier
                     || install.name == identifier
+                    || install.name == crate::sanitize_version_name(identifier)
                     || { let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
                      normalized_identifier.is_some() && normalized_identifier == crate::utils::normalize_path_for_comparison(&install.path)
                 }
@@ -306,7 +311,11 @@ impl IdfConfig {
         if let Some(index) = self
             .idf_installed
             .iter()
-            .position(|install| install.id == identifier || install.name == identifier)
+            .position(|install| {
+                install.id == identifier
+                    || install.name == identifier
+                    || install.name == crate::sanitize_version_name(identifier)
+            })
         {
             // If we're removing the currently selected installation, clear the selection
             if self.idf_selected_id == self.idf_installed[index].id {
@@ -465,6 +474,44 @@ mod tests {
 
         // Test removing non-existent installation
         assert!(!config.remove_installation("non-existent"));
+    }
+
+    /// Installs of a slashed version (e.g. `release/v5.5`) are stored under the
+    /// sanitized name `release-v5.5`. Lookups must accept the raw slashed form the
+    /// user is likely to type, while still matching the sanitized/stored form.
+    fn create_slashed_test_config() -> IdfConfig {
+        let mut config = create_test_config();
+        config.idf_installed[0].name = String::from("release-v5.5");
+        config.idf_installed[0].id = String::from("esp-idf-release-v5-5");
+        config.idf_selected_id = String::from("esp-idf-release-v5-5");
+        config
+    }
+
+    #[test]
+    fn test_lookup_matches_slashed_version() {
+        // remove: raw slashed input matches the stored sanitized name
+        let mut config = create_slashed_test_config();
+        assert!(config.remove_installation("release/v5.5"));
+        assert!(!config.idf_installed.iter().any(|i| i.name == "release-v5.5"));
+
+        // remove: the sanitized form still matches
+        let mut config = create_slashed_test_config();
+        assert!(config.remove_installation("release-v5.5"));
+
+        // select: raw slashed input selects the sanitized install
+        let mut config = create_slashed_test_config();
+        config.idf_selected_id.clear();
+        assert!(config.select_installation("release/v5.5"));
+        assert_eq!(config.idf_selected_id, "esp-idf-release-v5-5");
+
+        // rename: raw slashed input finds the sanitized install
+        let mut config = create_slashed_test_config();
+        assert!(config.update_installation_name("release/v5.5", String::from("renamed")));
+        assert_eq!(config.idf_installed[0].name, "renamed");
+
+        // a plain (slash-free) name is unaffected
+        let mut config = create_test_config();
+        assert!(config.remove_installation("v5.1.5"));
     }
 
     #[test]
