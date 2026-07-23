@@ -390,7 +390,7 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
         let terminals = [
             ("gnome-terminal", vec!["--", "bash", "-c", &shell_cmd]),
             ("konsole", vec!["-e", "bash", "-c", &shell_cmd]),
-            ("xfce4-terminal", vec!["-e", "bash", "-c", &shell_cmd]),
+            ("xfce4-terminal", vec!["--execute", "bash", "-c", &shell_cmd]),
             ("xterm", vec!["-e", "bash", "-c", &shell_cmd]),
             ("alacritty", vec!["-e", "bash", "-c", &shell_cmd]),
             ("kitty", vec!["bash", "-c", &shell_cmd]),
