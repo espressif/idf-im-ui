@@ -37,6 +37,7 @@ use std::os::windows::process::CommandExt;
 use anyhow::{anyhow, Context, Result};
 use idf_im_lib::{
   ensure_path,
+  sanitize_version_name,
   expand_tilde,
   idf_config::{IdfConfig, IDF_CONFIG_FILE_NAME},
   offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive},
@@ -99,7 +100,7 @@ fn prepare_installation_directories(
   settings: &Settings,
   version: &str,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
-  let version_path = settings.path.as_ref().unwrap().as_path().join(version);
+  let version_path = settings.path.as_ref().unwrap().as_path().join(sanitize_version_name(version));
 
   ensure_path(version_path.to_str().unwrap())?;
   send_message(
