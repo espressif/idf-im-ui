@@ -169,6 +169,20 @@ eim install --skip-prerequisites-check=true
 
 > ⚠️ **Warning:** Use this flag only if you are certain that all required prerequisites are correctly installed, as skipping the check may lead to installation failures later.
 
+### "Failed to check prerequisites: Unable to execute PowerShell" error on Windows
+
+If installation on Windows fails with an error like:
+
+```text
+Failed to install dependencies from offline archive: Failed to check prerequisites: Unable to execute PowerShell to verify prerequisites: program not found. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.
+```
+
+it means EIM was unable to locate or execute PowerShell on your system.
+
+**Note:** Windows 10 is no longer a supported platform for the ESP-IDF Installation Manager. The installer is tested and validated on Windows 11 only. If you must run EIM on Windows 10 and PowerShell cannot be detected (even though Windows 10 ships with Windows PowerShell 5.1 by default), installing an updated PowerShell version typically resolves the issue.
+
+Once PowerShell 7 is installed and added to `PATH`, EIM will locate it via `pwsh.exe` and the prerequisite check will complete successfully.
+
 ### Python SSL sanity check fails when using a system-wide proxy
 
 If EIM reports:
