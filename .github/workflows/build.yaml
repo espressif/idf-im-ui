@@ -722,6 +722,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Disable pacman sandbox (workaround for Landlock in containers)
+        run: |
+          grep -q '^DisableSandbox' /etc/pacman.conf \
+            || sed -i 's/^#DisableSandbox/DisableSandbox/' /etc/pacman.conf
+          grep -q '^DisableSandbox' /etc/pacman.conf \
+            || echo 'DisableSandbox' >> /etc/pacman.conf
+
       - name: Install Arch dependencies
         run: |
           pacman -Sy --noconfirm --overwrite '*' base-devel curl git fakeroot github-cli
@@ -1727,6 +1734,13 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+
+      - name: Disable pacman sandbox (workaround for Landlock in containers)
+        run: |
+          grep -q '^DisableSandbox' /etc/pacman.conf \
+            || sed -i 's/^#DisableSandbox/DisableSandbox/' /etc/pacman.conf
+          grep -q '^DisableSandbox' /etc/pacman.conf \
+            || echo 'DisableSandbox' >> /etc/pacman.conf
 
       - name: Install Arch dependencies
         run: |
