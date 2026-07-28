@@ -3,7 +3,7 @@
 {{env_var_pairs}}
 
 # --- Capture absolute eim path early (before PATH changes) ---
-_EIM_BIN="$(command -v eim 2>/dev/null || true)"
+_EIM_BIN="$(command -v eim 2>>/dev/null || true)"
 
 parse_cmake_version() {
     cmake_file="{{idf_path_escaped}}/tools/cmake/version.cmake"
@@ -81,10 +81,6 @@ add_env_variable() {
     export ESP_IDF_VERSION="$IDF_VERSION_MAJOR_MINOR"
     printf '%s\n' "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
 
-    # Create a temporary file
-    temp_file=$(mktemp)
-    printf '%s\n' "$ENV_VAR_PAIRS" > "$temp_file"
-
     # Process environment variables
     while read -r pair; do
         if [ -n "$pair" ]; then
@@ -93,7 +89,9 @@ add_env_variable() {
             eval "export $key=\"$value\""
             printf '%s\n' "Added environment variable $key = $value"
         fi
-    done < "$temp_file"
+    done << EOF
+$ENV_VAR_PAIRS
+EOF
 }
 
 # Function to add a directory to the system PATH
@@ -134,9 +132,9 @@ register_idf_completions() {
 
 
     if [ -n "$ZSH_VERSION" ]; then
-        if ! typeset -f compdef >/dev/null 2>&1; then
-            autoload -Uz compinit 2>/dev/null || return 1
-            compinit -u -C 2>/dev/null || return 1
+        if ! typeset -f compdef >>/dev/null 2>&1; then
+            autoload -Uz compinit 2>>/dev/null || return 1
+            compinit -u -C 2>>/dev/null || return 1
         fi
 
         _idf_completion="$(cd /tmp && env _IDF.PY_COMPLETE=zsh_source \
@@ -144,7 +142,7 @@ register_idf_completions() {
             IDF_PYTHON_ENV_PATH="$idf_venv" \
             IDF_SKIP_DEPS=1 \
             IDF_COMPONENT_MERGE=0 \
-            "$python_bin" "$idf_py" 2>/dev/null)"
+            "$python_bin" "$idf_py" 2>>/dev/null)"
 
         if _is_valid_completion "$_idf_completion"; then
             _idf_completion="$(echo "$_idf_completion" | sed \
@@ -153,8 +151,8 @@ register_idf_completions() {
                 -e "s|idf\.py)|\"${python_bin}\" \"${idf_py}\")|g" \
             )"
 
-            eval "$_idf_completion" 2>/dev/null
-            compdef '_idfpy_completion' 'idf.py' 2>/dev/null && \
+            eval "$_idf_completion" 2>>/dev/null
+            compdef '_idfpy_completion' 'idf.py' 2>>/dev/null && \
                 printf '%s\n' "Registered idf.py tab completion (zsh)."
         fi
     elif [ -n "$BASH_VERSION" ]; then
@@ -166,13 +164,13 @@ register_idf_completions() {
                 IDF_SKIP_DEPS=1 IDF_COMPONENT_MERGE=0 \
                 IDF_PATH="{{idf_path_escaped}}" \
                 IDF_PYTHON_ENV_PATH="{{idf_python_env_path_escaped}}" \
-                "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>/dev/null)
+                "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" 2>>/dev/null)
             completions=$(echo "$completions" | sed "s/^plain,//")
             COMPREPLY=( $completions )
         }
-        complete -F _idf_py_custom_completion idf.py 2>/dev/null && \
+        complete -F _idf_py_custom_completion idf.py 2>>/dev/null && \
             printf "%s\n" "Registered idf.py tab completion (bash)."
-        ' 2>/dev/null
+        ' 2>>/dev/null
     fi
 
     unset _idf_completion
@@ -203,19 +201,19 @@ else
     fi
 fi
 
-if ( f.x() { :; }; f.x ) 2>/dev/null; then
+if ( eval 'f.x() { :; }; f.x' ) 2>>/dev/null; then
 
-    idf.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" "$@"; }
+    eval 'idf.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" "$@"; }'
 
-    esptool.py() { esptool "$@"; }
+    eval 'esptool.py() { esptool "$@"; }'
 
-    espefuse.py() { espefuse "$@"; }
+    eval 'espefuse.py() { espefuse "$@"; }'
 
-    espsecure.py() { espsecure "$@"; }
+    eval 'espsecure.py() { espsecure "$@"; }'
 
-    otatool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/app_update/otatool.py" "$@"; }
+    eval 'otatool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/app_update/otatool.py" "$@"; }'
 
-    parttool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/partition_table/parttool.py" "$@"; }
+    eval 'parttool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/partition_table/parttool.py" "$@"; }'
 else
     # Fallback: aliases for dot-named commands (dash-compatible)
 
@@ -256,5 +254,5 @@ printf '%s\n' "You are now using IDF version $IDF_VERSION."
 
 # Sync selection with eim_idf.json for IDEs (silent on failure)
 if [ -n "$_EIM_BIN" ] && [ -x "$_EIM_BIN" ]; then
-    "$_EIM_BIN" select "{{idf_version}}" >/dev/null 2>&1 && printf '%s\n' "eim select {{idf_version}}"
+    "$_EIM_BIN" select "{{idf_version}}" >>/dev/null 2>&1 && printf '%s\n' "eim select {{idf_version}}"
 fi

@@ -2863,6 +2863,26 @@ mod tests {
         let activate = fs::read_to_string(&activate_path).expect("read activate");
         let deactivate = fs::read_to_string(&deactivate_path).expect("read deactivate");
 
+        #[cfg(not(target_os = "windows"))]
+        {
+            let output = std::process::Command::new("sh")
+                .args([
+                    "-c",
+                    "unset IDF_TOOLS_PATH; set -C; . \"$1\" >>/dev/null 2>&1; [ \"$IDF_TOOLS_PATH\" = \"/opt/esp/tools\" ]",
+                    "sh",
+                ])
+                .arg(&activate_path)
+                .output()
+                .expect("run activation script with noclobber");
+            assert!(
+                output.status.success(),
+                "activation with noclobber failed (status: {}): stdout: {} stderr: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
         // No leftover placeholders
         assert!(
             !activate.contains("{{"),

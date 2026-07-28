@@ -99,7 +99,7 @@ for _v in ESP_IDF_VERSION IDF_PATH IDF_TOOLS_PATH IDF_PYTHON_ENV_PATH \
 done
 
 # Tool variables written by the activate script as a heredoc.
-ENV_VAR_PAIRS=$(get_env_var_pairs 2>/dev/null) || ENV_VAR_PAIRS=""
+ENV_VAR_PAIRS=$(get_env_var_pairs 2>>/dev/null) || ENV_VAR_PAIRS=""
 if [ -n "$ENV_VAR_PAIRS" ]; then
     # Feed the heredoc directly into the while loop. A here-doc redirect
     # runs the consuming loop in the current shell (not a subshell), so
@@ -110,7 +110,7 @@ if [ -n "$ENV_VAR_PAIRS" ]; then
         [ -n "$_pair" ] || continue
         _key="${_pair%%:*}"
         if [ -n "$_key" ]; then
-            unset "$_key" 2>/dev/null || true
+            unset "$_key" 2>>/dev/null || true
         fi
     done << EOF
 $ENV_VAR_PAIRS
@@ -130,16 +130,16 @@ if [ -n "${VIRTUAL_ENV:-}" ] && [ -f "${VIRTUAL_ENV}/bin/deactivate" ]; then
     . "${VIRTUAL_ENV}/bin/deactivate"
     printf '%s\n' "Deactivated virtual environment at ${VIRTUAL_ENV}"
 fi
-unset VIRTUAL_ENV 2>/dev/null || true
+unset VIRTUAL_ENV 2>>/dev/null || true
 # Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
 # does not match a live venv.
-unset IDF_PYTHON_ENV_PATH 2>/dev/null || true
+unset IDF_PYTHON_ENV_PATH 2>>/dev/null || true
 
 # --- Remove IDF tool functions and completions ---------------------------
 for _fn in idf.py esptool esptool.py espefuse espefuse.py espsecure \
            espsecure.py otatool.py parttool.py _idf_py_custom_completion; do
-    if command -v "$_fn" >/dev/null 2>&1; then
-        unset -f "$_fn" 2>/dev/null || true
+    if command -v "$_fn" >>/dev/null 2>&1; then
+        unset -f "$_fn" 2>>/dev/null || true
     fi
 done
 
@@ -147,20 +147,20 @@ done
 # The completion may have been registered as `complete -F _idf_py_custom_completion idf.py`
 # (bash) or via `compdef` in zsh. Both are best-effort.
 if [ -n "$BASH_VERSION" ]; then
-    complete -r idf.py 2>/dev/null || true
+    complete -r idf.py 2>>/dev/null || true
 fi
-if [ -n "$ZSH_VERSION" ] && command -v compdef >/dev/null 2>&1; then
+if [ -n "$ZSH_VERSION" ] && command -v compdef >>/dev/null 2>&1; then
     # The activate script registered `_idfpy_completion` for `idf.py`; remove it.
     # `compdef -d` deletes the completion for the given command.
-    if command -v compdef >/dev/null 2>&1; then
-        compdef -d idf.py 2>/dev/null || true
+    if command -v compdef >>/dev/null 2>&1; then
+        compdef -d idf.py 2>>/dev/null || true
     fi
     # Best-effort: drop the helper function and the cache entry.
-    if typeset -f _idfpy_completion >/dev/null 2>&1; then
-        unset -f _idfpy_completion 2>/dev/null || true
+    if typeset -f _idfpy_completion >>/dev/null 2>&1; then
+        unset -f _idfpy_completion 2>>/dev/null || true
     fi
 fi
 
-unset _fn addition_to_path ENV_VAR_PAIRS 2>/dev/null || true
+unset _fn addition_to_path ENV_VAR_PAIRS 2>>/dev/null || true
 
 printf '%s\n' "ESP-IDF environment deactivated."
