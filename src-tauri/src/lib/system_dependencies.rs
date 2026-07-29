@@ -584,7 +584,11 @@ fn check_tools_with_package_manager(
                 ));
                 match output {
                     Ok(o) => {
-                        if o.status.success() {
+                        // The probe swallows failures (`2>$null`, `-ErrorAction SilentlyContinue`),
+                        // so PowerShell exits with 0 even when the tool is missing. Only the printed
+                        // location tells us it was actually found.
+                        let stdout = String::from_utf8_lossy(&o.stdout);
+                        if o.status.success() && !stdout.trim().is_empty() {
                             debug!("{} is already installed: {:?}", tool, o);
                         } else {
                             debug!("check for {} failed: {:?}", tool, o);
