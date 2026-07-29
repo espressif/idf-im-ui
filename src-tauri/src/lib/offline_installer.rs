@@ -166,12 +166,7 @@ pub async fn install_prerequisites_offline(
                     .unwrap_or_default();
                 warn!("Archive dir contents: {:?}", archive_contents);
                 if !git_archive_path.exists() {
-                    // Only archives built on Windows bundle the prerequisites, so this means the
-                    // archive is either older than that packaging or was built on another platform.
-                    return Err(format!(
-                        "Git is required but this offline archive does not bundle it (expected {}). Install Git manually and run the installation again, or rebuild the archive on Windows.",
-                        git_archive_path.display()
-                    ));
+                    return Err(format!("Git portable archive not found at expected path: {}", git_archive_path.display()));
                 }
                 info!("Found Git archive at: {}", git_archive_path.display());
 
