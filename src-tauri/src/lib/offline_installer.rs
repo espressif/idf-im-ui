@@ -3,7 +3,7 @@ use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, python_utils::detect_default_python, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive}};
+use crate::{add_path_to_path, command_executor::{self, execute_command}, python_utils::detect_default_python, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive, get_git_path}};
 
 /// One entry of the offline archive manifest served at
 /// `https://dl.espressif.com/dl/eim/offline_archives.json`.
@@ -139,8 +139,9 @@ pub async fn install_prerequisites_offline(
 
     info!("Missing prerequisites: {:?}", check_result.missing);
 
-    // Determine what needs to be installed
-    let needs_git = check_result.missing.iter().any(|m| *m == "git");
+    // Determine what needs to be installed. Git is probed directly as well, so a bundled Git is
+    // installed whenever the system one is unusable, regardless of the prerequisite verdict.
+    let needs_git = check_result.missing.iter().any(|m| *m == "git") || get_git_path().is_err();
     let needs_python = detect_default_python().is_err();
 
     if !needs_git && !needs_python {
