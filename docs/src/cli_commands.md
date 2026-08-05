@@ -71,8 +71,9 @@ Options:
 - `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF. When installing multiple versions, these features are applied to all versions. For per-version feature configuration, use a configuration file with the `idf_features_per_version` option.
 - `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
 - `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.
-- `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
+- `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash. The name becomes part of the Python environment path, the activation script file name and the identifier used by `select`, `run` and `remove`, so pinning it is useful whenever the checked-out revision changes over time — see [Using EIM with git bisect](./git_bisect.md#why---version-name-matters).
 - `--cleanup`: If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
+- `--force-python-reinstall`: Force deletion and recreation of the Python virtual environment. By default, install and fix skip Python package work when the existing environment already matches the current requirements and constraints.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.14 on Linux, macOS, and Windows.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
 - `--create-bat-activation-script`: Optional flag to create a CMD batch activation script in addition to PowerShell profile. This is for backward compatibility only - PowerShell is recommended and batch support will be abandoned in a future release.
@@ -242,6 +243,7 @@ eim fix [OPTIONS]
 
 Options:
 - `-p, --path <PATH>`: Path of the existing installation to fix. If omitted, you will be presented with a selection of all known IDF installations to choose from.
+- `--force-python-reinstall`: Delete and recreate the Python virtual environment from scratch. By default, Python packages are refreshed only when the current requirements files, constraints file, or selected features differ from what was last installed; otherwise that step is skipped.
 
 `fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
 
@@ -255,9 +257,14 @@ eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 # Fix an installation and additionally install the docs and pytest features
 eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
 
+# Force a full wipe and reinstall of the Python virtual environment
+eim fix -p /path/to/existing/esp-idf --force-python-reinstall
+
 # Fix an installation, choosing interactively from all installed versions
 eim fix
 ```
+
+`fix` never touches the Git repository itself — it does not fetch, check out or update submodules. It re-reads `tools/tools.json` and the Python requirements from the working tree as it currently stands, which makes it the command to run after you change the checked-out revision yourself. See [Using EIM with git bisect](./git_bisect.md) for that workflow.
 
 ### Completions Command
 
