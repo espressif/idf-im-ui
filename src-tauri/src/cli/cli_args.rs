@@ -291,6 +291,12 @@ pub struct InstallArgs {
 
     #[arg(
         long,
+        help = "If set to true, the installer will skipp component managers components download. Default is false on install true on fix.",
+    )]
+    pub skip_components_download: Option<bool>,
+
+    #[arg(
+        long,
         help = "Folder name to be used for the python environments. If not provided, it will default to `python`."
     )]
     pub python_env_folder_name: Option<String>,
@@ -405,6 +411,10 @@ impl IntoIterator for InstallArgs {
             (
               "cleanup".to_string(),
               self.cleanup.map(Into::into)
+            ),
+            (
+              "skip_components_download".to_string(),
+              self.skip_components_download.map(Into::into)
             ),
             (
                 "python_env_folder_name".to_string(),
