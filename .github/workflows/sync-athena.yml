@@ -30,6 +30,7 @@ jobs:
         uses: hahihula/sync-athena@v1
         with:
           mode: issue_to_task
+          author: EimGitBot
           repo: ${{ github.repository }}
           ticket_prefix: EIM
           athena_project_uuid: ${{ vars.ATHENA_PROJECT_UUID }}
@@ -49,6 +50,7 @@ jobs:
         uses: hahihula/sync-athena@v1
         with:
           mode: pr_to_comment
+          author: EimGitBot
           repo: ${{ github.repository }}
           ticket_prefix: EIM
           athena_project_uuid: ${{ vars.ATHENA_PROJECT_UUID }}
