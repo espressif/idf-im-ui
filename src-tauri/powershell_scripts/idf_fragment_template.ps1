@@ -51,6 +51,7 @@ $IdfVersionMajorMinor = if ($IdfVersion -and $IdfVersion -match '^\d+\.\d+') { $
 
 # Set environment variables
 $env:ESP_IDF_VERSION = "$IdfVersionMajorMinor"
+$env:IDF_VERSION = "$IdfVersion"
 $env_var_pairs.GetEnumerator() | ForEach-Object {
     Set-Item -Path "env:$($_.Key)" -Value $_.Value -ErrorAction SilentlyContinue
 }

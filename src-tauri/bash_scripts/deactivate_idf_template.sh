@@ -30,7 +30,7 @@ This script should be sourced, not executed.
     . {{deactivate_script_path}}
 
 It will:
-  - unset ESP_IDF_VERSION, IDF_PATH, IDF_TOOLS_PATH, IDF_PYTHON_ENV_PATH,
+  - unset ESP_IDF_VERSION, IDF_VERSION, IDF_PATH, IDF_TOOLS_PATH, IDF_PYTHON_ENV_PATH,
     IDF_COMPONENT_LOCAL_STORAGE_URL, ESP_ROM_ELF_DIR, OPENOCD_SCRIPTS
     and every tool variable written by the matching activate script;
   - strip the toolchain path prefixes from $PATH (re-ordering the rest);
@@ -91,7 +91,7 @@ fi
 
 # --- Unset environment variables ----------------------------------------
 # Fixed vars always set by the activation script.
-for _v in ESP_IDF_VERSION IDF_PATH IDF_TOOLS_PATH IDF_PYTHON_ENV_PATH \
+for _v in ESP_IDF_VERSION IDF_VERSION IDF_PATH IDF_TOOLS_PATH IDF_PYTHON_ENV_PATH \
           IDF_COMPONENT_LOCAL_STORAGE_URL ESP_ROM_ELF_DIR OPENOCD_SCRIPTS; do
     if eval "[ \${$_v+x} ]"; then
         eval "unset $_v"

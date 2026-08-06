@@ -57,6 +57,7 @@ Write-Host "Removed IDF toolchain entries from PATH"
 # Fixed vars always set by the activation script.
 foreach ($v in @(
     'ESP_IDF_VERSION',
+    'IDF_VERSION',
     'IDF_PATH',
     'IDF_TOOLS_PATH',
     'IDF_PYTHON_ENV_PATH',
