@@ -50,6 +50,7 @@ pub struct Settings {
     pub skip_prerequisites_check: Option<bool>,
     pub version_name: Option<String>,
     pub cleanup: Option<bool>,
+    pub skip_components_download: Option<bool>,
     pub python_env_folder_name: Option<String>,
     pub use_local_archive: Option<PathBuf>, // Path to a local archive for offline installation
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
@@ -128,6 +129,7 @@ impl Default for Settings {
             skip_prerequisites_check: Some(false),
             version_name: None,
             cleanup: Some(false),
+            skip_components_download: Some(false),
             python_env_folder_name: Some("python".to_string()),
             use_local_archive: None,
             activation_script_path_override: Some(default_activation_script_path_override),
@@ -236,6 +238,7 @@ impl Settings {
             skip_prerequisites_check,
             version_name,
             cleanup,
+            skip_components_download,
             python_env_folder_name,
             use_local_archive,
             activation_script_path_override,
@@ -321,6 +324,7 @@ impl Settings {
             skip_prerequisites_check,
             version_name,
             cleanup,
+            skip_components_download,
             python_env_folder_name,
             use_local_archive,
             activation_script_path_override,

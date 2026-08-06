@@ -857,6 +857,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             installed_tools_list,
             tool_install_directory.to_str().unwrap(),
         );
+        let skip_component_installation = offline_mode || config.skip_components_download == Some(true);
         idf_im_lib::single_version_post_install(
             &paths.activation_script_path.to_str().unwrap(),
             paths.idf_path.to_str().unwrap(),
@@ -867,7 +868,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             Some(export_vars), // env_vars
             &paths.python_path.to_string_lossy(),
             config.create_bat_activation_script.unwrap_or(false),
-            offline_mode,
+            skip_component_installation,
             false, // is_gui
         )
     }

@@ -255,6 +255,8 @@ pub async fn install_single_version(
 
   let (export_paths,export_vars) = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
 
+  let skip_component_installation = settings.skip_components_download == Some(true);
+
   idf_im_lib::single_version_post_install(
       &paths.activation_script_path.to_string_lossy().to_string(),
       &paths.idf_path.to_string_lossy().to_string(),
@@ -265,7 +267,7 @@ pub async fn install_single_version(
       Some(export_vars), // env_vars
       &paths.python_path.to_string_lossy().to_string(),
       false, // create_cmd_bat
-      false, // offline_installation
+      skip_component_installation,
       true,  // is_gui
   );
 
