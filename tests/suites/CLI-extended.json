@@ -32,5 +32,23 @@
     },
     "deleteAfterTest": true,
     "testProxyMode": false
+  },
+  {
+    "id": 3,
+    "type": "named-version-install",
+    "name": "CLI Named Version Install on existing idf-path",
+    "data": {
+      "idfList": "default",
+      "targetList": "esp32",
+      "installFolder": ".espext_named",
+      "version-name": "my-named-idf",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "pypiMirror": "pypi_org",
+      "recursive": true,
+      "nonInteractive": true
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
   }
 ]
