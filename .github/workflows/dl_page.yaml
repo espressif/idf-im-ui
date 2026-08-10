@@ -1,4 +1,9 @@
 name: Publish dl page
+# The dl page (dl_page/index.html) is a static SPA that fetches the latest
+# release info from S3 / eim_unified_release.json (uploaded by the
+# `update-release-info` job in build.yaml) and lists every release asset.
+# It distinguishes between the IDE-friendly (non-version-named) and the
+# version-named variants so users can pick the one they need.
 on:
   release:
     types:
@@ -9,7 +14,7 @@ on:
       - release/*
     paths:
       - "dl_page/**"
-      - ".github/workflows/dl_page.yml"
+      - ".github/workflows/dl_page.yaml"
   workflow_dispatch:
 
 jobs:
@@ -27,6 +32,8 @@ jobs:
           DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
           AWS_DEFAULT_REGION: ap-east-1
         run: |
+          # The page itself is a static file; release assets are loaded
+          # client-side from eim_unified_release.json (uploaded by build.yaml).
           aws s3 cp --acl=public-read "./dl_page/index.html" s3://espdldata/dl/eim/index.html
           # Invalidate Cache
           aws cloudfront create-invalidation --distribution-id ${DL_DISTRIBUTION_ID} --paths "/dl/eim/index.html"

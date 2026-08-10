@@ -264,7 +264,7 @@ jobs:
           name: eim-cli-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/eim
 
-      - name: Upload Release Asset - Unix
+      - name: Upload Release Asset - Unix (IDE-friendly)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -272,11 +272,28 @@ jobs:
           set -euo pipefail
           TAG="${{ github.event.release.tag_name }}"
           STAGE="$(mktemp -d)"
+          # IDE-friendly archive: plain "eim" binary, no symlinks. Used by
+          # package managers and IDEs that don't follow symlinks in zips.
+          cp release_cli/${{ matrix.package_name }}/eim "$STAGE/eim"
+          chmod +x "$STAGE/eim"
+          (cd "$STAGE" && zip -y eim-cli-${{ matrix.package_name }}.zip eim)
+          gh release upload "$TAG" "$STAGE/eim-cli-${{ matrix.package_name }}.zip" --clobber
+
+      - name: Upload Release Asset - Unix (version-named)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os != 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          STAGE="$(mktemp -d)"
+          # Version-named archive: ships the binary as "eim_<TAG>" with a
+          # plain "eim" symlink alongside it.
           cp release_cli/${{ matrix.package_name }}/eim "$STAGE/eim_${TAG}"
           chmod +x "$STAGE/eim_${TAG}"
           ln -s "eim_${TAG}" "$STAGE/eim"
-          (cd "$STAGE" && zip -y eim-cli-${{ matrix.package_name }}.zip "eim_${TAG}" eim)
-          gh release upload "$TAG" "$STAGE/eim-cli-${{ matrix.package_name }}.zip" --clobber
+          (cd "$STAGE" && zip -y "eim-cli-${{ matrix.package_name }}-${TAG}.zip" "eim_${TAG}" eim)
+          gh release upload "$TAG" "$STAGE/eim-cli-${{ matrix.package_name }}-${TAG}.zip" --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -299,7 +316,20 @@ jobs:
           name: offline_installer_builder-${{ matrix.package_name }}-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/${{ matrix.package_name }}/offline_installer_builder
 
-      - name: Upload offline_installer_builder Release Asset - Unix
+      - name: Upload offline_installer_builder Release Asset - Unix (IDE-friendly)
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          STAGE="$(mktemp -d)"
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder "$STAGE/offline_installer_builder"
+          chmod +x "$STAGE/offline_installer_builder"
+          (cd "$STAGE" && zip -y offline_installer_builder-${{ matrix.package_name }}.zip offline_installer_builder)
+          gh release upload "$TAG" "$STAGE/offline_installer_builder-${{ matrix.package_name }}.zip" --clobber
+
+      - name: Upload offline_installer_builder Release Asset - Unix (version-named)
         if: github.event_name == 'release' && github.event.action == 'created'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -310,8 +340,8 @@ jobs:
           cp release_cli/${{ matrix.package_name }}/offline_installer_builder "$STAGE/offline_installer_builder_${TAG}"
           chmod +x "$STAGE/offline_installer_builder_${TAG}"
           ln -s "offline_installer_builder_${TAG}" "$STAGE/offline_installer_builder"
-          (cd "$STAGE" && zip -y offline_installer_builder-${{ matrix.package_name }}.zip "offline_installer_builder_${TAG}" offline_installer_builder)
-          gh release upload "$TAG" "$STAGE/offline_installer_builder-${{ matrix.package_name }}.zip" --clobber
+          (cd "$STAGE" && zip -y "offline_installer_builder-${{ matrix.package_name }}-${TAG}.zip" "offline_installer_builder_${TAG}" offline_installer_builder)
+          gh release upload "$TAG" "$STAGE/offline_installer_builder-${{ matrix.package_name }}-${TAG}.zip" --clobber
 
       - name: Prepare manpage for deb package
         if: github.event_name == 'release' && github.event.action == 'created'
@@ -461,7 +491,20 @@ jobs:
           name: eim-cli-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/linux-armv7/eim
 
-      - name: Upload Release Asset
+      - name: Upload Release Asset (IDE-friendly)
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          STAGE="$(mktemp -d)"
+          cp release_cli/linux-armv7/eim "$STAGE/eim"
+          chmod +x "$STAGE/eim"
+          (cd "$STAGE" && zip -y eim-cli-linux-armv7.zip eim)
+          gh release upload "$TAG" "$STAGE/eim-cli-linux-armv7.zip" --clobber
+
+      - name: Upload Release Asset (version-named)
         if: github.event_name == 'release' && github.event.action == 'created'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -472,8 +515,8 @@ jobs:
           cp release_cli/linux-armv7/eim "$STAGE/eim_${TAG}"
           chmod +x "$STAGE/eim_${TAG}"
           ln -s "eim_${TAG}" "$STAGE/eim"
-          (cd "$STAGE" && zip -y eim-cli-linux-armv7.zip "eim_${TAG}" eim)
-          gh release upload "$TAG" "$STAGE/eim-cli-linux-armv7.zip" --clobber
+          (cd "$STAGE" && zip -y "eim-cli-linux-armv7-${TAG}.zip" "eim_${TAG}" eim)
+          gh release upload "$TAG" "$STAGE/eim-cli-linux-armv7-${TAG}.zip" --clobber
 
       # offline installer
       - name: Build offline_installer_builder
@@ -503,7 +546,20 @@ jobs:
           name: offline_installer_builder-linux-armv7-${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
           path: release_cli/linux-armv7/offline_installer_builder
 
-      - name: Upload offline_installer_builder Release Asset
+      - name: Upload offline_installer_builder Release Asset (IDE-friendly)
+        if: github.event_name == 'release' && github.event.action == 'created'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          STAGE="$(mktemp -d)"
+          cp release_cli/linux-armv7/offline_installer_builder "$STAGE/offline_installer_builder"
+          chmod +x "$STAGE/offline_installer_builder"
+          (cd "$STAGE" && zip -y offline_installer_builder-linux-armv7.zip offline_installer_builder)
+          gh release upload "$TAG" "$STAGE/offline_installer_builder-linux-armv7.zip" --clobber
+
+      - name: Upload offline_installer_builder Release Asset (version-named)
         if: github.event_name == 'release' && github.event.action == 'created'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -514,8 +570,8 @@ jobs:
           cp release_cli/linux-armv7/offline_installer_builder "$STAGE/offline_installer_builder_${TAG}"
           chmod +x "$STAGE/offline_installer_builder_${TAG}"
           ln -s "offline_installer_builder_${TAG}" "$STAGE/offline_installer_builder"
-          (cd "$STAGE" && zip -y offline_installer_builder-linux-armv7.zip "offline_installer_builder_${TAG}" offline_installer_builder)
-          gh release upload "$TAG" "$STAGE/offline_installer_builder-linux-armv7.zip" --clobber
+          (cd "$STAGE" && zip -y "offline_installer_builder-linux-armv7-${TAG}.zip" "offline_installer_builder_${TAG}" offline_installer_builder)
+          gh release upload "$TAG" "$STAGE/offline_installer_builder-linux-armv7-${TAG}.zip" --clobber
 
       # .deb package
       - name: Prepare manpage for deb package
@@ -1091,13 +1147,21 @@ jobs:
           cp release_cli/${{ matrix.package_name }}/eim.zip eim-cli-${{ matrix.package_name }}.zip
           gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.zip --clobber
 
-      - name: Upload Release Asset (Windows)
+      - name: Upload Release Asset (Windows - IDE-friendly)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}.exe --clobber
+
+      - name: Upload Release Asset (Windows - version-named)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp release_cli/${{ matrix.package_name }}/eim.exe eim-cli-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" eim-cli-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe --clobber
 
       - name: Build offline_installer_builder (Windows)
         if: runner.os == 'Windows'
@@ -1196,13 +1260,21 @@ jobs:
             offline_installer_builder-${{ matrix.package_name }}.zip \
             --clobber
 
-      - name: Upload offline_installer_builder Release Asset (Windows)
+      - name: Upload offline_installer_builder Release Asset (Windows - IDE-friendly)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe
-          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe --clobber
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}.exe --clobber
+
+      - name: Upload offline_installer_builder Release Asset (Windows - version-named)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp release_cli/${{ matrix.package_name }}/offline_installer_builder.exe offline_installer_builder-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe
+          gh release upload "${{ github.event.release.tag_name }}" offline_installer_builder-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe --clobber
 
   build-offline-archives:
     name: Build Offline Archives
@@ -1473,13 +1545,21 @@ jobs:
             src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: warn
 
-      - name: Upload Release Assets (Windows)
+      - name: Upload Release Assets (Windows - IDE-friendly)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe"
-          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}_${{ github.event.release.tag_name }}.exe" --clobber
+          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}.exe"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.exe" --clobber
+
+      - name: Upload Release Assets (Windows - version-named)
+        if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp src-tauri/target/release/eim.exe "eim-gui-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe"
+          gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}-${{ github.event.release.tag_name }}.exe" --clobber
 
       - name: Upload Release Assets (Windows msi)
         if: github.event_name == 'release' && github.event.action == 'created' && runner.os == 'Windows'
@@ -1491,7 +1571,20 @@ jobs:
           cp "$MSI_FILE" "eim-gui-${{ matrix.package_name }}.msi"
           gh release upload "${{ github.event.release.tag_name }}" "eim-gui-${{ matrix.package_name }}.msi" --clobber
 
-      - name: Upload Release Assets (Linux)
+      - name: Upload Release Assets (Linux - IDE-friendly)
+        if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.event.release.tag_name }}"
+          STAGE="$(mktemp -d)"
+          cp src-tauri/target/release/eim "$STAGE/eim"
+          chmod +x "$STAGE/eim"
+          (cd "$STAGE" && zip -y "eim-gui-${{ matrix.package_name }}.zip" eim)
+          gh release upload "$TAG" "$STAGE/eim-gui-${{ matrix.package_name }}.zip" --clobber
+
+      - name: Upload Release Assets (Linux - version-named)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -1502,8 +1595,8 @@ jobs:
           cp src-tauri/target/release/eim "$STAGE/eim_${TAG}"
           chmod +x "$STAGE/eim_${TAG}"
           ln -s "eim_${TAG}" "$STAGE/eim"
-          (cd "$STAGE" && zip -y "eim-gui-${{ matrix.package_name }}.zip" "eim_${TAG}" eim)
-          gh release upload "$TAG" "$STAGE/eim-gui-${{ matrix.package_name }}.zip" --clobber
+          (cd "$STAGE" && zip -y "eim-gui-${{ matrix.package_name }}-${TAG}.zip" "eim_${TAG}" eim)
+          gh release upload "$TAG" "$STAGE/eim-gui-${{ matrix.package_name }}-${TAG}.zip" --clobber
 
       - name: Upload Release Assets (Linux - .deb)
         if: github.event_name == 'release' && github.event.action == 'created' && startsWith(matrix.os, 'ubuntu')
