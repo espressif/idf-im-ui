@@ -860,7 +860,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           let result = wizard::run_wizzard_run(settings).await;
           match result {
             Ok(r) => {
-              info!("{}", t!("fix.result"));
+              info!("{}", t!("fix.result", r = r));
               info!("{}", t!("fix.success", path = path_to_fix.display()));
             }
             Err(err) => {

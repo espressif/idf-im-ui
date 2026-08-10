@@ -2136,7 +2136,7 @@ pub fn single_version_post_install(
     env_vars: Option<Vec<(String, String)>>,
     python_bin_path: &str,
     create_cmd_bat: bool,
-    offline_installation: bool,
+    skip_component_installation: bool,
     is_gui: bool,
 ) {
     let mut env_vars_merged = setup_environment_variables(
@@ -2358,7 +2358,7 @@ pub fn single_version_post_install(
         ),
         _ => format!("{}/activate_idf_{}.sh", activation_script_path, idf_version),
     };
-    if !offline_installation {
+    if !skip_component_installation {
         let command = format!(
             "compote registry sync --resolution=latest --recursive {}",
             tool_install_directory

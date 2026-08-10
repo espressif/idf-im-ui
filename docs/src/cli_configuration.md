@@ -85,6 +85,7 @@ pypi_mirror = "https://pypi.org/simple"
 recurse_submodules = true
 install_all_prerequisites = true
 skip_prerequisites_check = false
+skip_components_download = false
 idf_features = ["ci", "docs"]
 ```
 
