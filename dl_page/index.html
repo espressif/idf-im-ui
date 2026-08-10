@@ -254,6 +254,24 @@
       margin-bottom: 0.5rem;
     }
 
+    .version-badge {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #4338ca;
+      padding: 0.125rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      border: 1px solid #c7d2fe;
+    }
+
+    .download-item.versioned-item {
+      border-left: 3px solid #c7d2fe;
+      background: #fafbff;
+    }
+
     .download-desc {
       color: var(--secondary);
       font-size: 0.875rem;
@@ -709,7 +727,11 @@ sudo apt install eim</code></pre>
             macosApple: 'macOS Apple Silicon'
           };
           const type = installerType === 'gui' ? 'GUI' : 'CLI';
-          return `${platformNames[platform]} ${type} installer package`;
+          const base = `${platformNames[platform]} ${type} installer package`;
+          if (artifact && artifact.isVersioned) {
+            return `${base} — version-named archive (binary shipped as \`eim_<version>\` with a plain \`eim\` symlink)`;
+          }
+          return base;
         },
         formatSize(bytes) {
           const units = ['B', 'KB', 'MB', 'GB'];
@@ -739,8 +761,11 @@ sudo apt install eim</code></pre>
           <div class="platform-content" :class="{ expanded: expandedSections[platformKey] }">
             <div class="installer-group" v-if="platformData.gui.length">
               <h3 class="installer-title">GUI Installers</h3>
-              <div v-for="artifact in platformData.gui" :key="artifact.id" class="download-item">
-                <h3 class="download-name">{{ artifact.name }}</h3>
+              <div v-for="artifact in platformData.gui" :key="artifact.id" class="download-item" :class="{ 'versioned-item': artifact.isVersioned }">
+                <h3 class="download-name">
+                  {{ artifact.name }}
+                  <span v-if="artifact.isVersioned" class="version-badge" title="Alternative archive: ships the binary as eim_<version> with a plain eim symlink.">version-named</span>
+                </h3>
                 <p class="download-desc">{{ getDescription(artifact, platformKey, 'gui') }}</p>
                 <div class="download-meta">
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
@@ -753,8 +778,11 @@ sudo apt install eim</code></pre>
             </div>
             <div class="installer-group" v-if="platformData.cli.length">
               <h3 class="installer-title">CLI Installers</h3>
-              <div v-for="artifact in platformData.cli" :key="artifact.id" class="download-item">
-                <h3 class="download-name">{{ artifact.name }}</h3>
+              <div v-for="artifact in platformData.cli" :key="artifact.id" class="download-item" :class="{ 'versioned-item': artifact.isVersioned }">
+                <h3 class="download-name">
+                  {{ artifact.name }}
+                  <span v-if="artifact.isVersioned" class="version-badge" title="Alternative archive: ships the binary as eim_<version> with a plain eim symlink.">version-named</span>
+                </h3>
                 <p class="download-desc">{{ getDescription(artifact, platformKey, 'cli') }}</p>
                 <div class="download-meta">
                   <span class="download-size">{{ formatSize(artifact.size) }}</span>
@@ -871,8 +899,11 @@ sudo apt install eim</code></pre>
           <div class="platform-content" :class="{ expanded: expandedSections.builder }">
             <div class="installer-group">
               <h3 class="installer-title">Builder Tools</h3>
-              <div v-for="tool in builderTools" :key="tool.id" class="download-item">
-                <h3 class="download-name">{{ tool.name }}</h3>
+              <div v-for="tool in builderTools" :key="tool.id" class="download-item" :class="{ 'versioned-item': tool.isVersioned }">
+                <h3 class="download-name">
+                  {{ tool.name }}
+                  <span v-if="tool.isVersioned" class="version-badge" title="Alternative archive: ships the binary as offline_installer_builder_<version> with a plain offline_installer_builder symlink.">version-named</span>
+                </h3>
                 <p class="download-desc">
                   Offline installer builder tool for {{ getPlatformDisplayName(tool.platform) }}
                 </p>
@@ -1009,6 +1040,12 @@ sudo apt install eim</code></pre>
             macosApple: { gui: [], cli: [] }
           };
 
+          // Filenames whose base name ends with `-v<semver>` (with optional
+          // pre-release suffix) and the extension are version-named variants
+          // (e.g. eim-cli-linux-x64-v1.0.0.zip). Used to mark them in the UI
+          // and to sort the IDE-friendly (non-version-named) variants first.
+          const versionedRegex = /[-_]v?\d+\.\d+\.\d+(?:[-_][a-zA-Z0-9.]+)?\.[a-z0-9]+$/i;
+
           for (const asset of releaseData.value.assets) {
             const name = asset.name.toLowerCase();
 
@@ -1019,6 +1056,7 @@ sudo apt install eim</code></pre>
 
             let platform = null;
             let installerType = null;
+            const isVersioned = versionedRegex.test(name);
 
             if (name.includes('windows') || name.endsWith('.exe')) {
               platform = 'windows';
@@ -1035,7 +1073,24 @@ sudo apt install eim</code></pre>
             }
 
             if (platform && installerType) {
-              platformCategories[platform][installerType].push(asset);
+              platformCategories[platform][installerType].push({
+                ...asset,
+                isVersioned
+              });
+            }
+          }
+
+          // Sort: IDE-friendly (non-version-named) variants first, then the
+          // version-named ones. Within each group, sort alphabetically so the
+          // order is stable across releases.
+          for (const platform of Object.keys(platformCategories)) {
+            for (const type of Object.keys(platformCategories[platform])) {
+              platformCategories[platform][type].sort((a, b) => {
+                if (a.isVersioned !== b.isVersioned) {
+                  return a.isVersioned ? 1 : -1;
+                }
+                return a.name.localeCompare(b.name);
+              });
             }
           }
 
@@ -1046,6 +1101,8 @@ sudo apt install eim</code></pre>
           if (!releaseData.value?.assets) return [];
 
           const tools = [];
+
+          const versionedRegex = /[-_]v?\d+\.\d+\.\d+(?:[-_][a-zA-Z0-9.]+)?\.[a-z0-9]+$/i;
 
           for (const asset of releaseData.value.assets) {
             const name = asset.name.toLowerCase();
@@ -1068,10 +1125,19 @@ sudo apt install eim</code></pre>
             if (platform) {
               tools.push({
                 ...asset,
-                platform
+                platform,
+                isVersioned: versionedRegex.test(name)
               });
             }
           }
+
+          // Sort: IDE-friendly first, then version-named.
+          tools.sort((a, b) => {
+            if (a.isVersioned !== b.isVersioned) {
+              return a.isVersioned ? 1 : -1;
+            }
+            return a.name.localeCompare(b.name);
+          });
 
           return tools;
         });
@@ -1121,10 +1187,15 @@ sudo apt install eim</code></pre>
 
 
           const archive = offlineArchiveData.value.find(item => item.version === idfVersion && item.platform === platform);
-          const installerAsset = releaseData.value.assets.find(asset => {
+          // Prefer the IDE-friendly (non-version-named) asset so the offline
+          // installer zip contains a plain "eim" binary without symlinks.
+          const versionedRegex = /[-_]v?\d+\.\d+\.\d+(?:[-_][a-zA-Z0-9.]+)?\.[a-z0-9]+$/i;
+          const candidateAssets = releaseData.value.assets.filter(asset => {
             const name = asset.name.toLowerCase();
             return name.includes(`eim-${installerType}`) && name.includes(platform);
           });
+          const installerAsset = candidateAssets.find(a => !versionedRegex.test(a.name.toLowerCase()))
+            || candidateAssets[0];
 
           if (!archive || !installerAsset) {
             alert('Required files not found.');
