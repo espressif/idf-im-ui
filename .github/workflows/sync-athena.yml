@@ -31,6 +31,7 @@ jobs:
         with:
           mode: issue_to_task
           author: EimGitBot
+          co_authors: "petr.gadorek@espressif.com,ali.azamrana@espressif.com"
           repo: ${{ github.repository }}
           ticket_prefix: EIM
           athena_project_uuid: ${{ vars.ATHENA_PROJECT_UUID }}
