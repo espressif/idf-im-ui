@@ -35,6 +35,7 @@ import { runCLIClonedIDFRepo } from "./scripts/CLICloneIDFRepo.test.js";
 import { runCLIDeactivationTest } from "./scripts/CLIDeactivation.test.js";
 import { runListToolsTest } from "./scripts/CLIListTools.test.js";
 import { runListFeaturesTest } from "./scripts/CLIListFeatures.test.js";
+import { runCLINamedVersionInstallTest } from "./scripts/CLINamedVersionInstall.test.js";
 import logger from "./classes/logger.class.js";
 import {
   IDFMIRRORS,
@@ -540,6 +541,88 @@ function testRun(jsonScript) {
 
         runCleanUp({
           id: `${test.id}3`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "named-version-install") {
+      // Regression test for installing an additional named IDF entry that
+      // points at the same `--idf-path` as an already-installed IDF.
+      // Before the fix, the CLI aborted with the "already installed"
+      // short-circuit even when `--version-name` was provided. The new
+      // branch must register a second `eim_idf.json` entry while the
+      // path is reused as-is.
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      const installFolder = test.data.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const targetList = test.data.targetList
+        ? test.data.targetList.split("|")
+        : ["esp32"];
+
+      const idfVersionList = test.data.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
+
+      const namedVersion =
+        test.data["version-name"] || test.data.versionName || "named-idf";
+
+      let installArgs = [];
+      runInDebug && installArgs.push("-vvv");
+      test.data.installFolder &&
+        installArgs.push(
+          os.platform() === "win32"
+            ? `-p "${installFolder}"`
+            : `-p ${installFolder}`,
+        );
+      test.data.targetList &&
+        installArgs.push(`-t ${targetList.join(",")}`);
+      test.data.idfList &&
+        installArgs.push(`-i ${idfUpdatedList.join(",")}`);
+      test.data.toolsMirror &&
+        installArgs.push(
+          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`,
+        );
+      test.data.idfMirror &&
+        installArgs.push(
+          `--idf-mirror ${
+            IDFMIRRORS[test.data.idfMirror] || "https://github.com"
+          }`,
+        );
+      test.data.pypiMirror &&
+        installArgs.push(
+          `--pypi-mirror ${
+            PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"
+          }`,
+        );
+      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
+      test.data.nonInteractive &&
+        installArgs.push(`-n ${test.data.nonInteractive}`);
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(7200000);
+
+        runCLINamedVersionInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMCLI,
+          args: installArgs,
+          idfVersion: idfUpdatedList[0],
+          installFolder,
+          namedVersion,
+          testProxyMode,
+          proxyBlockList,
+        });
+
+        runCleanUp({
+          id: `${test.id}2`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,
