@@ -75,6 +75,7 @@ $IdfVersionMajorMinor = if ($IdfVersion -and $IdfVersion -match '^\d+\.\d+') { $
 function Print-EnvVariables {
     "PATH={{add_paths_extras}}"
     "ESP_IDF_VERSION=$IdfVersionMajorMinor"
+    "IDF_VERSION=$IdfVersion"
     "SYSTEM_PATH={{current_system_path}}"
     $env_var_pairs.GetEnumerator() | ForEach-Object {
         Write-Host "$($_.Key)=$($_.Value)"
@@ -114,6 +115,7 @@ if ($e) {
 
 # Set environment variables
 $env:ESP_IDF_VERSION = "$IdfVersionMajorMinor"
+$env:IDF_VERSION = "$IdfVersion"
 $env_var_pairs.GetEnumerator() | ForEach-Object {
     Set-Item -Path "env:$($_.Key)" -Value $_.Value
 }

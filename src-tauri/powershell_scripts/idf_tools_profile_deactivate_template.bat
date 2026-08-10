@@ -44,6 +44,7 @@ echo Removed IDF toolchain entries from PATH
 REM --- Unset environment variables --------------------------------------
 REM Fixed vars always set by the activation script.
 set "ESP_IDF_VERSION="
+set "IDF_VERSION="
 set "IDF_PATH="
 set "IDF_TOOLS_PATH="
 set "IDF_PYTHON_ENV_PATH="

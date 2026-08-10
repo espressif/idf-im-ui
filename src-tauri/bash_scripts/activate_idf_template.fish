@@ -63,6 +63,7 @@ function print_env_variables
     printf '%s\n' "PATH={{addition_to_path}}"
     printf '%s\n' "SYSTEM_PATH={{current_system_path}}"
     printf '%s\n' "ESP_IDF_VERSION=$IDF_VERSION_MAJOR_MINOR"
+    printf '%s\n' "IDF_VERSION=$IDF_VERSION"
 
     # Process environment variables
     for pair in $ENV_VAR_PAIRS
@@ -76,7 +77,9 @@ end
 
 function add_env_variable
     set -gx ESP_IDF_VERSION "$IDF_VERSION_MAJOR_MINOR"
+    set -gx IDF_VERSION "$IDF_VERSION"
     printf '%s\n' "Added environment variable ESP_IDF_VERSION = $ESP_IDF_VERSION"
+    printf '%s\n' "Added environment variable IDF_VERSION = $IDF_VERSION"
 
     # Process environment variables
     for pair in $ENV_VAR_PAIRS

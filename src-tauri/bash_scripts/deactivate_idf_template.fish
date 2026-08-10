@@ -59,7 +59,7 @@ end
 
 # --- Unset environment variables ----------------------------------------
 # Fixed vars always set by the activation script.
-for v in ESP_IDF_VERSION IDF_PATH IDF_TOOLS_PATH IDF_PYTHON_ENV_PATH \
+for v in ESP_IDF_VERSION IDF_VERSION IDF_PATH IDF_TOOLS_PATH IDF_PYTHON_ENV_PATH \
          IDF_COMPONENT_LOCAL_STORAGE_URL ESP_ROM_ELF_DIR OPENOCD_SCRIPTS
     if set -q $v
         set -e $v
