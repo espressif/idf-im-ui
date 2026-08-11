@@ -69,6 +69,7 @@ jobs:
       version_count:    ${{ steps.get-versions.outputs.version_count }}
       should_purge:     ${{ steps.get-versions.outputs.should_purge }}
       debug:            ${{ steps.get-versions.outputs.debug }}
+      staging_prefix:   ${{ steps.get-versions.outputs.staging_prefix }}
       resolved_run_id:  ${{ steps.resolve-run-id.outputs.run_id }}
 
     steps:
@@ -138,6 +139,7 @@ jobs:
         run: |
           DEBUG="${{ inputs.debug }}"
           echo "debug=$DEBUG" >> $GITHUB_OUTPUT
+          echo "staging_prefix=release-staging/${{ github.run_id }}/" >> $GITHUB_OUTPUT
 
           # Purge logic
           if [ "$DEBUG" = "true" ]; then
@@ -174,6 +176,7 @@ jobs:
           DEBUG="${{ steps.get-versions.outputs.debug }}"
           PURGE="${{ steps.get-versions.outputs.should_purge }}"
           RUN_ID="${{ steps.resolve-run-id.outputs.run_id }}"
+          STAGING="${{ steps.get-versions.outputs.staging_prefix }}"
 
           echo "# 🏗️ Offline Installer Build Pipeline" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -182,11 +185,14 @@ jobs:
           echo "| Source Run ID | \`$RUN_ID\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Debug mode | $( [ "$DEBUG" = "true" ] && echo "⚠️ Yes (uploads to \`debug/\`)" || echo "No") |" >> $GITHUB_STEP_SUMMARY
           echo "| Purge old archives | $( [ "$PURGE" = "true" ] && echo "🗑️ Yes" || echo "No") |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staging prefix | \`dl/eim/${STAGING}\` (atomic publish target) |" >> $GITHUB_STEP_SUMMARY
           echo "| Versions to build | \`$(echo $VERSIONS | jq -r 'join(", ")')\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Platforms per version | linux-x64, linux-aarch64, windows-x64, macos-aarch64, macos-x64 |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "> ⏳ Versions are processed **sequentially** (one at a time) to avoid rate limiting." >> $GITHUB_STEP_SUMMARY
           echo "> Platforms within each version build **in parallel**." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 🛡️  Archives are uploaded to the staging prefix and only moved to their canonical S3 keys once every platform's build-info is collected and verified. The new \`offline_archives.json\` is published last, so its size entries can never point at a stale object." >> $GITHUB_STEP_SUMMARY
 
   # ── 2. Build versions one at a time ───────────────────────────────────────
   #
@@ -205,7 +211,7 @@ jobs:
     with:
       idf_version:      ${{ matrix.idf_version }}
       resolved_run_id:  ${{ needs.get-versions.outputs.resolved_run_id }}
-      should_purge:     ${{ needs.get-versions.outputs.should_purge }}
+      staging_prefix:   ${{ needs.get-versions.outputs.staging_prefix }}
       debug:            ${{ needs.get-versions.outputs.debug }}
       ref:              ${{ inputs.ref || github.ref }}
     secrets:
@@ -217,9 +223,11 @@ jobs:
   update-json:
     name: "📝 Update offline_archives.json"
     needs: [get-versions, build-version]
+    # Runs even in debug mode: staged archives still need to be promoted to
+    # their (debug/) canonical keys and the staging prefix still needs to be
+    # cleaned up. Only the JSON publish and purge sub-steps below skip debug.
     if: |
       always() &&
-      needs.get-versions.outputs.debug != 'true' &&
       !contains(needs.build-version.result, 'cancelled')
     runs-on: ubuntu-latest
 
@@ -232,6 +240,7 @@ jobs:
           aws-region: ap-east-1
 
       - name: Download current offline_archives.json from S3
+        if: needs.get-versions.outputs.debug != 'true'
         run: |
           aws s3 cp s3://espdldata/dl/eim/offline_archives.json ./offline_archives.json 2>/dev/null \
             || echo "[]" > ./offline_archives.json
@@ -246,7 +255,145 @@ jobs:
           pattern: build-info-*
           path: ./all-build-infos/
 
+      - name: Promote staged archives to canonical S3 keys
+        id: promote
+        shell: bash
+        env:
+          STAGING_PREFIX: ${{ needs.get-versions.outputs.staging_prefix }}
+        run: |
+          set -euo pipefail
+
+          BUCKET="espdldata"
+          BASE_DIR="dl/eim"
+          STAGED_DIR="${BASE_DIR}/${STAGING_PREFIX}"
+          PROMOTE_LOG="promote.log"
+          : > "$PROMOTE_LOG"
+
+          PROMOTED=0
+          VERIFIED=0
+          FAILED=0
+
+          while IFS= read -r -d '' info_file; do
+            [ -f "$info_file" ] || continue
+            jq empty "$info_file" 2>/dev/null || continue
+            status=$(jq -r '.status' "$info_file")
+            [ "$status" = "success" ] || continue
+
+            # staged_key is relative to ${BASE_DIR} (e.g.
+            # "release-staging/<run_id>/archive_<v>_<p>.zst") because the
+            # platform job uploads to s3://${BUCKET}/${BASE_DIR}/${staged_key}.
+            staged_key=$(jq -r '.staged_key // empty' "$info_file")
+            canonical=$(jq -r '.filename // empty'      "$info_file")
+            expected_size=$(jq -r '.size'               "$info_file")
+
+            if [ -z "$staged_key" ] || [ -z "$canonical" ]; then
+              echo "::error::build-info missing staged_key/filename: $info_file" | tee -a "$PROMOTE_LOG"
+              FAILED=$((FAILED+1))
+              continue
+            fi
+
+            staged_uri="s3://${BUCKET}/${BASE_DIR}/${staged_key}"
+            canonical_uri="s3://${BUCKET}/${BASE_DIR}/${canonical}"
+
+            echo ""
+            echo "▶️  Promoting ${staged_key} → ${canonical}" | tee -a "$PROMOTE_LOG"
+
+            # aws s3 mv is a server-side COPY + DELETE on a single key. For an
+            # existing destination, S3 overwrites it; for a new key it just
+            # renames. This avoids any window where both old and new are
+            # missing from the canonical prefix.
+            #
+            # --metadata-directive REPLACE is required so the new ContentType
+            # (application/zstd) is applied: by default the S3 copy preserves
+            # the source object's metadata and silently drops the
+            # --content-type we set. We don't carry any user metadata today,
+            # so REPLACE is safe; if that changes we'll need to re-supply
+            # the relevant headers via --metadata here.
+            if ! aws s3 mv \
+                "${staged_uri}" \
+                "${canonical_uri}" \
+                --acl=public-read \
+                --content-type="application/zstd" \
+                --metadata-directive REPLACE 2>&1 | tee -a "$PROMOTE_LOG"; then
+              echo "::error::Failed to promote ${staged_uri} → ${canonical_uri}" | tee -a "$PROMOTE_LOG"
+              FAILED=$((FAILED+1))
+              continue
+            fi
+            PROMOTED=$((PROMOTED+1))
+
+            # Belt-and-braces: confirm the canonical object is now served as
+            # application/zstd. If the directive had been silently ignored the
+            # copy would still succeed but CloudFront/browser downloads would
+            # detect the wrong type for the archive.
+            actual_type=$(aws s3api head-object \
+                --bucket "${BUCKET}" \
+                --key "${BASE_DIR}/${canonical}" \
+                --query 'ContentType' \
+                --output text 2>/dev/null || echo "")
+            if [ "$actual_type" != "application/zstd" ]; then
+              echo "::error::ContentType for ${canonical} is '${actual_type}', expected 'application/zstd'" | tee -a "$PROMOTE_LOG"
+              FAILED=$((FAILED+1))
+              continue
+            fi
+
+            # Verify the canonical object exists and matches the expected size.
+            actual_size=$(aws s3api head-object \
+                --bucket "${BUCKET}" \
+                --key "${BASE_DIR}/${canonical}" \
+                --query 'ContentLength' \
+                --output text 2>/dev/null || echo "")
+            if [ -z "$actual_size" ] || [ "$actual_size" != "$expected_size" ]; then
+              echo "::error::Size mismatch for ${canonical}: expected ${expected_size}, got ${actual_size}" | tee -a "$PROMOTE_LOG"
+              FAILED=$((FAILED+1))
+              continue
+            fi
+            VERIFIED=$((VERIFIED+1))
+            echo "  ✅ Verified ${canonical} (${actual_size} bytes, ${actual_type})" | tee -a "$PROMOTE_LOG"
+
+            # Also move the matching .log file if it was staged alongside the archive.
+            staged_log="${staged_key%.zst}.log"
+            canonical_log="${canonical%.zst}.log"
+            staged_log_uri="s3://${BUCKET}/${BASE_DIR}/${staged_log}"
+            canonical_log_uri="s3://${BUCKET}/${BASE_DIR}/${canonical_log}"
+            if aws s3api head-object --bucket "${BUCKET}" --key "${BASE_DIR}/${staged_log}" >/dev/null 2>&1; then
+              aws s3 mv \
+                "${staged_log_uri}" \
+                "${canonical_log_uri}" \
+                --acl=public-read \
+                --content-type="text/plain" \
+                --metadata-directive REPLACE >/dev/null 2>&1 || true
+            fi
+          done < <(find all-build-infos -name "build-info.json" -type f -print0)
+
+          echo ""
+          echo "Promoted:  ${PROMOTED}" | tee -a "$PROMOTE_LOG"
+          echo "Verified:  ${VERIFIED}" | tee -a "$PROMOTE_LOG"
+          echo "Failed:    ${FAILED}"   | tee -a "$PROMOTE_LOG"
+
+          if [ "$PROMOTED" -eq 0 ]; then
+            echo "::error::No archives were promoted — refusing to publish JSON." | tee -a "$PROMOTE_LOG"
+            exit 1
+          fi
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::${FAILED} promote(s) failed — refusing to publish JSON." | tee -a "$PROMOTE_LOG"
+            exit 1
+          fi
+
+          {
+            echo "## 🚚 Promote Results"
+            echo ""
+            echo "| Metric | Count |"
+            echo "|--------|-------|"
+            echo "| Promoted | ${PROMOTED} |"
+            echo "| Size verified | ${VERIFIED} |"
+            echo "| Failed | ${FAILED} |"
+            echo "| Staging prefix | \`${STAGED_DIR}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # ── Purge obsolete archives ─────────────────────────────────────────────
+      # Runs only after promote has succeeded (the job would already have
+      # exited above otherwise), so a promote failure never deletes canonical
+      # archives that offline_archives.json still references.
       - name: Purge unsupported archives from S3
         if: needs.get-versions.outputs.should_purge == 'true'
         shell: bash
@@ -318,6 +465,8 @@ jobs:
 
       # ── Merge JSON ──────────────────────────────────────────────────────────
       - name: Merge and upload updated JSON
+        if: needs.get-versions.outputs.debug != 'true'
+        shell: bash
         run: |
           # Collect only successful entries
           NEW_ENTRIES="[]"
@@ -326,7 +475,7 @@ jobs:
             jq empty "$info_file" 2>/dev/null || continue
             status=$(jq -r '.status' "$info_file")
             [ "$status" = "success" ] || continue
-            entry=$(cat "$info_file")
+            entry=$(cat "$info_file" | jq 'del(.staged_key)')
             NEW_ENTRIES=$(echo "$NEW_ENTRIES" | jq --argjson e "$entry" '. + [$e]')
           done < <(find all-build-infos -name "build-info.json" -type f -print0)
 
@@ -381,6 +530,34 @@ jobs:
             echo "| Total entries in JSON | ${TOTAL} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Runs regardless of whether promote/merge succeeded so a failed or
+      # partial promotion never leaves this run's staged objects orphaned in
+      # S3 (the promote step's log/summary already captured what happened
+      # before any of it is removed here).
+      - name: Clean up staging prefix for this run
+        if: always()
+        shell: bash
+        env:
+          STAGING_PREFIX: ${{ needs.get-versions.outputs.staging_prefix }}
+        run: |
+          set -euo pipefail
+          BUCKET="espdldata"
+          # Refuse to run if the prefix is missing or doesn't look like a
+          # run-specific staging path: an empty value would expand
+          # `aws s3 rm s3://${BUCKET}/dl/eim/${STAGED_DIR} --recursive` to a
+          # recursive delete of the canonical archive prefix.
+          if [ -z "${STAGING_PREFIX}" ] || [ "${STAGING_PREFIX}" = "/" ]; then
+            echo "::warning::staging_prefix is empty — skipping cleanup to avoid deleting canonical keys."
+            exit 0
+          fi
+          case "${STAGING_PREFIX}" in
+            release-staging/*/) ;;
+            *) echo "::error::Unexpected staging_prefix '${STAGING_PREFIX}' — refusing to delete."; exit 1 ;;
+          esac
+          STAGED_DIR="dl/eim/${STAGING_PREFIX}"
+
+          echo "🧹 Cleaning up staging prefix s3://${BUCKET}/${STAGED_DIR}"
+          aws s3 rm "s3://${BUCKET}/${STAGED_DIR}" --recursive || true
   # ── 4. Final dashboard ─────────────────────────────────────────────────────
   dashboard:
     name: "📊 Pipeline Dashboard"
@@ -588,7 +765,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────
   autotest:
     name: "🧪 Autotest Offline Archives"
-    needs: [get-versions, build-version, count-successes]
+    needs: [get-versions, build-version, count-successes, update-json]
     if: |
       !cancelled() &&
       needs.count-successes.outputs.any_success == 'true'
