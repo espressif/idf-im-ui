@@ -117,19 +117,6 @@ If your test is scriptable, wrap the four commands above in a shell script and h
 
 Keep the same rule in mind when the build is skipped for legitimate reasons — a revision that predates the target you are building for, for instance, should be a `125`, not a `1`.
 
-## What to expect in terms of time
-
-Measured on an Apple silicon Mac with a warm tool cache, building `hello_world` for a single target:
-
-| Step | Time |
-| --- | --- |
-| One bisect step inside a release line | ~50 s |
-| A step that crosses a release (`v5.5.4` → `v6.0.2`) | ~80 s |
-| `eim fix` alone, when new toolchains have to be downloaded | ~2 min |
-| `git submodule update --init --recursive` after a large jump | ~2 min |
-
-Inside one release line the Python requirements and constraints usually do not change, so `eim fix` finds the environment already satisfies them and the remaining cost is mostly tools checks, activation-script regeneration and the project build. Cross-release steps still pay for new toolchains and for the packages whose constraints moved.
-
 ## Keeping it fast
 
 Within a single release line you can often skip calling `eim fix` entirely unless the revision you just checked out actually touched something relevant. This tells you whether it did:
