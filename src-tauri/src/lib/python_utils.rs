@@ -307,6 +307,11 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
 ///   by specifying a directory containing wheel files.
 /// * `pypi_mirror` - An `Option<String>` that, if present, specifies a custom PyPI mirror URL
 ///   to use as the package index (e.g., "https://pypi.tuna.tsinghua.edu.cn/simple").
+/// * `upgrade` - Whether to pass `--upgrade`. With it, pip ignores the versions already
+///   installed and resolves every requirement against the index, which costs a request per
+///   package even when the environment already satisfies everything. Without it, pip keeps
+///   any installed version that satisfies its requirement and the constraints file, and only
+///   reaches out for the packages that are missing or no longer satisfy them.
 ///
 /// # Returns
 ///
@@ -331,6 +336,7 @@ pub fn pip_install_requirements(
     constraint_file: &Option<PathBuf>,
     wheel_dir: &Option<PathBuf>,
     pypi_mirror: &Option<String>,
+    upgrade: bool,
 ) -> Result<(), std::io::Error> {
     let python_location = match std::env::consts::OS {
         "windows" => venv_path.join("Scripts").join("python.exe"),
@@ -352,12 +358,17 @@ pub fn pip_install_requirements(
         "windows" => {
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only, no indexes needed
-                let args = vec![
+                let mut args = vec![
                     "-m", "pip", "install", "-r",
                     requirements_file.to_str().unwrap(),
-                    "--upgrade", "--constraint", constrain_path,
-                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
                 ];
+                if upgrade {
+                    args.push("--upgrade");
+                }
+                args.extend_from_slice(&[
+                    "--constraint", constrain_path,
+                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
+                ]);
                 command_executor::execute_command_direct_with_env(
                     python_location.to_str().unwrap(),
                     &args,
@@ -367,9 +378,14 @@ pub fn pip_install_requirements(
                 let mut args = vec![
                   "-m", "pip", "install", "-r",
                   requirements_file.to_str().unwrap(),
-                  "--upgrade", "--constraint", constrain_path,
-                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
                 ];
+                if upgrade {
+                    args.push("--upgrade");
+                }
+                args.extend_from_slice(&[
+                  "--constraint", constrain_path,
+                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
+                ]);
 
                 if let Some(mirror_url) = pypi_mirror {
                   args.push("--index-url");
@@ -402,6 +418,7 @@ pub fn pip_install_requirements(
             }
         }
         _ => {
+            let upgrade_flag = if upgrade { " --upgrade" } else { "" };
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only
                 command_executor::execute_command_direct_with_env(
@@ -409,9 +426,10 @@ pub fn pip_install_requirements(
                   &vec![
                       "-c",
                       &format!(
-                          "{} -m pip install -r {} --upgrade --constraint {} --no-index --find-links {}",
+                          "{} -m pip install -r {}{} --constraint {} --no-index --find-links {}",
                           shlex::quote(python_location.to_str().unwrap()),
                           shlex::quote(requirements_file.to_str().unwrap()),
+                          upgrade_flag,
                           shlex::quote(constrain_path),
                           shlex::quote(wheel_dir.to_str().unwrap())
                       ),
@@ -421,18 +439,20 @@ pub fn pip_install_requirements(
             } else {
                 let cmd = if let Some(mirror_url) = pypi_mirror {
                   format!(
-                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
+                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
                     shlex::quote(python_location.to_str().unwrap()),
                     shlex::quote(requirements_file.to_str().unwrap()),
+                    upgrade_flag,
                     shlex::quote(constrain_path),
                     shlex::quote(ESPRESSIF_PYPI),
                     shlex::quote(mirror_url),
                   )
                 } else {
                   format!(
-                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {}",
+                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {}",
                     shlex::quote(python_location.to_str().unwrap()),
                     shlex::quote(requirements_file.to_str().unwrap()),
+                    upgrade_flag,
                     shlex::quote(constrain_path),
                     shlex::quote(ESPRESSIF_PYPI),
                   )
@@ -559,7 +579,10 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 ///   Python virtual environment, should be stored.
 /// * `reinstall` - A boolean indicating whether to remove an existing virtual
 ///   environment before creating a new one. If `true`, the existing `venv` will be
-///   deleted.
+///   deleted, and pip is additionally run with `--upgrade`, so every requirement is
+///   resolved fresh against the index. If `false`, the existing environment is kept and
+///   pip installs only the packages that are missing or no longer satisfy the constraints,
+///   which is what makes a repeated `fix` cheap.
 /// * `idf_path` - A reference to a `Path` pointing to the root directory of the
 ///   ESP-IDF installation, used to locate `requirements.txt` files.
 /// * `features` - A slice of `String`s, where each string represents an additional
@@ -718,8 +741,10 @@ pub async fn install_python_env(
     };
 
     // install the requirements from files
+    // `reinstall` doubles as the upgrade switch: a rebuilt environment is resolved fresh
+    // against the index, while a reused one keeps whatever already satisfies the constraints.
     for requirements_file in requirements_file_list {
-        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir, pypi_mirror) {
+        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir, pypi_mirror, reinstall) {
             Ok(_) => {
                 debug!("requirements installed: {}", requirements_file.display());
             }

@@ -56,6 +56,7 @@ pub struct Settings {
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
     pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
+    pub recreate_py_env: Option<bool>, // Whether to delete and rebuild the Python virtual environment
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +136,7 @@ impl Default for Settings {
             activation_script_path_override: Some(default_activation_script_path_override),
             python_version_override: Some(PYTHON_NAME_TO_INSTALL.to_string()),
             create_bat_activation_script: Some(false),
+            recreate_py_env: Some(true),
         }
     }
 }
@@ -243,7 +245,8 @@ impl Settings {
             use_local_archive,
             activation_script_path_override,
             python_version_override,
-            create_bat_activation_script
+            create_bat_activation_script,
+            recreate_py_env
           );
 
           if cli_overrides.contains("idf_tools") {
@@ -329,7 +332,8 @@ impl Settings {
             use_local_archive,
             activation_script_path_override,
             python_version_override,
-            create_bat_activation_script
+            create_bat_activation_script,
+            recreate_py_env
         );
     }
 

@@ -74,7 +74,7 @@ Options:
 - `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash. The name becomes part of the Python environment path, the activation script file name and the identifier used by `select`, `run` and `remove`, so pinning it is useful whenever the checked-out revision changes over time — see [Using EIM with git bisect](./git_bisect.md#why---version-name-matters).
 - `--cleanup`: If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
 - `--skip-components-download`: If set to true, the installer will skip the component managers' components download step (`compote registry sync`) after installation. Default is `false` for `install`/`wizard` and `true` for `fix`. Use this when you want to install the toolchain but defer fetching component definitions — for example, in CI/Docker layers where components will be pulled on demand later, or when you intentionally want to keep the installation minimal.
-- `--force-python-reinstall`: Force deletion and recreation of the Python virtual environment. By default, install and fix skip Python package work when the existing environment already matches the current requirements and constraints.
+- `--recreate-py-env`: Whether to delete and rebuild the Python virtual environment. Installation always rebuilds it regardless of this flag, so it is only meaningful for [`fix`](#fix-command), which reuses the existing environment by default.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.14 on Linux, macOS, and Windows.
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
 - `--create-bat-activation-script`: Optional flag to create a CMD batch activation script in addition to PowerShell profile. This is for backward compatibility only - PowerShell is recommended and batch support will be abandoned in a future release.
@@ -244,7 +244,7 @@ eim fix [OPTIONS]
 
 Options:
 - `-p, --path <PATH>`: Path of the existing installation to fix. If omitted, you will be presented with a selection of all known IDF installations to choose from.
-- `--force-python-reinstall`: Delete and recreate the Python virtual environment from scratch. By default, Python packages are refreshed only when the current requirements files, constraints file, or selected features differ from what was last installed; otherwise that step is skipped.
+- `--recreate-py-env <true|false>`: Delete and rebuild the Python virtual environment from scratch, then resolve every requirement against the package index. Defaults to `false` for `fix`, which is what makes a repeated `fix` cheap — see [The Python environment](#the-python-environment) below.
 
 `fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
 
@@ -258,14 +258,27 @@ eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 # Fix an installation and additionally install the docs and pytest features
 eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
 
-# Force a full wipe and reinstall of the Python virtual environment
-eim fix -p /path/to/existing/esp-idf --force-python-reinstall
+# Wipe and rebuild the Python virtual environment
+eim fix -p /path/to/existing/esp-idf --recreate-py-env true
 
 # Fix an installation, choosing interactively from all installed versions
 eim fix
 ```
 
 `fix` never touches the Git repository itself — it does not fetch, check out or update submodules. It re-reads `tools/tools.json` and the Python requirements from the working tree as it currently stands, which makes it the command to run after you change the checked-out revision yourself. See [Using EIM with git bisect](./git_bisect.md) for that workflow.
+
+#### The Python environment
+
+`fix` keeps the existing virtual environment and runs pip against it, so pip installs only the packages which are missing or no longer satisfy the constraints file of the revision you have checked out. Everything already satisfied is left alone, and pip does not contact the package index for it. This is what makes a second `fix` on an unchanged installation cheap rather than a multi-minute reinstall.
+
+Installation is unaffected: `install` and `wizard` always build the environment from scratch, as they always have.
+
+Two consequences worth knowing:
+
+- When a revision tightens a version range — `tools/requirements/*.txt` lists packages without versions and `espidf.constraints.*.txt` supplies the ranges — the installed package no longer satisfies it and pip upgrades it. Moving between revisions therefore still gets you the right package versions.
+- Packages no longer drift to the newest release *within* a range that has not changed. If the constraint is `esptool~=5.2` and you have 5.2.1 installed, `fix` leaves it there rather than moving to 5.2.9.
+
+Pass `--recreate-py-env true` when you want the old behaviour: the environment is deleted and recreated, and pip resolves every requirement against the index, taking the newest version each constraint allows. That is also the way to repair an environment which has been corrupted or modified by hand.
 
 ### Completions Command
 

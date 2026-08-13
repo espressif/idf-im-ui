@@ -568,6 +568,7 @@ pub async fn prepare_settings_for_fix_idf_installation(
     settings.version_name = version_name;
     settings.install_all_prerequisites = Some(true);
     settings.config_file_save_path = None;
+    settings.recreate_py_env = Some(false);
     return Ok(settings);
 }
 

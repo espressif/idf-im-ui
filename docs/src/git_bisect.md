@@ -97,7 +97,9 @@ The rest of this section explains why each of those is there.
 
 When a revision removes a submodule, `git checkout` prints warnings like `warning: unable to rmdir 'components/json/cJSON': Directory not empty`. These are expected while bisecting and do not affect the build — git is declining to delete a directory that still holds the old submodule's checkout.
 
-**Run `eim fix`.** This re-reads `tools/tools.json` and `tools/requirements/*` from the worktree as it currently stands, installs any tool versions the new revision needs, and refreshes the Python environment against the constraints file matching the revision's `tools/cmake/version.cmake`. When the requirements, constraints and selected features are unchanged from the last install (typical inside one release line), the Python step is skipped automatically. It never touches your repository — no fetch, no checkout, no submodule handling — and it keeps the name recorded at install time. It also runs without prompting, because it recovers the configuration stored with the installation, which is what makes it safe to call from a `git bisect run` script. See the [Fix command](./cli_commands.md#fix-command).
+**Run `eim fix`.** This re-reads `tools/tools.json` and `tools/requirements/*` from the worktree as it currently stands, installs any tool versions the new revision needs, and refreshes the Python environment against the constraints file matching the revision's `tools/cmake/version.cmake`. It never touches your repository — no fetch, no checkout, no submodule handling — and it keeps the name recorded at install time. It also runs without prompting, because it recovers the configuration stored with the installation, which is what makes it safe to call from a `git bisect run` script. See the [Fix command](./cli_commands.md#fix-command).
+
+`fix` keeps the existing Python virtual environment rather than rebuilding it, so pip installs only the packages the new revision needs and leaves everything already satisfying its constraints alone. Inside one release line that usually means nothing to do and no network traffic; when a revision tightens a constraint, the affected package is upgraded. This is what makes it affordable to run at every step. If an environment ever ends up in a bad state, `eim fix -p <path> --recreate-py-env true` deletes and rebuilds it — see [The Python environment](./cli_commands.md#the-python-environment).
 
 `fix` is necessary because EIM's activation script is generated once, with the toolchain paths and environment variables written into it. Unlike ESP-IDF's own `export.sh`, which recomputes the environment every time you source it, the activation script cannot notice that the checked-out revision now needs a different compiler — it will simply put the previously installed one on `PATH`. `eim fix` is what regenerates it.
 
@@ -117,7 +119,7 @@ Keep the same rule in mind when the build is skipped for legitimate reasons — 
 
 ## What to expect in terms of time
 
-Measured on an Apple silicon Mac with a warm tool cache, building `hello_world` for a single target (before the Python skip optimization; same-line steps are cheaper now when requirements are unchanged):
+Measured on an Apple silicon Mac with a warm tool cache, building `hello_world` for a single target:
 
 | Step | Time |
 | --- | --- |
@@ -126,7 +128,7 @@ Measured on an Apple silicon Mac with a warm tool cache, building `hello_world` 
 | `eim fix` alone, when new toolchains have to be downloaded | ~2 min |
 | `git submodule update --init --recursive` after a large jump | ~2 min |
 
-On same-line revisions where Python requirements and constraints do not change, `eim fix` skips reinstalling the virtual environment and the remaining cost is mostly tools checks, activation-script regeneration and the project build. Cross-release steps still pay for new toolchains and a Python refresh.
+Inside one release line the Python requirements and constraints usually do not change, so `eim fix` finds the environment already satisfies them and the remaining cost is mostly tools checks, activation-script regeneration and the project build. Cross-release steps still pay for new toolchains and for the packages whose constraints moved.
 
 ## Keeping it fast
 
