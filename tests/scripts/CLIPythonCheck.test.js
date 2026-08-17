@@ -89,13 +89,21 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
 
       testRunner.process.write("n");
 
+      // The refused-install message is printed by the CLI wrapper, with
+      // whitespace added by the pty on Windows that can produce a
+      // double-space between "and" and the final "try again". Match the
+      // stable prefix instead of the exact whitespace.
       const terminalExited = await testRunner.waitForOutput(
-        "Please install Python3 with pip, venv, and SSL support and try again"
+        "Please install Python3 with pip, venv, and SSL support"
       );
       expect(
         terminalExited,
         "EIM did not fails after denying to install pre-requisites"
       ).to.be.true;
+      expect(
+        testRunner.output,
+        "Refusal message did not include the 'try again' hint"
+      ).to.match(/try again/);
       logger.info(`python detection passed: >>\r ${testRunner.output}`);
     });
 

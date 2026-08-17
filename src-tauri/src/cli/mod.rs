@@ -336,7 +336,16 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                                 if versions.iter().any(|version| {
                                   let version_path = idf_im_lib::utils::normalize_path_for_comparison(&version.path);
                                   debug!("Normalized version_path for '{}': {:?}", version.path, version_path);
-                                  version_path.map_or(false, |p| p == provided_path)
+                                  version_path.map_or(false, |p| {
+                                      if p == provided_path {
+                                          return true;
+                                      }
+                                      std::path::Path::new(&p)
+                                          .ancestors()
+                                          .any(|ancestor| {
+                                              ancestor == std::path::Path::new(&provided_path)
+                                          })
+                                  })
                                 }) {
                                   info!("{}", t!("install.already_installed", path = path.display()));
                                   info!("{}", t!("install.use_fix_command"));

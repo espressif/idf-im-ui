@@ -131,6 +131,8 @@ impl IdfConfig {
                   _ => i.idf_tools_path.clone(),
               }
             }).collect::<Vec<_>>();
+            let new_names: Vec<&str> =
+                self.idf_installed.iter().map(|i| i.name.as_str()).collect();
 
             let mut merged_version = existing_version
               .iter()
@@ -143,7 +145,10 @@ impl IdfConfig {
                   "windows" => i.idf_tools_path.to_lowercase(),
                   _ => i.idf_tools_path.clone(),
                 };
-                !new_paths.contains(&normalized_path) || !new_tools_paths.contains(&normalized_tools_path)
+                let path_matches = new_paths.contains(&normalized_path);
+                let tools_matches = new_tools_paths.contains(&normalized_tools_path);
+                let name_matches = new_names.contains(&i.name.as_str());
+                !(path_matches && tools_matches && name_matches)
               })
               .cloned()
               .collect::<Vec<_>>();
@@ -561,7 +566,7 @@ mod tests {
   }
 
   #[test]
-fn test_append_with_same_path_replacement() -> Result<()> {
+  fn test_append_with_same_path_replacement() -> Result<()> {
     let dir = tempdir()?;
     let config_path = dir.path().join("same_path_test_config.json");
 
@@ -590,29 +595,41 @@ fn test_append_with_same_path_replacement() -> Result<()> {
         version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
     };
 
-    // Append new config to existing file (should replace installation with same path)
+    // Append new config to existing file. Two entries that share both
+    // path and tools_path but carry DIFFERENT names are independent
+    // installations (typically created via `eim install --version-name`
+    // against the same checkout) and must both be preserved — the
+    // v5.1.5 entry is kept AND the new v5.0 (Updated) entry is added.
     new_config.to_file(&config_path, true, true)?;
 
     // Read the resulting config
     let result_config = IdfConfig::from_file(&config_path)?;
 
-    // Verify the result has 2 installations
-    assert_eq!(result_config.idf_installed.len(), 2);
+    // Verify the result has 3 installations: v5.4 (unchanged), v5.1.5
+    // (kept), and the new v5.0 (Updated) entry added against the same path.
+    assert_eq!(result_config.idf_installed.len(), 3);
 
     let v5_0_install = result_config.idf_installed.iter()
-        .find(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
-        .expect("Installation with path /tmp/esp-new/v5.1.5/esp-idf not found");
+        .find(|i| i.id == "esp-idf-new-id")
+        .expect("New installation with id esp-idf-new-id not found");
 
-    // Verify it's the updated one, not the original
-    assert_eq!(v5_0_install.id, "esp-idf-new-id");
+    // Verify the new entry carried the right metadata.
     assert_eq!(v5_0_install.name, "ESP-IDF v5.0 (Updated)");
+    assert_eq!(v5_0_install.path, "/tmp/esp-new/v5.1.5/esp-idf");
     assert_eq!(v5_0_install.activation_script, "/tmp/esp/v5.0/updated-export.sh");
 
-    // Verify the unique installation is still there unchanged
+    // The original v5.1.5 entry must still be present, alongside the new one.
     let v5_1_install = result_config.idf_installed.iter()
+        .find(|i| i.id == "esp-idf-5f014e6764904e4c914eeb365325bfcd")
+        .expect("Original v5.1.5 installation was dropped during merge");
+    assert_eq!(v5_1_install.path, "/tmp/esp-new/v5.1.5/esp-idf");
+    assert_eq!(v5_1_install.name, "v5.1.5");
+
+    // Verify the unique installation is still there unchanged
+    let v5_4_install = result_config.idf_installed.iter()
         .find(|i| i.path == "/tmp/esp-new/v5.4/esp-idf")
         .expect("Installation with path /tmp/esp-new/v5.4/esp-idf not found");
-    assert_eq!(v5_1_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
+    assert_eq!(v5_4_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
 
     Ok(())
   }

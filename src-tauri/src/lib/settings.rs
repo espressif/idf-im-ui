@@ -396,7 +396,13 @@ impl Settings {
             }
         }
 
-        let git_path = get_git_path().map_err(|e| anyhow!("Failed to get git path: {}", e))?;
+        let git_path = match get_git_path() {
+            Ok(path) => path,
+            Err(err) => {
+                log::debug!("Could not resolve git path while saving config: {}", err);
+                String::new()
+            }
+        };
         let mut config = IdfConfig {
             git_path,
             idf_selected_id: idf_installations
@@ -447,11 +453,16 @@ impl Settings {
 
       let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
 
+      let entry_name = match self.version_name {
+        Some(ref name) => name.to_string(),
+        None => version.to_string(),
+      };
+
       let (idf_path, version_installation_path, actual_version) = if using_existing_idf {
         // Using existing IDF directory
         let idf_path = base_path.clone();
-        let actual_version = match self.version_name {
-          Some(ref name) => name.to_string(),
+        let resolved = match self.version_name {
+          Some(_) => entry_name.clone(),
           None =>  match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
             Ok(hash) => hash,
             Err(err) => {
@@ -460,16 +471,11 @@ impl Settings {
             }
           }
         };
-        (idf_path.clone(), idf_path, actual_version)
+        (idf_path.clone(), idf_path, resolved)
       } else {
-        // New installation
-        let actual_version = match self.version_name {
-          Some(ref name) => name.to_string(),
-          None => version.to_string(),
-        };
-        let version_installation_path = base_path.join(&actual_version);
+        let version_installation_path = base_path.join(version);
         let idf_path = version_installation_path.join("esp-idf");
-        (idf_path, version_installation_path, actual_version)
+        (idf_path, version_installation_path, entry_name)
       };
 
       let tool_download_directory = version_installation_path.join(tool_download_folder);

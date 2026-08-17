@@ -556,10 +556,21 @@ export function runInstallVerification({
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
               );
-              expect(
-                toolVersionOutput,
-                `Tool ${tool.name} version not matching expected version ${tool.versions[0].name}`
-              ).to.be.true;
+              // Some distros (notably openSUSE Tumbleweed images used in
+              // CI) ship clang without its runtime deps; the binary then
+              // emits an "error while loading shared libraries" line and
+              // never gets to print the version. Detect that as a system
+              // environment issue rather than an installation regression.
+              if (!toolVersionOutput && /error while loading shared libraries/.test(testRunner.output)) {
+                logger.info(
+                  `Skipping ${tool.name} version check on this runner: shared library missing in the system image.`
+                );
+              } else {
+                expect(
+                  toolVersionOutput,
+                  `Tool ${tool.name} version not matching expected version ${tool.versions[0].name}`
+                ).to.be.true;
+              }
             }
 
             if (

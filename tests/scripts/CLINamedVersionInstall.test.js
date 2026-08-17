@@ -148,6 +148,7 @@ export function runCLINamedVersionInstallTest({
     it(`1- Should install IDF ${idfVersion} (default name)`, async function () {
       this.timeout(3600000);
       logger.info(`Installing IDF ${idfVersion} with default naming`);
+      testRunner.output = "";
       testRunner.callEIM(pathToEIM, ["install", ...args]);
       const result = await waitForInstallCompletion(3600000);
       expect(result, "Initial install did not complete").to.be.oneOf([
@@ -165,7 +166,8 @@ export function runCLINamedVersionInstallTest({
       logger.info(
         `Re-installing IDF ${idfVersion} at same path with --version-name ${namedVersion}`,
       );
-      const beforeOutputLength = testRunner.output.length;
+      testRunner.output = "";
+      const beforeOutputLength = 0;
       testRunner.callEIM(pathToEIM, [
         "install",
         "--version-name",
@@ -179,12 +181,15 @@ export function runCLINamedVersionInstallTest({
       // mapped to an installed IDF. The bug surfaced as the
       // "already installed" + "use the 'fix' command" pair of messages.
       // After the fix, `--version-name` opts out of that short-circuit,
-      // so neither message must appear in the new run output.
+      // so neither message must appear in the new run output. Match
+      // only the short-circuit phrasing (the wizard does legitimately
+      // print "Tool 'X' is already installed..." on every run because
+      // it skips re-downloading existing tools).
       expect(
         newOutput,
         `CLI aborted the named-version install with the "already installed" short-circuit. ` +
           `Output: ${newOutput}`,
-      ).to.not.match(/already installed/i);
+      ).to.not.match(/IDF at path .*already installed/i);
       expect(
         newOutput,
         `CLI suggested the "fix" command, which is wrong when --version-name is used. ` +
@@ -252,7 +257,11 @@ export function runCLINamedVersionInstallTest({
       logger.info(
         `Sanity check: re-installing without --version-name should still be rejected`,
       );
-      const beforeOutputLength = testRunner.output.length;
+      // Clear buffered output so the waitForOutput calls below are
+      // scoped to this install only (the pty is shared with the previous
+      // tests in the suite).
+      testRunner.output = "";
+      const beforeOutputLength = 0;
       testRunner.callEIM(pathToEIM, ["install", ...args]);
 
       // The CLI should refuse with the "already installed" message and

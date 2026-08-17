@@ -104,14 +104,20 @@ export function runListToolsTest({
         30000
       );
       expect(header, "EIM list-tools --outdated not printing header").to.be.true;
-      // Either the header is followed by a populated outdated list, or by
-      // the empty-state line. Both are valid outcomes; just make sure one
-      // of the two appears.
-      const hasOutdated = testRunner.output.includes("Outdated tools:") &&
-        testRunner.output.includes("is outdated by");
-      const hasNoOutdated = testRunner.output.includes("No outdated tools.");
+      // Wait for the trailing summary line (either the empty-state marker
+      // or the first outdated entry, which appears after the tool table).
+      // The two possible outcomes are separated by chunked output writes,
+      // so the assertion would otherwise race the final chunk arriving.
+      const hasOutdatedEntry = await testRunner.waitForOutput(
+        "is outdated by",
+        30000
+      );
+      const hasNoOutdated = await testRunner.waitForOutput(
+        "No outdated tools.",
+        30000
+      );
       expect(
-        hasOutdated || hasNoOutdated,
+        hasOutdatedEntry || hasNoOutdated,
         "EIM list-tools --outdated produced neither an outdated list nor a no-outdated message"
       ).to.be.true;
     });

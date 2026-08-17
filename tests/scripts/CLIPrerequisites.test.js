@@ -76,6 +76,22 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         this.skip();
       }
       logger.info(`Starting test - confirm requirements are missing`);
+      // The Windows prerequisites-installer prompt is only shown when the
+      // check actually finds a missing prerequisite (e.g. git on a fresh
+      // image). On environments where git is already present (CI images
+      // with scoop, runner tooling, etc.) the wizard reports "All
+      // prerequisites are satisfied!" and skips the prompt — there's
+      // nothing to install, so this negative-answer branch is N/A.
+      const alreadySatisfied = await testRunner.waitForOutput(
+        "All prerequisites are satisfied!",
+        5000
+      );
+      if (alreadySatisfied) {
+        logger.info(
+          "Prerequisites already satisfied on this runner; skipping install-prompt assertion"
+        );
+        this.skip();
+      }
       const promptRequisites = await testRunner.waitForOutput(
         "Do you want to install prerequisites?",
         30000
@@ -109,6 +125,19 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
         this.skip();
       }
       logger.info(`Starting test - installing git`);
+      // Same pre-condition as test 2: skip on runners where git is
+      // already present, since the install-prompt branch is never
+      // reached in that case.
+      const alreadySatisfied = await testRunner.waitForOutput(
+        "All prerequisites are satisfied!",
+        5000
+      );
+      if (alreadySatisfied) {
+        logger.info(
+          "Prerequisites already satisfied on this runner; skipping git-install assertions"
+        );
+        this.skip();
+      }
       await testRunner.waitForOutput(
         "Do you want to install prerequisites?",
         30000

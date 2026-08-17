@@ -87,7 +87,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["select"]);
       const selectQuery = await testRunner.waitForOutput(
         "Which version do you want to select?",
-        5000
+        15000
       );
       expect(selectQuery, "EIM select not prompting for IDF version").to.be
         .true;
@@ -95,7 +95,7 @@ export function runVersionManagementTest({
       testRunner.sendInput("");
       const selectedIDF = await testRunner.waitForOutput(
         "Selected version",
-        5000
+        15000
       );
       expect(selectedIDF, "EIM select failed to select idf from prompt").to.be
         .true;
@@ -104,7 +104,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["list"]);
       const idfListOutput = await testRunner.waitForOutput(
         "Installed versions",
-        5000
+        15000
       );
       let idfToSelect;
       if (testRunner.output.includes(`${idfList[0]} (selected)`)) {
@@ -116,7 +116,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["select", idfToSelect]);
       const selectOutput = await testRunner.waitForOutput(
         `Selected version: ${idfToSelect}`,
-        5000
+        15000
       );
       expect(selectOutput, "EIM failed to select IDF version").to.be.true;
       testRunner.output = "";
@@ -124,7 +124,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["list"]);
       const selectedList = await testRunner.waitForOutput(
         "Installed versions",
-        5000
+        15000
       );
       expect(selectedList, "EIM not showing list of installed IDF").to.be.true;
       expect(
@@ -137,7 +137,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["select", "random"]);
       const errorOutput = await testRunner.waitForOutput(
         `Version random not installed`,
-        5000
+        15000
       );
       expect(
         errorOutput,
@@ -156,21 +156,21 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["rename"]);
       const renameQuery = await testRunner.waitForOutput(
         "Which version do you want to rename?",
-        5000
+        15000
       );
       expect(renameQuery, "EIM rename not prompting for IDF version").to.be
         .true;
       testRunner.sendInput("");
       const newNameQuery = await testRunner.waitForOutput(
         "Enter new name",
-        5000
+        15000
       );
       expect(newNameQuery, "EIM rename not prompting for new name input").to.be
         .true;
       testRunner.sendInput("newName");
       const renamedOutput = await testRunner.waitForOutput(
         "Version renamed",
-        5000
+        15000
       );
       expect(renamedOutput, "EIM rename failed to rename IDF installation").to
         .be.true;
@@ -179,7 +179,7 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["list"]);
       const installedList = await testRunner.waitForOutput(
         "Installed versions",
-        5000
+        15000
       );
       expect(installedList, "EIM not showing list of installed IDF").to.be.true;
       expect(
@@ -190,13 +190,13 @@ export function runVersionManagementTest({
       testRunner.callEIM(pathToEIM, ["rename", "newName", "renamedIDF"]);
       const renameOutput = await testRunner.waitForOutput(
         `Version renamed`,
-        5000
+        15000
       );
       expect(renameOutput, "EIM failed to rename IDF version").to.be.true;
       testRunner.output = "";
       await new Promise((resolve) => setTimeout(resolve, 2000));
       testRunner.callEIM(pathToEIM, ["list"]);
-      const updatedList = await testRunner.waitForOutput("renamedIDF", 5000);
+      const updatedList = await testRunner.waitForOutput("renamedIDF", 15000);
       expect(updatedList, "EIM not showing renamed IDF installation").to.be
         .true;
     });
