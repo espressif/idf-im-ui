@@ -358,7 +358,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         "versions": format!("{:?}", settings.idf_versions),
                       }))).await;
                   }
-                    let result = wizard::run_wizzard_run(settings).await;
+                    let result = wizard::run_wizzard_run(settings, true).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result", r = "Ok".to_string()));
@@ -787,7 +787,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     if !do_not_track {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
                     }
-                    let result = wizard::run_wizzard_run(settings).await;
+                    let result = wizard::run_wizzard_run(settings, true).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result"));
@@ -814,7 +814,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 Err(err) => Err(anyhow::anyhow!(err)),
             }
         }
-        Commands::Fix { install_args } => {
+        Commands::Fix {
+            install_args,
+            recreate_py_env,
+        } => {
           let path_to_fix = if let Some(path) = install_args.path.clone() {
               // If a path is provided, fix the IDF installation at that path
                if is_valid_idf_directory(&path) {
@@ -857,7 +860,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           // passed to `fix` override those preserved values (and the defaults).
           let mut settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
           settings.apply_cli_overrides(install_args.into_iter())?;
-          let result = wizard::run_wizzard_run(settings).await;
+          let result = wizard::run_wizzard_run(settings, recreate_py_env.unwrap_or(false)).await;
           match result {
             Ok(r) => {
               info!("{}", t!("fix.result", r = "Ok"));

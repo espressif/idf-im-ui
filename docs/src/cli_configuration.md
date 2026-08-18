@@ -86,11 +86,8 @@ recurse_submodules = true
 install_all_prerequisites = true
 skip_prerequisites_check = false
 skip_components_download = false
-recreate_py_env = true
 idf_features = ["ci", "docs"]
 ```
-
-`recreate_py_env` controls whether the Python virtual environment is deleted and rebuilt. Installation always rebuilds it, so the setting only affects [`eim fix`](./cli_commands.md#fix-command), which defaults to `false` and reuses the existing environment.
 
 Load a configuration file:
 ```bash

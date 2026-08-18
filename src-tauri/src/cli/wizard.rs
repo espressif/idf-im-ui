@@ -335,7 +335,11 @@ async fn download_and_extract_tools(
     .await
 }
 
-pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
+/// `recreate_py_env` deletes the existing Python virtual environment and rebuilds it from scratch,
+/// upgrading every package to the newest version its constraint allows. Installation passes `true`;
+/// `fix` passes `false` unless the user asks for it, so that a repeated fix only installs the
+/// packages which are missing or no longer satisfy the constraints.
+pub async fn run_wizzard_run(mut config: Settings, recreate_py_env: bool) -> Result<(), String> {
     debug!(
         "{}",
         t!(
@@ -811,9 +815,6 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         }
 
-        // Installation always rebuilds; only `fix` opts out, by setting this to false in
-        // `prepare_settings_for_fix_idf_installation`.
-        let recreate_py_env = config.recreate_py_env.unwrap_or(true);
         if recreate_py_env {
             info!("{}", t!("wizard.python.recreating_env"));
         } else {

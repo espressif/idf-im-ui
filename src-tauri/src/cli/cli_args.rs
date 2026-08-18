@@ -141,6 +141,12 @@ pub enum Commands {
     Fix {
         #[command(flatten)]
         install_args: InstallArgs,
+
+        #[arg(
+            long,
+            help = "Whether to delete and rebuild the Python virtual environment. Defaults to false: the existing environment is reused and only the packages which are missing or no longer satisfy the constraints are installed. Set to true to get a clean environment and to upgrade packages to the newest version their constraint allows. Installation always rebuilds and is unaffected by this flag."
+        )]
+        recreate_py_env: Option<bool>,
     },
 
     /// Install drivers for ESP-IDF. This is only available on Windows platforms.
@@ -325,12 +331,6 @@ pub struct InstallArgs {
         help = "Whether to create a .bat activation script on Windows. This is useful for users who want to activate the ESP-IDF environment using a batch file instead of PowerShell. Default is false. This is for legacy compatibility reasons as the default activation method on Windows is now PowerShell script.",
     )]
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
-
-    #[arg(
-        long,
-        help = "Whether to delete and rebuild the Python virtual environment. Only meaningful for the `fix` command, which reuses the existing environment by default and installs just the packages which are missing or no longer satisfy the constraints. Set to true to get a clean environment and to upgrade packages to the newest version their constraint allows. Installation always rebuilds regardless of this flag.",
-    )]
-    pub recreate_py_env: Option<bool>, // Whether to delete and rebuild the Python virtual environment
 }
 
 impl IntoIterator for InstallArgs {
@@ -441,10 +441,6 @@ impl IntoIterator for InstallArgs {
             (
                 "create_bat_activation_script".to_string(),
                 self.create_bat_activation_script.map(Into::into),
-            ),
-            (
-                "recreate_py_env".to_string(),
-                self.recreate_py_env.map(Into::into),
             ),
         ]
         .into_iter()
