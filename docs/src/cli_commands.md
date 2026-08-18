@@ -266,6 +266,12 @@ eim fix
 
 `fix` never touches the Git repository itself — it does not fetch, check out or update submodules. It re-reads `tools/tools.json` and the Python requirements from the working tree as it currently stands, which makes it the command to run after you change the checked-out revision yourself. See [Using EIM with git bisect](./git_bisect.md) for that workflow.
 
+#### Mirrors
+
+`fix` reuses the mirrors recorded in the installation and does not measure mirror latency. `install` and `wizard` pick the fastest reachable mirror by probing the candidates, which costs several seconds; repeating that on every `fix` would only re-derive the mirrors the installation already has, so it is skipped.
+
+Pass `-m, --mirror`, `--idf-mirror` or `--pypi-mirror` to fix an installation against a different mirror than the one it was installed with. If the installation has no stored configuration to recover — for example one registered by an older EIM, or one left behind by a `fix` which failed part way through — `fix` falls back to latency-based selection, exactly as `install` does.
+
 #### The Python environment
 
 `fix` keeps the existing virtual environment and runs pip against it, so pip installs only the packages which are missing or no longer satisfy the constraints file of the revision you have checked out. Everything already satisfied is left alone, and pip does not contact the package index for it. This is what makes a second `fix` on an unchanged installation cheap rather than a multi-minute reinstall.

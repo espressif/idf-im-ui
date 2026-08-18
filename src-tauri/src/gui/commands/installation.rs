@@ -1236,8 +1236,10 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         version: Some(installation.name.clone()),
     });
 
+    // The GUI decides mirrors through `get_mirror_to_use`, which already leaves a fix's
+    // configured mirrors alone, so the recovery flag is of no use here.
     let mut settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone()), fix_config_path.as_ref()).await {
-        Ok(settings) => {
+        Ok((settings, _)) => {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: 30,

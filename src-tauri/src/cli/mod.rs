@@ -358,7 +358,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         "versions": format!("{:?}", settings.idf_versions),
                       }))).await;
                   }
-                    let result = wizard::run_wizzard_run(settings, true).await;
+                    let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
+                        recreate_py_env: true,
+                        preserve_mirrors: false,
+                    }).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result", r = "Ok".to_string()));
@@ -787,7 +790,10 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                     if !do_not_track {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
                     }
-                    let result = wizard::run_wizzard_run(settings, true).await;
+                    let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
+                        recreate_py_env: true,
+                        preserve_mirrors: false,
+                    }).await;
                     match result {
                         Ok(r) => {
                             info!("{}", t!("install.wizard_result"));
@@ -858,9 +864,15 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
           // Start from the settings the installation was originally created with (so tools,
           // features, target etc. are preserved), then let any CLI args the user explicitly
           // passed to `fix` override those preserved values (and the defaults).
-          let mut settings = prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
+          let (mut settings, recovered_from_installation) =
+            prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
           settings.apply_cli_overrides(install_args.into_iter())?;
-          let result = wizard::run_wizzard_run(settings, recreate_py_env.unwrap_or(false)).await;
+          let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
+            recreate_py_env: recreate_py_env.unwrap_or(false),
+            // The recovered mirrors were already chosen by the original install, so re-measuring
+            // mirror latency here would only re-derive them at the cost of several seconds.
+            preserve_mirrors: recovered_from_installation,
+          }).await;
           match result {
             Ok(r) => {
               info!("{}", t!("fix.result", r = "Ok"));

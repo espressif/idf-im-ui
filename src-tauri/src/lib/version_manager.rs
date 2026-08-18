@@ -514,10 +514,18 @@ pub fn run_command_using_activation_script_headless(
     }
 }
 
+/// Builds the settings a `fix` run should start from, recovering the configuration the
+/// installation was originally created with whenever it is available.
+///
+/// The returned flag reports whether that recovery actually succeeded. Callers need it to
+/// tell a value that was deliberately chosen by the original install from one that merely
+/// happens to equal the built-in default, which is a distinction `Settings::is_default`
+/// cannot make on its own. When it is `false` the settings are plain defaults and should be
+/// treated as such.
 pub async fn prepare_settings_for_fix_idf_installation(
     path_to_fix: PathBuf,
     config_path: Option<&PathBuf>,
-) -> anyhow::Result<Settings> {
+) -> anyhow::Result<(Settings, bool)> {
     info!("Fixing IDF installation at path: {}", path_to_fix.display());
     // The fix logic is just instalation with use of existing repository
     let mut version_name = None;
@@ -562,13 +570,14 @@ pub async fn prepare_settings_for_fix_idf_installation(
         }
     }
 
+    let recovered_from_installation = original_settings.is_some();
     let mut settings = original_settings.unwrap_or_default();
     settings.path = Some(path_to_fix.clone());
     settings.non_interactive = Some(true);
     settings.version_name = version_name;
     settings.install_all_prerequisites = Some(true);
     settings.config_file_save_path = None;
-    return Ok(settings);
+    return Ok((settings, recovered_from_installation));
 }
 
 // ============================================================================
