@@ -119,17 +119,16 @@ impl IdfConfig {
             let existing_config = IdfConfig::from_file(path.as_ref())?;
             let existing_version = existing_config.idf_installed;
 
-            let new_paths = self.idf_installed.iter().map(|i| {
-              match std::env::consts::OS {
+            let new_identities = self.idf_installed.iter().map(|i| {
+              let normalized_path = match std::env::consts::OS {
                   "windows" => i.path.to_lowercase(),
                   _ => i.path.clone(),
-              }
-            }).collect::<Vec<_>>();
-            let new_tools_paths = self.idf_installed.iter().map(|i| {
-              match std::env::consts::OS {
+              };
+              let normalized_tools_path = match std::env::consts::OS {
                   "windows" => i.idf_tools_path.to_lowercase(),
                   _ => i.idf_tools_path.clone(),
-              }
+              };
+              (normalized_path, i.name.clone(), normalized_tools_path)
             }).collect::<Vec<_>>();
 
             let mut merged_version = existing_version
@@ -143,7 +142,7 @@ impl IdfConfig {
                   "windows" => i.idf_tools_path.to_lowercase(),
                   _ => i.idf_tools_path.clone(),
                 };
-                !new_paths.contains(&normalized_path) || !new_tools_paths.contains(&normalized_tools_path)
+                !new_identities.contains(&(normalized_path, i.name.clone(), normalized_tools_path))
               })
               .cloned()
               .collect::<Vec<_>>();
@@ -561,9 +560,9 @@ mod tests {
   }
 
   #[test]
-fn test_append_with_same_path_replacement() -> Result<()> {
+fn test_append_with_same_identity_replacement() -> Result<()> {
     let dir = tempdir()?;
-    let config_path = dir.path().join("same_path_test_config.json");
+    let config_path = dir.path().join("same_identity_test_config.json");
 
     // Create initial config with two installations
     let mut initial_config = create_test_config();
@@ -571,16 +570,19 @@ fn test_append_with_same_path_replacement() -> Result<()> {
     // Save initial config to file
     initial_config.to_file(&config_path, true, false)?;
 
-    // Create new config with installation that has the same path but different ID and name
+    // Create new config with an installation that has the same path, name AND
+    // idf_tools_path as one already in initial_config (only the id and other
+    // details differ) - this represents re-installing/fixing that same named
+    // version, and should replace the existing entry.
     let mut new_config = IdfConfig {
         git_path: String::from("/usr/bin/git"),
         idf_installed: vec![
             IdfInstallation {
                 activation_script: String::from("/tmp/esp/v5.0/updated-export.sh"),
                 id: String::from("esp-idf-new-id"),
-                idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the first installation in initial_config
-                name: String::from("ESP-IDF v5.0 (Updated)"),
-                path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the first installation in initial_config
+                idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the second installation in initial_config
+                name: String::from("v5.1.5"), // Same name as the second installation in initial_config
+                path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the second installation in initial_config
                 python: String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3"),
                 installation_config: None,
             },
@@ -590,29 +592,86 @@ fn test_append_with_same_path_replacement() -> Result<()> {
         version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
     };
 
-    // Append new config to existing file (should replace installation with same path)
+    // Append new config to existing file (should replace installation with same identity)
     new_config.to_file(&config_path, true, true)?;
 
     // Read the resulting config
     let result_config = IdfConfig::from_file(&config_path)?;
 
-    // Verify the result has 2 installations
+    // Verify the result still has 2 installations (replaced, not added)
     assert_eq!(result_config.idf_installed.len(), 2);
 
-    let v5_0_install = result_config.idf_installed.iter()
+    let v5_1_5_install = result_config.idf_installed.iter()
         .find(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
         .expect("Installation with path /tmp/esp-new/v5.1.5/esp-idf not found");
 
     // Verify it's the updated one, not the original
-    assert_eq!(v5_0_install.id, "esp-idf-new-id");
-    assert_eq!(v5_0_install.name, "ESP-IDF v5.0 (Updated)");
-    assert_eq!(v5_0_install.activation_script, "/tmp/esp/v5.0/updated-export.sh");
+    assert_eq!(v5_1_5_install.id, "esp-idf-new-id");
+    assert_eq!(v5_1_5_install.name, "v5.1.5");
+    assert_eq!(v5_1_5_install.activation_script, "/tmp/esp/v5.0/updated-export.sh");
 
     // Verify the unique installation is still there unchanged
-    let v5_1_install = result_config.idf_installed.iter()
+    let v5_4_install = result_config.idf_installed.iter()
         .find(|i| i.path == "/tmp/esp-new/v5.4/esp-idf")
         .expect("Installation with path /tmp/esp-new/v5.4/esp-idf not found");
-    assert_eq!(v5_1_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
+    assert_eq!(v5_4_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
+
+    Ok(())
+  }
+
+  #[test]
+  fn test_append_with_same_path_different_name_kept() -> Result<()> {
+    let dir = tempdir()?;
+    let config_path = dir.path().join("same_path_different_name_test_config.json");
+
+    // Create initial config with two installations
+    let mut initial_config = create_test_config();
+
+    // Save initial config to file
+    initial_config.to_file(&config_path, true, false)?;
+
+    // Create new config with an installation that shares a path with an
+    // existing one but has a different name (e.g. a named-version install
+    // registered against an already-installed IDF checkout). Since the name
+    // differs, this must be kept as a distinct entry rather than replacing
+    // the existing one.
+    let mut new_config = IdfConfig {
+        git_path: String::from("/usr/bin/git"),
+        idf_installed: vec![
+            IdfInstallation {
+                activation_script: String::from("/tmp/esp/v5.0/named-export.sh"),
+                id: String::from("esp-idf-named-id"),
+                idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the second installation in initial_config
+                name: String::from("my-named-idf"), // Different name than the second installation in initial_config
+                path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the second installation in initial_config
+                python: String::from("/tmp/esp/v5.0/named-tools/python/bin/python3"),
+                installation_config: None,
+            },
+        ],
+        idf_selected_id: String::from("esp-idf-named-id"),
+        eim_path: None,
+        version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+    };
+
+    // Append new config to existing file (should keep both installations)
+    new_config.to_file(&config_path, true, true)?;
+
+    // Read the resulting config
+    let result_config = IdfConfig::from_file(&config_path)?;
+
+    // Verify the result now has 3 installations (nothing replaced)
+    assert_eq!(result_config.idf_installed.len(), 3);
+
+    let names: Vec<&str> = result_config.idf_installed.iter().map(|i| i.name.as_str()).collect();
+    assert!(names.contains(&"ESP-IDF v5.4"));
+    assert!(names.contains(&"v5.1.5"));
+    assert!(names.contains(&"my-named-idf"));
+
+    // Both entries sharing the path should still point at it
+    let sharing_path_count = result_config.idf_installed.iter()
+        .filter(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
+        .count();
+    assert_eq!(sharing_path_count, 2);
 
     Ok(())
   }

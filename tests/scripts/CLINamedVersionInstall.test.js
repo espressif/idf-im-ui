@@ -253,7 +253,11 @@ export function runCLINamedVersionInstallTest({
         `Sanity check: re-installing without --version-name should still be rejected`,
       );
       const beforeOutputLength = testRunner.output.length;
-      testRunner.callEIM(pathToEIM, ["install", ...args]);
+      const pFlag =
+        os.platform() === "win32"
+          ? `-p "${idfInstallRoot}"`
+          : `-p ${idfInstallRoot}`;
+      testRunner.callEIM(pathToEIM, ["install", pFlag]);
 
       // The CLI should refuse with the "already installed" message and
       // exit promptly. Give it a generous window but no full install
