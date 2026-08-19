@@ -141,12 +141,6 @@ pub enum Commands {
     Fix {
         #[command(flatten)]
         install_args: InstallArgs,
-
-        #[arg(
-            long,
-            help = "Whether to delete and rebuild the Python virtual environment. Defaults to false: the existing environment is reused and only the packages which are missing or no longer satisfy the constraints are installed. Set to true to get a clean environment and to upgrade packages to the newest version their constraint allows. Installation always rebuilds and is unaffected by this flag."
-        )]
-        recreate_py_env: Option<bool>,
     },
 
     /// Install drivers for ESP-IDF. This is only available on Windows platforms.

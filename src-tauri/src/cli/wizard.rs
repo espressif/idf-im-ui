@@ -338,11 +338,11 @@ async fn download_and_extract_tools(
 /// Per-run choices which are not part of the installation's configuration, so they are passed in
 /// rather than stored in `Settings` (and therefore never end up in the installation blob).
 pub struct WizardOptions {
-    /// Deletes the existing Python virtual environment and rebuilds it from scratch, upgrading
-    /// every package to the newest version its constraint allows. Installation passes `true`;
-    /// `fix` passes `false` unless the user asks for it, so that a repeated fix only installs the
-    /// packages which are missing or no longer satisfy the constraints.
-    pub recreate_py_env: bool,
+    /// Try pip against the existing virtual environment first (no `--upgrade`). Only `fix`
+    /// sets this; `install` / `wizard` leave it off so they still rebuild from scratch. If
+    /// that first attempt fails, `install_python_env` deletes the venv and retries once with
+    /// `--upgrade`.
+    pub try_existing_venv: bool,
     /// The mirrors in `Settings` were recovered from an installation's stored configuration, so a
     /// value which merely equals the built-in default is still a deliberate choice from the
     /// original install and must not be re-derived by latency probing. Only `fix` sets this.
@@ -825,16 +825,16 @@ pub async fn run_wizzard_run(mut config: Settings, options: WizardOptions) -> Re
             }
         }
 
-        if options.recreate_py_env {
-            info!("{}", t!("wizard.python.recreating_env"));
-        } else {
+        if options.try_existing_venv {
             info!("{}", t!("wizard.python.reusing_env"));
+        } else {
+            info!("{}", t!("wizard.python.recreating_env"));
         }
         match idf_im_lib::python_utils::install_python_env(
             &paths,
             &paths.actual_version,
             &tool_install_directory,
-            options.recreate_py_env,
+            !options.try_existing_venv,
             &features_names,
             if offline_mode {
                 Some(offline_archive_dir.as_ref().unwrap().path())

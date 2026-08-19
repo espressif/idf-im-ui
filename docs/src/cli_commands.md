@@ -243,7 +243,6 @@ eim fix [OPTIONS]
 
 Options:
 - `-p, --path <PATH>`: Path of the existing installation to fix. If omitted, you will be presented with a selection of all known IDF installations to choose from.
-- `--recreate-py-env <true|false>`: Delete and rebuild the Python virtual environment from scratch, then resolve every requirement against the package index. Defaults to `false`, which is what makes a repeated `fix` cheap — see [The Python environment](#the-python-environment) below. This option exists only on `fix`.
 
 Apart from that, `fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
 
@@ -256,9 +255,6 @@ eim fix -p /path/to/existing/esp-idf --idf-tools cmake,openocd
 
 # Fix an installation and additionally install the docs and pytest features
 eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
-
-# Wipe and rebuild the Python virtual environment
-eim fix -p /path/to/existing/esp-idf --recreate-py-env true
 
 # Fix an installation, choosing interactively from all installed versions
 eim fix
@@ -276,14 +272,14 @@ Pass `-m, --mirror`, `--idf-mirror` or `--pypi-mirror` to fix an installation ag
 
 `fix` keeps the existing virtual environment and runs pip against it, so pip installs only the packages which are missing or no longer satisfy the constraints file of the revision you have checked out. Everything already satisfied is left alone, and pip does not contact the package index for it. This is what makes a second `fix` on an unchanged installation cheap rather than a multi-minute reinstall.
 
-Installation is unaffected: `install` and `wizard` always build the environment from scratch, as they always have, and they do not accept `--recreate-py-env`.
+If that pip run fails — a corrupted environment, a missing interpreter, a non-zero pip exit — `fix` warns, deletes the virtual environment, and retries once with `--upgrade`. A second failure is reported as an error.
+
+Installation is unaffected: `install` and `wizard` always build the environment from scratch, as they always have.
 
 Two consequences worth knowing:
 
 - When a revision tightens a version range — `tools/requirements/*.txt` lists packages without versions and `espidf.constraints.*.txt` supplies the ranges — the installed package no longer satisfies it and pip upgrades it. Moving between revisions therefore still gets you the right package versions.
 - Packages no longer drift to the newest release *within* a range that has not changed. If the constraint is `esptool~=5.2` and you have 5.2.1 installed, `fix` leaves it there rather than moving to 5.2.9.
-
-Pass `--recreate-py-env true` when you want the old behaviour: the environment is deleted and recreated, and pip resolves every requirement against the index, taking the newest version each constraint allows. That is also the way to repair an environment which has been corrupted or modified by hand.
 
 ### Completions Command
 

@@ -359,7 +359,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       }))).await;
                   }
                     let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
-                        recreate_py_env: true,
+                        try_existing_venv: false,
                         preserve_mirrors: false,
                     }).await;
                     match result {
@@ -791,7 +791,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                       track_cli_event("CLI wizard started", Some(json!({}))).await;
                     }
                     let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
-                        recreate_py_env: true,
+                        try_existing_venv: false,
                         preserve_mirrors: false,
                     }).await;
                     match result {
@@ -822,7 +822,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
         }
         Commands::Fix {
             install_args,
-            recreate_py_env,
         } => {
           let path_to_fix = if let Some(path) = install_args.path.clone() {
               // If a path is provided, fix the IDF installation at that path
@@ -868,7 +867,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             prepare_settings_for_fix_idf_installation(path_to_fix.clone(), config_path.as_ref()).await?;
           settings.apply_cli_overrides(install_args.into_iter())?;
           let result = wizard::run_wizzard_run(settings, wizard::WizardOptions {
-            recreate_py_env: recreate_py_env.unwrap_or(false),
+            try_existing_venv: true,
             // The recovered mirrors were already chosen by the original install, so re-measuring
             // mirror latency here would only re-derive them at the cost of several seconds.
             preserve_mirrors: recovered_from_installation,

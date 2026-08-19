@@ -565,6 +565,71 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
     None
 }
 
+fn remove_python_venv(venv_path: &Path) {
+    if !venv_path.exists() {
+        return;
+    }
+    debug!("venv already exists, removing it");
+    match std::fs::remove_dir_all(venv_path) {
+        Ok(_) => debug!("venv removed"),
+        Err(e) => warn!("failed to remove venv: {}, trying to proceed nonetheless", e),
+    }
+}
+
+/// Creates the virtual environment (if needed) and installs every requirements file.
+///
+/// `upgrade` is passed through to pip: a rebuilt environment is resolved fresh against
+/// the index, while a reused one keeps whatever already satisfies the constraints.
+fn populate_venv(
+    venv_path: &Path,
+    python_executable: &str,
+    requirements_file_list: &[PathBuf],
+    constraint_file: &Option<PathBuf>,
+    wheel_dir: &Option<PathBuf>,
+    pypi_mirror: &Option<String>,
+    upgrade: bool,
+) -> Result<(), String> {
+    match ensure_path(venv_path.to_str().unwrap()) {
+        Ok(_) => debug!("venv path ensured: {}", venv_path.display()),
+        Err(e) => {
+            error!("failed to ensure venv path: {}", e);
+            return Err(format!("failed to ensure venv path: {}", e));
+        }
+    }
+
+    match create_python_venv(venv_path.to_str().unwrap(), python_executable) {
+        Ok(_) => debug!("venv created"),
+        Err(e) => {
+            error!("failed to create venv: {}", e);
+            return Err(format!("failed to create venv: {}", e));
+        }
+    }
+
+    for requirements_file in requirements_file_list {
+        match pip_install_requirements(
+            venv_path,
+            requirements_file,
+            constraint_file,
+            wheel_dir,
+            pypi_mirror,
+            upgrade,
+        ) {
+            Ok(_) => debug!("requirements installed: {}", requirements_file.display()),
+            Err(e) => {
+                error!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                );
+                return Err(format!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Installs or updates the Python virtual environment for a specific ESP-IDF version.
 ///
 /// This asynchronous function orchestrates the creation of a Python virtual environment,
@@ -577,12 +642,11 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 /// * `idf_version` - A string slice representing the ESP-IDF version (e.g., "v5.1", "master").
 /// * `idf_tools_path` - A reference to a `Path` where ESP-IDF tools, including the
 ///   Python virtual environment, should be stored.
-/// * `reinstall` - A boolean indicating whether to remove an existing virtual
-///   environment before creating a new one. If `true`, the existing `venv` will be
-///   deleted, and pip is additionally run with `--upgrade`, so every requirement is
-///   resolved fresh against the index. If `false`, the existing environment is kept and
-///   pip installs only the packages that are missing or no longer satisfy the constraints,
-///   which is what makes a repeated `fix` cheap.
+/// * `reinstall` - If `true` (install / wizard), the existing `venv` is deleted first and
+///   pip is run with `--upgrade`. If `false` (`fix`), the existing environment is kept and
+///   pip installs only the packages that are missing or no longer satisfy the constraints.
+///   Should that first attempt fail (venv creation or a non-zero pip exit), the environment
+///   is deleted and pip is retried once with `--upgrade`; a second failure is returned.
 /// * `idf_path` - A reference to a `Path` pointing to the root directory of the
 ///   ESP-IDF installation, used to locate `requirements.txt` files.
 /// * `features` - A slice of `String`s, where each string represents an additional
@@ -618,27 +682,10 @@ pub async fn install_python_env(
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
 
-    // if reinstall is true, remove the existing venv
-    if venv_path.exists() && reinstall {
-        debug!("venv already exists, removing it");
-        match std::fs::remove_dir_all(&venv_path) {
-            Ok(_) => {
-                debug!("venv removed");
-            }
-            Err(e) => {
-                warn!("failed to remove venv: {}, trying to proceed nonetheless", e);
-            }
-        }
+    if reinstall {
+        remove_python_venv(&venv_path);
     }
-    match ensure_path(venv_path.to_str().unwrap()){
-        Ok(_) => {
-            debug!("venv path ensured: {}", venv_path.display());
-        }
-        Err(e) => {
-            error!("failed to ensure venv path: {}", e);
-            return Err(format!("failed to ensure venv path: {}", e));
-        }
-    }
+
     if let Some(_offline_dir) = offline_archive_dir {
         offline_mode = true;
     } else {
@@ -653,17 +700,6 @@ pub async fn install_python_env(
     } else {
         detect_default_python().unwrap_or_else(|_| "python3".to_string())
     };
-
-    // create the venv
-    match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
-        Ok(_) => {
-            debug!("venv created");
-        }
-        Err(e) => {
-            error!("failed to create venv: {}", e);
-            return Err(format!("failed to create venv: {}", e));
-        }
-    }
 
     // install the requirements
     let mut requirements_file_list = vec![];
@@ -740,25 +776,32 @@ pub async fn install_python_env(
         None
     };
 
-    // install the requirements from files
-    // `reinstall` doubles as the upgrade switch: a rebuilt environment is resolved fresh
-    // against the index, while a reused one keeps whatever already satisfies the constraints.
-    for requirements_file in requirements_file_list {
-        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir, pypi_mirror, reinstall) {
-            Ok(_) => {
-                debug!("requirements installed: {}", requirements_file.display());
-            }
-            Err(e) => {
-                error!(
-                    "failed to install requirements from file {:?}: {}",
-                    requirements_file, e
-                );
-                return Err(format!(
-                    "failed to install requirements from file {:?}: {}",
-                    requirements_file, e
-                ));
-            }
+    if let Err(e) = populate_venv(
+        &venv_path,
+        &python_executable,
+        &requirements_file_list,
+        &constraint_file,
+        &wheel_dir,
+        pypi_mirror,
+        reinstall,
+    ) {
+        if reinstall {
+            return Err(e);
         }
+        warn!(
+            "Python environment reuse failed; deleting the virtual environment and retrying with a full reinstall: {}",
+            e
+        );
+        remove_python_venv(&venv_path);
+        populate_venv(
+            &venv_path,
+            &python_executable,
+            &requirements_file_list,
+            &constraint_file,
+            &wheel_dir,
+            pypi_mirror,
+            true,
+        )?;
     }
     info!("Python environment installed successfully");
     Ok(())
