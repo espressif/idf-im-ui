@@ -129,7 +129,8 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          cache-dependency-glob: "src-tauri/Cargo.lock"
+          cache-suffix: ${{ inputs.idf_version }}
 
       # ── Compute versions & flags ───────────────────────────────────────────
       - name: Get IDF versions
@@ -553,7 +554,6 @@ jobs:
         with:
           pattern: build-info-*
           path: ./all-build-infos/
-        continue-on-error: true
 
       - name: Count successful builds
         id: count
