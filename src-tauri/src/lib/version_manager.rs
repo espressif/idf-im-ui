@@ -290,7 +290,11 @@ pub fn remove_single_idf_version(
     if let Some(installation) = ide_config
         .idf_installed
         .iter()
-        .find(|install| install.id == identifier || install.name == identifier)
+        .find(|install| {
+            install.id == identifier
+                || install.name == identifier
+                || install.name == crate::sanitize_version_name(identifier)
+        })
         .cloned()
     {
         let installation_folder_path = PathBuf::from(installation.path.clone());
@@ -428,7 +432,10 @@ pub fn run_command_in_context(
 ) -> anyhow::Result<ExitStatus> {
     let installation = match list_installed_versions(config_path) {
         Ok(versions) => versions.into_iter().find(|v| {
-            v.id == identifier || v.name == identifier || {
+            v.id == identifier
+                || v.name == identifier
+                || v.name == crate::sanitize_version_name(identifier)
+                || {
                 let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
                 normalized_identifier.is_some()
                     && normalized_identifier == crate::utils::normalize_path_for_comparison(&v.path)
@@ -936,7 +943,11 @@ fn find_installation<'a>(
     if let Some(install) = ide_config
         .idf_installed
         .iter()
-        .find(|i| i.id == identifier || i.name == identifier)
+        .find(|i| {
+            i.id == identifier
+                || i.name == identifier
+                || i.name == crate::sanitize_version_name(identifier)
+        })
     {
         return Ok(install);
     }

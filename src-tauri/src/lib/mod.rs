@@ -1959,6 +1959,15 @@ pub fn ensure_path(directory_path: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Makes an IDF version/tag string safe to use as a directory or file name.
+///
+/// Branch/tag names may contain path separators (e.g. `release/v6.0`)
+/// This can create unnecessary nested directories. Instead replace them with
+/// a hyphen
+pub fn sanitize_version_name(version: &str) -> String {
+    version.replace(['/', '\\'], "-")
+}
+
 /// Adds a directory to the system's PATH environment variable.
 /// If the directory is already present in the PATH, it will not be added again.
 ///
@@ -2601,6 +2610,15 @@ mod tests {
         builder.finish().unwrap();
 
         (dest_dir, tar_path.to_string_lossy().into_owned())
+    }
+
+    #[test]
+    fn test_sanitize_version_name() {
+        assert_eq!(sanitize_version_name("release/v6.0"), "release-v6.0");
+        assert_eq!(sanitize_version_name("release/v5.5"), "release-v5.5");
+        assert_eq!(sanitize_version_name("v5.3.1"), "v5.3.1");
+        assert_eq!(sanitize_version_name("release-v6.0"), "release-v6.0");
+        assert_eq!(sanitize_version_name("release\\v6.0"), "release-v6.0");
     }
 
     #[test]
