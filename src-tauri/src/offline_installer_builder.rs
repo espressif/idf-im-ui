@@ -931,7 +931,10 @@ async fn main() {
 
             // Create components download directory
             let components_dir = archive_dir.path().join("components");
+            let required_components_dir = archive_dir.path().join("required_components");
             ensure_path(components_dir.to_str().unwrap())
+                .expect("Failed to create components directory");
+            ensure_path(required_components_dir.to_str().unwrap())
                 .expect("Failed to create components directory");
 
             // Build compote command arguments
@@ -976,6 +979,44 @@ async fn main() {
                     error!("Failed to run compote: {}", err);
                     warn!("Component sync failed, continuing without components...");
                 }
+            }
+
+            let compote_args_required_components: Vec<&str> = vec![
+                "cooking",
+                "stock",
+            ];
+
+            debug!("Compote command: {:?} {:?}", compote_executable, compote_args_required_components);
+
+            let env_for_compote = vec![
+              ("IDF_PATH",idf_path.to_str().unwrap()),
+              ("IDF_TOOLS_PATH",required_components_dir.to_str().unwrap())
+            ];
+
+            match execute_command_with_env(
+              compote_executable.to_str().unwrap(),
+              &compote_args_required_components,
+              env_for_compote
+            ) {
+              Ok(output) => {
+                  if output.status.success() {
+                      info!(
+                          "Successfully synced Root Managed Components.",
+                      );
+                      debug!("Compote output: {}", String::from_utf8_lossy(&output.stdout));
+                  } else {
+                      error!(
+                          "Failed to sync Root Managed Components: {}",
+                          String::from_utf8_lossy(&output.stderr)
+                      );
+                      // Don't fail the entire build, just warn
+                      warn!("Component sync failed, continuing without Root Managed Components...");
+                  }
+              }
+              Err(err) => {
+                  error!("Failed to run compote: {}", err);
+                  warn!("Component sync failed, continuing without Root Managed Components...");
+              }
             }
 
             if let Err(e) = fs::remove_dir_all(&compote_env) {

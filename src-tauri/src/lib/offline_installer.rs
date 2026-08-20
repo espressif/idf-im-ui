@@ -369,16 +369,26 @@ pub fn copy_idf_from_offline_archive(
 pub fn copy_components_from_offline_archive(
     archive_dir: &TempDir,
     target_dir: &Path,
+    tool_install_directory: &Path
 ) -> Result<(), String> {
     match crate::utils::copy_dir_contents(&archive_dir.path().join("components"), target_dir) {
         Ok(_) => {
             info!("Successfully copied components from offline archive to: {}", target_dir.display());
-            Ok(())
         }
         Err(err) => {
-            Err(format!("Failed to copy components from offline archive: {}", err))
+            return Err(format!("Failed to copy components from offline archive: {}", err))
         }
     }
+    match crate::utils::copy_dir_contents(&archive_dir.path().join("required_components"), tool_install_directory) {
+        Ok(_) => {
+            info!("Successfully copied Root Managed Components from offline archive to: {}", tool_install_directory.display());
+
+        }
+        Err(err) => {
+            return Err(format!("Failed to copy Root Managed Components from offline archive: {}", err))
+        }
+    }
+    Ok(())
 }
 
 pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {
@@ -485,9 +495,10 @@ mod tests {
 
     #[test]
     fn test_copy_components_from_offline_archive_success() {
-        // Create a temporary archive directory with components
+        // Create a temporary archive directory with components and required_components
         let archive_dir = TempDir::new().unwrap();
         let target_dir = TempDir::new().unwrap();
+        let tool_install_directory = TempDir::new().unwrap();
 
         // Create a components directory in the archive
         let components_src = archive_dir.path().join("components");
@@ -498,19 +509,32 @@ mod tests {
         fs::create_dir_all(&test_component).unwrap();
         fs::write(test_component.join("test.txt"), "test content").unwrap();
 
+        // Create the required_components directory in the archive
+        let required_components_src = archive_dir.path().join("required_components");
+        fs::create_dir_all(&required_components_src).unwrap();
+        let root_managed_component = required_components_src.join("espressif__esp_idf_monitor");
+        fs::create_dir_all(&root_managed_component).unwrap();
+        fs::write(root_managed_component.join("package.json"), "{}").unwrap();
+
         // Call the function
         let result = copy_components_from_offline_archive(
             &archive_dir,
             target_dir.path(),
+            tool_install_directory.path(),
         );
 
         // Verify success
         assert!(result.is_ok());
 
-        // Verify files were copied
+        // Verify components files were copied
         let copied_component = target_dir.path().join("test_component");
         assert!(copied_component.exists());
         assert!(copied_component.join("test.txt").exists());
+
+        // Verify root managed components files were copied to the tool install directory
+        let copied_root_component = tool_install_directory.path().join("espressif__esp_idf_monitor");
+        assert!(copied_root_component.exists());
+        assert!(copied_root_component.join("package.json").exists());
     }
 
     #[test]
@@ -518,17 +542,74 @@ mod tests {
         // Create a temporary archive directory without components
         let archive_dir = TempDir::new().unwrap();
         let target_dir = TempDir::new().unwrap();
+        let tool_install_directory = TempDir::new().unwrap();
 
-        // Don't create components directory
+        // Don't create components or required_components directories
 
-        // Call the function - should fail
+        // Call the function - should fail on the components copy
         let result = copy_components_from_offline_archive(
             &archive_dir,
             target_dir.path(),
+            tool_install_directory.path(),
         );
 
-        // Verify failure
+        // Verify failure for the components copy
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Failed to copy"));
+        assert!(result.unwrap_err().contains("Failed to copy components"));
+    }
+
+    #[test]
+    fn test_copy_components_from_offline_archive_no_required_components_dir() {
+        // Create a temporary archive directory with components only (no required_components)
+        let archive_dir = TempDir::new().unwrap();
+        let target_dir = TempDir::new().unwrap();
+        let tool_install_directory = TempDir::new().unwrap();
+
+        let components_src = archive_dir.path().join("components");
+        fs::create_dir_all(&components_src).unwrap();
+        fs::write(components_src.join("placeholder.txt"), "x").unwrap();
+
+        // Do NOT create required_components so the second copy must fail
+
+        let result = copy_components_from_offline_archive(
+            &archive_dir,
+            target_dir.path(),
+            tool_install_directory.path(),
+        );
+
+        // Verify failure for the root managed components copy
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Root Managed Components"));
+    }
+
+    #[test]
+    fn test_copy_components_from_offline_archive_copies_to_independent_targets() {
+        // The components and required_components must be copied to distinct directories
+        let archive_dir = TempDir::new().unwrap();
+        let target_dir = TempDir::new().unwrap();
+        let tool_install_directory = TempDir::new().unwrap();
+
+        let components_src = archive_dir.path().join("components");
+        fs::create_dir_all(&components_src).unwrap();
+        fs::write(components_src.join("component.txt"), "regular").unwrap();
+
+        let required_components_src = archive_dir.path().join("required_components");
+        fs::create_dir_all(&required_components_src).unwrap();
+        fs::write(required_components_src.join("root_managed.txt"), "root").unwrap();
+
+        let result = copy_components_from_offline_archive(
+            &archive_dir,
+            target_dir.path(),
+            tool_install_directory.path(),
+        );
+        assert!(result.is_ok());
+
+        // Regular components must land in target_dir, NOT in tool_install_directory
+        assert!(target_dir.path().join("component.txt").exists());
+        assert!(!tool_install_directory.path().join("component.txt").exists());
+
+        // Root managed components must land in tool_install_directory, NOT in target_dir
+        assert!(tool_install_directory.path().join("root_managed.txt").exists());
+        assert!(!target_dir.path().join("root_managed.txt").exists());
     }
 }

@@ -397,7 +397,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.install_all_prerequisites.unwrap_or_default(),
         config.python_version_override.clone(),
         offline_mode,
-        tool_install_directory,
+        tool_install_directory.clone(),
     )
     .await?;
 
@@ -406,7 +406,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         // copy IDFs
         copy_idf_from_offline_archive(archive_dir, &config)?;
         let compoments_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
-        match copy_components_from_offline_archive(archive_dir, &compoments_dir) {
+        match copy_components_from_offline_archive(archive_dir, &compoments_dir, &tool_install_directory) {
             Ok(_) => {
                 info!("{}", t!("wizard.components_copy.success"));
             }
