@@ -9,6 +9,8 @@ The ESP-IDF Installation Manager supports configuration through both its graphic
 
 If you specify an installation path that already contains a valid ESP-IDF Git repository, EIM will detect and use this existing repository. In this scenario, any ESP-IDF version selections made in the configuration file, command line, or GUI will be disregarded. EIM will proceed to install the necessary tools based on the version of ESP-IDF found in the existing repository, without overwriting its contents. This allows you to manage your ESP-IDF Git clone independently and use EIM solely for toolchain setup.
 
+Because EIM's own clones are shallow (a single reference at depth 1), this is also the way to work with a repository whose checked-out revision you change yourself, for example when running `git bisect` over ESP-IDF. See [Using EIM with git bisect](./git_bisect.md).
+
 ## Configuration Priority
 
 The configuration priority order is:

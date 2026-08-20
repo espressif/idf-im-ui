@@ -487,7 +487,6 @@ pub async fn setup_tools(
         &paths,
         &paths.actual_version,
         &paths.tool_install_directory,
-        true, //TODO: actually read from config
         &features_for_version,
         offline_archive_dir, // Offline archive directory
         &Some(pypi_mirror_to_use), // PyPI mirror

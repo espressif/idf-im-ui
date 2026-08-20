@@ -811,11 +811,11 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             }
         }
 
+        info!("{}", t!("wizard.python.reusing_env"));
         match idf_im_lib::python_utils::install_python_env(
             &paths,
             &paths.actual_version,
             &tool_install_directory,
-            true, //TODO: actually read from config
             &features_names,
             if offline_mode {
                 Some(offline_archive_dir.as_ref().unwrap().path())

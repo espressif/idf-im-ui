@@ -307,6 +307,11 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
 ///   by specifying a directory containing wheel files.
 /// * `pypi_mirror` - An `Option<String>` that, if present, specifies a custom PyPI mirror URL
 ///   to use as the package index (e.g., "https://pypi.tuna.tsinghua.edu.cn/simple").
+/// * `upgrade` - Whether to pass `--upgrade`. With it, pip ignores the versions already
+///   installed and resolves every requirement against the index, which costs a request per
+///   package even when the environment already satisfies everything. Without it, pip keeps
+///   any installed version that satisfies its requirement and the constraints file, and only
+///   reaches out for the packages that are missing or no longer satisfy them.
 ///
 /// # Returns
 ///
@@ -331,6 +336,7 @@ pub fn pip_install_requirements(
     constraint_file: &Option<PathBuf>,
     wheel_dir: &Option<PathBuf>,
     pypi_mirror: &Option<String>,
+    upgrade: bool,
 ) -> Result<(), std::io::Error> {
     let python_location = match std::env::consts::OS {
         "windows" => venv_path.join("Scripts").join("python.exe"),
@@ -352,12 +358,17 @@ pub fn pip_install_requirements(
         "windows" => {
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only, no indexes needed
-                let args = vec![
+                let mut args = vec![
                     "-m", "pip", "install", "-r",
                     requirements_file.to_str().unwrap(),
-                    "--upgrade", "--constraint", constrain_path,
-                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
                 ];
+                if upgrade {
+                    args.push("--upgrade");
+                }
+                args.extend_from_slice(&[
+                    "--constraint", constrain_path,
+                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
+                ]);
                 command_executor::execute_command_direct_with_env(
                     python_location.to_str().unwrap(),
                     &args,
@@ -367,9 +378,14 @@ pub fn pip_install_requirements(
                 let mut args = vec![
                   "-m", "pip", "install", "-r",
                   requirements_file.to_str().unwrap(),
-                  "--upgrade", "--constraint", constrain_path,
-                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
                 ];
+                if upgrade {
+                    args.push("--upgrade");
+                }
+                args.extend_from_slice(&[
+                  "--constraint", constrain_path,
+                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
+                ]);
 
                 if let Some(mirror_url) = pypi_mirror {
                   args.push("--index-url");
@@ -402,6 +418,7 @@ pub fn pip_install_requirements(
             }
         }
         _ => {
+            let upgrade_flag = if upgrade { " --upgrade" } else { "" };
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only
                 command_executor::execute_command_direct_with_env(
@@ -409,9 +426,10 @@ pub fn pip_install_requirements(
                   &vec![
                       "-c",
                       &format!(
-                          "{} -m pip install -r {} --upgrade --constraint {} --no-index --find-links {}",
+                          "{} -m pip install -r {}{} --constraint {} --no-index --find-links {}",
                           shlex::quote(python_location.to_str().unwrap()),
                           shlex::quote(requirements_file.to_str().unwrap()),
+                          upgrade_flag,
                           shlex::quote(constrain_path),
                           shlex::quote(wheel_dir.to_str().unwrap())
                       ),
@@ -421,18 +439,20 @@ pub fn pip_install_requirements(
             } else {
                 let cmd = if let Some(mirror_url) = pypi_mirror {
                   format!(
-                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
+                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
                     shlex::quote(python_location.to_str().unwrap()),
                     shlex::quote(requirements_file.to_str().unwrap()),
+                    upgrade_flag,
                     shlex::quote(constrain_path),
                     shlex::quote(ESPRESSIF_PYPI),
                     shlex::quote(mirror_url),
                   )
                 } else {
                   format!(
-                    "{} -m pip install -r {} --upgrade --constraint {} --prefer-binary --index-url {}",
+                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {}",
                     shlex::quote(python_location.to_str().unwrap()),
                     shlex::quote(requirements_file.to_str().unwrap()),
+                    upgrade_flag,
                     shlex::quote(constrain_path),
                     shlex::quote(ESPRESSIF_PYPI),
                   )
@@ -545,28 +565,90 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
     None
 }
 
+fn remove_python_venv(venv_path: &Path) {
+    if !venv_path.exists() {
+        return;
+    }
+    debug!("venv already exists, removing it");
+    match std::fs::remove_dir_all(venv_path) {
+        Ok(_) => debug!("venv removed"),
+        Err(e) => warn!("failed to remove venv: {}, trying to proceed nonetheless", e),
+    }
+}
+
+/// Creates the virtual environment (if needed) and installs every requirements file.
+///
+/// `upgrade` is passed through to pip: a rebuilt environment is resolved fresh against
+/// the index, while a reused one keeps whatever already satisfies the constraints.
+fn populate_venv(
+    venv_path: &Path,
+    python_executable: &str,
+    requirements_file_list: &[PathBuf],
+    constraint_file: &Option<PathBuf>,
+    wheel_dir: &Option<PathBuf>,
+    pypi_mirror: &Option<String>,
+    upgrade: bool,
+) -> Result<(), String> {
+    match ensure_path(venv_path.to_str().unwrap()) {
+        Ok(_) => debug!("venv path ensured: {}", venv_path.display()),
+        Err(e) => {
+            error!("failed to ensure venv path: {}", e);
+            return Err(format!("failed to ensure venv path: {}", e));
+        }
+    }
+
+    match create_python_venv(venv_path.to_str().unwrap(), python_executable) {
+        Ok(_) => debug!("venv created"),
+        Err(e) => {
+            error!("failed to create venv: {}", e);
+            return Err(format!("failed to create venv: {}", e));
+        }
+    }
+
+    for requirements_file in requirements_file_list {
+        match pip_install_requirements(
+            venv_path,
+            requirements_file,
+            constraint_file,
+            wheel_dir,
+            pypi_mirror,
+            upgrade,
+        ) {
+            Ok(_) => debug!("requirements installed: {}", requirements_file.display()),
+            Err(e) => {
+                error!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                );
+                return Err(format!(
+                    "failed to install requirements from file {:?}: {}",
+                    requirements_file, e
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Installs or updates the Python virtual environment for a specific ESP-IDF version.
 ///
-/// This asynchronous function orchestrates the creation of a Python virtual environment,
-/// downloads the necessary constraints file, and then installs all required Python
-/// packages based on the ESP-IDF version and specified features. It can optionally
-/// reinstall the environment if it already exists.
+/// The existing virtual environment is kept and pip installs only the packages that are
+/// missing or no longer satisfy the constraints. If that first attempt fails (venv
+/// creation or a non-zero pip exit), the environment is deleted and pip is retried once
+/// with `--upgrade`; a second failure is returned as an error.
 ///
 /// # Arguments
 ///
+/// * `paths` - Version-specific paths (IDF checkout, venv location, etc.).
 /// * `idf_version` - A string slice representing the ESP-IDF version (e.g., "v5.1", "master").
 /// * `idf_tools_path` - A reference to a `Path` where ESP-IDF tools, including the
 ///   Python virtual environment, should be stored.
-/// * `reinstall` - A boolean indicating whether to remove an existing virtual
-///   environment before creating a new one. If `true`, the existing `venv` will be
-///   deleted.
-/// * `idf_path` - A reference to a `Path` pointing to the root directory of the
-///   ESP-IDF installation, used to locate `requirements.txt` files.
 /// * `features` - A slice of `String`s, where each string represents an additional
 ///   feature whose Python requirements should be installed (e.g., "esp_gh_action").
 ///   These correspond to files like `requirements_esp_gh_action.txt`.
 /// * `offline_archive_dir` - Optional path to offline archive directory containing
 ///   pre-downloaded wheels and constraints files.
+/// * `pypi_mirror` - Optional PyPI mirror URL.
 ///
 /// # Returns
 ///
@@ -574,20 +656,10 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 /// - `Ok(())` if the Python environment was installed or updated successfully.
 /// - `Err(String)` if any step of the installation process fails, containing
 ///   a descriptive error message.
-///
-/// # Errors
-///
-/// This function can return an error for various reasons, including but not limited to:
-/// - Failure to create the virtual environment.
-/// - Issues removing an existing virtual environment during a reinstall operation.
-/// - Failure to download the constraints file.
-/// - Failure to install any of the required Python packages from the `requirements.txt`
-///   files using pip.
 pub async fn install_python_env(
     paths: &VersionPaths,
     idf_version: &str,
     idf_tools_path: &Path,
-    reinstall: bool,
     features: &[String],
     offline_archive_dir: Option<&Path>,
     pypi_mirror: &Option<String>
@@ -595,27 +667,6 @@ pub async fn install_python_env(
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
 
-    // if reinstall is true, remove the existing venv
-    if venv_path.exists() && reinstall {
-        debug!("venv already exists, removing it");
-        match std::fs::remove_dir_all(&venv_path) {
-            Ok(_) => {
-                debug!("venv removed");
-            }
-            Err(e) => {
-                warn!("failed to remove venv: {}, trying to proceed nonetheless", e);
-            }
-        }
-    }
-    match ensure_path(venv_path.to_str().unwrap()){
-        Ok(_) => {
-            debug!("venv path ensured: {}", venv_path.display());
-        }
-        Err(e) => {
-            error!("failed to ensure venv path: {}", e);
-            return Err(format!("failed to ensure venv path: {}", e));
-        }
-    }
     if let Some(_offline_dir) = offline_archive_dir {
         offline_mode = true;
     } else {
@@ -630,17 +681,6 @@ pub async fn install_python_env(
     } else {
         detect_default_python().unwrap_or_else(|_| "python3".to_string())
     };
-
-    // create the venv
-    match create_python_venv(venv_path.to_str().unwrap(), &python_executable) {
-        Ok(_) => {
-            debug!("venv created");
-        }
-        Err(e) => {
-            error!("failed to create venv: {}", e);
-            return Err(format!("failed to create venv: {}", e));
-        }
-    }
 
     // install the requirements
     let mut requirements_file_list = vec![];
@@ -717,23 +757,29 @@ pub async fn install_python_env(
         None
     };
 
-    // install the requirements from files
-    for requirements_file in requirements_file_list {
-        match pip_install_requirements(&venv_path, &requirements_file, &constraint_file, &wheel_dir, pypi_mirror) {
-            Ok(_) => {
-                debug!("requirements installed: {}", requirements_file.display());
-            }
-            Err(e) => {
-                error!(
-                    "failed to install requirements from file {:?}: {}",
-                    requirements_file, e
-                );
-                return Err(format!(
-                    "failed to install requirements from file {:?}: {}",
-                    requirements_file, e
-                ));
-            }
-        }
+    if let Err(e) = populate_venv(
+        &venv_path,
+        &python_executable,
+        &requirements_file_list,
+        &constraint_file,
+        &wheel_dir,
+        pypi_mirror,
+        false,
+    ) {
+        warn!(
+            "Python environment reuse failed; deleting the virtual environment and retrying with a full reinstall: {}",
+            e
+        );
+        remove_python_venv(&venv_path);
+        populate_venv(
+            &venv_path,
+            &python_executable,
+            &requirements_file_list,
+            &constraint_file,
+            &wheel_dir,
+            pypi_mirror,
+            true,
+        )?;
     }
     info!("Python environment installed successfully");
     Ok(())

@@ -368,6 +368,9 @@ wizard.prerequisites.skip_check:
 wizard.python.env_installed:
   en: Python environment installed
   cn: 已安装 Python 环境
+wizard.python.reusing_env:
+  en: "Reusing the existing Python virtual environment; installing only the packages which are missing or no longer satisfy the constraints"
+  cn: "正在重用现有的 Python 虚拟环境，仅安装缺失的或不再满足约束条件的软件包"
 wizard.debug.config_entering:
   en: "Config entering wizard: %{config}"
   cn: "配置进入向导: %{config}"

@@ -514,6 +514,12 @@ pub fn run_command_using_activation_script_headless(
     }
 }
 
+/// Builds the settings a `fix` run should start from, recovering the configuration the
+/// installation was originally created with whenever it is available.
+///
+/// When the stored configuration is successfully recovered, `config_file` is set so that
+/// the mirror-selection logic in `select_single_mirror` recognises these values as
+/// deliberate choices and skips latency probing.
 pub async fn prepare_settings_for_fix_idf_installation(
     path_to_fix: PathBuf,
     config_path: Option<&PathBuf>,
@@ -562,7 +568,11 @@ pub async fn prepare_settings_for_fix_idf_installation(
         }
     }
 
+    let recovered_from_installation = original_settings.is_some();
     let mut settings = original_settings.unwrap_or_default();
+    if recovered_from_installation {
+        settings.config_file = Some(config_path.cloned().unwrap_or_else(get_default_config_path));
+    }
     settings.path = Some(path_to_fix.clone());
     settings.non_interactive = Some(true);
     settings.version_name = version_name;

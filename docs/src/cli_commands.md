@@ -71,7 +71,7 @@ Options:
 - `--idf-features <IDF_FEATURES>`: Comma-separated list of additional IDF features (ci, docs, pytests, etc.) to be installed with ESP-IDF. When installing multiple versions, these features are applied to all versions. For per-version feature configuration, use a configuration file with the `idf_features_per_version` option.
 - `--repo-stub <REPO_STUB>`: Custom repository stub to use instead of the default ESP-IDF repository. Allows using custom IDF repositories
 - `--skip-prerequisites-check`: Skip prerequisites check. This is useful if you are sure that all prerequisites are already installed and you want to skip the check. This is not recommended unless you know what you are doing, as it can result in a non-functional installation. Use at your own risk.
-- `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash.
+- `--version-name`: Version name to be used for the installation. If not provided, the version will be derived from the ESP-IDF repository tag or commit hash. The name becomes part of the Python environment path, the activation script file name and the identifier used by `select`, `run` and `remove`, so pinning it is useful whenever the checked-out revision changes over time — see [Using EIM with git bisect](./git_bisect.md#why---version-name-matters).
 - `--cleanup`: If set to true, the installer will remove temporary tool archive files after installation. Default is false. This is useful for headless, CI, and Docker environments where the installation artifacts are not needed after installation and can significantly reduce the final image size.
 - `--skip-components-download`: If set to true, the installer will skip the component managers' components download step (`compote registry sync`) after installation. Default is `false` for `install`/`wizard` and `true` for `fix`. Use this when you want to install the toolchain but defer fetching component definitions — for example, in CI/Docker layers where components will be pulled on demand later, or when you intentionally want to keep the installation minimal.
 - `--use-local-archive <PATH_TO_ARCHIVE>`: Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a `.zst` file. **Do not unpack the .zst archive.** This option is not compatible with online installation options like `--idf-versions`, `--mirror`, etc. At this time, offline installation only supports Python 3.11 to 3.14 on Linux, macOS, and Windows.
@@ -244,7 +244,7 @@ eim fix [OPTIONS]
 Options:
 - `-p, --path <PATH>`: Path of the existing installation to fix. If omitted, you will be presented with a selection of all known IDF installations to choose from.
 
-`fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
+Apart from that, `fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
 
 ```bash
 # Fix (repair) an installation, keeping its original tools/features
@@ -259,6 +259,25 @@ eim fix -p /path/to/existing/esp-idf --idf-features docs,pytest
 # Fix an installation, choosing interactively from all installed versions
 eim fix
 ```
+
+`fix` never touches the Git repository itself — it does not fetch, check out or update submodules. It re-reads `tools/tools.json` and the Python requirements from the working tree as it currently stands, which makes it the command to run after you change the checked-out revision yourself. See [Using EIM with git bisect](./git_bisect.md) for that workflow.
+
+#### Mirrors
+
+`fix` reuses the mirrors recorded in the installation and does not measure mirror latency. `install` and `wizard` pick the fastest reachable mirror by probing the candidates, which costs several seconds; repeating that on every `fix` would only re-derive the mirrors the installation already has, so it is skipped.
+
+Pass `-m, --mirror`, `--idf-mirror` or `--pypi-mirror` to fix an installation against a different mirror than the one it was installed with. If the installation has no stored configuration to recover — for example one registered by an older EIM, or one left behind by a `fix` which failed part way through — `fix` falls back to latency-based selection, exactly as `install` does.
+
+#### The Python environment
+
+All commands (`install`, `wizard`, `fix`) keep the existing virtual environment and run pip against it without `--upgrade`, so pip installs only the packages which are missing or no longer satisfy the constraints file. Everything already satisfied is left alone, and pip does not contact the package index for it.
+
+If that pip run fails — a corrupted environment, a missing interpreter, a non-zero pip exit — the environment is deleted and pip is retried once with `--upgrade`. A second failure is reported as an error.
+
+Two consequences worth knowing:
+
+- When a revision tightens a version range — `tools/requirements/*.txt` lists packages without versions and `espidf.constraints.*.txt` supplies the ranges — the installed package no longer satisfies it and pip upgrades it. Moving between revisions therefore still gets you the right package versions.
+- Packages no longer drift to the newest release *within* a range that has not changed. If the constraint is `esptool~=5.2` and you have 5.2.1 installed, `fix` leaves it there rather than moving to 5.2.9.
 
 ### Completions Command
 
