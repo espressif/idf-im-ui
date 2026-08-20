@@ -8,32 +8,40 @@ import fs from "fs";
 import os from "os";
 
 /**
- * Verifies the regression fix for installing a named version on the same
- * `--idf-path` as an existing IDF installation.
+ * Verifies the regression fix for installing a named version under the same
+ * base `-p`/`--idf-path` folder as an existing IDF installation.
  *
  * Background:
- *   `eim install --idf-path <path>` against a path that already maps to a
- *   tracked IDF in `eim_idf.json` used to abort with
+ *   `eim install -p <path>` against a base folder that already has a
+ *   tracked IDF checkout under it used to abort with
  *   "The IDF at path '<path>' is already installed ... use the 'fix' command",
  *   even when the user also supplied `--version-name <newName>` to register
- *   a separate, named entry pointing at the same directory.
+ *   a separate, named entry.
  *
  *   The CLI now skips the "already installed" short-circuit whenever
  *   `--version-name` is provided, allowing a second installation to register
- *   a new entry in `eim_idf.json` against the same path.
+ *   a new entry in `eim_idf.json`.
  *
  * Scenario under test:
  *   1. Run `eim install -p <installFolder> -i <idf> ...` once with no
  *      `--version-name`. This produces the default-named entry in
  *      `eim_idf.json` and the IDF checkout at `<installFolder>/<idf>/esp-idf`.
  *   2. Run `eim install -p <installFolder> -i <idf> ... --version-name <named>`
- *      against the SAME `<installFolder>` and same IDF version. The wizard
- *      will re-use the existing checkout (path-already-exists branch) and
- *      register a new entry under `<named>`. The CLI must NOT abort with
- *      the "already installed" message.
+ *      against the SAME base `<installFolder>` and same IDF version. The
+ *      destination folder for a named install is always derived from
+ *      `--version-name` (see `Settings::get_version_paths` in
+ *      src-tauri/src/lib/settings.rs), so this clones a second, independent
+ *      checkout at `<installFolder>/<named>/esp-idf` and registers it under
+ *      `<named>`. The CLI must NOT abort with the "already installed"
+ *      message - only pointing `-p` directly AT an existing IDF checkout
+ *      root reuses it (the `using_existing_idf` path in settings.rs, which
+ *      checks for a `tools/tools.json` at the given path); a base folder
+ *      that merely happens to contain an existing `<idf>/esp-idf`
+ *      subdirectory does not.
  *   3. After both installs, `eim_idf.json` must contain two distinct
- *      entries: the original default-named one and the new named one, both
- *      pointing at the same IDF path.
+ *      entries with two distinct IDF paths: the original default-named one
+ *      at `<installFolder>/<idf>/esp-idf`, and the new named one at
+ *      `<installFolder>/<named>/esp-idf`.
  */
 export function runCLINamedVersionInstallTest({
   id = 0,
@@ -50,12 +58,17 @@ export function runCLINamedVersionInstallTest({
     let testRunner = null;
     let proxy = null;
 
+    const ALREADY_INSTALLED_ABORT_RE = /IDF at path .* is already installed/i;
+
     const espIdfJsonFolder =
       os.platform() === "win32"
         ? path.join("C:\\Espressif", "tools")
         : path.join(os.homedir(), ".espressif", "tools");
     const eimJsonFilePath = path.join(espIdfJsonFolder, "eim_idf.json");
     const idfInstallRoot = path.join(installFolder, idfVersion, "esp-idf");
+    // A named install always clones into its own <version-name>/esp-idf
+    // folder under the same base installFolder - see the header comment.
+    const namedInstallRoot = path.join(installFolder, namedVersion, "esp-idf");
 
     before(async function () {
       this.timeout(120000);
@@ -148,6 +161,7 @@ export function runCLINamedVersionInstallTest({
     it(`1- Should install IDF ${idfVersion} (default name)`, async function () {
       this.timeout(3600000);
       logger.info(`Installing IDF ${idfVersion} with default naming`);
+      testRunner.output = "";
       testRunner.callEIM(pathToEIM, ["install", ...args]);
       const result = await waitForInstallCompletion(3600000);
       expect(result, "Initial install did not complete").to.be.oneOf([
@@ -165,7 +179,13 @@ export function runCLINamedVersionInstallTest({
       logger.info(
         `Re-installing IDF ${idfVersion} at same path with --version-name ${namedVersion}`,
       );
-      const beforeOutputLength = testRunner.output.length;
+      // waitForInstallCompletion()/waitForOutput() check the whole
+      // cumulative terminal buffer, not just output since this command was
+      // sent. Without clearing it first, the "Now you can start using IDF
+      // tools" success message still sitting in the buffer from test 1's
+      // install would immediately satisfy the completion check below before
+      // this second install has done anything at all.
+      testRunner.output = "";
       testRunner.callEIM(pathToEIM, [
         "install",
         "--version-name",
@@ -173,7 +193,7 @@ export function runCLINamedVersionInstallTest({
         ...args,
       ]);
       const result = await waitForInstallCompletion(3600000);
-      const newOutput = testRunner.output.slice(beforeOutputLength);
+      const newOutput = testRunner.output;
 
       // The CLI used to abort before doing any work when the path already
       // mapped to an installed IDF. The bug surfaced as the
@@ -184,7 +204,7 @@ export function runCLINamedVersionInstallTest({
         newOutput,
         `CLI aborted the named-version install with the "already installed" short-circuit. ` +
           `Output: ${newOutput}`,
-      ).to.not.match(/already installed/i);
+      ).to.not.match(ALREADY_INSTALLED_ABORT_RE);
       expect(
         newOutput,
         `CLI suggested the "fix" command, which is wrong when --version-name is used. ` +
@@ -232,10 +252,14 @@ export function runCLINamedVersionInstallTest({
       ).to.include(namedVersion);
 
       for (const entry of eimJsonContent.idfInstalled) {
+        // Each entry gets its own checkout, keyed off its own name - see
+        // the header comment for why these are not the same path.
+        const expectedPath =
+          entry.name === namedVersion ? namedInstallRoot : idfInstallRoot;
         expect(
           entry.path,
-          `IDF path for entry '${entry.name}' should equal '${idfInstallRoot}'`,
-        ).to.equal(idfInstallRoot);
+          `IDF path for entry '${entry.name}' should equal '${expectedPath}'`,
+        ).to.equal(expectedPath);
         expect(
           fs.existsSync(entry.path),
           `IDF path for entry '${entry.name}' does not exist on disk: ${entry.path}`,
@@ -252,7 +276,11 @@ export function runCLINamedVersionInstallTest({
       logger.info(
         `Sanity check: re-installing without --version-name should still be rejected`,
       );
-      const beforeOutputLength = testRunner.output.length;
+      // See the note in test 2: waitForOutput() checks the whole cumulative
+      // buffer, so it must be cleared before each new command or a
+      // completion/failure marker left over from a previous install would
+      // end this loop instantly without this command having done anything.
+      testRunner.output = "";
       const pFlag =
         os.platform() === "win32"
           ? `-p "${idfInstallRoot}"`
@@ -265,8 +293,7 @@ export function runCLINamedVersionInstallTest({
       const deadline = Date.now() + 600000;
       let sawMessage = false;
       while (Date.now() < deadline) {
-        const tail = testRunner.output.slice(beforeOutputLength);
-        if (/already installed/i.test(tail)) {
+        if (ALREADY_INSTALLED_ABORT_RE.test(testRunner.output)) {
           sawMessage = true;
           break;
         }
@@ -283,7 +310,7 @@ export function runCLINamedVersionInstallTest({
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      const tail = testRunner.output.slice(beforeOutputLength);
+      const tail = testRunner.output;
       expect(
         sawMessage,
         `CLI should have aborted the second install without --version-name ` +

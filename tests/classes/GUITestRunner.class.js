@@ -32,7 +32,43 @@ class GUITestRunner {
   }
 
   // Function to launch the GUI application
+  // Wrapped in a hard outer deadline: `_start()` below has async steps
+  // (notably `Builder().build()`, which creates the WebDriver session) that
+  // carry no timeout of their own. If one of those hangs - e.g. tauri-driver
+  // becomes ready and launches the app, but the session-creation handshake
+  // itself stalls - nothing inside `_start()` ever rejects, so the retry
+  // loop's cleanup never runs and mocha's own hook timeout (60s) is left to
+  // kill the test, leaving tauri-driver/the app running with no cleanup at
+  // all. Racing against a real timer here guarantees `stop()` always runs
+  // and that we always throw ourselves well before that hook timeout.
   async start() {
+    let deadlineTimer;
+    const deadlineMs = 45000;
+    const deadline = new Promise((_, reject) => {
+      deadlineTimer = setTimeout(() => {
+        reject(
+          new Error(`GUI application did not become ready within ${deadlineMs}ms`)
+        );
+      }, deadlineMs);
+    });
+    const startPromise = this._start();
+    // If the deadline wins the race, `startPromise` is still running in the
+    // background (Promise.race doesn't cancel it) and will settle later on
+    // its own, e.g. once `stop()` below tears down tauri-driver out from
+    // under it. Nothing awaits that outcome, so give it a no-op handler to
+    // avoid an unhandled rejection.
+    startPromise.catch(() => {});
+    try {
+      await Promise.race([startPromise, deadline]);
+    } catch (error) {
+      await this.stop();
+      throw error;
+    } finally {
+      clearTimeout(deadlineTimer);
+    }
+  }
+
+  async _start() {
     logger.info("Lauching Tauri Driver");
     const tauriDriverPath = path.resolve(
       os.homedir(),
@@ -42,8 +78,25 @@ class GUITestRunner {
     );
     try {
       this.tauriDriver = spawn(tauriDriverPath, [], {
-        stdio: [null, process.stdout, process.stderr],
+        stdio: ["ignore", "pipe", "pipe"],
       });
+      // tauri-driver's own stdout/stderr carry the actual reason a session
+      // fails to be created (e.g. the underlying msedgedriver/webview error
+      // behind "DevToolsActivePort file doesn't exist"). Piping straight to
+      // process.stdout/stderr used to send this into the raw CI console,
+      // which isn't captured by any uploaded artifact - every session
+      // failure was undiagnosable after the fact. Log it to a file instead
+      // (tests/*.log is already picked up by the CI artifact upload).
+      const tauriDriverLogPath = path.join(
+        import.meta.dirname,
+        "..",
+        "tauri-driver-output.log"
+      );
+      const logLine = (chunk) =>
+        fs.appendFileSync(tauriDriverLogPath, chunk.toString());
+      logLine(`\n--- tauri-driver launched at ${new Date().toISOString()} (pid ${this.tauriDriver.pid}) ---\n`);
+      this.tauriDriver.stdout.on("data", logLine);
+      this.tauriDriver.stderr.on("data", logLine);
     } catch (error) {
       logger.info("Error launching Tauri driver:", error);
       throw error;
@@ -51,7 +104,6 @@ class GUITestRunner {
 
     const tauriReady = await this.waitForTauriDriver(10000);
     if (!tauriReady) {
-      await this.stop();
       throw new Error(
         `tauri-driver did not become ready in time (path: ${tauriDriverPath})`
       );
@@ -71,7 +123,6 @@ class GUITestRunner {
           error
         );
         if (attempt === maxSessionAttempts) {
-          await this.stop();
           throw error;
         }
         await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
@@ -83,9 +134,17 @@ class GUITestRunner {
     const end = Date.now() + timeout;
     while (Date.now() < end) {
       try {
-        const response = await fetch("http://127.0.0.1:4444/status");
-        if (response.ok) {
-          return true;
+        const controller = new AbortController();
+        const abortTimer = setTimeout(() => controller.abort(), 2000);
+        try {
+          const response = await fetch("http://127.0.0.1:4444/status", {
+            signal: controller.signal,
+          });
+          if (response.ok) {
+            return true;
+          }
+        } finally {
+          clearTimeout(abortTimer);
         }
       } catch (_error) {
         // tauri-driver not ready yet
@@ -105,8 +164,21 @@ class GUITestRunner {
       }
     }
     try {
-      if (this.tauriDriver) {
-        this.tauriDriver.kill();
+      if (this.tauriDriver && this.tauriDriver.pid) {
+        if (os.platform() === "win32") {
+          await new Promise((resolve) => {
+            const killer = spawn("taskkill", [
+              "/pid",
+              String(this.tauriDriver.pid),
+              "/T",
+              "/F",
+            ]);
+            killer.on("close", resolve);
+            killer.on("error", resolve);
+          });
+        } else {
+          this.tauriDriver.kill();
+        }
       }
     } catch (error) {
       logger.info("Error closing Tauri driver:", error);

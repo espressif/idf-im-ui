@@ -62,8 +62,6 @@ try {
           (version) => version.old !== true && version.pre_release !== true && version.name !== 'latest'
         )?.name || IDFDefaultVersion;
       logger.info(`IDF Default Version set to: ${IDFDefaultVersion}`);
-      let IDFValidVersions = [...idfVersions.filter((v)=>v.old!==true && v.name !== 'latest').map((v)=>v.name)];
-      IDFDefaultVersionIndex = IDFValidVersions.indexOf(IDFDefaultVersion) === -1? IDFDefaultVersionIndex: IDFValidVersions.indexOf(IDFDefaultVersion);
 
       const validIdfVersions = idfVersions.filter(
         (v) => v.old !== true && v.name !== "latest",
@@ -75,22 +73,37 @@ try {
         .filter((v) => v.pre_release === true)
         .map((v) => v.name);
 
+      // "previous"/"previousPrevious"/"old" must be derived from the
+      // stable-only list. Indexing into a list that still mixes in
+      // prereleases (as this used to) shifts every position whenever a
+      // prerelease sorts ahead of a stable release in the API response,
+      // making "previous" silently collide with IDFDefaultVersion instead
+      // of pointing at the actual second-newest stable release.
+      if (IDFAvailableVersions.stable.length > 1) {
+        IDFPreviousStable = IDFAvailableVersions.stable[1] || IDFPreviousStable;
+      }
+      if (IDFAvailableVersions.stable.length > 2) {
+        IDFPreviousPreviousStable = IDFAvailableVersions.stable[2] || IDFPreviousPreviousStable;
+      }
+      if (IDFAvailableVersions.stable.length > 3) {
+        IDFOldStable = IDFAvailableVersions.stable[3] || IDFOldStable;
+      }
+
+      // IDFDefaultVersionIndex indexes into the flat [development, ...stable,
+      // ...prerelease] list used by the CLI wizard's version picker (see
+      // CLIWizardInstall.test.js), not the raw API order. IDFDefaultVersion
+      // is always the first stable release, so its position there is 1 (for
+      // "development") plus its offset within the stable list.
+      const stableDefaultIndex = IDFAvailableVersions.stable.indexOf(IDFDefaultVersion);
+      IDFDefaultVersionIndex =
+        stableDefaultIndex === -1 ? IDFDefaultVersionIndex : stableDefaultIndex + 1;
+
       logger.info(
         `Available IDF Versions: ${JSON.stringify(IDFAvailableVersions)}`,
       );
       logger.info(
         `IDF Default Version Index set to: ${IDFDefaultVersionIndex}`,
       );
-
-      if (IDFValidVersions.length > 1) {
-        IDFPreviousStable = IDFValidVersions[1] || IDFPreviousStable;
-      }
-      if (IDFValidVersions.length > 2) {
-        IDFPreviousPreviousStable = IDFValidVersions[2] || IDFPreviousPreviousStable;
-      }
-      if (IDFValidVersions.length > 3) {
-        IDFOldStable = IDFValidVersions[3] || IDFOldStable;
-      }
       logger.info(
         `IDF previous: ${IDFPreviousStable}, previousPrevious: ${IDFPreviousPreviousStable}, old: ${IDFOldStable}`,
       );
