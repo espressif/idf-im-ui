@@ -270,11 +270,9 @@ Pass `-m, --mirror`, `--idf-mirror` or `--pypi-mirror` to fix an installation ag
 
 #### The Python environment
 
-`fix` keeps the existing virtual environment and runs pip against it, so pip installs only the packages which are missing or no longer satisfy the constraints file of the revision you have checked out. Everything already satisfied is left alone, and pip does not contact the package index for it. This is what makes a second `fix` on an unchanged installation cheap rather than a multi-minute reinstall.
+All commands (`install`, `wizard`, `fix`) keep the existing virtual environment and run pip against it without `--upgrade`, so pip installs only the packages which are missing or no longer satisfy the constraints file. Everything already satisfied is left alone, and pip does not contact the package index for it.
 
-If that pip run fails — a corrupted environment, a missing interpreter, a non-zero pip exit — `fix` warns, deletes the virtual environment, and retries once with `--upgrade`. A second failure is reported as an error.
-
-Installation is unaffected: `install` and `wizard` always build the environment from scratch, as they always have.
+If that pip run fails — a corrupted environment, a missing interpreter, a non-zero pip exit — the environment is deleted and pip is retried once with `--upgrade`. A second failure is reported as an error.
 
 Two consequences worth knowing:
 

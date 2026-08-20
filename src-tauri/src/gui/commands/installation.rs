@@ -230,7 +230,6 @@ pub async fn install_single_version(
   app_handle: AppHandle,
   settings: &Settings,
   version: String,
-  reinstall_python_env: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
   info!("Installing IDF version: {}", version);
 
@@ -254,7 +253,7 @@ pub async fn install_single_version(
   }
 
 
-  let (export_paths,export_vars) = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None, reinstall_python_env).await?;
+  let (export_paths,export_vars) = setup_tools(&app_handle, settings, &paths.idf_path, &paths.actual_version, None).await?;
 
   let skip_component_installation = settings.skip_components_download == Some(true);
 
@@ -788,7 +787,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 total = total_versions).to_string());
 
         // Install single version
-        match install_single_version(app_handle.clone(), &settings, version.clone(), true).await {
+        match install_single_version(app_handle.clone(), &settings, version.clone()).await {
             Ok(_) => {
                 emit_installation_event(&app_handle, InstallationProgress {
                   stage: if index < versions.len() - 1 { InstallationStage::Configure } else { InstallationStage::Complete },
@@ -1237,10 +1236,8 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         version: Some(installation.name.clone()),
     });
 
-    // The GUI decides mirrors through `get_mirror_to_use`, which already leaves a fix's
-    // configured mirrors alone, so the recovery flag is of no use here.
     let mut settings = match prepare_settings_for_fix_idf_installation(PathBuf::from(installation.path.clone()), fix_config_path.as_ref()).await {
-        Ok((settings, _)) => {
+        Ok(settings) => {
             emit_installation_event(&app_handle, InstallationProgress {
                 stage: InstallationStage::Prerequisites,
                 percentage: 30,
@@ -1329,7 +1326,7 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         rust_i18n::t!("gui.fix.starting_repair_log", version = installation.name.clone()).to_string());
 
     // The actual repair process - this will generate detailed progress events
-    match install_single_version(app_handle.clone(), &settings, installation.name.clone(), false).await {
+    match install_single_version(app_handle.clone(), &settings, installation.name.clone()).await {
         Ok(_) => {
             emit_log_message(&app_handle, MessageLevel::Success,
                 rust_i18n::t!("gui.fix.repair_success", version = installation.name.clone()).to_string());
@@ -1906,7 +1903,7 @@ pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<Str
                 version: Some(idf_version.clone()),
             });
 
-            let (export_paths, export_vars ) = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version, Some(offline_archive_dir.path()), true).await {
+            let (export_paths, export_vars ) = match setup_tools(&app_handle, &settings, &paths.idf_path, &paths.actual_version, Some(offline_archive_dir.path())).await {
                 Ok((paths, vars)) => {
                     emit_log_message(&app_handle, MessageLevel::Success,
                         rust_i18n::t!("gui.offline.tools_configured").to_string());

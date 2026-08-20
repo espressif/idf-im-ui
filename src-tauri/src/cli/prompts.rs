@@ -243,26 +243,15 @@ async fn select_single_mirror<FGet, FSet>(
     candidates: &[&str], // list of mirror URLs
     wizard_key: &str,    // e.g. "wizard.idf.mirror"
     log_prefix: &str,    // e.g. "IDF", "Tools", "PyPI"
-    preserve_mirrors: bool, // settings came from a recovered installation, see `WizardOptions`
 ) -> Result<(), String>
 where
     FGet: Fn(&Settings) -> &Option<String>,
     FSet: Fn(&mut Settings, String),
 {
-    // Interactive by default when non_interactive is None
     let interactive = !config.non_interactive.unwrap_or_default();
     let wizard_all = config.wizard_all_questions.unwrap_or_default();
     let current = get_value(config);
-    // `is_default` compares by value, so it cannot tell a mirror nobody ever chose from one a
-    // previous run chose which happens to equal the default. `preserve_mirrors` supplies that
-    // missing distinction for settings recovered from an installation.
-    let needs_value = current.is_none() || (config.is_default(field_name) && !preserve_mirrors);
-    if preserve_mirrors && !needs_value {
-        debug!(
-            "Keeping {log_prefix} mirror from the recovered installation config: {:?}",
-            current
-        );
-    }
+    let needs_value = current.is_none() || config.is_default(field_name);
 
     // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
@@ -298,7 +287,7 @@ where
     Ok(())
 }
 
-pub async fn select_mirrors(mut config: Settings, preserve_mirrors: bool) -> Result<Settings, String> {
+pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
     // IDF mirror
     let idf_candidates = idf_im_lib::get_idf_mirrors_list();
 
@@ -310,7 +299,6 @@ pub async fn select_mirrors(mut config: Settings, preserve_mirrors: bool) -> Res
         idf_candidates,
         "wizard.idf.mirror",
         "IDF",
-        preserve_mirrors,
     )
     .await?;
 
@@ -325,7 +313,6 @@ pub async fn select_mirrors(mut config: Settings, preserve_mirrors: bool) -> Res
         tools_candidates,
         "wizard.tools.mirror",
         "Tools",
-        preserve_mirrors,
     )
     .await?;
 
@@ -340,7 +327,6 @@ pub async fn select_mirrors(mut config: Settings, preserve_mirrors: bool) -> Res
         pypi_candidates,
         "wizard.pypi.mirror",
         "PyPI",
-        preserve_mirrors,
     )
     .await?;
 

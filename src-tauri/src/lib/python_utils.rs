@@ -632,28 +632,23 @@ fn populate_venv(
 
 /// Installs or updates the Python virtual environment for a specific ESP-IDF version.
 ///
-/// This asynchronous function orchestrates the creation of a Python virtual environment,
-/// downloads the necessary constraints file, and then installs all required Python
-/// packages based on the ESP-IDF version and specified features. It can optionally
-/// reinstall the environment if it already exists.
+/// The existing virtual environment is kept and pip installs only the packages that are
+/// missing or no longer satisfy the constraints. If that first attempt fails (venv
+/// creation or a non-zero pip exit), the environment is deleted and pip is retried once
+/// with `--upgrade`; a second failure is returned as an error.
 ///
 /// # Arguments
 ///
+/// * `paths` - Version-specific paths (IDF checkout, venv location, etc.).
 /// * `idf_version` - A string slice representing the ESP-IDF version (e.g., "v5.1", "master").
 /// * `idf_tools_path` - A reference to a `Path` where ESP-IDF tools, including the
 ///   Python virtual environment, should be stored.
-/// * `reinstall` - If `true` (install / wizard), the existing `venv` is deleted first and
-///   pip is run with `--upgrade`. If `false` (`fix`), the existing environment is kept and
-///   pip installs only the packages that are missing or no longer satisfy the constraints.
-///   Should that first attempt fail (venv creation or a non-zero pip exit), the environment
-///   is deleted and pip is retried once with `--upgrade`; a second failure is returned.
-/// * `idf_path` - A reference to a `Path` pointing to the root directory of the
-///   ESP-IDF installation, used to locate `requirements.txt` files.
 /// * `features` - A slice of `String`s, where each string represents an additional
 ///   feature whose Python requirements should be installed (e.g., "esp_gh_action").
 ///   These correspond to files like `requirements_esp_gh_action.txt`.
 /// * `offline_archive_dir` - Optional path to offline archive directory containing
 ///   pre-downloaded wheels and constraints files.
+/// * `pypi_mirror` - Optional PyPI mirror URL.
 ///
 /// # Returns
 ///
@@ -661,30 +656,16 @@ fn populate_venv(
 /// - `Ok(())` if the Python environment was installed or updated successfully.
 /// - `Err(String)` if any step of the installation process fails, containing
 ///   a descriptive error message.
-///
-/// # Errors
-///
-/// This function can return an error for various reasons, including but not limited to:
-/// - Failure to create the virtual environment.
-/// - Issues removing an existing virtual environment during a reinstall operation.
-/// - Failure to download the constraints file.
-/// - Failure to install any of the required Python packages from the `requirements.txt`
-///   files using pip.
 pub async fn install_python_env(
     paths: &VersionPaths,
     idf_version: &str,
     idf_tools_path: &Path,
-    reinstall: bool,
     features: &[String],
     offline_archive_dir: Option<&Path>,
     pypi_mirror: &Option<String>
 ) -> Result<(), String> {
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
-
-    if reinstall {
-        remove_python_venv(&venv_path);
-    }
 
     if let Some(_offline_dir) = offline_archive_dir {
         offline_mode = true;
@@ -783,11 +764,8 @@ pub async fn install_python_env(
         &constraint_file,
         &wheel_dir,
         pypi_mirror,
-        reinstall,
+        false,
     ) {
-        if reinstall {
-            return Err(e);
-        }
         warn!(
             "Python environment reuse failed; deleting the virtual environment and retrying with a full reinstall: {}",
             e

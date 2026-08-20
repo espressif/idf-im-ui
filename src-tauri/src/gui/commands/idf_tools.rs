@@ -97,7 +97,6 @@ pub async fn setup_tools(
     idf_path: &PathBuf,
     idf_version: &str,
     offline_archive_dir: Option<&Path>,
-    reinstall_python_env: bool,
 ) -> Result<(Vec<String>,Vec<(String,String)>)> {
     info!("Setting up tools...");
 
@@ -488,7 +487,6 @@ pub async fn setup_tools(
         &paths,
         &paths.actual_version,
         &paths.tool_install_directory,
-        reinstall_python_env,
         &features_for_version,
         offline_archive_dir, // Offline archive directory
         &Some(pypi_mirror_to_use), // PyPI mirror
