@@ -263,6 +263,37 @@ If the CLI detects the correct Python but the GUI does not, this is almost certa
 
 * Alternatively, configure your macOS environment so GUI applications launched from Finder inherit the same `PATH` as your shell. This is a macOS configuration issue rather than an EIM-specific one.
 
+### EIM detected the wrong Python — multiple Python installations found
+
+If you have more than one Python installed on your system (e.g. from the Microsoft Store, MSYS2, python.org, Homebrew, MacPorts, pyenv, or a Linux package manager), EIM may pick a different Python than the one you intended, causing the prerequisite/configure step to fail or behave unexpectedly.
+
+This happens because EIM searches `PATH` for a `python3`/`python` executable and uses the **first valid one it finds** — which isn't always the one you want, especially if:
+- You have a Windows Store "App Execution Alias" stub alongside a real Python install.
+- You have multiple Python installs from different sources (MSYS2, python.org, Anaconda, etc.).
+- Your shell/environment `PATH` ordering doesn't match what you'd expect.
+
+**Solution: run EIM from the CLI with your preferred Python prepended to `PATH`**
+
+Since the EIM GUI and CLI are the same binary, you can fix this without reinstalling anything — just prepend the directory containing the correct Python to `PATH` before launching `eim`, so it's found first.
+
+**Windows (PowerShell):**
+```powershell
+$env:PATH = "C:\path\to\correct\python\folder;" + $env:PATH
+eim install
+```
+
+**macOS / Linux (Bash/Zsh):**
+```bash
+export PATH="/path/to/correct/python/folder:$PATH"
+eim install
+```
+
+This only affects the current terminal session. Once EIM installs with the correct Python, it pins that Python path into the generated ESP-IDF activation scripts, so ESP-IDF will consistently use that same Python afterward — you don't need to repeat this step for normal day-to-day use.
+
+You can also launch the GUI from the same terminal session (once `PATH` is fixed) if you prefer the guided flow — e.g. run `eim` with no arguments, or `eim gui` if using the Homebrew-installed CLI on macOS.
+
+> **Note:** We currently don't offer a manual Python-selector in the GUI, as we feel it would add confusion for less advanced users without a clear way to explain when/why it's needed. The CLI approach above is intended to cover this "multiple Pythons on the system" case for users who need more control.
+
 ## GUI-Specific Questions
 
 ### What is the new Report Issue button for?
