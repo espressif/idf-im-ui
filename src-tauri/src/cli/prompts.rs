@@ -248,6 +248,7 @@ where
     FGet: Fn(&Settings) -> &Option<String>,
     FSet: Fn(&mut Settings, String),
 {
+    // Interactive by default when non_interactive is None
     let interactive = !config.non_interactive.unwrap_or_default();
     let wizard_all = config.wizard_all_questions.unwrap_or_default();
     let current = get_value(config);
