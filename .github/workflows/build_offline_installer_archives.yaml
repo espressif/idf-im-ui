@@ -129,7 +129,8 @@ jobs:
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
         with:
           enable-cache: true
-          cache-dependency-glob: "uv.lock"
+          cache-dependency-glob: "src-tauri/Cargo.lock"
+          cache-suffix: ${{ inputs.idf_version }}
 
       # ── Compute versions & flags ───────────────────────────────────────────
       - name: Get IDF versions
@@ -383,7 +384,7 @@ jobs:
   # ── 4. Final dashboard ─────────────────────────────────────────────────────
   dashboard:
     name: "📊 Pipeline Dashboard"
-    needs: [get-versions, build-version, update-json]
+    needs: [get-versions, build-version, update-json, count-successes]
     if: always()
     runs-on: ubuntu-latest
 
@@ -489,7 +490,14 @@ jobs:
           echo "| JSON updated | ${{ needs.update-json.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Debug mode | ${{ needs.get-versions.outputs.debug }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Purge ran | ${{ needs.get-versions.outputs.should_purge }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Autotest | $( [ "${{ needs.count-successes.outputs.any_success }}" = "true" ] && echo "ran" || echo "⏭ skipped (no archives built)") |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+
+          # ── Autotest-skipped notice ───────────────────────────────────────
+          if [ "${{ needs.count-successes.outputs.any_success }}" != "true" ]; then
+            echo "ℹ️ Autotest was skipped because no archives were built successfully." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
 
           # ── Failed builds detail ───────────────────────────────────────────
           if [ $FAILURE -gt 0 ]; then
@@ -525,11 +533,65 @@ jobs:
             exit 1
           fi
 
-  # ── 5. Autotest ────────────────────────────────────────────────────────────
+  # ── 5. Count successful builds ─────────────────────────────────────────────
+  #
+  # Counts build-info artifacts with status="success" across every version
+  # matrix entry. Used to gate downstream jobs (autotest) so they don't run
+  # when nothing was actually built — there's nothing to test otherwise.
+  # ──────────────────────────────────────────────────────────────────────────
+  count-successes:
+    name: "🔢 Count Successful Builds"
+    needs: [get-versions, build-version]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      success_count: ${{ steps.count.outputs.success_count }}
+      failure_count: ${{ steps.count.outputs.failure_count }}
+      any_success:   ${{ steps.count.outputs.any_success }}
+    steps:
+      - name: Download all build-infos
+        uses: actions/download-artifact@v8
+        with:
+          pattern: build-info-*
+          path: ./all-build-infos/
+
+      - name: Count successful builds
+        id: count
+        shell: bash
+        run: |
+          SUCCESS=0
+          FAILURE=0
+          while IFS= read -r -d '' f; do
+            [ -f "$f" ] || continue
+            jq empty "$f" 2>/dev/null || continue
+            status=$(jq -r '.status' "$f")
+            case "$status" in
+              success) SUCCESS=$((SUCCESS+1)) ;;
+              failure) FAILURE=$((FAILURE+1)) ;;
+            esac
+          done < <(find all-build-infos -name "build-info.json" -type f -print0)
+
+          echo "📊 success=$SUCCESS failure=$FAILURE"
+          echo "success_count=$SUCCESS" >> "$GITHUB_OUTPUT"
+          echo "failure_count=$FAILURE" >> "$GITHUB_OUTPUT"
+          if [ "$SUCCESS" -gt 0 ]; then
+            echo "any_success=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any_success=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ── 6. Autotest ────────────────────────────────────────────────────────────
+  #
+  # Only run if at least one archive was built successfully; otherwise the
+  # test_offline workflow would download non-existent artifacts and produce
+  # meaningless results.
+  # ──────────────────────────────────────────────────────────────────────────
   autotest:
     name: "🧪 Autotest Offline Archives"
-    needs: [get-versions, build-version]
-    if: "!cancelled()"
+    needs: [get-versions, build-version, count-successes]
+    if: |
+      !cancelled() &&
+      needs.count-successes.outputs.any_success == 'true'
     uses: ./.github/workflows/test_offline.yml
     with:
       ref:               ${{ inputs.ref || github.ref }}

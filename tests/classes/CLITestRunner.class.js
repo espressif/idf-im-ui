@@ -134,9 +134,16 @@ class CLITestRunner {
     const startTime = Date.now();
     let exitCode = null;
     while (Date.now() - startTime < timeout) {
-      if (this.output.includes(sentinel)) {
+      // The sentinel is part of the command we sent (`echo "<sentinel>"`),
+      // so it appears in the terminal echo before the command actually runs.
+      // Wait until the EXIT= probe has been written too — that only
+      // happens once the chained command has finished executing. Without
+      // this guard the loop breaks on the echo's sentinel, slices the
+      // buffer up to it, and reports exitCode=null because EXIT=0 was
+      // never captured (the script hadn't run yet).
+      if (this.output.includes(sentinel) && /EXIT=\d+/.test(this.output)) {
         const match = this.output.match(/EXIT=(\d+)/);
-        if (match) exitCode = parseInt(match[1], 10);
+        exitCode = parseInt(match[1], 10);
         break;
       }
       if (this.exited) break;

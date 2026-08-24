@@ -115,12 +115,18 @@ jobs:
 
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
+        env:
+          HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
         run: |
           brew update
           brew install gdk-pixbuf cairo pango libjpeg libpng zlib meson glib dbus-glib
 
       - name: Install UV
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "src-tauri/Cargo.lock"
+          cache-suffix: ${{ inputs.idf_version }}
 
       # ── AWS ────────────────────────────────────────────────────────────────
       - name: Configure AWS credentials
