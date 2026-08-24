@@ -19,6 +19,7 @@ use crate::gui::{
       get_offline_archive_cache_dir,
       get_file_name,
       compare_versions,
+      is_stable_version,
       MirrorType
     },
 };
@@ -2051,7 +2052,13 @@ async fn platform_archives() -> Result<Vec<OfflineArchive>, String> {
         })
         .collect();
 
-    archives.sort_by(|a, b| compare_versions(&b.version, &a.version));
+    archives.sort_by(|a, b| {
+        match (is_stable_version(&a.version), is_stable_version(&b.version)) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => compare_versions(&b.version, &a.version),
+        }
+    });
     Ok(archives)
 }
 

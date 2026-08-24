@@ -190,14 +190,17 @@ jobs:
         if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'
         run: |
           docker exec test-runner \
-            bash -c "
+            bash -c '
               if command -v apt-get &>/dev/null; then
                 apt-get update
                 apt-get install -y git cmake wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev
+                libxml2_pkg=$(apt-cache search --names-only "^libxml2\$" 2>/dev/null | awk "{print \$1}" | head -n1)
+                if [ -z "$libxml2_pkg" ]; then libxml2_pkg=$(apt-cache search --names-only "^libxml2" 2>/dev/null | awk "{print \$1}" | grep -vE "dev|dbg|doc|utils" | head -n1); fi
+                if [ -n "$libxml2_pkg" ]; then apt-get install -y "$libxml2_pkg"; else echo "WARNING: no libxml2 runtime package found via apt-cache search, esp-clang may fail to run"; fi
               elif command -v dnf &>/dev/null; then
-                dnf install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
+                dnf install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel libxml2
               elif command -v yum &>/dev/null; then
-                yum install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel
+                yum install -y git cmake wget flex bison gperf ccache libffi-devel openssl-devel dfu-util libusb1-devel libxml2
               elif command -v pacman &>/dev/null; then
                 pacman -Syu --noconfirm git cmake wget flex bison gperf ccache libffi openssl dfu-util libusb libxml2-legacy
               elif command -v zypper &>/dev/null; then
@@ -205,9 +208,9 @@ jobs:
                 rm -f /run/zypp.pid 2>/dev/null || true
                 zypper install -y git cmake wget flex bison gperf ccache libffi-devel libopenssl-devel dfu-util libusb-1_0-0 libxml2-devel libxml2-tools
               else
-                echo 'Unknown package manager' && exit 1
+                echo "Unknown package manager" && exit 1
               fi
-            "
+            '
 
       - name: Run python check (Linux only)
         if: (matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm') && matrix.run_on != 'MirrorRunner'

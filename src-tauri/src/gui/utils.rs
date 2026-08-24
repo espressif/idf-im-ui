@@ -132,6 +132,12 @@ pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
     std::cmp::Ordering::Equal
 }
 
+pub fn is_stable_version(v: &str) -> bool {
+    v.trim_start_matches('v')
+        .split('.')
+        .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+}
+
 pub fn format_bytes(bytes: u64) -> String {
     const GB: f64 = 1_073_741_824.0;
     const MB: f64 = 1_048_576.0;
@@ -244,6 +250,26 @@ mod tests {
         assert!(
             !is_path_empty_or_nonexistent(path.to_str().unwrap(), &versions),
             "Path that is a file should return false"
+        );
+    }
+
+    #[test]
+    fn test_is_stable_version() {
+        assert!(is_stable_version("v6.0.2"));
+        assert!(is_stable_version("6.0.2"));
+        assert!(!is_stable_version("v6.1-beta1"));
+        assert!(!is_stable_version("v6.1-rc1"));
+        assert!(!is_stable_version("release-v6.1"));
+    }
+
+    #[test]
+    fn test_compare_versions_ignores_prerelease_suffix() {
+        // compare_versions only looks at the numeric prefix, so on its own it
+        // ranks a v6.1 prerelease above v6.0.2 - this is exactly why
+        // platform_archives() must not rely on it alone to pick a default.
+        assert_eq!(
+            compare_versions("v6.1-beta1", "v6.0.2"),
+            std::cmp::Ordering::Greater
         );
     }
 }

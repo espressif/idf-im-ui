@@ -114,7 +114,7 @@ jobs:
       - name: Run IDF basic install test script (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
-          python3 --version        
+          python3 --version
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim"
@@ -140,7 +140,7 @@ jobs:
       - name: Run IDF basic install test script (MacOS)
         if: matrix.os == 'macos-latest' || matrix.os == 'macos-15-intel'
         run: |
-          python3 --version        
+          python3 --version
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_CLI_PATH="../artifacts/eim.app/Contents/MacOS/eim"
@@ -174,7 +174,7 @@ jobs:
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python3 --version        
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_CLI_PATH = "..\artifacts\eim.exe"
@@ -326,7 +326,7 @@ jobs:
 
       - name: Run prerequisites check (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
-        run: |    
+        run: |
           export LOG_TO_FILE="true"
           export PREREQUISITES_OS="${{ matrix.distro_name || 'ubuntu' }}"
           export PACKAGE_NAME="${{ matrix.package_name }}"
@@ -363,7 +363,7 @@ jobs:
       - name: Run IDF basic install test script using GUI (non-Windows)
         if: matrix.os != 'windows-latest'
         run: |
-          python3 --version        
+          python3 --version
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="${{ github.workspace }}/artifacts/eim"
@@ -375,7 +375,7 @@ jobs:
       - name: Run IDF extended install test script using GUI (non-Windows)
         if: matrix.os != 'windows-latest' && inputs.run_extended == 'true'
         run: |
-          python3 --version        
+          python3 --version
           export LOG_TO_FILE="true"
           export PACKAGE_NAME="${{ matrix.package_name }}"
           export EIM_GUI_PATH="${{ github.workspace }}/artifacts/eim"
@@ -412,6 +412,82 @@ jobs:
           Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile 'setup.exe'
           Start-Process -FilePath setup.exe -Verb RunAs -Wait
 
+      # tauri-driver drives the app through msedgedriver, which must match
+      # the installed WebView2 Runtime version to establish a session at
+      # all - a mismatch causes the WebDriver session handshake to hang
+      # silently rather than error outright (this is what was happening:
+      # fetching a generically "latest stable" driver doesn't guarantee it
+      # matches the WebView2 Runtime version actually installed, since
+      # they're related but independently-versioned products). Read the
+      # real installed WebView2 Runtime version from the registry (per
+      # Microsoft's documented WebView2 detection GUID) and fetch a driver
+      # matched to it, falling back to the latest patch for the same major
+      # version if that exact build isn't published, and to the generic
+      # latest-stable driver only if the version can't be read at all.
+      - name: Install matching Edge WebDriver (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          $webview2Key = "{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          $webview2Version = $null
+          foreach ($regPath in @(
+            "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\$webview2Key",
+            "Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\EdgeUpdate\Clients\$webview2Key"
+          )) {
+            $value = (Get-ItemProperty -Path $regPath -Name pv -ErrorAction SilentlyContinue).pv
+            if ($value -and $value -ne "0.0.0.0") {
+              $webview2Version = $value
+              break
+            }
+          }
+
+          function Read-VersionResponse($response) {
+            if ($response.Content -is [string]) {
+              return $response.Content.Trim()
+            }
+            $stream = New-Object System.IO.MemoryStream(,$response.Content)
+            $reader = New-Object System.IO.StreamReader($stream, $true)
+            $result = $reader.ReadToEnd().Trim()
+            $reader.Dispose()
+            return $result
+          }
+
+          if ($webview2Version) {
+            Write-Host "Detected installed WebView2 Runtime version: $webview2Version"
+          } else {
+            Write-Host "Could not detect installed WebView2 Runtime version from the registry; falling back to latest stable msedgedriver"
+          }
+
+          if ($webview2Version) {
+            try {
+              Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$webview2Version/edgedriver_win64.zip" -OutFile edgedriver.zip -UseBasicParsing
+              $version = $webview2Version
+            } catch {
+              $major = $webview2Version.Split('.')[0]
+              Write-Host "No msedgedriver build for exact version $webview2Version ($($_.Exception.Message)); falling back to the latest patch for major version $major"
+              $majorResponse = Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/LATEST_RELEASE_$major" -UseBasicParsing
+              $version = Read-VersionResponse $majorResponse
+              Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip -UseBasicParsing
+            }
+          } else {
+            $response = Invoke-WebRequest -Uri 'https://msedgedriver.microsoft.com/LATEST_STABLE' -UseBasicParsing
+            $version = Read-VersionResponse $response
+            Invoke-WebRequest -Uri "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile edgedriver.zip -UseBasicParsing
+          }
+
+          Write-Host "Fetched msedgedriver $version"
+          Expand-Archive -Path edgedriver.zip -DestinationPath "$env:USERPROFILE\edgedriver" -Force
+          # LATEST_STABLE/LATEST_RELEASE_<major> can in principle return a
+          # version with no Windows build behind it
+          # (see https://github.com/MicrosoftEdge/EdgeWebDriver/issues/39).
+          # Fail loudly here rather than silently leaving no/a stale
+          # msedgedriver.exe in place, which would just reproduce the driver
+          # session failures this step exists to fix.
+          if (-not (Test-Path "$env:USERPROFILE\edgedriver\msedgedriver.exe")) {
+            Write-Error "msedgedriver.exe missing after extracting edgedriver_win64.zip for version $version"
+            exit 1
+          }
+          echo "$env:USERPROFILE\edgedriver" | Out-File -FilePath $env:GITHUB_PATH -Append
+
       - name: Setup node modules (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -430,7 +506,7 @@ jobs:
       - name: Run prerequisites check (Windows)
         if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
         run: |
-          $env:LOG_TO_FILE="true"   
+          $env:LOG_TO_FILE="true"
           $env:PREREQUISITES_OS="windows"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
@@ -442,7 +518,7 @@ jobs:
       - name: Run python check (Windows)
         if: matrix.os == 'windows-latest' && matrix.distro_name == 'scoop'
         run: |
-          $env:LOG_TO_FILE="true"        
+          $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
@@ -458,7 +534,7 @@ jobs:
       - name: Run IDF basic install test script using GUI (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          python3 --version        
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
@@ -485,7 +561,7 @@ jobs:
       - name: Run IDF extended install test script using GUI (Windows)
         if: matrix.os == 'windows-latest' && inputs.run_extended == 'true'
         run: |
-          python3 --version        
+          python3 --version
           $env:LOG_TO_FILE="true"
           $env:PACKAGE_NAME="${{ matrix.package_name }}"
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
