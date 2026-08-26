@@ -1,0 +1,17 @@
+[
+  {
+    "id": 1,
+    "type": "incomplete-installations",
+    "name": "GUI Incomplete Installations Modal",
+    "data": {
+      "idfList": "default",
+      "targetList": "esp32",
+      "installFolder": ".espincomplete",
+      "idfMirror": "github",
+      "toolsMirror": "github",
+      "pypiMirror": "pypi_org"
+    },
+    "deleteAfterTest": true,
+    "testProxyMode": false
+  }
+]

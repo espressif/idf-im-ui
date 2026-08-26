@@ -212,6 +212,22 @@ export function runInstallVerification({
             `installationConfig should be valid base64 for IDF ${idf.name || "invalid IDF Entry"}`
           ).to.be.true;
         }
+
+        // Schema v3.0: status field is required and must be "finished" after a successful install
+        expect(
+          idf,
+          `No 'status' field on entry ${idf.name || "invalid IDF Entry"} — schema v3.0 requires it`
+        ).to.have.property("status");
+
+        expect(
+          ["finished", "in_progress", "failed", "being_repaired", "broken"],
+          `Entry ${idf.name || "invalid IDF Entry"} has unknown status '${idf.status}'`
+        ).to.include(idf.status);
+
+        expect(
+          idf.status,
+          `Entry ${idf.name || "invalid IDF Entry"} should have status 'finished' after a successful install`
+        ).to.equal("finished");
       }
     });
 

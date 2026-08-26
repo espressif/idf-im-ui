@@ -53,6 +53,17 @@ pub fn generic_select_with_default(
     Ok(options[selection].to_string())
 }
 
+/// Like `generic_select` but returns the selected index instead of the label string.
+/// Use this when the display labels differ from the values you want to act on.
+pub fn generic_select_index(prompt_key: &str, options: &[String]) -> Result<usize, String> {
+    Select::with_theme(&create_theme())
+        .with_prompt(t!(prompt_key))
+        .items(options)
+        .default(0)
+        .interact()
+        .map_err(|e| format!("Failed to select: {}", e))
+}
+
 pub fn generic_confirm(prompt_key: &str) -> Result<bool, dialoguer::Error> {
     generic_confirm_with_default(prompt_key, false)
 }

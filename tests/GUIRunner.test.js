@@ -33,6 +33,7 @@ import { runGUIOfflineInstallTest } from "./scripts/GUIOfflineInstall.test.js";
 import { runGUIVersionManagementTest } from "./scripts/GUIVersionManagement.test.js";
 import { runGUIPrerequisitesTest } from "./scripts/GUIPrerequisite.test.js";
 import { runGUIPythonCheckTest } from "./scripts/GUIPythonCheck.test.js";
+import { runGUIIncompleteInstallationsTest } from "./scripts/GUIIncompleteInstallations.test.js";
 import { runCleanUp } from "./scripts/cleanUpRunner.test.js";
 import {
   IDFDefaultVersion,
@@ -290,6 +291,67 @@ function testRun(script) {
 
         runCleanUp({
           id: `${test.id}4`,
+          installFolder,
+          toolsFolder: TOOLSFOLDER,
+          deleteAfterTest,
+        });
+      });
+    } else if (test.type === "incomplete-installations") {
+      // GUI tests for the incomplete-installation detection modal.
+      // Requires at least one finished IDF installation to be present so the
+      // suite can inject non-finished statuses and exercise the modal UI.
+      // The suite installs one IDF via the GUI expert flow into the suite's
+      // `installFolder` (so the run is self-contained and does not depend on
+      // any prior suite having left an installation behind), then injects a
+      // non-finished status into eim_idf.json before exercising the modal.
+
+      const deleteAfterTest = test.deleteAfterTest ?? true;
+
+      let installFolder = test.data?.installFolder
+        ? path.join(os.homedir(), test.data.installFolder)
+        : INSTALLFOLDER;
+
+      const targetList = test.data?.targetList
+        ? test.data.targetList.split("|")
+        : ["All"];
+
+      const idfVersionList = test.data?.idfList
+        ? test.data.idfList.split("|")
+        : [IDFDefaultVersion];
+
+      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
+
+      const toolsMirror = test.data?.toolsMirror || "github";
+      const idfMirror = test.data?.idfMirror || "github";
+      const pypiMirror = test.data?.pypiMirror || "pypi_org";
+      const testProxyMode = test.testProxyMode ?? false;
+      const proxyBlockList = test.proxyBlockList ?? [];
+
+      describe(`Test${test.id}- ${test.name} |`, function () {
+        this.timeout(6000000);
+
+        runGUICustomInstallTest({
+          id: `${test.id}1`,
+          pathToEIM: pathToEIMGUI,
+          installFolder,
+          targetList,
+          idfVersionList: idfUpdatedList,
+          toolsMirror,
+          idfMirror,
+          pypiMirror,
+          testProxyMode,
+          proxyBlockList,
+        });
+
+        runGUIIncompleteInstallationsTest({
+          id: `${test.id}2`,
+          pathToEIM: pathToEIMGUI,
+          idfList: idfUpdatedList,
+          toolsFolder: TOOLSFOLDER,
+        });
+
+        runCleanUp({
+          id: `${test.id}3`,
           installFolder,
           toolsFolder: TOOLSFOLDER,
           deleteAfterTest,

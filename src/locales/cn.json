@@ -33,6 +33,21 @@
       "updateWithBrew": "如果你通过 Homebrew 安装，请在终端运行以下命令进行更新：",
       "updateWithWinget": "如果你通过 Winget 安装，请在终端运行以下命令进行更新：",
       "downloadManually": "从发布页面下载最新版本："
+    },
+    "incompleteInstallations": {
+      "ribbonTitle": "检测到未完成的安装",
+      "modalTitle": "未完成的安装",
+      "description": "以下安装未能成功完成。您可以修复或删除它们。",
+      "fixButton": "修复",
+      "deleteButton": "删除",
+      "dismissButton": "忽略",
+      "statusFinished": "已完成",
+      "statusInProgress": "安装中",
+      "statusFailed": "失败",
+      "statusBeingRepaired": "修复中",
+      "statusBroken": "损坏",
+      "noPath": "（路径未知）",
+      "fixStarted": "已开始修复 {name}"
     }
   },
   "warnings": {

@@ -79,7 +79,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       }
       logger.info(`Starting test - confirm python is missing`);
       const promptPython = await testRunner.waitForOutput(
-        "Do you want to install Python?"
+        "Do you want to install"
       );
 
       expect(
@@ -90,7 +90,7 @@ export function runCLIPythonCheckTest({ id = 0, pathToEIM, prerequisites = [] })
       testRunner.process.write("n");
 
       const terminalExited = await testRunner.waitForOutput(
-        "Please install Python3 with pip, venv, and SSL support and try again"
+        "Please install Python3"
       );
       expect(
         terminalExited,

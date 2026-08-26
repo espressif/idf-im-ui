@@ -326,6 +326,7 @@ pub fn run(
             remove_installation,
             purge_all_installations,
             fix_installation,
+            check_incomplete_installations,
             get_app_settings,
             save_app_settings,
             start_offline_installation,
