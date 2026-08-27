@@ -12,12 +12,12 @@ on:
       resolved_run_id:
         required: true
         type: string
-      should_purge:
-        required: true
-        type: string   # 'true' | 'false'  (booleans can't cross workflow_call cleanly)
       debug:
         required: true
         type: string   # 'true' | 'false'
+      staging_prefix:
+        required: true
+        type: string
       ref:
         required: true
         type: string
@@ -137,39 +137,10 @@ jobs:
           aws-region: ap-east-1
 
       # ── Purge (if requested) ───────────────────────────────────────────────
-      - name: Purge existing archives — Unix
-        if: inputs.should_purge == 'true' && runner.os != 'Windows'
-        shell: bash
-        continue-on-error: true
-        run: |
-          echo "🗑️ Purging existing archives for ${{ inputs.idf_version }} / ${{ matrix.package_name }}..."
-          set +e
-          aws s3 ls s3://espdldata/dl/eim/ \
-            | grep "archive_${{ inputs.idf_version }}_${{ matrix.package_name }}\.zst" \
-            | awk '{print $4}' \
-            | while read filename; do
-                [ -n "$filename" ] && aws s3 rm "s3://espdldata/dl/eim/$filename" || true
-              done
-          exit 0
-
-      - name: Purge existing archives — Windows
-        if: inputs.should_purge == 'true' && runner.os == 'Windows'
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          Write-Host "🗑️ Purging existing archives for ${{ inputs.idf_version }} / ${{ matrix.package_name }}..."
-          try {
-            $archives = aws s3 ls s3://espdldata/dl/eim/ |
-              Where-Object { $_ -match "archive_${{ inputs.idf_version }}_${{ matrix.package_name }}\.zst" }
-            if (-not $archives) { Write-Host "No existing archives found." }
-            foreach ($archive in $archives) {
-              $filename = $archive.Split()[-1]
-              if ($filename) { aws s3 rm "s3://espdldata/dl/eim/$filename" }
-            }
-          } catch { Write-Host "::warning::Purge error: $_" }
-          exit 0
-
-      # ── Build ──────────────────────────────────────────────────────────────
+      # Purging is now handled centrally by the orchestrator AFTER all
+      # archives have been staged, so individual platform jobs never write
+      # to canonical S3 keys.
+      # ─────────────────────────────────────────────────────────────────────
       - name: Build archive
         id: build
         shell: bash
@@ -210,84 +181,115 @@ jobs:
           fi
 
       # ── Upload ─────────────────────────────────────────────────────────────
+      # Platform jobs upload to a run-specific staging prefix; the orchestrator
+      # promotes the staged archives to their canonical names atomically after
+      # every build-info is collected and the JSON is regenerated.
       - name: Upload to S3 — Unix
         if: runner.os != 'Windows'
         id: upload_unix
         shell: bash
         env:
-          S3_PREFIX: ${{ inputs.debug == 'true' && 'debug/' || '' }}
+          STAGING_PREFIX: ${{ inputs.staging_prefix }}
+          DEBUG_PREFIX:   ${{ inputs.debug == 'true' && 'debug/' || '' }}
+          PLATFORM:       ${{ matrix.package_name }}
+          VERSION:        ${{ inputs.idf_version }}
         run: |
-          PLATFORM="${{ matrix.package_name }}"
-          VERSION="${{ inputs.idf_version }}"
+          set -euo pipefail
+
+          PLATFORM="$PLATFORM"
+          VERSION="$VERSION"
           archive=$(ls built_archives/*.zst | head -1)
           FILENAME=$(basename "$archive")
-          JSON_FILENAME="${S3_PREFIX}${FILENAME}"
+          # Canonical filename (what will end up in offline_archives.json)
+          CANONICAL_FILENAME="${DEBUG_PREFIX}${FILENAME}"
+          # Where the archive physically lives right now (staging)
+          STAGED_KEY="${STAGING_PREFIX}${FILENAME}"
 
-          SIZE=$([ "${{ runner.os }}" = "macOS" ] && stat -f %z "$archive" || stat -c %s "$archive")
+          SIZE=$([ "$(uname -s)" = "Darwin" ] && stat -f %z "$archive" || stat -c %s "$archive")
 
-          echo "☁️ Uploading ${FILENAME} ($(numfmt --to=iec $SIZE)) to s3://espdldata/dl/eim/${S3_PREFIX}"
+          echo "☁️ Uploading ${FILENAME} ($(numfmt --to=iec $SIZE)) to s3://espdldata/dl/eim/${STAGED_KEY}"
 
           aws s3 cp --acl=public-read --content-type="application/zstd" \
-            "$archive" "s3://espdldata/dl/eim/${S3_PREFIX}${FILENAME}"
+            "$archive" "s3://espdldata/dl/eim/${STAGED_KEY}"
 
           LOG_FILE="${archive%.zst}.log"
           if [ -f "$LOG_FILE" ]; then
             aws s3 cp --acl=public-read --content-type="text/plain" \
-              "$LOG_FILE" "s3://espdldata/dl/eim/${S3_PREFIX}$(basename $LOG_FILE)"
+              "$LOG_FILE" "s3://espdldata/dl/eim/${STAGING_PREFIX}$(basename $LOG_FILE)"
           fi
 
           mkdir -p build-info
           jq -n \
-            --arg version  "$VERSION" \
-            --arg platform "$PLATFORM" \
-            --arg filename "$JSON_FILENAME" \
-            --argjson size "$SIZE" \
-            '{"version":$version,"platform":$platform,"filename":$filename,"size":$size,"status":"success"}' \
+            --arg version      "$VERSION" \
+            --arg platform     "$PLATFORM" \
+            --arg filename     "$CANONICAL_FILENAME" \
+            --arg staged_key   "$STAGED_KEY" \
+            --argjson size     "$SIZE" \
+            '{"version":$version,"platform":$platform,"filename":$filename,"staged_key":$staged_key,"size":$size,"status":"success"}' \
             > build-info/build-info.json
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### ☁️ Upload" >> $GITHUB_STEP_SUMMARY
           echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| File | \`${JSON_FILENAME}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| File (canonical) | \`${CANONICAL_FILENAME}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Staged at | \`${STAGED_KEY}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| Size | $(numfmt --to=iec $SIZE) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Status | ✅ Success |" >> $GITHUB_STEP_SUMMARY
+          echo "| Status | ✅ Staged for promotion |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload to S3 — Windows
         if: runner.os == 'Windows'
         id: upload_windows
         shell: pwsh
         env:
-          S3_PREFIX: ${{ inputs.debug == 'true' && 'debug/' || '' }}
+          STAGING_PREFIX: ${{ inputs.staging_prefix }}
+          DEBUG_PREFIX:   ${{ inputs.debug == 'true' && 'debug/' || '' }}
+          PLATFORM:       ${{ matrix.package_name }}
+          VERSION:        ${{ inputs.idf_version }}
         run: |
-          $PLATFORM = "${{ matrix.package_name }}"
-          $VERSION  = "${{ inputs.idf_version }}"
+          $PLATFORM = "$env:PLATFORM"
+          $VERSION  = "$env:VERSION"
           $archive  = Get-ChildItem "built_archives/*.zst" | Select-Object -First 1
           if (-not $archive) { Write-Error "No archive found!"; exit 1 }
 
-          $FILENAME    = $archive.Name
-          $SIZE        = $archive.Length
-          $Prefix      = "${{ env.S3_PREFIX }}"
-          $JsonFilename = "$Prefix$FILENAME"
+          $FILENAME          = $archive.Name
+          $SIZE              = $archive.Length
+          $StagingPrefix     = "$env:STAGING_PREFIX"
+          $DebugPrefix       = "$env:DEBUG_PREFIX"
+          $CanonicalFilename = "$DebugPrefix$FILENAME"
+          $StagedKey         = "$StagingPrefix$FILENAME"
 
-          Write-Host "☁️ Uploading $FILENAME ($([math]::Round($SIZE/1MB, 1)) MB)"
+          Write-Host "☁️ Staging $FILENAME ($([math]::Round($SIZE/1MB, 1)) MB) at s3://espdldata/dl/eim/$StagedKey"
 
+          # PowerShell does NOT stop on a non-zero exit from a native command,
+          # so we have to check $LASTEXITCODE ourselves; otherwise a failed
+          # upload would be reported as success and the orchestrator would
+          # later try to promote a staged_key that was never written.
           aws s3 cp --acl=public-read --content-type="application/zstd" `
-            "$($archive.FullName)" "s3://espdldata/dl/eim/$Prefix$FILENAME"
+            "$($archive.FullName)" "s3://espdldata/dl/eim/$StagedKey"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "aws s3 cp failed for archive (exit $LASTEXITCODE) — refusing to write a success build-info."
+            exit $LASTEXITCODE
+          }
 
           $LogFile = "$($archive.DirectoryName)\$($archive.BaseName).log"
           if (Test-Path $LogFile) {
             aws s3 cp --acl=public-read --content-type="text/plain" `
-              "$LogFile" "s3://espdldata/dl/eim/$Prefix$(Split-Path $LogFile -Leaf)"
+              "$LogFile" "s3://espdldata/dl/eim/$StagingPrefix$(Split-Path $LogFile -Leaf)"
+            if ($LASTEXITCODE -ne 0) {
+              Write-Error "aws s3 cp failed for log (exit $LASTEXITCODE) — refusing to write a success build-info."
+              exit $LASTEXITCODE
+            }
           }
 
           New-Item -ItemType Directory -Path "build-info" -Force | Out-Null
           @{
-            version  = $VERSION
-            platform = $PLATFORM
-            filename = $JsonFilename
-            size     = $SIZE
-            status   = "success"
+            version      = $VERSION
+            platform     = $PLATFORM
+            filename     = $CanonicalFilename
+            staged_key   = $StagedKey
+            size         = $SIZE
+            status       = "success"
           } | ConvertTo-Json | Out-File "build-info/build-info.json" -Encoding UTF8
 
       # Write failure build-info so the dashboard can count it
