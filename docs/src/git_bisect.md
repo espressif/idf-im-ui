@@ -45,7 +45,7 @@ The name is not just a label. It is part of several paths:
 
 - the Python virtual environment: `<tool install folder>/python/<name>/venv`
 - the activation and deactivation scripts: `activate_idf_<name>.sh`, `activate_idf_<name>.fish`, `Microsoft.<name>.PowerShell_profile.ps1`
-- the identifier you pass to `eim select`, `eim run` and `eim remove`
+- the identifier you pass to `eim select`, `eim run`, `eim shell` and `eim remove`
 
 The name is also **frozen at install time**. `eim fix` deliberately keeps it, whatever revision you have checked out, and `eim install` refuses to run a second time on a path that is already registered:
 
