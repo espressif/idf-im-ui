@@ -1,5 +1,5 @@
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
-use idf_im_lib::{settings::Settings, telemetry::track_event};
+use idf_im_lib::settings::Settings;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use rust_i18n::t;
@@ -131,19 +131,6 @@ pub fn create_progress_bar() -> ProgressBar {
 
 pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
     pb.set_position(value);
-}
-
-const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-pub async fn track_cli_event(event_name: &str, additional_data: Option<serde_json::Value>) {
-  let data = additional_data.unwrap_or(serde_json::Value::Null);
-  let system_info = idf_im_lib::telemetry::get_system_info();
-    track_event("CLI event", serde_json::json!({
-      "event_name": event_name,
-      "system_info": system_info,
-      "eim_version": EIM_VERSION,
-      "additional_data": data.to_string(),
-    })).await;
 }
 
 pub fn print_tool_selection_summary(settings: &Settings) {
