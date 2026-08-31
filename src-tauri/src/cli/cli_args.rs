@@ -121,6 +121,12 @@ pub enum Commands {
         idf: Option<String>,
     },
 
+    /// Start an interactive shell with the environment of a specific ESP-IDF version activated
+    Shell {
+        #[arg(help = "ID, name or version of idf to activate")]
+        idf: Option<String>,
+    },
+
     /// Import existing ESP-IDF installation using tools_set_config.json
     Import {
         #[arg(help = "Import using existing config file")]

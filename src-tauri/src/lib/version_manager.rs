@@ -423,11 +423,10 @@ pub fn find_esp_idf_folders(path: &str) -> Vec<String> {
         .collect()
 }
 
-pub fn run_command_in_context(
+fn find_activation_script_for_identifier(
     identifier: &str,
-    command: &str,
     config_path: Option<&PathBuf>,
-) -> anyhow::Result<ExitStatus> {
+) -> anyhow::Result<String> {
     let installation = match list_installed_versions(config_path) {
         Ok(versions) => versions.into_iter().find(|v| {
             v.id == identifier || v.name == identifier || {
@@ -448,11 +447,26 @@ pub fn run_command_in_context(
         }
     };
 
-    let activation_script = installation.activation_script.as_deref().ok_or_else(|| {
+    installation.activation_script.clone().ok_or_else(|| {
         anyhow!("Installation {} has no activation script set", identifier)
-    })?;
+    })
+}
 
-    run_command_using_activation_script(activation_script, command, None)
+pub fn run_command_in_context(
+    identifier: &str,
+    command: &str,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<ExitStatus> {
+    let activation_script = find_activation_script_for_identifier(identifier, config_path)?;
+    run_command_using_activation_script(&activation_script, command, None)
+}
+
+pub fn run_interactive_shell_in_context(
+    identifier: &str,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<ExitStatus> {
+    let activation_script = find_activation_script_for_identifier(identifier, config_path)?;
+    run_interactive_shell_using_activation_script(&activation_script)
 }
 
 fn build_activation_script(activation_script: &str, command: &str) -> String {
@@ -492,6 +506,151 @@ pub fn run_command_using_activation_script(
             Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
         }
     }
+}
+
+/// Starts an interactive shell with the given activation script sourced, handing
+/// control of the current terminal to the user until they exit that shell.
+///
+/// Simply sourcing the activation script and then `exec`ing the user's shell
+/// only carries over environment variables: aliases and shell functions (which
+/// the activation script also defines, e.g. `idf.py`) are interpreter state,
+/// not part of the process environment, so they don't survive an `exec` into a
+/// fresh shell process. Instead we start the target shell using its own
+/// startup-file mechanism (bash `--rcfile`, zsh `ZDOTDIR`, fish
+/// `--init-command`) so the activation script is sourced *inside* the very
+/// shell session the user ends up in, alongside their normal rc file.
+#[cfg(target_os = "windows")]
+pub fn run_interactive_shell_using_activation_script(
+    activation_script: &str,
+) -> anyhow::Result<ExitStatus> {
+    debug!(
+        "Starting interactive shell using activation script {}",
+        activation_script
+    );
+    // On Windows the activation profile is run with `-NoExit -File`, so it
+    // executes inside the same PowerShell session the user keeps using -
+    // functions/aliases it defines are naturally still in scope.
+    let script = format!(". \"{}\"\r\npowershell -NoExit -NoLogo", activation_script);
+
+    let executor = crate::command_executor::get_executor();
+    match executor.run_script_from_string_streaming(&script) {
+        Ok(status) => Ok(status),
+        Err(e) => Err(anyhow!("Failed to start interactive shell: {}", e)),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+pub fn run_interactive_shell_using_activation_script(
+    activation_script: &str,
+) -> anyhow::Result<ExitStatus> {
+    debug!(
+        "Starting interactive shell using activation script {}",
+        activation_script
+    );
+
+    let user_shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
+    let shell_name = Path::new(&user_shell)
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("bash");
+
+    match shell_name {
+        "zsh" => run_interactive_zsh_with_activation(activation_script),
+        "fish" => run_interactive_fish_with_activation(activation_script),
+        _ => run_interactive_bash_with_activation(activation_script),
+    }
+}
+
+/// Starts an interactive bash with the activation script sourced from a
+/// generated `--rcfile`, after first sourcing the user's own `~/.bashrc` so
+/// their normal aliases/prompt are kept too.
+#[cfg(not(target_os = "windows"))]
+fn run_interactive_bash_with_activation(activation_script: &str) -> anyhow::Result<ExitStatus> {
+    use std::io::Write;
+
+    let mut rc_file = tempfile::Builder::new()
+        .prefix("eim_shell_bashrc_")
+        .suffix(".sh")
+        .tempfile()
+        .map_err(|e| anyhow!("Failed to create temporary bash rc file: {}", e))?;
+    writeln!(
+        rc_file,
+        "[ -f \"$HOME/.bashrc\" ] && source \"$HOME/.bashrc\"\nsource \"{}\"",
+        activation_script
+    )
+    .map_err(|e| anyhow!("Failed to write temporary bash rc file: {}", e))?;
+
+    let script = format!(
+        "exec bash --rcfile \"{}\" -i",
+        rc_file.path().to_string_lossy()
+    );
+
+    let executor = crate::command_executor::get_executor();
+    let result = executor
+        .run_script_from_string_streaming(&script)
+        .map_err(|e| anyhow!("Failed to start interactive shell: {}", e));
+    // rc_file is kept alive (and thus on disk) until here, i.e. for the whole
+    // duration of the interactive session.
+    drop(rc_file);
+    result
+}
+
+/// Starts an interactive zsh with the activation script sourced via a
+/// generated `ZDOTDIR`, whose `.zshrc` also sources the user's own zshrc.
+#[cfg(not(target_os = "windows"))]
+fn run_interactive_zsh_with_activation(activation_script: &str) -> anyhow::Result<ExitStatus> {
+    let zdotdir = tempfile::tempdir()
+        .map_err(|e| anyhow!("Failed to create temporary ZDOTDIR: {}", e))?;
+
+    let original_zdotdir = std::env::var("ZDOTDIR").unwrap_or_else(|_| {
+        std::env::var("HOME").unwrap_or_default()
+    });
+
+    let rc_content = format!(
+        "export ZDOTDIR=\"{original}\"\n[ -f \"{original}/.zshrc\" ] && source \"{original}/.zshrc\"\nsource \"{activation}\"",
+        original = original_zdotdir,
+        activation = activation_script
+    );
+    std::fs::write(zdotdir.path().join(".zshrc"), rc_content)
+        .map_err(|e| anyhow!("Failed to write temporary zsh rc file: {}", e))?;
+
+    let script = format!(
+        "export ZDOTDIR=\"{}\"\nexec zsh -i",
+        zdotdir.path().to_string_lossy()
+    );
+
+    let executor = crate::command_executor::get_executor();
+    let result = executor
+        .run_script_from_string_streaming(&script)
+        .map_err(|e| anyhow!("Failed to start interactive shell: {}", e));
+    drop(zdotdir);
+    result
+}
+
+/// Starts an interactive fish shell, sourcing the fish variant of the
+/// activation script (generated alongside the POSIX one) via `--init-command`.
+/// Falls back to bash if no fish activation script is available (e.g. an
+/// installation created before fish support was added).
+#[cfg(not(target_os = "windows"))]
+fn run_interactive_fish_with_activation(activation_script: &str) -> anyhow::Result<ExitStatus> {
+    let fish_script = Path::new(activation_script).with_extension("fish");
+    if !fish_script.is_file() {
+        warn!(
+            "No fish activation script found at {}, falling back to bash",
+            fish_script.display()
+        );
+        return run_interactive_bash_with_activation(activation_script);
+    }
+
+    let script = format!(
+        "exec fish --init-command 'source \"{}\"'",
+        fish_script.to_string_lossy()
+    );
+
+    let executor = crate::command_executor::get_executor();
+    executor
+        .run_script_from_string_streaming(&script)
+        .map_err(|e| anyhow!("Failed to start interactive shell: {}", e))
 }
 
 pub fn run_command_using_activation_script_headless(

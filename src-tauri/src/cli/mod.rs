@@ -19,6 +19,7 @@ use idf_im_lib::version_manager::get_selected_version;
 use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
 use idf_im_lib::version_manager::remove_single_idf_version;
 use idf_im_lib::version_manager::run_command_in_context;
+use idf_im_lib::version_manager::run_interactive_shell_in_context;
 use idf_im_lib::version_manager::select_idf_version;
 use idf_im_lib::logging;
 use log::debug;
@@ -99,6 +100,22 @@ pub fn setup_cli(
 
     log::trace!("CLI logging initialized. Console: {:?}, File: {:?}", console_level, file_level);
     Ok(())
+}
+
+/// Resolves the IDF identifier to operate on: the one explicitly passed on
+/// the command line, or the currently selected version if none was given.
+fn resolve_idf_identifier(
+    idf: Option<String>,
+    config_path: Option<&PathBuf>,
+) -> anyhow::Result<String> {
+    if let Some(idf_str) = idf {
+        Ok(idf_str)
+    } else if let Some(selected) = get_selected_version(config_path) {
+        info!("{}", t!("cli.using_selected_idf", idf = selected.name));
+        Ok(selected.id)
+    } else {
+        Err(anyhow::anyhow!(t!("cli.no_idf_specified_no_selected")))
+    }
 }
 
 fn status_label(status: &InstallationStatus) -> String {
@@ -580,19 +597,26 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             }
         }
         Commands::Run { command, idf } => {
-            let idf_identifier = if let Some(idf_str) = idf {
-                idf_str
-            } else if let Some(selected) = get_selected_version(config_path.as_ref()) {
-                info!("{}", t!("run.using_selected", idf = selected.name));
-                selected.id
-            } else {
-                return Err(anyhow::anyhow!(t!("run.no_idf_specified_no_selected")));
-            };
+            let idf_identifier = resolve_idf_identifier(idf, config_path.as_ref())?;
 
             match run_command_in_context(&idf_identifier, &command, config_path.as_ref()) {
                 Ok(status) => {
                     if !status.success() {
                         return Err(anyhow::anyhow!(t!("run.command_failed")));
+                    }
+                    Ok(())
+                }
+                Err(err) => Err(err),
+            }
+        }
+        Commands::Shell { idf } => {
+            let idf_identifier = resolve_idf_identifier(idf, config_path.as_ref())?;
+
+            info!("{}", t!("shell.starting", idf = idf_identifier));
+            match run_interactive_shell_in_context(&idf_identifier, config_path.as_ref()) {
+                Ok(status) => {
+                    if !status.success() {
+                        return Err(anyhow::anyhow!(t!("shell.command_failed")));
                     }
                     Ok(())
                 }

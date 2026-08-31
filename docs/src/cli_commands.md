@@ -36,6 +36,7 @@ These options can be used with any command:
 | `purge` | Purge all ESP-IDF installations |
 | `import` | Import existing ESP-IDF installation using tools_set_config.json |
 | `run` | Run a command in the context of a specific ESP-IDF version |
+| `shell` | Start an interactive shell with the environment of a specific ESP-IDF version activated |
 | `discover` | Discover available ESP-IDF versions (not implemented yet) |
 | `completions` | Generate shell completion script to stdout |
 | `help-json` | Print help in JSON format for machine reading |
@@ -240,6 +241,21 @@ The IDF version can be identified by:
 - **Name**: The display name (e.g., `v5.3.2`)
 - **Path**: The full installation path
 
+### Shell Command
+
+Start an interactive shell with the environment of a specific ESP-IDF version activated. Unlike `run`, which executes a single command and exits, `shell` hands control of the current terminal to you and keeps the environment active until you exit that shell.
+
+```bash
+eim shell [IDF_VERSION]
+```
+
+Arguments:
+- `IDF_VERSION`: The ID, name, or path of the installed IDF version (optional)
+
+If `IDF_VERSION` is not provided, the command uses the currently selected IDF version (set via `eim select`). If no version is selected and none is specified, an error is returned.
+
+The new shell is your normal login shell (`$SHELL`), started with its usual startup files (e.g. `~/.bashrc`, `~/.zshrc`) so your own aliases, functions and prompt customizations are kept, in addition to the ESP-IDF ones — `idf.py`, `esptool.py` and friends are available as real shell functions, not just as commands reachable through `PATH`. Bash, zsh and fish are supported directly; on Windows the environment is activated in a PowerShell session (`-NoExit`). Type `exit` (or press Ctrl+D) to leave the shell and return to your previous one — activation is local to that shell process and is not persisted anywhere.
+
 ### Discover Command
 
 Discover available ESP-IDF versions (not implemented yet).
@@ -393,6 +409,12 @@ eim run "idf.py build"
 
 # Run a command with output redirection (command must be quoted)
 eim run "idf.py size > sizes.txt" v5.4
+
+# Start an interactive shell with a specific IDF version activated
+eim shell v5.3.2
+
+# Start an interactive shell using the currently selected IDF version
+eim shell
 ```
 
 ## Per-Version Feature Configuration
