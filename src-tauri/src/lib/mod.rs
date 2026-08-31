@@ -2392,6 +2392,35 @@ pub fn single_version_post_install(
                 err
             ),
         }
+        let second_component_command = "compote cooking stock";
+        let second_result = if is_gui {
+            // Use headless mode in GUI to avoid showing PowerShell window
+            run_command_using_activation_script_headless(
+                &activation_script_fullname,
+                &second_component_command,
+                Some(idf_path),
+            )
+        } else {
+            run_command_using_activation_script(
+                &activation_script_fullname,
+                &second_component_command,
+                Some(idf_path),
+            )
+        };
+
+        match second_result {
+            Ok(output) => {
+                if output.success() {
+                    info!("Required components successfully downloaded");
+                } else {
+                    warn!("Downloading required components failed.");
+                }
+            }
+            Err(err) => warn!(
+                "Downloading required components failed: {:?}",
+                err
+            ),
+        }
     }
 }
 
