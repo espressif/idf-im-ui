@@ -80,7 +80,19 @@ impl ErrorKind {
 
     pub fn from_message(msg: &str) -> Self {
         let msg = msg.to_lowercase();
-        if msg.contains("cancel") || msg.contains("abort") {
+        if msg.contains("python") || msg.contains("venv") || msg.contains("pip") {
+            ErrorKind::Python
+        } else if msg.contains("git") {
+            ErrorKind::Git
+        } else if msg.contains("timeout")
+            || msg.contains("dns")
+            || msg.contains("connection")
+            || msg.contains("network")
+            || msg.contains("tls")
+            || msg.contains("http")
+        {
+            ErrorKind::Network
+        } else if msg.contains("cancel") || msg.contains("abort") {
             ErrorKind::UserCancelled
         } else if msg.contains("permission")
             || msg.contains("os error")
@@ -90,18 +102,6 @@ impl ErrorKind {
             || msg.contains("space")
         {
             ErrorKind::Filesystem
-        } else if msg.contains("timeout")
-            || msg.contains("dns")
-            || msg.contains("connection")
-            || msg.contains("network")
-            || msg.contains("tls")
-            || msg.contains("http")
-        {
-            ErrorKind::Network
-        } else if msg.contains("git") {
-            ErrorKind::Git
-        } else if msg.contains("python") || msg.contains("venv") || msg.contains("pip") {
-            ErrorKind::Python
         } else if msg.contains("missing")
             || msg.contains("prerequisite")
             || msg.contains("dependency")
@@ -287,6 +287,21 @@ fn dispatch(props: EventProps) {
     let (i_key, ingest_base) = parse_connection_string();
     let url = format!("{}/v2/track", ingest_base);
 
+    // Attach the static app-version/system-info fields here, once, so every event
+    // carries them regardless of which track_* function built it.
+    let mut properties = match serde_json::to_value(&props) {
+        Ok(serde_json::Value::Object(map)) => map,
+        _ => return,
+    };
+    properties.insert(
+        "appVersion".to_string(),
+        serde_json::Value::String(EIM_VERSION.to_string()),
+    );
+    properties.insert(
+        "systemInfo".to_string(),
+        serde_json::Value::String(get_system_info()),
+    );
+
     let envelope = Envelope {
         name: "Microsoft.ApplicationInsights.Event",
         time: Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
@@ -296,7 +311,7 @@ fn dispatch(props: EventProps) {
             "baseType": "EventData",
             "baseData": {
                 "name": "eim_event",
-                "properties": props,
+                "properties": properties,
             }
         }),
     };
@@ -310,7 +325,7 @@ fn dispatch(props: EventProps) {
     };
 
     let client = client.clone();
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         let _ = client
             .post(&url)
             .header("Content-Type", "application/x-json-stream")
@@ -318,6 +333,28 @@ fn dispatch(props: EventProps) {
             .send()
             .await;
     });
+    if let Ok(mut pending) = PENDING_DISPATCHES.lock() {
+        pending.push(handle);
+    }
+}
+
+static PENDING_DISPATCHES: Lazy<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
+    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+
+pub async fn flush(timeout: Duration) {
+    let handles: Vec<_> = match PENDING_DISPATCHES.lock() {
+        Ok(mut pending) => std::mem::take(&mut *pending),
+        Err(_) => return,
+    };
+    if handles.is_empty() {
+        return;
+    }
+    let _ = tokio::time::timeout(timeout, async {
+        for handle in handles {
+            let _ = handle.await;
+        }
+    })
+    .await;
 }
 
 fn parse_connection_string() -> (String, String) {

@@ -830,7 +830,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                         warn!("Failed to create pending installation entries: {}", e);
                     }
 
-                    let ctx = build_cli_context(&settings, InstallMode::Cli);
+                    let ctx = build_cli_context(&settings, InstallMode::Wizard);
                     let extras = build_cli_extras(&settings);
                     if !do_not_track {
                       telemetry::track_install_started(&ctx);

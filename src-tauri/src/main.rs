@@ -137,7 +137,9 @@ async fn main() {
         let cli = cli::cli_args::Cli::parse();
         set_locale(&cli.locale);
 
-        match cli::run_cli(cli).await {
+        let result = cli::run_cli(cli).await;
+        idf_im_lib::telemetry::flush(std::time::Duration::from_secs(3)).await;
+        match result {
             Ok(_) => std::process::exit(0),
             Err(e) => {
                 eprintln!("Error executing CLI: {}", e);
@@ -185,6 +187,7 @@ async fn main() {
     } else {
         debug!("This is the end...");
     }
+    idf_im_lib::telemetry::flush(std::time::Duration::from_secs(3)).await;
     match result {
         Ok(_) => std::process::exit(0),
         Err(e) => {

@@ -366,7 +366,13 @@ pub async fn track_event_command(
                 Some("failure") | None => InstallOutcome::Failure,
                 Some(other) => return Err(format!("Unknown outcome: {}", other)),
             };
-            let kind = parse_error_kind(error_kind.as_deref())?;
+            let explicit_kind = parse_error_kind(error_kind.as_deref())?;
+            let kind = match (outcome, explicit_kind, error_message.as_deref()) {
+                (InstallOutcome::Failure, None, Some(msg)) => {
+                    Some(telemetry::ErrorKind::from_message(msg))
+                }
+                _ => explicit_kind,
+            };
             let error = match (outcome, kind, error_message.as_deref()) {
                 (InstallOutcome::Failure, Some(k), Some(msg)) => Some(build_anyhow(k, msg)),
                 _ => None,
