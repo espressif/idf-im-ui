@@ -1010,6 +1010,7 @@ fn subcommand_name(cmd: &Commands) -> &'static str {
         Commands::Remove { .. } => "remove",
         Commands::Rename { .. } => "rename",
         Commands::Run { .. } => "run",
+        Commands::Shell { .. } => "shell",
         Commands::Import { .. } => "import",
         Commands::Purge => "purge",
         Commands::Wizard(_) => "wizard",

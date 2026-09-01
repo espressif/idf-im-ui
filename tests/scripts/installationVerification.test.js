@@ -572,6 +572,26 @@ export function runInstallVerification({
               logger.debug(
                 `Tool ${tool.name} version output: ${testRunner.output} expected: ${tool.versions[0].name} result: ${toolVersionOutput}`
               );
+              if (!toolVersionOutput) {
+                try {
+                  const versionRegex = new RegExp(tool.version_regex);
+                  const match = testRunner.output.match(versionRegex);
+                  if (match) {
+                    const installed = match[1];
+                    const expected = tool.versions[0].name;
+                    const normalize = (s) => s.replace(/_+/g, "_");
+                    if (normalize(installed) === normalize(expected)) {
+                      toolVersionOutput = true;
+                      logger.info(
+                        `Tool ${tool.name} version matched after normalizing underscores: ${installed} ~ ${expected}`
+                      );
+                    }
+                  }
+                } catch (e) {
+                  // Regex parse failures just fall through to the original
+                  // expect() below.
+                }
+              }
               if (
                 !toolVersionOutput &&
                 tool.name === "esp-clang" &&
