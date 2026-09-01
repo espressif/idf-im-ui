@@ -1128,8 +1128,30 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
         }
       };
 
-    // Compare versions (major.minor only)
-    if installed_version == expected_version.name || versions_match(installed_version, &expected_version.name) {
+    // Compare versions (major.minor only). Collapse runs of underscores on
+    // both sides so cosmetic build-string differences like
+    // "esp-21.1.3_20260408" vs "esp-21.1.3__20260408" (seen on some Windows
+    // builds of clangd) still match.
+    let normalize = |s: &str| {
+        let mut out = String::with_capacity(s.len());
+        let mut prev_underscore = false;
+        for ch in s.chars() {
+            if ch == '_' {
+                if !prev_underscore {
+                    out.push('_');
+                }
+                prev_underscore = true;
+            } else {
+                out.push(ch);
+                prev_underscore = false;
+            }
+        }
+        out
+    };
+    if installed_version == expected_version.name
+        || versions_match(installed_version, &expected_version.name)
+        || normalize(installed_version) == normalize(&expected_version.name)
+    {
         Ok(ToolStatus::Correct {
             version: installed_version.to_string(),
         })
