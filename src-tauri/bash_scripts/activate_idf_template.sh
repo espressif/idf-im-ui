@@ -206,7 +206,7 @@ fi
 
 if ( eval 'f.x() { :; }; f.x' ) 2>>/dev/null; then
 
-    eval 'idf.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/tools/idf.py" "$@"; }'
+    eval 'idf.py() { "{{idf_path_escaped}}/tools/idf.py" "$@"; }'
 
     eval 'esptool.py() { esptool "$@"; }'
 
@@ -214,31 +214,31 @@ if ( eval 'f.x() { :; }; f.x' ) 2>>/dev/null; then
 
     eval 'espsecure.py() { espsecure "$@"; }'
 
-    eval 'otatool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/app_update/otatool.py" "$@"; }'
+    eval 'otatool.py() { "{{idf_path_escaped}}/components/app_update/otatool.py" "$@"; }'
 
-    eval 'parttool.py() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/partition_table/parttool.py" "$@"; }'
+    eval 'parttool.py() { "{{idf_path_escaped}}/components/partition_table/parttool.py" "$@"; }'
 else
     # Fallback: aliases for dot-named commands (dash-compatible)
 
-    alias idf.py="{{python_bin_path}} {{idf_path_escaped}}/tools/idf.py"
+    alias idf.py="{{idf_path_escaped}}/tools/idf.py"
 
-    alias esptool.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
+    alias esptool.py="{{idf_path_escaped}}/components/esptool_py/esptool/esptool.py"
 
-    alias espefuse.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
+    alias espefuse.py="{{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py"
 
-    alias espsecure.py="{{python_bin_path}} {{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
+    alias espsecure.py="{{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py"
 
-    alias otatool.py="{{python_bin_path}} {{idf_path_escaped}}/components/app_update/otatool.py"
+    alias otatool.py="{{idf_path_escaped}}/components/app_update/otatool.py"
 
-    alias parttool.py="{{python_bin_path}} {{idf_path_escaped}}/components/partition_table/parttool.py"
+    alias parttool.py="{{idf_path_escaped}}/components/partition_table/parttool.py"
 fi
 
 # shellcheck disable=SC2317
-esptool() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/esptool.py" "$@"; }
+esptool() { "{{idf_path_escaped}}/components/esptool_py/esptool/esptool.py" "$@"; }
 # shellcheck disable=SC2317
-espefuse() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py" "$@"; }
+espefuse() { "{{idf_path_escaped}}/components/esptool_py/esptool/espefuse.py" "$@"; }
 # shellcheck disable=SC2317
-espsecure() { "{{python_bin_path}}" "{{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py" "$@"; }
+espsecure() { "{{idf_path_escaped}}/components/esptool_py/esptool/espsecure.py" "$@"; }
 
 
 # Main execution
