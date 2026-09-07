@@ -1,24 +1,31 @@
 # EIM Maintenance Guide
 
-This document provides comprehensive guidance for maintaining the various distribution components of the ESP-IDF Installation Manager (EIM). It covers all external repositories, package managers, and documentation that need periodic review and updates.
+This document provides comprehensive guidance for maintaining the various distribution components of the ESP-IDF Installation Manager (EIM). It covers all external repositories, package managers, CI/CD workflows, and documentation that need periodic review and updates.
 
 ## Table of Contents
 
-- [Overview](#overview)
-  - [Release and Workflow Overview](#release-and-workflow-overview)
-- [1. Scoop Manifests for Offline Installer](#1-scoop-manifests-for-offline-installer)
-- [2. Scoop Installer PowerShell Scripts](#2-scoop-installer-powershell-scripts)
-- [3. Docker Repository](#3-docker-repository)
-- [4. GitHub Install Action](#4-github-install-action)
-- [5. Homebrew EIM](#5-homebrew-eim)
-- [6. TLDR Pages Entry](#6-tldr-pages-entry)
-- [7. Man Page](#7-man-page)
-- [8. APT Repository](#8-apt-repository)
-- [9. RPM Repository](#9-rpm-repository)
-- [10. WinGet](#10-winget)
-- [11. Scoop Distribution (Online)](#11-scoop-distribution-online)
 - [Maintenance Checklists](#maintenance-checklists)
 - [Secrets Reference](#secrets-reference)
+- [Overview](#overview)
+  - [Distribution Architecture](#distribution-architecture)
+  - [Release and Workflow Overview](#release-and-workflow-overview)
+- [1. Release Automation](#1-release-automation)
+- [2. Sync and Housekeeping Workflows](#2-sync-and-housekeeping-workflows)
+- [3. Scoop Manifests for Offline Installer](#3-scoop-manifests-for-offline-installer)
+- [4. Scoop Installer PowerShell Scripts](#4-scoop-installer-powershell-scripts)
+- [5. Docker Integration](#5-docker-integration)
+- [6. GitHub Install Action](#6-github-install-action)
+- [7. Homebrew EIM](#7-homebrew-eim)
+- [8. TLDR Pages Entry](#8-tldr-pages-entry)
+- [9. Man Page](#9-man-page)
+- [10. APT Repository](#10-apt-repository)
+- [11. RPM Repository](#11-rpm-repository)
+- [12. Pacman Repository (Arch Linux)](#12-pacman-repository-arch-linux)
+- [13. WinGet](#13-winget)
+- [14. Scoop Distribution (Online)](#14-scoop-distribution-online)
+- [15. Mirror Infrastructure](#15-mirror-infrastructure)
+- [16. CLI Features Impact on Maintenance](#16-cli-features-impact-on-maintenance)
+- [External Links Reference](#external-links-reference)
 
 The checklists and secrets reference below are the most frequently used part of this guide; the detailed sections that follow give context for each component.
 
@@ -28,14 +35,17 @@ The checklists and secrets reference below are the most frequently used part of 
 
 ### After Each Release
 
-- [ ] Verify correct version of EIM and offline installer archives is on dl.espressif
+- [ ] Verify correct version of EIM **and** offline installer archives is on [dl.espressif.com](https://dl.espressif.com/dl/eim/)
 - [ ] Verify Homebrew formula updated automatically (check https://github.com/espressif/homebrew-eim)
 - [ ] Verify WinGet PR created (check https://github.com/microsoft/winget-pkgs/pulls)
 - [ ] Verify WinGet PR merged (may take 1-3 days for Microsoft review)
 - [ ] Verify APT repository updated (`apt-cache policy eim`)
 - [ ] Verify RPM repository updated (`dnf info eim`)
+- [ ] Verify Pacman repository updated (`pacman -Si eim`)
 - [ ] Verify Scoop manifests attached to release (when Scoop workflow is enabled)
-- [ ] Test Docker image with new release
+- [ ] Verify Linux packages are signed (check `update-linux-repos.yml` workflow logs)
+- [ ] Check telemetry endpoint is reachable and collecting data correctly
+- [ ] Test activation and deactivation scripts on all platforms (bash, fish, PowerShell, batch)
 
 ### Monthly Maintenance
 
@@ -44,20 +54,25 @@ The checklists and secrets reference below are the most frequently used part of 
   curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/7zip.json | jq .version
   curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json | jq .version
   ```
+- [ ] Verify `sync-git-python-to-s3.yml` weekly runs are succeeding (Git and Python installers on S3)
+- [ ] Verify `purge_debug_offline_archives.yml` daily runs are cleaning up debug archives
 - [ ] Sync PowerShell scripts with upstream if needed (diff with ScoopInstaller/Install)
 - [ ] Verify all PAT tokens are valid:
   - `WINGET_PAT` - test with `gh auth status`
   - `HOMEBREW_UPDATE_TOKEN` - check workflow logs
-- [ ] Test installation on all platforms
-- [ ] Update dependencies (e.g. Rust, Node, GitHub Actions) as needed
+- [ ] Test installation on all platforms (Windows, macOS, Linux)
+- [ ] Update dependencies (Rust, Node, GitHub Actions) as needed
 
 ### With Major EIM Changes
 
-- [ ] Update man page with new commands/options
+- [ ] Update man page with new commands/options (e.g. `shell`, `list-tools`, `list-features`, `fix` with features/tools)
 - [ ] Update or create TLDR page
-- [ ] Update Docker repository if installation flags changed
-- [ ] Update install-esp-idf-action if CLI interface changed
+- [ ] Update Docker examples if installation flags changed (e.g. `--cleanup`, `--skip-components-download`)
+- [ ] Update `install-esp-idf-action` if CLI interface changed
 - [ ] Update documentation references
+- [ ] If activation/deactivation scripts changed, verify on all shells (bash, fish, PowerShell, batch)
+- [ ] If mirror URLs or probing logic changed, test with `--mirror` and `--repo-stub` flags
+- [ ] If offline installer changed, rebuild and test offline archives on all platforms
 
 ### Quarterly Security Review
 
@@ -66,6 +81,8 @@ The checklists and secrets reference below are the most frequently used part of 
 - [ ] Review AWS IAM permissions
 - [ ] Check for security advisories on dependencies
 - [ ] Update base images (Docker, etc.)
+- [ ] Run `cargo audit` and address findings
+- [ ] Review forked dependencies (`lzma-rs`, `dialoguer`, `RustPython`) for upstream updates
 
 ---
 
@@ -73,12 +90,15 @@ The checklists and secrets reference below are the most frequently used part of 
 
 | Secret Name | Purpose | Where Used | Renewal Location |
 |-------------|---------|------------|------------------|
-| `HOMEBREW_UPDATE_TOKEN` | Push to espressif/homebrew-eim | update-homebrew.yml | GitHub PAT settings |
-| `WINGET_PAT` | Fork sync and PR creation to WinGet | update-windows-packages.yml | GitHub PAT settings |
-| `AWS_ACCESS_KEY_ID` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
-| `AWS_SECRET_ACCESS_KEY` | S3 upload for APT/RPM repos | update-linux-repos.yml | AWS IAM Console |
-| `DL_DISTRIBUTION_ID` | CloudFront cache invalidation | update-linux-repos.yml | AWS CloudFront Console |
+| `HOMEBREW_UPDATE_TOKEN` | Push to espressif/homebrew-eim | `update-homebrew.yml` | GitHub PAT settings |
+| `WINGET_PAT` | Fork sync and PR creation to WinGet | `update-windows-packages.yml` | GitHub PAT settings |
+| `AWS_ACCESS_KEY_ID` | S3 upload for APT/RPM/Pacman repos, tools sync, archive purge | `update-linux-repos.yml`, `sync-git-python-to-s3.yml`, `purge_debug_offline_archives.yml` | AWS IAM Console |
+| `AWS_SECRET_ACCESS_KEY` | S3 upload for APT/RPM/Pacman repos, tools sync, archive purge | `update-linux-repos.yml`, `sync-git-python-to-s3.yml`, `purge_debug_offline_archives.yml` | AWS IAM Console |
+| `DL_DISTRIBUTION_ID` | CloudFront cache invalidation | `update-linux-repos.yml`, `sync-git-python-to-s3.yml` | AWS CloudFront Console |
+| `ATHENA_BASE_URL` | Athena project management sync | `sync-athena.yml` | Athena admin settings |
+| `ATHENA_TOKEN` | Athena API authentication | `sync-athena.yml` | Athena admin settings |
 | `GITHUB_TOKEN` | Automatic, for release asset uploads | Various workflows | Automatic (no renewal needed) |
+| `SIGNING_KEY` | GPG key for signing Linux packages (APT, RPM, Pacman) | `update-linux-repos.yml` | GPG key management |
 
 ### How to Update Secrets
 
@@ -97,6 +117,13 @@ The checklists and secrets reference below are the most frequently used part of 
 - `repo` (for fork access)
 - `workflow` (for PR creation)
 
+### Athena Variables (Repository Variables, not Secrets)
+
+| Variable | Purpose |
+|----------|---------|
+| `ATHENA_PROJECT_UUID` | The Athena project identifier for EIM |
+| `ATHENA_DB_PATH` | Database path within Athena |
+
 ---
 
 ## Overview
@@ -107,49 +134,139 @@ EIM is distributed through multiple channels to support different platforms and 
 
 ```
 Release Trigger (GitHub Release)
-         │
-         ▼
+         |
+         v
     Build Phase (build.yaml)
-         │
-         ├── CLI Binaries
-         ├── GUI Binaries
-         ├── .deb packages
-         ├── .rpm packages
-         ├── .dmg files
-         └── .msi installers
-         │
-         ▼
+         |
+         +-- CLI Binaries (Windows, macOS, Linux)
+         +-- GUI Binaries (Windows, macOS, Linux)
+         +-- .deb packages (x64, arm64)
+         +-- .rpm packages (x64, arm64)
+         +-- .pacman packages (x86_64, aarch64, armv7h)
+         +-- .dmg files (macOS)
+         +-- .msi installers (Windows)
+         |
+         v
   Distribution Phase
-         │
-         ├── update-homebrew.yml ──────► espressif/homebrew-eim
-         ├── update-linux-repos.yml ───► APT Repository (S3)
-         │                             └► RPM Repository (S3)
-         └── update-windows-packages.yml ─► WinGet (microsoft/winget-pkgs)
-                                          └► Scoop Manifests (Release assets)
+         |
+         +-- update-homebrew.yml ----------> espressif/homebrew-eim
+         +-- update-linux-repos.yml -------> APT Repository (S3)
+         |                                   RPM Repository (S3)
+         |                                   Pacman Repository (S3)
+         +-- update-windows-packages.yml --> WinGet (microsoft/winget-pkgs)
+                                             Scoop Manifests (Release assets)
+
+  Sync / Housekeeping (independent of releases)
+         |
+         +-- sync-athena.yml ------------> Athena project tracker
+         +-- sync-git-python-to-s3.yml --> Git & Python installers on S3
+         +-- purge_debug_offline_archives.yml -> S3 debug archive cleanup
 ```
 
 ### Release and Workflow Overview
 
-Releases are **not** created by CI. A maintainer creates a GitHub Release (e.g. tag `v0.7.1` and "Publish release"). That triggers the following:
+Releases are **not** created by CI. A maintainer creates a GitHub Release (e.g. tag `v0.19.0` and "Publish release"). That triggers the following:
 
-1. **Trigger:** `build.yaml` runs when `release.type` is `created` (`.github/workflows/build.yaml`).
+1. **Trigger:** `build.yaml` runs when `release.type` is `created`.
 
-2. **Build jobs:** `build-cli`, `build-cli-linux`, and `build-gui` build binaries for all platforms. Each job uploads **artifacts** (e.g. `eim-cli-windows-x64-v0.7.1`) and, on release, uploads the same files as **release assets** to the GitHub Release.
+2. **Build jobs:** `build-cli`, `build-cli-linux`, and `build-gui` build binaries for all platforms. Each job uploads **artifacts** and, on release, uploads the same files as **release assets** to the GitHub Release. Binaries now include version tags in filenames (e.g. `eim-cli-windows-x64-v0.19.0`).
 
-3. **Offline archives:** The job `build-offline-archives` calls `build_offline_installer_archives.yaml`. It uses the `offline_installer_builder` binary (built in `build-cli`/`build-cli-linux`) and the **scoop manifest templates** (compiled into that binary) to build offline archives and upload them to S3.
+3. **Offline archives:** The job `build-offline-archives` calls `build_offline_installer_archives.yaml`. It uses the `offline_installer_builder` binary and the scoop manifest templates to build offline archives and upload them atomically to S3.
 
 4. **Release info:** The job `update-release-info` fetches the latest release JSON and uploads it to S3 (`eim_unified_release.json`).
 
-5. **Distribution workflows:** After `update-release-info`, the main workflow **calls** three reusable workflows with `version: ${{ github.ref_name }}` (e.g. `v0.7.1`):
-   - **update-homebrew.yml** — Downloads macOS assets from the **release API**, computes SHA256, updates `espressif/homebrew-eim`.
-   - **update-linux-repos.yml** — Downloads **artifacts** from the **same run** (e.g. `eim-gui-linux-x64-v0.7.1-deb`), updates APT and RPM repos on S3.
-   - **update-windows-packages.yml** — Downloads **artifacts** from the same run (e.g. `eim-cli-windows-x64-v0.7.1`), generates Scoop manifests, uploads them to the release, then runs WinGet releaser (PR to `microsoft/winget-pkgs`).
+5. **Distribution workflows:** After `update-release-info`, the main workflow calls three reusable workflows with `version: ${{ github.ref_name }}`:
+   - **`update-homebrew.yml`** -- Downloads macOS assets from the release API, computes SHA256, updates `espressif/homebrew-eim`.
+   - **`update-linux-repos.yml`** -- Downloads artifacts from the same run, updates APT, RPM, and Pacman repos on S3. Packages are now **signed** with the repository GPG key.
+   - **`update-windows-packages.yml`** -- Downloads artifacts from the same run, generates Scoop manifests, uploads them to the release, then runs WinGet releaser (PR to `microsoft/winget-pkgs`).
 
-Artifacts are shared across jobs in the same workflow run, so distribution jobs use the versioned artifact names (e.g. `eim-cli-windows-x64-v0.7.1`) to download what the build jobs uploaded.
+**Release Preparation:** Use `prepare-release.yml` (workflow_dispatch) to automate version bumping. It creates a release branch, bumps versions in `Cargo.toml` and `package.json`, updates lock files, and creates a PR.
 
 ---
 
-## 1. Scoop Manifests for Offline Installer
+## 1. Release Automation
+
+### Purpose
+
+The `prepare-release.yml` workflow automates the release preparation process, replacing manual version bumps.
+
+### Workflow File
+
+`.github/workflows/prepare-release.yml`
+
+### How It Works
+
+1. Triggered manually via `workflow_dispatch` with a version string (e.g. `0.19.0`)
+2. Validates semver format
+3. Creates a `release-v{version}` branch from the source branch
+4. Bumps version in `src-tauri/Cargo.toml` and `package.json`
+5. Runs `cargo update --workspace` to update `Cargo.lock`
+6. Commits and pushes the release branch
+7. Creates a PR targeting the specified branch (default: `master`)
+
+### Maintenance Notes
+
+- The version validation regex accepts pre-release suffixes (e.g. `1.0.0-rc.1`)
+- If the release branch already exists, the workflow fails safely
+- Review the generated PR carefully: check that `Cargo.lock` changes look reasonable
+
+---
+
+## 2. Sync and Housekeeping Workflows
+
+### sync-athena.yml
+
+**Purpose:** Syncs GitHub issues, comments, and PRs to the Athena project management tool.
+
+**Triggers:** Issue events, comment events, PR events, manual dispatch (backfill).
+
+**What it does:**
+- `issue_to_task` -- Creates EIM tickets from GitHub issues
+- `comment_to_task` -- Appends comments to existing EIM tickets
+- `pr_to_comment` -- Links PRs to their EIM tickets
+
+**Required secrets/variables:** `ATHENA_BASE_URL`, `ATHENA_TOKEN`, `ATHENA_PROJECT_UUID`, `ATHENA_DB_PATH`
+
+### sync-git-python-to-s3.yml
+
+**Purpose:** Keeps Git for Windows and Python installers on Espressif's S3 (`dl.espressif.com`) for use by the offline installer and EIM's dependency installation.
+
+**Triggers:** Weekly (Monday 02:00 UTC), on release publish, manual dispatch.
+
+**What it does:**
+- Downloads Python build-standalone installers (Windows x64 and arm64) from `astral-sh/python-build-standalone`
+- Downloads the latest Git for Windows release (x64 and arm64 tar.bz2)
+- Uploads to `s3://espdldata/dl/eim/tools/{python,git}/` if not already present
+- Updates a `git-windows-latest.json` manifest with the current version
+- Invalidates CloudFront cache
+
+**S3 paths:**
+- `dl/eim/tools/python/` -- Python standalone builds
+- `dl/eim/tools/git/` -- Git for Windows archives
+
+### purge_debug_offline_archives.yml
+
+**Purpose:** Daily cleanup of debug offline archive builds on S3 to control storage costs.
+
+**Triggers:** Daily at 04:00 UTC, manual dispatch.
+
+**What it does:**
+- Lists all objects under `s3://espdldata/dl/eim/debug/`
+- Deletes objects older than 48 hours (configurable via `max_age_hours`)
+- Supports dry-run mode
+- Writes a summary to the GitHub Actions job summary
+
+### sync-jira.yml and jira-pr-comment.yml
+
+**Purpose:** Syncs GitHub issues, comments, and PRs to Jira (project EIM). The `jira-pr-comment.yml` adds a PR link comment to Jira when the PR title matches `EIM-{number}: ...`.
+
+**Triggers:** Issue/comment/PR events (sync-jira), PR open/edit (jira-pr-comment), hourly PR scan, manual `mirror-issues` dispatch.
+
+**Required secrets:** Jira API credentials (configured in repository secrets).
+
+---
+
+## 3. Scoop Manifests for Offline Installer
 
 ### Purpose
 
@@ -157,90 +274,40 @@ These JSON manifest templates define how Scoop installs dependencies (7-Zip, Git
 
 ### Used by Workflows
 
-These files are **not** read by any workflow directly. They are embedded at **compile time** in the Rust binary:
+These files are **not** read by any workflow directly. They are used in the offline installer build process:
 
-- **build.yaml** — The `build-cli` and `build-cli-linux` jobs build the `offline_installer_builder` binary. That binary is compiled with `include_str!("../../scoop_manifest_templates/7zip.json")` etc. in `src-tauri/src/lib/offline_installer.rs`, so the template contents are baked into the executable.
-- **build_offline_installer_archives.yaml** — Runs the `offline_installer_builder` binary to produce offline archives. When a user runs the offline installer, that binary (or the EIM GUI/CLI using the same logic) expands the templates with `{{offline_archive_scoop_dir}}` and uses them to install Scoop dependencies from the archive.
-
-No workflow edits these JSON files; they are maintained in the repo and only affect behaviour when the binary is built and when offline archives are built or used.
+- **`build.yaml`** -- Builds the `offline_installer_builder` binary.
+- **`build_offline_installer_archives.yaml`** -- Runs the builder to produce offline archives. The scoop manifest templates are included in the archive and processed at runtime with the `{{offline_archive_scoop_dir}}` placeholder.
 
 ### File Locations
 
-| File | Description | Lines |
-|------|-------------|-------|
-| `src-tauri/scoop_manifest_templates/7zip.json` | 7-Zip archiver (v25.01) | 73 |
-| `src-tauri/scoop_manifest_templates/git.json` | Git for Windows (v2.50.1) | 82 |
-| `src-tauri/scoop_manifest_templates/python311.json` | Python 3.11.9 | 95 |
-| `src-tauri/scoop_manifest_templates/python310.json` | Python 3.10.11 | 93 |
-| `src-tauri/scoop_manifest_templates/dark.json` | WiX Toolset Decompiler (v3.14.1) | 10 |
+| File | Description |
+|------|-------------|
+| `src-tauri/scoop_manifest_templates/7zip.json` | 7-Zip archiver |
+| `src-tauri/scoop_manifest_templates/git.json` | Git for Windows |
+| `src-tauri/scoop_manifest_templates/python311.json` | Python 3.11 |
+| `src-tauri/scoop_manifest_templates/dark.json` | WiX Toolset Decompiler |
+
+> **Note:** `python310.json` also exists in the templates directory but is not actively used by the current offline installer code. It is kept for potential future use.
 
 ### How It Works
 
-1. Templates are embedded at compile time in `src-tauri/src/lib/offline_installer.rs` (lines 319-344):
-
-```rust
-let packages = [
-    ScoopPackage {
-        name: "7zip",
-        template_content: include_str!("../../scoop_manifest_templates/7zip.json"),
-        manifest_filename: "7zip.json",
-        test_command: "echo 0"
-    },
-    // ... more packages
-];
-```
-
-2. The placeholder `{{offline_archive_scoop_dir}}` is replaced at runtime (line 316):
-
-```rust
-context.insert("offline_archive_scoop_dir", &scoop_path.to_str().unwrap().replace("\\", "/"));
-```
-
-3. Scoop then installs each package using the processed manifest.
+1. Templates use `{{offline_archive_scoop_dir}}` as a placeholder for the local path
+2. At runtime, the offline installer replaces the placeholder with the actual extraction directory
+3. Scoop then installs each package using the processed manifest
 
 ### Version Update Procedure
 
-**Example: Updating 7-Zip from v25.01 to v25.02**
+1. Check the upstream Scoop bucket for the latest version (e.g. https://github.com/ScoopInstaller/Main/blob/master/bucket/7zip.json)
+2. Update the corresponding template file with new version, URLs, and hashes
+3. Download the new binaries and calculate SHA256
+4. Update the `autoupdate` URL pattern if the naming convention changed
 
-1. Check the upstream Scoop bucket for the latest version:
-   - URL: https://github.com/ScoopInstaller/Main/blob/master/bucket/7zip.json
-
-2. Update `src-tauri/scoop_manifest_templates/7zip.json`:
-
-```json
-{
-    "version": "25.02",  // Line 2 - update version
-    "architecture": {
-        "64bit": {
-            "url": "file://{{offline_archive_scoop_dir}}/7z2502-x64.msi",  // Line 9 - update filename
-            "hash": "NEW_SHA256_HASH_HERE"  // Line 10 - update hash
-        },
-        "32bit": {
-            "url": "file://{{offline_archive_scoop_dir}}/7z2502.msi",  // Line 14
-            "hash": "NEW_SHA256_HASH_HERE"  // Line 15
-        }
-    }
-}
-```
-
-3. Download the new binaries and calculate SHA256:
-
-```bash
-# Download the new version
-curl -LO https://www.7-zip.org/a/7z2502-x64.msi
-
-# Calculate SHA256
-sha256sum 7z2502-x64.msi
-# or on Windows:
-certutil -hashfile 7z2502-x64.msi SHA256
-```
-
-4. Update the `autoupdate` URL pattern if the naming convention changed.
+> **Important:** The actual download URLs for the dependency files (7-Zip, Git, Python) used in offline archives are managed through the `sync-git-python-to-s3.yml` workflow, which syncs them to `dl.espressif.com`. Updates to template versions must be coordinated with the S3-hosted files.
 
 ### Fetching Upstream Changes
 
 ```bash
-# Compare with upstream Scoop manifests
 curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/7zip.json | jq .version
 curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/git.json | jq .version
 curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/python.json | jq .version
@@ -250,15 +317,13 @@ curl -s https://raw.githubusercontent.com/ScoopInstaller/Main/master/bucket/dark
 ### Important Notes
 
 - The `url` field uses `file://{{offline_archive_scoop_dir}}/...` for offline installation
-- Keep `checkver` and `autoupdate` sections for reference, even though offline installs don't use them
+- Keep `checkver` and `autoupdate` sections for reference
 - Python manifests include PEP-514 registry entries for Python discovery by other tools
 - Test offline installation after any manifest changes
 
-**Important:** The actual download URLs for the dependency files (7-Zip, Git, Python, etc.) are currently **hardcoded in the offline installer** code. The version update procedure above (fetching from upstream and updating manifests) may therefore not work as described until the installer is changed to resolve or configure those URLs. This is expected to be addressed in [EIM-381](https://jira.espressif.com:8443/browse/EIM-381).
-
 ---
 
-## 2. Scoop Installer PowerShell Scripts
+## 4. Scoop Installer PowerShell Scripts
 
 ### Purpose
 
@@ -266,14 +331,14 @@ These scripts install and configure Scoop package manager on Windows. The offlin
 
 ### Used by Workflows
 
-No workflow in this repository **runs** these scripts. They are bundled into the **offline installation archive** when `build_offline_installer_archives.yaml` runs the `offline_installer_builder`. The archive content is then used on a user's Windows machine: the offline installer extracts and runs `install_scoop_offline.ps1` (and may use `install_scoop.ps1` in online flows). So these files are **payload** for the offline archive, not invoked by CI. Changing them only affects future offline archive builds and end-user offline installs.
+No workflow in this repository runs these scripts. They are bundled into the offline installation archive when `build_offline_installer_archives.yaml` runs the builder. The archive content is then used on a user's Windows machine.
 
 ### File Locations
 
-| File | Description | Lines |
-|------|-------------|-------|
-| `src-tauri/powershell_scripts/install_scoop_offline.ps1` | Offline Scoop installer | 639 |
-| `src-tauri/powershell_scripts/install_scoop.ps1` | Online Scoop installer | 716 |
+| File | Description |
+|------|-------------|
+| `src-tauri/powershell_scripts/install_scoop_offline.ps1` | Offline Scoop installer |
+| `src-tauri/powershell_scripts/install_scoop.ps1` | Online Scoop installer |
 
 ### Upstream Source
 
@@ -282,159 +347,42 @@ No workflow in this repository **runs** these scripts. They are bundled into the
 ### How to Fetch Upstream Changes
 
 ```bash
-# Download the latest upstream installer
 curl -o /tmp/upstream_install.ps1 https://raw.githubusercontent.com/ScoopInstaller/Install/master/install.ps1
-
-# Compare with our online version
 diff src-tauri/powershell_scripts/install_scoop.ps1 /tmp/upstream_install.ps1
-
-# Or use a visual diff tool
-code --diff src-tauri/powershell_scripts/install_scoop.ps1 /tmp/upstream_install.ps1
-```
-
-### Key Functions to Monitor
-
-When syncing with upstream, pay attention to these functions:
-
-| Function | Local Lines | Purpose |
-|----------|-------------|---------|
-| `Test-Prerequisite` | 148-168 | PowerShell version and TLS checks |
-| `Expand-ZipArchive` | 197-235 | Archive extraction logic |
-| `Import-ScoopShim` | 264-329 | Shim creation for scoop command |
-| `Add-ShimsDirToPath` | 401-423 | PATH configuration |
-| `Add-DefaultConfig` | 474-513 | Scoop configuration setup |
-
-### EIM-Specific Additions (Do NOT Remove)
-
-The offline script contains EIM-specific code that must be preserved:
-
-1. **`$OfflineDir` parameter** (line 57):
-```powershell
-param(
-    [String] $ScoopDir,
-    [String] $ScoopGlobalDir,
-    [String] $ScoopCacheDir,
-    [String] $OfflineDir,  # EIM-specific
-    [Switch] $RunAsAdmin
-)
-```
-
-2. **`Test-OfflineFiles` function** (lines 113-140):
-```powershell
-function Test-OfflineFiles {
-    param([String] $OfflineDirectory)
-    # Validates scoop-master.zip and main-master.zip exist
-    $requiredFiles = @('scoop-master.zip', 'main-master.zip')
-    # ...
-}
-```
-
-3. **`Install-ScoopOffline` function** (lines 523-574):
-```powershell
-function Install-ScoopOffline {
-    param([String] $OfflineDirectory)
-    # Extracts from local zip files instead of downloading
-    # ...
-}
-```
-
-### Sync Procedure
-
-1. Download upstream changes
-2. Diff with local version
-3. Apply relevant changes to `install_scoop.ps1`
-4. Port applicable changes to `install_scoop_offline.ps1` while preserving EIM-specific code
-5. Test both online and offline installation
-
----
-
-## 3. Docker Repository
-
-### Used by Workflows
-
-No workflow in **this** repository builds or updates the Docker image. The image lives in a separate repository (Hahihula/eim-idf-build-docker). Optionally, that repo could be triggered on new EIM releases (e.g. via `repository_dispatch` or a manual trigger); currently it is updated manually when EIM or ESP-IDF versions change.
-
-### Official and reference Docker resources
-
-- **Official Docker image:** The ESP-IDF repository hosts an official Docker image that is being migrated to EIM; this is expected to be in place after the next release.
-- **CI images:** CI/build Docker images are maintained in the **esp-dockerfiles** repository.
-- **Documentation:** The EIM documentation includes a Dockerfile example; see the [headless usage / Docker integration](https://docs.espressif.com/projects/idf-im-ui/en/latest/headless_usage.html) docs.
-
-The repository and image below are a **proof-of-concept** example for non-interactive EIM installation.
-
-### Repository
-
-**URL:** https://github.com/Hahihula/eim-idf-build-docker
-
-**Docker Hub:** https://hub.docker.com/r/hahihula/eim-idf-build
-
-### Purpose
-
-Provides a proof-of-concept Docker image demonstrating non-interactive EIM installation for CI/CD pipelines.
-
-### Current Dockerfile Key Sections
-
-```dockerfile
-# Base image - update when Debian releases new stable version
-FROM bitnami/minideb:bookworm
-
-# Required packages for ESP-IDF development
-RUN install_packages git cmake ninja-build wget flex bison gperf ccache \
-    libffi-dev libssl-dev dfu-util libusb-1.0-0 python3 python3-pip \
-    python3-setuptools python3-wheel xz-utils unzip python3-venv curl jq
-
-# EIM download - automatically fetches latest release
-ARG TARGETARCH=arm64
-RUN set -x && \
-    LATEST_RELEASE=$(curl -s https://api.github.com/repos/espressif/idf-im-ui/releases/latest) && \
-    # Architecture detection and download logic...
-
-# ESP-IDF installation via EIM
-RUN eim -vvv install -n true -a true -r false
-
-# Entrypoint - HARDCODED IDF VERSION - NEEDS UPDATE
-ENTRYPOINT ["/bin/bash", "-c", "source /root/.espressif/tools/activate_idf_v5.3.1.sh && python3 /root/.espressif/v5.3.1/esp-idf/tools/idf.py build"]
-```
-
-### Maintenance Tasks
-
-1. **Update ESP-IDF version in entrypoint:**
-   - When the default IDF version changes, update the `activate_idf_v5.3.1.sh` path
-   - This is currently hardcoded and requires manual update
-
-2. **Test multi-architecture builds:**
-```bash
-# Build for both architectures
-docker buildx build --platform linux/amd64,linux/arm64 -t hahihula/eim-idf-build:test .
-
-# Test the image
-docker run --rm -it -v $(pwd):/tmp/project hahihula/eim-idf-build:latest
-```
-
-3. **Update base image:**
-   - Monitor for new Debian stable releases
-   - Test with new base image before updating
-
-4. **Sync with EIM documentation:**
-   - Keep Docker usage aligned with: https://docs.espressif.com/projects/idf-im-ui/en/latest/headless_usage.html
-
-### Example Usage
-
-```bash
-# Build ESP-IDF project using the Docker image
-docker run --rm -it -v $(pwd):/tmp/project hahihula/eim-idf-build:latest
-
-# Specify different target
-docker run --rm -it -v $(pwd):/tmp/project -e IDF_TARGET=esp32s3 hahihula/eim-idf-build:latest
 ```
 
 ---
 
-## 4. GitHub Install Action
+## 5. Docker Integration
 
-### Used by Workflows
+### Overview
 
-No workflow in **this** repository uses or updates the install-esp-idf-action. It is consumed by **other** repositories when they add `uses: espressif/install-esp-idf-action@v1` to their workflows. Maintenance (testing, version bumps) is done in the action's own repository.
+EIM replaces the traditional `install.sh`/`export.sh` scripts for installing ESP-IDF in Docker containers. The official esp-idf Docker images are being migrated to use EIM.
+
+### Documentation Dockerfile
+
+The EIM documentation at `docs/src/headless_usage.md` contains the reference Dockerfile example. This is the primary source of truth for Docker-based EIM usage.
+
+**Key patterns:**
+- Use `eim install` (runs in non-interactive mode by default)
+- Use `--cleanup true` to remove tool archive files and reduce image size
+- Use `--skip-components-download true` to defer component fetching
+- Use `-a true` to auto-install prerequisites
+
+### Official esp-idf Docker Images
+
+The official Docker images in the [espressif/esp-idf](https://github.com/espressif/esp-idf) repository are being migrated to use EIM instead of the legacy Python-based `idf_tools.py` installer. The `esp-dockerfiles` repository also contains CI images.
+
+### Maintenance Notes
+
+- When EIM CLI flags change, update the Dockerfile examples in `docs/src/headless_usage.md`
+- Verify the latest EIM binary download URL pattern works in Docker builds
+- Test both x64 and arm64 Docker images
+- The `--cleanup` flag is important for reducing Docker image size
+
+---
+
+## 6. GitHub Install Action
 
 ### Repository
 
@@ -442,289 +390,73 @@ No workflow in **this** repository uses or updates the install-esp-idf-action. I
 
 ### Purpose
 
-GitHub Action that automates ESP-IDF installation on GitHub-hosted runners using EIM. Supports Windows, macOS (Intel and ARM), and Linux.
+Provides a GitHub Action for installing ESP-IDF in CI workflows. Uses EIM under the hood.
 
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `action.yml` | Action metadata and input definitions |
-| `index.js` | Main action logic |
-| `dist/index.js` | Bundled code (committed to repo) |
-
-### Current Inputs (action.yml)
+### Usage Example
 
 ```yaml
-inputs:
-  version:
-    description: "Version of ESP-IDF to install"
-    required: false
-    default: "latest"
-  path:
-    description: "Installation path for ESP-IDF"
-    required: false
-  tools-path:
-    description: "Path for ESP-IDF tools"
-    required: false
-  eim-version:
-    description: "Version of EIM to use (default is latest)"
-    required: false
+steps:
+  - uses: actions/checkout@v6
+  - name: Install ESP-IDF
+    uses: espressif/install-esp-idf-action@v1
+    with:
+      version: "v5.3.2"
+      path: "/custom/path/to/esp-idf"
+      tools-path: "/custom/path/to/tools"
 ```
 
-### Maintenance Tasks
+### Maintenance Notes
 
-1. **Test after each EIM release:**
-```yaml
-# Test workflow
-name: Test Install Action
-on: push
-jobs:
-  test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: espressif/install-esp-idf-action@v1
-        with:
-          version: "v5.3.2"
-      - run: idf.py --version
-```
-
-2. **Update when EIM CLI arguments change:**
-   - If EIM adds/removes/changes CLI flags, update `index.js`
-   - Rebuild with: `ncc build index.js --license licenses.txt`
-   - Commit the updated `dist/` directory
-
-3. **Platform-specific testing:**
-   - Verify on all three platforms after changes
-   - Pay attention to PATH handling differences
-
-4. **Keep README examples current:**
-   - Update example workflows when new features are added
-   - Document any breaking changes
-
-### Development Workflow
-
-```bash
-# Clone the repository
-git clone https://github.com/espressif/install-esp-idf-action.git
-cd install-esp-idf-action
-
-# Install dependencies
-npm install
-
-# Make changes to index.js
-
-# Build the action
-npm install -g @vercel/ncc
-ncc build index.js --license licenses.txt
-
-# Commit both source and dist
-git add .
-git commit -m "Update action"
-```
+- Update when EIM CLI interface changes
+- Ensure the action downloads the correct versioned EIM binary
+- Test on Windows, macOS, and Linux runners
 
 ---
 
-## 5. Homebrew EIM
+## 7. Homebrew EIM
 
 ### Repository
 
 **URL:** https://github.com/espressif/homebrew-eim
 
-### Used by Workflows
-
-**Invocation:** In `build.yaml`, the job `update-homebrew` runs only when `github.event_name == 'release' && github.event.action == 'created'`. It calls the reusable workflow `.github/workflows/update-homebrew.yml` with `version: ${{ github.ref_name }}` (e.g. `v0.7.1`). It depends on `update-release-info`, so release metadata is available.
-
-**What the workflow does:** `update-homebrew.yml` checks out `espressif/homebrew-eim`, uses the **GitHub release API** (and `secrets.GITHUB_TOKEN`) to get the list of release assets, downloads the macOS CLI and GUI assets (e.g. `eim-cli-macos-x64.zip`, `eim-gui-macos-aarch64.dmg`), computes SHA256, then generates `Formula/eim.rb` and `Casks/eim-gui.rb` and pushes to the homebrew-eim repo using `secrets.HOMEBREW_UPDATE_TOKEN`. It does **not** use workflow artifacts; it always uses the release assets for the given tag.
-
 ### Automated Workflow
 
 **File:** `.github/workflows/update-homebrew.yml`
 
-This workflow automatically updates the Homebrew formula and cask when a new release is created.
+### How the Workflow Works
 
-### Formula Structure (Formula/eim.rb)
-
-```ruby
-# typed: false
-# frozen_string_literal: true
-
-class Eim < Formula
-  desc "ESP-IDF Installation Manager - CLI tool for setting up ESP-IDF development environment"
-  homepage "https://github.com/espressif/idf-im-ui"
-  version "0.7.1"  # Auto-updated by workflow
-  license "MIT"
-
-  on_macos do
-    on_intel do
-      url "https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-cli-macos-x64.zip"
-      sha256 "459c56e703c10e66b0642b8f2d8f585743336ed657f69bef98bc83e34386234a"
-    end
-    on_arm do
-      url "https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-cli-macos-aarch64.zip"
-      sha256 "f5dc2b9f15e24235041a31865051923551b8e7ce4524e56e2d5a72a549189a0f"
-    end
-  end
-
-  depends_on "dfu-util"
-  depends_on "python@3.12"  # Update if Python requirements change
-
-  def install
-    bin.install "eim"
-    (zsh_completion/"_eim").write Utils.safe_popen_read("#{bin}/eim", "completions", "zsh")
-  end
-
-  test do
-    assert_match "eim", shell_output("#{bin}/eim --version")
-  end
-end
-```
-
-### Cask Structure (Casks/eim-gui.rb)
-
-```ruby
-cask "eim-gui" do
-  version "0.7.1"
-
-  on_intel do
-    url "https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-gui-macos-x64.dmg"
-    sha256 "..."
-  end
-  on_arm do
-    url "https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-gui-macos-aarch64.dmg"
-    sha256 "..."
-  end
-
-  name "ESP-IDF Installation Manager"
-  desc "GUI application for installing and managing ESP-IDF development environment"
-  homepage "https://github.com/espressif/idf-im-ui"
-
-  app "eim.app"
-end
-```
+1. Triggered by the main `build.yaml` after a release
+2. Downloads macOS assets from the GitHub release API (aarch64 and x64)
+3. Computes SHA256 hashes
+4. Updates the formula and cask in `espressif/homebrew-eim`
+5. Pushes the changes using `HOMEBREW_UPDATE_TOKEN`
 
 ### Manual Verification
 
 ```bash
-# Add the tap
 brew tap espressif/eim
-
-# Install CLI
-brew install eim --verbose
+brew install espressif/eim/eim
 eim --version
-
-# Install GUI
-brew install --cask eim-gui
-
-# Update
-brew upgrade eim
-
-# Troubleshoot
-brew doctor
 ```
 
 ### Required Secret
 
-**`HOMEBREW_UPDATE_TOKEN`** - Personal Access Token with:
-- Push access to `espressif/homebrew-eim` repository
-- Scope: `repo`
-
-### Maintenance Tasks
-
-1. **Verify formula after releases** - Check that the workflow ran successfully
-2. **Update dependencies** - If EIM requires different Python versions, update `depends_on`
-3. **Test zsh completions** - Verify shell completions work after installation
-4. **Monitor Homebrew deprecation warnings** - Keep formula syntax up to date
+`HOMEBREW_UPDATE_TOKEN` -- PAT with `repo` scope for pushing to `espressif/homebrew-eim`.
 
 ---
 
-## 6. TLDR Pages Entry
-
-### Used by Workflows
-
-No workflow in this repository creates or updates the TLDR page. The page lives in the community repo `tldr-pages/tldr`. Adding or updating the `eim` entry is done manually (fork, edit `pages/common/eim.md`, open a PR).
+## 8. TLDR Pages Entry
 
 ### Repository
 
 **URL:** https://github.com/tldr-pages/tldr
 
-### Purpose
-
-TLDR pages provide simplified, community-maintained help pages for command-line tools. Having an entry for `eim` makes it easier for users to discover and use the tool.
-
-### Expected File Location
-
-`pages/common/eim.md`
-
-### Required Format
-
-```markdown
-# eim
-
-> ESP-IDF Installation Manager - CLI tool for installing and managing ESP-IDF development environments.
-> More information: <https://github.com/espressif/idf-im-ui>.
-
-- Install ESP-IDF non-interactively:
-
-`eim install -i {{v5.3.2}}`
-
-- Run the interactive installation wizard:
-
-`eim wizard`
-
-- List all installed ESP-IDF versions:
-
-`eim list`
-
-- Select an ESP-IDF version as active:
-
-`eim select {{version}}`
-
-- Remove a specific ESP-IDF version:
-
-`eim remove {{version}}`
-
-- Install ESP-IDF from an offline archive:
-
-`eim install --use-local-archive {{path/to/archive.zst}}`
-
-- Generate shell completions:
-
-`eim completions {{bash|zsh|fish|powershell}}`
-```
-
 ### Submission Process
 
-1. **Fork the repository:**
-```bash
-gh repo fork tldr-pages/tldr
-```
-
-2. **Create the page:**
-```bash
-cd tldr
-mkdir -p pages/common
-# Create pages/common/eim.md with the content above
-```
-
-3. **Validate the page:**
-```bash
-# Install tldr-lint
-npm install -g tldr-lint
-
-# Lint your page
-tldr-lint pages/common/eim.md
-```
-
-4. **Submit PR:**
-```bash
-git add pages/common/eim.md
-git commit -m "eim: add page"
-git push origin main
-gh pr create --title "eim: add page" --body "Add tldr page for ESP-IDF Installation Manager"
-```
+1. Fork https://github.com/tldr-pages/tldr
+2. Create `pages/common/eim.md` following TLDR format
+3. Lint with `tldr-lint pages/common/eim.md`
+4. Submit PR
 
 ### Contributing Guidelines
 
@@ -734,63 +466,38 @@ Key rules:
 - Use `{{placeholder}}` syntax for user-provided values
 - Maximum 8 examples per page
 - Each example must have a description ending with a colon
-- Commands must be wrapped in backticks
+
+### Update Triggers
+
+Update the TLDR page when:
+- New CLI commands are added (e.g. `shell`, `list-tools`, `list-features`)
+- New important flags are added (e.g. `--cleanup`, `--skip-components-download`)
+- Command syntax changes
 
 ---
 
-## 7. Man Page
-
-### Used by Workflows
-
-The file `man/eim.1` is part of the repository and is **included in the Linux packages** produced by `build.yaml`. When the GUI and CLI are built for Linux, the packaging step (e.g. for `.deb` and `.rpm`) typically installs the man page into the package so that `man eim` works after installation. No separate workflow "generates" the man page; it is maintained as source in `man/eim.1` and shipped with the built packages.
+## 9. Man Page
 
 ### File Location
 
-`man/eim.1` (392 lines)
+`man/eim.1`
 
 ### Purpose
 
 Unix manual page installed on Linux/macOS systems, accessible via `man eim`.
 
+### Used by Workflows
+
+The man page is maintained as source in `man/eim.1` and is included in Linux packages (`.deb`, `.rpm`, `.pacman`) produced by `build.yaml`.
+
 ### Structure
 
-```troff
-.TH EIM 1 "2025" "ESP-IDF Installation Manager" "User Commands"
-.SH NAME
-eim \- ESP-IDF Installation Manager command-line interface
-.SH SYNOPSIS
-.B eim
-[\fIOPTIONS\fR] [\fICOMMAND\fR]
-.SH DESCRIPTION
-...
-.SH GLOBAL OPTIONS
-.TP
-.BR \-l ", " \-\-locale " " \fILOCALE\fR
-Set the language for the wizard (en, cn)
-...
-.SH COMMANDS
-.SS install
-.SS wizard
-.SS list
-.SS select
-.SS rename
-.SS remove
-.SS purge
-.SS import
-.SS fix
-.SS completions
-.SS discover
-.SH CONFIGURATION
-.SH EXAMPLES
-.SH OFFLINE INSTALLATION
-.SH CUSTOM REPOSITORIES
-.SH PRIVACY
-.SH FILES
-.SH SEE ALSO
-.SH BUGS
-.SH AUTHOR
-.SH COPYRIGHT
-```
+The man page covers:
+- `NAME`, `SYNOPSIS`, `DESCRIPTION`
+- `GLOBAL OPTIONS`
+- `COMMANDS` -- install, wizard, list, list-tools, list-features, select, rename, remove, purge, import, fix, run, shell, completions, discover
+- `CONFIGURATION`, `EXAMPLES`, `OFFLINE INSTALLATION`, `CUSTOM REPOSITORIES`, `PRIVACY`
+- `FILES`, `SEE ALSO`, `BUGS`, `AUTHOR`, `COPYRIGHT`
 
 ### Update Triggers
 
@@ -800,246 +507,157 @@ Update the man page when:
 - Default values change
 - New features like offline installation are modified
 
-### Adding a New Command
-
-Example: Adding a new `upgrade` command
-
-```troff
-.SS upgrade
-Upgrade an existing ESP-IDF installation to a newer version.
-
-.B eim upgrade
-[\fIVERSION\fR]
-
-If VERSION is not provided, upgrades to the latest stable version.
-
-.B Options:
-.TP
-.BR \-\-keep\-tools
-Keep existing tools instead of reinstalling
-```
-
-### Adding a New Option
-
-Example: Adding `--quiet` flag to install command
-
-```troff
-.TP
-.BR \-q ", " \-\-quiet
-Suppress non-essential output during installation
-```
-
-### Testing the Man Page
+### Testing
 
 ```bash
-# View locally without installing
 man ./man/eim.1
-
-# Check for formatting errors
 groff -man -Tascii man/eim.1 > /dev/null
-
-# After installation
-man eim
 ```
-
-### Man Page Formatting Reference
-
-| Macro | Purpose | Example |
-|-------|---------|---------|
-| `.TH` | Title header | `.TH EIM 1 "2025"` |
-| `.SH` | Section header | `.SH COMMANDS` |
-| `.SS` | Subsection | `.SS install` |
-| `.TP` | Tagged paragraph | `.TP` followed by option |
-| `.BR` | Bold/Roman alternating | `.BR \-v ", " \-\-verbose` |
-| `.B` | Bold text | `.B eim install` |
-| `.I` | Italic text | `.I PATH` |
-| `\fI` / `\fR` | Inline italic/roman | `\fIOPTIONS\fR` |
 
 ---
 
-## 8. APT Repository
+## 10. APT Repository
 
 ### Hosted Location
 
 - **URL:** https://dl.espressif.com/dl/eim/apt/
 - **S3 Bucket:** `s3://espdldata/dl/eim/apt/`
 
-### Used by Workflows
-
-**Invocation:** In `build.yaml`, the job `update-linux-repos` runs when `github.event_name == 'release' && github.event.action == 'created'`. It calls `.github/workflows/update-linux-repos.yml` with `version: ${{ github.ref_name }}`. It depends on `build-cli-linux`, `build-gui`, and `update-release-info`.
-
-**What the workflow does:** The job `update-apt-repo` in `update-linux-repos.yml` downloads **artifacts from the same workflow run** (e.g. `eim-gui-linux-x64-v0.7.1-deb`, `eim-cli-linux-x64-v0.7.1-deb`), not from the release. It uses `actions/download-artifact@v4` with names like `eim-gui-linux-x64-${{ inputs.version }}-deb`. So the `.deb` files must have been uploaded as artifacts by the build jobs in that run. The job then builds the APT repository layout, uploads to S3, and invalidates the CloudFront cache.
-
 ### Automated Workflow
 
-**File:** `.github/workflows/update-linux-repos.yml` (lines 17-125)
+**File:** `.github/workflows/update-linux-repos.yml` (job: `update-apt-repo`)
+
+### How the Workflow Works
+
+1. Downloads `.deb` artifacts from the same workflow run
+2. Syncs existing packages from S3
+3. Signs packages with the repository GPG key
+4. Generates APT metadata (`dpkg-scanpackages`, `apt-ftparchive release`)
+5. Uploads to S3 with `public-read` ACL
+6. Invalidates CloudFront cache
 
 ### Repository Structure
 
 ```
 apt/
-├── pool/main/
-│   ├── eim_0.7.1_amd64.deb
-│   ├── eim_0.7.1_arm64.deb
-│   ├── eim-gui_0.7.1_amd64.deb
-│   └── eim-gui_0.7.1_arm64.deb
-└── dists/stable/
-    ├── Release
-    └── main/
-        ├── binary-amd64/
-        │   ├── Packages
-        │   └── Packages.gz
-        └── binary-arm64/
-            ├── Packages
-            └── Packages.gz
++-- pool/main/
+|   +-- eim_{version}_amd64.deb
+|   +-- eim_{version}_arm64.deb
+|   +-- eim-gui_{version}_amd64.deb
+|   +-- eim-gui_{version}_arm64.deb
++-- dists/stable/
+    +-- Release
+    +-- main/
+        +-- binary-amd64/
+        |   +-- Packages
+        |   +-- Packages.gz
+        +-- binary-arm64/
+            +-- Packages
+            +-- Packages.gz
 ```
-
-### How the Workflow Works
-
-1. Downloads `.deb` **artifacts from the same run** (artifact names include `inputs.version`, e.g. `eim-gui-linux-x64-v0.7.1-deb`)
-2. Syncs existing packages from S3
-3. Generates APT metadata:
-   - `dpkg-scanpackages` creates Packages files
-   - `apt-ftparchive release` creates Release file
-4. Uploads to S3 with `public-read` ACL
-5. Invalidates CloudFront cache
 
 ### Manual Verification
 
 ```bash
-# Add repository (no GPG key required currently)
 echo "deb https://dl.espressif.com/dl/eim/apt stable main" | sudo tee /etc/apt/sources.list.d/eim.list
-
-# Update package lists
 sudo apt update
-
-# Check available versions
 apt-cache policy eim
-apt-cache policy eim-gui
-
-# Install
 sudo apt install eim
-sudo apt install eim-gui
-
-# Verify installation
 eim --version
-```
-
-### Required Secrets
-
-| Secret | Purpose |
-|--------|---------|
-| `AWS_ACCESS_KEY_ID` | S3 authentication |
-| `AWS_SECRET_ACCESS_KEY` | S3 authentication |
-| `DL_DISTRIBUTION_ID` | CloudFront cache invalidation |
-
-### Troubleshooting
-
-```bash
-# Check repository metadata
-curl -s https://dl.espressif.com/dl/eim/apt/dists/stable/Release
-
-# Check package list
-curl -s https://dl.espressif.com/dl/eim/apt/dists/stable/main/binary-amd64/Packages
-
-# Clear local cache and retry
-sudo rm -rf /var/lib/apt/lists/*
-sudo apt update
 ```
 
 ---
 
-## 9. RPM Repository
+## 11. RPM Repository
 
 ### Hosted Location
 
 - **URL:** https://dl.espressif.com/dl/eim/rpm/
 - **S3 Bucket:** `s3://espdldata/dl/eim/rpm/`
 
-### Used by Workflows
-
-Same workflow as the APT repository: **update-linux-repos.yml**. The job `update-rpm-repo` runs after `update-apt-repo` and downloads **artifacts from the same run** (e.g. `eim-cli-linux-x64-v0.7.1-rpm`, `eim-gui-linux-x64-v0.7.1-rpm`). It uses `actions/download-artifact@v4` with names like `eim-cli-linux-x64-${{ inputs.version }}-rpm`. The job then builds the RPM repository with `createrepo_c`, uploads to S3, and invalidates CloudFront.
-
 ### Automated Workflow
 
-**File:** `.github/workflows/update-linux-repos.yml` (lines 126-253)
-
-### Repository Structure
-
-```
-rpm/
-├── eim.repo
-├── x86_64/
-│   ├── eim-0.7.1.x86_64.rpm
-│   ├── eim-gui-0.7.1.x86_64.rpm
-│   └── repodata/
-│       ├── repomd.xml
-│       ├── primary.xml.gz
-│       └── ...
-└── aarch64/
-    ├── eim-0.7.1.aarch64.rpm
-    └── repodata/
-        └── ...
-```
-
-### Repository Configuration File (eim.repo)
-
-```ini
-[eim]
-name=ESP-IDF Installation Manager
-baseurl=https://dl.espressif.com/dl/eim/rpm/$basearch
-enabled=1
-gpgcheck=0
-```
+**File:** `.github/workflows/update-linux-repos.yml` (job: `update-rpm-repo`)
 
 ### How the Workflow Works
 
-1. Downloads `.rpm` **artifacts from the same run** (e.g. `eim-cli-linux-x64-v0.7.1-rpm`)
+1. Downloads `.rpm` artifacts from the same workflow run
 2. Organizes by architecture (x86_64, aarch64)
-3. Generates metadata using `createrepo_c`
-4. Creates `eim.repo` configuration file
-5. Uploads to S3
+3. Signs packages with the repository GPG key
+4. Generates metadata using `createrepo_c`
+5. Creates `eim.repo` configuration file
+6. Uploads to S3
 
 ### Manual Verification
 
 ```bash
-# Add repository (Fedora/RHEL/CentOS)
 sudo wget -O /etc/yum.repos.d/eim.repo https://dl.espressif.com/dl/eim/rpm/eim.repo
-
-# Or manually create the file
-sudo tee /etc/yum.repos.d/eim.repo << 'EOF'
-[eim]
-name=ESP-IDF Installation Manager
-baseurl=https://dl.espressif.com/dl/eim/rpm/$basearch
-enabled=1
-gpgcheck=0
-EOF
-
-# Update and install
 sudo dnf check-update
 sudo dnf install eim
-
-# Verify
 eim --version
-```
-
-### Troubleshooting
-
-```bash
-# Check repository metadata
-curl -s https://dl.espressif.com/dl/eim/rpm/x86_64/repodata/repomd.xml
-
-# Clear DNF cache
-sudo dnf clean all
-sudo dnf makecache
-
-# List available packages
-dnf list available eim*
 ```
 
 ---
 
-## 10. WinGet
+## 12. Pacman Repository (Arch Linux)
+
+### Hosted Location
+
+- **URL:** https://dl.espressif.com/dl/eim/pacman/
+- **S3 Bucket:** `s3://espdldata/dl/eim/pacman/`
+
+### Automated Workflow
+
+**File:** `.github/workflows/update-linux-repos.yml` (job: `update-pacman-repo`)
+
+### How the Workflow Works
+
+1. Downloads `.pacman` artifacts from the same workflow run (x86_64, aarch64, armv7h)
+2. Syncs existing packages from S3
+3. Signs packages with the repository GPG key using `repo-add --sign`
+4. Generates pacman database files
+5. Uploads to S3 with separate architecture directories
+
+### Repository Structure
+
+```
+pacman/
++-- x86_64/
+|   +-- eim-{version}-x86_64.pkg.tar.zst
+|   +-- eim.db
+|   +-- eim.db.tar.gz
+|   +-- eim.files
++-- aarch64/
+|   +-- eim-{version}-aarch64.pkg.tar.zst
+|   +-- ...
++-- armv7h/
+    +-- eim-{version}-armv7h.pkg.tar.zst
+    +-- ...
+```
+
+### Manual Verification
+
+```bash
+# Add to /etc/pacman.conf:
+# [eim]
+# SigLevel = Optional TrustAll
+# Server = https://dl.espressif.com/dl/eim/pacman/$arch
+
+sudo pacman -Syu
+sudo pacman -S eim
+eim --version
+```
+
+### Maintenance Notes
+
+- Pacman support was added in v0.16.0
+- The repository supports three architectures: x86_64, aarch64, armv7h
+- Package signing is handled by the same GPG key as APT/RPM
+- **Note:** Pacman is not yet covered by `test_pkg_managers.yml` (only APT, DNF, Homebrew, and WinGet have automated post-release verification). Manual testing on Arch Linux is recommended after each release.
+
+---
+
+## 13. WinGet
 
 ### Package Identifiers
 
@@ -1048,71 +666,32 @@ dnf list available eim*
 | CLI | `Espressif.EIM-CLI` |
 | GUI | `Espressif.eim` |
 
-### Used by Workflows
-
-**Invocation:** In `build.yaml`, the job `update-windows-packages` runs when `github.event_name == 'release' && github.event.action == 'created'`. It calls `.github/workflows/update-windows-packages.yml` with `version: ${{ github.ref_name }}` and depends on `build-cli`, `build-gui`, and `update-release-info`.
-
-**What the workflow does:** The workflow has three jobs. The first job, `generate-windows-packages`, downloads **artifacts from the same run** (`eim-cli-windows-x64-${{ inputs.version }}`, `eim-gui-windows-x64-${{ inputs.version }}`) and generates Scoop manifests, then uploads them to the release. The second and third jobs (`publish-winget-cli`, `publish-winget-gui`) sync the fork `Hahihula/winget-pkgs` with upstream and use `vedantmgoyal9/winget-releaser@v2` to create a PR to `microsoft/winget-pkgs`; the releaser uses the **published release assets** (e.g. `eim-cli-windows-x64.exe`, `eim-gui-windows-x64.msi`) and `secrets.WINGET_PAT`.
-
 ### Automated Workflow
 
-**File:** `.github/workflows/update-windows-packages.yml` (lines 111-149)
+**File:** `.github/workflows/update-windows-packages.yml`
 
 ### How the Workflow Works
 
-1. **Syncs the fork** with upstream microsoft/winget-pkgs:
-```yaml
-- name: Sync WinGet fork
-  run: gh repo sync Hahihula/winget-pkgs --source microsoft/winget-pkgs --force
-```
+1. Downloads Windows artifacts from the same workflow run
+2. Generates Scoop manifests and uploads them to the release
+3. Syncs the WinGet fork with upstream `microsoft/winget-pkgs`
+4. Uses `vedantmgoyal9/winget-releaser@v2` to create PRs to `microsoft/winget-pkgs`
 
-2. **Creates PR** using winget-releaser action:
-```yaml
-- uses: vedantmgoyal9/winget-releaser@v2
-  with:
-    identifier: Espressif.EIM-CLI
-    installers-regex: 'eim-cli-windows-x64\.exe$'
-    token: ${{ secrets.WINGET_PAT }}
-    fork-user: Hahihula
-```
+> **Note:** The WinGet workflow currently uses a personal fork for the winget-pkgs sync step. This should be migrated to an organization-owned fork when available.
 
 ### Manual Verification
 
 ```powershell
-# Search for packages
 winget search Espressif
-
-# Install CLI
 winget install Espressif.EIM-CLI
-
-# Install GUI
 winget install Espressif.eim
-
-# Update
-winget upgrade Espressif.EIM-CLI
-
-# Verify
 eim --version
 ```
 
 ### Required Secret
 
-**`WINGET_PAT`** - Personal Access Token requirements:
-- Access to `Hahihula/winget-pkgs` fork
+**`WINGET_PAT`** -- Personal Access Token requirements:
 - Scopes: `repo`, `workflow`
-
-### PAT Renewal Process
-
-1. Go to https://github.com/settings/tokens
-2. Click "Generate new token (classic)"
-3. Set expiration (recommend 1 year)
-4. Select scopes:
-   - `repo` (Full control of private repositories)
-   - `workflow` (Update GitHub Action workflows)
-5. Generate and copy the token
-6. Update in repository settings:
-   - Go to `Settings > Secrets and variables > Actions`
-   - Update `WINGET_PAT` with new token
 
 ### Troubleshooting
 
@@ -1124,69 +703,21 @@ If PRs are not being created:
 
 ---
 
-## 11. Scoop Distribution (Online)
+## 14. Scoop Distribution (Online)
 
-### Current status
+### Current Status
 
-**There is no Scoop repository at the moment, and the Scoop-related workflow is currently turned off.** The following section describes how Scoop distribution is intended to work when the workflow is enabled, for future reference.
+**There is no dedicated Scoop repository at the moment.** The Scoop distribution works via release-hosted manifests only. Users install EIM via Scoop with the manifest URL from the GitHub release.
 
-### Used by Workflows
+### How It Works
 
-**Invocation:** Same as WinGet — the job `update-windows-packages` in `build.yaml` calls `update-windows-packages.yml` with `version: ${{ github.ref_name }}` on release.
-
-**What the workflow does:** The first job of `update-windows-packages.yml`, `generate-windows-packages`, downloads the Windows CLI and GUI **artifacts** from the same run (e.g. `eim-cli-windows-x64-v0.7.1`, `eim-gui-windows-x64-v0.7.1`), computes SHA256 hashes of the binaries, and generates two Scoop manifest files (`eim-cli.json`, `eim.json`) with version and download URLs pointing at the GitHub release (e.g. `https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-cli-windows-x64.exe#/eim.exe`). It then uploads these manifests to the **same GitHub Release** as assets using `gh release upload ${{ inputs.version }} manifests-scoop/*.json --clobber`. Users install EIM via Scoop with the manifest URL (e.g. `scoop install https://github.com/espressif/idf-im-ui/releases/latest/download/eim-cli.json`). The workflow does **not** publish to the main Scoop bucket; distribution is via release-hosted manifests only.
-
-### Automated Workflow
-
-**File:** `.github/workflows/update-windows-packages.yml` (lines 37-108)
-
-### Generated Manifests
-
-The workflow generates and uploads these manifests to GitHub releases:
-
-| File | Package |
-|------|---------|
-| `eim-cli.json` | CLI tool |
-| `eim.json` | GUI application |
-
-### Manifest Structure
-
-```json
-{
-    "version": "0.7.1",
-    "description": "ESP-IDF Installation Manager CLI - Setup tool for ESP-IDF development environment",
-    "homepage": "https://github.com/espressif/idf-im-ui",
-    "license": "MIT",
-    "architecture": {
-        "64bit": {
-            "url": "https://github.com/espressif/idf-im-ui/releases/download/v0.7.1/eim-cli-windows-x64.exe#/eim.exe",
-            "hash": "abc123..."
-        }
-    },
-    "bin": "eim.exe",
-    "checkver": {
-        "github": "https://github.com/espressif/idf-im-ui"
-    },
-    "autoupdate": {
-        "architecture": {
-            "64bit": {
-                "url": "https://github.com/espressif/idf-im-ui/releases/download/v$version/eim-cli-windows-x64.exe#/eim.exe"
-            }
-        }
-    }
-}
-```
+The `update-windows-packages.yml` workflow generates two Scoop manifests (`eim-cli.json`, `eim.json`) and uploads them as GitHub Release assets. The manifests contain version, SHA256 hashes, and download URLs pointing at the release.
 
 ### Manual Installation
 
 ```powershell
-# Install CLI from release manifest
 scoop install https://github.com/espressif/idf-im-ui/releases/latest/download/eim-cli.json
-
-# Install GUI from release manifest
 scoop install https://github.com/espressif/idf-im-ui/releases/latest/download/eim.json
-
-# Verify
 eim --version
 ```
 
@@ -1201,12 +732,75 @@ eim --version
 
 ---
 
+## 15. Mirror Infrastructure
+
+### Background
+
+EIM supports installing ESP-IDF from alternative repository mirrors using `--mirror` and `--repo-stub` CLI flags. This is critical for users in regions with restricted network access.
+
+### Mirror History
+
+- **JihuLab mirror** (`jihulab.com/esp-mirror`): Previously the default mirror for China. Now deprecated due to authentication requirements that break submodule fetching. Replaced by Espressif's own mirror infrastructure (EIM-332).
+- **Espressif mirror**: The current replacement. EIM includes mirror probing logic to test connectivity before use.
+- **Offline archives**: The primary fallback for restricted network environments.
+
+### Mirror-Related Code
+
+- `src-tauri/src/lib/git_tools.rs` -- Contains `apply_github_mirror()`, `reverse_github_mirror()`, and submodule URL resolution logic
+- Mirror probing runs at installation time to detect and prefer the fastest available mirror
+
+### Custom Repository Configuration
+
+```bash
+# For GitHub repositories (only repo-stub needed):
+eim install -i {{version}} --repo-stub my-github-user/my-custom-idf
+
+# For completely custom repositories (GitLab, self-hosted, etc.):
+eim install -i {{version}} --mirror https://gitlab.example.com --repo-stub my-gitlab-user/my-custom-idf
+```
+
+### Maintenance Notes
+
+- When mirror URLs change, update `git_tools.rs` and associated tests
+- The offline installer serves as the fallback for all mirror issues
+- Monitor GitHub issues for mirror-related installation failures (common pattern: JihuLab auth errors)
+
+---
+
+## 16. CLI Features Impact on Maintenance
+
+When new CLI commands or flags are added, multiple distribution components may need updates. Use this checklist:
+
+### Commands Added Since v0.15.0
+
+| Command / Flag | Version | Maintenance Impact |
+|---------------|---------|-------------------|
+| `eim shell` | v0.19.0 | Man page, TLDR, docs |
+| `eim list-tools` | v0.17.0 | Man page, TLDR, docs |
+| `eim list-features` | v0.17.0 | Man page, TLDR, docs |
+| `eim fix --idf-features` / `--idf-tools` | v0.16.0 | Man page, docs |
+| `eim install --cleanup` | v0.16.0 | Docker examples, CI docs |
+| `eim install --skip-components-download` | v0.18.0 | Docker examples, CI docs |
+| `eim install --use-local-archive` | v0.15.0 | Offline installation docs |
+| Deactivation scripts | v0.15.0 | After-install docs, activation/deactivation reference |
+| Telemetry | v0.19.0 | Privacy docs, man page |
+| Installation status in config | v0.19.0 | Config file docs |
+
+### What to Update for Each New Command/Flag
+
+1. **Man page** (`man/eim.1`) -- Add command/option documentation
+2. **TLDR page** -- Add example if the command is commonly used
+3. **Documentation** (`docs/src/`) -- Update relevant docs pages
+4. **GitHub Install Action** -- Update if the action's interface is affected
+5. **Docker examples** -- Update if the flag is relevant to CI/Docker usage
+
+---
+
 ## External Links Reference
 
 | Component | Repository/URL |
 |-----------|---------------|
 | Main EIM Repository | https://github.com/espressif/idf-im-ui |
-| Docker Repository | https://github.com/Hahihula/eim-idf-build-docker |
 | Install Action | https://github.com/espressif/install-esp-idf-action |
 | Homebrew Tap | https://github.com/espressif/homebrew-eim |
 | TLDR Pages | https://github.com/tldr-pages/tldr |
@@ -1214,3 +808,5 @@ eim --version
 | Scoop Installer | https://github.com/ScoopInstaller/Install |
 | WinGet Packages | https://github.com/microsoft/winget-pkgs |
 | EIM Documentation | https://docs.espressif.com/projects/idf-im-ui |
+| EIM Downloads | https://dl.espressif.com/dl/eim/ |
+| Athena Sync Action | https://github.com/hahihula/sync-athena |
