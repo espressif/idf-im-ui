@@ -655,38 +655,19 @@ pub fn get_tools_export_paths_from_list(
       tools_file.tools.iter().find(|tool| tool.name == tool_name)
         .and_then(|tool| {
           tool.export_paths.iter().for_each(|path| {
-            if path.iter().find(| level | {
-                *level == "bin"
-            }).is_some() {
-                let bin_dirs = find_bin_directories(&p);
-                for bin_dir in bin_dirs {
-                    match Path::new(&bin_dir).try_exists() {
-                        Ok(true) => {
-                            paths_set.insert(bin_dir);
-                        }
-                        Ok(false) => {
-                            log::warn!("Bin directory does not exist: {}", bin_dir);
-                        }
-                        Err(e) => {
-                            log::error!("Error checking bin directory: {}", e);
-                        }
-                    }
-                }
-            } else {
-              let mut export_path = p.clone();
-              for level in path {
-                  export_path.push(level);
+            let mut export_path = p.clone();
+            for level in path {
+                export_path.push(level);
+            }
+            match export_path.try_exists() {
+              Ok(true) => {
+                  paths_set.insert(export_path.to_str().unwrap().to_string());
               }
-              match export_path.try_exists() {
-                Ok(true) => {
-                    paths_set.insert(export_path.to_str().unwrap().to_string());
-                }
-                Ok(false) => {
-                    log::warn!("Export path does not exist: {}", export_path.to_str().unwrap());
-                }
-                Err(e) => {
-                    log::error!("Error checking export path: {}", e);
-                }
+              Ok(false) => {
+                  log::warn!("Export path does not exist: {}", export_path.to_str().unwrap());
+              }
+              Err(e) => {
+                  log::error!("Error checking export path: {}", e);
               }
             }
           });
