@@ -1995,6 +1995,22 @@ jobs:
           cp "$PACMAN_FILE" "$DEST"
           gh release upload "${{ github.event.release.tag_name }}" "$DEST" --repo "${{ github.repository }}" --clobber
 
+  publish-staging-artifacts:
+    name: Publish Staging Artifacts
+    needs: [build-cli, build-cli-linux, build-cli-linux-armv7]
+    if: >-
+      needs.build-cli.result == 'success' &&
+      needs.build-cli-linux.result == 'success' &&
+      needs.build-cli-linux-armv7.result == 'success' &&
+      contains(github.event.pull_request.labels.*.name, 'STAGING')
+    permissions:
+      contents: read
+      actions: read
+    uses: ./.github/workflows/publish_debug_artifacts.yml
+    with:
+      artifact_suffix: ${{ (github.event_name == 'release' && github.ref_name) || github.run_number }}
+    secrets: inherit
+
   Autotest-CLI:
     name: Autotest CLI
     needs: [build-cli, build-cli-linux, build-cli-linux-armv7]

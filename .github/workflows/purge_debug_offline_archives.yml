@@ -16,6 +16,11 @@ on:
         required: false
         type: number
         default: 48
+      staging_max_age_hours:
+        description: "Retention for dl/eim/debug/staging/ objects in hours (default: 168)"
+        required: false
+        type: number
+        default: 168
 
 permissions:
   contents: read
@@ -37,19 +42,26 @@ jobs:
         env:
           DRY_RUN: ${{ inputs.dry_run || 'false' }}
           MAX_AGE_HOURS: ${{ inputs.max_age_hours || 48 }}
+          STAGING_MAX_AGE_HOURS: ${{ inputs.staging_max_age_hours || 168 }}
         run: |
           set -euo pipefail
 
           BUCKET="espdldata"
           PREFIX="dl/eim/debug/"
+          STAGING_PREFIX="dl/eim/debug/staging/"
           CUTOFF_EPOCH=$(date -d "${MAX_AGE_HOURS} hours ago" +%s)
           CUTOFF_HUMAN=$(date -d "${MAX_AGE_HOURS} hours ago" -u +"%Y-%m-%dT%H:%M:%SZ")
+          STAGING_CUTOFF_EPOCH=$(date -d "${STAGING_MAX_AGE_HOURS} hours ago" +%s)
+          STAGING_CUTOFF_HUMAN=$(date -d "${STAGING_MAX_AGE_HOURS} hours ago" -u +"%Y-%m-%dT%H:%M:%SZ")
 
           echo "=== Purge Debug Offline Archives ==="
           echo "Bucket:        s3://${BUCKET}"
           echo "Prefix:        ${PREFIX}"
           echo "Max age:       ${MAX_AGE_HOURS} hours"
           echo "Cutoff time:   ${CUTOFF_HUMAN}"
+          echo "Staging prefix:   ${STAGING_PREFIX}"
+          echo "Staging max age:  ${STAGING_MAX_AGE_HOURS} hours"
+          echo "Staging cutoff:   ${STAGING_CUTOFF_HUMAN}"
           echo "Dry run:       ${DRY_RUN}"
           echo ""
 
@@ -76,7 +88,12 @@ jobs:
 
             FILE_EPOCH=$(date -d "${last_modified}" +%s)
 
-            if [ "${FILE_EPOCH}" -lt "${CUTOFF_EPOCH}" ]; then
+            case "${key}" in
+              "${STAGING_PREFIX}"*) THRESHOLD_EPOCH="${STAGING_CUTOFF_EPOCH}" ;;
+              *)                    THRESHOLD_EPOCH="${CUTOFF_EPOCH}" ;;
+            esac
+
+            if [ "${FILE_EPOCH}" -lt "${THRESHOLD_EPOCH}" ]; then
               AGE_HOURS=$(( ($(date +%s) - FILE_EPOCH) / 3600 ))
 
               if [ "${DRY_RUN}" = "true" ]; then
@@ -127,6 +144,8 @@ jobs:
             echo "| Prefix | \`s3://${BUCKET}/${PREFIX}\` |"
             echo "| Max age | ${MAX_AGE_HOURS} hours |"
             echo "| Cutoff | ${CUTOFF_HUMAN} |"
+            echo "| Staging max age | ${STAGING_MAX_AGE_HOURS} hours |"
+            echo "| Staging cutoff | ${STAGING_CUTOFF_HUMAN} |"
             echo "| Dry run | ${DRY_RUN} |"
             echo "| Total objects | ${TOTAL_COUNT} |"
             if [ "${DRY_RUN}" = "true" ]; then
