@@ -1,0 +1,221 @@
+name: Publish Staging Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      artifact_suffix:
+        description: "Suffix used in the build artifact names (run number or tag)"
+        required: true
+        type: string
+      staging_id:
+        description: "Staging id, defaults to pr<number>-<short sha> or the ref name"
+        required: false
+        type: string
+        default: ""
+      source_run_id:
+        description: "Run id to download artifacts from, defaults to the current run"
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      artifact_suffix:
+        description: "Suffix used in the build artifact names (run number or tag)"
+        required: true
+        type: string
+      staging_id:
+        description: "Staging id, defaults to pr<number>-<short sha> or the ref name"
+        required: false
+        type: string
+        default: ""
+      source_run_id:
+        description: "Run id to download artifacts from, defaults to the current run"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  publish:
+    name: Publish staging artifacts to S3
+    runs-on: ubuntu-latest
+    env:
+      BUCKET: espdldata
+      PREFIX: dl/eim/debug/staging
+      BASE_URL_ROOT: https://dl.espressif.com/dl/eim/debug/staging
+      SUFFIX: ${{ inputs.artifact_suffix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Resolve staging id and version
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          STAGING_ID="${{ inputs.staging_id }}"
+          if [ -z "$STAGING_ID" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            if [ -n "$PR_NUMBER" ]; then
+              STAGING_ID="pr${PR_NUMBER}-${HEAD_SHA:0:7}"
+            else
+              STAGING_ID="${GITHUB_REF_NAME//\//-}"
+            fi
+          fi
+
+          VERSION="$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed 's/version = "\(.*\)"/\1/')"
+
+          echo "staging_id=$STAGING_ID" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_url=${BASE_URL_ROOT}/${STAGING_ID}" >> "$GITHUB_OUTPUT"
+
+      - name: Download CLI linux-x64 .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: eim-cli-linux-x64-${{ inputs.artifact_suffix }}-deb
+          path: dl/linux-x64
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download CLI linux-aarch64 .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: eim-cli-linux-aarch64-${{ inputs.artifact_suffix }}-deb
+          path: dl/linux-aarch64
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download CLI linux-armv7 .deb
+        uses: actions/download-artifact@v8
+        with:
+          name: eim-cli-linux-armv7-${{ inputs.artifact_suffix }}-deb
+          path: dl/linux-armv7
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download CLI windows-x64 binary
+        uses: actions/download-artifact@v8
+        with:
+          name: eim-cli-windows-x64-${{ inputs.artifact_suffix }}
+          path: dl/windows-x64
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stage assets under fixed names
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p stage
+
+          for ARCH in x64 aarch64 armv7; do
+            DEB="$(find "dl/linux-${ARCH}" -name 'eim*.deb' -print -quit || true)"
+            if [ -z "$DEB" ]; then
+              echo "::error::No .deb found for linux-${ARCH}"
+              exit 1
+            fi
+            cp "$DEB" "stage/eim-cli-linux-${ARCH}.deb"
+          done
+
+          cp dl/windows-x64/eim.exe stage/eim-cli-windows-x64.exe
+
+          (cd stage && sha256sum \
+            eim-cli-linux-x64.deb \
+            eim-cli-linux-aarch64.deb \
+            eim-cli-linux-armv7.deb \
+            eim-cli-windows-x64.exe > sha256sums.txt)
+          cat stage/sha256sums.txt
+
+      - name: Set up AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Upload assets to S3
+        shell: bash
+        env:
+          STAGING_ID: ${{ steps.meta.outputs.staging_id }}
+        run: |
+          set -euo pipefail
+          aws s3 cp stage/ "s3://${BUCKET}/${PREFIX}/${STAGING_ID}/" \
+            --recursive --acl public-read
+          aws s3 ls "s3://${BUCKET}/${PREFIX}/${STAGING_ID}/"
+
+      - name: Publish manifest
+        shell: bash
+        env:
+          STAGING_ID: ${{ steps.meta.outputs.staging_id }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          BASE_URL: ${{ steps.meta.outputs.base_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id || github.run_id }}
+        run: |
+          set -euo pipefail
+
+          jq -n \
+            --arg staging_id "$STAGING_ID" \
+            --arg version "$VERSION" \
+            --arg pr "$PR_NUMBER" \
+            --arg head_sha "$HEAD_SHA" \
+            --arg run_id "$SOURCE_RUN_ID" \
+            --arg run_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" \
+            --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg base_url "$BASE_URL" \
+            --argjson assets '{
+              "linux-x64":     "eim-cli-linux-x64.deb",
+              "linux-aarch64": "eim-cli-linux-aarch64.deb",
+              "linux-armv7":   "eim-cli-linux-armv7.deb",
+              "windows-x64":   "eim-cli-windows-x64.exe"
+            }' \
+            --argjson sha256 "$(jq -Rn '[inputs | split("  ") | {(.[1] | ltrimstr("./")): .[0]}] | add' < stage/sha256sums.txt)" \
+            '{schema: 1, staging_id: $staging_id, version: $version, pr: $pr, head_sha: $head_sha,
+              run_id: $run_id, run_url: $run_url, created_at: $created_at, base_url: $base_url,
+              assets: $assets, sha256: $sha256}' > manifest.json
+
+          cat manifest.json
+
+          aws s3 cp manifest.json \
+            "s3://${BUCKET}/${PREFIX}/${STAGING_ID}/manifest.json" --acl public-read
+
+      - name: Invalidate CloudFront
+        shell: bash
+        env:
+          STAGING_ID: ${{ steps.meta.outputs.staging_id }}
+          DL_DISTRIBUTION_ID: ${{ secrets.DL_DISTRIBUTION_ID }}
+        run: |
+          set -euo pipefail
+          aws cloudfront create-invalidation \
+            --distribution-id "${DL_DISTRIBUTION_ID}" \
+            --paths "/${PREFIX}/${STAGING_ID}/*"
+
+      - name: Job summary
+        shell: bash
+        env:
+          STAGING_ID: ${{ steps.meta.outputs.staging_id }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          BASE_URL: ${{ steps.meta.outputs.base_url }}
+        run: |
+          {
+            echo "## Staging artifacts published"
+            echo ""
+            echo "| Field | Value |"
+            echo "|-------|-------|"
+            echo "| Staging id | \`${STAGING_ID}\` |"
+            echo "| Version | \`${VERSION}\` |"
+            echo "| Base URL | ${BASE_URL} |"
+            echo "| Manifest | ${BASE_URL}/manifest.json |"
+            echo ""
+            echo "Start the staging pipeline with:"
+            echo ""
+            echo '```'
+            echo "STAGING_ID=${STAGING_ID}"
+            echo "EIM_BASE_URL=${BASE_URL}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
