@@ -30,22 +30,35 @@ This script should be sourced, not executed.
     . {{deactivate_script_path}}
 
 It will:
+  - call the Python venv's `deactivate` if a venv is currently active;
+  - strip the toolchain path prefixes from $PATH (re-ordering the rest);
   - unset ESP_IDF_VERSION, IDF_VERSION, IDF_PATH, IDF_TOOLS_PATH, IDF_PYTHON_ENV_PATH,
     IDF_COMPONENT_LOCAL_STORAGE_URL, ESP_ROM_ELF_DIR, OPENOCD_SCRIPTS
     and every tool variable written by the matching activate script;
-  - strip the toolchain path prefixes from $PATH (re-ordering the rest);
-  - call the Python venv's `deactivate` if a venv is currently active;
   - remove the idf.py, esptool, espefuse, espsecure, otatool, parttool
     shell functions and the idf.py tab completion.
 USAGE
     exit 1
 fi
 
+# --- Deactivate the Python virtual environment --------------------------
+if [ -n "${VIRTUAL_ENV:-}" ] && type deactivate 2>>/dev/null | grep -qi "function"; then
+    _old_virtual_env="$VIRTUAL_ENV"
+    deactivate
+    printf '%s\n' "Deactivated virtual environment at ${_old_virtual_env}"
+    unset _old_virtual_env
+fi
+unset VIRTUAL_ENV 2>>/dev/null || true
+# Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
+# does not match a live venv.
+unset IDF_PYTHON_ENV_PATH 2>>/dev/null || true
+
 # --- Strip matching PATH prefixes ---------------------------------------
 # `addition_to_path` matches the colon-separated list that the activate
 # script prepended to $PATH. We remove those exact entries (with and
 # without the trailing slash, in case a path is a directory) and rebuild
-# PATH preserving the relative order of all other entries.
+# PATH preserving the relative order of all other entries. This must
+# run after the venv deactivation above (see comment there).
 addition_to_path="{{addition_to_path}}"
 
 strip_path_prefixes() {
@@ -117,23 +130,6 @@ $ENV_VAR_PAIRS
 EOF
     unset _pair _key
 fi
-
-# --- Deactivate the Python virtual environment --------------------------
-# If a venv was activated by the matching activate script, VIRTUAL_ENV
-# will be set. We delegate to the standard venv deactivate function
-# (which restores PATH/PYTHONHOME/PS1 and unsets its own helper vars)
-# and then explicitly unset VIRTUAL_ENV -- the standard venv
-# `deactivate` function does NOT clear it, so the caller's shell
-# would otherwise still look "active" after sourcing this script.
-if [ -n "${VIRTUAL_ENV:-}" ] && [ -f "${VIRTUAL_ENV}/bin/deactivate" ]; then
-    # shellcheck disable=SC1090
-    . "${VIRTUAL_ENV}/bin/deactivate"
-    printf '%s\n' "Deactivated virtual environment at ${VIRTUAL_ENV}"
-fi
-unset VIRTUAL_ENV 2>>/dev/null || true
-# Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
-# does not match a live venv.
-unset IDF_PYTHON_ENV_PATH 2>>/dev/null || true
 
 # --- Remove IDF tool functions and completions ---------------------------
 for _fn in idf.py esptool esptool.py espefuse espefuse.py espsecure \

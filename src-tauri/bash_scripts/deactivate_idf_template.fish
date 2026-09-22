@@ -23,11 +23,25 @@ if not status is-interactive
     end
 end
 
+# --- Deactivate the Python virtual environment --------------------------
+if set -q VIRTUAL_ENV; and test -n "$VIRTUAL_ENV"
+    if functions -q deactivate
+        set -l old_virtual_env $VIRTUAL_ENV
+        deactivate
+        echo "Deactivated virtual environment at $old_virtual_env"
+    end
+end
+set -e VIRTUAL_ENV 2>/dev/null
+# Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
+# does not match a live venv.
+set -e IDF_PYTHON_ENV_PATH 2>/dev/null
+
 # --- Strip matching PATH prefixes ---------------------------------------
 # `addition_to_path` matches the colon-separated list that the activate
 # script prepended to $PATH. We remove those exact entries (with and
 # without the trailing slash) and rebuild PATH preserving the order of
-# the remaining entries.
+# the remaining entries. This must run after the venv deactivation
+# above (see comment there).
 set -l addition_to_path "{{addition_to_path}}"
 
 if test -n "$addition_to_path"
@@ -79,25 +93,6 @@ if set -q FISH_ENV_VAR_PAIRS; and test -n "$FISH_ENV_VAR_PAIRS"
     end
     set -e FISH_ENV_VAR_PAIRS
 end
-
-# --- Deactivate the Python virtual environment --------------------------
-# The venv's `deactivate.fish` (or the bash-style fallback) restores
-# PATH/PYTHONHOME/PS1 and removes its own helper functions, but it
-# does NOT clear VIRTUAL_ENV. We have to drop it explicitly so the
-# caller's shell is no longer flagged as venv-active.
-if set -q VIRTUAL_ENV; and test -n "$VIRTUAL_ENV"
-    if test -f "$VIRTUAL_ENV/bin/deactivate.fish"
-        source "$VIRTUAL_ENV/bin/deactivate.fish"
-        echo "Deactivated virtual environment at $VIRTUAL_ENV"
-    else if test -f "$VIRTUAL_ENV/bin/deactivate"
-        source "$VIRTUAL_ENV/bin/deactivate"
-        echo "Deactivated virtual environment at $VIRTUAL_ENV (bash-style)"
-    end
-end
-set -e VIRTUAL_ENV 2>/dev/null
-# Also drop a stray IDF_PYTHON_ENV_PATH that the activation set but that
-# does not match a live venv.
-set -e IDF_PYTHON_ENV_PATH 2>/dev/null
 
 # --- Remove IDF tool functions and completions ---------------------------
 for fn in idf.py esptool esptool.py espefuse espefuse.py espsecure \
