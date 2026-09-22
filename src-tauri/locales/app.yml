@@ -1049,6 +1049,9 @@ gui.installation.ide_json_saved:
 gui.installation.config_save_warning:
   en: "Warning: IDE configuration save failed"
   cn: "警告：IDE 配置保存失败"
+gui.installation.ide_config_save_failed_detail:
+  en: "Failed to save IDE configuration: %{error}"
+  cn: "IDE 配置保存失败：%{error}"
 gui.installation.ide_json_failed:
   en: "Failed to save IDE JSON file: %{error}"
   cn: "保存 IDE JSON 文件失败：%{error}"
@@ -1208,12 +1211,6 @@ gui.fix.updating_config:
 gui.fix.saving_info:
   en: "Saving installation information"
   cn: "保存安装信息"
-gui.fix.config_updated:
-  en: "IDE configuration already updated"
-  cn: "IDE 配置已更新"
-gui.fix.found_in_config:
-  en: "Installation found in configuration"
-  cn: "在配置中找到安装"
 gui.fix.config_saved_success:
   en: "IDE configuration saved successfully"
   cn: "IDE 配置保存成功"
