@@ -39,7 +39,7 @@ use anyhow::{anyhow, Context, Result};
 use idf_im_lib::{
   ensure_path,
   expand_tilde,
-  idf_config::{IdfConfig, IDF_CONFIG_FILE_NAME},
+  idf_config::IDF_CONFIG_FILE_NAME,
   offline_installer::{copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive},
   utils::{copy_dir_contents, extract_zst_archive, is_valid_idf_directory, parse_cmake_version},
   version_manager::prepare_settings_for_fix_idf_installation,
@@ -1188,6 +1188,48 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
     return res;
 }
 
+/// Merges user-picked extra tools/features (from the "add more tools/features" pickers)
+/// into whatever this version was already configured with, keyed the same way
+/// `setup_tools` looks them up (by the installation's current name). The "always"
+/// required tools/features are re-derived regardless of what's in these lists, so only
+/// the newly requested ones need adding here.
+fn merge_extra_selection(
+    settings: &mut idf_im_lib::settings::Settings,
+    version_key: &str,
+    extra_tools: &Option<Vec<String>>,
+    extra_features: &Option<Vec<String>>,
+) {
+    if let Some(extra) = extra_tools.as_ref().filter(|t| !t.is_empty()) {
+        let mut per_version = settings.idf_tools_per_version.clone().unwrap_or_default();
+        let mut tools_for_version = per_version
+            .get(version_key)
+            .cloned()
+            .unwrap_or_else(|| settings.idf_tools.clone().unwrap_or_default());
+        for tool in extra {
+            if !tools_for_version.contains(tool) {
+                tools_for_version.push(tool.clone());
+            }
+        }
+        per_version.insert(version_key.to_string(), tools_for_version);
+        settings.idf_tools_per_version = Some(per_version);
+    }
+
+    if let Some(extra) = extra_features.as_ref().filter(|f| !f.is_empty()) {
+        let mut per_version = settings.idf_features_per_version.clone().unwrap_or_default();
+        let mut features_for_version = per_version
+            .get(version_key)
+            .cloned()
+            .unwrap_or_else(|| settings.idf_features.clone().unwrap_or_default());
+        for feature in extra {
+            if !features_for_version.contains(feature) {
+                features_for_version.push(feature.clone());
+            }
+        }
+        per_version.insert(version_key.to_string(), features_for_version);
+        settings.idf_features_per_version = Some(per_version);
+    }
+}
+
 #[tauri::command]
 pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Option<Vec<String>>, extra_features: Option<Vec<String>>) -> Result<(), String> {
     debug!("Fixing installation with id {}, extra_tools: {:?}, extra_features: {:?}", id, extra_tools, extra_features);
@@ -1289,46 +1331,7 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         }
     };
 
-    // If the user picked additional (previously not-installed, on_request) tools in the
-    // "add more tools" picker, merge them into whatever tools this version was already
-    // configured with, keyed the same way `setup_tools` looks them up (by the installation's
-    // current name). The "always" required tools are re-derived by `setup_tools` regardless
-    // of what's in this list, so we only need to add the newly requested ones here.
-    if let Some(extra) = extra_tools.filter(|t| !t.is_empty()) {
-        let version_key = installation.name.clone();
-        let mut per_version = settings.idf_tools_per_version.clone().unwrap_or_default();
-        let mut tools_for_version = per_version
-            .get(&version_key)
-            .cloned()
-            .unwrap_or_else(|| settings.idf_tools.clone().unwrap_or_default());
-        for tool in extra {
-            if !tools_for_version.contains(&tool) {
-                tools_for_version.push(tool);
-            }
-        }
-        per_version.insert(version_key, tools_for_version);
-        settings.idf_tools_per_version = Some(per_version);
-    }
-
-    // Same idea, but for optional (non-core) features picked in the "add more features"
-    // picker: merge them into whatever features this version was already configured with.
-    // The required "core" feature is always installed regardless of this list (see
-    // `install_python_env`), so we only need to add the newly requested optional ones here.
-    if let Some(extra) = extra_features.filter(|f| !f.is_empty()) {
-        let version_key = installation.name.clone();
-        let mut per_version = settings.idf_features_per_version.clone().unwrap_or_default();
-        let mut features_for_version = per_version
-            .get(&version_key)
-            .cloned()
-            .unwrap_or_else(|| settings.idf_features.clone().unwrap_or_default());
-        for feature in extra {
-            if !features_for_version.contains(&feature) {
-                features_for_version.push(feature);
-            }
-        }
-        per_version.insert(version_key, features_for_version);
-        settings.idf_features_per_version = Some(per_version);
-    }
+    merge_extra_selection(&mut settings, &installation.name, &extra_tools, &extra_features);
 
     let config_path = fix_config_path.clone()
         .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
@@ -1392,10 +1395,22 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         version: Some(installation.name.clone()),
     });
 
-    // The installation should have been added back by single_version_post_install()
-    // but let's ensure the IDE configuration is properly saved by reconstructing
-    // the settings with the right configuration
-    let paths = settings.get_version_paths(&installation.name).map_err(|err| {
+    // Reload this installation's stored settings fresh from disk rather than reusing
+    // the `settings` snapshot captured before the (potentially long-running) install
+    // above: another operation may have updated this installation's tools/features
+    // while we were repairing, and persisting our stale in-memory copy would silently
+    // discard that update. Re-apply just the extras this call itself requested.
+    let mut fresh_settings = prepare_settings_for_fix_idf_installation(
+        PathBuf::from(installation.path.clone()),
+        fix_config_path.as_ref(),
+    )
+    .await
+    .unwrap_or_else(|_| settings.clone());
+    merge_extra_selection(&mut fresh_settings, &installation.name, &extra_tools, &extra_features);
+
+    // single_version_post_install() only writes the activation script/shortcut, not
+    // eim_idf.json, so reconstruct the settings and save the config ourselves.
+    let paths = fresh_settings.get_version_paths(&installation.name).map_err(|err| {
         error!("Failed to get version paths after repair: {}", err);
         format!("Failed to get version paths after repair: {}", err)
     })?;
@@ -1407,7 +1422,7 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
     debug!("Config path is dir: {}", config_path.is_dir());
 
     // Create a properly configured Settings object for IDE JSON saving
-    let mut updated_settings = settings.clone();
+    let mut updated_settings = fresh_settings;
     // esp_idf_json_path should be the directory, not the file itself
     // because save_esp_ide_json() will append the filename
     if let Some(parent_dir) = config_path.parent() {
@@ -1431,98 +1446,45 @@ pub async fn fix_installation(app_handle: AppHandle, id: String, extra_tools: Op
         }
     }
 
-    // Let's check if single_version_post_install already added the installation back
     let ide_json_path = updated_settings.esp_idf_json_path.clone().unwrap_or_default();
 
-    // Try to read the current IDE config to see what's in it
-    match IdfConfig::from_file(&config_path) {
-        Ok(current_config) => {
-            info!("Current IDE config has {} installed versions", current_config.idf_installed.len());
-            for installed in &current_config.idf_installed {
-                info!("Installed version: {} (ID: {})", installed.name, installed.id);
-            }
+    // Always save: the pre-repair entry is marked BeingRepaired/InProgress in place
+    // (not removed), so its name+path already exist in the config regardless of
+    // whether the status has been brought back to Finished yet.
+    match updated_settings.save_esp_ide_json() {
+        Ok(_) => {
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Configure,
+                percentage: 95,
+                message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
+                detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
+                version: Some(installation.name.clone()),
+            });
 
-            // Check if our repaired installation is already there
-            let found_installation = current_config.idf_installed.iter()
-                .find(|inst| inst.name == installation.name && inst.path == installation.path);
+            emit_log_message(&app_handle, MessageLevel::Success,
+                rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string());
 
-            if found_installation.is_some() {
-                info!("Repaired installation already found in IDE config - no need to save again");
-                emit_installation_event(&app_handle, InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: 95,
-                    message: rust_i18n::t!("gui.fix.config_updated").to_string(),
-                    detail: Some(rust_i18n::t!("gui.fix.found_in_config").to_string()),
-                    version: Some(installation.name.clone()),
-                });
-            } else {
-                info!("Repaired installation not found in IDE config - trying to save");
-                // Try to save the configuration
-                match updated_settings.save_esp_ide_json() {
-                    Ok(_) => {
-                        emit_installation_event(&app_handle, InstallationProgress {
-                            stage: InstallationStage::Configure,
-                            percentage: 95,
-                            message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
-                            detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
-                            version: Some(installation.name.clone()),
-                        });
-
-                        emit_log_message(&app_handle, MessageLevel::Success,
-                            rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string());
-
-                        info!("IDE JSON saved to {}", ide_json_path);
-                    }
-                    Err(e) => {
-                        let error_msg = rust_i18n::t!("gui.installation.ide_config_save_failed_detail", error = e.to_string()).to_string();
-                        warn!("{}", error_msg);
-
-                        emit_installation_event(&app_handle, InstallationProgress {
-                            stage: InstallationStage::Configure,
-                            percentage: 95,
-                            message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
-                            detail: Some(e.to_string()),
-                            version: Some(installation.name.clone()),
-                        });
-
-                        emit_log_message(&app_handle, MessageLevel::Warning, error_msg);
-                    }
-                }
-            }
+            info!("IDE JSON saved to {}", ide_json_path);
         }
         Err(e) => {
-            warn!("Failed to read current IDE config: {}", e);
-            // Try to save anyway
-            match updated_settings.save_esp_ide_json() {
-                Ok(_) => {
-                    emit_installation_event(&app_handle, InstallationProgress {
-                        stage: InstallationStage::Configure,
-                        percentage: 95,
-                        message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.config_saved_to", path = ide_json_path.clone()).to_string()),
-                        version: Some(installation.name.clone()),
-                    });
+            // The repair/tools/features install itself succeeded, but without this save
+            // the entry stays persisted as BeingRepaired/InProgress forever (nothing else
+            // writes eim_idf.json for this path) — so this must be a terminal error, not
+            // just a logged warning.
+            let error_msg = rust_i18n::t!("gui.installation.ide_config_save_failed_detail", error = e.to_string()).to_string();
+            error!("{}", error_msg);
 
-                    emit_log_message(&app_handle, MessageLevel::Success,
-                        rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string());
+            emit_installation_event(&app_handle, InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
+                detail: Some(e.to_string()),
+                version: Some(installation.name.clone()),
+            });
 
-                    info!("IDE JSON saved to {}", ide_json_path);
-                }
-                Err(e) => {
-                    let error_msg = rust_i18n::t!("gui.installation.ide_config_save_failed_detail", error = e.to_string()).to_string();
-                    warn!("{}", error_msg);
-
-                    emit_installation_event(&app_handle, InstallationProgress {
-                        stage: InstallationStage::Configure,
-                        percentage: 95,
-                        message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
-                        detail: Some(e.to_string()),
-                        version: Some(installation.name.clone()),
-                    });
-
-                    emit_log_message(&app_handle, MessageLevel::Warning, error_msg);
-                }
-            }
+            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
+            set_installation_status(&app_handle, false)?;
+            return Err(error_msg);
         }
     }
 
