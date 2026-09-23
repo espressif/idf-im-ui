@@ -30,7 +30,7 @@ jobs:
       issues: write
     steps:
       - name: Sync issue to Athena
-        uses: hahihula/sync-athena@v1
+        uses: hahihula/sync-athena@v2
         with:
           mode: issue_to_task
           issue_number: ${{ inputs.issue-numbers }}
@@ -41,6 +41,8 @@ jobs:
           athena_db_path: ${{ vars.ATHENA_DB_PATH }}
           athena_base_url: ${{ secrets.ATHENA_BASE_URL }}
           athena_token: ${{ secrets.ATHENA_TOKEN }}
+          registry_username: ${{ secrets.SYNC_ATHENA_REGISTRY_USERNAME }}
+          registry_token: ${{ secrets.SYNC_ATHENA_REGISTRY_TOKEN }}
 
   comment-to-task:
     if: github.event_name == 'issue_comment'
@@ -52,7 +54,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Sync comment to Athena
-        uses: hahihula/sync-athena@v1
+        uses: hahihula/sync-athena@v2
         with:
           mode: comment_to_task
           repo: ${{ github.repository }}
@@ -61,6 +63,8 @@ jobs:
           athena_db_path: ${{ vars.ATHENA_DB_PATH }}
           athena_base_url: ${{ secrets.ATHENA_BASE_URL }}
           athena_token: ${{ secrets.ATHENA_TOKEN }}
+          registry_username: ${{ secrets.SYNC_ATHENA_REGISTRY_USERNAME }}
+          registry_token: ${{ secrets.SYNC_ATHENA_REGISTRY_TOKEN }}
 
   pr-to-task:
     if: github.event_name == 'pull_request'
@@ -71,7 +75,7 @@ jobs:
       pull-requests: read
     steps:
       - name: Sync PR to Athena
-        uses: hahihula/sync-athena@v1
+        uses: hahihula/sync-athena@v2
         with:
           mode: pr_to_comment
           repo: ${{ github.repository }}
@@ -80,3 +84,5 @@ jobs:
           athena_db_path: ${{ vars.ATHENA_DB_PATH }}
           athena_base_url: ${{ secrets.ATHENA_BASE_URL }}
           athena_token: ${{ secrets.ATHENA_TOKEN }}
+          registry_username: ${{ secrets.SYNC_ATHENA_REGISTRY_USERNAME }}
+          registry_token: ${{ secrets.SYNC_ATHENA_REGISTRY_TOKEN }}
