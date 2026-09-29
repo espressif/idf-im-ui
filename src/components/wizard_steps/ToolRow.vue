@@ -88,13 +88,13 @@ export default {
 }
 
 .tool-row.optional:hover {
-  border-color: #e7352c;
-  background-color: #fef2f2;
+  border-color: #93c5fd;
+  background-color: #f0f9ff;
 }
 
 .tool-row.optional.selected {
-  background-color: #fee2e2;
-  border-color: #e7352c;
+  background-color: #f0f9ff;
+  border-color: #bfdbfe;
 }
 
 .tool-row.required {

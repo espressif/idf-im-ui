@@ -13,7 +13,7 @@
           <n-input-group data-id="path-input-group">
             <n-input v-model:value="installPath" :placeholder="t('installationPathSelect.input.placeholder')" class="path-field"
               data-id="installation-path-input" />
-            <n-button @click="openFolderDialog" type="primary" data-id="browse-button">
+            <n-button @click="openFolderDialog" type="info" data-id="browse-button">
               {{ t('installationPathSelect.input.browseButton') }}
             </n-button>
           </n-input-group>
@@ -57,7 +57,7 @@
                   :placeholder="t('installationPathSelect.toolFolders.downloadPlaceholder')"
                   :disabled="!customToolFolders"
                   class="path-field" data-id="tool-download-folder-input" />
-                <n-button @click="browseToolFolder('download')" type="error"
+                <n-button @click="browseToolFolder('download')" type="info"
                   :disabled="!customToolFolders" data-id="tool-download-browse-button">
                   {{ t('installationPathSelect.input.browseButton') }}
                 </n-button>
@@ -70,7 +70,7 @@
                   :placeholder="t('installationPathSelect.toolFolders.installPlaceholder')"
                   :disabled="!customToolFolders"
                   class="path-field" data-id="tool-install-folder-input" />
-                <n-button @click="browseToolFolder('install')" type="error"
+                <n-button @click="browseToolFolder('install')" type="info"
                   :disabled="!customToolFolders" data-id="tool-install-browse-button">
                   {{ t('installationPathSelect.input.browseButton') }}
                 </n-button>
@@ -81,7 +81,7 @@
       </div>
 
       <div class="action-footer" data-id="path-action-footer">
-        <n-button @click="processInstallPath" :disabled="!pathIsValid" type="primary" size="large"
+        <n-button @click="processInstallPath" :disabled="!pathIsValid" type="info" size="large"
           data-id="continue-path-button">
           {{ t('installationPathSelect.continueButton') }}
         </n-button>

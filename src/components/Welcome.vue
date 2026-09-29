@@ -85,10 +85,10 @@
           <div class="preferences">
             <n-checkbox v-model:checked="dontShowAgain" data-id="dont-show-again-checkbox">
               {{ $t('welcome.preferences.dontShow') }}
-            </n-checkbox><br></br>
+            </n-checkbox>
             <n-checkbox v-model:checked="allowUsageTracking" @update:checked="handleUsageTrackingChange" data-id="allow-usage-tracking-checkbox">
               {{ $t('welcome.preferences.allowTracking') }}
-            </n-checkbox><br></br>
+            </n-checkbox>
             <a
               href="https://docs.espressif.com/projects/idf-im-ui/en/latest/#privacy-and-data-collection"
               target="_blank"
@@ -416,6 +416,7 @@ export default {
   font-size: 1.25rem;
   color: #4b5563;
   margin-bottom: 2rem;
+  text-align: center;
 }
 
 .status-check {
@@ -503,6 +504,10 @@ export default {
   padding-top: 2rem;
   border-top: 1px solid #e5e7eb;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.1rem;
 }
 
 .n-button[type="success"] {

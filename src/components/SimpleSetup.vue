@@ -76,7 +76,7 @@
           {{ $t('simpleSetup.select.offlineAlert') }}
         </n-alert>
 
-        <n-button @click="startInstallation" type="primary" size="large" block
+        <n-button @click="startInstallation" type="info" size="large" class="start-button"
           :disabled="!selectedVersion" data-id="start-simple-offline-button">
           {{ $t('simpleSetup.ready.startButton') }}
         </n-button>
@@ -93,24 +93,39 @@
           <h2>{{ phaseTitle }}</h2>
         </div>
 
-        <!-- Two coarse phases -->
+        <!-- Three phases: download, decompress, install -->
         <div class="phase-track">
-          <div class="phase-chip" :class="{ active: phase === 'download', done: phase === 'install' }">
-            <span class="phase-dot">1</span>{{ $t('simpleSetup.installation.steps.download.title') }}
+          <div class="phase-chip" :class="phaseChipClass('download')">
+            <span class="phase-dot"><CheckOutlined v-if="phaseRank > 0" />
+              <template v-else>1</template></span>{{ $t('simpleSetup.installation.steps.download.title') }}
           </div>
-          <div class="phase-sep"></div>
-          <div class="phase-chip" :class="{ active: phase === 'install' }">
-            <span class="phase-dot">2</span>{{ $t('simpleSetup.installation.steps.install.title') }}
+          <div class="phase-sep" :class="{ done: phaseRank > 0 }"></div>
+          <div class="phase-chip" :class="phaseChipClass('extract')">
+            <span class="phase-dot"><CheckOutlined v-if="phaseRank > 1" />
+              <template v-else>2</template></span>{{ $t('simpleSetup.installation.steps.extract.title') }}
+          </div>
+          <div class="phase-sep" :class="{ done: phaseRank > 1 }"></div>
+          <div class="phase-chip" :class="phaseChipClass('install')">
+            <span class="phase-dot"><CheckOutlined v-if="installProgress >= 100" />
+              <template v-else>3</template></span>{{ $t('simpleSetup.installation.steps.install.title') }}
           </div>
         </div>
 
         <p class="status-description">{{ installationMessage }}</p>
 
-        <!-- Show simple progress bar during DOWNLOAD -->
-        <n-progress v-if="!installPhaseStarted" type="line" :percentage="downloadProgress"
-          :processing="downloadProgress < 100" :indicator-placement="'inside'" color="#E8362D" />
+        <!-- DOWNLOAD: determinate bar, green once complete -->
+        <n-progress v-if="phase === 'download'" type="line" :percentage="downloadProgress"
+          :processing="downloadProgress < 100" :indicator-placement="'inside'"
+          :color="downloadProgress >= 100 ? SUCCESS_COLOR : INFO_COLOR" />
 
-        <!-- Show detailed GlobalProgress during INSTALL -->
+        <!-- DECOMPRESS: backend reports no percentage, so show an animated indeterminate bar -->
+        <div v-else-if="phase === 'extract'" class="extract-progress">
+          <div class="indeterminate-bar"><div class="indeterminate-fill"></div></div>
+          <p class="extract-note">{{ $t('simpleSetup.installation.extractingMessage') }}</p>
+          <p class="extract-elapsed">{{ $t('simpleSetup.installation.extractingElapsed', { time: extractElapsedText }) }}</p>
+        </div>
+
+        <!-- INSTALL: detailed steps -->
         <GlobalProgress
           v-else
           :initial-message="installationMessage"
@@ -198,34 +213,35 @@
     <!-- Error State (including prereq/python issues) -->
     <n-card v-else-if="currentState === 'error'" class="status-card">
       <div class="error-status">
-        <n-result :status="warningLike ? 'warning' : 'error'" :title="errorTitle" :description="errorMessage">
+        <n-result :status="warningLike ? 'info' : 'error'" :title="errorTitle" :description="errorMessage">
           <template #icon>
-            <n-icon :size="72" :color="warningLike ? '#faad14' : '#ff4d4f'">
-              <CloseCircleOutlined />
+            <n-icon :size="72" :color="warningLike ? INFO_COLOR : '#ff4d4f'">
+              <InfoCircleOutlined v-if="warningLike" />
+              <CloseCircleOutlined v-else />
             </n-icon>
           </template>
           <template #footer>
             <CheckResultsList v-if="pythonCheckResults.length > 0" :items="pythonCheckResults" />
             <div class="error-actions">
-              <n-button v-if="verificationFailed" @click="skipAndContinue" type="warning" size="large" data-id="skip-prerequisites-button">
+              <n-button v-if="verificationFailed" @click="skipAndContinue" size="large" data-id="skip-prerequisites-button">
                 {{ $t('common.prerequisites.skipCheck') }}
               </n-button>
-              <n-button v-if="!noArchive" @click="viewLogs" type="info" size="large">
+              <n-button v-if="!noArchive && !warningLike" @click="viewLogs" size="large">
                 {{ $t('simpleSetup.error.viewLogs') }}
               </n-button>
-              <n-button @click="retry" type="warning" size="large">
+              <n-button @click="retry" :type="warningLike ? 'info' : 'warning'" size="large">
                 {{ $t('simpleSetup.error.retry') }}
               </n-button>
-              <n-button @click="useWizard" type="info" size="large">
+              <n-button @click="useWizard" :type="warningLike ? 'default' : 'info'" size="large">
                 {{ $t('simpleSetup.error.wizard') }}
               </n-button>
             </div>
           </template>
         </n-result>
 
-        <n-alert v-if="errorDetails" :type="warningLike ? 'warning' : 'error'" style="margin-top: 2rem;">
+        <n-alert v-if="errorDetails" :type="warningLike ? 'info' : 'error'" style="margin-top: 2rem;">
           <template #header>{{ $t('simpleSetup.error.details') }}</template>
-          <pre class="error-details">{{ errorDetails }}</pre>
+          <pre class="error-details" :class="{ 'is-info': warningLike }">{{ errorDetails }}</pre>
         </n-alert>
       </div>
     </n-card>
@@ -245,6 +261,8 @@ import {
 } from 'naive-ui'
 import {
   ArrowLeftOutlined,
+  CheckOutlined,
+  InfoCircleOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
   DownloadOutlined,
@@ -260,7 +278,7 @@ export default {
   components: {
     NButton, NCard, NIcon, NSpin, NResult, NAlert, NProgress,
     NCollapse, NCollapseItem, NScrollbar, NSelect, NCheckbox,
-    ArrowLeftOutlined, CheckCircleOutlined, CloseCircleOutlined,
+    ArrowLeftOutlined, CheckOutlined, InfoCircleOutlined, CheckCircleOutlined, CloseCircleOutlined,
     DownloadOutlined, ToolOutlined, LoadingOutlined,
     GlobalProgress,
     CheckResultsList
@@ -292,8 +310,16 @@ export default {
     const archiveDecision = ref('')
     const isDeletingArchive = ref(false)
 
-    // Two-phase progress
+    const SUCCESS_COLOR = '#52c41a'
+    const INFO_COLOR = '#2080f0'
+
+    // Three-phase progress: download -> extract (decompress) -> install
+    const PHASE_ORDER = ['download', 'extract', 'install']
+    const currentPhase = ref('download')
     const installPhaseStarted = ref(false)
+    const extractStartedAt = ref(0)
+    const extractElapsedSec = ref(0)
+    let extractTimer = null
     const downloadProgress = ref(0)
     const installProgress = ref(0)
     const installationMessage = ref('')
@@ -342,20 +368,52 @@ export default {
       driveChanged.value ? swapDrive(installPath.value, selectedDrive.value) : installPath.value
     )
 
-    const phase = computed(() => (installPhaseStarted.value ? 'install' : 'download'))
-    const phaseProgress = computed(() => (installPhaseStarted.value ? installProgress.value : downloadProgress.value))
-    const phaseTitle = computed(() =>
-      installPhaseStarted.value
-        ? (t('simpleSetup.installation.title') || 'Installing ESP-IDF')
-        : t('simpleSetup.installation.downloadingTitle')
-    )
+    const phase = computed(() => currentPhase.value)
+    const phaseRank = computed(() => PHASE_ORDER.indexOf(currentPhase.value))
+    const phaseProgress = computed(() => (phase.value === 'install' ? installProgress.value : phase.value === 'download' ? downloadProgress.value : 0))
+    const phaseTitle = computed(() => {
+      if (phase.value === 'install') return t('simpleSetup.installation.title') || 'Installing ESP-IDF'
+      if (phase.value === 'extract') return t('simpleSetup.installation.extractingTitle')
+      return t('simpleSetup.installation.downloadingTitle')
+    })
+    const extractElapsedText = computed(() => {
+      const m = Math.floor(extractElapsedSec.value / 60)
+      const s = extractElapsedSec.value % 60
+      return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`
+    })
+
+    const phaseChipClass = (name) => {
+      const idx = PHASE_ORDER.indexOf(name)
+      if (name === 'install' && installProgress.value >= 100) return { done: true }
+      return { active: idx === phaseRank.value, done: idx < phaseRank.value }
+    }
 
     const getStatusIcon = computed(() => {
-      if (!installPhaseStarted.value) return DownloadOutlined
+      if (phase.value === 'download') return DownloadOutlined
+      if (phase.value === 'extract') return ToolOutlined
       if (installProgress.value < 100) return ToolOutlined
       return CheckCircleOutlined
     })
-    const getStatusIconClass = computed(() => (phaseProgress.value < 100 ? 'rotating' : ''))
+    const getStatusIconClass = computed(() => (phase.value === 'install' && installProgress.value >= 100 ? 'success-icon' : ''))
+
+    const stopExtractTimer = () => {
+      if (extractTimer) { clearInterval(extractTimer); extractTimer = null }
+    }
+
+    const enterPhase = (name) => {
+      if (PHASE_ORDER.indexOf(name) <= phaseRank.value) return
+      currentPhase.value = name
+      if (name === 'extract') {
+        extractStartedAt.value = Date.now()
+        extractElapsedSec.value = 0
+        extractTimer = setInterval(() => {
+          extractElapsedSec.value = Math.floor((Date.now() - extractStartedAt.value) / 1000)
+        }, 1000)
+      } else {
+        stopExtractTimer()
+      }
+      if (name === 'install') installPhaseStarted.value = true
+    }
     const getProgressColorScheme = computed(() => {
       if (currentState.value === 'error') return 'error'
       if (installProgress.value === 100) return 'success'
@@ -513,6 +571,7 @@ export default {
         if (msg) installationMessage.value = msg
 
         if (stage === 'error') {
+          stopExtractTimer()
           currentState.value = 'error'
           warningLike.value = false
           errorTitle.value = t('simpleSetup.error.start.title')
@@ -527,7 +586,8 @@ export default {
         }
 
         if (stage === 'complete') {
-          installPhaseStarted.value = true
+          enterPhase('install')
+          stopExtractTimer()
           installProgress.value = 100
           if (currentState.value === 'installing') currentState.value = 'complete'
           trackEvent('install_finished', {
@@ -537,12 +597,15 @@ export default {
           return
         }
 
-        if (installPhaseStarted.value) {
-          if (percentage != null) installProgress.value = percentage
-        } else if (stage === 'download') {
+        if (phase.value === 'download' && stage === 'download') {
           if (percentage != null) downloadProgress.value = percentage
+        } else if (stage === 'extract') {
+          // Decompression happens in one blocking backend call with no percentage.
+          downloadProgress.value = 100
+          enterPhase('extract')
         } else if (stage) {
-          installPhaseStarted.value = true
+          downloadProgress.value = 100
+          enterPhase('install')
           if (percentage != null) installProgress.value = percentage
         }
       })
@@ -554,6 +617,15 @@ export default {
     }
 
     // === Actions ===
+    const resetPhases = () => {
+      stopExtractTimer()
+      currentPhase.value = 'download'
+      installPhaseStarted.value = false
+      downloadProgress.value = 0
+      installProgress.value = 0
+      extractElapsedSec.value = 0
+    }
+
     const startInstallation = async () => {
       try {
         const ok = await invoke('is_path_empty_or_nonexistent_command', {
@@ -574,9 +646,7 @@ export default {
       }
 
       currentState.value = 'installing'
-      installPhaseStarted.value = false
-      downloadProgress.value = 0
-      installProgress.value = 0
+      resetPhases()
       installationMessage.value = ''
       installMessages.value = []
       downloadedArchivePath.value = ''
@@ -593,6 +663,7 @@ export default {
         })
         downloadedArchivePath.value = path
       } catch (error) {
+        stopExtractTimer()
         if (currentState.value !== 'error') {
           currentState.value = 'error'
           warningLike.value = false
@@ -626,9 +697,7 @@ export default {
     const retry = async () => {
       errorMessage.value = ''
       errorDetails.value = ''
-      installPhaseStarted.value = false
-      downloadProgress.value = 0
-      installProgress.value = 0
+      resetPhases()
       installMessages.value = []
       pythonCheckResults.value = []
       await checkPrerequisites(true)
@@ -659,6 +728,7 @@ export default {
     onUnmounted(() => {
       if (unlistenProgress) unlistenProgress()
       if (unlistenLog) unlistenLog()
+      stopExtractTimer()
     })
 
     return {
@@ -671,7 +741,8 @@ export default {
       installationMessage, installMessages, installationSteps,
       errorTitle, errorMessage, errorDetails, noArchive, warningLike,
       pythonCheckResults, verificationFailed,
-      phase, phaseProgress, phaseTitle,
+      phase, phaseRank, phaseProgress, phaseTitle, phaseChipClass, extractElapsedText,
+      SUCCESS_COLOR, INFO_COLOR,
       getStatusIcon, getStatusIconClass, getProgressColorScheme,
       formatSize,
       startInstallation, skipAndContinue,
@@ -840,9 +911,9 @@ export default {
 }
 
 .phase-chip.active {
-  border-color: #E8362D;
-  color: #E8362D;
-  background: #fdeceb;
+  border-color: #2080f0;
+  color: #2080f0;
+  background: #eff6ff;
 }
 
 .phase-chip.done {
@@ -855,19 +926,74 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: currentColor;
-  color: white;
-  font-size: 0.7rem;
+  font-size: 0.85rem;
   font-weight: bold;
+}
+
+.phase-dot svg {
+  width: 12px;
+  height: 12px;
 }
 
 .phase-sep {
   width: 2rem;
   height: 2px;
   background: #e5e7eb;
+  transition: background 0.3s;
+}
+
+.phase-sep.done {
+  background: #10b981;
+}
+
+.start-button {
+  min-width: 220px;
+}
+
+.extract-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.indeterminate-bar {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  border-radius: 6px;
+  background: #e5e7eb;
+  overflow: hidden;
+}
+
+.indeterminate-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 35%;
+  border-radius: 6px;
+  background: #2080f0;
+  animation: indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+  0% { left: -35%; }
+  100% { left: 100%; }
+}
+
+.extract-note,
+.extract-elapsed {
+  margin: 0;
+  color: #6b7280;
+  text-align: center;
+}
+
+.extract-elapsed {
+  font-size: 0.875rem;
+}
+
+.success-icon {
+  color: #52c41a;
 }
 
 .status-description {
@@ -967,6 +1093,10 @@ export default {
 
 .error-details {
   color: #991b1b;
+}
+
+.error-details.is-info {
+  color: #374151;
 }
 
 .setup-header .n-button {

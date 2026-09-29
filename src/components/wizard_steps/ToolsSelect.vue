@@ -54,7 +54,7 @@
             </span>
             <n-button
               @click="processChoices"
-              type="primary"
+              type="info"
               size="large"
               :disabled="!canProceed"
               data-id="continue-tools-button"

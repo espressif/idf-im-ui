@@ -275,7 +275,8 @@ where
         if let Some(entry) = entries.first() {
             if entry.latency.is_some() {
                 // The first entry is best mirror to select
-                info!("Selected {log_prefix} mirror: {} ({:?} ms)", entry.url, entry.latency.unwrap());
+                info!("Selected {log_prefix} mirror: {}", entry.url);
+                debug!("Selected {log_prefix} mirror latency: {:?} ms", entry.latency.unwrap());
                 set_value(config, entry.url.clone());
             }
         } else {

@@ -36,7 +36,7 @@
       </n-spin>
     </n-card>
     <hr></hr>
-    <p class="description" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
+    <p class="description product-selector-note" data-id="target-select-description-second-line">{{ t('targetSelect.productSelectorMessage') }} <a
         href="https://products.espressif.com/#/product-comparison?names=ESP32-S2,ESP32-C3,ESP32-S3,ESP32-C6&type=SoC"
         target="_blank">{{ t('targetSelect.productSelector') }}</a></p>
   </div>
@@ -139,6 +139,13 @@ export default {
 hr {
   background-color: #6b7280;
   color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+/* same size as the step titles in the sidebar */
+.product-selector-note {
+  font-size: 14px;
+  margin-top: 1rem;
 }
 
 .selection-card {

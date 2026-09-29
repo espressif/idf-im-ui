@@ -521,7 +521,7 @@
   },
   "wizardStep": {
     "title": "Expert Installation Step",
-    "stepIndicator": "Step {step}",
+    "stepIndicator": "{step}/{total}",
     "steps": {
       "prerequisitesCheck": "Prerequisites Check",
       "pythonSanityCheck": "Python Sanity Check",
@@ -737,6 +737,9 @@
       "title": "Installing ESP-IDF",
       "defaultTitle": "Installing ESP-IDF",
       "downloadingTitle": "Downloading package",
+      "extractingTitle": "Decompressing package",
+      "extractingMessage": "Unpacking the downloaded package. This can take several minutes — the installer is still working, please do not close it.",
+      "extractingElapsed": "Elapsed: {time}",
       "preparing": "Preparing installation...",
       "steps": {
         "check": {

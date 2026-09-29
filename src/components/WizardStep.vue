@@ -3,7 +3,7 @@
     <!-- Expert Installation Step Header -->
     <div class="wizard-header">
       <h1 class="header-title">{{ t('wizardStep.title') }}</h1>
-      <div class="step-indicator">{{ t('wizardStep.stepIndicator', { step: currentStep }) }}</div>
+      <div class="step-indicator">{{ t('wizardStep.stepIndicator', { step: currentStep, total: totalSteps }) }}</div>
     </div>
 
     <div class="wizard-content">

@@ -73,7 +73,7 @@
                           @click="selectAllOptional(versionData.version)"
                           size="small"
                           text
-                          type="primary"
+                          type="info"
                           data-id="select-all-button"
                         >
                           {{ t('featuresSelect.actions.selectAll') }}
@@ -83,7 +83,7 @@
                           @click="deselectAllOptional(versionData.version)"
                           size="small"
                           text
-                          type="primary"
+                          type="info"
                           data-id="deselect-all-button"
                         >
                           {{ t('featuresSelect.actions.deselectAll') }}
@@ -182,7 +182,7 @@
                         @click="selectAllOptional(versionFeatures[0].version)"
                         size="small"
                         text
-                        type="primary"
+                        type="info"
                         data-id="select-all-button"
                       >
                         {{ t('featuresSelect.actions.selectAll') }}
@@ -192,7 +192,7 @@
                         @click="deselectAllOptional(versionFeatures[0].version)"
                         size="small"
                         text
-                        type="primary"
+                        type="info"
                         data-id="deselect-all-button"
                       >
                         {{ t('featuresSelect.actions.deselectAll') }}
@@ -243,7 +243,7 @@
             </span>
             <n-button
               @click="processChoices"
-              type="primary"
+              type="info"
               size="large"
               :disabled="!canProceed"
               data-id="continue-features-button"
@@ -534,13 +534,13 @@ export default {
 }
 
 .feature-row.optional:hover {
-  border-color: #e7352c;
-  background-color: #fef2f2;
+  border-color: #93c5fd;
+  background-color: #f0f9ff;
 }
 
 .feature-row.optional.selected {
-  background-color: #fee2e2;
-  border-color: #e7352c;
+  background-color: #f0f9ff;
+  border-color: #bfdbfe;
 }
 
 .feature-row.required {

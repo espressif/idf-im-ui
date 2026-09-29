@@ -5,22 +5,19 @@
     :data-id="`version-item-${version.name}`"
     @click="toggle"
   >
+    <div
+      v-if="version.latest"
+      class="latest-ribbon"
+      :data-id="`version-latest-tag-${version.name}`"
+    ><span>{{ t('versionSelect.tags.latest') }}</span></div>
     <div class="version-content" :data-id="`version-content-${version.name}`">
       <div class="version-header" :data-id="`version-header-${version.name}`">
         <span class="version-name" :data-id="`version-name-${version.name}`">{{ version.name }}</span>
         <div class="version-tags">
           <n-tag
-            v-if="version.latest"
-            type="error"
-            size="small"
-            :data-id="`version-latest-tag-${version.name}`"
-          >
-            {{ t('versionSelect.tags.latest') }}
-          </n-tag>
-          <n-tag
             v-if="version.pre_release"
-            type="warning"
             size="small"
+            :color="{ color: '#facc15', textColor: '#1f2937', borderColor: '#eab308' }"
             :data-id="`version-prerelease-tag-${version.name}`"
           >
             {{ t('versionSelect.tags.preRelease') }}
@@ -65,6 +62,10 @@ export default {
 
 <style scoped>
 .version-item {
+  position: relative;
+  overflow: hidden;
+  min-height: 64px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -106,6 +107,32 @@ export default {
 
 .version-item.development.selected {
   background-color: rgba(208, 48, 80, 0.1);
+}
+
+/* Diagonal "latest" ribbon over the top-right corner */
+.latest-ribbon {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 60px;
+  height: 60px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.latest-ribbon span {
+  position: absolute;
+  top: 10px;
+  right: -22px;
+  width: 80px;
+  transform: rotate(45deg);
+  background: #d03050;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .version-content {

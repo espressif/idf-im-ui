@@ -88,6 +88,10 @@ export default {
   margin-bottom: 16px;
 }
 
+.version-section[data-id="prerelease-versions-section"] {
+  margin-top: 40px;
+}
+
 .section-alert.warning {
   border-left: 4px solid #f0a020;
 }
