@@ -141,6 +141,7 @@
       :positive-text="t('versionManagement.modals.rename.confirmButton')"
       :negative-text="t('versionManagement.modals.rename.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'rename-version-confirm-button' }"
       @positive-click="confirmRename"
       data-id="rename-version-modal"
     >
@@ -160,10 +161,11 @@
       :positive-text="t('versionManagement.modals.remove.confirmButton')"
       :negative-text="t('versionManagement.modals.remove.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'remove-version-confirm-button' }"
       @positive-click="confirmRemove"
       data-id="remove-version-modal"
     >
-      <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })"></span>
+      <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })" data-id="remove-version-message"></span>
       <br><br>
       {{ t('versionManagement.modals.remove.pathMessage') }}
       <br>
@@ -196,19 +198,22 @@
       :positive-text="t('versionManagement.modals.purge.confirmButton')"
       :negative-text="t('versionManagement.modals.purge.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'purge-all-confirm-button' }"
       @positive-click="confirmPurge"
       data-id="purge-all-modal"
     >
-      <n-alert type="error" :bordered="false">
+      <n-alert type="error" :bordered="false" data-id="purge-all-warning">
         {{ t('versionManagement.modals.purge.warning') }}
       </n-alert>
       <br>
-      {{ t('versionManagement.modals.purge.listMessage') }}
-      <ul>
-        <li v-for="version in installedVersions" :key="version.id">
-          {{ version.name }} ({{ version.path }})
-        </li>
-      </ul>
+      <div data-id="purge-all-list">
+        {{ t('versionManagement.modals.purge.listMessage') }}
+        <ul>
+          <li v-for="version in installedVersions" :key="version.id">
+            {{ version.name }} ({{ version.path }})
+          </li>
+        </ul>
+      </div>
       <br>
       <n-checkbox v-model:checked="purgeConfirmed" data-id="purge-all-confirm-checkbox">
         {{ t('versionManagement.modals.purge.confirmation') }}

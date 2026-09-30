@@ -31,12 +31,12 @@
     </n-card>
 
     <!-- Choose package (+ drive on Windows) -->
-    <n-card v-else-if="currentState === 'select'" class="status-card">
+    <n-card v-else-if="currentState === 'select'" class="status-card" data-id="simple-setup-select">
       <div class="ready-status">
         <n-icon :size="64" color="#52c41a">
           <CheckCircleOutlined />
         </n-icon>
-        <h2>{{ $t('simpleSetup.ready.title') }}</h2>
+        <h2 data-id="simple-setup-ready-title">{{ $t('simpleSetup.ready.title') }}</h2>
 
         <div class="select-block">
           <label class="field-label">{{ $t('simpleSetup.select.version') }}</label>
@@ -45,13 +45,13 @@
 
         <!-- Windows-only: change the install DRIVE -->
         <div class="select-block" v-if="appStore.os === 'windows' && drives.length > 1">
-          <n-checkbox v-model:checked="allowDriveChange">
+          <n-checkbox v-model:checked="allowDriveChange" data-id="drive-change-checkbox">
             {{ $t('simpleSetup.drive.acknowledge') }}
           </n-checkbox>
-          <div v-if="allowDriveChange" class="drive-picker">
+          <div v-if="allowDriveChange" class="drive-picker" data-id="drive-picker">
             <label class="field-label">{{ $t('simpleSetup.drive.label') }}</label>
-            <n-select v-model:value="selectedDrive" :options="driveOptions" />
-            <n-alert type="warning" :bordered="false" style="margin-top: 0.5rem;">
+            <n-select v-model:value="selectedDrive" :options="driveOptions" data-id="drive-select" />
+            <n-alert type="warning" :bordered="false" style="margin-top: 0.5rem;" data-id="drive-warning">
               {{ $t('simpleSetup.drive.warning', { drive: selectedDrive }) }}
             </n-alert>
           </div>
@@ -84,13 +84,13 @@
     </n-card>
 
     <!-- Installation Progress (two phases: download, then install with detailed steps) -->
-    <n-card v-else-if="currentState === 'installing'" class="status-card">
+    <n-card v-else-if="currentState === 'installing'" class="status-card" data-id="simple-setup-installing">
       <div class="installing-status">
         <div class="status-header">
           <n-icon :size="48" :class="getStatusIconClass">
             <component :is="getStatusIcon" />
           </n-icon>
-          <h2>{{ phaseTitle }}</h2>
+          <h2 data-id="simple-setup-phase-title">{{ phaseTitle }}</h2>
         </div>
 
         <!-- Three phases: download, decompress, install -->
@@ -147,10 +147,10 @@
     </n-card>
 
     <!-- Installation Complete -->
-    <n-card v-else-if="currentState === 'complete'" class="status-card">
+    <n-card v-else-if="currentState === 'complete'" class="status-card" data-id="simple-setup-complete">
       <div class="complete-status">
         <n-result status="success" :title="$t('simpleSetup.complete.title')"
-          :description="$t('simpleSetup.complete.description')">
+          :description="$t('simpleSetup.complete.description')" data-id="simple-setup-complete-result">
           <template #icon>
             <n-icon :size="72" color="#52c41a">
               <CheckCircleOutlined />
@@ -158,10 +158,10 @@
           </template>
           <template #footer>
             <div class="completion-actions">
-              <n-button @click="viewDocumentation" size="large">
+              <n-button @click="viewDocumentation" size="large" data-id="simple-documentation-button">
                 {{ $t('simpleSetup.complete.buttons.documentation') }}
               </n-button>
-              <n-button @click="goToManagement" type="primary" size="large">
+              <n-button @click="goToManagement" type="primary" size="large" data-id="simple-dashboard-button">
                 {{ $t('simpleSetup.complete.buttons.dashboard') }}
               </n-button>
             </div>
@@ -211,7 +211,7 @@
     </n-card>
 
     <!-- Error State (including prereq/python issues) -->
-    <n-card v-else-if="currentState === 'error'" class="status-card">
+    <n-card v-else-if="currentState === 'error'" class="status-card" data-id="simple-setup-error">
       <div class="error-status">
         <n-result :status="warningLike ? 'info' : 'error'" :title="errorTitle" :description="errorMessage">
           <template #icon>

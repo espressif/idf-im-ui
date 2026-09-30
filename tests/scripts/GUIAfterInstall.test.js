@@ -3,7 +3,7 @@ import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 import { By } from "selenium-webdriver";
-import { tGui, matchable } from "../helpers/i18n.js";
+import { tGui } from "../helpers/i18n.js";
 
 // This function verifies the presence of the installed IDF versions in the dashboard
 export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
@@ -63,15 +63,18 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
 
     it("2- Should show option to manage installations", async function () {
       this.timeout(10000);
-      const dashboardCard = await eimRunner.findByText(
-        tGui("welcome.cards.manage.title")
+      const dashboardCard = await eimRunner.findByDataId(
+        "manage-versions-card"
       );
       expect(
         dashboardCard,
         "Expected dashboard card to be shown on welcome page"
       ).to.not.be.false;
-      const dashboardContent = await eimRunner.findByText(
-        matchable("welcome.cards.manage.description")
+      expect(await dashboardCard.getText()).to.include(
+        tGui("welcome.cards.manage.title")
+      );
+      const dashboardContent = await eimRunner.findByDataId(
+        "manage-versions-description"
       );
       const text = await dashboardContent.getText();
       const numberMatch = text.match(/\d+/);
@@ -80,9 +83,7 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
         totalInstallations,
         "Expected at least one installation"
       ).to.be.gte(1);
-      const click = await eimRunner.clickButton(
-        tGui("welcome.cards.manage.button")
-      );
+      const click = await eimRunner.clickByDataId("manage-versions-button");
       expect(click, "Expected to click on Open Dashboard button").to.be.true;
     });
 

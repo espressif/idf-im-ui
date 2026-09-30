@@ -5,7 +5,7 @@
 
     <div class="selection_header">
       {{ t('targetSelect.targetChips') }}
-      <span @click="clickOnAll">
+      <span @click="clickOnAll" data-id="select-all-targets">
         {{ t('targetSelect.all') }}
         <n-checkbox :checked="all" id="select_all_targets" size="large"></n-checkbox>
       </span>

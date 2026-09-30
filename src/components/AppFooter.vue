@@ -55,7 +55,7 @@
           <p>{{ $t('footer.modal.about.version', { version: appVersion }) }}</p>
         </div>
 
-        <div class="about-description">
+        <div class="about-description" data-id="about-description">
           <p>{{ $t('footer.modal.about.description.line1') }}</p>
           <p>{{ $t('footer.modal.about.description.line2') }}</p>
         </div>

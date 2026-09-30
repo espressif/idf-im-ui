@@ -55,7 +55,7 @@
       </n-alert>
 
       <!-- Selected Archives -->
-      <div class="section">
+      <div class="section" data-id="archive-section">
         <h3>{{ $t('offlineInstaller.config.archive.title') }}</h3>
         <div v-if="archives.length > 0" class="archive-list">
           <n-card v-for="(archive, index) in archives" :key="index" size="small">
@@ -219,10 +219,10 @@
     </n-card>
 
     <!-- Installation Progress -->
-    <n-card v-else class="progress-card">
-      <h2>{{ $t('offlineInstaller.installation.title') }}</h2>
+    <n-card v-else class="progress-card" data-id="offline-installation-progress">
+      <h2 data-id="offline-installation-title">{{ $t('offlineInstaller.installation.title') }}</h2>
 
-      <n-alert title="Installation Error" type="error" v-if="error_message">
+      <n-alert title="Installation Error" type="error" v-if="error_message" data-id="offline-installation-error-alert">
         {{ error_message }}
       </n-alert>
 

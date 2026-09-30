@@ -20,6 +20,7 @@
               :name="versionData.version"
               :tab="versionData.version"
               :data-id="`version-tab-${versionData.version}`"
+              :tab-props="{ 'data-id': `version-tab-button-${versionData.version}` }"
             >
               <tools-content
                 :version="versionData.version"

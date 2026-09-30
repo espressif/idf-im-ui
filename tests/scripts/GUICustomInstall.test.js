@@ -109,17 +109,18 @@ export function runGUICustomInstallTest({
 
     it("02- Should show expert installation option", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await eimRunner.clickByDataId("new-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("basic-installer-title");
       const text = await header.getText();
       expect(text, "Expected installation setup screen").to.equal(
         tGui("basicInstaller.title"),
       );
-      const custom = await eimRunner.findByText(
+      const custom = await eimRunner.findByDataId("custom-mode-card");
+      expect(custom, "Expected option for custom installation").to.not.be.false;
+      expect(await custom.getText()).to.include(
         tGui("basicInstaller.cards.custom.title"),
       );
-      expect(custom, "Expected option for custom installation").to.not.be.false;
       expect(
         await custom.isDisplayed(),
         "Expected option for simplified installation",
@@ -128,14 +129,14 @@ export function runGUICustomInstallTest({
 
     it("03- Should show targets list", async function () {
       this.timeout(45000);
-      await eimRunner.clickButton(tGui("basicInstaller.cards.custom.button"));
+      await eimRunner.clickByDataId("custom-mode-button");
       await new Promise((resolve) => setTimeout(resolve, 15000));
       const targetsList = await eimRunner.findByDataId("targets-grid", 20000);
       const targetsText = await targetsList.getText();
       for (let target of availableTargets) {
         expect(targetsText).to.include(target);
       }
-      let targetAll = await eimRunner.findByText(tGui("targetSelect.all"));
+      let targetAll = await eimRunner.findByDataId("select-all-targets");
       expect(
         await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).to.include("checked");
@@ -143,19 +144,23 @@ export function runGUICustomInstallTest({
       expect(await targetESP32.getAttribute("class")).to.not.include(
         "selected",
       );
-      await eimRunner.clickElement("esp32");
+      await eimRunner.clickByDataId("target-item-esp32");
       expect(
         await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).not.to.include("checked");
       expect(await targetESP32.getAttribute("class")).to.include("selected");
-      await eimRunner.clickElement("esp32");
+      await eimRunner.clickByDataId("target-item-esp32");
       expect(
         await targetAll.findElement(By.css("Div")).getAttribute("class"),
       ).to.include("checked");
-      await eimRunner.clickElement(tGui("targetSelect.all"));
+      await eimRunner.clickByDataId("select-all-targets");
 
       for (let target of targetList) {
-        await eimRunner.clickElement(target);
+        if (target === "All") {
+          await eimRunner.clickByDataId("select-all-targets");
+        } else {
+          await eimRunner.clickByDataId(`target-item-${target}`);
+        }
         if (target === "All") {
           expect(
             await targetAll.findElement(By.css("Div")).getAttribute("class"),
@@ -173,7 +178,7 @@ export function runGUICustomInstallTest({
 
     it("04- Should show IDF version list", async function () {
       this.timeout(15000);
-      await eimRunner.clickButton(tGui("targetSelect.continueButton"));
+      await eimRunner.clickByDataId("continue-targets-button");
       await new Promise((resolve) => setTimeout(resolve, 4000));
 
       const IDFListStable = await eimRunner.findByDataId(
@@ -211,7 +216,7 @@ export function runGUICustomInstallTest({
       );
       expect(await IDFMaster.getAttribute("class")).to.not.include("selected");
       for (let version of idfVersionList) {
-        await eimRunner.clickElement(version);
+        await eimRunner.clickByDataId(`version-item-${version}`);
       }
       const selectedVersions = await eimRunner.findByDataId("selected-tags");
       const selectedVersionsText = await selectedVersions.getText();
@@ -222,13 +227,9 @@ export function runGUICustomInstallTest({
 
     it("05- Should show IDF download mirrors", async function () {
       this.timeout(15000);
-      await eimRunner.clickButton(tGui("versionSelect.continueInstallation"));
+      await eimRunner.clickByDataId("continue-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const IDFMirrorsList = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        tGui("mirrorSelect.sections.idfMirror"),
-      );
+      const IDFMirrorsList = await eimRunner.findByDataId("idf-mirror-section");
       let IDFMirrorsListText = await IDFMirrorsList.getText();
       for (let mirror of Object.values(IDFMIRRORS)) {
         expect(IDFMirrorsListText).to.include(mirror);
@@ -272,10 +273,8 @@ export function runGUICustomInstallTest({
 
     it("06- Should show tools download mirrors", async function () {
       this.timeout(10000);
-      const toolsMirrorsList = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        tGui("mirrorSelect.sections.toolsMirror"),
+      const toolsMirrorsList = await eimRunner.findByDataId(
+        "tools-mirror-section",
       );
       let toolsMirrorsListText = await toolsMirrorsList.getText();
       for (let mirror of Object.values(TOOLSMIRRORS)) {
@@ -347,10 +346,8 @@ export function runGUICustomInstallTest({
 
     it("07- Should show PyPI download mirrors", async function () {
       this.timeout(10000);
-      const pypiMirrorsList = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        tGui("mirrorSelect.sections.pypiMirror"),
+      const pypiMirrorsList = await eimRunner.findByDataId(
+        "pypi-mirror-section",
       );
       let pypiMirrorsListText = await pypiMirrorsList.getText();
       for (let mirror of Object.values(PYPIMIRRORS)) {
@@ -419,23 +416,19 @@ export function runGUICustomInstallTest({
       );
       expect(await ustcMirror.getAttribute("class")).to.include("selected");
 
-      const pypiMirrorButton = await eimRunner.findByText(
-        PYPIMIRRORS[pypiMirror],
-      );
-      await eimRunner.driver.executeScript(
-        "arguments[0].click();",
-        pypiMirrorButton,
+      await eimRunner.clickByDataId(
+        `pypi-mirror-option-${PYPIMIRRORS[pypiMirror]}`,
       );
     });
 
     it("08- Should show list of optional features", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(tGui("mirrorSelect.continueButton"));
+      await eimRunner.clickByDataId("continue-mirrors-button");
       await new Promise((resolve) => setTimeout(resolve, 4000));
 
       for (let version of idfVersionList) {
         if (idfVersionList.length > 1) {
-          await eimRunner.clickElement(version);
+          await eimRunner.clickByDataId(`version-tab-button-${version}`);
         }
 
         const requiredFeaturesList =
@@ -464,12 +457,12 @@ export function runGUICustomInstallTest({
 
     it("09- Should show list of Tools", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(tGui("featuresSelect.continueButton"));
+      await eimRunner.clickByDataId("continue-features-button");
       await new Promise((resolve) => setTimeout(resolve, 4000));
 
       for (let version of idfVersionList) {
         if (idfVersionList.length > 1) {
-          await eimRunner.clickElement(version);
+          await eimRunner.clickByDataId(`version-tab-button-${version}`);
         }
 
         const completeToolsList =
@@ -488,7 +481,7 @@ export function runGUICustomInstallTest({
 
     it("10- Should show installation path", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(tGui("installationPathSelect.continueButton"));
+      await eimRunner.clickByDataId("continue-tools-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const installPath = await eimRunner.findByDataId("path-info-title");
       expect(await installPath.getText()).to.equal(
@@ -509,7 +502,7 @@ export function runGUICustomInstallTest({
 
     it("11- Should show installation summary", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(tGui("installationPathSelect.continueButton"));
+      await eimRunner.clickByDataId("continue-path-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const versionSummary = await eimRunner.findByDataId("versions-info");
       expect(await versionSummary.getText()).to.include(
@@ -526,29 +519,23 @@ export function runGUICustomInstallTest({
       this.timeout(2730000);
 
       try {
-        await eimRunner.clickButton(
-          tGui("installationProgress.buttons.startInstallation"),
-        );
+        await eimRunner.clickByDataId("start-installation-button");
         await new Promise((resolve) => setTimeout(resolve, 2000));
-        const installing = await eimRunner.findByText(
+        const installing = await eimRunner.findByDataId("installation-title");
+        expect(await installing.isDisplayed()).to.be.true;
+        expect(await installing.getText()).to.equal(
           tGui("installationProgress.title.installation"),
         );
-        expect(await installing.isDisplayed()).to.be.true;
         const startTime = Date.now();
 
-        // NOTE(EIM-661): the "Installation Failed" title is rendered via
-        // `installationProgress.error.title`, which is not present in
-        // `src/locales/en.json` today; `simpleSetup.error.title` holds the
-        // same literal string and is used here as a stand-in source of
-        // truth until the missing key is added in a follow-up.
         while (Date.now() - startTime < 2700000) {
-          if (await eimRunner.findByText(tGui("simpleSetup.error.title"), 1000)) {
+          if (await eimRunner.findByDataId("error-message", 1000)) {
             logger.debug("failed!!!!");
             break;
           }
           if (
-            await eimRunner.findByText(
-              tGui("installationProgress.buttons.completeInstallation"),
+            await eimRunner.findByDataId(
+              "complete-installation-button-footer",
               1000,
             )
           ) {
@@ -560,8 +547,8 @@ export function runGUICustomInstallTest({
         if (Date.now() - startTime >= 2700000) {
           logger.info("Installation timed out after 45 minutes");
         }
-        const completed = await eimRunner.findByText(
-          tGui("installationProgress.buttons.completeInstallation"),
+        const completed = await eimRunner.findByDataId(
+          "complete-installation-button-footer",
         );
         expect(completed).to.not.be.false;
         expect(await completed.isDisplayed()).to.be.true;
@@ -575,20 +562,15 @@ export function runGUICustomInstallTest({
       this.timeout(15000);
 
       try {
-        await eimRunner.clickButton(
-          tGui("installationProgress.buttons.completeInstallation"),
-        );
+        await eimRunner.clickByDataId("complete-installation-button-footer");
         await new Promise((resolve) => setTimeout(resolve, 5000));
-        const completed = await eimRunner.findByText(tGui("complete.title"));
+        const completed = await eimRunner.findByDataId("completion-result");
         expect(await completed.isDisplayed()).to.be.true;
-        const saveConfig = await eimRunner.findByText(
-          tGui("complete.buttons.saveConfiguration"),
-        );
+        expect(await completed.getText()).to.include(tGui("complete.title"));
+        const saveConfig = await eimRunner.findByDataId("save-config-button");
         expect(saveConfig).to.not.be.false;
         expect(await saveConfig.isDisplayed()).to.be.true;
-        const exit = await eimRunner.findByText(
-          tGui("complete.buttons.exitInstaller"),
-        );
+        const exit = await eimRunner.findByDataId("exit-button");
         expect(exit).to.not.be.false;
       } catch (error) {
         logger.info("Failed to complete installation", error);

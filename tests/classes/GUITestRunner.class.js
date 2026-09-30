@@ -268,78 +268,16 @@ class GUITestRunner {
     }
   }
 
-  // method to find an element by its text content
-  async findByText(text, timeout = 5000) {
+  // method to click any element by its data-id attribute
+  // Uses a JS click so it works for elements covered by overlays or not in the viewport
+  async clickByDataId(dataId, timeout = 5000) {
+    const element = await this.findByDataId(dataId, timeout);
+    if (!element) return false;
     try {
-      const element = await this.driver.wait(
-        until.elementLocated(By.xpath(`//*[contains(text(), '${text}')]`)),
-        timeout,
-        `Element containing text "${text}" not found`
-      );
-      logger.debug(`Selected html element ${await element.getTagName()}`);
-      return element;
-    } catch (error) {
-      logger.debug(`Error during selection: ${error}`);
-      return false;
-    }
-  }
-
-  // method to find an element by its relation to another element
-  // Use this method to select an element upstream or downstream to a known element. Relation and tag refers to the element you want to find.
-  // text is the text content of the reference element.
-  async findByRelation(relation, tag, text, timeout = 5000) {
-    try {
-      const element = await this.driver.wait(
-        until.elementLocated(
-          By.xpath(`//*[contains(text(), '${text}')]/${relation}::${tag}`)
-        ),
-        timeout,
-        `Element ${tag} containing text "${text}" not found`
-      );
-      logger.debug(`Selected html element ${await element.getTagName()}`);
-      return element;
-    } catch (error) {
-      logger.debug(`Error during selection: ${error}`);
-      return false;
-    }
-  }
-
-  // method to click a button by its text content
-  async clickButton(text, timeout = 5000) {
-    try {
-      const button = await this.driver.wait(
-        until.elementLocated(
-          By.xpath(`//*[contains(text(), '${text}')]/ancestor-or-self::button`)
-        ),
-        timeout,
-        `Button with text "${text}" not found`
-      );
-      logger.debug(
-        `Selected button element with text ${await button.getText()}`
-      );
-      await this.driver.executeScript("arguments[0].click();", button);
-      return true;
-    } catch (error) {
-      logger.debug(`Error during selection: ${error}`);
-      return false;
-    }
-  }
-
-  // method to click any element by its text content
-  async clickElement(text, timeout = 5000) {
-    try {
-      const element = await this.driver.wait(
-        until.elementLocated(By.xpath(`//*[contains(text(), '${text}')]`)),
-        timeout,
-        `Element with text "${text}" not found`
-      );
-      logger.debug(
-        `Selected element ${await element.getTagName()} with text ${await element.getText()}`
-      );
       await this.driver.executeScript("arguments[0].click();", element);
       return true;
     } catch (error) {
-      logger.debug(`Error during selection: ${error}`);
+      logger.debug(`Error during click: ${error}`);
       return false;
     }
   }

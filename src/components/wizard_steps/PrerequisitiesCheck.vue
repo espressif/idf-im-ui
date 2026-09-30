@@ -35,7 +35,7 @@
 
         <!-- All prerequisites satisfied -->
         <div v-else-if="missing_prerequisities.length === 0">
-          <n-button @click="nextstep" type="primary" data-id="continue-button">
+          <n-button @click="nextstep" type="primary" data-id="prerequisites-continue-button">
             {{ t('prerequisitiesCheck.actions.continue') }}
           </n-button>
         </div>

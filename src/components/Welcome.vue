@@ -45,7 +45,7 @@
                   <DashboardOutlined />
                 </n-icon>
                 <h3>{{ $t('welcome.cards.manage.title') }}</h3>
-                <p>{{ $t('welcome.cards.manage.description', { count: installedVersionsCount }) }}</p>
+                <p data-id="manage-versions-description">{{ $t('welcome.cards.manage.description', { count: installedVersionsCount }) }}</p>
                 <n-button type="primary" block data-id="manage-versions-button">{{ $t('welcome.cards.manage.button') }}</n-button>
               </div>
             </n-card>
