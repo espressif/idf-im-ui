@@ -278,10 +278,12 @@ pub fn run(
           if let Err(e) = std::fs::create_dir_all(&config_dir) {
             log::error!("Failed to create config directory: {}", e);
           } else if let Ok(store) = app.handle().store_builder(config_file).build() {
-            // If do_not_track is true, set usage_statistics to false
-            store.set("usage_statistics".to_string(), Value::Bool(!do_not_track_value));
-            if let Err(e) = store.save() {
-                log::error!("Failed to save usage_statistics setting: {}", e);
+            // Only an explicit --do-not-track overrides the user's saved preference
+            if do_not_track_value {
+              store.set("usage_statistics".to_string(), Value::Bool(false));
+              if let Err(e) = store.save() {
+                  log::error!("Failed to save usage_statistics setting: {}", e);
+              }
             }
           }
 

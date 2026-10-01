@@ -216,7 +216,7 @@ pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
                 .clone();
 
             let usage_statistics = store.get("usage_statistics")
-                .unwrap_or(Value::Bool(false))
+                .unwrap_or(Value::Bool(true))
                 .clone();
 
             json!({
