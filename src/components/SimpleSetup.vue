@@ -565,7 +565,13 @@ export default {
     }
 
     // === Event Listeners ===
+    const detachListeners = () => {
+      if (unlistenProgress) { unlistenProgress(); unlistenProgress = null }
+      if (unlistenLog) { unlistenLog(); unlistenLog = null }
+    }
+
     const attachListeners = async () => {
+      detachListeners()
       unlistenProgress = await listen('installation-progress', async (event) => {
         const { stage, percentage, message: msg, detail, version } = event.payload
         if (msg) installationMessage.value = msg
@@ -599,7 +605,7 @@ export default {
 
         if (phase.value === 'download' && stage === 'download') {
           if (percentage != null) downloadProgress.value = percentage
-        } else if (stage === 'extract') {
+        } else if (stage === 'checking' || stage === 'extract') {
           // Decompression happens in one blocking backend call with no percentage.
           downloadProgress.value = 100
           enterPhase('extract')
@@ -726,8 +732,7 @@ export default {
 
     onMounted(() => { checkPrerequisites() })
     onUnmounted(() => {
-      if (unlistenProgress) unlistenProgress()
-      if (unlistenLog) unlistenLog()
+      detachListeners()
       stopExtractTimer()
     })
 
