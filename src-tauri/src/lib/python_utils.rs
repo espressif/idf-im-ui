@@ -1219,13 +1219,16 @@ pub fn where_non_alias(name: &str) -> Option<PathBuf> {
 /// Detects the best available Python 3 interpreter on the system.
 ///
 /// Search order:
+/// - **macOS**: Absolute paths for Homebrew (Apple Silicon, then Intel),
+///   MacPorts, and the system interpreter, then bare `python3` on PATH.
+///   Absolute paths are checked explicitly because a GUI launched from a
+///   sandboxed environment does not inherit `.zshrc`/`.bashrc` PATH entries.
+/// - **Linux/other Unix**: `python3` first, then `python` (only accepted if it
+///   reports a 3.x version, since on some distros `python` is still 2.7).
 /// - **Windows**: Generic names on PATH while skipping App Execution Aliases,
 ///   each verified with [`is_python3`].
-/// - **Linux/macOS**: `python3` first, then `python` (only accepted if it
-///   reports a 3.x version, since on some distros `python` is still 2.7).
 ///
-/// Returns the command/path string for the first working Python 3 it finds,
-/// or a sensible default so callers get a clear error downstream rather than a panic.
+/// Returns the command/path string for the first working Python 3 it finds.
 pub fn detect_default_python() -> Result<String> {
     match std::env::consts::OS {
         "windows" => {
@@ -1243,19 +1246,29 @@ pub fn detect_default_python() -> Result<String> {
             warn!("No working Python 3 found on Windows PATH");
             Err(anyhow!("No working Python 3 interpreter found on Windows PATH"))
         }
-        _ => {
-            // Unix: prefer python3
-            if is_python3("python3") {
-                info!("Found python3");
-                return Ok("python3".to_string());
-            }
-            // Fallback: bare `python`, but only if it's actually 3.x
-            if is_python3("python") {
-                info!("Found python (verified 3.x)");
-                return Ok("python".to_string());
+        os => {
+            // Unix: absolute paths first (sandboxed GUIs don't inherit shell PATH),
+            // then fall back to PATH lookup. Every candidate is verified.
+            let candidates: &[&str] = if os == "macos" {
+                &[
+                    "/opt/homebrew/bin/python3", // Homebrew (Apple Silicon)
+                    "/usr/local/bin/python3",    // Homebrew (Intel)
+                    "/opt/local/bin/python3",    // MacPorts
+                    "/usr/bin/python3",          // system Python (Xcode CLT)
+                    "python3",                   // PATH fallback
+                ]
+            } else {
+                &["python3", "python"] // `python` verified below; may be 2.x on some distros
+            };
+
+            for cand in candidates {
+                if is_python3(cand) {
+                    info!("Found Python 3: {}", cand);
+                    return Ok(cand.to_string());
+                }
             }
 
-            warn!("No working Python 3 found ");
+            warn!("No working Python 3 found");
             Err(anyhow!("No working Python 3 found"))
         }
     }
