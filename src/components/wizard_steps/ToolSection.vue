@@ -9,7 +9,7 @@
         <n-button
           @click="$emit('select-all', version)"
           text
-          type="primary"
+          type="info"
           data-id="select-all-button"
         >
           {{ t('toolsSelect.actions.selectAll') }}
@@ -18,7 +18,7 @@
         <n-button
           @click="$emit('deselect-all', version)"
           text
-          type="primary"
+          type="info"
           data-id="deselect-all-button"
         >
           {{ t('toolsSelect.actions.deselectAll') }}

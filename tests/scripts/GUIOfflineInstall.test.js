@@ -115,18 +115,19 @@ export function runGUIOfflineInstallTest({
     it("2- Should show offline installation option", async function () {
       this.timeout(10000);
 
-      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await eimRunner.clickByDataId("new-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("basic-installer-title");
       const text = await header.getText();
       expect(text, "Expected installation setup screen").to.equal(
         tGui("basicInstaller.title"),
       );
-      const simplified = await eimRunner.findByText(
-        tGui("basicInstaller.cards.offline.title"),
-      );
+      const simplified = await eimRunner.findByDataId("offline-mode-card");
       expect(simplified, "Expected option for offline installation").to.not.be
         .false;
+      expect(await simplified.getText()).to.include(
+        tGui("basicInstaller.cards.offline.title"),
+      );
       expect(
         await simplified.isDisplayed(),
         "Expected option for offline installation",
@@ -140,7 +141,7 @@ export function runGUIOfflineInstallTest({
         "document.querySelector('#eim_offline_installation_input').value = arguments[0]",
         `${pathToOfflineArchive}`,
       );
-      await eimRunner.clickButton(tGui("basicInstaller.cards.offline.button"));
+      await eimRunner.clickByDataId("offline-mode-button");
 
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const header = await eimRunner.findByCSS("h1");
@@ -149,11 +150,7 @@ export function runGUIOfflineInstallTest({
         tGui("offlineInstaller.title"),
       );
 
-      const selectedFile = await eimRunner.findByRelation(
-        "parent",
-        "div",
-        tGui("offlineInstaller.config.archive.title"),
-      );
+      const selectedFile = await eimRunner.findByDataId("archive-section");
       const selectedFileText = await selectedFile.getText();
       expect(selectedFileText, "Expected file path to be shown").to.include(
         `offlineArchive_${offlineIDFVersion}.zst`,
@@ -166,24 +163,22 @@ export function runGUIOfflineInstallTest({
           : path.join(os.homedir(), ".espressif");
       expect(await pathInput.getAttribute("value")).to.include(defaultInput);
 
-      const useDefault = await eimRunner.findByText(
-        tGui("offlineInstaller.config.path.useDefault"),
+      const useDefault = await eimRunner.findByDataId(
+        "installation-path-use-default-checkbox",
       );
       const isDisplayed = await useDefault.isDisplayed();
       expect(isDisplayed, "Expected option to use default installation path").to
         .be.true;
-      const checkBox = await eimRunner.findByRelation(
-        "parent",
-        "div",
+      expect(await useDefault.getText()).to.include(
         tGui("offlineInstaller.config.path.useDefault"),
       );
-      const checked = await checkBox.getAttribute("class");
+      const checked = await useDefault.getAttribute("class");
       expect(checked, "Expected checkbox to be unchecked").to.include(
         "checked",
       );
 
-      const startButton = await eimRunner.findByText(
-        tGui("offlineInstaller.config.startButton"),
+      const startButton = await eimRunner.findByDataId(
+        "start-installation-button",
       );
       expect(startButton, "Expected button to start installation").to.not.be
         .false;
@@ -373,10 +368,10 @@ export function runGUIOfflineInstallTest({
 
     it("5- Should install IDF using offline file", async function () {
       this.timeout(2730000);
-      await eimRunner.clickButton(tGui("offlineInstaller.config.startButton"));
+      await eimRunner.clickByDataId("start-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 5000));
-      const installing = await eimRunner.findByText(
-        tGui("offlineInstaller.installation.title"),
+      const installing = await eimRunner.findByDataId(
+        "offline-installation-title",
         20000,
       );
 
@@ -390,28 +385,18 @@ export function runGUIOfflineInstallTest({
       ).to.be.true;
 
       const startTime = Date.now();
-      // NOTE(EIM-661): the offline installer also surfaces a generic
-      // "Installation Failed" banner; no dedicated i18n key exists for
-      // the offline flow today, so `simpleSetup.error.title` is reused
-      // as the source of truth for the literal. Flag for follow-up if
-      // a dedicated key is added.
       while (Date.now() - startTime < 2700000) {
-        if (await eimRunner.findByText(tGui("simpleSetup.error.title"), 1000)) {
+        if (await eimRunner.findByDataId("error-message", 1000)) {
           logger.debug("failed!!!!");
           break;
         }
         if (
-          await eimRunner.findByText(tGui("installationProgress.alert.error"), 1000)
+          await eimRunner.findByDataId("offline-installation-error-alert", 1000)
         ) {
           logger.debug("failed!!!!");
           break;
         }
-        if (
-          await eimRunner.findByText(
-            tGui("offlineInstaller.installation.success.title"),
-            1000,
-          )
-        ) {
+        if (await eimRunner.findByDataId("installation-summary", 1000)) {
           logger.debug("Completed!!!");
           break;
         }
@@ -420,11 +405,12 @@ export function runGUIOfflineInstallTest({
       if (Date.now() - startTime >= 2700000) {
         logger.info("Installation timed out after 45 minutes");
       }
-      const completed = await eimRunner.findByText(
-        tGui("offlineInstaller.installation.success.title"),
-      );
+      const completed = await eimRunner.findByDataId("installation-summary");
       expect(completed, "Expected installation to be completed").to.not.be
         .false;
+      expect(await completed.getText()).to.include(
+        tGui("offlineInstaller.installation.summary.title"),
+      );
       expect(
         await completed.isDisplayed(),
         "Expected 'Installation Complete' text displayed",
@@ -433,9 +419,7 @@ export function runGUIOfflineInstallTest({
 
     it("6- Should return to dashboard once completed.", async function () {
       this.timeout(10000);
-      await eimRunner.clickButton(
-        tGui("offlineInstaller.installation.success.complete"),
-      );
+      await eimRunner.clickByDataId("complete-installation-button-footer");
       await new Promise((resolve) => setTimeout(resolve, 2000));
       const cards = await eimRunner.findMultipleByClass("n-card");
       let versionsList = [];

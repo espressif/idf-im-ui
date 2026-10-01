@@ -520,7 +520,7 @@
   },
   "wizardStep": {
     "title": "进阶安装步骤",
-    "stepIndicator": "步骤 {step}",
+    "stepIndicator": "{step}/{total}",
     "steps": {
       "prerequisitesCheck": "检查依赖项",
       "pythonSanityCheck": "检查 Python 环境",
@@ -736,6 +736,9 @@
       "title": "正在安装 ESP-IDF",
       "defaultTitle": "正在安装 ESP-IDF",
       "downloadingTitle": "正在下载软件包",
+      "extractingTitle": "正在解压软件包",
+      "extractingMessage": "正在解压已下载的软件包。这可能需要几分钟——安装程序仍在运行，请勿关闭。",
+      "extractingElapsed": "已用时间：{time}",
       "preparing": "正在准备安装...",
       "steps": {
         "check": {

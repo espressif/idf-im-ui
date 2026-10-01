@@ -7,23 +7,6 @@ import logger from "../classes/logger.class.js";
 import { tGui, matchable } from "../helpers/i18n.js";
 import os from "os";
 
-// Poll for any of the given substrings to appear in the DOM. Returns the
-// first matching element, or false if none appear within `timeout`.
-// Useful for UI states that alternate between several titles (e.g. the
-// install progress screen flips between "Downloading package" and
-// "Installing ESP-IDF" depending on cache state).
-async function findByAnyText(eimRunner, texts, timeout = 30000) {
-  const startTime = Date.now();
-  while (Date.now() - startTime < timeout) {
-    for (const text of texts) {
-      const el = await eimRunner.findByText(text, 100);
-      if (el) return el;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  return false;
-}
-
 // This function executes the simplified installation functionality of the EIM GUI.
 // When `drive` is provided (Windows only), the test exercises the per-install
 // drive override — the user ticks the "install on a different drive" checkbox,
@@ -115,18 +98,19 @@ export function runGUISimplifiedInstallTest({
     it("2- Should show installation options", async function () {
       this.timeout(10000);
 
-      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await eimRunner.clickByDataId("new-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const header = await eimRunner.findByCSS("h1");
+      const header = await eimRunner.findByDataId("basic-installer-title");
       const text = await header.getText();
       expect(text, "Expected installation setup screen").to.equal(
         tGui("basicInstaller.title")
       );
-      const simplified = await eimRunner.findByText(
-        tGui("basicInstaller.cards.easy.title")
-      );
+      const simplified = await eimRunner.findByDataId("easy-mode-card");
       expect(simplified, "Expected option for simplified installation").to.not
         .be.false;
+      expect(await simplified.getText()).to.include(
+        tGui("basicInstaller.cards.easy.title")
+      );
       expect(
         await simplified.isDisplayed(),
         "Expected option for simplified installation"
@@ -136,15 +120,16 @@ export function runGUISimplifiedInstallTest({
     it("3- Should show installation summary", async function () {
       this.timeout(35000);
 
-      await eimRunner.clickButton(tGui("basicInstaller.cards.easy.button"));
+      await eimRunner.clickByDataId("easy-mode-button");
       await new Promise((resolve) => setTimeout(resolve, 25000));
-      const header = await eimRunner.findByCSS("h2");
+      const header = await eimRunner.findByDataId("simple-setup-ready-title");
+      expect(header, "Expected installation summary screen").to.not.be.false;
       const text = await header.getText();
       expect(text, "Expected installation summary screen").to.equal(
         tGui("simpleSetup.ready.title")
       );
-      const startButton = await eimRunner.findByText(
-        tGui("simpleSetup.ready.startButton")
+      const startButton = await eimRunner.findByDataId(
+        "start-simple-offline-button"
       );
       expect(startButton, "Expected button to start installation").to.not.be
         .false;
@@ -161,19 +146,13 @@ export function runGUISimplifiedInstallTest({
       }
       this.timeout(20000);
 
-      // Tick the "install on a different drive" acknowledge checkbox. naive-ui
-      // renders n-checkbox as a <label> wrapping the box + text; clicking the
-      // label text toggles the bound ref.
-      const ackText = tGui("simpleSetup.drive.acknowledge");
-      const ackLabel = await eimRunner.findByText(ackText);
-      await eimRunner.driver.executeScript(
-        "arguments[0].click();",
-        ackLabel,
-      );
+      // Tick the "install on a different drive" acknowledge checkbox.
+      const ackClicked = await eimRunner.clickByDataId("drive-change-checkbox");
+      expect(ackClicked, "Expected drive change checkbox").to.be.true;
 
       // The drive picker (v-if=allowDriveChange) appears once the box is ticked.
       await new Promise((resolve) => setTimeout(resolve, 1500));
-      const drivePicker = await eimRunner.findByClass("drive-picker");
+      const drivePicker = await eimRunner.findByDataId("drive-picker");
       expect(drivePicker, "Expected drive picker to appear").to.not.be.false;
 
       // Open the naive-ui n-select. naive-ui's n-select ignores a plain
@@ -185,9 +164,7 @@ export function runGUISimplifiedInstallTest({
       // mousedown+mouseup+click sequence through the focused element. If that
       // still doesn't open the popup, fall back to focusing + sending Enter
       // (the keyboard activation path).
-      const selectTrigger = await drivePicker.findElement(
-        By.className("n-select"),
-      );
+      const selectTrigger = await eimRunner.findByDataId("drive-select");
       await selectTrigger.click();
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
@@ -215,22 +192,28 @@ export function runGUISimplifiedInstallTest({
         await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
-      // The drive label is the same string as the value ("D:"). naive-ui option
-      // labels end up as plain text in the popup; clickElement finds the first
-      // visible match.
-      const optionClicked = await eimRunner.clickElement(drive);
+      // The drive label is the same string as the value ("D:"). naive-ui
+      // renders options in a teleported popup, so match them by text.
+      const options = await eimRunner.findMultipleByClass(
+        "n-base-select-option",
+      );
+      let optionClicked = false;
+      for (const option of options || []) {
+        if ((await option.getText()).trim() === drive) {
+          await eimRunner.driver.executeScript("arguments[0].click();", option);
+          optionClicked = true;
+          break;
+        }
+      }
       expect(optionClicked, `Expected to select drive ${drive}`).to.be.true;
 
       // Sanity-check: the drive warning should now mention the picked drive.
-      // Use matchable() to grab the portion of the locale string before the
-      // {drive} placeholder, since Selenium's getText() returns the rendered
-      // text including the interpolated value.
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const warningPrefix = matchable("simpleSetup.drive.warning");
-      const warningNode = await eimRunner.findByText(warningPrefix);
+      const warningNode = await eimRunner.findByDataId("drive-warning");
       expect(warningNode, "Expected drive warning to be visible").to.not.be
         .false;
       const warningText = await warningNode.getText();
+      expect(warningText).to.include(matchable("simpleSetup.drive.warning"));
       expect(
         warningText,
         `Expected drive warning to mention ${drive}`,
@@ -239,18 +222,11 @@ export function runGUISimplifiedInstallTest({
 
     it("5- Should install IDF using simplified setup", async function () {
       this.timeout(2730000);
-      await eimRunner.clickButton(tGui("simpleSetup.ready.startButton"));
-      // The h2 alternates between the download phase ("Downloading package",
-      // long-lived for offline installs while the archive downloads) and the
-      // install phase ("Installing ESP-IDF", reached faster for cached
-      // online installs). Accept either — both mean the install has started.
-      const installingTitles = [
-        tGui("simpleSetup.installation.downloadingTitle"),
-        tGui("simpleSetup.installation.title"),
-      ];
-      const installing = await findByAnyText(
-        eimRunner,
-        installingTitles,
+      await eimRunner.clickByDataId("start-simple-offline-button");
+      // The progress card is shown for all phases (download, decompress,
+      // install) — any of them means the install has started.
+      const installing = await eimRunner.findByDataId(
+        "simple-setup-installing",
         60000
       );
 
@@ -262,13 +238,11 @@ export function runGUISimplifiedInstallTest({
 
       const startTime = Date.now();
       while (Date.now() - startTime < 2700000) {
-        if (await eimRunner.findByText(tGui("simpleSetup.error.title"), 1000)) {
+        if (await eimRunner.findByDataId("simple-setup-error", 1000)) {
           logger.debug("failed!!!!");
           break;
         }
-        if (
-          await eimRunner.findByText(tGui("simpleSetup.complete.title"), 1000)
-        ) {
+        if (await eimRunner.findByDataId("simple-setup-complete", 1000)) {
           logger.debug("Completed!!!");
           break;
         }
@@ -277,11 +251,14 @@ export function runGUISimplifiedInstallTest({
       if (Date.now() - startTime >= 2700000) {
         logger.info("Installation timed out after 45 minutes");
       }
-      const completed = await eimRunner.findByText(
-        tGui("simpleSetup.complete.title")
+      const completed = await eimRunner.findByDataId(
+        "simple-setup-complete-result"
       );
       expect(completed, "Expected installation to be completed").to.not.be
         .false;
+      expect(await completed.getText()).to.include(
+        tGui("simpleSetup.complete.title")
+      );
       expect(
         await completed.isDisplayed(),
         "Expected 'Installation Complete' text displayed"
@@ -290,8 +267,8 @@ export function runGUISimplifiedInstallTest({
 
     it("6- Should show installation complete summary", async function () {
       this.timeout(10000);
-      const documentationButton = await eimRunner.findByText(
-        tGui("simpleSetup.complete.buttons.documentation")
+      const documentationButton = await eimRunner.findByDataId(
+        "simple-documentation-button"
       );
       expect(documentationButton, "Expected button to show documentation").to
         .not.be.false;
@@ -299,8 +276,8 @@ export function runGUISimplifiedInstallTest({
         await documentationButton.isDisplayed(),
         "Expected Expected button to show documentation to be displayed"
       ).to.be.true;
-      const dashboardButton = await eimRunner.findByText(
-        tGui("simpleSetup.complete.buttons.dashboard")
+      const dashboardButton = await eimRunner.findByDataId(
+        "simple-dashboard-button"
       );
       expect(dashboardButton, "Expected button to return to dashboard").to.not
         .be.false;

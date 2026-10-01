@@ -15,10 +15,6 @@
  *     `<tag>`, trimmed. Used for substring assertions when Selenium's
  *     `getText()` strips inline HTML or when the dynamic value is
  *     unknown at assert time.
- *   - xpathText(path, locale?) — returns the longest apostrophe-free
- *     segment of the raw locale value. `GUITestRunner` builds XPath 1.0
- *     `contains(text(), '...')` expressions, whose single-quoted literal
- *     cannot embed a real `'`.
  *
  * Notes:
  *   - Lookup + interpolation are delegated to `vue-i18n`. We do not
@@ -28,7 +24,7 @@
  *     Node 20.x release CI pins, without depending on JSON-import
  *     attributes (Node 20.10+).
  *   - We retain a reference to the parsed objects (`RAW`) for
- *     `matchable` / `xpathText`, which need the un-interpolated template
+ *     `matchable`, which needs the un-interpolated template
  *     string. `vue-i18n` may compile messages internally, so we don't
  *     read them back through `getLocaleMessage`.
  */
@@ -98,7 +94,7 @@ function rawMessage(keyPath, locale) {
 /**
  * Return the portion of a translation that precedes the first `{var}`
  * placeholder or HTML tag, with trailing whitespace trimmed. Useful for
- * substring assertions (findByText / .include(...)) when the dynamic
+ * substring assertions (.include(...)) when the dynamic
  * value is unknown or when the rendered DOM strips inline tags from the
  * locale value (e.g. `<strong>{name}</strong>`).
  *
@@ -113,32 +109,4 @@ export function matchable(keyPath, locale = "en") {
   const candidates = [brace, tag].filter((i) => i !== -1);
   if (candidates.length === 0) return raw;
   return raw.slice(0, Math.min(...candidates)).trimEnd();
-}
-
-/**
- * Return an XPath-safe substring of a translation.
- *
- * GUITestRunner uses `contains(text(), '...')` XPath expressions, whose
- * single-quoted literal cannot embed a real apostrophe. Many English
- * copies contain apostrophes (e.g. "Don't show..."), so we return the
- * longest apostrophe-free segment of the translated value. The segment
- * still comes from the locale file, so the key remains the source of
- * truth.
- *
- * Throws if the segment is empty (nothing useful to match on).
- *
- * @param {string} keyPath
- * @param {"en"|"cn"} [locale="en"]
- * @returns {string}
- */
-export function xpathText(keyPath, locale = "en") {
-  const raw = rawMessage(keyPath, locale);
-  const segments = raw
-    .split("'")
-    .map((s) => s.trim())
-    .filter(Boolean);
-  if (segments.length === 0) {
-    throw new Error(`i18n path "${keyPath}" has no XPath-safe text`);
-  }
-  return segments.reduce((a, b) => (a.length >= b.length ? a : b));
 }

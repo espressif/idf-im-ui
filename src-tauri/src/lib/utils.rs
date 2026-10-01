@@ -1153,7 +1153,7 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
         if !head_latency_failed {
             match measure_url_score_head(url, timeout).await {
                 Ok(score) => {
-                    info!("Mirror score: {} -> {}", url, score);
+                    debug!("Mirror score: {} -> {}", url, score);
                     mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
                 }
                 Err(e) => {
@@ -1172,11 +1172,11 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
         for url in mirrors.iter() {
             match measure_url_score_get(url, timeout).await {
                 Some(score) => {
-                    info!("Mirror get score: {} -> {}", url, score);
+                    debug!("Mirror get score: {} -> {}", url, score);
                     mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
                 }
                 None => {
-                    info!("Unable to measure get latency for {}: {:?}", url, timeout);
+                    debug!("Unable to measure get latency for {}: {:?}", url, timeout);
                     mirror_entries.push(MirrorEntry { url: url.to_string(), latency: None });
                 }
             }

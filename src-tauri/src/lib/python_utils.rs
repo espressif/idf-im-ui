@@ -214,12 +214,7 @@ pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str)
     info!("Downloading constraints file from {}", constraint_url);
 
     match download_file(&constraint_url, idf_tools_path.to_str().unwrap(), None).await {
-        Ok(_) => {
-            info!(
-                "Downloaded constraints file to {}",
-                constraint_path.display()
-            );
-        }
+        Ok(_) => {}
         Err(e) => {
             error!("Failed to download constraints file: {}", e);
             return Err(anyhow!("Failed to download constraints file: {}", e));
@@ -723,7 +718,7 @@ pub async fn install_python_env(
           .context("Failed to download constraints file")
       {
           Ok(constraint_file) => {
-              info!("Downloaded constraints file: {}", constraint_file.display());
+              debug!("Using constraints file: {}", constraint_file.display());
               Some(constraint_file)
           }
           Err(e) => {

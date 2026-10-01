@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
-import { tGui, matchable } from "../helpers/i18n.js";
+import { tGui } from "../helpers/i18n.js";
 import { By } from "selenium-webdriver";
 import fs from "fs";
 import path from "path";
@@ -77,15 +77,18 @@ export function runGUIVersionManagementTest({
 
     it("2- Should show option to manage installations", async function () {
       this.timeout(10000);
-      const dashboardCard = await eimRunner.findByText(
-        tGui("welcome.cards.manage.title")
+      const dashboardCard = await eimRunner.findByDataId(
+        "manage-versions-card"
       );
       expect(
         dashboardCard,
         "Expected dashboard card to be shown on welcome page"
       ).to.not.be.false;
-      const dashboardContent = await eimRunner.findByText(
-        matchable("welcome.cards.manage.description")
+      expect(await dashboardCard.getText()).to.include(
+        tGui("welcome.cards.manage.title")
+      );
+      const dashboardContent = await eimRunner.findByDataId(
+        "manage-versions-description"
       );
       const text = await dashboardContent.getText();
       const numberMatch = text.match(/\d+/);
@@ -94,9 +97,7 @@ export function runGUIVersionManagementTest({
         totalInstallations,
         "Expected at least one installation"
       ).to.be.gte(1);
-      const click = await eimRunner.clickButton(
-        tGui("welcome.cards.manage.button")
-      );
+      const click = await eimRunner.clickByDataId("manage-versions-button");
       await new Promise((resolve) => setTimeout(resolve, 1000));
       expect(click, "Expected to click on Open Dashboard button").to.be.true;
     });
@@ -391,9 +392,7 @@ export function runGUIVersionManagementTest({
       await input.sendKeys(Key.CONTROL + "a");
       await input.sendKeys(Key.BACK_SPACE);
       await input.sendKeys("NewName");
-      await eimRunner.clickElement(
-        tGui("versionManagement.modals.rename.confirmButton")
-      );
+      await eimRunner.clickByDataId("rename-version-confirm-button");
       await new Promise((resolve) => setTimeout(resolve, 1000));
       let renameVersionsList = [];
       for (let card of cards) {
@@ -438,17 +437,15 @@ export function runGUIVersionManagementTest({
         removeButton
       );
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      const confirmation = await eimRunner.findByText(
-        matchable("versionManagement.modals.remove.message")
+      const confirmation = await eimRunner.findByDataId(
+        "remove-version-message"
       );
       const confirmationText = await confirmation.getText();
       expect(
         confirmationText.includes(IDFToDeleteText),
         `Expected confirmation dialog to mention IDF version ${IDFToDeleteText}`
       ).to.be.true;
-      await eimRunner.clickElement(
-        tGui("versionManagement.modals.remove.confirmButton")
-      );
+      await eimRunner.clickByDataId("remove-version-confirm-button");
       await new Promise((resolve) => setTimeout(resolve, 20000));
 
       const updatedCards = await eimRunner.findMultipleByClass("n-card");
@@ -496,27 +493,19 @@ export function runGUIVersionManagementTest({
         purgeVersionsList.push(versionText);
       }
       logger.debug(`Installed versions before purge all: ${purgeVersionsList}`);
-      const quickActions = await eimRunner.findByClass("quick-actions");
-      expect(quickActions, "Expected to find quick actions section").to.not.be
-        .false;
-      const purgeAllText = tGui("versionManagement.quickActions.purgeAll");
-      const purgeButton = await quickActions
-        .findElement(By.xpath(`//*[contains(text(), '${purgeAllText}')]`))
-        .catch(() => false);
-      await eimRunner.driver.executeScript(
-        "arguments[0].click();",
-        purgeButton
-      );
+      const purgeClicked = await eimRunner.clickByDataId("purge-all-button");
+      expect(purgeClicked, "Expected to find purge all button").to.be.true;
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const confirmation = await eimRunner.findByText(
-        tGui("versionManagement.modals.purge.warning")
-      );
+      const confirmation = await eimRunner.findByDataId("purge-all-warning");
       expect(confirmation, "Expected to find confirmation dialog for purge all")
         .to.not.be.false;
+      expect(await confirmation.getText()).to.include(
+        tGui("versionManagement.modals.purge.warning")
+      );
 
-      const confirmationIDFList = await eimRunner.findByText(
-        matchable("versionManagement.modals.purge.listMessage")
+      const confirmationIDFList = await eimRunner.findByDataId(
+        "purge-all-list"
       );
       const confirmationIDFListText = await confirmationIDFList.getText();
       for (let idfVersion of purgeVersionsList) {
@@ -526,22 +515,13 @@ export function runGUIVersionManagementTest({
         ).to.be.true;
       }
 
-      await eimRunner.clickElement(
-        tGui("versionManagement.modals.purge.confirmation")
-      );
+      await eimRunner.clickByDataId("purge-all-confirm-checkbox");
       await new Promise((resolve) => setTimeout(resolve, 500));
-      const buttons = await eimRunner.driver.wait(
-        until.elementsLocated(
-          By.xpath(
-            `//*[contains(text(), '${purgeAllText}')]/ancestor-or-self::button`
-          )
-        )
-      );
-      await eimRunner.driver.executeScript("arguments[0].click();", buttons[1]);
+      await eimRunner.clickByDataId("purge-all-confirm-button");
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      const noInstalls = await eimRunner.findByText(
-        tGui("versionManagement.sections.noVersions"),
+      const noInstalls = await eimRunner.findByDataId(
+        "no-versions-installed-empty-state",
         45000
       );
       expect(noInstalls, "Expected to find no installations message").to.not.be

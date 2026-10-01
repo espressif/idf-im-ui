@@ -28,9 +28,9 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
       // are missing the wizard is stuck on step 1 and every subsequent test
       // hangs waiting for elements that only exist on later steps.
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await eimRunner.clickByDataId("new-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      await eimRunner.clickButton(tGui("basicInstaller.cards.custom.button"));
+      await eimRunner.clickByDataId("custom-mode-button");
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
       // On Windows, if a prerequisite (e.g. git) is missing the wizard shows
@@ -38,16 +38,14 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
       // Click it, wait for the install to complete and the "Continue" button
       // to appear (rendered after the prerequisite re-check passes).
       if (os.platform() === "win32") {
-        const installPrereqsButton = await eimRunner.findByText(
-          tGui("prerequisitiesCheck.actions.installMissing"),
+        const installPrereqsButton = await eimRunner.findByDataId(
+          "install-prerequisites-button",
           10000
         );
         if (installPrereqsButton) {
-          await eimRunner.clickButton(
-            tGui("prerequisitiesCheck.actions.installMissing")
-          );
-          await eimRunner.findByText(
-            tGui("prerequisitiesCheck.actions.continue"),
+          await eimRunner.clickByDataId("install-prerequisites-button");
+          await eimRunner.findByDataId(
+            "prerequisites-continue-button",
             300000
           );
         }
@@ -55,14 +53,12 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
 
       // Advance past the Prerequisites Check. Handles both the
       // "all prerequisites already passed" and "just installed" cases.
-      const continueButton = await eimRunner.findByText(
-        tGui("prerequisitiesCheck.actions.continue"),
+      const continueButton = await eimRunner.findByDataId(
+        "prerequisites-continue-button",
         30000
       );
       if (continueButton) {
-        await eimRunner.clickButton(
-          tGui("prerequisitiesCheck.actions.continue")
-        );
+        await eimRunner.clickByDataId("prerequisites-continue-button");
         await new Promise((resolve) => setTimeout(resolve, 5000));
       }
     });
@@ -98,8 +94,8 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
       if (os.platform() !== "win32") {
         this.skip();
       }
-      const installpythonButton = await eimRunner.findByText(
-        tGui("pythonSanitycheck.actions.installPython"),
+      const installpythonButton = await eimRunner.findByDataId(
+        "install-python-button",
         30000
       );
       expect(installpythonButton, "Expected Install Python button to be present").to.not.be.false;
@@ -110,9 +106,9 @@ export function runGUIPythonCheckTest({ id = 0, pathToEIM}) {
       if (os.platform() !== "win32") {
         this.skip();
       }
-      await eimRunner.clickButton(tGui("pythonSanitycheck.actions.installPython"));
+      await eimRunner.clickByDataId("install-python-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = await eimRunner.findByText(tGui("targetSelect.title"), 580000);
+      const result = await eimRunner.findByDataId("target-select-title", 580000);
       expect(result, "Expected Select Target Chips text to be present").to.not.be.false;
     });
   });

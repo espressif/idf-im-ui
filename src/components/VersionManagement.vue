@@ -38,6 +38,11 @@
           hoverable
           :data-id="`version-card-${version.id}`"
         >
+          <span
+            class="action-hint"
+            :class="{ visible: hoveredAction && hoveredAction.id === version.id }"
+            aria-hidden="true"
+          >{{ hoveredAction && hoveredAction.id === version.id ? hoveredAction.label : '' }}</span>
           <div class="version-card-content">
             <div class="version-info">
               <h3 :data-id="`version-name-${version.id}`">{{ version.name }}</h3>
@@ -55,86 +60,25 @@
             </div> -->
           </div>
           <div class="version-actions">
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="openIDFTerminal(version)" quaternary circle :data-id="`open-idf-terminal-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><LaptopOutlined /></n-icon>
-                  </template>
-                </n-button>
+            <n-button
+              v-for="action in versionActions(version)"
+              :key="action.key"
+              @click="action.handler(version)"
+              @mouseenter="hoveredAction = { id: version.id, label: action.label }"
+              @mouseleave="hoveredAction = null"
+              @focus="hoveredAction = { id: version.id, label: action.label }"
+              @blur="hoveredAction = null"
+              quaternary
+              circle
+              size="large"
+              :type="action.type"
+              :aria-label="action.label"
+              :data-id="`${action.key}-button-${version.id}`"
+            >
+              <template #icon>
+                <n-icon><component :is="action.icon" /></n-icon>
               </template>
-              {{ t('versionManagement.version.actions.openTerminal') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="renameVersion(version)" quaternary circle :data-id="`rename-version-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><EditOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.rename') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="fixVersion(version)" quaternary circle :data-id="`fix-version-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><ToolOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.fix') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="openInExplorer(version)" quaternary circle :data-id="`open-in-explorer-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><FolderOpenOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.openFolder') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="openListTools(version)" quaternary circle :data-id="`list-tools-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><UnorderedListOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.listTools') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="openListFeatures(version)" quaternary circle :data-id="`list-features-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><AppstoreOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.listFeatures') }}
-            </n-tooltip>
-            <n-tooltip trigger="hover">
-              <template #trigger>
-                <n-button @click="removeVersion(version)" quaternary circle :data-id="`remove-version-button-${version.id}`" type="error">
-                  <template #icon>
-                    <n-icon><DeleteOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.remove') }}
-            </n-tooltip>
-            <n-tooltip v-if="version.installationConfig" trigger="hover">
-              <template #trigger>
-                <n-button @click="exportInstallationConfig(version)" quaternary circle :data-id="`export-config-button-${version.id}`">
-                  <template #icon>
-                    <n-icon><SaveOutlined /></n-icon>
-                  </template>
-                </n-button>
-              </template>
-              {{ t('versionManagement.version.actions.exportConfig') }}
-            </n-tooltip>
+            </n-button>
           </div>
         </n-card>
       </div>
@@ -153,7 +97,7 @@
 
     <!-- Quick Actions -->
     <div class="quick-actions">
-      <n-button @click="goToBasicInstaller" type="primary" size="large" data-id="install-new-version-button">
+      <n-button @click="goToBasicInstaller" type="info" size="large" data-id="install-new-version-button">
         <template #icon>
           <n-icon><PlusCircleOutlined /></n-icon>
         </template>
@@ -197,6 +141,7 @@
       :positive-text="t('versionManagement.modals.rename.confirmButton')"
       :negative-text="t('versionManagement.modals.rename.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'rename-version-confirm-button' }"
       @positive-click="confirmRename"
       data-id="rename-version-modal"
     >
@@ -216,10 +161,11 @@
       :positive-text="t('versionManagement.modals.remove.confirmButton')"
       :negative-text="t('versionManagement.modals.remove.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'remove-version-confirm-button' }"
       @positive-click="confirmRemove"
       data-id="remove-version-modal"
     >
-      <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })"></span>
+      <span v-html="t('versionManagement.modals.remove.message', { name: selectedVersion?.name })" data-id="remove-version-message"></span>
       <br><br>
       {{ t('versionManagement.modals.remove.pathMessage') }}
       <br>
@@ -252,19 +198,22 @@
       :positive-text="t('versionManagement.modals.purge.confirmButton')"
       :negative-text="t('versionManagement.modals.purge.cancelButton')"
       :negative-button-props="{ textColor: '#e5e7eb' }"
+      :positive-button-props="{ 'data-id': 'purge-all-confirm-button' }"
       @positive-click="confirmPurge"
       data-id="purge-all-modal"
     >
-      <n-alert type="error" :bordered="false">
+      <n-alert type="error" :bordered="false" data-id="purge-all-warning">
         {{ t('versionManagement.modals.purge.warning') }}
       </n-alert>
       <br>
-      {{ t('versionManagement.modals.purge.listMessage') }}
-      <ul>
-        <li v-for="version in installedVersions" :key="version.id">
-          {{ version.name }} ({{ version.path }})
-        </li>
-      </ul>
+      <div data-id="purge-all-list">
+        {{ t('versionManagement.modals.purge.listMessage') }}
+        <ul>
+          <li v-for="version in installedVersions" :key="version.id">
+            {{ version.name }} ({{ version.path }})
+          </li>
+        </ul>
+      </div>
       <br>
       <n-checkbox v-model:checked="purgeConfirmed" data-id="purge-all-confirm-checkbox">
         {{ t('versionManagement.modals.purge.confirmation') }}
@@ -577,6 +526,7 @@ export default {
     const { t } = useI18n()
 
     const installedVersions = ref([])
+    const hoveredAction = ref(null)
     const os = ref('unknown')
     const prerequisitesInstalled = ref(true)
     const checkingUpdates = ref(false)
@@ -732,8 +682,12 @@ export default {
 
     const confirmFix = async () => {
       try {
-        // Start the fix process
-        invoke('fix_installation', { id: selectedVersion.value.id })
+        // Start the fix process (not awaited: the progress page tracks it via events)
+        const id = selectedVersion.value.id
+        invoke('fix_installation', { id }).catch((error) => {
+          console.error('Fix installation error:', error)
+          message.error(t('versionManagement.messages.error.repair', { error }))
+        })
 
         message.success(t('versionManagement.messages.success.repairStarted'))
 
@@ -745,7 +699,6 @@ export default {
             id: selectedVersion.value.id,
             name: selectedVersion.value.name,
             path: selectedVersion.value.path,
-            // Add auto-tracking flag so it knows repair is already in progress
             autotrack: 'true'
           }
         })
@@ -755,6 +708,23 @@ export default {
       }
     }
 
+
+    // Card action buttons; data-id becomes `${key}-button-${version.id}`
+    const versionActions = (version) => {
+      const actions = [
+        { key: 'open-idf-terminal', icon: 'LaptopOutlined', handler: openIDFTerminal, label: t('versionManagement.version.actions.openTerminal') },
+        { key: 'rename-version', icon: 'EditOutlined', handler: renameVersion, label: t('versionManagement.version.actions.rename') },
+        { key: 'fix-version', icon: 'ToolOutlined', handler: fixVersion, label: t('versionManagement.version.actions.fix') },
+        { key: 'open-in-explorer', icon: 'FolderOpenOutlined', handler: openInExplorer, label: t('versionManagement.version.actions.openFolder') },
+        { key: 'list-tools', icon: 'UnorderedListOutlined', handler: openListTools, label: t('versionManagement.version.actions.listTools') },
+        { key: 'list-features', icon: 'AppstoreOutlined', handler: openListFeatures, label: t('versionManagement.version.actions.listFeatures') },
+        { key: 'remove-version', icon: 'DeleteOutlined', handler: removeVersion, label: t('versionManagement.version.actions.remove'), type: 'error' }
+      ]
+      if (version.installationConfig) {
+        actions.push({ key: 'export-config', icon: 'SaveOutlined', handler: exportInstallationConfig, label: t('versionManagement.version.actions.exportConfig') })
+      }
+      return actions
+    }
 
     const openInExplorer = async (version) => {
       try {
@@ -805,13 +775,17 @@ export default {
       addingTools.value = true
       try {
         const version = listToolsVersion.value
-        await invoke('fix_installation', { id: version.id, extraTools: selectedExtraTools.value })
+        // Not awaited: the repair runs for minutes and the progress page must be
+        // listening before its events are emitted.
+        invoke('fix_installation', { id: version.id, extraTools: selectedExtraTools.value }).catch((error) => {
+          console.error('Add tools error:', error)
+          message.error(t('versionManagement.messages.error.repair', { error }))
+        })
 
         message.success(t('versionManagement.messages.success.repairStarted'))
         showListToolsModal.value = false
         showAddToolsPanel.value = false
 
-        // Navigate to installation progress with fix mode parameters, same as confirmFix
         router.push({
           path: '/installation-progress',
           query: {
@@ -871,13 +845,17 @@ export default {
       addingFeatures.value = true
       try {
         const version = listFeaturesVersion.value
-        await invoke('fix_installation', { id: version.id, extraFeatures: selectedExtraFeatures.value })
+        // Not awaited: the repair runs for minutes and the progress page must be
+        // listening before its events are emitted.
+        invoke('fix_installation', { id: version.id, extraFeatures: selectedExtraFeatures.value }).catch((error) => {
+          console.error('Add features error:', error)
+          message.error(t('versionManagement.messages.error.repair', { error }))
+        })
 
         message.success(t('versionManagement.messages.success.repairStarted'))
         showListFeaturesModal.value = false
         showAddFeaturesPanel.value = false
 
-        // Navigate to installation progress with fix mode parameters, same as confirmFix
         router.push({
           path: '/installation-progress',
           query: {
@@ -1052,6 +1030,8 @@ export default {
 
     return {
       installedVersions,
+      hoveredAction,
+      versionActions,
       os,
       prerequisitesInstalled,
       checkingUpdates,
@@ -1146,14 +1126,36 @@ export default {
 
 .version-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
 
 .version-card {
+  position: relative;
   border: 1px solid #e5e7eb;
   transition: all 0.3s ease;
+}
+
+.version-card :deep(.n-card__content) {
+  padding: 1.75rem 1.75rem 1.25rem;
+}
+
+/* Fixed-position action label, top right inside the card border */
+.action-hint {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.9rem;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #4b5563;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.action-hint.visible {
+  opacity: 1;
 }
 
 .version-card:hover {
@@ -1175,7 +1177,7 @@ export default {
 
 .version-info h3 {
   font-family: 'Trueno-bold', sans-serif;
-  font-size: 1.25rem;
+  font-size: 1.45rem;
   color: #1f2937;
   margin: 0;
 }
@@ -1185,8 +1187,8 @@ export default {
   align-items: center;
   gap: 0.5rem;
   color: #6b7280;
-  font-size: 0.875rem;
-  padding: 0.5rem;
+  font-size: 1rem;
+  padding: 0.65rem;
   background: #f9fafb;
   border-radius: 4px;
 }

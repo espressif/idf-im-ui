@@ -18,7 +18,7 @@
                   <p class="install-note" data-id="install-python-note">{{ t('pythonSanitycheck.installNote') }}</p>
                 </div>
                 <n-button v-if="python_sane" @click="nextstep" type="primary" :disabled="loading"
-                  data-id="continue-button">
+                  data-id="python-continue-button">
                   {{ t('pythonSanitycheck.actions.continueNext') }}
                 </n-button>
                 <n-button v-if="!python_sane" @click="check_python_sanity" type="primary" data-id="recheck-python-button">

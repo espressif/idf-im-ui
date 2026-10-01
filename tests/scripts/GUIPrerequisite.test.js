@@ -48,9 +48,9 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     it("1- Should check prerequisites", async function () {
       this.timeout(25000);
       await new Promise((resolve) => setTimeout(resolve, 10000));
-      await eimRunner.clickButton(tGui("welcome.cards.new.button"));
+      await eimRunner.clickByDataId("new-installation-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      await eimRunner.clickButton(tGui("basicInstaller.cards.custom.button"));
+      await eimRunner.clickByDataId("custom-mode-button");
       await new Promise((resolve) => setTimeout(resolve, 5000));
       const prerequisitesList = await eimRunner.findByDataId(
         "prerequisites-items-list"
@@ -67,8 +67,8 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       if (os.platform() !== "win32") {
         this.skip();
       }
-      const installReqButton = await eimRunner.findByText(
-        tGui("prerequisitiesCheck.actions.installMissing")
+      const installReqButton = await eimRunner.findByDataId(
+        "install-prerequisites-button"
       );
       expect(installReqButton, "Expected Install Missing Prerequisites button to be present").to.not.be.false;
 
@@ -79,11 +79,11 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       if (os.platform() !== "win32") {
         this.skip();
       }
-      const checkReqButton = await eimRunner.findByText(
-        tGui("prerequisitiesCheck.actions.checkPrerequisites")
+      const checkReqButton = await eimRunner.findByDataId(
+        "check-prerequisites-button"
       );
       expect(checkReqButton, "Expected check Prerequisites button to be present").to.not.be.false;
-      await eimRunner.clickButton(tGui("prerequisitiesCheck.actions.checkPrerequisites"));
+      await eimRunner.clickByDataId("check-prerequisites-button");
       await new Promise((resolve) => setTimeout(resolve, 10000));
       const prerequisitesList = await eimRunner.findByDataId(
         "prerequisites-items-list"
@@ -100,13 +100,13 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
       if (os.platform() !== "win32") {
         this.skip();
       }
-      await eimRunner.clickButton(tGui("prerequisitiesCheck.actions.installMissing"));
+      await eimRunner.clickByDataId("install-prerequisites-button");
       await new Promise((resolve) => setTimeout(resolve, 2000));
-      const result = await eimRunner.findByText(
-        tGui("pythonSanitycheck.status.setupRequired.title"),
-        60000
-      );
+      const result = await eimRunner.findByDataId("python-check-result", 60000);
       expect(result, "Expected python check screen").to.not.be.false;
+      expect(await result.getText()).to.include(
+        tGui("pythonSanitycheck.status.setupRequired.title")
+      );
     });
   });
 }

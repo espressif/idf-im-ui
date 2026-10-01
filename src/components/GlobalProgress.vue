@@ -31,7 +31,7 @@
     </div>
 
     <div class="progress-steps" v-if="steps.length > 0">
-      <n-steps :current="currentStep" size="small">
+      <n-steps :current="currentStep" size="small" :theme-overrides="stepsThemeOverrides">
         <n-step
           v-for="(step, index) in steps"
           :key="index"
@@ -145,6 +145,15 @@ export default {
     const railColor = computed(() => {
       return props.colorScheme === 'error' ? '#ffccc7' : '#f0f0f0'
     })
+
+    // Completed steps are shown in green
+    const stepsThemeOverrides = {
+      indicatorColorFinish: '#52c41a',
+      indicatorBorderColorFinish: '#52c41a',
+      indicatorTextColorFinish: '#ffffff',
+      splitorColorFinish: '#52c41a',
+      headerTextColorFinish: '#389e0d'
+    }
 
     const getStepStatus = (index) => {
       if (index < currentStep.value) return 'finish'
@@ -272,6 +281,7 @@ export default {
     })
 
     return {
+      stepsThemeOverrides,
       currentMessage,
       progressPercentage,
       processing,
