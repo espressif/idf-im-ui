@@ -7,20 +7,19 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
-use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use idf_im_lib::system_dependencies;
+use idf_im_lib::tool_selection::{
+    get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
+};
+use idf_im_lib::utils::calculate_mirrors_latency;
+use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use log::{debug, info};
 use rust_i18n::t;
-use idf_im_lib::utils::calculate_mirrors_latency;
-use idf_im_lib::tool_selection::{
-    ToolSelectionInfo, fetch_tools_file, get_optional_tools, get_required_tools, get_tools_for_selection, get_tools_json_url
-};
-use std::collections::HashMap;
 
 use crate::cli::helpers::generic_confirm_with_default;
 
 pub async fn select_target() -> Result<Vec<String>, String> {
-    let mut available_targets = idf_im_lib::idf_versions::get_avalible_targets().await?;
+    let mut available_targets = idf_im_lib::idf_versions::get_available_targets().await?;
     available_targets.insert(0, "all".to_string());
     first_defaulted_multiselect("wizard.select_target.prompt", &available_targets)
 }
@@ -29,20 +28,24 @@ pub async fn select_idf_version(
     target: &str,
     non_interactive: bool,
 ) -> Result<Vec<String>, String> {
-    let mut avalible_versions = if target == "all" {
+    let mut available_versions = if target == "all" {
         //todo process vector of targets
         // in non-interactive mode, we want to skip pre-releases
         idf_im_lib::idf_versions::get_idf_names(!non_interactive).await
     } else {
         // in non-interactive mode, we want to skip pre-releases
-        idf_im_lib::idf_versions::get_idf_name_by_target(&target.to_string().to_lowercase(),!non_interactive).await
+        idf_im_lib::idf_versions::get_idf_name_by_target(
+            &target.to_string().to_lowercase(),
+            !non_interactive,
+        )
+        .await
     };
-    avalible_versions.push("master".to_string());
+    available_versions.push("master".to_string());
     if non_interactive {
         debug!("{}", t!("noninteractive.default"));
-        Ok(vec![avalible_versions.first().unwrap().clone()])
+        Ok(vec![available_versions.first().unwrap().clone()])
     } else {
-        first_defaulted_multiselect("wizard.select_idf_version.prompt", &avalible_versions)
+        first_defaulted_multiselect("wizard.select_idf_version.prompt", &available_versions)
     }
 }
 
@@ -75,8 +78,8 @@ pub async fn check_and_install_prerequisites(
                 }
 
                 // Interactive mode: ask user if they want to skip
-                let skip = generic_confirm("prerequisites.skip_prompt")
-                    .map_err(|e| e.to_string())?;
+                let skip =
+                    generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
                 if !skip {
                     return Err(t!("prerequisites.user_cancelled").to_string());
                 }
@@ -94,7 +97,11 @@ pub async fn check_and_install_prerequisites(
             let unsatisfied_prerequisites: Vec<String> =
                 result.missing.into_iter().map(|p| p.to_string()).collect();
 
-            info!("{} {:?}", t!("prerequisites.missing"), unsatisfied_prerequisites);
+            info!(
+                "{} {:?}",
+                t!("prerequisites.missing"),
+                unsatisfied_prerequisites
+            );
             info!(
                 "{}",
                 t!(
@@ -112,18 +119,27 @@ pub async fn check_and_install_prerequisites(
                     Ok(false)
                 };
                 if res.map_err(|e| e.to_string())? {
-                    system_dependencies::install_prerequisites(unsatisfied_prerequisites, tools_dir)
-                        .await
-                        .map_err(|e| e.to_string())?;
+                    system_dependencies::install_prerequisites(
+                        unsatisfied_prerequisites,
+                        tools_dir,
+                    )
+                    .await
+                    .map_err(|e| e.to_string())?;
 
                     // Re-check after installation to verify prerequisites were installed
-                    let recheck_result = run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
+                    let recheck_result =
+                        run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
                     if !recheck_result.missing.is_empty() {
                         return Err(format!(
                             "{}",
                             t!(
                                 "prerequisites.install.catastrophic",
-                                l = recheck_result.missing.iter().map(|s| s.to_string()).collect::<Vec<_>>().join(", ")
+                                l = recheck_result
+                                    .missing
+                                    .iter()
+                                    .map(|s| s.to_string())
+                                    .collect::<Vec<_>>()
+                                    .join(", ")
                             ),
                         ));
                     } else {
@@ -140,15 +156,17 @@ pub async fn check_and_install_prerequisites(
         }
         Err(err) => {
             // Error during checking (e.g., unsupported package manager)
-            info!("{}", t!("prerequisites.verification_error", error = err.clone()));
+            info!(
+                "{}",
+                t!("prerequisites.verification_error", error = err.clone())
+            );
 
             if non_interactive {
                 return Err(err);
             }
 
             // Interactive mode: ask user if they want to skip
-            let skip = generic_confirm("prerequisites.skip_prompt")
-                .map_err(|e| e.to_string())?;
+            let skip = generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
             if !skip {
                 return Err(t!("prerequisites.user_cancelled").to_string());
             }
@@ -170,7 +188,10 @@ fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String
             all_ok = false;
             debug!("[FAIL] {}: {}", name, result.message);
             println!("  [FAIL] {}", name);
-            println!("         Hint: {}", t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string());
+            println!(
+                "         Hint: {}",
+                t!(result.check.hint_key_for_os(std::env::consts::OS))
+            );
         }
     }
     if all_ok {
@@ -208,9 +229,14 @@ pub async fn check_and_install_python(
             };
 
             if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(vec![python_version_override.unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string())], tools_dir.clone())
-                    .await
-                    .map_err(|e| e.to_string())?;
+                system_dependencies::install_prerequisites(
+                    vec![python_version_override.unwrap_or_else(|| {
+                        idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()
+                    })],
+                    tools_dir.clone(),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
                 let usable_python = tools_dir
                     .join("python")
                     .join("python.exe")
@@ -257,12 +283,11 @@ where
     // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
         let entries = calculate_mirrors_latency(candidates).await;
-        let display = entries.iter().map(|e| {
-            if e.latency.is_none() {
-                format!("{} (timeout)", e.url)
-            } else {
-                format!("{} ({:?} ms)", e.url, e.latency.unwrap())
-                }
+        let display = entries
+            .iter()
+            .map(|e| match e.latency {
+                Some(latency) => format!("{} ({latency:?} ms)", e.url),
+                None => format!("{} (timeout)", e.url),
             })
             .collect::<Vec<String>>();
         let selected = generic_select(wizard_key, &display)?;
@@ -273,10 +298,10 @@ where
         // This prevents overriding user's mirror selection from GUI/config file
         let entries = calculate_mirrors_latency(candidates).await;
         if let Some(entry) = entries.first() {
-            if entry.latency.is_some() {
+            if let Some(latency) = entry.latency {
                 // The first entry is best mirror to select
                 info!("Selected {log_prefix} mirror: {}", entry.url);
-                debug!("Selected {log_prefix} mirror latency: {:?} ms", entry.latency.unwrap());
+                debug!("Selected {log_prefix} mirror latency: {latency:?} ms");
                 set_value(config, entry.url.clone());
             }
         } else {
@@ -396,11 +421,7 @@ pub fn select_features(
     if non_interactive {
         // Non-interactive mode: return all required features
         println!("Non-interactive mode: selecting all required features by default");
-        let required = metadata
-            .required_features()
-            .into_iter()
-            .cloned()
-            .collect();
+        let required = metadata.required_features().into_iter().cloned().collect();
         Ok(required)
     } else {
         // Interactive mode: let user select features
@@ -419,7 +440,8 @@ pub fn get_features_for_version(
     if let Some(per_version) = &config.idf_features_per_version {
         if let Some(feature_names) = per_version.get(version) {
             // Convert feature names back to FeatureInfo
-            let features: Vec<FeatureInfo> = requirements_files.features
+            let features: Vec<FeatureInfo> = requirements_files
+                .features
                 .iter()
                 .filter(|f| feature_names.contains(&f.name))
                 .cloned()
@@ -430,7 +452,8 @@ pub fn get_features_for_version(
 
     // Fall back to global idf_features (from CLI)
     if let Some(global_features) = &config.idf_features {
-        let features: Vec<FeatureInfo> = requirements_files.features
+        let features: Vec<FeatureInfo> = requirements_files
+            .features
             .iter()
             .filter(|f| global_features.contains(&f.name))
             .cloned()
@@ -441,7 +464,8 @@ pub fn get_features_for_version(
     // If no features specified, use interactive selection (CLI) or return required only
     if config.non_interactive.unwrap_or_default() {
         // Non-interactive: return only required features
-        Ok(requirements_files.features
+        Ok(requirements_files
+            .features
             .iter()
             .filter(|f| !f.optional)
             .cloned()
@@ -483,10 +507,7 @@ fn select_features_interactive(
         .collect();
 
     // Pre-select all required features
-    let defaults: Vec<bool> = features_to_show
-        .iter()
-        .map(|f| !f.optional)
-        .collect();
+    let defaults: Vec<bool> = features_to_show.iter().map(|f| !f.optional).collect();
 
     // Show multi-select dialog
     let selections = MultiSelect::with_theme(&ColorfulTheme::default())
@@ -631,7 +652,10 @@ pub fn select_tools_interactive(
     let mut selected: Vec<String> = required_tools.iter().map(|t| t.name.clone()).collect();
 
     if optional_tools.is_empty() {
-        info!("No optional tools available. Using {} required tools.", selected.len());
+        info!(
+            "No optional tools available. Using {} required tools.",
+            selected.len()
+        );
         return Ok(selected);
     }
 
@@ -650,16 +674,16 @@ pub fn select_tools_interactive(
     // Determine defaults based on pre_selected or default to none
     let defaults: Vec<bool> = optional_tools
         .iter()
-        .map(|t| {
-            pre_selected
-                .map(|ps| ps.contains(&t.name))
-                .unwrap_or(false)
-        })
+        .map(|t| pre_selected.map(|ps| ps.contains(&t.name)).unwrap_or(false))
         .collect();
 
     println!("\nRequired tools (will be installed automatically):");
     for tool in &required_tools {
-        println!("  [*] {} - {}", tool.name, tool.description.as_deref().unwrap_or(""));
+        println!(
+            "  [*] {} - {}",
+            tool.name,
+            tool.description.as_deref().unwrap_or("")
+        );
     }
     println!();
 
@@ -686,7 +710,10 @@ pub fn select_tools_non_interactive(
     if include_optional {
         tools.iter().map(|t| t.name.clone()).collect()
     } else {
-        get_required_tools(tools).iter().map(|t| t.name.clone()).collect()
+        get_required_tools(tools)
+            .iter()
+            .map(|t| t.name.clone())
+            .collect()
     }
 }
 
@@ -699,8 +726,7 @@ pub fn select_tools(
     targets: Option<&[String]>,
     existing_selection: Option<&[String]>,
 ) -> Result<Vec<ToolSelectionInfo>, String> {
-    let available = get_tools_for_selection(tools_file, targets)
-        .map_err(|e| e.to_string())?;
+    let available = get_tools_for_selection(tools_file, targets).map_err(|e| e.to_string())?;
 
     if available.is_empty() {
         return Err("No tools available for selection".to_string());
@@ -719,12 +745,20 @@ pub fn select_tools(
     // No existing selection - do interactive or non-interactive selection
     if non_interactive {
         // Non-interactive mode: return required tools, optionally include all
-        info!("Non-interactive mode: selecting {} tools by default (QEMU excluded)",
-            if include_optional { "all" } else { "required" });
+        info!(
+            "Non-interactive mode: selecting {} tools by default (QEMU excluded)",
+            if include_optional { "all" } else { "required" }
+        );
         let selected: Vec<ToolSelectionInfo> = if include_optional {
-            available.into_iter().filter(|t| !t.name.contains("qemu")).collect()
+            available
+                .into_iter()
+                .filter(|t| !t.name.contains("qemu"))
+                .collect()
         } else {
-            available.into_iter().filter(|t| t.install == "always").collect()
+            available
+                .into_iter()
+                .filter(|t| t.install == "always")
+                .collect()
         };
         Ok(selected)
     } else {
@@ -738,37 +772,36 @@ pub fn select_tools(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-use super::*;
+    use super::*;
 
-  fn create_test_tool(name: &str, install: &str) -> ToolSelectionInfo {
-    ToolSelectionInfo {
-      name: name.to_string(),
-      description: Some(format!("Description for {}", name)),
-      install: install.to_string(),
-      editable: install == "on_request",
-      supported_targets: Some(vec!["all".to_string()]),
+    fn create_test_tool(name: &str, install: &str) -> ToolSelectionInfo {
+        ToolSelectionInfo {
+            name: name.to_string(),
+            description: Some(format!("Description for {}", name)),
+            install: install.to_string(),
+            editable: install == "on_request",
+            supported_targets: Some(vec!["all".to_string()]),
+        }
     }
-  }
 
-  #[test]
-  fn test_select_tools_non_interactive() {
-    let tools = vec![
-        create_test_tool("required1", "always"),
-        create_test_tool("optional1", "on_request"),
-        create_test_tool("required2", "always"),
-    ];
+    #[test]
+    fn test_select_tools_non_interactive() {
+        let tools = vec![
+            create_test_tool("required1", "always"),
+            create_test_tool("optional1", "on_request"),
+            create_test_tool("required2", "always"),
+        ];
 
-    // Without optional
-    let selected = select_tools_non_interactive(&tools, false);
-    assert_eq!(selected.len(), 2);
-    assert!(selected.contains(&"required1".to_string()));
-    assert!(selected.contains(&"required2".to_string()));
+        // Without optional
+        let selected = select_tools_non_interactive(&tools, false);
+        assert_eq!(selected.len(), 2);
+        assert!(selected.contains(&"required1".to_string()));
+        assert!(selected.contains(&"required2".to_string()));
 
-    // With optional
-    let selected = select_tools_non_interactive(&tools, true);
-    assert_eq!(selected.len(), 3);
-  }
+        // With optional
+        let selected = select_tools_non_interactive(&tools, true);
+        assert_eq!(selected.len(), 3);
+    }
 }

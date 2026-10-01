@@ -1,9 +1,18 @@
-use std::{fs, io::{self, Read, Write}, path::{Path, PathBuf}};
+use std::{
+    fs,
+    io::{self, Read, Write},
+    path::{Path, PathBuf},
+};
 
 use log::{debug, error, info, warn};
 use tempfile::TempDir;
 
-use crate::{add_path_to_path, command_executor::{self, execute_command}, python_utils::detect_default_python, render_template, settings::Settings, system_dependencies::{add_to_path, get_correct_powershell_command}, utils::{copy_dir_contents,copy_dir_contents_preserving_mtime, extract_zst_archive, get_git_path}};
+use crate::{
+    command_executor::{self},
+    python_utils::detect_default_python,
+    settings::Settings,
+    utils::{copy_dir_contents_preserving_mtime, extract_zst_archive, get_git_path},
+};
 
 /// One entry of the offline archive manifest served at
 /// `https://dl.espressif.com/dl/eim/offline_archives.json`.
@@ -78,7 +87,6 @@ pub async fn fetch_offline_archive_manifest(
         .map_err(|e| format!("Failed to parse offline archive manifest: {}", e))
 }
 
-
 /// Installs prerequisite software packages from an offline archive.
 ///
 /// This function handles the installation of development prerequisites on different
@@ -141,7 +149,7 @@ pub async fn install_prerequisites_offline(
 
     // Determine what needs to be installed. Git is probed directly as well, so a bundled Git is
     // installed whenever the system one is unusable, regardless of the prerequisite verdict.
-    let needs_git = check_result.missing.iter().any(|m| *m == "git") || get_git_path().is_err();
+    let needs_git = check_result.missing.contains(&"git") || get_git_path().is_err();
     let needs_python = detect_default_python().is_err();
 
     if !needs_git && !needs_python {
@@ -160,13 +168,19 @@ pub async fn install_prerequisites_offline(
                 let git_archive_path = archive_dir.path().join("git.tar.bz2");
                 warn!("Looking for Git archive at: {}", git_archive_path.display());
                 let archive_contents = std::fs::read_dir(archive_dir.path())
-                    .map(|d| d.into_iter().filter_map(|e| e.ok())
-                        .map(|e| e.file_name().to_str().unwrap_or("").to_string())
-                        .collect::<Vec<_>>())
+                    .map(|d| {
+                        d.into_iter()
+                            .filter_map(|e| e.ok())
+                            .map(|e| e.file_name().to_str().unwrap_or("").to_string())
+                            .collect::<Vec<_>>()
+                    })
                     .unwrap_or_default();
                 warn!("Archive dir contents: {:?}", archive_contents);
                 if !git_archive_path.exists() {
-                    return Err(format!("Git portable archive not found at expected path: {}", git_archive_path.display()));
+                    return Err(format!(
+                        "Git portable archive not found at expected path: {}",
+                        git_archive_path.display()
+                    ));
                 }
                 info!("Found Git archive at: {}", git_archive_path.display());
 
@@ -197,7 +211,10 @@ pub async fn install_prerequisites_offline(
                 // Find Python archive - renamed to simple name during archive creation
                 let python_archive = archive_dir.path().join("python.tar.gz");
                 if !python_archive.exists() {
-                    return Err(format!("Python archive not found at expected path: {}", python_archive.display()));
+                    return Err(format!(
+                        "Python archive not found at expected path: {}",
+                        python_archive.display()
+                    ));
                 }
                 debug!("Found Python archive at: {}", python_archive.display());
 
@@ -281,7 +298,7 @@ pub async fn install_prerequisites_offline(
 /// logged with error-level messages.
 pub fn copy_idf_from_offline_archive(
     archive_dir: &TempDir,
-    config: &Settings
+    config: &Settings,
 ) -> Result<(), String> {
     let mut everything_copied = true;
     for archive_version in config.clone().idf_versions.unwrap() {
@@ -320,19 +337,27 @@ pub fn copy_idf_from_offline_archive(
                     Ok(out) => {
                         let exit_code = out.status.code().unwrap_or(-1);
                         if exit_code <= 7 {
-                            info!("Successfully copied IDF version {} (robocopy exit code: {})", archive_version, exit_code);
+                            info!(
+                                "Successfully copied IDF version {} (robocopy exit code: {})",
+                                archive_version, exit_code
+                            );
                         } else {
-                            error!("robocopy failed for version {} with exit code {}: {:?} | {:?}",
-                                archive_version, exit_code, out.stdout, out.stderr);
+                            error!(
+                                "robocopy failed for version {} with exit code {}: {:?} | {:?}",
+                                archive_version, exit_code, out.stdout, out.stderr
+                            );
                             everything_copied = false;
                         }
                     }
                     Err(err) => {
-                        error!("Failed to execute robocopy for version {}: {}", archive_version, err);
+                        error!(
+                            "Failed to execute robocopy for version {}: {}",
+                            archive_version, err
+                        );
                         everything_copied = false;
                     }
                 }
-            },
+            }
             _ => {
                 debug!("Moving IDF version: {}", archive_version);
                 match fs::rename(&src_path, &dst_path) {
@@ -347,7 +372,10 @@ pub fn copy_idf_from_offline_archive(
                         let dst_idf_path = dst_path.join("esp-idf");
                         match copy_dir_contents_preserving_mtime(&src_idf_path, &dst_idf_path) {
                             Ok(_) => {
-                                info!("Successfully copied IDF version with preserved timestamps: {}", archive_version);
+                                info!(
+                                    "Successfully copied IDF version with preserved timestamps: {}",
+                                    archive_version
+                                );
                             }
                             Err(err) => {
                                 error!("Failed to copy IDF version {}: {}", archive_version, err);
@@ -369,29 +397,46 @@ pub fn copy_idf_from_offline_archive(
 pub fn copy_components_from_offline_archive(
     archive_dir: &TempDir,
     target_dir: &Path,
-    tool_install_directory: &Path
+    tool_install_directory: &Path,
 ) -> Result<(), String> {
     match crate::utils::copy_dir_contents(&archive_dir.path().join("components"), target_dir) {
         Ok(_) => {
-            info!("Successfully copied components from offline archive to: {}", target_dir.display());
+            info!(
+                "Successfully copied components from offline archive to: {}",
+                target_dir.display()
+            );
         }
         Err(err) => {
-            return Err(format!("Failed to copy components from offline archive: {}", err))
+            return Err(format!(
+                "Failed to copy components from offline archive: {}",
+                err
+            ))
         }
     }
-    match crate::utils::copy_dir_contents(&archive_dir.path().join("required_components"), tool_install_directory) {
+    match crate::utils::copy_dir_contents(
+        &archive_dir.path().join("required_components"),
+        tool_install_directory,
+    ) {
         Ok(_) => {
-            info!("Successfully copied Root Managed Components from offline archive to: {}", tool_install_directory.display());
-
+            info!(
+                "Successfully copied Root Managed Components from offline archive to: {}",
+                tool_install_directory.display()
+            );
         }
         Err(err) => {
-            return Err(format!("Failed to copy Root Managed Components from offline archive: {}", err))
+            return Err(format!(
+                "Failed to copy Root Managed Components from offline archive: {}",
+                err
+            ))
         }
     }
     Ok(())
 }
 
-pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) -> Result<Settings, String> {
+pub fn use_offline_archive(
+    mut config: Settings,
+    offline_archive_dir: &TempDir,
+) -> Result<Settings, String> {
     debug!("Using offline archive: {:?}", config.use_local_archive);
     if !config.use_local_archive.as_ref().unwrap().exists() {
         return Err(format!(
@@ -399,31 +444,43 @@ pub fn use_offline_archive(mut config: Settings, offline_archive_dir: &TempDir) 
             config.use_local_archive.as_ref().unwrap().display()
         ));
     }
-    match extract_zst_archive(&config.use_local_archive.as_ref().unwrap(), &offline_archive_dir.path()) {
-      Ok(_) => {
-          info!("Successfully extracted archive to: {:?}", offline_archive_dir);
-      }
-      Err(err) => {
-          return Err(format!("Failed to extract archive: {}", err));
-      }
+    match extract_zst_archive(
+        config.use_local_archive.as_ref().unwrap(),
+        offline_archive_dir.path(),
+    ) {
+        Ok(_) => {
+            info!(
+                "Successfully extracted archive to: {:?}",
+                offline_archive_dir
+            );
+        }
+        Err(err) => {
+            return Err(format!("Failed to extract archive: {}", err));
+        }
     }
     let config_path = offline_archive_dir.path().join("config.toml");
     if config_path.exists() {
-      debug!("Loading config from extracted archive: {}", config_path.display());
-      let mut tmp_setting = Settings::default();
-      match Settings::load(&mut tmp_setting, &config_path.to_str().unwrap()) {
-        Ok(()) => {
-          debug!("Config loaded from archive: {:?}", config_path.display());
-          debug!("Config: {:?}", tmp_setting);
-          debug!("Using only version for now.");
-          config.idf_versions = tmp_setting.idf_versions;
-      }
-        Err(err) => {
-          return Err(format!("Failed to load config from archive: {}", err));
+        debug!(
+            "Loading config from extracted archive: {}",
+            config_path.display()
+        );
+        let mut tmp_setting = Settings::default();
+        match Settings::load(&mut tmp_setting, config_path.to_str().unwrap()) {
+            Ok(()) => {
+                debug!("Config loaded from archive: {:?}", config_path.display());
+                debug!("Config: {:?}", tmp_setting);
+                debug!("Using only version for now.");
+                config.idf_versions = tmp_setting.idf_versions;
+            }
+            Err(err) => {
+                return Err(format!("Failed to load config from archive: {}", err));
+            }
         }
-      }
     } else {
-      warn!("Config file not found in archive: {}. Continuing with default config.", config_path.display());
+        warn!(
+            "Config file not found in archive: {}. Continuing with default config.",
+            config_path.display()
+        );
     }
     Ok(config)
 }
@@ -460,7 +517,8 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
 
         if path.is_file() {
             if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-                if file_name.starts_with("requirements.") && file_name != "requirements.merged.txt" {
+                if file_name.starts_with("requirements.") && file_name != "requirements.merged.txt"
+                {
                     requirements_found = true;
                     debug!("Merging file: {}", path.display());
                     let mut file = fs::File::open(&path)?;
@@ -475,7 +533,10 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     }
 
     if !requirements_found {
-        warn!("No 'requirements.*' files found in {}", folder_path.display());
+        warn!(
+            "No 'requirements.*' files found in {}",
+            folder_path.display()
+        );
         return Ok(()); // Or return an error if you consider it an error
     }
 
@@ -483,7 +544,10 @@ pub fn merge_requirements_files(folder_path: &Path) -> Result<(), io::Error> {
     let mut output_file = fs::File::create(&output_file_path)?;
     output_file.write_all(merged_content.as_bytes())?;
 
-    info!("Successfully merged requirements files to: {}", output_file_path.display());
+    info!(
+        "Successfully merged requirements files to: {}",
+        output_file_path.display()
+    );
 
     Ok(())
 }
@@ -532,7 +596,9 @@ mod tests {
         assert!(copied_component.join("test.txt").exists());
 
         // Verify root managed components files were copied to the tool install directory
-        let copied_root_component = tool_install_directory.path().join("espressif__esp_idf_monitor");
+        let copied_root_component = tool_install_directory
+            .path()
+            .join("espressif__esp_idf_monitor");
         assert!(copied_root_component.exists());
         assert!(copied_root_component.join("package.json").exists());
     }
@@ -609,7 +675,10 @@ mod tests {
         assert!(!tool_install_directory.path().join("component.txt").exists());
 
         // Root managed components must land in tool_install_directory, NOT in target_dir
-        assert!(tool_install_directory.path().join("root_managed.txt").exists());
+        assert!(tool_install_directory
+            .path()
+            .join("root_managed.txt")
+            .exists());
         assert!(!target_dir.path().join("root_managed.txt").exists());
     }
 }

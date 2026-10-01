@@ -1,11 +1,9 @@
-use anyhow::anyhow;
 use anyhow::Result;
-use dialoguer::FolderSelect;
 use idf_im_lib::git_tools::ProgressMessage;
 use idf_im_lib::idf_features::get_requirements_json_url;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_features::RequirementsMetadata;
-use idf_im_lib::idf_tools::Tool;
+use idf_im_lib::idf_tools::get_tools_export_vars_from_list;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::offline_installer::copy_components_from_offline_archive;
 use idf_im_lib::offline_installer::copy_idf_from_offline_archive;
@@ -14,24 +12,19 @@ use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::tool_selection::fetch_tools_file;
-use idf_im_lib::tool_selection::get_required_tool_names;
 use idf_im_lib::tool_selection::get_tool_names;
-use idf_im_lib::idf_tools::get_tools_export_vars_from_list;
 use idf_im_lib::tool_selection::get_tools_json_url;
 use idf_im_lib::utils::copy_dir_contents;
-use idf_im_lib::utils::extract_zst_archive;
 use idf_im_lib::{ensure_path, DownloadProgress};
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::{debug, error, info, warn};
 use rust_i18n::t;
-use serde::de;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::thread;
 use std::{
-    env,
     fmt::Write,
-    fs::{self, OpenOptions},
+    fs::{self},
     path::{Path, PathBuf},
 };
 use tempfile::TempDir;
@@ -40,42 +33,13 @@ use tempfile::TempDir;
 const DEFAULT_TOOLS_DOWNLOAD_FOLDER: &str = "dist";
 const DEFAULT_TOOLS_INSTALL_FOLDER: &str = "tools";
 const DEFAULT_TOOLS_JSON_LOCATION: &str = "tools/tools.json";
-const DEFAULT_IDF_TOOLS_PY_LOCATION: &str = "./tools/idf_tools.py";
 
 use crate::cli::helpers::{
-    create_progress_bar, create_theme, generic_confirm, generic_input, generic_select_index,
+    create_progress_bar, generic_confirm, generic_input, generic_select_index,
     update_progress_bar_number,
 };
 
 use crate::cli::prompts::*;
-
-fn add_to_shell_rc(content: &str) -> Result<(), String> {
-    let shell = env::var("SHELL").unwrap_or_else(|_| String::from(""));
-    let home = dirs::home_dir().unwrap();
-
-    let rc_file = match shell.as_str() {
-        "/bin/bash" => home.join(".bashrc"),
-        "/bin/zsh" => home.join(".zshrc"),
-        "/bin/fish" => home.join(".config/fish/config.fish"),
-        _ => return Err(t!("wizard.shell.unsupported").to_string()),
-    };
-
-    let mut file = OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(rc_file)
-        .unwrap();
-
-    match std::io::Write::write_all(&mut file, content.as_bytes()) {
-        Ok(_) => info!("{}", t!("wizard.shellrc.update.success")),
-        Err(err) => {
-            error!("{}", t!("wizard.shellrc.update.error"));
-            error!("Error: {:?}", err);
-        }
-    };
-
-    Ok(())
-}
 
 async fn select_targets_and_versions(mut config: Settings) -> Result<Settings, String> {
     if (config.wizard_all_questions.unwrap_or_default()
@@ -199,7 +163,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                 Ok(_) => {
                     debug!("{}", t!("wizard.idf.progress_bar.join"));
                 }
-                Err(err) => {
+                Err(_err) => {
                     error!("{}", t!("wizard.idf.progress_bar.error"));
                 }
             }
@@ -214,7 +178,10 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                 if (err.contains("exists") && !err.contains("does not exist"))
                     || err.contains("not empty")
                 {
-                    warn!("IDF path already present; continuing (non-interactive): {}", err);
+                    warn!(
+                        "IDF path already present; continuing (non-interactive): {}",
+                        err
+                    );
                     Ok(())
                 } else {
                     Err(DownloadError::DownloadFailed(err))
@@ -228,12 +195,12 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
 
 fn setup_directory(
     wizard_all_questions: Option<bool>,
-    base_path: &PathBuf,
+    base_path: &Path,
     config_field: &mut Option<String>,
     prompt_key: &str,
     default_name: &str,
 ) -> Result<PathBuf, String> {
-    let mut directory = base_path.clone();
+    let mut directory = base_path.to_path_buf();
 
     if let Some(name) = config_field.clone() {
         directory.push(name);
@@ -275,8 +242,8 @@ fn get_tools_json_path(config: &mut Settings, idf_path: &Path) -> PathBuf {
 async fn download_and_extract_tools(
     config: &Settings,
     tools: &ToolsFile,
-    download_dir: &PathBuf,
-    install_dir: &PathBuf,
+    download_dir: &Path,
+    install_dir: &Path,
 ) -> anyhow::Result<HashMap<String, (String, idf_im_lib::idf_tools::Download)>> {
     info!(
         "{}: {:?}",
@@ -308,7 +275,10 @@ async fn download_and_extract_tools(
         }
         DownloadProgress::Downloaded(url) => {
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                info!("{}", t!("wizard.tool.download.success", filename = filename));
+                info!(
+                    "{}",
+                    t!("wizard.tool.download.success", filename = filename)
+                );
             }
         }
         DownloadProgress::Verified(url) => {
@@ -320,7 +290,11 @@ async fn download_and_extract_tools(
             if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
                 info!(
                     "{}",
-                    t!("wizard.tool.extract.success", filename = filename, dest = dest)
+                    t!(
+                        "wizard.tool.extract.success",
+                        filename = filename,
+                        dest = dest
+                    )
                 );
             }
         }
@@ -340,27 +314,32 @@ async fn download_and_extract_tools(
 /// Checks for incomplete (non-Finished) installations and interactively offers fix or delete.
 /// Only called in interactive mode (non_interactive == false).
 pub async fn check_and_handle_incomplete_installations(
-    settings: &Settings,
+    _settings: &Settings,
     config_path: Option<&std::path::PathBuf>,
 ) {
     use idf_im_lib::idf_config::{IdfConfig, InstallationStatus};
     use idf_im_lib::version_manager::{get_default_config_path, remove_single_idf_version};
 
-    let resolved = config_path
-        .cloned()
-        .unwrap_or_else(get_default_config_path);
+    let resolved = config_path.cloned().unwrap_or_else(get_default_config_path);
 
     let config = match IdfConfig::from_file(&resolved) {
         Ok(c) => c,
         Err(_) => return,
     };
 
-    let incomplete: Vec<_> = config.get_incomplete_installations().into_iter().cloned().collect();
+    let incomplete: Vec<_> = config
+        .get_incomplete_installations()
+        .into_iter()
+        .cloned()
+        .collect();
     if incomplete.is_empty() {
         return;
     }
 
-    println!("{}", t!("wizard.incomplete.found", count = incomplete.len()));
+    println!(
+        "{}",
+        t!("wizard.incomplete.found", count = incomplete.len())
+    );
 
     for installation in &incomplete {
         let status_label = match installation.status {
@@ -387,47 +366,46 @@ pub async fn check_and_handle_incomplete_installations(
             t!("wizard.incomplete.action.skip").to_string(),
         ];
 
-        let choice_idx = match generic_select_index(
-            "wizard.incomplete.action_prompt",
-            &options,
-        ) {
+        let choice_idx = match generic_select_index("wizard.incomplete.action_prompt", &options) {
             Ok(i) => i,
             Err(_) => continue,
         };
 
         match choice_idx {
             0 => {
-                info!("User chose to fix incomplete installation: {}", installation.name);
-                let fix_settings = match idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation(
-                    std::path::PathBuf::from(&installation.path),
-                    Some(&resolved),
-                )
-                .await
-                {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("Failed to prepare fix: {}", e);
-                        continue;
-                    }
-                };
+                info!(
+                    "User chose to fix incomplete installation: {}",
+                    installation.name
+                );
+                let fix_settings =
+                    match idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation(
+                        std::path::PathBuf::from(&installation.path),
+                        Some(&resolved),
+                    )
+                    .await
+                    {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("Failed to prepare fix: {}", e);
+                            continue;
+                        }
+                    };
 
-                match run_wizzard_run(fix_settings).await {
+                match run_wizard_run(fix_settings).await {
                     Ok(_) => info!("Successfully fixed installation: {}", installation.name),
                     Err(e) => error!("Failed to fix installation {}: {}", installation.name, e),
                 }
             }
-            1 => {
-                match remove_single_idf_version(&installation.name, true, Some(&resolved)) {
-                    Ok(_) => info!("Deleted incomplete installation: {}", installation.name),
-                    Err(e) => error!("Failed to delete installation {}: {}", installation.name, e),
-                }
-            }
+            1 => match remove_single_idf_version(&installation.name, true, Some(&resolved)) {
+                Ok(_) => info!("Deleted incomplete installation: {}", installation.name),
+                Err(e) => error!("Failed to delete installation {}: {}", installation.name, e),
+            },
             _ => {} // skip: do nothing
         }
     }
 }
 
-pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
+pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
     debug!(
         "{}",
         t!(
@@ -442,7 +420,12 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
     } else {
         None
     };
-    let tool_install_directory = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+    let tool_install_directory = PathBuf::from(
+        config
+            .tool_install_folder_name
+            .clone()
+            .expect("Tools install folder not defined"),
+    );
 
     if offline_mode {
         // only setting up temp directory if offline mode is enabled
@@ -456,7 +439,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         };
         // install prerequisites offline
         if std::env::consts::OS == "windows" {
-            match install_prerequisites_offline(&archive_dir, tool_install_directory.clone()).await {
+            match install_prerequisites_offline(archive_dir, tool_install_directory.clone()).await {
                 Ok(_) => {
                     info!("{}", t!("wizard.prerequisites.offline_install.success"));
                 }
@@ -497,14 +480,23 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         let archive_dir = offline_archive_dir.as_ref().unwrap();
         // copy IDFs
         copy_idf_from_offline_archive(archive_dir, &config)?;
-        let compoments_dir = PathBuf::from(config.tool_install_folder_name.clone().expect("Tools install folder not defined"));
-        match copy_components_from_offline_archive(archive_dir, &compoments_dir, &tool_install_directory) {
+        let components_dir = PathBuf::from(
+            config
+                .tool_install_folder_name
+                .clone()
+                .expect("Tools install folder not defined"),
+        );
+        match copy_components_from_offline_archive(
+            archive_dir,
+            &components_dir,
+            &tool_install_directory,
+        ) {
             Ok(_) => {
                 info!("{}", t!("wizard.components_copy.success"));
             }
             Err(err) => {
                 warn!("{}: {}", t!("wizard.components_copy.failure"), err);
-                // The component will be donwloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
+                // The component will be downloaded during first build and not all of them are actually needed but most importantly this is for backward compatibility with old IDF not supporting the new component manager, so we don't want to block the installation if the copy fails
             }
         }
     }
@@ -524,7 +516,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         config.idf_features_per_version = Some(HashMap::new());
     }
     // Multiple version starts here
-    let mut using_existing_idf = false;
+    let mut using_existing_idf;
     for idf_version in config.idf_versions.clone().unwrap() {
         let paths = config.get_version_paths(&idf_version).map_err(|err| {
             error!("Failed to get version paths: {}", err);
@@ -543,10 +535,15 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 continue;
             }
 
-            let requirements_file = requirements_dir.join("requirements.merged.txt").to_string_lossy().to_string();
+            let requirements_file = requirements_dir
+                .join("requirements.merged.txt")
+                .to_string_lossy()
+                .to_string();
             let feature_info = FeatureInfo {
                 name: "merged".to_string(),
-                description: Some("All merged ESP-IDF features available in the offline installer".to_string()),
+                description: Some(
+                    "All merged ESP-IDF features available in the offline installer".to_string(),
+                ),
                 optional: false,
                 requirement_path: requirements_file,
             };
@@ -555,26 +552,37 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 features: vec![feature_info],
             }
         } else {
-            let req_url = get_requirements_json_url(config.repo_stub.clone().as_deref(), &idf_version.to_string(), config.idf_mirror.clone().as_deref());
+            let req_url = get_requirements_json_url(
+                config.repo_stub.clone().as_deref(),
+                &idf_version.to_string(),
+                config.idf_mirror.clone().as_deref(),
+            );
             debug!("repo url: {} ", req_url);
             match RequirementsMetadata::from_url(&req_url) {
                 Ok(files) => files,
                 Err(err) => {
-                  warn!("{}: {}. {}", t!("wizard.requirements.read_failure"), err, t!("wizard.features.selection_unavailable"));
-                  // Missing option for feature selction should not block installation
-                  // This is exceptionally important for headless run against private repos
-                  RequirementsMetadata {
-                    version: 1,
-                    features: vec![],
-                  }
+                    warn!(
+                        "{}: {}. {}",
+                        t!("wizard.requirements.read_failure"),
+                        err,
+                        t!("wizard.features.selection_unavailable")
+                    );
+                    // Missing option for feature selection should not block installation
+                    // This is exceptionally important for headless run against private repos
+                    RequirementsMetadata {
+                        version: 1,
+                        features: vec![],
+                    }
                 }
             }
         };
 
         // Check if we already have features for this version (from CLI arg or config file)
-        let features = if let Some(existing) = config.get_features_for_version_if_set(&idf_version) {
+        let features = if let Some(existing) = config.get_features_for_version_if_set(&idf_version)
+        {
             // Convert feature names back to FeatureInfo
-            requirements_files.features
+            requirements_files
+                .features
                 .iter()
                 .filter(|f| existing.contains(&f.name))
                 .cloned()
@@ -589,56 +597,59 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
         } else {
             Vec::new() // Empty - will use defaults later
         };
-        let features_names = features.iter().map(|f| f.name.clone()).collect::<Vec<String>>();
+        let features_names = features
+            .iter()
+            .map(|f| f.name.clone())
+            .collect::<Vec<String>>();
 
         debug!(
             "{}: {}",
             t!("wizard.features.selected"),
-            features_names
-                .join(", ")
+            features_names.join(", ")
         );
         // Save to per-version map
         if let Some(ref mut per_version) = config.idf_features_per_version {
-          per_version.insert(
-            idf_version.clone(),
-            features.iter().map(|f| f.name.clone()).collect(),
-          );
+            per_version.insert(
+                idf_version.clone(),
+                features.iter().map(|f| f.name.clone()).collect(),
+            );
         }
         let remote_tools_file = if offline_mode {
             None
         } else {
-          let tools_url = get_tools_json_url(
-              config.repo_stub.clone().as_deref(),
-              &idf_version.to_string(),
-              config.idf_mirror.clone().as_deref()
-          );
+            let tools_url = get_tools_json_url(
+                config.repo_stub.clone().as_deref(),
+                &idf_version.to_string(),
+                config.idf_mirror.clone().as_deref(),
+            );
 
-          // Try to fetch tools.json from remote first (for selection before download)
-          match fetch_tools_file(&tools_url) {
-              Ok(file) => Some(file),
-              Err(err) => {
-                  warn!("{}: {}. {}",
-                      t!("wizard.tools.read_failure"),
-                      err,
-                      t!("wizard.tools.selection_unavailable")
-                  );
-                  None
-              }
-          }
+            // Try to fetch tools.json from remote first (for selection before download)
+            match fetch_tools_file(&tools_url) {
+                Ok(file) => Some(file),
+                Err(err) => {
+                    warn!(
+                        "{}: {}. {}",
+                        t!("wizard.tools.read_failure"),
+                        err,
+                        t!("wizard.tools.selection_unavailable")
+                    );
+                    None
+                }
+            }
         };
 
         // Only do tool selection if we got the remote file
         let selected_tools = if let Some(mut tools_file) = remote_tools_file {
-          ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
-          /// This is needed because the IDEs expect clang to be always installed                     ///
-          /// ninja is included as without it the users are not able to actually build the projects   ///
-          ///////////////////////////////////////////////////////////////////////////////////////////////
-          for t in tools_file.tools.iter_mut() {
-            if t.name.contains("clang") || t.name.contains("ninja") {
-              t.install = "always".to_string();
-              debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+            ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED //////////////////////
+            // This is needed because the IDEs expect clang to be always installed
+            // ninja is included as without it the users are not able to actually build the projects
+            ///////////////////////////////////////////////////////////////////////////////////////////////
+            for t in tools_file.tools.iter_mut() {
+                if t.name.contains("clang") || t.name.contains("ninja") {
+                    t.install = "always".to_string();
+                    debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+                }
             }
-          }
             // Check if we already have tools for this version (from CLI arg or config file)
             if let Some(existing) = config.get_tools_for_version_if_set(&idf_version) {
                 // Convert tool names back to ToolSelectionInfo (validates against available tools)
@@ -646,7 +657,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     &tools_file,
                     config.non_interactive.unwrap_or_default(),
                     true,
-                    config.target.as_ref().map(|t| t.as_slice()),
+                    config.target.as_deref(),
                     Some(&existing),
                 )?
             } else {
@@ -655,7 +666,7 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                     &tools_file,
                     config.non_interactive.unwrap_or_default(),
                     true,
-                    config.target.as_ref().map(|t| t.as_slice()),
+                    config.target.as_deref(),
                     None,
                 )?
             }
@@ -673,26 +684,18 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 .join(", ")
         );
         if selected_tools.iter().any(|t| t.name.contains("qemu")) {
-          let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
+            let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
             match qemu_prereqs {
-            Ok(prereqs) if !prereqs.is_empty() => {
-                error!(
-                    "{}: {:?}",
-                    t!("wizard.qemu.prerequisites.missing"),
-                    prereqs
-                );
-                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                Ok(prereqs) if !prereqs.is_empty() => {
+                    error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
+                    return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                }
+                Err(err) => {
+                    error!("{}: {}", t!("wizard.qemu.prerequisites.check_error"), err);
+                    return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                }
+                Ok(_) => { /* All good, continue. */ }
             }
-            Err(err) => {
-                error!(
-                    "{}: {}",
-                    t!("wizard.qemu.prerequisites.check_error"),
-                    err
-                );
-                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
-            }
-            Ok(_) => { /* All good, continue. */ }
-          }
         }
 
         // Save tools to per-version map
@@ -701,14 +704,11 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 config.idf_tools_per_version = Some(HashMap::new());
             }
             if let Some(ref mut per_version) = config.idf_tools_per_version {
-                per_version.insert(
-                    idf_version.clone(),
-                    get_tool_names(&selected_tools),
-                );
+                per_version.insert(idf_version.clone(), get_tool_names(&selected_tools));
             }
         }
         if offline_mode && !using_existing_idf {
-          error!("THIS SHOULD NOT HAPPEN: offline mode should be using existing IDF copied from offline archive, but it seems like the IDF is not present at the expected location. This likely means that the copy from offline archive failed. Please check previous logs for any errors related to copying IDF from offline archive.");
+            error!("THIS SHOULD NOT HAPPEN: offline mode should be using existing IDF copied from offline archive, but it seems like the IDF is not present at the expected location. This likely means that the copy from offline archive failed. Please check previous logs for any errors related to copying IDF from offline archive.");
         } else if !using_existing_idf {
             // download idf
             let download_config = DownloadConfig {
@@ -783,31 +783,29 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
 
         let mut tools = idf_im_lib::idf_tools::read_and_parse_tools_file(&validated_file)
             .map_err(|err| format!("{}: {}", t!("wizard.tools_json.unparsable"), err))?;
-        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
-        /// This is needed because the IDEs expect clang to be always installed                     ///
-        /// ninja is included as without it the users are not able to actually build the projects   ///
+        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED //////////////////////
+        // This is needed because the IDEs expect clang to be always installed
+        // ninja is included as without it the users are not able to actually build the projects
         ///////////////////////////////////////////////////////////////////////////////////////////////
         for t in tools.tools.iter_mut() {
-          if t.name.contains("clang") || t.name.contains("ninja") {
-            t.install = "always".to_string();
-            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
-          }
+            if t.name.contains("clang") || t.name.contains("ninja") {
+                t.install = "always".to_string();
+                debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+            }
         }
         if let Some(ref per_version) = config.idf_tools_per_version {
             if let Some(selected_tool_names) = per_version.get(&idf_version) {
-              info!("{}: {}",
-                  t!("wizard.tools.filtering.selected_tools"),
-                  selected_tool_names.join(", ")
+                info!(
+                    "{}: {}",
+                    t!("wizard.tools.filtering.selected_tools"),
+                    selected_tool_names.join(", ")
                 );
-                tools.tools = tools.tools
-                    .into_iter()
-                    .filter(|tool| {
-                        // Always include "always" install tools
-                        tool.install == "always" ||
+                tools.tools.retain(|tool| {
+                    // Always include "always" install tools
+                    tool.install == "always" ||
                         // Include user-selected optional tools
                         selected_tool_names.contains(&tool.name)
-                    })
-                    .collect();
+                });
 
                 info!(
                     "Filtered to {} tools based on user selection for {}",
@@ -816,37 +814,31 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
                 );
             }
         } else {
-          tools.tools = tools.tools
-            .into_iter()
-            .filter(|tool| {
+            tools.tools.retain(|tool| {
                 tool.install == "always" ||
                 // Include user-selected optional tools
                 selected_tools.iter().any(|t| t.name == tool.name)
-            })
-            .collect();
+            });
         }
 
-        if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
+        if tools
+            .tools
+            .iter()
+            .find(|&x| x.name.contains("qemu"))
+            .is_some()
+        {
             let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
             match qemu_prereqs {
-            Ok(prereqs) if !prereqs.is_empty() => {
-                error!(
-                    "{}: {:?}",
-                    t!("wizard.qemu.prerequisites.missing"),
-                    prereqs
-                );
-                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                Ok(prereqs) if !prereqs.is_empty() => {
+                    error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
+                    return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                }
+                Err(err) => {
+                    error!("{}: {}", t!("wizard.qemu.prerequisites.check_error"), err);
+                    return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
+                }
+                Ok(_) => { /* All good, continue. */ }
             }
-            Err(err) => {
-                error!(
-                    "{}: {}",
-                    t!("wizard.qemu.prerequisites.check_error"),
-                    err
-                );
-                return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
-            }
-            Ok(_) => { /* All good, continue. */ }
-          }
         }
         debug!(
             "{}: {}",
@@ -947,9 +939,10 @@ pub async fn run_wizzard_run(mut config: Settings) -> Result<(), String> {
             installed_tools_list,
             tool_install_directory.to_str().unwrap(),
         );
-        let skip_component_installation = offline_mode || config.skip_components_download == Some(true);
+        let skip_component_installation =
+            offline_mode || config.skip_components_download == Some(true);
         idf_im_lib::single_version_post_install(
-            &paths.activation_script_path.to_str().unwrap(),
+            paths.activation_script_path.to_str().unwrap(),
             paths.idf_path.to_str().unwrap(),
             &paths.actual_version,
             tool_install_directory.to_str().unwrap(),

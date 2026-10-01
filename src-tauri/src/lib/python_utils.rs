@@ -24,7 +24,10 @@ use std::{
 use vm::{builtins::PyStrRef, Interpreter};
 
 use crate::{
-    command_executor::{self, execute_command_direct}, download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win, settings::VersionPaths, utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult}
+    command_executor::{self, execute_command_direct},
+    download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
+    settings::VersionPaths,
+    utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult},
 };
 
 /// Identifies which Python sanity check a [`GenericCheckResult`] belongs to.
@@ -115,12 +118,7 @@ pub fn run_python_script_from_file(
             match std::env::consts::OS {
                 "windows" => executor.execute_with_env(
                     "powershell",
-                    &[
-                        "-Command",
-                        python_cmd,
-                        path,
-                        args.unwrap_or(""),
-                    ],
+                    &["-Command", python_cmd, path, args.unwrap_or("")],
                     envs_str,
                 ),
                 _ => executor.execute_with_env("bash", &["-c", &callable], envs_str),
@@ -129,12 +127,7 @@ pub fn run_python_script_from_file(
         None => match std::env::consts::OS {
             "windows" => executor.execute(
                 "powershell",
-                &[
-                    "-Command",
-                    python_cmd,
-                    path,
-                    args.unwrap_or(""),
-                ],
+                &["-Command", python_cmd, path, args.unwrap_or("")],
             ),
             _ => executor.execute("bash", &["-c", &callable]),
         },
@@ -181,7 +174,10 @@ pub fn run_python_script_from_file(
 /// - The download of the constraints file fails for any reason (e.g., network issues,
 ///   invalid URL, server errors).
 /// - File system metadata cannot be accessed or modified times cannot be determined.
-pub async fn download_constraints_file(idf_tools_path: &Path, idf_version: &str) -> Result<PathBuf> {
+pub async fn download_constraints_file(
+    idf_tools_path: &Path,
+    idf_version: &str,
+) -> Result<PathBuf> {
     let constraint_file = format!(
         "espidf.constraints.{}.txt",
         remove_after_second_dot(idf_version)
@@ -258,10 +254,8 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
     info!("Creating Python virtual environment at: {}", venv_path);
     debug!("Using Python executable: {}", python_executable);
 
-    let output = command_executor::execute_command_direct(
-        python_executable,
-        &["-m", "venv", venv_path],
-    );
+    let output =
+        command_executor::execute_command_direct(python_executable, &["-m", "venv", venv_path]);
 
     match output {
         Ok(out) => {
@@ -270,15 +264,33 @@ fn create_python_venv(venv_path: &str, python_executable: &str) -> Result<String
                     .unwrap_or("Success (non-UTF8 output)")
                     .to_string())
             } else {
-                debug!("Failed to create Python virtual environment. stderr: {} \n stdout: {}", std::str::from_utf8(&out.stderr).unwrap_or("Error (non-UTF8 output)"), std::str::from_utf8(&out.stdout).unwrap_or("Error (non-UTF8 output)"));
+                debug!(
+                    "Failed to create Python virtual environment. stderr: {} \n stdout: {}",
+                    std::str::from_utf8(&out.stderr).unwrap_or("Error (non-UTF8 output)"),
+                    std::str::from_utf8(&out.stdout).unwrap_or("Error (non-UTF8 output)")
+                );
                 let stderr_str = String::from_utf8_lossy(&out.stderr);
                 let stdout_str = String::from_utf8_lossy(&out.stdout);
-                debug!("Failed to create Python virtual environment. stderr: {} \n stdout: {}", stderr_str, stdout_str);
+                debug!(
+                    "Failed to create Python virtual environment. stderr: {} \n stdout: {}",
+                    stderr_str, stdout_str
+                );
                 Err(stderr_str.into_owned())
             }
         }
         Err(e) => Err(e.to_string()),
     }
+}
+
+/// Quotes a value so it can be embedded safely in a POSIX shell command.
+///
+/// Thin wrapper over [`shlex::try_quote`] that turns a NUL byte in the input
+/// into a regular [`std::io::Error`] instead of silently producing a command
+/// line the shell cannot parse.
+fn shell_quote(value: &str) -> Result<String, std::io::Error> {
+    shlex::try_quote(value)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(std::io::Error::other)
 }
 
 /// Installs Python packages listed in a requirements file into a specified virtual environment
@@ -340,7 +352,7 @@ pub fn pip_install_requirements(
     std::env::set_var("VIRTUAL_ENV", venv_path.to_str().unwrap());
     if std::env::var("PIP_USER").unwrap_or_default() == "yes" {
         debug!("Found PIP_USER=\"yes\" in the environment. Disabling PIP_USER in this shell to install packages into a virtual environment.");
-        std::env::set_var("PIP_USER", "no".to_string());
+        std::env::set_var("PIP_USER", "no");
     }
     let constrain_path = match constraint_file {
         Some(path) => path.to_str().unwrap(),
@@ -354,15 +366,21 @@ pub fn pip_install_requirements(
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only, no indexes needed
                 let mut args = vec![
-                    "-m", "pip", "install", "-r",
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
                     requirements_file.to_str().unwrap(),
                 ];
                 if upgrade {
                     args.push("--upgrade");
                 }
                 args.extend_from_slice(&[
-                    "--constraint", constrain_path,
-                    "--no-index", "--find-links", wheel_dir.to_str().unwrap()
+                    "--constraint",
+                    constrain_path,
+                    "--no-index",
+                    "--find-links",
+                    wheel_dir.to_str().unwrap(),
                 ]);
                 command_executor::execute_command_direct_with_env(
                     python_location.to_str().unwrap(),
@@ -371,25 +389,29 @@ pub fn pip_install_requirements(
                 )
             } else {
                 let mut args = vec![
-                  "-m", "pip", "install", "-r",
-                  requirements_file.to_str().unwrap(),
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    requirements_file.to_str().unwrap(),
                 ];
                 if upgrade {
                     args.push("--upgrade");
                 }
                 args.extend_from_slice(&[
-                  "--constraint", constrain_path,
-                  "--prefer-binary",        // ← never compile if a wheel exists anywhere
+                    "--constraint",
+                    constrain_path,
+                    "--prefer-binary", // ← never compile if a wheel exists anywhere
                 ]);
 
                 if let Some(mirror_url) = pypi_mirror {
-                  args.push("--index-url");
-                  args.push(ESPRESSIF_PYPI);
-                  args.push("--extra-index-url");
-                  args.push(mirror_url.as_str());
+                    args.push("--index-url");
+                    args.push(ESPRESSIF_PYPI);
+                    args.push("--extra-index-url");
+                    args.push(mirror_url.as_str());
                 } else {
-                  args.push("--index-url");
-                  args.push(ESPRESSIF_PYPI);
+                    args.push("--index-url");
+                    args.push(ESPRESSIF_PYPI);
                 }
 
                 command_executor::execute_command_direct_with_env(
@@ -399,15 +421,12 @@ pub fn pip_install_requirements(
                 )
             } {
                 Ok(out) => {
-                  if out.status.success() {
-                    Ok(())
-                  } else {
-                    let error_msg = String::from_utf8_lossy(&out.stderr).to_string();
-                    Err(std::io::Error::new(
-                      std::io::ErrorKind::Other,
-                      error_msg,
-                    ))
-                  }
+                    if out.status.success() {
+                        Ok(())
+                    } else {
+                        let error_msg = String::from_utf8_lossy(&out.stderr).to_string();
+                        Err(std::io::Error::other(error_msg))
+                    }
                 }
                 Err(e) => Err(e),
             }
@@ -417,45 +436,45 @@ pub fn pip_install_requirements(
             match if let Some(wheel_dir) = wheel_dir {
                 // Offline mode — local wheels only
                 command_executor::execute_command_direct_with_env(
-                  "bash",
-                  &vec![
-                      "-c",
-                      &format!(
-                          "{} -m pip install -r {}{} --constraint {} --no-index --find-links {}",
-                          shlex::quote(python_location.to_str().unwrap()),
-                          shlex::quote(requirements_file.to_str().unwrap()),
-                          upgrade_flag,
-                          shlex::quote(constrain_path),
-                          shlex::quote(wheel_dir.to_str().unwrap())
-                      ),
-                  ],
-                  vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
+                    "bash",
+                    &[
+                        "-c",
+                        &format!(
+                            "{} -m pip install -r {}{} --constraint {} --no-index --find-links {}",
+                            shell_quote(python_location.to_str().unwrap())?,
+                            shell_quote(requirements_file.to_str().unwrap())?,
+                            upgrade_flag,
+                            shell_quote(constrain_path)?,
+                            shell_quote(wheel_dir.to_str().unwrap())?
+                        ),
+                    ],
+                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
                 )
             } else {
                 let cmd = if let Some(mirror_url) = pypi_mirror {
-                  format!(
+                    format!(
                     "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
-                    shlex::quote(python_location.to_str().unwrap()),
-                    shlex::quote(requirements_file.to_str().unwrap()),
+                    shell_quote(python_location.to_str().unwrap())?,
+                    shell_quote(requirements_file.to_str().unwrap())?,
                     upgrade_flag,
-                    shlex::quote(constrain_path),
-                    shlex::quote(ESPRESSIF_PYPI),
-                    shlex::quote(mirror_url),
+                    shell_quote(constrain_path)?,
+                    shell_quote(ESPRESSIF_PYPI)?,
+                    shell_quote(mirror_url)?,
                   )
                 } else {
-                  format!(
-                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {}",
-                    shlex::quote(python_location.to_str().unwrap()),
-                    shlex::quote(requirements_file.to_str().unwrap()),
-                    upgrade_flag,
-                    shlex::quote(constrain_path),
-                    shlex::quote(ESPRESSIF_PYPI),
-                  )
+                    format!(
+                        "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {}",
+                        shell_quote(python_location.to_str().unwrap())?,
+                        shell_quote(requirements_file.to_str().unwrap())?,
+                        upgrade_flag,
+                        shell_quote(constrain_path)?,
+                        shell_quote(ESPRESSIF_PYPI)?,
+                    )
                 };
 
                 command_executor::execute_command_direct_with_env(
                     "bash",
-                    &vec!["-c", &cmd],
+                    &["-c", &cmd],
                     vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
                 )
             } {
@@ -467,8 +486,7 @@ pub fn pip_install_requirements(
                         );
                         Ok(())
                     } else {
-                        Err(std::io::Error::new(
-                            std::io::ErrorKind::Other,
+                        Err(std::io::Error::other(
                             std::str::from_utf8(&out.stderr).unwrap().to_string(),
                         ))
                     }
@@ -487,7 +505,6 @@ pub fn pip_install_requirements(
 /// # Returns
 /// * `Result<String, String>` - Python version string (e.g., "3.11") or error
 fn detect_python_version(python_executable: &str) -> Result<String, String> {
-
     match execute_command_direct(python_executable, &["--version"]) {
         Ok(output) => {
             if output.status.success() {
@@ -499,12 +516,18 @@ fn detect_python_version(python_executable: &str) -> Result<String, String> {
                         return Ok(format!("{}.{}", version_parts[0], version_parts[1]));
                     }
                 }
-                Err(format!("Could not parse Python version from: {}", version_output))
+                Err(format!(
+                    "Could not parse Python version from: {}",
+                    version_output
+                ))
             } else {
-                Err(format!("Failed to get Python version: {}", String::from_utf8_lossy(&output.stderr)))
+                Err(format!(
+                    "Failed to get Python version: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                ))
             }
         }
-        Err(e) => Err(format!("Failed to execute Python version check: {}", e))
+        Err(e) => Err(format!("Failed to execute Python version check: {}", e)),
     }
 }
 
@@ -529,7 +552,11 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
         debug!("Looking for wheels in: {}", versioned_wheel_dir.display());
 
         if versioned_wheel_dir.exists() {
-            info!("Found Python {}-specific wheel directory: {}", python_version, versioned_wheel_dir.display());
+            info!(
+                "Found Python {}-specific wheel directory: {}",
+                python_version,
+                versioned_wheel_dir.display()
+            );
             return Some(versioned_wheel_dir);
         }
     }
@@ -537,7 +564,10 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
     // Fallback: try the old "wheels" directory for backward compatibility
     let legacy_wheel_dir = offline_archive_dir.join("wheels");
     if legacy_wheel_dir.exists() {
-        warn!("Using legacy wheel directory (may not be compatible): {}", legacy_wheel_dir.display());
+        warn!(
+            "Using legacy wheel directory (may not be compatible): {}",
+            legacy_wheel_dir.display()
+        );
         return Some(legacy_wheel_dir);
     }
 
@@ -545,9 +575,7 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
     if let Ok(entries) = std::fs::read_dir(offline_archive_dir) {
         let wheel_dirs: Vec<String> = entries
             .filter_map(|entry| entry.ok())
-            .filter(|entry| {
-                entry.file_name().to_string_lossy().starts_with("wheels_")
-            })
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with("wheels_"))
             .map(|entry| entry.file_name().to_string_lossy().to_string())
             .collect();
 
@@ -567,7 +595,10 @@ fn remove_python_venv(venv_path: &Path) {
     debug!("venv already exists, removing it");
     match std::fs::remove_dir_all(venv_path) {
         Ok(_) => debug!("venv removed"),
-        Err(e) => warn!("failed to remove venv: {}, trying to proceed nonetheless", e),
+        Err(e) => warn!(
+            "failed to remove venv: {}, trying to proceed nonetheless",
+            e
+        ),
     }
 }
 
@@ -657,7 +688,7 @@ pub async fn install_python_env(
     idf_tools_path: &Path,
     features: &[String],
     offline_archive_dir: Option<&Path>,
-    pypi_mirror: &Option<String>
+    pypi_mirror: &Option<String>,
 ) -> Result<(), String> {
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
@@ -696,7 +727,7 @@ pub async fn install_python_env(
         }
     }
     let constrains_idf_version = match parse_cmake_version(paths.idf_path.to_str().unwrap()) {
-        Ok((maj,min)) => format!("v{}.{}", maj, min),
+        Ok((maj, min)) => format!("v{}.{}", maj, min),
         Err(e) => {
             warn!("Failed to parse CMake version: {}", e);
             idf_version.to_string()
@@ -704,28 +735,34 @@ pub async fn install_python_env(
     };
 
     let constraint_file = if offline_mode {
-      let filename = format!("espidf.constraints.{}.txt", remove_after_second_dot(&constrains_idf_version));
-      let src_path = offline_archive_dir.unwrap().join(filename.clone());
-      let dest_path = idf_tools_path.join(filename.clone());
-      fs::copy(
-          src_path.clone(),
-          dest_path.clone(),
-      ).map_err(|e| format!("Failed to copy constraints file: {} error: {}", src_path.display(), e))?;
-      Some(dest_path)
+        let filename = format!(
+            "espidf.constraints.{}.txt",
+            remove_after_second_dot(&constrains_idf_version)
+        );
+        let src_path = offline_archive_dir.unwrap().join(filename.clone());
+        let dest_path = idf_tools_path.join(filename.clone());
+        fs::copy(src_path.clone(), dest_path.clone()).map_err(|e| {
+            format!(
+                "Failed to copy constraints file: {} error: {}",
+                src_path.display(),
+                e
+            )
+        })?;
+        Some(dest_path)
     } else {
-      match download_constraints_file(idf_tools_path, &constrains_idf_version)
-          .await
-          .context("Failed to download constraints file")
-      {
-          Ok(constraint_file) => {
-              debug!("Using constraints file: {}", constraint_file.display());
-              Some(constraint_file)
-          }
-          Err(e) => {
-              warn!("Failed to download constraints file: {}", e);
-              None
-          }
-      }
+        match download_constraints_file(idf_tools_path, &constrains_idf_version)
+            .await
+            .context("Failed to download constraints file")
+        {
+            Ok(constraint_file) => {
+                debug!("Using constraints file: {}", constraint_file.display());
+                Some(constraint_file)
+            }
+            Err(e) => {
+                warn!("Failed to download constraints file: {}", e);
+                None
+            }
+        }
     };
 
     // Determine the appropriate wheel directory for offline mode
@@ -842,18 +879,6 @@ pub fn run_idf_tools_py_with_features(
     )
 }
 
-fn run_install_python_env_script(
-    idf_tools_path: &str,
-    environment_variables: &Vec<(String, String)>,
-) -> Result<String, String> {
-    let output =
-        run_install_python_env_script_with_features(idf_tools_path, environment_variables, &[]);
-
-    trace!("idf_tools.py install-python-env output:\n{:?}", output);
-
-    output
-}
-
 fn run_install_python_env_script_with_features(
     idf_tools_path: &str,
     environment_variables: &Vec<(String, String)>,
@@ -917,11 +942,9 @@ fn start_local_https_test_server() -> Option<HttpsTestServer> {
     let _ = rustls::crypto::ring::default_provider().install_default();
 
     // 1. Generate a self-signed cert good for localhost + 127.0.0.1.
-    let cert = rcgen::generate_simple_self_signed(vec![
-        "localhost".to_string(),
-        "127.0.0.1".to_string(),
-    ])
-    .ok()?;
+    let cert =
+        rcgen::generate_simple_self_signed(vec!["localhost".to_string(), "127.0.0.1".to_string()])
+            .ok()?;
     let cert_pem = cert.cert.pem();
     let cert_der = cert.cert.der().to_vec();
     let key_der = cert.key_pair.serialize_der();
@@ -1030,12 +1053,15 @@ fn start_local_https_test_server() -> Option<HttpsTestServer> {
 /// # Returns
 ///
 /// * `Vec<GenericCheckResult<SanityCheck>>` — one entry per check, in a fixed order.
-pub fn python_sanity_check(python: Option<&str>, _offline: bool) -> Vec<GenericCheckResult<SanityCheck>> {
+pub fn python_sanity_check(
+    python: Option<&str>,
+    _offline: bool,
+) -> Vec<GenericCheckResult<SanityCheck>> {
     let detected;
     let py = match python {
         Some(p) => p,
         None => {
-            detected  = detect_default_python().unwrap_or_else(|_| "python3".to_string());
+            detected = detect_default_python().unwrap_or_else(|_| "python3".to_string());
             &detected
         }
     };
@@ -1049,7 +1075,8 @@ pub fn python_sanity_check(python: Option<&str>, _offline: bool) -> Vec<GenericC
             check: SanityCheck::AppExecutionAlias,
             passed: !alias_detected,
             message: if alias_detected {
-                "Python resolves to a Windows App Execution Alias (Microsoft Store stub)".to_string()
+                "Python resolves to a Windows App Execution Alias (Microsoft Store stub)"
+                    .to_string()
             } else {
                 "No App Execution Alias conflict detected".to_string()
             },
@@ -1072,36 +1099,56 @@ pub fn python_sanity_check(python: Option<&str>, _offline: bool) -> Vec<GenericC
 
     // ── 2. pip ───────────────────────────────────────────────────────
     let pip_output = command_executor::execute_command_direct(py, &["-m", "pip", "--version"]);
-    results.push(GenericCheckResult::from_command_output(SanityCheck::Pip, pip_output));
+    results.push(GenericCheckResult::from_command_output(
+        SanityCheck::Pip,
+        pip_output,
+    ));
 
     // ── 3. venv ──────────────────────────────────────────────────────
     let venv_result = {
-      match tempfile::TempDir::new() {
-        Err(e) => GenericCheckResult {
-          check: SanityCheck::Venv,
-          passed: false,
-          message: format!("Failed: could not create temp directory: {e}"),
-        },
-        Ok(tmp_dir) => {
-          let venv_path = tmp_dir.path().join("probe");
-          let venv_output = command_executor::execute_command_direct(
-              py,
-              &["-m", "venv", venv_path.to_str().unwrap()],
-          );
-          GenericCheckResult::from_command_output(SanityCheck::Venv, venv_output)
+        match tempfile::TempDir::new() {
+            Err(e) => GenericCheckResult {
+                check: SanityCheck::Venv,
+                passed: false,
+                message: format!("Failed: could not create temp directory: {e}"),
+            },
+            Ok(tmp_dir) => {
+                let venv_path = tmp_dir.path().join("probe");
+                let venv_output = command_executor::execute_command_direct(
+                    py,
+                    &["-m", "venv", venv_path.to_str().unwrap()],
+                );
+                GenericCheckResult::from_command_output(SanityCheck::Venv, venv_output)
+            }
         }
-      }
     };
     results.push(venv_result);
 
-
     // ── 4. Standard library ──────────────────────────────────────────
-    let stdlib_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/import_standard_library.py")]);
-    results.push(GenericCheckResult::from_command_output(SanityCheck::StdLib, stdlib_output));
+    let stdlib_output = command_executor::execute_command_direct(
+        py,
+        &[
+            "-c",
+            include_str!("../../python_scripts/sanity_check/import_standard_library.py"),
+        ],
+    );
+    results.push(GenericCheckResult::from_command_output(
+        SanityCheck::StdLib,
+        stdlib_output,
+    ));
 
     // ── 5. ctypes ────────────────────────────────────────────────────
-    let ctypes_output = command_executor::execute_command_direct(py, &["-c", include_str!("../../python_scripts/sanity_check/ctypes_check.py")]);
-    results.push(GenericCheckResult::from_command_output(SanityCheck::Ctypes, ctypes_output));
+    let ctypes_output = command_executor::execute_command_direct(
+        py,
+        &[
+            "-c",
+            include_str!("../../python_scripts/sanity_check/ctypes_check.py"),
+        ],
+    );
+    results.push(GenericCheckResult::from_command_output(
+        SanityCheck::Ctypes,
+        ctypes_output,
+    ));
 
     // ── 6. SSL/HTTPS (local-only) ───────────────────────────────────
     // We always run this check, in both online and offline mode, by
@@ -1124,7 +1171,10 @@ pub fn python_sanity_check(python: Option<&str>, _offline: bool) -> Vec<GenericC
             ];
             let ssl_output = command_executor::execute_command_direct_with_env(
                 py,
-                &["-c", include_str!("../../python_scripts/sanity_check/try_https.py")],
+                &[
+                    "-c",
+                    include_str!("../../python_scripts/sanity_check/try_https.py"),
+                ],
                 envs,
             );
             // Dropping `server` here sets the stop flag and joins the thread.
@@ -1141,31 +1191,42 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
     // 1. Run command - early return on failure
     let out = match command_executor::execute_command_direct(py, &["--version"]) {
         Ok(out) if out.status.success() => out,
-        Ok(out) => return GenericCheckResult {
-            check: SanityCheck::PythonVersion,
-            passed: false,
-            message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        },
-        Err(e) => return GenericCheckResult {
-            check: SanityCheck::PythonVersion,
-            passed: false,
-            message: e.to_string(),
-        },
+        Ok(out) => {
+            return GenericCheckResult {
+                check: SanityCheck::PythonVersion,
+                passed: false,
+                message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            }
+        }
+        Err(e) => {
+            return GenericCheckResult {
+                check: SanityCheck::PythonVersion,
+                passed: false,
+                message: e.to_string(),
+            }
+        }
     };
 
     // 2. Parse version - early return on failure
-    let version_str = String::from_utf8_lossy(&out.stdout).trim().replace("Python ", "");
+    let version_str = String::from_utf8_lossy(&out.stdout)
+        .trim()
+        .replace("Python ", "");
     let version = match Version::parse(&version_str) {
         Ok(v) => v,
-        Err(_) => return GenericCheckResult {
-            check: SanityCheck::PythonVersion,
-            passed: false,
-            message: format!("Failed to parse Python version: {}", version_str),
-        },
+        Err(_) => {
+            return GenericCheckResult {
+                check: SanityCheck::PythonVersion,
+                passed: false,
+                message: format!("Failed to parse Python version: {}", version_str),
+            }
+        }
     };
 
     // 3. Check version requirement
-    let (req, required_str) = (VersionReq::parse(">=3.10.0, <3.15.0").unwrap(), ">=3.10.0, <3.15.0");
+    let (req, required_str) = (
+        VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
+        ">=3.10.0, <3.15.0",
+    );
 
     if req.matches(&version) {
         GenericCheckResult {
@@ -1177,7 +1238,10 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
         GenericCheckResult {
             check: SanityCheck::PythonVersion,
             passed: false,
-            message: format!("Python {} is not supported (required: {})", version, required_str),
+            message: format!(
+                "Python {} is not supported (required: {})",
+                version, required_str
+            ),
         }
     }
 }
@@ -1239,7 +1303,9 @@ pub fn detect_default_python() -> Result<String> {
             }
 
             warn!("No working Python 3 found on Windows PATH");
-            Err(anyhow!("No working Python 3 interpreter found on Windows PATH"))
+            Err(anyhow!(
+                "No working Python 3 interpreter found on Windows PATH"
+            ))
         }
         os => {
             // Unix: absolute paths first (sandboxed GUIs don't inherit shell PATH),
@@ -1322,11 +1388,11 @@ fn is_python3(cmd: &str) -> bool {
 pub fn run_python_script_with_rustpython(script: &str) -> String {
     vm::Interpreter::without_stdlib(Default::default()).enter(|vm| {
         let scope = vm.new_scope_with_builtins();
-        let code_opbject = vm
-            .compile(script, vm::compiler::Mode::Exec, "<embeded>".to_owned())
+        let code_object = vm
+            .compile(script, vm::compiler::Mode::Exec, "<embedded>".to_owned())
             .map_err(|err| format!("error: {:?}", err))
             .unwrap();
-        let output = vm.run_code_obj(code_opbject, scope).unwrap();
+        let output = vm.run_code_obj(code_object, scope).unwrap();
         format!("output: {:?}", output)
         // Ok(output)
     });

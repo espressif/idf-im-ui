@@ -10,24 +10,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("cargo:warning=Successfully cached IDF versions at build time");
         }
         Err(e) => {
-            println!("cargo:warning=Failed to download IDF versions at build time: {}", e);
+            println!(
+                "cargo:warning=Failed to download IDF versions at build time: {}",
+                e
+            );
             // Optionally set a fallback empty JSON or handle error
             println!("cargo:rustc-env=CACHED_IDF_VERSIONS={{}}");
         }
     }
     #[cfg(feature = "gui")]
     {
-    tauri_build::build()
+        tauri_build::build()
     }
     Ok(())
 }
 
 fn download_idf_versions_with_curl() -> Result<String, Box<dyn Error>> {
     let output = Command::new("curl")
-        .args(&[
+        .args([
             "-sS",
             "-L",
-            "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
+            "https://dl.espressif.com/dl/esp-idf/idf_versions.json",
         ])
         .output()?;
 

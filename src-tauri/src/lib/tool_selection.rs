@@ -1,8 +1,14 @@
-use log::{debug, info, warn};
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::{git_tools::get_raw_file_url, idf_tools::{Tool, ToolsFile, apply_platform_overrides, filter_tools_by_target, get_platform_identification}};
+use crate::{
+    git_tools::get_raw_file_url,
+    idf_tools::{
+        apply_platform_overrides, filter_tools_by_target, get_platform_identification, Tool,
+        ToolsFile,
+    },
+};
 
 /// Information about a tool for selection purposes
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -45,11 +51,7 @@ impl std::fmt::Display for ToolSelectionError {
 impl std::error::Error for ToolSelectionError {}
 
 /// Get the URL for tools.json file for a specific IDF version
-pub fn get_tools_json_url(
-    repository: Option<&str>,
-    version: &str,
-    mirror: Option<&str>,
-) -> String {
+pub fn get_tools_json_url(repository: Option<&str>, version: &str, mirror: Option<&str>) -> String {
     get_raw_file_url(repository, version, mirror, "tools/tools.json")
 }
 
@@ -65,14 +67,14 @@ pub fn fetch_tools_file(url: &str) -> Result<ToolsFile, ToolSelectionError> {
     let tools_file: ToolsFile = serde_json::from_str(&text)
         .map_err(|e: serde_json::Error| ToolSelectionError::JsonError(e.to_string()))?;
 
-    let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
+    let platform = get_platform_identification().map_err(ToolSelectionError::PlatformError)?;
 
     Ok(apply_platform_overrides(tools_file, &platform))
 }
 
 /// Fetch tools.json from URL (async)
 pub async fn fetch_tools_file_async(url: &str) -> Result<ToolsFile, ToolSelectionError> {
-    let response:reqwest::Response = reqwest::get(url)
+    let response: reqwest::Response = reqwest::get(url)
         .await
         .map_err(|e: reqwest::Error| ToolSelectionError::HttpError(e.to_string()))?;
 
@@ -84,7 +86,7 @@ pub async fn fetch_tools_file_async(url: &str) -> Result<ToolsFile, ToolSelectio
     let tools_file: ToolsFile = serde_json::from_str(&text)
         .map_err(|e: serde_json::Error| ToolSelectionError::JsonError(e.to_string()))?;
 
-    let platform = get_platform_identification().map_err(|e| ToolSelectionError::PlatformError(e))?;
+    let platform = get_platform_identification().map_err(ToolSelectionError::PlatformError)?;
 
     Ok(apply_platform_overrides(tools_file, &platform))
 }
@@ -106,11 +108,12 @@ pub fn get_tools_for_selection(
     tools_file: &ToolsFile,
     targets: Option<&[String]>,
 ) -> Result<Vec<ToolSelectionInfo>, ToolSelectionError> {
-    let platform = get_platform_identification()
-        .map_err(|e| ToolSelectionError::PlatformError(e))?;
+    let platform = get_platform_identification().map_err(ToolSelectionError::PlatformError)?;
 
     // Filter tools that have downloads for current platform
-    let mut filtered_tools: Vec<Tool> = tools_file.tools.iter()
+    let mut filtered_tools: Vec<Tool> = tools_file
+        .tools
+        .iter()
         .filter(|tool| {
             // Check if tool has a download for current platform or "any"
             tool.versions.iter().any(|version| {
@@ -132,7 +135,7 @@ pub fn get_tools_for_selection(
     let selection_info: Vec<ToolSelectionInfo> = filtered_tools
         .iter()
         .filter(|tool| tool.install != "never")
-        .map(|tool| tool_to_selection_info(tool))
+        .map(tool_to_selection_info)
         .collect();
 
     Ok(selection_info)
@@ -147,8 +150,6 @@ pub fn get_required_tools(tools: &[ToolSelectionInfo]) -> Vec<&ToolSelectionInfo
 pub fn get_optional_tools(tools: &[ToolSelectionInfo]) -> Vec<&ToolSelectionInfo> {
     tools.iter().filter(|t| t.install == "on_request").collect()
 }
-
-
 
 /// Validate selected tools against available tools
 pub fn validate_tool_selection(
@@ -195,15 +196,16 @@ pub fn get_tools_for_version(
         if let Some(selected) = per_version.get(version) {
             // Validate and return
             return validate_tool_selection(selected, &available)
-                .map_err(|e| ToolSelectionError::JsonError(e));
+                .map_err(ToolSelectionError::JsonError);
         }
     }
 
     // Default to required tools only
-    Ok(get_required_tools(&available).iter().map(|t| t.name.clone()).collect())
+    Ok(get_required_tools(&available)
+        .iter()
+        .map(|t| t.name.clone())
+        .collect())
 }
-
-
 
 /// Get tool names from ToolSelectionInfo vector
 pub fn get_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
@@ -212,7 +214,11 @@ pub fn get_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
 
 /// Get required tool names from ToolSelectionInfo vector
 pub fn get_required_tool_names(tools: &[ToolSelectionInfo]) -> Vec<String> {
-    tools.iter().filter(|t| t.install == "always").map(|t| t.name.clone()).collect()
+    tools
+        .iter()
+        .filter(|t| t.install == "always")
+        .map(|t| t.name.clone())
+        .collect()
 }
 
 #[cfg(test)]
@@ -256,8 +262,6 @@ mod tests {
         assert!(optional.iter().any(|t| t.name == "tool2"));
         assert!(optional.iter().any(|t| t.name == "tool3"));
     }
-
-
 
     #[test]
     fn test_validate_tool_selection() {

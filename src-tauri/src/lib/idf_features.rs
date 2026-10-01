@@ -52,7 +52,7 @@ impl std::error::Error for ParseError {}
 
 impl RequirementsMetadata {
     /// Parse from a JSON string
-    pub fn from_str(json_str: &str) -> Result<Self, ParseError> {
+    pub fn parse(json_str: &str) -> Result<Self, ParseError> {
         let metadata: RequirementsMetadata = serde_json::from_str(json_str)?;
         Ok(metadata)
     }
@@ -60,7 +60,7 @@ impl RequirementsMetadata {
     /// Parse from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self, ParseError> {
         let contents = fs::read_to_string(path)?;
-        Self::from_str(&contents)
+        Self::parse(&contents)
     }
 
     /// Parse from a URL
@@ -72,7 +72,7 @@ impl RequirementsMetadata {
             .text()
             .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
-        Self::from_str(&text)
+        Self::parse(&text)
     }
 
     /// Parse from a URL (async version)
@@ -81,12 +81,12 @@ impl RequirementsMetadata {
             .await
             .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
-        let text:String = response
+        let text: String = response
             .text()
             .await
             .map_err(|e: reqwest::Error| ParseError::HttpError(e.to_string()))?;
 
-        Self::from_str(&text)
+        Self::parse(&text)
     }
 
     /// Get all required features
@@ -137,16 +137,16 @@ mod tests {
 
     #[test]
     fn test_parse_from_str() {
-        let metadata = RequirementsMetadata::from_str(EXAMPLE_JSON).unwrap();
+        let metadata = RequirementsMetadata::parse(EXAMPLE_JSON).unwrap();
         assert_eq!(metadata.version, 1);
         assert_eq!(metadata.features.len(), 2);
         assert_eq!(metadata.features[0].name, "core");
-        assert_eq!(metadata.features[0].optional, false);
+        assert!(!metadata.features[0].optional);
     }
 
     #[test]
     fn test_required_features() {
-        let metadata = RequirementsMetadata::from_str(EXAMPLE_JSON).unwrap();
+        let metadata = RequirementsMetadata::parse(EXAMPLE_JSON).unwrap();
         let required = metadata.required_features();
         assert_eq!(required.len(), 1);
         assert_eq!(required[0].name, "core");
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_optional_features() {
-        let metadata = RequirementsMetadata::from_str(EXAMPLE_JSON).unwrap();
+        let metadata = RequirementsMetadata::parse(EXAMPLE_JSON).unwrap();
         let optional = metadata.optional_features();
         assert_eq!(optional.len(), 1);
         assert_eq!(optional[0].name, "gdbgui");
@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn test_find_feature() {
-        let metadata = RequirementsMetadata::from_str(EXAMPLE_JSON).unwrap();
+        let metadata = RequirementsMetadata::parse(EXAMPLE_JSON).unwrap();
         let feature = metadata.find_feature("gdbgui");
         assert!(feature.is_some());
         assert_eq!(feature.unwrap().name, "gdbgui");

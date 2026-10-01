@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Context, Result};
 use base64::Engine;
 use log::debug;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde::de::Error as DeError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
@@ -12,18 +12,14 @@ use crate::ensure_path;
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum InstallationStatus {
     InProgress,
     Failed,
+    #[default]
     Finished,
     BeingRepaired,
     Broken,
-}
-
-impl Default for InstallationStatus {
-    fn default() -> Self {
-        InstallationStatus::Finished
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -63,22 +59,26 @@ where
 
     match value {
         // New format: base64 string
-        serde_json::Value::String(s) => {
-            base64::engine::general_purpose::STANDARD
-                .decode(&s)
-                .map(|v| Some(Base64Bytes(v)))
-                .map_err(|e| DeError::custom(format!("Invalid base64: {}", e)))
-        }
+        serde_json::Value::String(s) => base64::engine::general_purpose::STANDARD
+            .decode(&s)
+            .map(|v| Some(Base64Bytes(v)))
+            .map_err(|e| DeError::custom(format!("Invalid base64: {}", e))),
         // Null or missing
         serde_json::Value::Null => Ok(None),
         // Unexpected type
-        _ => Err(DeError::custom("Expected base64 string or array of integers")),
+        _ => Err(DeError::custom(
+            "Expected base64 string or array of integers",
+        )),
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IdfInstallation {
-    #[serde(rename = "activationScript", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "activationScript",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub activation_script: Option<String>,
     pub id: String,
     #[serde(rename = "idfToolsPath")]
@@ -87,7 +87,12 @@ pub struct IdfInstallation {
     pub path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub python: Option<String>,
-    #[serde(rename = "installationConfig", default, skip_serializing_if = "Option::is_none", deserialize_with = "deserialize_base64_bytes")]
+    #[serde(
+        rename = "installationConfig",
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_base64_bytes"
+    )]
     pub installation_config: Option<Base64Bytes>,
     #[serde(default)]
     pub status: InstallationStatus,
@@ -138,37 +143,45 @@ impl IdfConfig {
             let existing_config = IdfConfig::from_file(path.as_ref())?;
             let existing_version = existing_config.idf_installed;
 
-            let new_identities = self.idf_installed.iter().map(|i| {
-              let normalized_path = match std::env::consts::OS {
-                  "windows" => i.path.to_lowercase(),
-                  _ => i.path.clone(),
-              };
-              let normalized_tools_path = match std::env::consts::OS {
-                  "windows" => i.idf_tools_path.to_lowercase(),
-                  _ => i.idf_tools_path.clone(),
-              };
-              (normalized_path, i.name.clone(), normalized_tools_path)
-            }).collect::<Vec<_>>();
+            let new_identities = self
+                .idf_installed
+                .iter()
+                .map(|i| {
+                    let normalized_path = match std::env::consts::OS {
+                        "windows" => i.path.to_lowercase(),
+                        _ => i.path.clone(),
+                    };
+                    let normalized_tools_path = match std::env::consts::OS {
+                        "windows" => i.idf_tools_path.to_lowercase(),
+                        _ => i.idf_tools_path.clone(),
+                    };
+                    (normalized_path, i.name.clone(), normalized_tools_path)
+                })
+                .collect::<Vec<_>>();
 
             let mut merged_version = existing_version
-              .iter()
-              .filter(|i| {
-                let normalized_path = match std::env::consts::OS {
-                  "windows" => i.path.to_lowercase(),
-                  _ => i.path.clone(),
-                };
-                let normalized_tools_path = match std::env::consts::OS {
-                  "windows" => i.idf_tools_path.to_lowercase(),
-                  _ => i.idf_tools_path.clone(),
-                };
-                !new_identities.contains(&(normalized_path, i.name.clone(), normalized_tools_path))
-              })
-              .cloned()
-              .collect::<Vec<_>>();
+                .iter()
+                .filter(|i| {
+                    let normalized_path = match std::env::consts::OS {
+                        "windows" => i.path.to_lowercase(),
+                        _ => i.path.clone(),
+                    };
+                    let normalized_tools_path = match std::env::consts::OS {
+                        "windows" => i.idf_tools_path.to_lowercase(),
+                        _ => i.idf_tools_path.clone(),
+                    };
+                    !new_identities.contains(&(
+                        normalized_path,
+                        i.name.clone(),
+                        normalized_tools_path,
+                    ))
+                })
+                .cloned()
+                .collect::<Vec<_>>();
             for install in self.idf_installed.iter() {
-              if !merged_version.iter().any(|i| i.id == install.id) {
-                merged_version.push(install.clone());
-              }
+                if !merged_version.iter().any(|i| i.id == install.id) {
+                    merged_version.push(install.clone());
+                }
             }
             self.idf_installed = merged_version;
             debug!("Merged existing config with new installations");
@@ -176,22 +189,25 @@ impl IdfConfig {
             debug!("Creating new ide config file");
         }
         if self.eim_path.is_none() {
-          self.eim_path = match env::current_exe() {
-            Ok(path) => Some(path.to_str().unwrap().to_string()),
-            Err(_) => None,
-          };
+            self.eim_path = match env::current_exe() {
+                Ok(path) => Some(path.to_str().unwrap().to_string()),
+                Err(_) => None,
+            };
         } else {
-          debug!("eim_path already set to {}", self.eim_path.as_ref().unwrap());
-          match env::current_exe() {
-            Ok(path) => {
-              let path = path.to_str().unwrap().to_string();
-              if self.eim_path.as_ref().unwrap() != &path {
-                // Update the eim_path if it is different
-                self.eim_path = Some(path);
-              }
-            },
-            Err(_) => debug!("Failed to get current executable path"),
-          };
+            debug!(
+                "eim_path already set to {}",
+                self.eim_path.as_ref().unwrap()
+            );
+            match env::current_exe() {
+                Ok(path) => {
+                    let path = path.to_str().unwrap().to_string();
+                    if self.eim_path.as_ref().unwrap() != &path {
+                        // Update the eim_path if it is different
+                        self.eim_path = Some(path);
+                    }
+                }
+                Err(_) => debug!("Failed to get current executable path"),
+            };
         }
         self.version = Some(IDF_CONFIG_FILE_VERSION.to_string());
 
@@ -287,17 +303,14 @@ impl IdfConfig {
     /// * `true` if a matching installation was found and selected.
     /// * `false` if no matching installation was found.
     pub fn select_installation(&mut self, identifier: &str) -> bool {
-        if let Some(installation) = self
-            .idf_installed
-            .iter()
-            .find(|install| {
-                install.id == identifier
-                    || install.name == identifier
-                    || { let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
-                     normalized_identifier.is_some() && normalized_identifier == crate::utils::normalize_path_for_comparison(&install.path)
-                }
-            })
-        {
+        if let Some(installation) = self.idf_installed.iter().find(|install| {
+            install.id == identifier || install.name == identifier || {
+                let normalized_identifier = crate::utils::normalize_path_for_comparison(identifier);
+                normalized_identifier.is_some()
+                    && normalized_identifier
+                        == crate::utils::normalize_path_for_comparison(&install.path)
+            }
+        }) {
             self.idf_selected_id = installation.id.clone();
             true
         } else {
@@ -340,15 +353,21 @@ impl IdfConfig {
         }
     }
 
-    pub fn is_path_in_config(self, path:String) -> bool {
-      self.idf_installed.iter().find(|i| i.path == path).is_some()
+    pub fn is_path_in_config(self, path: String) -> bool {
+        self.idf_installed.iter().find(|i| i.path == path).is_some()
     }
 
     /// Updates the status of an installation identified by ID, name, or path.
-    pub fn update_installation_status(&mut self, identifier: &str, status: InstallationStatus) -> bool {
-        if let Some(installation) = self.idf_installed.iter_mut().find(|i| {
-            i.id == identifier || i.name == identifier || i.path == identifier
-        }) {
+    pub fn update_installation_status(
+        &mut self,
+        identifier: &str,
+        status: InstallationStatus,
+    ) -> bool {
+        if let Some(installation) = self
+            .idf_installed
+            .iter_mut()
+            .find(|i| i.id == identifier || i.name == identifier || i.path == identifier)
+        {
             installation.status = status;
             true
         } else {
@@ -366,9 +385,11 @@ impl IdfConfig {
         python: String,
         installation_config: Option<Base64Bytes>,
     ) -> bool {
-        if let Some(installation) = self.idf_installed.iter_mut().find(|i| {
-            i.id == identifier || i.name == identifier || i.path == identifier
-        }) {
+        if let Some(installation) = self
+            .idf_installed
+            .iter_mut()
+            .find(|i| i.id == identifier || i.name == identifier || i.path == identifier)
+        {
             installation.activation_script = Some(activation_script);
             installation.python = Some(python);
             if installation_config.is_some() {
@@ -409,11 +430,9 @@ pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {
 mod tests {
     use crate::idf_config::InstallationStatus::Finished;
 
-use super::*;
+    use super::*;
     use std::fs;
     use tempfile::tempdir;
-
-
 
     fn create_test_config() -> IdfConfig {
         IdfConfig {
@@ -612,115 +631,121 @@ use super::*;
         Ok(())
     }
 
-  #[test]
-  fn test_eim_path_auto_set() -> Result<()> {
-      let dir = tempdir()?;
-      let config_path = dir.path().join("eim_path_test_config.json");
-      let mut config = create_test_config();
+    #[test]
+    fn test_eim_path_auto_set() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("eim_path_test_config.json");
+        let mut config = create_test_config();
 
-      // Ensure eim_path is None
-      config.eim_path = None;
+        // Ensure eim_path is None
+        config.eim_path = None;
 
-      // Save config to file
-      config.to_file(&config_path, true, false)?;
+        // Save config to file
+        config.to_file(&config_path, true, false)?;
 
-      // Read the config back
-      let read_config = IdfConfig::from_file(&config_path)?;
+        // Read the config back
+        let read_config = IdfConfig::from_file(&config_path)?;
 
-      // Check that eim_path is now set to the current executable path
-      assert!(read_config.eim_path.is_some());
+        // Check that eim_path is now set to the current executable path
+        assert!(read_config.eim_path.is_some());
 
-      // Get current executable path to compare
-      let current_exe = env::current_exe()?;
-      let current_exe_str = current_exe.to_str().unwrap();
+        // Get current executable path to compare
+        let current_exe = env::current_exe()?;
+        let current_exe_str = current_exe.to_str().unwrap();
 
-      // Compare paths
-      assert_eq!(read_config.eim_path.unwrap(), current_exe_str);
+        // Compare paths
+        assert_eq!(read_config.eim_path.unwrap(), current_exe_str);
 
-      Ok(())
-  }
-
-  #[test]
-  fn test_append_with_same_identity_replacement() -> Result<()> {
-      let dir = tempdir()?;
-      let config_path = dir.path().join("same_identity_test_config.json");
-
-      // Create initial config with two installations
-      let mut initial_config = create_test_config();
-
-      // Save initial config to file
-      initial_config.to_file(&config_path, true, false)?;
-
-      // Create new config with an installation that has the same path, name AND
-      // idf_tools_path as one already in initial_config (only the id and other
-      // details differ) - this represents re-installing/fixing that same named
-      // version, and should replace the existing entry.
-      let mut new_config = IdfConfig {
-          git_path: String::from("/usr/bin/git"),
-          idf_installed: vec![
-              IdfInstallation {
-                  activation_script: Some(String::from("/tmp/esp/v5.0/updated-export.sh")),
-                  id: String::from("esp-idf-new-id"),
-                  idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the second installation in initial_config
-                  name: String::from("v5.1.5"), // Same name as the second installation in initial_config
-                  path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the second installation in initial_config
-                  python: Some(String::from("/tmp/esp/v5.0/updated-tools/python/bin/python3")),
-                  installation_config: None,
-                  status: Finished,
-              },
-          ],
-          idf_selected_id: String::from("esp-idf-new-id"),
-          eim_path: None,
-          version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
-      };
-
-      // Append new config to existing file (should replace installation with same identity)
-      new_config.to_file(&config_path, true, true)?;
-
-      // Read the resulting config
-      let result_config = IdfConfig::from_file(&config_path)?;
-
-      // Verify the result still has 2 installations (replaced, not added)
-      assert_eq!(result_config.idf_installed.len(), 2);
-
-      let v5_1_5_install = result_config.idf_installed.iter()
-          .find(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
-          .expect("Installation with path /tmp/esp-new/v5.1.5/esp-idf not found");
-
-      // Verify it's the updated one, not the original
-      assert_eq!(v5_1_5_install.id, "esp-idf-new-id");
-      assert_eq!(v5_1_5_install.name, "v5.1.5");
-      assert_eq!(v5_1_5_install.activation_script, Some("/tmp/esp/v5.0/updated-export.sh".to_string()));
-
-      // Verify the unique installation is still there unchanged
-      let v5_4_install = result_config.idf_installed.iter()
-          .find(|i| i.path == "/tmp/esp-new/v5.4/esp-idf")
-          .expect("Installation with path /tmp/esp-new/v5.4/esp-idf not found");
-      assert_eq!(v5_4_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
-
-      Ok(())
+        Ok(())
     }
 
-  #[test]
-  fn test_append_with_same_path_different_name_kept() -> Result<()> {
-    let dir = tempdir()?;
-    let config_path = dir.path().join("same_path_different_name_test_config.json");
+    #[test]
+    fn test_append_with_same_identity_replacement() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("same_identity_test_config.json");
 
-    // Create initial config with two installations
-    let mut initial_config = create_test_config();
+        // Create initial config with two installations
+        let mut initial_config = create_test_config();
 
-    // Save initial config to file
-    initial_config.to_file(&config_path, true, false)?;
+        // Save initial config to file
+        initial_config.to_file(&config_path, true, false)?;
 
-    // Create new config with an installation that shares a path with an
-    // existing one but has a different name (e.g. a named-version install
-    // registered against an already-installed IDF checkout). Since the name
-    // differs, this must be kept as a distinct entry rather than replacing
-    // the existing one.
-    let mut new_config = IdfConfig {
-        git_path: String::from("/usr/bin/git"),
-        idf_installed: vec![
-            IdfInstallation {
+        // Create new config with an installation that has the same path, name AND
+        // idf_tools_path as one already in initial_config (only the id and other
+        // details differ) - this represents re-installing/fixing that same named
+        // version, and should replace the existing entry.
+        let mut new_config = IdfConfig {
+            git_path: String::from("/usr/bin/git"),
+            idf_installed: vec![IdfInstallation {
+                activation_script: Some(String::from("/tmp/esp/v5.0/updated-export.sh")),
+                id: String::from("esp-idf-new-id"),
+                idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the second installation in initial_config
+                name: String::from("v5.1.5"), // Same name as the second installation in initial_config
+                path: String::from("/tmp/esp-new/v5.1.5/esp-idf"), // Same path as the second installation in initial_config
+                python: Some(String::from(
+                    "/tmp/esp/v5.0/updated-tools/python/bin/python3",
+                )),
+                installation_config: None,
+                status: Finished,
+            }],
+            idf_selected_id: String::from("esp-idf-new-id"),
+            eim_path: None,
+            version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+        };
+
+        // Append new config to existing file (should replace installation with same identity)
+        new_config.to_file(&config_path, true, true)?;
+
+        // Read the resulting config
+        let result_config = IdfConfig::from_file(&config_path)?;
+
+        // Verify the result still has 2 installations (replaced, not added)
+        assert_eq!(result_config.idf_installed.len(), 2);
+
+        let v5_1_5_install = result_config
+            .idf_installed
+            .iter()
+            .find(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
+            .expect("Installation with path /tmp/esp-new/v5.1.5/esp-idf not found");
+
+        // Verify it's the updated one, not the original
+        assert_eq!(v5_1_5_install.id, "esp-idf-new-id");
+        assert_eq!(v5_1_5_install.name, "v5.1.5");
+        assert_eq!(
+            v5_1_5_install.activation_script,
+            Some("/tmp/esp/v5.0/updated-export.sh".to_string())
+        );
+
+        // Verify the unique installation is still there unchanged
+        let v5_4_install = result_config
+            .idf_installed
+            .iter()
+            .find(|i| i.path == "/tmp/esp-new/v5.4/esp-idf")
+            .expect("Installation with path /tmp/esp-new/v5.4/esp-idf not found");
+        assert_eq!(v5_4_install.id, "esp-idf-5705c12db93b4d1a8b084c6986173c1b");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_append_with_same_path_different_name_kept() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("same_path_different_name_test_config.json");
+
+        // Create initial config with two installations
+        let mut initial_config = create_test_config();
+
+        // Save initial config to file
+        initial_config.to_file(&config_path, true, false)?;
+
+        // Create new config with an installation that shares a path with an
+        // existing one but has a different name (e.g. a named-version install
+        // registered against an already-installed IDF checkout). Since the name
+        // differs, this must be kept as a distinct entry rather than replacing
+        // the existing one.
+        let mut new_config = IdfConfig {
+            git_path: String::from("/usr/bin/git"),
+            idf_installed: vec![IdfInstallation {
                 activation_script: Some(String::from("/tmp/esp/v5.0/named-export.sh")),
                 id: String::from("esp-idf-named-id"),
                 idf_tools_path: String::from("/tmp/esp-new/v5.1.5/tools"), // Same idf tools path as the second installation in initial_config
@@ -729,43 +754,48 @@ use super::*;
                 python: Some(String::from("/tmp/esp/v5.0/named-tools/python/bin/python3")),
                 installation_config: None,
                 status: InstallationStatus::Finished,
-            },
-        ],
-        idf_selected_id: String::from("esp-idf-named-id"),
-        eim_path: None,
-        version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
-    };
+            }],
+            idf_selected_id: String::from("esp-idf-named-id"),
+            eim_path: None,
+            version: Some(IDF_CONFIG_FILE_VERSION.to_string()),
+        };
 
-    // Append new config to existing file (should keep both installations)
-    new_config.to_file(&config_path, true, true)?;
+        // Append new config to existing file (should keep both installations)
+        new_config.to_file(&config_path, true, true)?;
 
-    // Read the resulting config
-    let result_config = IdfConfig::from_file(&config_path)?;
+        // Read the resulting config
+        let result_config = IdfConfig::from_file(&config_path)?;
 
-    // Verify the result now has 3 installations (nothing replaced)
-    assert_eq!(result_config.idf_installed.len(), 3);
+        // Verify the result now has 3 installations (nothing replaced)
+        assert_eq!(result_config.idf_installed.len(), 3);
 
-    let names: Vec<&str> = result_config.idf_installed.iter().map(|i| i.name.as_str()).collect();
-    assert!(names.contains(&"ESP-IDF v5.4"));
-    assert!(names.contains(&"v5.1.5"));
-    assert!(names.contains(&"my-named-idf"));
+        let names: Vec<&str> = result_config
+            .idf_installed
+            .iter()
+            .map(|i| i.name.as_str())
+            .collect();
+        assert!(names.contains(&"ESP-IDF v5.4"));
+        assert!(names.contains(&"v5.1.5"));
+        assert!(names.contains(&"my-named-idf"));
 
-    // Both entries sharing the path should still point at it
-    let sharing_path_count = result_config.idf_installed.iter()
-        .filter(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
-        .count();
-    assert_eq!(sharing_path_count, 2);
+        // Both entries sharing the path should still point at it
+        let sharing_path_count = result_config
+            .idf_installed
+            .iter()
+            .filter(|i| i.path == "/tmp/esp-new/v5.1.5/esp-idf")
+            .count();
+        assert_eq!(sharing_path_count, 2);
 
-    Ok(())
-  }
+        Ok(())
+    }
 
-  #[test]
-  fn test_read_v1_config_without_installation_config() -> Result<()> {
-    let dir = tempdir()?;
-    let config_path = dir.path().join("v1_config.json");
+    #[test]
+    fn test_read_v1_config_without_installation_config() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("v1_config.json");
 
-    // Create a v1.0 config manually (without installationConfig field)
-    let v1_json = r#"{
+        // Create a v1.0 config manually (without installationConfig field)
+        let v1_json = r#"{
       "gitPath": "/usr/bin/git",
       "idfInstalled": [
         {
@@ -782,60 +812,61 @@ use super::*;
       "version": "1.0"
     }"#;
 
-    fs::write(&config_path, v1_json)?;
+        fs::write(&config_path, v1_json)?;
 
-    // Read the v1 config
-    let config = IdfConfig::from_file(&config_path)?;
+        // Read the v1 config
+        let config = IdfConfig::from_file(&config_path)?;
 
-    assert_eq!(config.git_path, "/usr/bin/git");
-    assert_eq!(config.version, Some("1.0".to_string()));
-    assert_eq!(config.idf_installed.len(), 1);
+        assert_eq!(config.git_path, "/usr/bin/git");
+        assert_eq!(config.version, Some("1.0".to_string()));
+        assert_eq!(config.idf_installed.len(), 1);
 
-    let installation = &config.idf_installed[0];
-    assert_eq!(installation.id, "esp-idf-v1-test");
-    assert_eq!(installation.name, "ESP-IDF v1.0");
-    // installation_config should be None since it didn't exist in v1
-    assert!(installation.installation_config.is_none());
+        let installation = &config.idf_installed[0];
+        assert_eq!(installation.id, "esp-idf-v1-test");
+        assert_eq!(installation.name, "ESP-IDF v1.0");
+        // installation_config should be None since it didn't exist in v1
+        assert!(installation.installation_config.is_none());
 
-    Ok(())
-  }
-
-  #[test]
-  fn test_write_and_read_v2_config_with_installation_config() -> Result<()> {
-    let dir = tempdir()?;
-    let config_path = dir.path().join("v2_config.json");
-
-    // Create a config with installation_config
-    let mut config = create_test_config_with_installation_config();
-    config.to_file(&config_path, true, false)?;
-
-    // Read it back
-    let read_config = IdfConfig::from_file(&config_path)?;
-
-    assert_eq!(read_config.version, Some("3.0".to_string()));
-    assert_eq!(read_config.idf_installed.len(), 2);
-
-    // Verify installation_config is preserved
-    for installation in &read_config.idf_installed {
-      assert!(installation.installation_config.is_some());
-
-      // Verify we can deserialize the binary data back to Settings
-      let settings_bytes = installation.installation_config.as_ref().unwrap();
-      let settings: crate::settings::Settings = bincode::deserialize(settings_bytes.as_slice())?;
-      assert!(settings.path.is_some());
+        Ok(())
     }
 
-    Ok(())
-  }
+    #[test]
+    fn test_write_and_read_v2_config_with_installation_config() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("v2_config.json");
 
-  #[test]
-  fn test_roundtrip_v1_to_v2_migration() -> Result<()> {
-    let dir = tempdir()?;
-    let v1_path = dir.path().join("v1_migration.json");
-    let v2_path = dir.path().join("v2_migration.json");
+        // Create a config with installation_config
+        let mut config = create_test_config_with_installation_config();
+        config.to_file(&config_path, true, false)?;
 
-    // Create a v1 config file
-    let v1_json = r#"{
+        // Read it back
+        let read_config = IdfConfig::from_file(&config_path)?;
+
+        assert_eq!(read_config.version, Some("3.0".to_string()));
+        assert_eq!(read_config.idf_installed.len(), 2);
+
+        // Verify installation_config is preserved
+        for installation in &read_config.idf_installed {
+            assert!(installation.installation_config.is_some());
+
+            // Verify we can deserialize the binary data back to Settings
+            let settings_bytes = installation.installation_config.as_ref().unwrap();
+            let settings: crate::settings::Settings =
+                bincode::deserialize(settings_bytes.as_slice())?;
+            assert!(settings.path.is_some());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_roundtrip_v1_to_v2_migration() -> Result<()> {
+        let dir = tempdir()?;
+        let v1_path = dir.path().join("v1_migration.json");
+        let v2_path = dir.path().join("v2_migration.json");
+
+        // Create a v1 config file
+        let v1_json = r#"{
       "gitPath": "/usr/bin/git",
       "idfInstalled": [
         {
@@ -852,65 +883,72 @@ use super::*;
       "version": "1.0"
     }"#;
 
-    fs::write(&v1_path, v1_json)?;
+        fs::write(&v1_path, v1_json)?;
 
-    // Read v1 and write as v2
-    let mut v2_config = IdfConfig::from_file(&v1_path)?;
-    v2_config.to_file(&v2_path, true, false)?;
+        // Read v1 and write as v2
+        let mut v2_config = IdfConfig::from_file(&v1_path)?;
+        v2_config.to_file(&v2_path, true, false)?;
 
-    // Verify the v2 file
-    let final_config = IdfConfig::from_file(&v2_path)?;
-    assert_eq!(final_config.version, Some("3.0".to_string()));
-    assert_eq!(final_config.idf_installed.len(), 1);
-    assert!(final_config.idf_installed[0].installation_config.is_none()); // No installation_config since original didn't have it
+        // Verify the v2 file
+        let final_config = IdfConfig::from_file(&v2_path)?;
+        assert_eq!(final_config.version, Some("3.0".to_string()));
+        assert_eq!(final_config.idf_installed.len(), 1);
+        assert!(final_config.idf_installed[0].installation_config.is_none()); // No installation_config since original didn't have it
 
-    Ok(())
-  }
-
-  #[test]
-  fn test_installation_config_preserved_after_append() -> Result<()> {
-    let dir = tempdir()?;
-    let config_path = dir.path().join("append_preserves_config.json");
-
-    // Create initial config with installation_config
-    let mut config = create_test_config_with_installation_config();
-    config.to_file(&config_path, true, false)?;
-
-    // Read it back to verify
-    let read_config = IdfConfig::from_file(&config_path)?;
-    assert_eq!(read_config.idf_installed.len(), 2);
-    for install in &read_config.idf_installed {
-      assert!(install.installation_config.is_some());
+        Ok(())
     }
 
-    // Now append a new installation (without installation_config)
-    let new_installation = IdfInstallation {
-      activation_script: Some(String::from("/new/esp/activate.sh")),
-      id: String::from("esp-idf-new"),
-      idf_tools_path: String::from("/new/esp/tools"),
-      name: String::from("ESP-IDF New"),
-      path: String::from("/new/esp/new/esp-idf"),
-      python: Some(String::from("/new/esp/tools/python/bin/python3")),
-      installation_config: None,
-      status: InstallationStatus::Finished,
-    };
+    #[test]
+    fn test_installation_config_preserved_after_append() -> Result<()> {
+        let dir = tempdir()?;
+        let config_path = dir.path().join("append_preserves_config.json");
 
-    config.idf_installed.push(new_installation);
-    config.to_file(&config_path, true, true)?;
+        // Create initial config with installation_config
+        let mut config = create_test_config_with_installation_config();
+        config.to_file(&config_path, true, false)?;
 
-    // Verify all installations preserved
-    let final_config = IdfConfig::from_file(&config_path)?;
-    assert_eq!(final_config.idf_installed.len(), 3);
+        // Read it back to verify
+        let read_config = IdfConfig::from_file(&config_path)?;
+        assert_eq!(read_config.idf_installed.len(), 2);
+        for install in &read_config.idf_installed {
+            assert!(install.installation_config.is_some());
+        }
 
-    // Check original installations still have their installation_config
-    for (i, install) in final_config.idf_installed.iter().enumerate() {
-      if i < 2 {
-        assert!(install.installation_config.is_some(), "Installation {} should have installation_config", i);
-      } else {
-        assert!(install.installation_config.is_none(), "New installation should not have installation_config");
-      }
+        // Now append a new installation (without installation_config)
+        let new_installation = IdfInstallation {
+            activation_script: Some(String::from("/new/esp/activate.sh")),
+            id: String::from("esp-idf-new"),
+            idf_tools_path: String::from("/new/esp/tools"),
+            name: String::from("ESP-IDF New"),
+            path: String::from("/new/esp/new/esp-idf"),
+            python: Some(String::from("/new/esp/tools/python/bin/python3")),
+            installation_config: None,
+            status: InstallationStatus::Finished,
+        };
+
+        config.idf_installed.push(new_installation);
+        config.to_file(&config_path, true, true)?;
+
+        // Verify all installations preserved
+        let final_config = IdfConfig::from_file(&config_path)?;
+        assert_eq!(final_config.idf_installed.len(), 3);
+
+        // Check original installations still have their installation_config
+        for (i, install) in final_config.idf_installed.iter().enumerate() {
+            if i < 2 {
+                assert!(
+                    install.installation_config.is_some(),
+                    "Installation {} should have installation_config",
+                    i
+                );
+            } else {
+                assert!(
+                    install.installation_config.is_none(),
+                    "New installation should not have installation_config"
+                );
+            }
+        }
+
+        Ok(())
     }
-
-    Ok(())
-  }
 }

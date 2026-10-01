@@ -1,40 +1,39 @@
-use clap::builder;
 use clap::Parser;
-use idf_im_lib::command_executor::{execute_command_with_dir, execute_command,execute_command_with_env};
+use fern::Dispatch;
+use idf_im_lib::command_executor::{
+    execute_command, execute_command_with_dir, execute_command_with_env,
+};
 use idf_im_lib::download_file;
 use idf_im_lib::download_file_and_rename;
 use idf_im_lib::ensure_path;
+use idf_im_lib::get_log_directory;
+use idf_im_lib::git_tools::ProgressMessage;
 use idf_im_lib::idf_tools::get_list_of_tools_to_download;
+use idf_im_lib::logging;
+use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::python_utils::download_constraints_file;
 use idf_im_lib::settings::Settings;
 use idf_im_lib::system_dependencies::get_latest_git_for_windows_url;
 use idf_im_lib::utils::extract_zst_archive;
-use idf_im_lib::utils::{parse_cmake_version};
+use idf_im_lib::utils::parse_cmake_version;
 use idf_im_lib::verify_file_checksum;
-use idf_im_lib::offline_installer::merge_requirements_files;
-use idf_im_lib::git_tools::ProgressMessage;
-use idf_im_lib::logging;
-use idf_im_lib::get_log_directory;
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use log::LevelFilter;
+use serde::{Deserialize, Serialize};
 use std::fmt::Write;
 use std::fs;
 use std::fs::File;
-use std::io;
-use std::io::{Read, Write as otherwrite};
+use std::io::Write as IoWrite;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 use tar::Builder as TarBuilder;
-use tar::Archive;
 use tempfile::TempDir;
-use zstd::{encode_all, decode_all};
-use fern::Dispatch;
-use log::LevelFilter;
-use serde::{Serialize, Deserialize};
+use zstd::encode_all;
 
 pub const PYTHON_VERSION: &str = "3.11";
 pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13", "3.14"];
@@ -45,32 +44,6 @@ struct PythonVersionResult {
     success: bool,
     error_message: Option<String>,
     source_built_packages: Vec<String>,
-}
-
-impl PythonVersionResult {
-    fn categorize_error(error_msg: &str) -> (String, String) {
-        if error_msg.contains("ModuleNotFoundError: No module named 'imp'") {
-            ("Python 3.12+ Incompatibility".to_string(),
-             "Package requires deprecated 'imp' module. Consider excluding from Python 3.12+".to_string())
-        } else if error_msg.contains("resolution-too-deep") {
-            ("Dependency Resolution Timeout".to_string(),
-             "Pip dependency graph too complex. Try using constraints file with pinned versions".to_string())
-        } else if error_msg.contains("gobject-introspection-1.0") {
-            ("Missing System Dependencies".to_string(),
-             "PyGObject requires system libraries (gobject-introspection-1.0). Install via apt or skip binary-only downloads".to_string())
-        } else if error_msg.contains("KeyError: '__version__'") {
-            ("Package Build Error".to_string(),
-             "Package metadata issue during build. May need source build or different version".to_string())
-        } else if error_msg.contains("--only-binary") || error_msg.contains("binary") {
-            ("Binary Package Unavailable".to_string(),
-             "No prebuilt wheel available for this platform/Python version".to_string())
-        } else if error_msg.contains("subprocess-exited-with-error") {
-            ("Build Subprocess Failed".to_string(),
-             "Package compilation failed. Check if system build dependencies are installed".to_string())
-        } else {
-            ("Unknown Error".to_string(), error_msg.lines().take(3).collect::<Vec<_>>().join(" | "))
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -120,48 +93,80 @@ impl BuildSummary {
 
         if self.archive_created && self.all_python_successful() {
             // Brief success format
-            summary.push_str(&format!("{} **{}** (`{}`)\n", status_icon, self.idf_version, self.architecture));
-            summary.push_str(&format!("- Python versions: {}\n",
-                self.python_versions.iter()
+            summary.push_str(&format!(
+                "{} **{}** (`{}`)\n",
+                status_icon, self.idf_version, self.architecture
+            ));
+            summary.push_str(&format!(
+                "- Python versions: {}\n",
+                self.python_versions
+                    .iter()
                     .map(|p| p.version.as_str())
                     .collect::<Vec<_>>()
-                    .join(", ")));
+                    .join(", ")
+            ));
             if let Some(size) = self.archive_size {
-                summary.push_str(&format!("- Archive size: {:.2} MB\n", size as f64 / 1_048_576.0));
+                summary.push_str(&format!(
+                    "- Archive size: {:.2} MB\n",
+                    size as f64 / 1_048_576.0
+                ));
             }
 
             // Show packages that needed source builds
-            let source_built: Vec<_> = self.python_versions.iter()
+            let source_built: Vec<_> = self
+                .python_versions
+                .iter()
                 .filter(|p| !p.source_built_packages.is_empty())
                 .collect();
             if !source_built.is_empty() {
                 summary.push_str("\n**Packages built from source:**\n");
                 for pv in source_built {
-                    summary.push_str(&format!("- Python {}: {}\n", pv.version, pv.source_built_packages.join(", ")));
+                    summary.push_str(&format!(
+                        "- Python {}: {}\n",
+                        pv.version,
+                        pv.source_built_packages.join(", ")
+                    ));
                 }
             }
         } else {
             // Detailed warning/error format
-            summary.push_str(&format!("{} **{}** (`{}`)\n", status_icon, self.idf_version, self.architecture));
-            summary.push_str("\n");
+            summary.push_str(&format!(
+                "{} **{}** (`{}`)\n",
+                status_icon, self.idf_version, self.architecture
+            ));
+            summary.push('\n');
 
             let successful: Vec<_> = self.python_versions.iter().filter(|p| p.success).collect();
             let failed: Vec<_> = self.python_versions.iter().filter(|p| !p.success).collect();
 
             if !successful.is_empty() {
-                summary.push_str(&format!("**✅ Successful Python versions:** {}\n\n",
-                    successful.iter().map(|p| p.version.as_str()).collect::<Vec<_>>().join(", ")));
+                summary.push_str(&format!(
+                    "**✅ Successful Python versions:** {}\n\n",
+                    successful
+                        .iter()
+                        .map(|p| p.version.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
             }
 
             if !failed.is_empty() {
-                summary.push_str(&format!("**❌ Failed Python versions:** {}\n\n",
-                    failed.iter().map(|p| p.version.as_str()).collect::<Vec<_>>().join(", ")));
+                summary.push_str(&format!(
+                    "**❌ Failed Python versions:** {}\n\n",
+                    failed
+                        .iter()
+                        .map(|p| p.version.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
 
                 summary.push_str("<details>\n<summary>Error Details</summary>\n\n");
                 for pv in failed {
-                    summary.push_str(&format!("**Python {}:**\n```\n{}\n```\n\n",
+                    summary.push_str(&format!(
+                        "**Python {}:**\n```\n{}\n```\n\n",
                         pv.version,
-                        pv.error_message.as_deref().unwrap_or("Unknown error")));
+                        pv.error_message.as_deref().unwrap_or("Unknown error")
+                    ));
                 }
                 summary.push_str("</details>\n\n");
             }
@@ -169,11 +174,14 @@ impl BuildSummary {
             if !self.archive_created {
                 summary.push_str("**Status:** Archive creation failed\n");
             } else if let Some(size) = self.archive_size {
-                summary.push_str(&format!("**Archive size:** {:.2} MB\n", size as f64 / 1_048_576.0));
+                summary.push_str(&format!(
+                    "**Archive size:** {:.2} MB\n",
+                    size as f64 / 1_048_576.0
+                ));
             }
         }
 
-        summary.push_str("\n");
+        summary.push('\n');
         summary
     }
 }
@@ -181,18 +189,20 @@ impl BuildSummary {
 fn write_github_summary(summaries: &[BuildSummary]) {
     let github_step_summary = std::env::var("GITHUB_STEP_SUMMARY");
 
-    let output = if let Ok(summary_file) = github_step_summary {
-        Some(summary_file)
-    } else {
-        None
-    };
+    let output = github_step_summary.ok();
 
     let mut content = String::new();
     content.push_str("# Offline Installer Build Summary\n\n");
 
-    let all_success = summaries.iter().all(|s| s.archive_created && s.all_python_successful());
-    let any_warnings = summaries.iter().any(|s| s.archive_created && s.any_python_failed());
-    let any_failures = summaries.iter().any(|s| !s.archive_created || s.all_python_failed());
+    let all_success = summaries
+        .iter()
+        .all(|s| s.archive_created && s.all_python_successful());
+    let any_warnings = summaries
+        .iter()
+        .any(|s| s.archive_created && s.any_python_failed());
+    let any_failures = summaries
+        .iter()
+        .any(|s| !s.archive_created || s.all_python_failed());
 
     if all_success {
         content.push_str("## ✅ All builds successful\n\n");
@@ -209,7 +219,10 @@ fn write_github_summary(summaries: &[BuildSummary]) {
     // Write to file if in GitHub Actions
     if let Some(file_path) = output {
         if let Err(e) = fs::write(&file_path, &content) {
-            error!("Failed to write GitHub step summary to {}: {}", file_path, e);
+            error!(
+                "Failed to write GitHub step summary to {}: {}",
+                file_path, e
+            );
         } else {
             info!("GitHub step summary written to {}", file_path);
         }
@@ -249,12 +262,18 @@ pub fn setup_offline_installer(
     };
 
     // Determine log file path
-    let log_dir = custom_log_dir.or_else(get_log_directory).unwrap_or_else(|| PathBuf::from("."));
+    let log_dir = custom_log_dir
+        .or_else(get_log_directory)
+        .unwrap_or_else(|| PathBuf::from("."));
     let log_file_path = log_dir.join("offline_installer.log");
 
     // Ensure log directory exists
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
-        eprintln!("Failed to create log directory {}: {}", log_dir.display(), e);
+        eprintln!(
+            "Failed to create log directory {}: {}",
+            log_dir.display(),
+            e
+        );
     }
 
     Dispatch::new()
@@ -264,10 +283,12 @@ pub fn setup_offline_installer(
         .chain(std::io::stderr())
         .apply()?;
 
-    log::debug!("Offline installer logging initialized at level: {:?}", log_level);
+    log::debug!(
+        "Offline installer logging initialized at level: {:?}",
+        log_level
+    );
     Ok(())
 }
-
 
 pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new(100);
@@ -304,7 +325,10 @@ async fn download_wheels_for_python_versions(
     constraint_file: &Path,
     python_versions: &[&str],
 ) -> Vec<PythonVersionResult> {
-    info!("Downloading wheels for Python versions: {:?}", python_versions);
+    info!(
+        "Downloading wheels for Python versions: {:?}",
+        python_versions
+    );
 
     let mut results = Vec::new();
 
@@ -338,19 +362,26 @@ async fn download_wheels_for_python_versions(
 
     for python_version in python_versions {
         // Skip if already marked as failed
-        if results.iter().any(|r| r.version == *python_version && !r.success) {
+        if results
+            .iter()
+            .any(|r| r.version == *python_version && !r.success)
+        {
             continue;
         }
 
         info!("Processing Python version: {}", python_version);
 
         // Create version-specific directories
-        let python_env = archive_dir.join(format!("python_env_{}", python_version.replace('.', "_")));
+        let python_env =
+            archive_dir.join(format!("python_env_{}", python_version.replace('.', "_")));
         let wheel_dir = archive_dir.join(format!("wheels_py{}", python_version.replace('.', "")));
 
         // Ensure directories exist
         if let Err(e) = ensure_path(python_env.to_str().unwrap()) {
-            error!("Failed to create Python env directory for {}: {}", python_version, e);
+            error!(
+                "Failed to create Python env directory for {}: {}",
+                python_version, e
+            );
             results.push(PythonVersionResult {
                 version: python_version.to_string(),
                 success: false,
@@ -360,7 +391,10 @@ async fn download_wheels_for_python_versions(
             continue;
         }
         if let Err(e) = ensure_path(wheel_dir.to_str().unwrap()) {
-            error!("Failed to create wheel directory for {}: {}", python_version, e);
+            error!(
+                "Failed to create wheel directory for {}: {}",
+                python_version, e
+            );
             results.push(PythonVersionResult {
                 version: python_version.to_string(),
                 success: false,
@@ -370,7 +404,10 @@ async fn download_wheels_for_python_versions(
             continue;
         }
 
-        info!("Creating virtual environment for Python {}...", python_version);
+        info!(
+            "Creating virtual environment for Python {}...",
+            python_version
+        );
 
         // Create virtual environment for this Python version
         match execute_command(
@@ -386,7 +423,10 @@ async fn download_wheels_for_python_versions(
             Ok(output) => {
                 if !output.status.success() {
                     let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    error!("Failed to create Python {} virtual environment: {}", python_version, error_msg);
+                    error!(
+                        "Failed to create Python {} virtual environment: {}",
+                        python_version, error_msg
+                    );
                     results.push(PythonVersionResult {
                         version: python_version.to_string(),
                         success: false,
@@ -395,10 +435,16 @@ async fn download_wheels_for_python_versions(
                     });
                     continue;
                 }
-                info!("Python {} virtual environment created successfully.", python_version);
+                info!(
+                    "Python {} virtual environment created successfully.",
+                    python_version
+                );
             }
             Err(err) => {
-                error!("Failed to create venv for Python {}: {}", python_version, err);
+                error!(
+                    "Failed to create venv for Python {}: {}",
+                    python_version, err
+                );
                 results.push(PythonVersionResult {
                     version: python_version.to_string(),
                     success: false,
@@ -417,19 +463,22 @@ async fn download_wheels_for_python_versions(
 
         // Install pip into the virtual environment
         info!("Installing pip into venv for Python {}...", python_version);
-        match execute_command(
-            python_executable.to_str().unwrap(),
-            &["-m", "ensurepip"],
-        ) {
+        match execute_command(python_executable.to_str().unwrap(), &["-m", "ensurepip"]) {
             Ok(output) => {
                 if output.status.success() {
                     info!("Pip installed into venv for Python {}.", python_version);
                 } else {
-                    error!("Failed to install pip into venv: {}", String::from_utf8_lossy(&output.stderr));
+                    error!(
+                        "Failed to install pip into venv: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
                     results.push(PythonVersionResult {
                         version: python_version.to_string(),
                         success: false,
-                        error_message: Some(format!("Failed to install pip: {}", String::from_utf8_lossy(&output.stderr))),
+                        error_message: Some(format!(
+                            "Failed to install pip: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        )),
                         source_built_packages: vec![],
                     });
                     continue;
@@ -458,22 +507,32 @@ async fn download_wheels_for_python_versions(
         info!("Downloading packages for Python {}...", python_version);
 
         // STEP 1: Try binary-only first
-        info!("STEP 1: Attempting binary-only download for Python {}...", python_version);
+        info!(
+            "STEP 1: Attempting binary-only download for Python {}...",
+            python_version
+        );
 
         std::env::set_var("PIP_MAX_ROUNDS", "200");
 
         let binary_result = execute_command_with_env(
             python_executable.to_str().unwrap(),
             &vec![
-                "-m", "pip", "download",
-                "-r", requirements_path.to_str().unwrap(),
-                "-c", constraint_file.to_str().unwrap(),
-                "--dest", wheel_dir.to_str().unwrap(),
+                "-m",
+                "pip",
+                "download",
+                "-r",
+                requirements_path.to_str().unwrap(),
+                "-c",
+                constraint_file.to_str().unwrap(),
+                "--dest",
+                wheel_dir.to_str().unwrap(),
                 "--only-binary=:all:",
-                "--index-url", "https://dl.espressif.com/pypi/",
-                "--extra-index-url", "https://pypi.org/simple",
+                "--index-url",
+                "https://dl.espressif.com/pypi/",
+                "--extra-index-url",
+                "https://pypi.org/simple",
             ],
-            vec!(("PIP_MAX_ROUNDS", "300"))
+            vec![("PIP_MAX_ROUNDS", "300")],
         );
 
         let mut source_built = Vec::new();
@@ -485,22 +544,36 @@ async fn download_wheels_for_python_versions(
 
             if let Ok(ref output) = result {
                 let stderr = String::from_utf8_lossy(&output.stderr);
-                info!("Binary-only error: {}", stderr.lines().take(5).collect::<Vec<_>>().join(" | "));
+                info!(
+                    "Binary-only error: {}",
+                    stderr.lines().take(5).collect::<Vec<_>>().join(" | ")
+                );
             }
 
-            info!("STEP 2: Retrying with source builds allowed for Python {}...", python_version);
+            info!(
+                "STEP 2: Retrying with source builds allowed for Python {}...",
+                python_version
+            );
 
             result = execute_command_with_env(
                 python_executable.to_str().unwrap(),
-                &vec!(
-                    "-m", "pip", "download", "--verbose",
-                    "-r", requirements_path.to_str().unwrap(),
-                    "-c", constraint_file.to_str().unwrap(),
-                    "--dest", wheel_dir.to_str().unwrap(),
-                    "--index-url", "https://dl.espressif.com/pypi/",
-                    "--extra-index-url", "https://pypi.org/simple",
-                ),
-                vec!(("PIP_MAX_ROUNDS", "300"))
+                &vec![
+                    "-m",
+                    "pip",
+                    "download",
+                    "--verbose",
+                    "-r",
+                    requirements_path.to_str().unwrap(),
+                    "-c",
+                    constraint_file.to_str().unwrap(),
+                    "--dest",
+                    wheel_dir.to_str().unwrap(),
+                    "--index-url",
+                    "https://dl.espressif.com/pypi/",
+                    "--extra-index-url",
+                    "https://pypi.org/simple",
+                ],
+                vec![("PIP_MAX_ROUNDS", "300")],
             );
 
             // Parse output to find packages that were built from source
@@ -526,12 +599,19 @@ async fn download_wheels_for_python_versions(
                 }
 
                 if !source_built.is_empty() {
-                    warn!("Python {}: Built {} packages from source: {:?}",
-                          python_version, source_built.len(), source_built);
+                    warn!(
+                        "Python {}: Built {} packages from source: {:?}",
+                        python_version,
+                        source_built.len(),
+                        source_built
+                    );
                 }
             }
         } else {
-            info!("Binary-only download succeeded for Python {}", python_version);
+            info!(
+                "Binary-only download succeeded for Python {}",
+                python_version
+            );
         }
 
         std::env::remove_var("PIP_MAX_ROUNDS");
@@ -539,9 +619,15 @@ async fn download_wheels_for_python_versions(
         match result {
             Ok(output) => {
                 if output.status.success() {
-                    info!("Python {} packages downloaded successfully.", python_version);
+                    info!(
+                        "Python {} packages downloaded successfully.",
+                        python_version
+                    );
                     if !source_built.is_empty() {
-                        info!("Packages built from source for Python {}: {:?}", python_version, source_built);
+                        info!(
+                            "Packages built from source for Python {}: {:?}",
+                            python_version, source_built
+                        );
                     }
                     results.push(PythonVersionResult {
                         version: python_version.to_string(),
@@ -551,7 +637,10 @@ async fn download_wheels_for_python_versions(
                     });
                 } else {
                     let error_msg = String::from_utf8_lossy(&output.stderr).to_string();
-                    error!("Failed to download Python {} packages: {}", python_version, error_msg);
+                    error!(
+                        "Failed to download Python {} packages: {}",
+                        python_version, error_msg
+                    );
                     results.push(PythonVersionResult {
                         version: python_version.to_string(),
                         success: false,
@@ -561,7 +650,10 @@ async fn download_wheels_for_python_versions(
                 }
             }
             Err(err) => {
-                error!("Failed to download packages for Python {}: {}", python_version, err);
+                error!(
+                    "Failed to download packages for Python {}: {}",
+                    python_version, err
+                );
                 results.push(PythonVersionResult {
                     version: python_version.to_string(),
                     success: false,
@@ -681,10 +773,10 @@ async fn main() {
                 let mut settings = Settings::default();
                 match settings.load(&config_path) {
                     Ok(_) => {
-                    info!("Settings loaded from {}: {:?}", config_path, settings);
+                        info!("Settings loaded from {}: {:?}", config_path, settings);
                     }
                     Err(e) => {
-                    error!("Failed to load settings from {}: {}", config_path, e);
+                        error!("Failed to load settings from {}: {}", config_path, e);
                         return;
                     }
                 }
@@ -695,25 +787,36 @@ async fn main() {
                 return;
             }
         };
-        let archive_dir = TempDir::new().expect("Failed to create temporary directory");
-        let global_python_version = args.python_version.unwrap_or_else(|| PYTHON_VERSION.to_string());
+        let global_python_version = args
+            .python_version
+            .unwrap_or_else(|| PYTHON_VERSION.to_string());
         info!("Using Python version: {}", global_python_version);
 
         // Determine which Python versions to download wheels for
-        let wheel_python_versions: Vec<String> = if let Some(versions) = args.wheel_python_versions {
+        let wheel_python_versions: Vec<String> = if let Some(versions) = args.wheel_python_versions
+        {
             versions
         } else {
-            SUPPORTED_PYTHON_VERSIONS.iter().map(|s| s.to_string()).collect()
+            SUPPORTED_PYTHON_VERSIONS
+                .iter()
+                .map(|s| s.to_string())
+                .collect()
         };
 
-        info!("Will download wheels for Python versions: {:?}", wheel_python_versions);
+        info!(
+            "Will download wheels for Python versions: {:?}",
+            wheel_python_versions
+        );
 
         let versions = idf_im_lib::idf_versions::get_idf_names(false).await;
         let version_list = if let Some(override_version) = args.idf_version_override {
             info!("Using IDF version override: {}", override_version);
             vec![override_version]
         } else if args.build_all_versions {
-            info!("Building separate archives for all supported versions: {:?}", versions);
+            info!(
+                "Building separate archives for all supported versions: {:?}",
+                versions
+            );
             versions.clone() // We'll iterate over all
         } else {
             settings
@@ -735,7 +838,10 @@ async fn main() {
                 }
             }
             Err(err) => {
-                error!("UV is not installed or not found: {}. Please install it and try again.", err);
+                error!(
+                    "UV is not installed or not found: {}. Please install it and try again.",
+                    err
+                );
                 return;
             }
         }
@@ -747,7 +853,7 @@ async fn main() {
             ensure_path(prereq_path.to_str().unwrap()).expect("Failed to create prereq dir");
 
             // Fetch latest Git for Windows portable URL dynamically
-            let (git_url, git_filename) = match get_latest_git_for_windows_url().await {
+            let (git_url, _git_filename) = match get_latest_git_for_windows_url().await {
                 Ok(url) => url,
                 Err(err) => {
                     error!("Failed to get latest Git for Windows URL: {}", err);
@@ -765,7 +871,15 @@ async fn main() {
 
             for (link, name) in prereq_list {
                 info!("Downloading prerequisite: {} as {}", link, name);
-                match download_file_and_rename(&link, prereq_path.to_str().unwrap(), None, Some(name), 3).await {
+                match download_file_and_rename(
+                    &link,
+                    prereq_path.to_str().unwrap(),
+                    None,
+                    Some(name),
+                    3,
+                )
+                .await
+                {
                     Ok(_) => info!("Downloaded: {}", name),
                     Err(err) => {
                         error!("Failed to download {}: {}", name, err);
@@ -774,7 +888,10 @@ async fn main() {
                 }
             }
 
-            info!("Shared Windows prerequisites downloaded to: {:?}", temp_shared.path());
+            info!(
+                "Shared Windows prerequisites downloaded to: {:?}",
+                temp_shared.path()
+            );
             Some(temp_shared)
         } else if std::env::consts::OS == "linux" || std::env::consts::OS == "macos" {
             info!("Detected Unix-like OS, prerequisites installation not implemented — skipping.");
@@ -801,11 +918,8 @@ async fn main() {
                 // Copy CONTENTS of shared_dir into archive_dir (not the dir itself)
                 // Archives are already named simply (git.tar.bz2, python.tar.gz) for reliable lookup
                 info!("Copying shared prerequisites to: {:?}", archive_dir.path());
-                idf_im_lib::utils::copy_dir_contents(
-                    shared_dir.path(),
-                    archive_dir.path(),
-                )
-                .expect("Failed to copy shared prerequisites");
+                idf_im_lib::utils::copy_dir_contents(shared_dir.path(), archive_dir.path())
+                    .expect("Failed to copy shared prerequisites");
             }
 
             // Download ESP-IDF for this version
@@ -850,13 +964,15 @@ async fn main() {
             ) {
                 Ok(_) => info!("ESP-IDF version {} downloaded successfully.", idf_version),
                 Err(err) => {
-                    error!("Failed to download ESP-IDF version {}: {}", idf_version, err);
+                    error!(
+                        "Failed to download ESP-IDF version {}: {}",
+                        idf_version, err
+                    );
                     build_summaries.push(summary);
                     continue; // Skip to next version
                 }
             }
             handle.join().unwrap(); // Wait for progress bar thread to finish
-
 
             // Create a temporary venv for compote
             let compote_env = archive_dir.path().join("compote_env");
@@ -949,23 +1065,27 @@ async fn main() {
 
             compote_args.push(components_dir.to_str().unwrap().to_string());
 
-            info!(
-                "Syncing components to {:?}...",
-                components_dir
+            info!("Syncing components to {:?}...", components_dir);
+            debug!(
+                "Compote command: {:?} {:?}",
+                compote_executable, compote_args
             );
-            debug!("Compote command: {:?} {:?}", compote_executable, compote_args);
 
             match execute_command_with_dir(
                 compote_executable.to_str().unwrap(),
-                &compote_args.iter().map(|s| s.as_str()).collect::<Vec<&str>>(),
+                &compote_args
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<&str>>(),
                 idf_path.to_str().unwrap(),
             ) {
                 Ok(output) => {
                     if output.status.success() {
-                        info!(
-                            "Successfully synced components.",
+                        info!("Successfully synced components.",);
+                        debug!(
+                            "Compote output: {}",
+                            String::from_utf8_lossy(&output.stdout)
                         );
-                        debug!("Compote output: {}", String::from_utf8_lossy(&output.stdout));
                     } else {
                         error!(
                             "Failed to sync components: {}",
@@ -981,42 +1101,45 @@ async fn main() {
                 }
             }
 
-            let compote_args_required_components: Vec<&str> = vec![
-                "cooking",
-                "stock",
-            ];
+            let compote_args_required_components: Vec<&str> = vec!["cooking", "stock"];
 
-            debug!("Compote command: {:?} {:?}", compote_executable, compote_args_required_components);
+            debug!(
+                "Compote command: {:?} {:?}",
+                compote_executable, compote_args_required_components
+            );
 
             let env_for_compote = vec![
-              ("IDF_PATH",idf_path.to_str().unwrap()),
-              ("IDF_TOOLS_PATH",required_components_dir.to_str().unwrap())
+                ("IDF_PATH", idf_path.to_str().unwrap()),
+                ("IDF_TOOLS_PATH", required_components_dir.to_str().unwrap()),
             ];
 
             match execute_command_with_env(
-              compote_executable.to_str().unwrap(),
-              &compote_args_required_components,
-              env_for_compote
+                compote_executable.to_str().unwrap(),
+                &compote_args_required_components,
+                env_for_compote,
             ) {
-              Ok(output) => {
-                  if output.status.success() {
-                      info!(
-                          "Successfully synced Root Managed Components.",
-                      );
-                      debug!("Compote output: {}", String::from_utf8_lossy(&output.stdout));
-                  } else {
-                      error!(
-                          "Failed to sync Root Managed Components: {}",
-                          String::from_utf8_lossy(&output.stderr)
-                      );
-                      // Don't fail the entire build, just warn
-                      warn!("Component sync failed, continuing without Root Managed Components...");
-                  }
-              }
-              Err(err) => {
-                  error!("Failed to run compote: {}", err);
-                  warn!("Component sync failed, continuing without Root Managed Components...");
-              }
+                Ok(output) => {
+                    if output.status.success() {
+                        info!("Successfully synced Root Managed Components.",);
+                        debug!(
+                            "Compote output: {}",
+                            String::from_utf8_lossy(&output.stdout)
+                        );
+                    } else {
+                        error!(
+                            "Failed to sync Root Managed Components: {}",
+                            String::from_utf8_lossy(&output.stderr)
+                        );
+                        // Don't fail the entire build, just warn
+                        warn!(
+                            "Component sync failed, continuing without Root Managed Components..."
+                        );
+                    }
+                }
+                Err(err) => {
+                    error!("Failed to run compote: {}", err);
+                    warn!("Component sync failed, continuing without Root Managed Components...");
+                }
             }
 
             if let Err(e) = fs::remove_dir_all(&compote_env) {
@@ -1025,7 +1148,12 @@ async fn main() {
 
             // Read tools.json
             let tools_json_file = idf_path
-                .join(settings.tools_json_file.clone().unwrap_or_else(|| Settings::default().tools_json_file.unwrap()))
+                .join(
+                    settings
+                        .tools_json_file
+                        .clone()
+                        .unwrap_or_else(|| Settings::default().tools_json_file.unwrap()),
+                )
                 .to_str()
                 .expect("Failed to convert tools json path")
                 .to_string();
@@ -1049,16 +1177,34 @@ async fn main() {
             ensure_path(tool_path.to_str().unwrap()).expect("Failed to ensure tools path");
 
             for (tool_name, (version, download_link)) in download_links.iter() {
-                info!("Preparing tool: {} version: {} from: {}", tool_name, version, download_link.url);
+                info!(
+                    "Preparing tool: {} version: {} from: {}",
+                    tool_name, version, download_link.url
+                );
                 match download_file(&download_link.url, tool_path.to_str().unwrap(), None).await {
                     Ok(_) => {
-                        let filename = Path::new(&download_link.url).file_name().unwrap().to_str().unwrap();
+                        let filename = Path::new(&download_link.url)
+                            .file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap();
                         let full_file_path = tool_path.join(filename);
 
-                        if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()).unwrap() {
-                            info!("Tool {} version {} downloaded and verified.", tool_name, version);
+                        if verify_file_checksum(
+                            &download_link.sha256,
+                            full_file_path.to_str().unwrap(),
+                        )
+                        .unwrap()
+                        {
+                            info!(
+                                "Tool {} version {} downloaded and verified.",
+                                tool_name, version
+                            );
                         } else {
-                            error!("Checksum failed for tool {} version {}.", tool_name, version);
+                            error!(
+                                "Checksum failed for tool {} version {}.",
+                                tool_name, version
+                            );
                             continue;
                         }
                     }
@@ -1077,9 +1223,17 @@ async fn main() {
                     idf_version.to_string()
                 }
             };
-            info!("Using constraints IDF version: {} from CMake", constrains_idf_version);
+            info!(
+                "Using constraints IDF version: {} from CMake",
+                constrains_idf_version
+            );
 
-            let constraint_file = match download_constraints_file(&archive_dir.path(), &constrains_idf_version).await {
+            let constraint_file = match download_constraints_file(
+                archive_dir.path(),
+                &constrains_idf_version,
+            )
+            .await
+            {
                 Ok(file) => {
                     info!("Downloaded constraints: {}", file.display());
                     file
@@ -1101,24 +1255,32 @@ async fn main() {
 
             let requirements_file = requirements_dir.join("requirements.merged.txt");
 
-            let wheel_versions: Vec<&str> = wheel_python_versions.iter().map(|s| s.as_str()).collect();
+            let wheel_versions: Vec<&str> =
+                wheel_python_versions.iter().map(|s| s.as_str()).collect();
             let python_results = download_wheels_for_python_versions(
                 archive_dir.path(),
                 &requirements_file,
                 &constraint_file,
                 &wheel_versions,
-            ).await;
+            )
+            .await;
 
             summary.python_versions = python_results;
 
             // Check if we have at least one successful Python version
             let has_any_success = summary.python_versions.iter().any(|p| p.success);
             if !has_any_success {
-                error!("All Python versions failed for {}. Skipping archive creation.", idf_version);
+                error!(
+                    "All Python versions failed for {}. Skipping archive creation.",
+                    idf_version
+                );
                 build_summaries.push(summary);
                 continue;
             } else if summary.any_python_failed() {
-                warn!("Some Python versions failed for {}, but continuing with archive creation", idf_version);
+                warn!(
+                    "Some Python versions failed for {}, but continuing with archive creation",
+                    idf_version
+                );
             }
 
             // Save settings for this version
@@ -1138,7 +1300,11 @@ async fn main() {
             let mut output_file = match File::create(&output_path) {
                 Ok(f) => f,
                 Err(e) => {
-                    error!("Failed to create output file {}: {}", output_path.display(), e);
+                    error!(
+                        "Failed to create output file {}: {}",
+                        output_path.display(),
+                        e
+                    );
                     build_summaries.push(summary);
                     continue;
                 }
@@ -1198,7 +1364,9 @@ async fn main() {
         write_github_summary(&build_summaries);
 
         // Determine exit code based on results
-        let all_successful = build_summaries.iter().all(|s| s.archive_created && s.all_python_successful());
+        let all_successful = build_summaries
+            .iter()
+            .all(|s| s.archive_created && s.all_python_successful());
         if !all_successful {
             error!("Some builds failed or had warnings. Check the summary above.");
         } else {
@@ -1206,7 +1374,10 @@ async fn main() {
         }
     } else if let Some(archive_path) = args.archive {
         // Extract installation data from archive
-        info!("Extracting installation data from archive: {:?}", archive_path);
+        info!(
+            "Extracting installation data from archive: {:?}",
+            archive_path
+        );
 
         if !archive_path.exists() {
             error!("Archive file does not exist: {:?}", archive_path);
@@ -1214,11 +1385,13 @@ async fn main() {
         }
 
         // Create extraction directory next to the archive
-        let archive_stem = archive_path.file_stem()
+        let archive_stem = archive_path
+            .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("extracted");
 
-        let extract_dir = archive_path.parent()
+        let extract_dir = archive_path
+            .parent()
             .unwrap_or_else(|| Path::new("."))
             .join(format!("{}_extracted", archive_stem));
 

@@ -3,27 +3,28 @@ use std::path::PathBuf;
 use crate::gui::{app_state::get_settings_non_blocking, ui::send_message};
 use log::{error, warn};
 use rust_i18n::t;
-use serde_json::{json, Value};
+use serde_json::json;
 use tauri::{AppHandle, Emitter};
-use tokio::task;
-
 
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
-pub fn get_prequisites() -> Vec<&'static str> {
-   idf_im_lib::system_dependencies::get_prequisites()
-    .into_iter()
-    .chain(idf_im_lib::system_dependencies::get_general_prerequisites_based_on_package_manager())
-    .collect()
+pub fn get_prerequisites() -> Vec<&'static str> {
+    idf_im_lib::system_dependencies::get_prerequisites()
+        .into_iter()
+        .chain(
+            idf_im_lib::system_dependencies::get_general_prerequisites_based_on_package_manager(),
+        )
+        .collect()
 }
 
 /// Checks which prerequisites are missing
 #[tauri::command]
-pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
+pub fn check_prerequisites(app_handle: AppHandle) -> Vec<String> {
     match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
         Ok(result) => {
             if result.shell_failed {
-                let warning_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                let warning_msg =
+                    t!("gui.system_dependencies.shell_verification_failed").to_string();
                 send_message(&app_handle, warning_msg.clone(), "warning".to_string());
                 warn!("{}", warning_msg);
                 vec![]
@@ -34,7 +35,11 @@ pub fn check_prequisites(app_handle: AppHandle) -> Vec<String> {
             }
         }
         Err(err) => {
-            let warning_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            let warning_msg = t!(
+                "gui.system_dependencies.verification_error",
+                error = err.to_string()
+            )
+            .to_string();
             send_message(&app_handle, warning_msg.clone(), "warning".to_string());
             warn!("{}", warning_msg);
             vec![]
@@ -48,7 +53,8 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
         Ok(result) => {
             if result.shell_failed {
                 // Shell execution failed - can't verify, user can skip
-                let warning_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+                let warning_msg =
+                    t!("gui.system_dependencies.shell_verification_failed").to_string();
                 send_message(&app_handle, warning_msg.clone(), "warning".to_string());
                 warn!("{}", warning_msg);
                 json!({
@@ -77,7 +83,11 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
         }
         Err(err) => {
             // Error during checking (e.g., unsupported package manager) - can't verify, user can skip
-            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            let error_msg = t!(
+                "gui.system_dependencies.verification_error",
+                error = err.to_string()
+            )
+            .to_string();
             send_message(&app_handle, error_msg.clone(), "warning".to_string());
             warn!("{}", error_msg);
             json!({
@@ -93,61 +103,83 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
 /// Installs missing prerequisites (non-blocking - runs in tokio background task)
 #[tauri::command]
 pub fn install_prerequisites(app_handle: AppHandle) -> bool {
-    let unsatisfied_prerequisites = match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
-        Ok(result) => {
-            if result.shell_failed {
-                let error_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
+    let unsatisfied_prerequisites =
+        match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+            Ok(result) => {
+                if result.shell_failed {
+                    let error_msg =
+                        t!("gui.system_dependencies.shell_verification_failed").to_string();
+                    send_message(&app_handle, error_msg.clone(), "error".to_string());
+                    error!("{}", error_msg);
+                    return false;
+                }
+                result.missing.into_iter().map(|p| p.to_string()).collect()
+            }
+            Err(err) => {
+                let error_msg = t!(
+                    "gui.system_dependencies.verification_error",
+                    error = err.to_string()
+                )
+                .to_string();
                 send_message(&app_handle, error_msg.clone(), "error".to_string());
                 error!("{}", error_msg);
                 return false;
             }
-            result.missing.into_iter().map(|p| p.to_string()).collect()
-        }
+        };
+
+    // Spawn tokio task to avoid blocking the UI
+    let app_handle_clone = app_handle.clone();
+    let settings = match get_settings_non_blocking(&app_handle) {
+        Ok(settings) => settings,
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.verification_error", error = err.to_string()).to_string();
+            let error_msg = t!(
+                "gui.system_dependencies.error_getting_settings",
+                error = err.to_string()
+            )
+            .to_string();
             send_message(&app_handle, error_msg.clone(), "error".to_string());
             error!("{}", error_msg);
             return false;
         }
     };
-
-    // Spawn tokio task to avoid blocking the UI
-    let app_handle_clone = app_handle.clone();
-    let settings = match get_settings_non_blocking(&app_handle) {
-      Ok(settings) => settings,
-      Err(err) => {
-          let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
-          send_message(
-              &app_handle,
-              error_msg.clone(),
-              "error".to_string(),
-          );
-          error!("{}", error_msg);
-          return false;
-      }
-    };
-    let tool_install_directory = PathBuf::from(settings.tool_install_folder_name.clone().expect("Tools install folder not defined"));
+    let tool_install_directory = PathBuf::from(
+        settings
+            .tool_install_folder_name
+            .clone()
+            .expect("Tools install folder not defined"),
+    );
     tokio::spawn(async move {
-        match idf_im_lib::system_dependencies::install_prerequisites(unsatisfied_prerequisites, tool_install_directory).await {
+        match idf_im_lib::system_dependencies::install_prerequisites(
+            unsatisfied_prerequisites,
+            tool_install_directory,
+        )
+        .await
+        {
             Ok(_) => {
                 // Emit event to notify frontend that installation is complete
-                let _ = app_handle_clone.emit("prerequisites-install-complete", json!({
-                    "success": true
-                }));
+                let _ = app_handle_clone.emit(
+                    "prerequisites-install-complete",
+                    json!({
+                        "success": true
+                    }),
+                );
             }
             Err(err) => {
-                let error_msg = t!("gui.system_dependencies.error_installing_prerequisites", error = err.to_string()).to_string();
-                send_message(
-                    &app_handle_clone,
-                    error_msg.clone(),
-                    "error".to_string(),
-                );
+                let error_msg = t!(
+                    "gui.system_dependencies.error_installing_prerequisites",
+                    error = err.to_string()
+                )
+                .to_string();
+                send_message(&app_handle_clone, error_msg.clone(), "error".to_string());
                 error!("{}", error_msg);
                 // Emit failure event
-                let _ = app_handle_clone.emit("prerequisites-install-complete", json!({
-                    "success": false,
-                    "error": err.to_string()
-                }));
+                let _ = app_handle_clone.emit(
+                    "prerequisites-install-complete",
+                    json!({
+                        "success": false,
+                        "error": err.to_string()
+                    }),
+                );
             }
         }
     });
@@ -202,39 +234,58 @@ pub fn python_install(app_handle: AppHandle) -> bool {
     let settings = match get_settings_non_blocking(&app_handle) {
         Ok(settings) => settings,
         Err(err) => {
-            let error_msg = t!("gui.system_dependencies.error_getting_settings", error = err.to_string()).to_string();
-            send_message(
-                &app_handle,
-                error_msg.clone(),
-                "error".to_string(),
-            );
+            let error_msg = t!(
+                "gui.system_dependencies.error_getting_settings",
+                error = err.to_string()
+            )
+            .to_string();
+            send_message(&app_handle, error_msg.clone(), "error".to_string());
             error!("{}", error_msg);
             return false;
         }
     };
-    let tool_install_directory = PathBuf::from(settings.tool_install_folder_name.clone().expect("Tools install folder not defined"));
-    let python_version = settings.python_version_override.clone().unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string());
+    let tool_install_directory = PathBuf::from(
+        settings
+            .tool_install_folder_name
+            .clone()
+            .expect("Tools install folder not defined"),
+    );
+    let python_version = settings
+        .python_version_override
+        .clone()
+        .unwrap_or_else(|| idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string());
     let app_handle_clone = app_handle.clone();
 
     tokio::spawn(async move {
-        match idf_im_lib::system_dependencies::install_prerequisites(vec![python_version], tool_install_directory).await {
+        match idf_im_lib::system_dependencies::install_prerequisites(
+            vec![python_version],
+            tool_install_directory,
+        )
+        .await
+        {
             Ok(_) => {
-                let _ = app_handle_clone.emit("python-install-complete", json!({
-                    "success": true
-                }));
+                let _ = app_handle_clone.emit(
+                    "python-install-complete",
+                    json!({
+                        "success": true
+                    }),
+                );
             }
             Err(err) => {
-                let error_msg = t!("gui.system_dependencies.error_installing_python", error = err.to_string()).to_string();
-                send_message(
-                    &app_handle_clone,
-                    error_msg.clone(),
-                    "error".to_string(),
-                );
+                let error_msg = t!(
+                    "gui.system_dependencies.error_installing_python",
+                    error = err.to_string()
+                )
+                .to_string();
+                send_message(&app_handle_clone, error_msg.clone(), "error".to_string());
                 error!("{}", error_msg);
-                let _ = app_handle_clone.emit("python-install-complete", json!({
-                    "success": false,
-                    "error": err.to_string()
-                }));
+                let _ = app_handle_clone.emit(
+                    "python-install-complete",
+                    json!({
+                        "success": false,
+                        "error": err.to_string()
+                    }),
+                );
             }
         }
     });

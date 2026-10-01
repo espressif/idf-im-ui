@@ -508,7 +508,7 @@ function Add-DefaultConfig {
         }
     }
 
-    # save current datatime to last_update
+    # save current datetime to last_update
     Add-Config -Name 'last_update' -Value ([System.DateTime]::Now.ToString('o')) | Out-Null
 }
 

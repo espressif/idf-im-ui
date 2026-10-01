@@ -1,16 +1,30 @@
-use crate::gui::{app_state::{get_settings_non_blocking, update_settings}, ui::{InstallationProgress, InstallationStage, MessageLevel, ProgressBar, emit_installation_event, emit_log_message, send_message, send_tools_message}, utils::{get_mirror_to_use, MirrorType}};
+use crate::gui::{
+    app_state::{get_settings_non_blocking, update_settings},
+    ui::{
+        emit_installation_event, emit_log_message, send_message, InstallationProgress,
+        InstallationStage, MessageLevel,
+    },
+    utils::{get_mirror_to_use, MirrorType},
+};
 use anyhow::{anyhow, Context, Result};
 
 use idf_im_lib::{
-  DownloadProgress, add_path_to_path, ensure_path, idf_features::{FeatureInfo, RequirementsMetadata, get_requirements_json_url}, idf_tools, settings::Settings, tool_selection::{VersionToolsInfo, fetch_tools_file_async, get_tools_for_selection}
+    add_path_to_path, ensure_path,
+    idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata},
+    idf_tools,
+    settings::Settings,
+    tool_selection::{fetch_tools_file_async, get_tools_for_selection, VersionToolsInfo},
+    DownloadProgress,
 };
-use log::{ debug, error, info, warn};
+use log::{debug, error, info, warn};
+use rust_i18n::t;
 use serde::{Deserialize, Serialize};
 use std::{
-  collections::HashMap, path::{Path, PathBuf}, sync::{Arc, Mutex}
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 use tauri::AppHandle;
-use rust_i18n::t;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VersionFeatureInfo {
@@ -18,89 +32,96 @@ pub struct VersionFeatureInfo {
     pub features: Vec<FeatureInfo>,
 }
 
-
 /// Represents the tool setup configuration
 #[derive(Debug)]
 struct ToolSetup {
-  download_dir: String,
-  install_dir: String,
-  tools_json_path: String,
+    download_dir: String,
+    install_dir: String,
+    tools_json_path: String,
 }
 
 impl ToolSetup {
-  /// Creates a new tool setup based on settings and version path
-  fn new(settings: &Settings, version_path: &PathBuf) -> Result<Self, String> {
-      let p = version_path;
-      let tools_json_path = p
-          .join("esp-idf")
-          .join(settings.tools_json_file.clone().unwrap_or_default());
-      let download_dir = p.join(
-          settings
-              .tool_download_folder_name
-              .clone()
-              .unwrap_or_default(),
-      );
-      let install_dir = p.join(
-          settings
-              .tool_install_folder_name
-              .clone()
-              .unwrap_or_default(),
-      );
-      Ok(Self {
-          download_dir: download_dir.to_str().unwrap().to_string(),
-          install_dir: install_dir.to_str().unwrap().to_string(),
-          tools_json_path: tools_json_path.to_str().unwrap().to_string(),
-      })
-  }
+    /// Creates a new tool setup based on settings and version path
+    fn new(settings: &Settings, version_path: &Path) -> Result<Self, String> {
+        let p = version_path;
+        let tools_json_path = p
+            .join("esp-idf")
+            .join(settings.tools_json_file.clone().unwrap_or_default());
+        let download_dir = p.join(
+            settings
+                .tool_download_folder_name
+                .clone()
+                .unwrap_or_default(),
+        );
+        let install_dir = p.join(
+            settings
+                .tool_install_folder_name
+                .clone()
+                .unwrap_or_default(),
+        );
+        Ok(Self {
+            download_dir: download_dir.to_str().unwrap().to_string(),
+            install_dir: install_dir.to_str().unwrap().to_string(),
+            tools_json_path: tools_json_path.to_str().unwrap().to_string(),
+        })
+    }
 
-  /// Creates necessary directories for tool installation
-  fn create_directories(&self, app_handle: &AppHandle) -> Result<(), String> {
-      // Create download directory
-      ensure_path(&self.download_dir).map_err(|e| {
-          send_message(
-              app_handle,
-              t!("gui.setup_tools.dir_create_failed", error = e.to_string()).to_string(),
-              "error".to_string(),
-          );
-          e.to_string()
-      })?;
+    /// Creates necessary directories for tool installation
+    fn create_directories(&self, app_handle: &AppHandle) -> Result<(), String> {
+        // Create download directory
+        ensure_path(&self.download_dir).map_err(|e| {
+            send_message(
+                app_handle,
+                t!("gui.setup_tools.dir_create_failed", error = e.to_string()).to_string(),
+                "error".to_string(),
+            );
+            e.to_string()
+        })?;
 
-      // Create installation directory
-      ensure_path(&self.install_dir).map_err(|e| {
-          send_message(
-              app_handle,
-              t!("gui.setup_tools.install_dir_create_failed", error = e.to_string()).to_string(),
-              "error".to_string(),
-          );
-          e.to_string()
-      })?;
+        // Create installation directory
+        ensure_path(&self.install_dir).map_err(|e| {
+            send_message(
+                app_handle,
+                t!(
+                    "gui.setup_tools.install_dir_create_failed",
+                    error = e.to_string()
+                )
+                .to_string(),
+                "error".to_string(),
+            );
+            e.to_string()
+        })?;
 
-      // Add installation directory to PATH
-      add_path_to_path(&self.install_dir);
+        // Add installation directory to PATH
+        add_path_to_path(&self.install_dir);
 
-      Ok(())
-  }
+        Ok(())
+    }
 
-  /// Validates that the tools.json file exists
-  fn validate_tools_json(&self) -> Result<(), String> {
-      if std::fs::metadata(&self.tools_json_path).is_err() {
-          return Err(t!("gui.setup_tools.tools_json_not_found", path = self.tools_json_path.clone()).to_string());
-      }
-      Ok(())
-  }
+    /// Validates that the tools.json file exists
+    fn validate_tools_json(&self) -> Result<(), String> {
+        if std::fs::metadata(&self.tools_json_path).is_err() {
+            return Err(t!(
+                "gui.setup_tools.tools_json_not_found",
+                path = self.tools_json_path.clone()
+            )
+            .to_string());
+        }
+        Ok(())
+    }
 }
 
 /// Sets up ESP-IDF tools based on settings and IDF path
 pub async fn setup_tools(
     app_handle: &AppHandle,
     settings: &Settings,
-    idf_path: &PathBuf,
+    idf_path: &Path,
     idf_version: &str,
     offline_archive_dir: Option<&Path>,
-) -> Result<(Vec<String>,Vec<(String,String)>)> {
+) -> Result<(Vec<String>, Vec<(String, String)>)> {
     info!("Setting up tools...");
 
-    let is_simple_installation = crate::gui::app_state::is_simple_installation(&app_handle);
+    let is_simple_installation = crate::gui::app_state::is_simple_installation(app_handle);
 
     let version_path = idf_path
         .parent()
@@ -121,98 +142,125 @@ pub async fn setup_tools(
         .map_err(|e| anyhow!("Failed to validate tools.json: {}", e))?;
 
     // Parse tools.json and get list of tools to download
-    let mut tools = idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path)
-        .map_err(|e| {
+    let mut tools =
+        idf_tools::read_and_parse_tools_file(&tool_setup.tools_json_path).map_err(|e| {
             emit_log_message(
                 app_handle,
                 MessageLevel::Error,
-                t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string(),
+                t!(
+                    "gui.setup_tools.tools_json_parse_failed",
+                    error = e.to_string()
+                )
+                .to_string(),
             );
-            anyhow!(t!("gui.setup_tools.tools_json_parse_failed", error = e.to_string()).to_string())
+            anyhow!(t!(
+                "gui.setup_tools.tools_json_parse_failed",
+                error = e.to_string()
+            )
+            .to_string())
         })?;
-    ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
-    /// This is needed because the IDEs expect clang to be always installed                     ///
-    /// ninja is included as without it the users are not able to actually build the projects   ///
+    ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED //////////////////////
+    // This is needed because the IDEs expect clang to be always installed
+    // ninja is included as without it the users are not able to actually build the projects
     ///////////////////////////////////////////////////////////////////////////////////////////////
     for t in tools.tools.iter_mut() {
-      if t.name.contains("clang") || t.name.contains("ninja"){
-        t.install = "always".to_string();
-        debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
-      }
+        if t.name.contains("clang") || t.name.contains("ninja") {
+            t.install = "always".to_string();
+            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+        }
     }
     if let Some(ref per_version) = settings.idf_tools_per_version {
-      if let Some(selected_tool_names) = per_version.get(idf_version) {
-        tools.tools = tools.tools
-          .into_iter()
-          .filter(|tool| {
-            // Always include "always" install tools
-            tool.install == "always" ||
+        if let Some(selected_tool_names) = per_version.get(idf_version) {
+            tools.tools.retain(|tool| {
+                // Always include "always" install tools
+                tool.install == "always" ||
             // Include user-selected optional tools
             selected_tool_names.contains(&tool.name)
-          })
-          .collect();
+            });
 
-        info!(
-          "Filtered to {} tools based on user selection for {}",
-          tools.tools.len(),
-          idf_version
-        );
-      }
+            info!(
+                "Filtered to {} tools based on user selection for {}",
+                tools.tools.len(),
+                idf_version
+            );
+        }
     } else {
-      tools.tools = tools.tools
-        .into_iter()
-        .filter(|tool| {
-            tool.install == "always"
-        })
-        .collect();
+        tools.tools.retain(|tool| tool.install == "always");
     }
 
-    if tools.tools.iter().find(|&x| x.name.contains("qemu")).is_some() {
+    if tools
+        .tools
+        .iter()
+        .find(|&x| x.name.contains("qemu"))
+        .is_some()
+    {
         let qemu_prereqs = idf_im_lib::system_dependencies::check_qemu_prerequisites();
         match qemu_prereqs {
-          Err(err) => {
-            error!(
-              "{}: {}",
-              t!("wizard.qemu.prerequisites.check_error"),
-              err
-              );
-              emit_installation_event(app_handle, InstallationProgress {
-                  stage: InstallationStage::Tools,
-                  percentage: 65,
-                  message: t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string(),
-                  detail: Some(t!("gui.setup_tools.qemu_prerequisites_check.xyz").to_string()),
-                  version: Some(idf_version.to_string()),
-              });
-              return Err(anyhow!(t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string()));
-          }
-          Ok(qemu_prereqs) => {
-            if !qemu_prereqs.is_empty() {
-              error!(
-                "{}: {:?}",
-                t!("wizard.qemu.prerequisites.missing"),
-                qemu_prereqs
-              );
-              emit_installation_event(app_handle, InstallationProgress {
-                  stage: InstallationStage::Tools,
-                  percentage: 65,
-                  message: t!("gui.setup_tools.qemu_prerequisites_check.missing").to_string(),
-                  detail: Some(t!("gui.setup_tools.qemu_prerequisites_check.missing_details", list = qemu_prereqs.join(", ")).to_string()),
-                  version: Some(idf_version.to_string()),
-              });
-              return Err(anyhow!(t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string()));
+            Err(err) => {
+                error!("{}: {}", t!("wizard.qemu.prerequisites.check_error"), err);
+                emit_installation_event(
+                    app_handle,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: 65,
+                        message: t!("gui.setup_tools.qemu_prerequisites_check.failed").to_string(),
+                        detail: Some(
+                            t!("gui.setup_tools.qemu_prerequisites_check.xyz").to_string(),
+                        ),
+                        version: Some(idf_version.to_string()),
+                    },
+                );
+                return Err(anyhow!(t!(
+                    "gui.setup_tools.qemu_prerequisites_check.failed"
+                )
+                .to_string()));
             }
-          }
+            Ok(qemu_prereqs) => {
+                if !qemu_prereqs.is_empty() {
+                    error!(
+                        "{}: {:?}",
+                        t!("wizard.qemu.prerequisites.missing"),
+                        qemu_prereqs
+                    );
+                    emit_installation_event(
+                        app_handle,
+                        InstallationProgress {
+                            stage: InstallationStage::Tools,
+                            percentage: 65,
+                            message: t!("gui.setup_tools.qemu_prerequisites_check.missing")
+                                .to_string(),
+                            detail: Some(
+                                t!(
+                                    "gui.setup_tools.qemu_prerequisites_check.missing_details",
+                                    list = qemu_prereqs.join(", ")
+                                )
+                                .to_string(),
+                            ),
+                            version: Some(idf_version.to_string()),
+                        },
+                    );
+                    return Err(anyhow!(t!(
+                        "gui.setup_tools.qemu_prerequisites_check.failed"
+                    )
+                    .to_string()));
+                }
+            }
         }
     }
 
     // Start tools installation phase (65% of total progress)
-    emit_installation_event(app_handle, InstallationProgress {
-        stage: InstallationStage::Tools,
-        percentage: 65,
-        message: t!("gui.setup_tools.installation_starting").to_string(),
-        detail: Some(t!("gui.setup_tools.preparing_tools", count = tools.tools.len()).to_string()),
-        version: Some(idf_version.to_string()),
-    });
+    emit_installation_event(
+        app_handle,
+        InstallationProgress {
+            stage: InstallationStage::Tools,
+            percentage: 65,
+            message: t!("gui.setup_tools.installation_starting").to_string(),
+            detail: Some(
+                t!("gui.setup_tools.preparing_tools", count = tools.tools.len()).to_string(),
+            ),
+            version: Some(idf_version.to_string()),
+        },
+    );
 
     // Progress tracking with interior mutability
     let total_tools = tools.tools.len() as f32;
@@ -230,30 +278,44 @@ pub async fn setup_tools(
     let progress_callback = move |progress: DownloadProgress| {
         match progress {
             DownloadProgress::Progress(current, total) => {
-                if total > 0 {
-                    let tool_progress = current * 100 / total;
+                if let Some(tool_progress) = (current * 100).checked_div(total) {
                     let completed = *completed_tools_clone.lock().unwrap();
                     let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                    let overall_tool_progress = (completed as f32 / total_tools) * tools_range as f32;
-                    let current_tool_contribution = (tool_progress as f32 / 100.0) * (tools_range as f32 / total_tools);
-                    let overall_percentage = base_percentage + overall_tool_progress as u32 + current_tool_contribution as u32;
+                    let overall_tool_progress =
+                        (completed as f32 / total_tools) * tools_range as f32;
+                    let current_tool_contribution =
+                        (tool_progress as f32 / 100.0) * (tools_range as f32 / total_tools);
+                    let overall_percentage = base_percentage
+                        + overall_tool_progress as u32
+                        + current_tool_contribution as u32;
 
-                    emit_installation_event(&app_handle_clone, InstallationProgress {
-                        stage: InstallationStage::Tools,
-                        percentage: overall_percentage.min(89), // Cap at 89% to leave room for completion
-                        message: t!("gui.setup_tools.downloading",
-                            tool_name = tool_name.split('/').last()
-                                .unwrap_or(&tool_name)
-                                .replace("-", " ")
-                        ).to_string(),
-                        detail: Some(t!("gui.setup_tools.tool_progress",
-                            current = completed + 1,
-                            total = total_tools as u32,
-                            percentage = tool_progress
-                        ).to_string()),
-                        version: Some(idf_version_clone.clone()),
-                    });
+                    emit_installation_event(
+                        &app_handle_clone,
+                        InstallationProgress {
+                            stage: InstallationStage::Tools,
+                            percentage: overall_percentage.min(89), // Cap at 89% to leave room for completion
+                            message: t!(
+                                "gui.setup_tools.downloading",
+                                tool_name = tool_name
+                                    .split('/')
+                                    .next_back()
+                                    .unwrap_or(&tool_name)
+                                    .replace("-", " ")
+                            )
+                            .to_string(),
+                            detail: Some(
+                                t!(
+                                    "gui.setup_tools.tool_progress",
+                                    current = completed + 1,
+                                    total = total_tools as u32,
+                                    percentage = tool_progress
+                                )
+                                .to_string(),
+                            ),
+                            version: Some(idf_version_clone.clone()),
+                        },
+                    );
                 }
             }
 
@@ -263,157 +325,249 @@ pub async fn setup_tools(
 
                 let overall_tool_progress = (completed as f32 / total_tools) * tools_range as f32;
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: overall_tool_progress as u32,
-                    message: t!("gui.setup_tools.downloading",
-                        tool_name = tool_name.split('/').last()
-                            .unwrap_or(&tool_name)
-                            .replace("-", " ")
-                    ).to_string(),
-                    detail: Some(t!("gui.setup_tools.tool_progress_indeterminate",
-                        bytes = current,
-                    ).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: overall_tool_progress as u32,
+                        message: t!(
+                            "gui.setup_tools.downloading",
+                            tool_name = tool_name
+                                .split('/')
+                                .next_back()
+                                .unwrap_or(&tool_name)
+                                .replace("-", " ")
+                        )
+                        .to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.tool_progress_indeterminate",
+                                bytes = current,
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
             }
 
             DownloadProgress::Start(url) => {
                 // Extract tool name from URL
-                let tool_name = if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
-                    // Try to extract tool name from filename (remove version/platform info)
-                    let clean_name = filename
-                        .split('-')
-                        .take(3) // Take first few parts before version numbers
-                        .collect::<Vec<_>>()
-                        .join("-")
-                        .replace(".tar", "")
-                        .replace(".zip", "");
-                    clean_name
-                } else {
-                    t!("gui.setup_tools.unknown_tool").to_string()
-                };
+                let tool_name =
+                    if let Some(filename) = Path::new(&url).file_name().and_then(|f| f.to_str()) {
+                        // Try to extract tool name from filename (remove version/platform info)
+                        let clean_name = filename
+                            .split('-')
+                            .take(3) // Take first few parts before version numbers
+                            .collect::<Vec<_>>()
+                            .join("-")
+                            .replace(".tar", "")
+                            .replace(".zip", "");
+                        clean_name
+                    } else {
+                        t!("gui.setup_tools.unknown_tool").to_string()
+                    };
 
                 *current_tool_name_clone.lock().unwrap() = tool_name.clone();
                 let completed = *completed_tools_clone.lock().unwrap();
-                let overall_percentage = base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32;
+                let overall_percentage = base_percentage
+                    + ((completed as f32 / total_tools) * tools_range as f32) as u32;
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: overall_percentage.min(89),
-                    message: t!("gui.setup_tools.preparing",
-                        tool_name = tool_name.replace("-", " ")
-                    ).to_string(),
-                    detail: Some(t!("gui.setup_tools.starting_tool",
-                        current = completed + 1,
-                        total = total_tools as u32
-                    ).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: overall_percentage.min(89),
+                        message: t!(
+                            "gui.setup_tools.preparing",
+                            tool_name = tool_name.replace("-", " ")
+                        )
+                        .to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.starting_tool",
+                                current = completed + 1,
+                                total = total_tools as u32
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
 
-                emit_log_message(&app_handle_clone, MessageLevel::Info,
-                    t!("gui.setup_tools.starting_download", tool_name = tool_name).to_string());
+                emit_log_message(
+                    &app_handle_clone,
+                    MessageLevel::Info,
+                    t!("gui.setup_tools.starting_download", tool_name = tool_name).to_string(),
+                );
             }
 
-            DownloadProgress::Downloaded(url) => {
+            DownloadProgress::Downloaded(_url) => {
                 let completed = *completed_tools_clone.lock().unwrap();
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 1).min(89),
-                    message: t!("gui.setup_tools.verifying",
-                        tool_name = tool_name.replace("-", " ")
-                    ).to_string(),
-                    detail: Some(t!("gui.setup_tools.downloaded_tool",
-                        current = completed + 1,
-                        total = total_tools as u32
-                    ).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: (base_percentage
+                            + ((completed as f32 / total_tools) * tools_range as f32) as u32
+                            + 1)
+                        .min(89),
+                        message: t!(
+                            "gui.setup_tools.verifying",
+                            tool_name = tool_name.replace("-", " ")
+                        )
+                        .to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.downloaded_tool",
+                                current = completed + 1,
+                                total = total_tools as u32
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
 
-                emit_log_message(&app_handle_clone, MessageLevel::Info,
-                    t!("gui.setup_tools.downloaded", tool_name = tool_name).to_string());
+                emit_log_message(
+                    &app_handle_clone,
+                    MessageLevel::Info,
+                    t!("gui.setup_tools.downloaded", tool_name = tool_name).to_string(),
+                );
             }
 
-            DownloadProgress::Verified(url) => {
+            DownloadProgress::Verified(_url) => {
                 let completed = *completed_tools_clone.lock().unwrap();
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: (base_percentage + ((completed as f32 / total_tools) * tools_range as f32) as u32 + 2).min(89),
-                    message: t!("gui.setup_tools.extracting",
-                        tool_name = tool_name.replace("-", " ")
-                    ).to_string(),
-                    detail: Some(t!("gui.setup_tools.verified_tool",
-                        current = completed + 1,
-                        total = total_tools as u32
-                    ).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: (base_percentage
+                            + ((completed as f32 / total_tools) * tools_range as f32) as u32
+                            + 2)
+                        .min(89),
+                        message: t!(
+                            "gui.setup_tools.extracting",
+                            tool_name = tool_name.replace("-", " ")
+                        )
+                        .to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.verified_tool",
+                                current = completed + 1,
+                                total = total_tools as u32
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
 
-                emit_log_message(&app_handle_clone, MessageLevel::Success,
-                    t!("gui.setup_tools.verified", tool_name = tool_name).to_string());
+                emit_log_message(
+                    &app_handle_clone,
+                    MessageLevel::Success,
+                    t!("gui.setup_tools.verified", tool_name = tool_name).to_string(),
+                );
             }
 
-            DownloadProgress::Extracted(url, _dest) => {
+            DownloadProgress::Extracted(_url, _dest) => {
                 let mut completed = completed_tools_clone.lock().unwrap();
                 *completed += 1;
                 let completed_count = *completed;
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                let overall_percentage = base_percentage + ((completed_count as f32 / total_tools) * tools_range as f32) as u32;
+                let overall_percentage = base_percentage
+                    + ((completed_count as f32 / total_tools) * tools_range as f32) as u32;
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: overall_percentage.min(89),
-                    message: t!("gui.setup_tools.installed",
-                        tool_name = tool_name.replace("-", " ")
-                    ).to_string(),
-                    detail: Some(t!("gui.setup_tools.completed_tools",
-                        current = completed_count,
-                        total = total_tools as u32
-                    ).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: overall_percentage.min(89),
+                        message: t!(
+                            "gui.setup_tools.installed",
+                            tool_name = tool_name.replace("-", " ")
+                        )
+                        .to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.completed_tools",
+                                current = completed_count,
+                                total = total_tools as u32
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
 
-                emit_log_message(&app_handle_clone, MessageLevel::Success,
-                    t!("gui.setup_tools.installed_tool",
+                emit_log_message(
+                    &app_handle_clone,
+                    MessageLevel::Success,
+                    t!(
+                        "gui.setup_tools.installed_tool",
                         tool_name = tool_name,
                         current = completed_count,
                         total = total_tools as u32
-                    ).to_string());
+                    )
+                    .to_string(),
+                );
             }
 
             DownloadProgress::Complete => {
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: 89,
-                    message: t!("gui.setup_tools.all_downloaded").to_string(),
-                    detail: Some(t!("gui.setup_tools.completed_installation", count = total_tools as u32).to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Tools,
+                        percentage: 89,
+                        message: t!("gui.setup_tools.all_downloaded").to_string(),
+                        detail: Some(
+                            t!(
+                                "gui.setup_tools.completed_installation",
+                                count = total_tools as u32
+                            )
+                            .to_string(),
+                        ),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
             }
 
             DownloadProgress::Error(err) => {
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                emit_installation_event(&app_handle_clone, InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: t!("gui.setup_tools.tool_failed", tool_name = tool_name).to_string(),
-                    detail: Some(err.to_string()),
-                    version: Some(idf_version_clone.clone()),
-                });
+                emit_installation_event(
+                    &app_handle_clone,
+                    InstallationProgress {
+                        stage: InstallationStage::Error,
+                        percentage: 0,
+                        message: t!("gui.setup_tools.tool_failed", tool_name = tool_name)
+                            .to_string(),
+                        detail: Some(err.to_string()),
+                        version: Some(idf_version_clone.clone()),
+                    },
+                );
 
-                emit_log_message(&app_handle_clone, MessageLevel::Error,
-                    t!("gui.setup_tools.tool_error", error = err.to_string()).to_string());
+                emit_log_message(
+                    &app_handle_clone,
+                    MessageLevel::Error,
+                    t!("gui.setup_tools.tool_error", error = err.to_string()).to_string(),
+                );
             }
         }
     };
 
-    let tools_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::IDFTools, settings, is_simple_installation).await;
+    let tools_mirror_to_use = get_mirror_to_use(
+        app_handle,
+        MirrorType::IDFTools,
+        settings,
+        is_simple_installation,
+    )
+    .await;
     let download_folder = PathBuf::from(&tool_setup.download_dir);
     let install_folder = PathBuf::from(&tool_setup.install_dir);
     // Use the library's setup_tools function
@@ -427,49 +581,72 @@ pub async fn setup_tools(
     )
     .await
     .map_err(|e| {
-        emit_installation_event(app_handle, InstallationProgress {
-            stage: InstallationStage::Error,
-            percentage: 0,
-            message: t!("gui.setup_tools.setup_failed").to_string(),
-            detail: Some(e.to_string()),
-            version: Some(idf_version.to_string()),
-        });
+        emit_installation_event(
+            app_handle,
+            InstallationProgress {
+                stage: InstallationStage::Error,
+                percentage: 0,
+                message: t!("gui.setup_tools.setup_failed").to_string(),
+                detail: Some(e.to_string()),
+                version: Some(idf_version.to_string()),
+            },
+        );
         anyhow!("Failed to setup tools: {}", e)
     })?;
 
     let tools_install_folder = &install_folder;
 
-    info!("Setting up tools... to directory: {}", tools_install_folder.display());
+    info!(
+        "Setting up tools... to directory: {}",
+        tools_install_folder.display()
+    );
     if settings.cleanup.unwrap_or(false) {
         // Cleanup download directory after installation
         match std::fs::remove_dir_all(&tool_setup.download_dir) {
             Ok(_) => {
-                info!("Cleaned up tools download directory: {}", tool_setup.download_dir);
-                emit_log_message(app_handle, MessageLevel::Success,
-                    t!("gui.setup_tools.cleanup.success").to_string());
+                info!(
+                    "Cleaned up tools download directory: {}",
+                    tool_setup.download_dir
+                );
+                emit_log_message(
+                    app_handle,
+                    MessageLevel::Success,
+                    t!("gui.setup_tools.cleanup.success").to_string(),
+                );
             }
             Err(err) => {
-                error!("Failed to clean up tools download directory {}: {}", tool_setup.download_dir, err);
-                emit_log_message(app_handle, MessageLevel::Error,
-                    t!("gui.setup_tools.cleanup.failure").to_string());
+                error!(
+                    "Failed to clean up tools download directory {}: {}",
+                    tool_setup.download_dir, err
+                );
+                emit_log_message(
+                    app_handle,
+                    MessageLevel::Error,
+                    t!("gui.setup_tools.cleanup.failure").to_string(),
+                );
             }
         }
     }
 
     // Transition to Python setup phase (90%)
-    emit_installation_event(app_handle, InstallationProgress {
-        stage: InstallationStage::Python,
-        percentage: 90,
-        message: t!("gui.setup_tools.python_setup_starting").to_string(),
-        detail: Some(t!("gui.setup_tools.python_installing").to_string()),
-        version: Some(idf_version.to_string()),
-    });
+    emit_installation_event(
+        app_handle,
+        InstallationProgress {
+            stage: InstallationStage::Python,
+            percentage: 90,
+            message: t!("gui.setup_tools.python_setup_starting").to_string(),
+            detail: Some(t!("gui.setup_tools.python_installing").to_string()),
+            version: Some(idf_version.to_string()),
+        },
+    );
 
-    let paths = match settings.get_version_paths(&idf_version) {
-      Ok(paths) => paths,
-      Err(_err) => {
-        return Err(anyhow!("Failed to setup environment paths for idf versions"));
-      }
+    let paths = match settings.get_version_paths(idf_version) {
+        Ok(paths) => paths,
+        Err(_err) => {
+            return Err(anyhow!(
+                "Failed to setup environment paths for idf versions"
+            ));
+        }
     };
 
     // Get features for this specific version
@@ -477,10 +654,15 @@ pub async fn setup_tools(
 
     info!(
         "Installing Python environment for {} with features: {:?}",
-        idf_version,
-        features_for_version
+        idf_version, features_for_version
     );
-    let pypi_mirror_to_use = get_mirror_to_use(&app_handle, MirrorType::PyPI, settings, is_simple_installation).await;
+    let pypi_mirror_to_use = get_mirror_to_use(
+        app_handle,
+        MirrorType::PyPI,
+        settings,
+        is_simple_installation,
+    )
+    .await;
 
     // Install Python environment
     match idf_im_lib::python_utils::install_python_env(
@@ -488,31 +670,42 @@ pub async fn setup_tools(
         &paths.actual_version,
         &paths.tool_install_directory,
         &features_for_version,
-        offline_archive_dir, // Offline archive directory
+        offline_archive_dir,       // Offline archive directory
         &Some(pypi_mirror_to_use), // PyPI mirror
-    ).await {
+    )
+    .await
+    {
         Ok(_) => {
             info!("Python environment installed");
-            emit_installation_event(app_handle, InstallationProgress {
-                stage: InstallationStage::Python,
-                percentage: 93,
-                message: t!("gui.setup_tools.python_configured").to_string(),
-                detail: Some(t!("gui.setup_tools.python_deps_installed").to_string()),
-                version: Some(idf_version.to_string()),
-            });
+            emit_installation_event(
+                app_handle,
+                InstallationProgress {
+                    stage: InstallationStage::Python,
+                    percentage: 93,
+                    message: t!("gui.setup_tools.python_configured").to_string(),
+                    detail: Some(t!("gui.setup_tools.python_deps_installed").to_string()),
+                    version: Some(idf_version.to_string()),
+                },
+            );
 
-            emit_log_message(app_handle, MessageLevel::Success,
-                t!("gui.setup_tools.python_installed").to_string());
+            emit_log_message(
+                app_handle,
+                MessageLevel::Success,
+                t!("gui.setup_tools.python_installed").to_string(),
+            );
         }
         Err(err) => {
             error!("Failed to install Python environment: {}", err);
-            emit_installation_event(app_handle, InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: t!("gui.setup_tools.python_setup_failed").to_string(),
-                detail: Some(err.to_string()),
-                version: Some(idf_version.to_string()),
-            });
+            emit_installation_event(
+                app_handle,
+                InstallationProgress {
+                    stage: InstallationStage::Error,
+                    percentage: 0,
+                    message: t!("gui.setup_tools.python_setup_failed").to_string(),
+                    detail: Some(err.to_string()),
+                    version: Some(idf_version.to_string()),
+                },
+            );
             return Err(anyhow!("Failed to install Python environment: {}", err));
         }
     };
@@ -540,18 +733,24 @@ pub async fn setup_tools(
     );
 
     // Configuration phase (95%)
-    emit_installation_event(app_handle, InstallationProgress {
-        stage: InstallationStage::Configure,
-        percentage: 95,
-        message: t!("gui.setup_tools.configuring_env").to_string(),
-        detail: Some(t!("gui.setup_tools.configuring_dev_env").to_string()),
-        version: Some(idf_version.to_string()),
-    });
+    emit_installation_event(
+        app_handle,
+        InstallationProgress {
+            stage: InstallationStage::Configure,
+            percentage: 95,
+            message: t!("gui.setup_tools.configuring_env").to_string(),
+            detail: Some(t!("gui.setup_tools.configuring_dev_env").to_string()),
+            version: Some(idf_version.to_string()),
+        },
+    );
 
-    emit_log_message(app_handle, MessageLevel::Success,
-        t!("gui.setup_tools.setup_completed").to_string());
+    emit_log_message(
+        app_handle,
+        MessageLevel::Success,
+        t!("gui.setup_tools.setup_completed").to_string(),
+    );
 
-    Ok((export_paths,export_vars))
+    Ok((export_paths, export_vars))
 }
 
 #[tauri::command]
@@ -575,10 +774,13 @@ pub async fn get_features_list_all_versions(
         let req_url = get_requirements_json_url(
             settings.repo_stub.clone().as_deref(),
             &version,
-            settings.idf_mirror.clone().as_deref()
+            settings.idf_mirror.clone().as_deref(),
         );
 
-        info!("Fetching requirements for version {} from: {}", version, req_url);
+        info!(
+            "Fetching requirements for version {} from: {}",
+            version, req_url
+        );
 
         let requirements_files = match RequirementsMetadata::from_url_async(&req_url).await {
             Ok(files) => files,
@@ -636,7 +838,10 @@ pub fn get_selected_features_per_version(
 ) -> Result<HashMap<String, Vec<String>>, String> {
     let settings = get_settings_non_blocking(&app_handle)?;
 
-    Ok(settings.idf_features_per_version.clone().unwrap_or_default())
+    Ok(settings
+        .idf_features_per_version
+        .clone()
+        .unwrap_or_default())
 }
 
 /// Gets the list of available tools for all selected IDF versions
@@ -663,7 +868,7 @@ pub async fn get_tools_list_all_versions(
         let tools_url = idf_im_lib::tool_selection::get_tools_json_url(
             settings.repo_stub.clone().as_deref(),
             &version,
-            settings.idf_mirror.clone().as_deref()
+            settings.idf_mirror.clone().as_deref(),
         );
 
         info!("Fetching tools for version {} from: {}", version, tools_url);
@@ -683,21 +888,18 @@ pub async fn get_tools_list_all_versions(
             }
         };
 
-        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED /////////////////////
-        /// This is needed because the IDEs expect clang to be always installed                     ///
-        /// ninja is included as without it the users are not able to actually build the projects   ///
+        ////////////////////// IMPORTANT MODIFY CLANG TOOL TO ALWAYS BE INSTALLED //////////////////////
+        // This is needed because the IDEs expect clang to be always installed
+        // ninja is included as without it the users are not able to actually build the projects
         ///////////////////////////////////////////////////////////////////////////////////////////////
         for t in tools_file.tools.iter_mut() {
-          if t.name.contains("clang") || t.name.contains("ninja") {
-            t.install = "always".to_string();
-            debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
-          }
+            if t.name.contains("clang") || t.name.contains("ninja") {
+                t.install = "always".to_string();
+                debug!("{}: {}", t!("wizard.tools_json.modify_clang"), t.name);
+            }
         }
 
-        let tools = match get_tools_for_selection(
-            &tools_file,
-            targets.as_ref().map(|t| t.as_slice()),
-        ) {
+        let tools = match get_tools_for_selection(&tools_file, targets.as_deref()) {
             Ok(tools) => tools,
             Err(err) => {
                 warn!("Failed to get tools for version {}: {}", version, err);

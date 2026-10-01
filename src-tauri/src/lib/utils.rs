@@ -1,49 +1,49 @@
 use crate::{
-    command_executor::{CommandExecutor, get_executor},
+    command_executor::{get_executor, CommandExecutor},
     idf_config::{IdfConfig, IdfInstallation},
-    idf_tools::read_and_parse_tools_file, single_version_post_install, version_manager::get_default_config_path
+    idf_tools::read_and_parse_tools_file,
+    single_version_post_install,
+    version_manager::get_default_config_path,
 };
-use anyhow::{anyhow, Result, Error};
+use anyhow::{anyhow, Result};
+use filetime::{set_file_mtime, set_symlink_file_times, FileTime};
 use log::{debug, error, info, warn};
 use rust_search::SearchBuilder;
 use serde::{Deserialize, Serialize};
-use tar::Archive;
-use zstd::{decode_all, Decoder};
-use filetime::{FileTime, set_file_mtime, set_symlink_file_times};
 #[cfg(not(windows))]
 use std::os::unix::fs::MetadataExt;
 use std::{
+    cmp::Ordering,
     collections::{HashMap, HashSet},
     fs::{self, File},
-    io::{self, BufReader, Read},
+    io::{self, BufReader},
     path::{Path, PathBuf},
     time::{Duration, Instant},
-    cmp::Ordering,
 };
+use tar::Archive;
+use zstd::Decoder;
 
-use gix::{filter::plumbing::driver::process::server::Request, prelude::*};
-use std::sync::atomic::AtomicBool;
 use regex::Regex;
 use url::Url;
 
+#[cfg(windows)]
+use std::mem;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(windows)]
+use winapi::shared::minwindef::{DWORD, FALSE};
+#[cfg(windows)]
+use winapi::um::fileapi::{FindClose, FindFirstFileW, GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
+#[cfg(windows)]
+use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
+#[cfg(windows)]
+use winapi::um::minwinbase::WIN32_FIND_DATAW;
 #[cfg(windows)]
 use winapi::um::processthreadsapi::{GetCurrentProcess, OpenProcessToken};
 #[cfg(windows)]
 use winapi::um::securitybaseapi::GetTokenInformation;
 #[cfg(windows)]
 use winapi::um::winnt::{TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
-#[cfg(windows)]
-use winapi::um::handleapi::{CloseHandle, INVALID_HANDLE_VALUE};
-#[cfg(windows)]
-use winapi::shared::minwindef::{DWORD, FALSE};
-#[cfg(windows)]
-use std::mem;
-#[cfg(windows)]
-use std::os::windows::ffi::OsStrExt;
-#[cfg(windows)]
-use winapi::um::fileapi::{FindClose, FindFirstFileW, GetFileAttributesW, INVALID_FILE_ATTRIBUTES};
-#[cfg(windows)]
-use winapi::um::minwinbase::WIN32_FIND_DATAW;
 
 /// A generic result structure for representing check outcomes across different check types.
 ///
@@ -63,10 +63,7 @@ pub struct GenericCheckResult<T> {
 
 impl<T> GenericCheckResult<T> {
     /// Builds a `GenericCheckResult` from the outcome of a command execution.
-    pub fn from_command_output(
-        check: T,
-        result: std::io::Result<std::process::Output>,
-    ) -> Self {
+    pub fn from_command_output(check: T, result: std::io::Result<std::process::Output>) -> Self {
         match result {
             Ok(out) if out.status.success() => GenericCheckResult {
                 check,
@@ -130,7 +127,6 @@ impl Ord for MirrorEntry {
 /// - `Ok(String)`: If a working git executable is found, returns its path as a `String`.
 /// - `Err(String)`: If git is not found or validation fails, returns an error message.
 pub fn get_git_path() -> Result<String, String> {
-
     let executor = get_executor();
 
     if std::env::consts::OS == "windows" {
@@ -140,7 +136,9 @@ pub fn get_git_path() -> Result<String, String> {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.lines() {
                     let candidate = line.trim();
-                    if candidate.is_empty() { continue; }
+                    if candidate.is_empty() {
+                        continue;
+                    }
 
                     // Verify it actually works
                     if verify_git(&*executor, candidate) {
@@ -167,7 +165,6 @@ pub fn get_git_path() -> Result<String, String> {
         }
 
         Err("git not found: not installed, not in PATH,".to_string())
-
     } else {
         // Unix: use `command -v` for portability via shell executor
         match executor.execute("sh", &["-c", "command -v git"]) {
@@ -278,15 +275,15 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
 /// }
 /// ```
 pub fn find_by_name_and_extension(path: &Path, name: &str, extension: &str) -> Vec<String> {
-  SearchBuilder::default()
-    .location(path)
-    .search_input(name)
-    .ext(extension)
-    .strict()
-    .ignore_case()
-    .hidden()
-    .build()
-    .collect()
+    SearchBuilder::default()
+        .location(path)
+        .search_input(name)
+        .ext(extension)
+        .strict()
+        .ignore_case()
+        .hidden()
+        .build()
+        .collect()
 }
 
 /// Checks if the given path is a valid ESP-IDF directory.
@@ -309,14 +306,7 @@ pub fn is_valid_idf_directory(path: &str) -> bool {
     if !tools_json_path.exists() {
         return false;
     }
-    match read_and_parse_tools_file(tools_json_path.to_str().unwrap()) {
-        Ok(_) => {
-            true
-        }
-        Err(_) => {
-            false
-        }
-    }
+    read_and_parse_tools_file(tools_json_path.to_str().unwrap()).is_ok()
 }
 
 /// Filters out duplicate paths from a vector of strings.
@@ -423,7 +413,12 @@ fn filter_subpaths(paths: Vec<String>) -> Vec<String> {
 /// - `Option<String>`: The normalized path as a string, or None if canonicalization fails.
 pub fn normalize_path_for_comparison(path: &str) -> Option<String> {
     let expanded = crate::expand_tilde(Path::new(path));
-    expanded.canonicalize().ok().map(|p| p.to_string_lossy().trim_end_matches('/').trim_end_matches('\\').to_string())
+    expanded.canonicalize().ok().map(|p| {
+        p.to_string_lossy()
+            .trim_end_matches('/')
+            .trim_end_matches('\\')
+            .to_string()
+    })
 }
 
 /// Removes a directory and all its contents recursively.
@@ -492,13 +487,18 @@ impl RetryStrategy {
     fn delay(&self, attempt: u32) -> std::time::Duration {
         match self {
             RetryStrategy::Immediate => std::time::Duration::ZERO,
-            RetryStrategy::Exponential(base) => *base * 2u32.pow(attempt.saturating_sub(1)) as u32,
+            RetryStrategy::Exponential(base) => *base * 2u32.pow(attempt.saturating_sub(1)),
         }
     }
 }
 
 /// Generic retry wrapper that takes a closure and retries it according to the configuration
-fn retry_with_strategy<F, T, E>(mut f: F, max_retries: usize, strategy: RetryStrategy, log_level: log::Level) -> Result<T, E>
+fn retry_with_strategy<F, T, E>(
+    mut f: F,
+    max_retries: usize,
+    strategy: RetryStrategy,
+    log_level: log::Level,
+) -> Result<T, E>
 where
     F: FnMut() -> Result<T, E>,
     E: std::fmt::Debug,
@@ -516,7 +516,10 @@ where
 
                 let delay = strategy.delay(attempt as u32);
                 match log_level {
-                    log::Level::Warn => warn!("Attempt {} failed: {:?}, retrying in {:?}", attempt, e, delay),
+                    log::Level::Warn => warn!(
+                        "Attempt {} failed: {:?}, retrying in {:?}",
+                        attempt, e, delay
+                    ),
                     log::Level::Debug => debug!("Attempt {} failed with error: {:?}", attempt, e),
                     _ => {}
                 }
@@ -539,12 +542,21 @@ where
 
 /// Retry wrapper with exponential backoff for network operations.
 /// Retries up to `max_retries` times with exponential backoff between attempts.
-pub fn with_retry_exponential<F, T, E>(f: F, max_retries: usize, base_delay: std::time::Duration) -> Result<T, E>
+pub fn with_retry_exponential<F, T, E>(
+    f: F,
+    max_retries: usize,
+    base_delay: std::time::Duration,
+) -> Result<T, E>
 where
     F: FnMut() -> Result<T, E>,
     E: std::fmt::Debug + std::fmt::Display,
 {
-    retry_with_strategy(f, max_retries, RetryStrategy::Exponential(base_delay), log::Level::Warn)
+    retry_with_strategy(
+        f,
+        max_retries,
+        RetryStrategy::Exponential(base_delay),
+        log::Level::Warn,
+    )
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -597,18 +609,23 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
         Err(e) => return Err(anyhow!("Failed to parse config file: {}", e)),
     };
     let mut settings = crate::settings::Settings::default();
-    let config_path = idf_json_path.cloned().unwrap_or_else(get_default_config_path);
+    let config_path = idf_json_path
+        .cloned()
+        .unwrap_or_else(get_default_config_path);
     let mut current_config = match IdfConfig::from_file(&config_path) {
-      Ok(config) => config,
-      Err(_e) => {
-        info!("Config file not found, creating a new one at: {}", config_path.display());
-        settings.idf_versions = Some(vec![]);
-        match settings.save_esp_ide_json() {
-          Ok(_) => info!("Created new config file at: {}", config_path.display()),
-          Err(e) => error!("Failed to create config file: {}", e),
+        Ok(config) => config,
+        Err(_e) => {
+            info!(
+                "Config file not found, creating a new one at: {}",
+                config_path.display()
+            );
+            settings.idf_versions = Some(vec![]);
+            match settings.save_esp_ide_json() {
+                Ok(_) => info!("Created new config file at: {}", config_path.display()),
+                Err(e) => error!("Failed to create config file: {}", e),
+            }
+            IdfConfig::from_file(&config_path).unwrap()
         }
-        IdfConfig::from_file(&config_path).unwrap()
-      }
     };
     for tool_set in config.into_iter() {
         let new_idf_tools_path = extract_tools_path_from_python_env_path(
@@ -629,19 +646,20 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
         let mut env_vars = tool_set.env_vars.clone();
         env_vars.remove("PATH");
         env_vars.remove("ESP_IDF_VERSION");
-        let env_vars_vec = env_vars.into_iter()
+        let env_vars_vec = env_vars
+            .into_iter()
             .map(|(k, v)| (k, v.to_string()))
             .collect::<Vec<(String, String)>>();
 
         single_version_post_install(
-            &paths.activation_script_path.to_string_lossy().into_owned(),
+            &paths.activation_script_path.to_string_lossy(),
             &tool_set.idf_location,
             &tool_set.idf_version,
             &new_idf_tools_path,
             new_export_paths,
             idf_python_env_path.as_deref(),
             Some(env_vars_vec),
-            &paths.python_path.to_string_lossy().to_string(),
+            paths.python_path.to_string_lossy().as_ref(),
             false, // create_cmd_bat
             false,
             false,
@@ -659,16 +677,13 @@ pub fn parse_tool_set_config(config_path: &str, idf_json_path: Option<&PathBuf>)
         };
 
         current_config.idf_installed.push(installation);
-
     }
     match current_config.to_file(config_path, true, true) {
-      Ok(_) => {
-        debug!("Updated config file with new tool set");
-        return Ok(())
-      }
-      Err(e) => {
-        return Err(anyhow!("Failed to update config file: {}", e))
-      }
+        Ok(_) => {
+            debug!("Updated config file with new tool set");
+            Ok(())
+        }
+        Err(e) => Err(anyhow!("Failed to update config file: {}", e)),
     }
 }
 
@@ -730,12 +745,12 @@ pub fn make_long_path_compatible(path: &str) -> String {
 /// assert_eq!(result, "one.two");
 /// ```
 pub fn remove_after_second_dot(s: &str) -> String {
-  if let Some(first_dot) = s.find('.') {
-      if let Some(second_dot) = s[first_dot + 1..].find('.') {
-          return s[..first_dot + 1 + second_dot].to_string();
-      }
-  }
-  s.to_string()
+    if let Some(first_dot) = s.find('.') {
+        if let Some(second_dot) = s[first_dot + 1..].find('.') {
+            return s[..first_dot + 1 + second_dot].to_string();
+        }
+    }
+    s.to_string()
 }
 
 /// Parses the IDF version from an ESP-IDF installation CMakec file.
@@ -791,7 +806,10 @@ pub fn parse_cmake_version(idf_path: &str) -> Result<(String, String)> {
 
     // Check if file exists
     if !cmake_path.exists() {
-        return Err(anyhow!("CMake version file not found at: {}", cmake_path.display()));
+        return Err(anyhow!(
+            "CMake version file not found at: {}",
+            cmake_path.display()
+        ));
     }
 
     // Read the file content
@@ -799,8 +817,7 @@ pub fn parse_cmake_version(idf_path: &str) -> Result<(String, String)> {
         .map_err(|e| anyhow!("Failed to read CMake version file: {}", e))?;
 
     // Regex to extract numbers from lines
-    let re = Regex::new(r"\d+")
-        .map_err(|e| anyhow!("Failed to compile regex: {}", e))?;
+    let re = Regex::new(r"\d+").map_err(|e| anyhow!("Failed to compile regex: {}", e))?;
 
     // Parse major and minor versions
     let mut major = None;
@@ -821,7 +838,9 @@ pub fn parse_cmake_version(idf_path: &str) -> Result<(String, String)> {
     if let (Some(Ok(maj)), Some(Ok(min))) = (major, minor) {
         return Ok((maj.to_string(), min.to_string()));
     }
-    Err(anyhow!("Could not find both major and minor version numbers"))
+    Err(anyhow!(
+        "Could not find both major and minor version numbers"
+    ))
 }
 
 /// Parse version string and extract major.minor components
@@ -837,7 +856,10 @@ pub fn parse_version_major_minor(version: &str) -> Option<(u32, u32)> {
 
 /// Compare two versions considering only major and minor components
 pub fn versions_match(installed: &str, expected: &str) -> bool {
-    match (parse_version_major_minor(installed), parse_version_major_minor(expected)) {
+    match (
+        parse_version_major_minor(installed),
+        parse_version_major_minor(expected),
+    ) {
         (Some((inst_major, inst_minor)), Some((exp_major, exp_minor))) => {
             inst_major == exp_major && inst_minor == exp_minor
         }
@@ -854,9 +876,12 @@ pub fn get_commit_hash(repo_path: &str) -> Result<String, Box<dyn std::error::Er
 pub fn extract_zst_archive_with_buffer_size(
     archive_path: &Path,
     extract_to: &Path,
-    buffer_size: usize
+    buffer_size: usize,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    info!("Extracting archive: {:?} to: {:?} with buffer size: {}", archive_path, extract_to, buffer_size);
+    info!(
+        "Extracting archive: {:?} to: {:?} with buffer size: {}",
+        archive_path, extract_to, buffer_size
+    );
 
     // Create extraction directory if it doesn't exist
     std::fs::create_dir_all(extract_to)?;
@@ -881,7 +906,10 @@ pub fn extract_zst_archive_with_buffer_size(
 }
 
 /// Convenience function that replaces the original with better defaults
-pub fn extract_zst_archive(archive_path: &Path, extract_to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub fn extract_zst_archive(
+    archive_path: &Path,
+    extract_to: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Use the streaming version with a reasonable default buffer size (64KB)
     extract_zst_archive_with_buffer_size(archive_path, extract_to, 64 * 1024)
 }
@@ -917,7 +945,7 @@ pub fn copy_dir_contents_preserving_mtime(src: &Path, dst: &Path) -> io::Result<
             set_symlink_file_times(
                 &dest_path,
                 FileTime::now(),
-                FileTime::from_last_modification_time(&meta)
+                FileTime::from_last_modification_time(&meta),
             )?;
         } else if meta.is_dir() {
             debug!("Directory entry: {:?} -> {:?}", path, dest_path);
@@ -956,9 +984,9 @@ pub fn create_symlink_rewritten(
             let new_abs_target = dst_root.join(rel_inside_src);
 
             // Convert to relative path from the new link location
-            let parent = dest_link_path.parent().ok_or_else(|| {
-                io::Error::new(io::ErrorKind::Other, "Destination symlink has no parent")
-            })?;
+            let parent = dest_link_path
+                .parent()
+                .ok_or_else(|| io::Error::other("Destination symlink has no parent"))?;
 
             pathdiff::diff_paths(&new_abs_target, parent).unwrap_or(new_abs_target)
         } else {
@@ -995,7 +1023,7 @@ pub fn copy_dir_contents_with_retries(
     src: &Path,
     dst: &Path,
     max_retries: u32,
-    retry_delay: std::time::Duration
+    retry_delay: std::time::Duration,
 ) -> io::Result<()> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
@@ -1027,7 +1055,7 @@ fn copy_file_with_retries(
     src: &Path,
     dst: &Path,
     max_retries: u32,
-    retry_delay: std::time::Duration
+    retry_delay: std::time::Duration,
 ) -> io::Result<()> {
     let mut attempts = 0;
 
@@ -1039,16 +1067,20 @@ fn copy_file_with_retries(
 
                 // Check if it's a retryable error
                 if is_retryable_error(&e) && attempts <= max_retries {
-                    eprintln!("Warning: Failed to copy {:?} to {:?} (attempt {}/{}): {}. Retrying...",
-                             src, dst, attempts, max_retries, e);
+                    eprintln!(
+                        "Warning: Failed to copy {:?} to {:?} (attempt {}/{}): {}. Retrying...",
+                        src, dst, attempts, max_retries, e
+                    );
                     std::thread::sleep(retry_delay);
                     continue;
                 } else {
                     // Add more context to the error
                     return Err(io::Error::new(
                         e.kind(),
-                        format!("Failed to copy {:?} to {:?} after {} attempts: {}",
-                               src, dst, attempts, e)
+                        format!(
+                            "Failed to copy {:?} to {:?} after {} attempts: {}",
+                            src, dst, attempts, e
+                        ),
                     ));
                 }
             }
@@ -1058,9 +1090,9 @@ fn copy_file_with_retries(
 
 fn is_retryable_error(error: &io::Error) -> bool {
     match error.raw_os_error() {
-        Some(5) => true,   // ERROR_ACCESS_DENIED
-        Some(32) => true,  // ERROR_SHARING_VIOLATION
-        Some(33) => true,  // ERROR_LOCK_VIOLATION
+        Some(5) => true,  // ERROR_ACCESS_DENIED
+        Some(32) => true, // ERROR_SHARING_VIOLATION
+        Some(33) => true, // ERROR_LOCK_VIOLATION
         _ => false,
     }
 }
@@ -1069,9 +1101,8 @@ fn get_base_url(url_str: &str) -> Option<String> {
     let url = Url::parse(url_str).ok()?;
     let scheme = url.scheme();
     let host = url.host_str()?;
-    let port = url.port();
-    if port.is_some() {
-        return Some(format!("{}://{}:{}", scheme, host, port.unwrap()));
+    if let Some(port) = url.port() {
+        return Some(format!("{}://{}:{}", scheme, host, port));
     }
 
     Some(format!("{}://{}", scheme, host))
@@ -1097,13 +1128,11 @@ pub async fn measure_url_score_head(url: &str, timeout: Duration) -> Result<u32,
         return Err(anyhow!("Invalid base URL: {}", url));
     }
 
-    match client.unwrap().head(&base_url.unwrap()).send().await {
+    match client.unwrap().head(base_url.unwrap()).send().await {
         Ok(resp) if resp.status().is_success() => {
-            return Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32);
+            Ok(start.elapsed().as_millis().min(u32::MAX as u128) as u32)
         }
-        _ => {
-            return Err(anyhow!("Mirror ping failed with HEAD for {}", url));
-        }
+        _ => Err(anyhow!("Mirror ping failed with HEAD for {}", url)),
     }
 }
 
@@ -1154,10 +1183,13 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
             match measure_url_score_head(url, timeout).await {
                 Ok(score) => {
                     debug!("Mirror score: {} -> {}", url, score);
-                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
+                    mirror_entries.push(MirrorEntry {
+                        url: url.to_string(),
+                        latency: Some(score),
+                    });
                 }
                 Err(e) => {
-                    warn!("{}", e.to_string());
+                    warn!("{}", e);
                     head_latency_failed = true;
                     break;
                 }
@@ -1173,11 +1205,17 @@ pub async fn calculate_mirrors_latency(mirrors: &[&str]) -> Vec<MirrorEntry> {
             match measure_url_score_get(url, timeout).await {
                 Some(score) => {
                     debug!("Mirror get score: {} -> {}", url, score);
-                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: Some(score) });
+                    mirror_entries.push(MirrorEntry {
+                        url: url.to_string(),
+                        latency: Some(score),
+                    });
                 }
                 None => {
                     debug!("Unable to measure get latency for {}: {:?}", url, timeout);
-                    mirror_entries.push(MirrorEntry { url: url.to_string(), latency: None });
+                    mirror_entries.push(MirrorEntry {
+                        url: url.to_string(),
+                        latency: None,
+                    });
                 }
             }
         }
@@ -1262,8 +1300,8 @@ mod tests {
     use std::fs::{self, File};
     use std::io::Write;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use tempfile::TempDir;
     use tar::Builder;
+    use tempfile::TempDir;
     use zstd::stream::write::Encoder;
 
     fn create_test_zst_archive(temp_dir: &TempDir) -> std::path::PathBuf {
@@ -1282,7 +1320,9 @@ mod tests {
         let encoder = Encoder::new(file, 0).unwrap(); // Compression level 0 for speed
         let mut tar_builder = Builder::new(encoder);
 
-        tar_builder.append_dir_all("test_content", &test_dir).unwrap();
+        tar_builder
+            .append_dir_all("test_content", &test_dir)
+            .unwrap();
         let encoder = tar_builder.into_inner().unwrap();
         encoder.finish().unwrap();
 
@@ -1454,66 +1494,36 @@ mod tests {
             remove_after_second_dot("hello.world.foo.bar"),
             "hello.world"
         );
-        assert_eq!(
-            remove_after_second_dot("a.b.c.d.e"),
-            "a.b"
-        );
+        assert_eq!(remove_after_second_dot("a.b.c.d.e"), "a.b");
     }
 
     #[test]
     fn test_exactly_two_dots() {
-        assert_eq!(
-            remove_after_second_dot("first.second."),
-            "first.second"
-        );
-        assert_eq!(
-            remove_after_second_dot("one.two.three"),
-            "one.two"
-        );
+        assert_eq!(remove_after_second_dot("first.second."), "first.second");
+        assert_eq!(remove_after_second_dot("one.two.three"), "one.two");
     }
 
     #[test]
     fn test_one_dot() {
-        assert_eq!(
-            remove_after_second_dot("hello.world"),
-            "hello.world"
-        );
-        assert_eq!(
-            remove_after_second_dot("test."),
-            "test."
-        );
+        assert_eq!(remove_after_second_dot("hello.world"), "hello.world");
+        assert_eq!(remove_after_second_dot("test."), "test.");
     }
 
     #[test]
     fn test_no_dots() {
-        assert_eq!(
-            remove_after_second_dot("hello"),
-            "hello"
-        );
-        assert_eq!(
-            remove_after_second_dot(""),
-            ""
-        );
+        assert_eq!(remove_after_second_dot("hello"), "hello");
+        assert_eq!(remove_after_second_dot(""), "");
     }
 
     #[test]
     fn test_dots_at_start() {
-        assert_eq!(
-            remove_after_second_dot("..rest"),
-            "."
-        );
-        assert_eq!(
-            remove_after_second_dot(".hello.world.foo"),
-            ".hello"
-        );
+        assert_eq!(remove_after_second_dot("..rest"), ".");
+        assert_eq!(remove_after_second_dot(".hello.world.foo"), ".hello");
     }
 
     #[test]
     fn test_consecutive_dots() {
-        assert_eq!(
-            remove_after_second_dot("hello...world"),
-            "hello."
-        );
+        assert_eq!(remove_after_second_dot("hello...world"), "hello.");
     }
 
     #[test]
@@ -1621,10 +1631,13 @@ set(IDF_VERSION_PATCH 2)
 
         let result = parse_cmake_version(idf_path.to_str().unwrap());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Could not find both major and minor version numbers"));
     }
 
-     #[test]
+    #[test]
     fn test_missing_minor_version() {
         let temp_dir = TempDir::new().unwrap();
         let content = r#"
@@ -1635,7 +1648,10 @@ set(IDF_VERSION_PATCH 2)
 
         let result = parse_cmake_version(idf_path.to_str().unwrap());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Could not find both major and minor version numbers"));
     }
 
     #[test]
@@ -1645,7 +1661,10 @@ set(IDF_VERSION_PATCH 2)
 
         let result = parse_cmake_version(idf_path);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("CMake version file not found"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("CMake version file not found"));
     }
 
     #[test]
@@ -1656,7 +1675,10 @@ set(IDF_VERSION_PATCH 2)
 
         let result = parse_cmake_version(idf_path.to_str().unwrap());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Could not find both major and minor version numbers"));
     }
 
     #[test]
@@ -1670,7 +1692,10 @@ set(IDF_VERSION_MINOR 1)
 
         let result = parse_cmake_version(idf_path.to_str().unwrap());
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Could not find both major and minor version numbers"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Could not find both major and minor version numbers"));
     }
 
     #[test]
@@ -1720,7 +1745,9 @@ set(IDF_VERSION_MAJOR 5)
 
         // Verify extracted files
         for i in 0..5 {
-            let extracted_file = extract_to.join("test_content").join(format!("test_file_{}.txt", i));
+            let extracted_file = extract_to
+                .join("test_content")
+                .join(format!("test_file_{}.txt", i));
             assert!(extracted_file.exists());
             let content = fs::read_to_string(&extracted_file).unwrap();
             assert_eq!(content, format!("Test content for file {}", i));
@@ -1739,7 +1766,9 @@ set(IDF_VERSION_MAJOR 5)
 
         // Verify extracted files
         for i in 0..5 {
-            let extracted_file = extract_to.join("test_content").join(format!("test_file_{}.txt", i));
+            let extracted_file = extract_to
+                .join("test_content")
+                .join(format!("test_file_{}.txt", i));
             assert!(extracted_file.exists());
         }
     }
@@ -1782,11 +1811,7 @@ set(IDF_VERSION_MAJOR 5)
     #[tokio::test]
     async fn test_calculate_mirror_latency_map_with_invalid_urls() {
         // Invalid URLs should be mapped to u32::MAX deterministically
-        let mirrors: &'static [&'static str] = &[
-            "not a url",
-            "://",
-            "file:///not-applicable",
-        ];
+        let mirrors: &'static [&'static str] = &["not a url", "://", "file:///not-applicable"];
 
         let map = calculate_mirrors_latency(mirrors).await;
         assert_eq!(map.len(), 3);

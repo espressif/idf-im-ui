@@ -1,47 +1,83 @@
-name: Spell Check (typos)
+name: Pre-Check
 
-# Triggers on pull requests and pushes to master or main branches
+# Blocking quality gate: spell check, formatting, linting and unused dependencies.
+# Every job below fails the workflow, so a red run blocks the pull request
+# (once the job names are marked as required status checks in branch protection).
 on:
   pull_request:
   push:
     branches: [master, main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typos:
+    name: Spell check (typos)
     runs-on: ubuntu-latest
     steps:
-      # Fetches full Git history to enable branch comparison
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
-      # Identifies changed files using git diff
-      - name: Get modified files
-        id: modified_files
-        run: |
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            BASE_BRANCH="${{ github.base_ref }}"
-            git fetch origin $BASE_BRANCH --depth=1
-            MODIFIED_FILES="$(git diff --name-only origin/$BASE_BRANCH...HEAD || echo "")"
-          else
-            MODIFIED_FILES="$(git diff --name-only HEAD~1 HEAD || echo "")"
-          fi
-
-          if [ -n "$MODIFIED_FILES" ]; then
-            echo "Modified files to check:"
-            echo "$MODIFIED_FILES"
-            echo "files=$(echo "$MODIFIED_FILES" | tr '\n' ' ')" >> $GITHUB_OUTPUT
-            echo "has_files=true" >> $GITHUB_OUTPUT
-          else
-            echo "No modified files to check."
-            echo "has_files=false" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run typos on modified files
-        if: steps.modified_files.outputs.has_files == 'true'
+      # Runs over the whole tree rather than a git-diff file list on purpose:
+      # an explicit file list bypasses the `extend-exclude` globs in .typos.toml
+      # and typos' binary detection, which produced thousands of false
+      # positives on screenshots, fonts and the vendored tests/node_modules.zip.
+      # `.github` is passed explicitly because typos skips dot-directories when
+      # walking the tree.
+      - name: Run typos
         uses: crate-ci/typos@v1
         with:
           config: .typos.toml
-          files: ${{ steps.modified_files.outputs.files }}
+          files: . .github
 
+  rust:
+    name: Rust (fmt, clippy, machete)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Same Tauri system dependencies used by the build-gui job in build.yaml.
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev \
+            libssl-dev patchelf xdg-utils
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-precheck-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-precheck-
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # `offline` adds the offline_installer_builder binary, which the default
+      # feature set does not compile.
+      - name: Lint
+        run: cargo clippy --all-targets --features offline -- -D warnings
+
+      - name: Check for unused dependencies
+        run: cargo machete

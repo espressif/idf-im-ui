@@ -405,7 +405,7 @@ export function runGUIVersionManagementTest({
       logger.debug(`Installed versions after rename: ${renameVersionsList}`);
       expect(
         renameVersionsList.includes("NewName"),
-        `Expected dashboard card to shown renamed IDF instalaltion `
+        `Expected dashboard card to shown renamed IDF installation `
       ).to.be.true;
       const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
       const eimJsonContent = JSON.parse(

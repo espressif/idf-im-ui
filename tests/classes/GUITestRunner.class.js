@@ -69,7 +69,7 @@ class GUITestRunner {
   }
 
   async _start() {
-    logger.info("Lauching Tauri Driver");
+    logger.info("Launching Tauri Driver");
     const tauriDriverPath = path.resolve(
       os.homedir(),
       ".cargo",
@@ -283,7 +283,7 @@ class GUITestRunner {
   }
 
   // Method to take a screenshot of the current GUI state
-  // Thsi is mostly used for debug
+  // This is mostly used for debug
   async takeScreenshot(filename) {
     try {
       const screenshot = await this.driver.takeScreenshot();

@@ -1,16 +1,13 @@
 use anyhow::anyhow;
 use anyhow::Result;
-use gix::command;
 use log::debug;
 use log::error;
 use log::info;
-use semver::Op;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::ExitStatus;
-use std::process::Output;
-use std::collections::HashMap;
 
 use lnk::encoding::WINDOWS_1252;
 use lnk::ShellLink;
@@ -18,10 +15,10 @@ use log::warn;
 
 use crate::utils::remove_directory_all;
 use crate::{
-    idf_config::{IdfConfig, IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME},
-    settings::Settings,
-    idf_tools::{Tool, Version},
+    idf_config::{IdfConfig, IdfInstallation, InstallationStatus},
     idf_features::{FeatureInfo, RequirementsMetadata},
+    idf_tools::{Tool, Version},
+    settings::Settings,
 };
 use serde::{Deserialize, Serialize};
 
@@ -236,7 +233,7 @@ pub fn find_shortcut_by_profile(custom_profile_filename: &str) -> anyhow::Result
         let path = entry.path();
 
         // Check if the entry is a .lnk file
-        if path.extension().map_or(false, |ext| ext == "lnk") {
+        if path.extension().is_some_and(|ext| ext == "lnk") {
             // Open and parse the .lnk file
             let link = ShellLink::open(&path, WINDOWS_1252).map_err(|e| {
                 anyhow!(
@@ -447,9 +444,10 @@ fn find_activation_script_for_identifier(
         }
     };
 
-    installation.activation_script.clone().ok_or_else(|| {
-        anyhow!("Installation {} has no activation script set", identifier)
-    })
+    installation
+        .activation_script
+        .clone()
+        .ok_or_else(|| anyhow!("Installation {} has no activation script set", identifier))
 }
 
 pub fn run_command_in_context(
@@ -494,9 +492,9 @@ pub fn run_command_using_activation_script(
     );
 
     let executor = crate::command_executor::get_executor();
-    if dir.is_some() {
-        debug!("Running command in directory {}", dir.unwrap());
-        match executor.run_script_from_string_streaming_with_dir(&script, dir.unwrap()) {
+    if let Some(dir) = dir {
+        debug!("Running command in directory {}", dir);
+        match executor.run_script_from_string_streaming_with_dir(&script, dir) {
             Ok(status) => Ok(status),
             Err(e) => Err(anyhow!("Failed to execute command: {}", e)),
         }
@@ -599,12 +597,11 @@ fn run_interactive_bash_with_activation(activation_script: &str) -> anyhow::Resu
 /// generated `ZDOTDIR`, whose `.zshrc` also sources the user's own zshrc.
 #[cfg(not(target_os = "windows"))]
 fn run_interactive_zsh_with_activation(activation_script: &str) -> anyhow::Result<ExitStatus> {
-    let zdotdir = tempfile::tempdir()
-        .map_err(|e| anyhow!("Failed to create temporary ZDOTDIR: {}", e))?;
+    let zdotdir =
+        tempfile::tempdir().map_err(|e| anyhow!("Failed to create temporary ZDOTDIR: {}", e))?;
 
-    let original_zdotdir = std::env::var("ZDOTDIR").unwrap_or_else(|_| {
-        std::env::var("HOME").unwrap_or_default()
-    });
+    let original_zdotdir =
+        std::env::var("ZDOTDIR").unwrap_or_else(|_| std::env::var("HOME").unwrap_or_default());
 
     let rc_content = format!(
         "export ZDOTDIR=\"{original}\"\n[ -f \"{original}/.zshrc\" ] && source \"{original}/.zshrc\"\nsource \"{activation}\"",
@@ -665,9 +662,9 @@ pub fn run_command_using_activation_script_headless(
     );
 
     let executor = crate::command_executor::get_executor();
-    let result = if dir.is_some() {
-        debug!("Running headless command in directory {}", dir.unwrap());
-        executor.run_script_from_string_streaming_headless_with_dir(&script, dir.unwrap())
+    let result = if let Some(dir) = dir {
+        debug!("Running headless command in directory {}", dir);
+        executor.run_script_from_string_streaming_headless_with_dir(&script, dir)
     } else {
         executor.run_script_from_string_streaming_headless(&script)
     };
@@ -693,9 +690,7 @@ pub async fn prepare_settings_for_fix_idf_installation(
     let mut original_settings: Option<Settings> = None;
     let mut pending_ids = HashMap::new();
 
-    let resolved_config_path = config_path
-        .cloned()
-        .unwrap_or_else(get_default_config_path);
+    let resolved_config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
 
     match list_installed_versions(config_path) {
         Ok(versions) => {
@@ -708,7 +703,10 @@ pub async fn prepare_settings_for_fix_idf_installation(
                         Some(config_bytes) => {
                             match bincode::deserialize::<Settings>(config_bytes.as_slice()) {
                                 Ok(settings) => {
-                                    info!("Recovered original installation settings for {}", v.name);
+                                    info!(
+                                        "Recovered original installation settings for {}",
+                                        v.name
+                                    );
                                     original_settings = Some(settings);
                                 }
                                 Err(err) => {
@@ -717,7 +715,10 @@ pub async fn prepare_settings_for_fix_idf_installation(
                             }
                         }
                         None => {
-                            warn!("No installation_config stored for {}. Falling back to defaults.", v.name);
+                            warn!(
+                                "No installation_config stored for {}. Falling back to defaults.",
+                                v.name
+                            );
                         }
                     }
 
@@ -733,7 +734,9 @@ pub async fn prepare_settings_for_fix_idf_installation(
                         InstallationStatus::BeingRepaired,
                     ) {
                         Ok(_) => info!("Marked installation {} as being repaired", v.name),
-                        Err(err) => error!("Failed to mark installation as being repaired: {}", err),
+                        Err(err) => {
+                            error!("Failed to mark installation as being repaired: {}", err)
+                        }
                     }
                 }
             }
@@ -753,8 +756,12 @@ pub async fn prepare_settings_for_fix_idf_installation(
     settings.version_name = version_name;
     settings.install_all_prerequisites = Some(true);
     settings.config_file_save_path = None;
-    settings.pending_installation_ids = if pending_ids.is_empty() { None } else { Some(pending_ids) };
-    return Ok(settings);
+    settings.pending_installation_ids = if pending_ids.is_empty() {
+        None
+    } else {
+        Some(pending_ids)
+    };
+    Ok(settings)
 }
 
 // ============================================================================
@@ -825,13 +832,10 @@ pub fn list_idf_tools(
     outdated_only: bool,
     config_path: Option<&std::path::PathBuf>,
 ) -> Result<ToolListReport, String> {
-    let identifier = identifier.ok_or_else(|| {
-        "no identifier provided; pass an IDF id, name or path".to_string()
-    })?;
+    let identifier = identifier
+        .ok_or_else(|| "no identifier provided; pass an IDF id, name or path".to_string())?;
 
-    let config_path = config_path
-        .cloned()
-        .unwrap_or_else(get_default_config_path);
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let ide_config = IdfConfig::from_file(&config_path)
         .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
 
@@ -998,13 +1002,10 @@ pub fn list_idf_features(
     identifier: Option<&str>,
     config_path: Option<&std::path::PathBuf>,
 ) -> Result<FeatureListReport, String> {
-    let identifier = identifier.ok_or_else(|| {
-        "no identifier provided; pass an IDF id, name or path".to_string()
-    })?;
+    let identifier = identifier
+        .ok_or_else(|| "no identifier provided; pass an IDF id, name or path".to_string())?;
 
-    let config_path = config_path
-        .cloned()
-        .unwrap_or_else(get_default_config_path);
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let ide_config = IdfConfig::from_file(&config_path)
         .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
 
@@ -1044,8 +1045,7 @@ pub fn list_idf_features(
         .features
         .into_iter()
         .map(|feature| {
-            let installed =
-                !feature.optional || selected_optional_features.contains(&feature.name);
+            let installed = !feature.optional || selected_optional_features.contains(&feature.name);
             FeatureListEntry { feature, installed }
         })
         .collect();
@@ -1252,11 +1252,7 @@ mod tests {
 
     /// Builds a minimal `Version` for tests. `download_keys` are the keys
     /// added to the empty `downloads` map (with placeholder `Download` values).
-    fn make_version(
-        name: &str,
-        status: &str,
-        download_keys: &[&str],
-    ) -> crate::idf_tools::Version {
+    fn make_version(name: &str, status: &str, download_keys: &[&str]) -> crate::idf_tools::Version {
         use crate::idf_tools::Download;
         use std::collections::HashMap;
         let mut downloads: HashMap<String, Download> = HashMap::new();
@@ -1280,10 +1276,7 @@ mod tests {
 
     /// Writes a real `ToolsFile` JSON at `<idf_path>/tools/tools.json`.
     /// Returns the path of the written file.
-    fn write_fake_tools_json(
-        idf_path: &std::path::Path,
-        tools: Vec<Tool>,
-    ) -> std::path::PathBuf {
+    fn write_fake_tools_json(idf_path: &std::path::Path, tools: Vec<Tool>) -> std::path::PathBuf {
         use crate::idf_tools::ToolsFile;
         let tools_dir = idf_path.join("tools");
         fs::create_dir_all(&tools_dir).unwrap();
@@ -1388,8 +1381,7 @@ mod tests {
         let installed = tools_path.join("xtensa-esp-elf").join("14.2.0");
         fs::create_dir_all(&installed).unwrap();
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
         assert_eq!(report.tools.len(), 1);
         let entry = &report.tools[0];
         assert_eq!(entry.version_inspections.len(), 1);
@@ -1430,15 +1422,17 @@ mod tests {
         let installed = tools_path.join("xtensa-esp-elf").join("13.2.0");
         fs::create_dir_all(&installed).unwrap();
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
         // Find the inspection for the older version
         let older = report.tools[0]
             .version_inspections
             .iter()
             .find(|vi| vi.version.name == "13.2.0")
             .expect("missing 13.2.0 inspection");
-        let info = older.installed.as_ref().expect("should detect 13.2.0 install");
+        let info = older
+            .installed
+            .as_ref()
+            .expect("should detect 13.2.0 install");
         assert!(!info.is_recommended_match);
     }
 
@@ -1471,8 +1465,7 @@ mod tests {
         let installed = tools_path.join("xtensa-esp-elf").join("13.2.0");
         fs::create_dir_all(&installed).unwrap();
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        let report = list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
         assert!(report.outdated_only);
         assert_eq!(report.outdated.len(), 1);
         assert_eq!(report.outdated[0].name, "xtensa-esp-elf");
@@ -1505,8 +1498,7 @@ mod tests {
         write_fake_tools_json(&idf_path, vec![tool]);
         // Nothing installed on disk
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        let report = list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
         assert!(report.outdated.is_empty());
     }
 
@@ -1569,8 +1561,8 @@ mod tests {
         );
 
         // Current platform key + an unrelated one.
-        let current_platform = crate::idf_tools::get_platform_identification()
-            .unwrap_or_else(|_| "any".to_string());
+        let current_platform =
+            crate::idf_tools::get_platform_identification().unwrap_or_else(|_| "any".to_string());
         let unrelated_platform = if current_platform == "any" {
             "win64"
         } else {
@@ -1587,9 +1579,8 @@ mod tests {
         );
         write_fake_tools_json(&idf_path, vec![tool]);
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
-        assert_eq!(report.tools[0].version_inspections[0].has_platform_download, true);
+        let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path)).unwrap();
+        assert!(report.tools[0].version_inspections[0].has_platform_download);
         // We only assert the first one (always true). The second's value
         // depends on whether current_platform happens to be "any".
     }
@@ -1616,15 +1607,9 @@ mod tests {
         // Candidate is non-semver, current is semver. The plain-string
         // tiebreaker compares them lexically: '1' < 'v', so the candidate
         // is NOT newer.
-        assert!(!is_newer_semver(
-            "14.2.0",
-            Some("v0.12.0-esp32-20260304")
-        ));
+        assert!(!is_newer_semver("14.2.0", Some("v0.12.0-esp32-20260304")));
         // And the reverse direction holds lexically: 'v' > '1'.
-        assert!(is_newer_semver(
-            "v0.12.0-esp32-20260304",
-            Some("14.2.0")
-        ));
+        assert!(is_newer_semver("v0.12.0-esp32-20260304", Some("14.2.0")));
     }
 
     #[test]
@@ -1692,8 +1677,7 @@ mod tests {
             .join("v0.11.0-esp32-20240304");
         fs::create_dir_all(&installed).unwrap();
 
-        let report =
-            list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
+        let report = list_idf_tools(Some("esp-idf-test-id"), true, Some(&config_path)).unwrap();
         assert_eq!(report.outdated.len(), 1);
         assert_eq!(report.outdated[0].name, "esp32ulp-elf");
         assert_eq!(report.outdated[0].installed, "v0.11.0-esp32-20240304");

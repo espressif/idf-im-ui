@@ -8,8 +8,6 @@ use fern::Dispatch;
 use log::LevelFilter;
 use std::path::PathBuf;
 
-use crate::get_log_directory;
-
 /// Log pattern format: "{date} - {level} - {message}"
 pub const LOG_PATTERN: &str = "%Y-%m-%d %H:%M:%S - %l - %m";
 
@@ -28,15 +26,13 @@ pub fn formatter(out: fern::FormatCallback, message: &std::fmt::Arguments, recor
 /// # Arguments
 /// * `log_file_path` - Path to the log file
 /// * `level` - Maximum log level to output
-pub fn setup_simple(
-    log_file_path: PathBuf,
-    level: LevelFilter,
-) {
+pub fn setup_simple(log_file_path: PathBuf, level: LevelFilter) {
     let _ = Dispatch::new()
         .format(formatter)
         .level(level)
         .chain(fern::log_file(log_file_path).unwrap_or_else(|_| {
-            fern::log_file("eim_simple.log").unwrap_or_else(|_| panic!("Failed to create fallback log file"))
+            fern::log_file("eim_simple.log")
+                .unwrap_or_else(|_| panic!("Failed to create fallback log file"))
         }))
         .apply();
 }

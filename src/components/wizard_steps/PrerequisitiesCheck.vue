@@ -108,7 +108,7 @@ export default {
   },
   methods: {
     get_prerequisities_list: async function () {
-      this.all_prerequisities = await invoke("get_prequisites", {});
+      this.all_prerequisities = await invoke("get_prerequisites", {});
       this.display_prerequisities = this.all_prerequisities.map(p => ({
         name: p,
         icon: '❓',

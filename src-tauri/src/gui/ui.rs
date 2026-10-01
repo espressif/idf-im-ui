@@ -1,7 +1,6 @@
-use log::{debug, info};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter}; // dep: fork = "0.1"
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -36,45 +35,26 @@ pub struct InstallationProgress {
     pub version: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-pub struct ToolProgress {
-    pub tool_name: String,
-    pub action: String,  // "start", "download", "verify", "extract", "complete", "error"
-    pub percentage: Option<u32>,
-}
-
 /// Emits a message to the frontend
 pub fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
     let _ = app_handle.emit(event_name, json_data);
 }
 
 /// Unified message emitter for all installation events
-pub fn emit_installation_event(
-    app_handle: &AppHandle,
-    progress: InstallationProgress
-) {
+pub fn emit_installation_event(app_handle: &AppHandle, progress: InstallationProgress) {
     let _ = app_handle.emit("installation-progress", &progress);
 }
 
-/// Emit tool-specific progress
-pub fn emit_tool_event(
-    app_handle: &AppHandle,
-    tool_progress: ToolProgress
-) {
-    let _ = app_handle.emit("tool-progress", &tool_progress);
-}
-
 /// Emit log messages (for detailed output)
-pub fn emit_log_message(
-    app_handle: &AppHandle,
-    level: MessageLevel,
-    message: String
-) {
-    let _ = app_handle.emit("log-message", json!({
-        "level": level,
-        "message": message,
-        "timestamp": chrono::Utc::now().to_rfc3339()
-    }));
+pub fn emit_log_message(app_handle: &AppHandle, level: MessageLevel, message: String) {
+    let _ = app_handle.emit(
+        "log-message",
+        json!({
+            "level": level,
+            "message": message,
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }),
+    );
 }
 
 /// Legacy wrapper - gradually phase this out
@@ -87,35 +67,6 @@ pub fn send_message(app_handle: &AppHandle, message: String, message_type: Strin
     };
     emit_log_message(app_handle, level, message);
 }
-
-/// Sends a tools-related message
-pub fn send_tools_message(app_handle: &AppHandle, tool: String, action: String) {
-    emit_to_fe(
-        app_handle,
-        "tools-message",
-        json!({ "tool": tool, "action": action }),
-    );
-}
-
-/// Sends an installation progress message for a specific version
-pub fn send_install_progress_message(app_handle: &AppHandle, version: String, state: String) {
-    emit_to_fe(
-        app_handle,
-        "install-progress-message",
-        json!({ "version": version, "state": state }),
-    );
-}
-
-/// Sends a simple setup message with a code and message
-pub fn send_simple_setup_message(app_handle: &AppHandle, message_code: i32, message: String) {
-    emit_to_fe(
-        app_handle,
-        "simple-setup-message",
-        json!({ "code": message_code, "message": message }),
-    );
-}
-
-
 
 /// Progress bar for displaying installation progress
 #[derive(Clone)]
@@ -155,20 +106,6 @@ impl ProgressBar {
                 "message": message.unwrap_or_default(),
                 "status": "info",
                 "display": true,
-            }),
-        );
-    }
-
-    /// Completes the progress bar and hides it
-    pub fn finish(&self) {
-        debug!("finish_progress_bar called");
-        emit_to_fe(
-            &self.app_handle,
-            "progress-message",
-            json!({
-                "message": "",
-                "percentage": 100,
-                "display": false,
             }),
         );
     }

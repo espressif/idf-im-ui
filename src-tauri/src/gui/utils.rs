@@ -1,9 +1,12 @@
-use std::{ fs, path::{ Path, PathBuf } };
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
-use idf_im_lib::settings::Settings;
-use tauri::AppHandle;
-use idf_im_lib::utils::MirrorEntry;
 use crate::gui::app_state;
+use idf_im_lib::settings::Settings;
+use idf_im_lib::utils::MirrorEntry;
+use tauri::AppHandle;
 
 pub enum MirrorType {
     IDF,
@@ -18,7 +21,11 @@ pub enum MirrorType {
 /// - The path exists, is a directory, and is empty
 /// - The path exists, is a directory, and contains only the specified version directories
 pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
-    log::info!("Checking if path is empty or non-existent: {} with versions: {:?}", path, versions);
+    log::info!(
+        "Checking if path is empty or non-existent: {} with versions: {:?}",
+        path,
+        versions
+    );
     let path = Path::new(path);
 
     // If path doesn't exist, return true
@@ -28,35 +35,46 @@ pub fn is_path_empty_or_nonexistent(path: &str, versions: &[String]) -> bool {
 
     // If path exists, check if it's a directory and if it's empty
     if path.is_dir() {
-      match fs::read_dir(path) {
-          Ok(_entries) => {
-              // Check if any version directories exist
-              for v in versions {
-                  let new_path = path.join(v);
-                  if new_path.exists() {
-                      return false;
-                  }
-              }
-              // No version directories found, path is available
-              true
-          }
-          Err(e) => {
-              log::error!("Failed to read directory {}: {}", path.display(), e);
-              false
-          }
-      }
-  } else {
+        match fs::read_dir(path) {
+            Ok(_entries) => {
+                // Check if any version directories exist
+                for v in versions {
+                    let new_path = path.join(v);
+                    if new_path.exists() {
+                        return false;
+                    }
+                }
+                // No version directories found, path is available
+                true
+            }
+            Err(e) => {
+                log::error!("Failed to read directory {}: {}", path.display(), e);
+                false
+            }
+        }
+    } else {
         // Path is a file which is conflicting with the directory
         false
     }
 }
 
-async fn choose_mirror(fallback: Option<String>, settings_key: &str, is_simple_installation: bool, settings: &Settings, cached_latency_entries: Option<Vec<MirrorEntry>>, mirrors_list: &[&str]) -> String {
+async fn choose_mirror(
+    fallback: Option<String>,
+    settings_key: &str,
+    is_simple_installation: bool,
+    settings: &Settings,
+    cached_latency_entries: Option<Vec<MirrorEntry>>,
+    mirrors_list: &[&str],
+) -> String {
     let fallback = fallback.unwrap_or_default();
 
     // Advanced install or user-overridden setting → just use what’s configured.
     if !is_simple_installation || !settings.is_default(settings_key) {
-        log::info!("Not simple installation or user-overridden setting, using mirror: {} for {}", fallback, settings_key);
+        log::info!(
+            "Not simple installation or user-overridden setting, using mirror: {} for {}",
+            fallback,
+            settings_key
+        );
         return fallback;
     }
 
@@ -65,43 +83,81 @@ async fn choose_mirror(fallback: Option<String>, settings_key: &str, is_simple_i
         match cached_latency_entries.first() {
             Some(entry) => {
                 log::info!("Using cached mirror: {} for {}", entry.url, settings_key);
-                return entry.url.clone();
+                entry.url.clone()
             }
             None => {
-                log::info!("No cached mirror found for {}, using fallback: {}", settings_key, fallback);
-                return fallback;
+                log::info!(
+                    "No cached mirror found for {}, using fallback: {}",
+                    settings_key,
+                    fallback
+                );
+                fallback
             }
         }
     } else {
         let entries = idf_im_lib::utils::calculate_mirrors_latency(mirrors_list).await;
         match entries.first() {
             Some(entry) => {
-                log::info!("Using calculated mirror: {} for {}", entry.url, settings_key);
-                return entry.url.clone();
+                log::info!(
+                    "Using calculated mirror: {} for {}",
+                    entry.url,
+                    settings_key
+                );
+                entry.url.clone()
             }
             None => {
-                log::info!("No calculated mirror found for {}, using fallback: {}", settings_key, fallback);
-                return fallback;
+                log::info!(
+                    "No calculated mirror found for {}, using fallback: {}",
+                    settings_key,
+                    fallback
+                );
+                fallback
             }
         }
     }
 }
 
-pub async fn get_mirror_to_use(app_handle: &AppHandle, mirror_type: MirrorType, settings: &Settings, is_simple_installation: bool) -> String {
+pub async fn get_mirror_to_use(
+    app_handle: &AppHandle,
+    mirror_type: MirrorType,
+    settings: &Settings,
+    is_simple_installation: bool,
+) -> String {
     match mirror_type {
         MirrorType::IDF => {
-            choose_mirror(settings.idf_mirror.clone(), "idf_mirror", is_simple_installation, settings,
-            app_state::get_idf_mirror_latency_entries(app_handle), idf_im_lib::get_idf_mirrors_list()).await
+            choose_mirror(
+                settings.idf_mirror.clone(),
+                "idf_mirror",
+                is_simple_installation,
+                settings,
+                app_state::get_idf_mirror_latency_entries(app_handle),
+                idf_im_lib::get_idf_mirrors_list(),
+            )
+            .await
         }
 
         MirrorType::IDFTools => {
-            choose_mirror(settings.mirror.clone(), "mirror", is_simple_installation, settings,
-            app_state::get_tools_mirror_latency_entries(app_handle), idf_im_lib::get_idf_tools_mirrors_list()).await
+            choose_mirror(
+                settings.mirror.clone(),
+                "mirror",
+                is_simple_installation,
+                settings,
+                app_state::get_tools_mirror_latency_entries(app_handle),
+                idf_im_lib::get_idf_tools_mirrors_list(),
+            )
+            .await
         }
 
         MirrorType::PyPI => {
-            choose_mirror(settings.pypi_mirror.clone(), "pypi_mirror", is_simple_installation, settings,
-            app_state::get_pypi_mirror_latency_entries(app_handle), idf_im_lib::get_pypi_mirrors_list()).await
+            choose_mirror(
+                settings.pypi_mirror.clone(),
+                "pypi_mirror",
+                is_simple_installation,
+                settings,
+                app_state::get_pypi_mirror_latency_entries(app_handle),
+                idf_im_lib::get_pypi_mirrors_list(),
+            )
+            .await
         }
     }
 }
@@ -150,7 +206,7 @@ pub fn format_bytes(bytes: u64) -> String {
 }
 
 pub fn get_file_name(path: &str) -> &str {
-  Path::new(path)
+    Path::new(path)
         .file_name()
         .and_then(|s| s.to_str())
         .unwrap_or(path)
@@ -178,7 +234,9 @@ pub fn get_offline_archive_cache_dir() -> Result<PathBuf, String> {
         .ok_or_else(|| "Could not determine local data directory".to_string())?;
     let eim_dir = log_dir.parent().unwrap_or(&log_dir).to_path_buf();
     let cache_dir = eim_dir.join("offline_archives");
-    let cache_dir_str = cache_dir.to_str().ok_or_else(|| "Cache directory path is not valid UTF-8".to_string())?;
+    let cache_dir_str = cache_dir
+        .to_str()
+        .ok_or_else(|| "Cache directory path is not valid UTF-8".to_string())?;
     idf_im_lib::ensure_path(cache_dir_str).map_err(|e| e.to_string())?;
     Ok(cache_dir)
 }

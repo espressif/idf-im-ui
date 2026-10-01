@@ -70,15 +70,15 @@ Tokens are pipe-combined for multi-version installs, e.g. `"default|previous"`. 
 
 This is the first entry point for the actual test execution. Up to this point all files were used to specify which tests to run, and the sequence of execution, but the test runners are the actual script that will run each test.
 
-These are all written in javascript powered by Mocha framework. By definition Mocha will read all the tests that will need to be executed and start running them based on the `describe` priority, note that by default Mocha would try to run all tests in parallel, since we need a specific test sequency and can't handle parallel testing on the same machine, we use `describe` nesting, so Mocha can only proceed to the next test block after the previous one is finished.
+These are all written in javascript powered by Mocha framework. By definition Mocha will read all the tests that will need to be executed and start running them based on the `describe` priority, note that by default Mocha would try to run all tests in parallel, since we need a specific test sequence and can't handle parallel testing on the same machine, we use `describe` nesting, so Mocha can only proceed to the next test block after the previous one is finished.
 
-The test Runners have teh task to read the environmental variables, setup the test conditions (read configs from the supporting config.js file), read the test suite json file and control the execution of each test script (do not mix the node scripts defined in the package.json with the test scripts which are single test sequencies found on the scripts folder)
+The test Runners have the task to read the environmental variables, setup the test conditions (read configs from the supporting config.js file), read the test suite json file and control the execution of each test script (do not mix the node scripts defined in the package.json with the test scripts which are single test sequences found on the scripts folder)
 
 ```
 Breaking down to an example:
 
 The github workflow will call for the test-cli script pointing to the CLI-basic test suite.
-The CLI runner is then executed and will read the CLI-basic.json fle
+The CLI runner is then executed and will read the CLI-basic.json file
 
 Inside the file there is a custom test scenario of the type `custom`
   {
@@ -107,7 +107,7 @@ Each test script has its own set of parameters that should be passed by the test
 
 The scripts makes use of helper functions shared among multiple scripts, these are written in the helper.js file.
 
-The test scripts represents the last nested Mocha describe function, and represents a single chunck of test. The test statements are written in chai, which is the most common statement validation used with Mocha.
+The test scripts represents the last nested Mocha describe function, and represents a single chunk of test. The test statements are written in chai, which is the most common statement validation used with Mocha.
 
 Both CLI and GUI test scripts follows the same concepts, where the CLI will make use of the CLITestRunner class, and the GUI will use the GUITestRunner class.
 
@@ -128,8 +128,8 @@ Similar to the CLI class, several methods were added to simplify selection of el
 
 ### Supporting files
 
-The config.js and helper.js files are shared accros all runners and test scripts.   
-The Config file works as a central configuration interface, where all teh default values are defined, and all the code to read the environmental variables are intended to live in this file.  
+The config.js and helper.js files are shared across all runners and test scripts.   
+The Config file works as a central configuration interface, where all the default values are defined, and all the code to read the environmental variables are intended to live in this file.  
 The helper file contains assisting functions that can be shared among different test scripts. Each function has a description of what it can be used for.
 
 

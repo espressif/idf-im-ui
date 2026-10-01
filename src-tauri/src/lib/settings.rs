@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use struct_iterable::Iterable;
 use uuid::Uuid;
 
-use crate::idf_config::{Base64Bytes, IdfConfig, IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME, IDF_CONFIG_FILE_VERSION};
+use crate::idf_config::{
+    Base64Bytes, IdfConfig, IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME,
+    IDF_CONFIG_FILE_VERSION,
+};
 use crate::system_dependencies::PYTHON_NAME_TO_INSTALL;
 use crate::utils::{get_git_path, is_valid_idf_directory};
 
@@ -72,8 +75,8 @@ pub struct VersionPaths {
     pub python_path: PathBuf,
     pub activation_script: PathBuf,
     pub activation_script_path: PathBuf, // Path to the activation script
-    pub actual_version: String, // This might be different from input if using existing IDF
-    pub using_existing_idf: bool, // Indicates if the IDF directory already exists
+    pub actual_version: String,          // This might be different from input if using existing IDF
+    pub using_existing_idf: bool,        // Indicates if the IDF directory already exists
 }
 
 impl Default for Settings {
@@ -81,16 +84,22 @@ impl Default for Settings {
         let tool_install_folder_name_value = match std::env::consts::OS {
             "windows" => "C:\\Espressif\\tools".to_string(),
             _ => dirs::home_dir()
-            .unwrap()
-            .join(".espressif")
-            .join("tools")
-            .to_str()
-            .unwrap().to_string(),
+                .unwrap()
+                .join(".espressif")
+                .join("tools")
+                .to_str()
+                .unwrap()
+                .to_string(),
         };
-        let tool_download_folder_name_value = match PathBuf::from(&tool_install_folder_name_value).parent() {
-            Some(parent) => parent.join("dist").to_str().unwrap().to_string(),
-            None => PathBuf::from(&tool_install_folder_name_value).join("tmp_dist").to_str().unwrap().to_string(),
-          };
+        let tool_download_folder_name_value =
+            match PathBuf::from(&tool_install_folder_name_value).parent() {
+                Some(parent) => parent.join("dist").to_str().unwrap().to_string(),
+                None => PathBuf::from(&tool_install_folder_name_value)
+                    .join("tmp_dist")
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+            };
 
         let default_esp_idf_json_path_value = tool_install_folder_name_value.clone();
         let default_activation_script_path_override = tool_install_folder_name_value.clone();
@@ -154,19 +163,22 @@ impl Settings {
 
         // If a config file is provided, load it
         if let Some(config_path) = config_path.clone() {
-          if config_path.exists() {
-            log::info!("Loading config from file: {:?}", config_path);
-            match settings.load(config_path.to_str().unwrap_or_default()) {
-              Ok(_) => log::info!("Config loaded successfully"),
-              Err(e) => log::warn!("Failed to load config from file: {}", e),
+            if config_path.exists() {
+                log::info!("Loading config from file: {:?}", config_path);
+                match settings.load(config_path.to_str().unwrap_or_default()) {
+                    Ok(_) => log::info!("Config loaded successfully"),
+                    Err(e) => log::warn!("Failed to load config from file: {}", e),
+                }
+            } else {
+                log::warn!("Config file does not exist: {:?}", config_path);
             }
-          } else {
-            log::warn!("Config file does not exist: {:?}", config_path);
-          }
         }
         log::debug!("Settings after file load {:?}", settings);
 
-        log::debug!("Settings after config load - idf_features: {:?}", settings.idf_features);
+        log::debug!(
+            "Settings after config load - idf_features: {:?}",
+            settings.idf_features
+        );
 
         settings.apply_cli_overrides(cli_settings)?;
 
@@ -175,7 +187,6 @@ impl Settings {
             settings.config_file = config_path;
         }
         log::debug!("Final settings: {:?}", settings);
-
 
         Ok(settings)
     }
@@ -209,7 +220,7 @@ impl Settings {
 
         let cli_config = cli_config.build()?;
         if let Ok(cli_settings_struct) = cli_config.try_deserialize::<Settings>() {
-          macro_rules! apply_if_overridden {
+            macro_rules! apply_if_overridden {
             ($($field:ident),*) => {
               $(
                 if cli_overrides.contains(stringify!($field)) {
@@ -220,43 +231,43 @@ impl Settings {
             };
           }
 
-          apply_if_overridden!(
-            path,
-            idf_path,
-            esp_idf_json_path,
-            tool_download_folder_name,
-            tool_install_folder_name,
-            target,
-            idf_versions,
-            tools_json_file,
-            config_file_save_path,
-            non_interactive,
-            wizard_all_questions,
-            mirror,
-            idf_mirror,
-            pypi_mirror,
-            recurse_submodules,
-            install_all_prerequisites,
-            idf_features,
-            idf_tools,
-            repo_stub,
-            skip_prerequisites_check,
-            version_name,
-            cleanup,
-            skip_components_download,
-            python_env_folder_name,
-            use_local_archive,
-            activation_script_path_override,
-            python_version_override,
-            create_bat_activation_script
-          );
+            apply_if_overridden!(
+                path,
+                idf_path,
+                esp_idf_json_path,
+                tool_download_folder_name,
+                tool_install_folder_name,
+                target,
+                idf_versions,
+                tools_json_file,
+                config_file_save_path,
+                non_interactive,
+                wizard_all_questions,
+                mirror,
+                idf_mirror,
+                pypi_mirror,
+                recurse_submodules,
+                install_all_prerequisites,
+                idf_features,
+                idf_tools,
+                repo_stub,
+                skip_prerequisites_check,
+                version_name,
+                cleanup,
+                skip_components_download,
+                python_env_folder_name,
+                use_local_archive,
+                activation_script_path_override,
+                python_version_override,
+                create_bat_activation_script
+            );
 
-          if cli_overrides.contains("idf_tools") {
-            self.idf_tools_per_version = None;
-          }
-          if cli_overrides.contains("idf_features") {
-            self.idf_features_per_version = None;
-          }
+            if cli_overrides.contains("idf_tools") {
+                self.idf_tools_per_version = None;
+            }
+            if cli_overrides.contains("idf_features") {
+                self.idf_features_per_version = None;
+            }
         }
 
         Ok(())
@@ -381,8 +392,8 @@ impl Settings {
     /// Existing finished entries are preserved; any entry at the same path is replaced.
     /// Call this at install start; call `save_esp_ide_json` on success.
     pub fn create_pending_esp_ide_json(&mut self) -> Result<()> {
-        let json_path =
-            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
+        let json_path = PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default())
+            .join(IDF_CONFIG_FILE_NAME);
 
         let git_path = get_git_path().map_err(|e| anyhow!("Failed to get git path: {}", e))?;
 
@@ -426,12 +437,12 @@ impl Settings {
     }
 
     pub fn save_esp_ide_json(&self) -> Result<()> {
-        let json_path =
-            PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default()).join(IDF_CONFIG_FILE_NAME);
+        let json_path = PathBuf::from(self.esp_idf_json_path.clone().unwrap_or_default())
+            .join(IDF_CONFIG_FILE_NAME);
 
         // Serialize the Settings itself to binary using bincode for installation_config
-        let settings_binary = bincode::serialize(self)
-            .map_err(|e| anyhow!("Failed to serialize settings: {}", e))?;
+        let settings_binary =
+            bincode::serialize(self).map_err(|e| anyhow!("Failed to serialize settings: {}", e))?;
 
         if let Some(versions) = &self.idf_versions {
             let mut idf_config = IdfConfig::from_file(&json_path).unwrap_or_else(|_| {
@@ -514,82 +525,87 @@ impl Settings {
 
     /// Constructs all necessary paths for a given IDF version
     pub fn get_version_paths(&self, version: &str) -> Result<VersionPaths> {
-      let base_path = self
-        .path
-        .as_ref()
-        .ok_or_else(|| anyhow!("Base path not set"))?;
+        let base_path = self
+            .path
+            .as_ref()
+            .ok_or_else(|| anyhow!("Base path not set"))?;
 
-      let tool_install_folder = self
-        .tool_install_folder_name
-        .as_ref()
-        .ok_or_else(|| anyhow!("Tool install folder name not set"))?;
+        let tool_install_folder = self
+            .tool_install_folder_name
+            .as_ref()
+            .ok_or_else(|| anyhow!("Tool install folder name not set"))?;
 
-      let tool_download_folder = self
-        .tool_download_folder_name
-        .as_ref()
-        .ok_or_else(|| anyhow!("Tool download folder name not set"))?;
+        let tool_download_folder = self
+            .tool_download_folder_name
+            .as_ref()
+            .ok_or_else(|| anyhow!("Tool download folder name not set"))?;
 
-      let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
+        let using_existing_idf = is_valid_idf_directory(base_path.to_str().unwrap_or_default());
 
-      let (idf_path, version_installation_path, actual_version) = if using_existing_idf {
-        // Using existing IDF directory
-        let idf_path = base_path.clone();
-        let actual_version = match self.version_name {
-          Some(ref name) => name.to_string(),
-          None =>  match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
-            Ok(hash) => hash,
-            Err(err) => {
-              warn!("Failed to get commit hash: {}", err);
-              version.to_string()
-            }
-          }
+        let (idf_path, version_installation_path, actual_version) = if using_existing_idf {
+            // Using existing IDF directory
+            let idf_path = base_path.clone();
+            let actual_version = match self.version_name {
+                Some(ref name) => name.to_string(),
+                None => match crate::utils::get_commit_hash(idf_path.to_str().unwrap()) {
+                    Ok(hash) => hash,
+                    Err(err) => {
+                        warn!("Failed to get commit hash: {}", err);
+                        version.to_string()
+                    }
+                },
+            };
+            (idf_path.clone(), idf_path, actual_version)
+        } else {
+            // New installation
+            let actual_version = match self.version_name {
+                Some(ref name) => name.to_string(),
+                None => version.to_string(),
+            };
+            let version_installation_path = base_path.join(&actual_version);
+            let idf_path = version_installation_path.join("esp-idf");
+            (idf_path, version_installation_path, actual_version)
         };
-        (idf_path.clone(), idf_path, actual_version)
-      } else {
-        // New installation
-        let actual_version = match self.version_name {
-          Some(ref name) => name.to_string(),
-          None => version.to_string(),
+
+        let tool_download_directory = version_installation_path.join(tool_download_folder);
+        let tool_install_directory = version_installation_path.join(tool_install_folder);
+
+        let python_venv_path = tool_install_directory
+            .join(self.python_env_folder_name.clone().unwrap_or_default())
+            .join(&actual_version)
+            .join("venv");
+
+        let python_path = match std::env::consts::OS {
+            "windows" => python_venv_path.join("Scripts").join("python.exe"),
+            _ => python_venv_path.join("bin").join("python"),
         };
-        let version_installation_path = base_path.join(&actual_version);
-        let idf_path = version_installation_path.join("esp-idf");
-        (idf_path, version_installation_path, actual_version)
-      };
 
-      let tool_download_directory = version_installation_path.join(tool_download_folder);
-      let tool_install_directory = version_installation_path.join(tool_install_folder);
+        let activation_script_path = PathBuf::from(
+            self.activation_script_path_override
+                .clone()
+                .unwrap_or_default(),
+        );
 
-      let python_venv_path = tool_install_directory.join(self.python_env_folder_name.clone().unwrap_or_default()).join(&actual_version).join("venv");
+        let activation_script = match std::env::consts::OS {
+            "windows" => activation_script_path.join(format!(
+                "Microsoft.{}.PowerShell_profile.ps1",
+                actual_version
+            )),
+            _ => activation_script_path.join(format!("activate_idf_{}.sh", actual_version)),
+        };
 
-      let python_path = match std::env::consts::OS {
-        "windows" => python_venv_path.join("Scripts").join("python.exe"),
-        _ => python_venv_path.join("bin").join("python"),
-      };
-
-      let activation_script_path = PathBuf::from(self
-        .activation_script_path_override
-        .clone()
-        .unwrap_or_default());
-
-      let activation_script = match std::env::consts::OS {
-        "windows" => activation_script_path
-          .join(format!("Microsoft.{}.PowerShell_profile.ps1", actual_version)),
-        _ => activation_script_path
-          .join(format!("activate_idf_{}.sh", actual_version)),
-      };
-
-      Ok(VersionPaths {
-        idf_path,
-        version_installation_path,
-        tool_download_directory,
-        tool_install_directory,
-        python_venv_path,
-        python_path,
-        activation_script,
-        activation_script_path,
-        actual_version,
-        using_existing_idf,
-      })
+        Ok(VersionPaths {
+            idf_path,
+            version_installation_path,
+            tool_download_directory,
+            tool_install_directory,
+            python_venv_path,
+            python_path,
+            activation_script,
+            activation_script_path,
+            actual_version,
+            using_existing_idf,
+        })
     }
 
     /// Get features for a version only if explicitly set (doesn't fall back to global)
@@ -613,7 +629,8 @@ impl Settings {
 
     /// Get features for a version with fallback to required-only
     pub fn get_features_for_version(&self, version: &str) -> Vec<String> {
-        self.get_features_for_version_if_set(version).unwrap_or_default()
+        self.get_features_for_version_if_set(version)
+            .unwrap_or_default()
     }
     /// Get tools for a version only if explicitly set (doesn't fall back to global)
     /// Used to check if we need to prompt for selection
@@ -636,6 +653,7 @@ impl Settings {
 
     /// Get tools for a version with fallback to empty (required tools will be added during installation)
     pub fn get_tools_for_version(&self, version: &str) -> Vec<String> {
-        self.get_tools_for_version_if_set(version).unwrap_or_default()
+        self.get_tools_for_version_if_set(version)
+            .unwrap_or_default()
     }
 }

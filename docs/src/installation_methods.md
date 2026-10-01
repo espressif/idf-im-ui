@@ -15,7 +15,7 @@ The **Expert Installation** wizard includes a new **Tools Selection** step where
 
 If you have an existing ESP-IDF installation, the welcome page will change to give you the option to **Manage Installations**, which takes you to the new **Version Management** dashboard.
 
-![Welcome - version already present](./screenshots/welcome_verion_management.png)
+![Welcome - version already present](./screenshots/welcome_version_management.png)
 
 ## Command Line Interface (CLI)
 

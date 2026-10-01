@@ -1,170 +1,31 @@
 use anyhow::Result;
 use fern::Dispatch;
-#[cfg(target_os = "linux")]
-use fork::{daemon, Fork};
 use idf_im_lib::get_log_directory;
 use idf_im_lib::logging::formatter;
-use idf_im_lib::{
-    add_path_to_path, ensure_path,
-    logging,
-    settings::Settings,
-};
-use log::{LevelFilter, debug, error, info};
-use std::process::Command;
-use std::{
-    env,
-    fs::{self, File},
-    path::{Path, PathBuf},
-    sync::{mpsc, Mutex},
-};
-use tauri::{AppHandle, Manager}; // dep: fork = "0.1"
+use idf_im_lib::settings::Settings;
+use log::LevelFilter;
+use std::{env, path::PathBuf, sync::Mutex};
+use tauri::Manager;
 mod app_state;
-mod ui;
 pub mod commands;
+mod ui;
 pub mod utils;
 
-use app_state::{AppState};
-use ui::{send_message, ProgressBar};
-use commands::{utils_commands::*, prequisites::*, installation::*, settings::*, idf_tools::*, version_management::*};
-use tauri_plugin_store::StoreExt;
+// Only used inside the Linux-only Nvidia/GBM workaround below. The imports must
+// carry the same `cfg` as the code that uses them, otherwise a macOS-only
+// `cargo clippy --fix` strips them as unused and the Linux build stops compiling.
+#[cfg(target_os = "linux")]
+use log::info;
+#[cfg(target_os = "linux")]
+use std::path::Path;
+
+use app_state::AppState;
+use commands::{
+    idf_tools::*, installation::*, prerequisites::*, settings::*, utils_commands::*,
+    version_management::*,
+};
 use serde_json::Value;
-
-fn prepare_installation_directories(
-    app_handle: AppHandle,
-    settings: &Settings,
-    version: &str,
-) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let version_path = settings.path.as_ref().unwrap().as_path().join(version);
-
-    ensure_path(version_path.to_str().unwrap())?;
-    send_message(
-        &app_handle,
-        format!(
-            "IDF installation folder created at: {}",
-            version_path.display()
-        ),
-        "info".to_string(),
-    );
-
-    Ok(version_path)
-}
-
-async fn download_idf(
-    app_handle: &AppHandle,
-    settings: &Settings,
-    version: &str,
-    idf_path: &PathBuf,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = mpsc::channel();
-    let progress = ProgressBar::new(app_handle.clone(), &format!("Installing IDF {}", version));
-
-    let handle = spawn_progress_monitor(app_handle.clone(), version.to_string(), rx);
-
-    match idf_im_lib::git_tools::get_esp_idf(
-      idf_path.to_str().unwrap(),
-      settings.repo_stub.as_deref(),
-      version,
-      settings.idf_mirror.as_deref(),
-      settings.recurse_submodules.unwrap_or_default(),
-      tx,
-    ) {
-        Ok(_) => {
-          send_message(
-            app_handle,
-            format!(
-                "IDF {} installed successfully at: {}",
-                version,
-                idf_path.display()
-            ),
-            "info".to_string(),
-          );
-          progress.finish();
-        }
-        Err(e) => {
-          send_message(
-            app_handle,
-            format!("Failed to install IDF {}. Reason: {}", version, e),
-            "error".to_string(),
-        );
-        progress.finish();
-        return Err(e.into());
-        }
-    }
-
-    handle.join().unwrap();
-    Ok(())
-}
-
-// Tool installation types
-#[derive(Debug)]
-struct ToolSetup {
-    download_dir: String,
-    install_dir: String,
-    tools_json_path: String,
-}
-
-impl ToolSetup {
-    fn new(settings: &Settings, version_path: &PathBuf) -> Result<Self, String> {
-        let p = version_path;
-        let tools_json_path = p
-            .join("esp-idf")
-            .join(settings.tools_json_file.clone().unwrap_or_default());
-        let download_dir = p.join(
-            settings
-                .tool_download_folder_name
-                .clone()
-                .unwrap_or_default(),
-        );
-        let install_dir = p.join(
-            settings
-                .tool_install_folder_name
-                .clone()
-                .unwrap_or_default(),
-        );
-        Ok(Self {
-            download_dir: download_dir.to_str().unwrap().to_string(),
-            install_dir: install_dir.to_str().unwrap().to_string(),
-            tools_json_path: tools_json_path.to_str().unwrap().to_string(),
-        })
-    }
-
-    fn create_directories(&self, app_handle: &AppHandle) -> Result<(), String> {
-        // Create download directory
-        ensure_path(&self.download_dir).map_err(|e| {
-            send_message(
-                app_handle,
-                format!("Failed to create download directory: {}", e),
-                "error".to_string(),
-            );
-            e.to_string()
-        })?;
-
-        // Create installation directory
-        ensure_path(&self.install_dir).map_err(|e| {
-            send_message(
-                app_handle,
-                format!("Failed to create installation directory: {}", e),
-                "error".to_string(),
-            );
-            e.to_string()
-        })?;
-
-        // Add installation directory to PATH
-        add_path_to_path(&self.install_dir);
-
-        Ok(())
-    }
-
-    fn validate_tools_json(&self) -> Result<(), String> {
-        if fs::metadata(&self.tools_json_path).is_err() {
-            return Err(format!(
-                "tools.json file not found at: {}",
-                self.tools_json_path
-            ));
-        }
-        Ok(())
-    }
-}
+use tauri_plugin_store::StoreExt;
 
 /// Setup logging for the GUI application.
 ///
@@ -174,42 +35,47 @@ impl ToolSetup {
 /// # Log Level Behavior
 /// - File: Always Trace level (all logs)
 /// - Console: Info level in debug builds, no console in production
-pub fn setup_gui_logging(
-    log_level_override: Option<LevelFilter>,
-) -> Result<(), fern::InitError> {
+pub fn setup_gui_logging(log_level_override: Option<LevelFilter>) -> Result<(), fern::InitError> {
     let console_level = log_level_override.unwrap_or(LevelFilter::Info);
     let log_dir = get_log_directory().unwrap_or_else(|| PathBuf::from("logs"));
 
     // Create log directory if it doesn't exist
     if let Err(e) = std::fs::create_dir_all(&log_dir) {
-        log::error!("Failed to create log directory {}: {}", log_dir.display(), e);
+        log::error!(
+            "Failed to create log directory {}: {}",
+            log_dir.display(),
+            e
+        );
     }
 
     let log_file_path = log_dir.join("eim_gui.log");
 
     // Build dispatch with file chain (always Trace) and console chain (debug only)
-    let mut dispatch = Dispatch::new()
+    let dispatch = Dispatch::new()
         .format(formatter)
         // File at Trace level
         .chain(
             Dispatch::new()
                 .level(LevelFilter::Trace)
-                .chain(fern::log_file(&log_file_path)?)
+                .chain(fern::log_file(&log_file_path)?),
         );
 
-    // Add console in debug builds
+    // Add console in debug builds. Shadowing instead of `let mut` keeps release
+    // builds free of an `unused_mut` warning, since this arm is compiled out.
     #[cfg(debug_assertions)]
-    {
-        dispatch = dispatch.chain(
-            Dispatch::new()
-                .level(console_level)
-                .chain(std::io::stderr())
-        );
-    }
+    let dispatch = dispatch.chain(
+        Dispatch::new()
+            .level(console_level)
+            .chain(std::io::stderr()),
+    );
 
     dispatch.apply()?;
 
-    log::info!("GUI logging initialized. File: {:?}, Console: {:?}", log_file_path, console_level);
+    log::info!(
+        "GUI logging initialized. File: {:?}, Console: {:?}",
+        log_file_path,
+        console_level
+    );
     Ok(())
 }
 
@@ -293,9 +159,9 @@ pub fn run(
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_settings,
-            check_prequisites,
+            check_prerequisites,
             install_prerequisites,
-            get_prequisites,
+            get_prerequisites,
             get_operating_system,
             python_sanity_check,
             python_install,
