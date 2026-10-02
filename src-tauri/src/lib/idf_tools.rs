@@ -1,16 +1,16 @@
-use log::{debug, trace};
+use anyhow::{anyhow, Result};
+use log::debug;
 use regex::Regex;
-use serde::{de, Deserialize, Serialize};
-use sysinfo::System;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
-use anyhow::{anyhow, Result};
+use sysinfo::System;
 
-use crate::command_executor::{execute_command, execute_command_with_env};
-use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
+use crate::command_executor::execute_command_with_env;
 use crate::utils::{find_by_name_and_extension, find_directories_by_name, versions_match};
+use crate::{decompress_archive, download_file, verify_file_checksum, DownloadProgress};
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Tool {
@@ -128,26 +128,21 @@ pub fn apply_platform_overrides(mut tools_file: ToolsFile, platform: &str) -> To
                 if override_entry.platforms.iter().any(|p| p == platform) {
                     debug!(
                         "Applying platform override for tool '{}' on platform '{}'",
-                        tool.name,
-                        platform
+                        tool.name, platform
                     );
 
                     // Apply install override if present
                     if let Some(install) = &override_entry.install {
                         debug!(
                             "  - Overriding install: '{}' -> '{}'",
-                            tool.install,
-                            install
+                            tool.install, install
                         );
                         tool.install = install.clone();
                     }
 
                     // Apply export_paths override if present
                     if let Some(export_paths) = &override_entry.export_paths {
-                        debug!(
-                            "  - Overriding export_paths ({} paths)",
-                            export_paths.len()
-                        );
+                        debug!("  - Overriding export_paths ({} paths)", export_paths.len());
                         tool.export_paths = export_paths.clone();
                     }
 
@@ -209,17 +204,25 @@ fn do_strip_container_dirs(path: &Path, levels: u8) -> Result<()> {
     let base_path = match (0..levels).try_fold(tmp_path.clone(), |current_path, level| {
         let mut entries = std::fs::read_dir(current_path)?;
 
-        let entry = entries.next()
+        let entry = entries
+            .next()
             .ok_or_else(|| anyhow!("at level {}, directory is empty", level))??;
 
         // Check if there's only one entry
         if entries.next().is_some() {
-            return Err(anyhow!("at level {}, expected 1 entry, found multiple", level));
+            return Err(anyhow!(
+                "at level {}, expected 1 entry, found multiple",
+                level
+            ));
         }
 
         let next_path = entry.path();
         if !next_path.is_dir() {
-            return Err(anyhow!("at level {}, '{}' is not a directory", level, entry.file_name().to_string_lossy()));
+            return Err(anyhow!(
+                "at level {}, '{}' is not a directory",
+                level,
+                entry.file_name().to_string_lossy()
+            ));
         }
 
         Ok(next_path)
@@ -386,7 +389,10 @@ fn get_os_name() -> String {
         // Normalize OS names to match our existing convention
         if name_lower.contains("windows") {
             return "windows".to_string();
-        } else if name_lower.contains("darwin") || name_lower.contains("macos") || name_lower.contains("mac os") {
+        } else if name_lower.contains("darwin")
+            || name_lower.contains("macos")
+            || name_lower.contains("mac os")
+        {
             return "macos".to_string();
         } else if name_lower.contains("linux") {
             return "linux".to_string();
@@ -404,28 +410,31 @@ fn get_os_name() -> String {
 /// Returns a normalized architecture name compatible with the existing platform identification system.
 fn get_arch_name() -> String {
     // Try runtime detection first
-    if let arch = System::cpu_arch() {
-        let arch_lower = arch.to_lowercase();
+    let arch_lower = System::cpu_arch().to_lowercase();
 
-        // Normalize architecture names to match our existing convention
-        if arch_lower.contains("x86_64") || arch_lower.contains("amd64") {
-            return "x86_64".to_string();
-        } else if arch_lower.contains("aarch64") || arch_lower.contains("arm64") {
-            return "aarch64".to_string();
-        } else if arch_lower.contains("i686") || arch_lower.contains("x86") && !arch_lower.contains("x86_64") {
-            return "x86".to_string();
-        } else if arch_lower.contains("arm") && !arch_lower.contains("aarch64") {
-            // Check for hard-float (armhf) vs soft-float (armel)
-            #[cfg(target_arch = "arm")]
+    // Normalize architecture names to match our existing convention
+    if arch_lower.contains("x86_64") || arch_lower.contains("amd64") {
+        return "x86_64".to_string();
+    } else if arch_lower.contains("aarch64") || arch_lower.contains("arm64") {
+        return "aarch64".to_string();
+    } else if arch_lower.contains("i686")
+        || arch_lower.contains("x86") && !arch_lower.contains("x86_64")
+    {
+        return "x86".to_string();
+    } else if arch_lower.contains("arm") && !arch_lower.contains("aarch64") {
+        // Check for hard-float (armhf) vs soft-float (armel)
+        #[cfg(target_arch = "arm")]
+        {
+            // For ARM, check target features or target string for hard-float
+            // armv7-unknown-linux-musleabihf uses hard-float ABI
+            if cfg!(target_feature = "vfp")
+                || cfg!(target_feature = "vfpv3")
+                || cfg!(target_feature = "vfpv4")
             {
-                // For ARM, check target features or target string for hard-float
-                // armv7-unknown-linux-musleabihf uses hard-float ABI
-                if cfg!(target_feature = "vfp") || cfg!(target_feature = "vfpv3") || cfg!(target_feature = "vfpv4") {
-                    return "armv7".to_string();
-                }
+                return "armv7".to_string();
             }
-            return "arm".to_string();
         }
+        return "arm".to_string();
     }
 
     // For cross-compilation, check target to distinguish armhf from armel
@@ -470,25 +479,41 @@ pub fn get_download_link_by_platform(
     tools: Vec<Tool>,
     platform: &String,
 ) -> HashMap<String, (String, Download)> {
-  let mut tool_links = HashMap::new();
-  for tool in tools {
-    let preferred_version;
-    if tool.versions.len() > 1 {
-      log::info!("Tool {} has multiple versions, using the recommended or the first one", tool.name);
-      preferred_version = tool.versions.iter().find(|v| v.status == "recommended").unwrap_or(&tool.versions[0]);
-    } else if tool.versions.is_empty() {
-      log::warn!("Tool {} has no versions", tool.name);
-      continue;
-    } else {
-      preferred_version = tool.versions.first().unwrap();
+    let mut tool_links = HashMap::new();
+    for tool in tools {
+        let preferred_version = if tool.versions.len() > 1 {
+            log::info!(
+                "Tool {} has multiple versions, using the recommended or the first one",
+                tool.name
+            );
+            tool.versions
+                .iter()
+                .find(|v| v.status == "recommended")
+                .unwrap_or(&tool.versions[0])
+        } else if tool.versions.is_empty() {
+            log::warn!("Tool {} has no versions", tool.name);
+            continue;
+        } else {
+            tool.versions.first().unwrap()
+        };
+        if let Some(download) = preferred_version
+            .downloads
+            .get(platform)
+            .or_else(|| preferred_version.downloads.get("any"))
+        {
+            tool_links.insert(
+                tool.name.clone(),
+                (preferred_version.name.clone(), download.clone()),
+            );
+        } else {
+            log::warn!(
+                "Tool {} does not have a download link for platform {}",
+                tool.name,
+                platform
+            );
+        }
     }
-    if let Some(download) = preferred_version.downloads.get(platform).or_else(|| preferred_version.downloads.get("any")) {
-      tool_links.insert(tool.name.clone(), (preferred_version.name.clone(), download.clone()));
-    } else {
-      log::warn!("Tool {} does not have a download link for platform {}", tool.name, platform);
-    }
-  }
-  tool_links
+    tool_links
 }
 
 /// Changes the download links of tools to use a specified mirror.
@@ -496,10 +521,10 @@ pub fn get_download_link_by_platform(
 /// # Arguments
 ///
 /// * `tools` - A HashMap where keys are tool names (String) and values are
-///             tuples containing the tool's version (String) and its corresponding
-///             Download instance.
+///   tuples containing the tool's version (String) and its corresponding
+///   Download instance.
 /// * `mirror` - An optional reference to a string representing the mirror URL.
-///              If `None`, the original URLs are used.
+///   If `None`, the original URLs are used.
 ///
 /// # Returns
 ///
@@ -514,7 +539,7 @@ pub fn change_links_donwanload_mirror(
 ) -> HashMap<String, (String, Download)> {
     let new_tools: HashMap<String, (String, Download)> = tools
         .iter()
-        .map(|(name, (version,  link))| {
+        .map(|(name, (version, link))| {
             let new_link = match mirror {
                 Some(mirror) => Download {
                     sha256: link.sha256.clone(),
@@ -552,7 +577,7 @@ pub fn get_list_of_tools_to_download(
     let platform = match get_platform_identification() {
         Ok(platform) => platform,
         Err(err) => {
-          panic!("Unable to identify platform: {}", err);
+            panic!("Unable to identify platform: {}", err);
         }
     };
     change_links_donwanload_mirror(get_download_link_by_platform(list, &platform), mirror)
@@ -607,17 +632,16 @@ pub fn get_tools_export_paths(
             log::warn!("Bin directory does not exist: {}", bin_dir);
         }
     }
-    let mut paths:Vec<String> = paths_set.into_iter().collect();
+    let mut paths: Vec<String> = paths_set.into_iter().collect();
     paths.sort();
     // move clang to the end of the list if it exists
     if let Some(index) = paths.iter().position(|path| path.contains("clang")) {
-      let clang_path = paths.remove(index);
-      paths.push(clang_path);
+        let clang_path = paths.remove(index);
+        paths.push(clang_path);
     }
     log::debug!("Export paths: {:?}", paths);
     paths
 }
-
 
 /// Gathers unique export paths for a given set of installed tools.
 ///
@@ -631,10 +655,10 @@ pub fn get_tools_export_paths(
 /// # Arguments
 ///
 /// * `tools_file` - A `ToolsFile` struct containing the definitions of tools,
-///                  including their `export_paths`.
+///   including their `export_paths`.
 /// * `installed_tools` - A `HashMap` where keys are tool names (`String`) and values
-///                       are tuples containing the tool's installed version (`String`)
-///                       and its `Download` information.
+///   are tuples containing the tool's installed version (`String`)
+///   and its `Download` information.
 /// * `tools_install_path` - A string slice representing the base directory where tools are installed.
 ///
 /// # Returns
@@ -643,57 +667,56 @@ pub fn get_tools_export_paths(
 /// specified installed tools that actually exist on the filesystem.
 ///
 pub fn get_tools_export_paths_from_list(
-  tools_file: ToolsFile,
-  installed_tools: HashMap<String, (String, Download)>,
-  tools_install_path: &str,
+    tools_file: ToolsFile,
+    installed_tools: HashMap<String, (String, Download)>,
+    tools_install_path: &str,
 ) -> Vec<String> {
     let mut paths_set: HashSet<String> = HashSet::new();
-    for (tool_name, (version, download)) in installed_tools {
-      let mut p = PathBuf::from(tools_install_path);
-      p.push(tool_name.clone());
-      p.push(version);
-      tools_file.tools.iter().find(|tool| tool.name == tool_name)
-        .and_then(|tool| {
-          tool.export_paths.iter().for_each(|path| {
-            if path.iter().find(| level | {
-                *level == "bin"
-            }).is_some() {
-                let bin_dirs = find_bin_directories(&p);
-                for bin_dir in bin_dirs {
-                    match Path::new(&bin_dir).try_exists() {
+    for (tool_name, (version, _download)) in installed_tools {
+        let mut p = PathBuf::from(tools_install_path);
+        p.push(tool_name.clone());
+        p.push(version);
+        if let Some(tool) = tools_file.tools.iter().find(|tool| tool.name == tool_name) {
+            tool.export_paths.iter().for_each(|path| {
+                if path.iter().find(|level| *level == "bin").is_some() {
+                    let bin_dirs = find_bin_directories(&p);
+                    for bin_dir in bin_dirs {
+                        match Path::new(&bin_dir).try_exists() {
+                            Ok(true) => {
+                                paths_set.insert(bin_dir);
+                            }
+                            Ok(false) => {
+                                log::warn!("Bin directory does not exist: {}", bin_dir);
+                            }
+                            Err(e) => {
+                                log::error!("Error checking bin directory: {}", e);
+                            }
+                        }
+                    }
+                } else {
+                    let mut export_path = p.clone();
+                    for level in path {
+                        export_path.push(level);
+                    }
+                    match export_path.try_exists() {
                         Ok(true) => {
-                            paths_set.insert(bin_dir);
+                            paths_set.insert(export_path.to_str().unwrap().to_string());
                         }
                         Ok(false) => {
-                            log::warn!("Bin directory does not exist: {}", bin_dir);
+                            log::warn!(
+                                "Export path does not exist: {}",
+                                export_path.to_str().unwrap()
+                            );
                         }
                         Err(e) => {
-                            log::error!("Error checking bin directory: {}", e);
+                            log::error!("Error checking export path: {}", e);
                         }
                     }
                 }
-            } else {
-              let mut export_path = p.clone();
-              for level in path {
-                  export_path.push(level);
-              }
-              match export_path.try_exists() {
-                Ok(true) => {
-                    paths_set.insert(export_path.to_str().unwrap().to_string());
-                }
-                Ok(false) => {
-                    log::warn!("Export path does not exist: {}", export_path.to_str().unwrap());
-                }
-                Err(e) => {
-                    log::error!("Error checking export path: {}", e);
-                }
-              }
-            }
-          });
-          Some(())
-        });
+            });
+        }
     }
-    let mut paths:Vec<String> = paths_set.into_iter().collect();
+    let mut paths: Vec<String> = paths_set.into_iter().collect();
     paths.sort();
     log::debug!("Export paths from list: {:?}", paths);
     paths
@@ -709,10 +732,10 @@ pub fn get_tools_export_paths_from_list(
 /// # Arguments
 ///
 /// * `tools_file` - A `ToolsFile` struct containing the definitions of tools,
-///                  including their `export_vars`.
+///   including their `export_vars`.
 /// * `installed_tools` - A `HashMap` where keys are tool names (`String`) and values
-///                       are tuples containing the tool's installed version (`String`)
-///                       and its `Download` information.
+///   are tuples containing the tool's installed version (`String`)
+///   and its `Download` information.
 /// * `tools_install_path` - A string slice representing the base directory where tools are installed.
 ///
 /// # Returns
@@ -721,17 +744,20 @@ pub fn get_tools_export_paths_from_list(
 /// for the specified installed tools.
 ///
 pub fn get_tools_export_vars_from_list(
-  _tools_file: ToolsFile,
-  installed_tools: HashMap<String, (String, Download)>,
-  tools_install_path: &str,
+    _tools_file: ToolsFile,
+    installed_tools: HashMap<String, (String, Download)>,
+    tools_install_path: &str,
 ) -> Vec<(String, String)> {
     let mut vars: Vec<(String, String)> = Vec::new();
 
     for (tool_name, (_version, _download)) in installed_tools {
         if let Some(tool) = _tools_file.tools.iter().find(|t| t.name == tool_name) {
             for (var_name, var_value) in &tool.export_vars {
-                let single_tool_install_path = PathBuf::from(tools_install_path).join(tool.name.clone()).join(tool.versions.first().unwrap().name.clone());
-                let processed_value = var_value.replace("${TOOL_PATH}", &single_tool_install_path.to_string_lossy());
+                let single_tool_install_path = PathBuf::from(tools_install_path)
+                    .join(tool.name.clone())
+                    .join(tool.versions.first().unwrap().name.clone());
+                let processed_value =
+                    var_value.replace("${TOOL_PATH}", &single_tool_install_path.to_string_lossy());
                 vars.push((var_name.clone(), processed_value));
             }
         }
@@ -781,10 +807,10 @@ pub fn find_bin_directories(path: &Path) -> Vec<String> {
 /// * `download_dir` - A `PathBuf` indicating the directory where tool archives should be downloaded.
 /// * `install_dir` - A `PathBuf` indicating the base directory where tools should be installed.
 /// * `mirror` - An `Option<&str>` specifying an optional mirror URL to use for downloads.
-///              If `Some`, download URLs will be adjusted to use this mirror.
+///   If `Some`, download URLs will be adjusted to use this mirror.
 /// * `progress_callback` - A closure that implements `Fn(DownloadProgress) + Clone + Send + 'static`.
-///                         This callback is invoked to report the progress and status of downloads
-///                         and installations.
+///   This callback is invoked to report the progress and status of downloads
+///   and installations.
 ///
 /// # Returns
 ///
@@ -798,116 +824,143 @@ pub fn find_bin_directories(path: &Path) -> Vec<String> {
 pub async fn setup_tools(
     tools: &ToolsFile,
     selected_targets: Vec<String>,
-    download_dir: &PathBuf,
-    install_dir: &PathBuf,
+    download_dir: &Path,
+    install_dir: &Path,
     mirror: Option<&str>,
     progress_callback: impl Fn(DownloadProgress) + Clone + Send + 'static,
 ) -> anyhow::Result<HashMap<String, (String, Download)>> {
-
     let download_links = get_list_of_tools_to_download(tools.clone(), selected_targets, mirror);
     // Download each tool
     for (tool_name, (version, download_link)) in download_links.iter() {
-      let file_path = Path::new(&download_link.url);
-      let filename = file_path.file_name()
-          .ok_or_else(|| anyhow::anyhow!("Invalid filename in URL"))?
-          .to_str()
-          .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename"))?;
+        let file_path = Path::new(&download_link.url);
+        let filename = file_path
+            .file_name()
+            .ok_or_else(|| anyhow::anyhow!("Invalid filename in URL"))?
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Invalid UTF-8 in filename"))?;
 
-      let full_file_path = download_dir.join(filename);
-      let this_install_dir = install_dir.join(tool_name).join(version);
+        let full_file_path = download_dir.join(filename);
+        let this_install_dir = install_dir.join(tool_name).join(version);
 
-      match verify_tool_installation(tool_name, tools, install_dir, version) {
-        Ok(ToolStatus::Correct { version }) => {
-          progress_callback(DownloadProgress::Verified(download_link.url.clone()));
-          progress_callback(DownloadProgress::Complete);
-          log::info!("Tool '{}' is already installed with the correct version: {}", tool_name, version);
-          continue; // Skip if already installed correctly
-        }
-        Ok(ToolStatus::DifferentVersion { installed, expected }) => {
-          // todo: install to different folder
-          log::warn!("Tool '{}' is installed with version '{}', but expected '{}'. Reinstalling...", tool_name, installed, expected);
-        }
-        Ok(ToolStatus::Missing) => {
-          log::info!("Tool '{}' is not installed. Downloading...", tool_name);
-        }
-        Err(e) => {
-          log::error!("Error verifying tool '{}': {}", tool_name, e);
-          return Err(anyhow::anyhow!("Error verifying tool '{}': {}", tool_name, e));
-        }
-      }
-
-
-
-
-      // Notify start of processing this tool
-      progress_callback(DownloadProgress::Start(download_link.url.clone()));
-
-      // Check if file already exists and has correct checksum
-      if let Ok(true) = verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap()) {
-        progress_callback(DownloadProgress::Verified(download_link.url.clone()));
-        decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
-
-        // Post-extraction operations
-        if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
-          post_extract_operations(tool_name, tool, &this_install_dir)?;
-        }
-
-        progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
-        progress_callback(DownloadProgress::Complete);
-        continue;
-      }
-
-      // Create a channel for progress updates
-      let (tx, rx) = std::sync::mpsc::channel();
-
-      // Spawn a thread to forward progress updates to the callback
-      let callback = progress_callback.clone();
-      let url = download_link.url.clone();
-      std::thread::spawn(move || {
-        while let Ok(progress) = rx.recv() {
-          match progress {
-            DownloadProgress::Progress(current, total) => {
-              callback(DownloadProgress::Progress(current, total));
+        match verify_tool_installation(tool_name, tools, install_dir, version) {
+            Ok(ToolStatus::Correct { version }) => {
+                progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+                progress_callback(DownloadProgress::Complete);
+                log::info!(
+                    "Tool '{}' is already installed with the correct version: {}",
+                    tool_name,
+                    version
+                );
+                continue; // Skip if already installed correctly
             }
-            DownloadProgress::Complete => {
-              callback(DownloadProgress::Downloaded(url.clone()));
+            Ok(ToolStatus::DifferentVersion {
+                installed,
+                expected,
+            }) => {
+                // todo: install to different folder
+                log::warn!(
+                    "Tool '{}' is installed with version '{}', but expected '{}'. Reinstalling...",
+                    tool_name,
+                    installed,
+                    expected
+                );
             }
-            DownloadProgress::Error(e) => {
-              callback(DownloadProgress::Error(e));
+            Ok(ToolStatus::Missing) => {
+                log::info!("Tool '{}' is not installed. Downloading...", tool_name);
             }
-            _ => {}
-          }
+            Err(e) => {
+                log::error!("Error verifying tool '{}': {}", tool_name, e);
+                return Err(anyhow::anyhow!(
+                    "Error verifying tool '{}': {}",
+                    tool_name,
+                    e
+                ));
+            }
         }
-      });
 
-      // Download the file
-      match download_file(&download_link.url, download_dir.to_str().unwrap(), Some(tx)).await {
-        Ok(_) => {
-          // Verify downloaded file
-          if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())? {
+        // Notify start of processing this tool
+        progress_callback(DownloadProgress::Start(download_link.url.clone()));
+
+        // Check if file already exists and has correct checksum
+        if let Ok(true) =
+            verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())
+        {
             progress_callback(DownloadProgress::Verified(download_link.url.clone()));
-            // Extract the archive
-
-            decompress_archive(full_file_path.to_str().unwrap(), this_install_dir.to_str().unwrap())?;
+            decompress_archive(
+                full_file_path.to_str().unwrap(),
+                this_install_dir.to_str().unwrap(),
+            )?;
 
             // Post-extraction operations
             if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
-              post_extract_operations(tool_name, tool, &this_install_dir)?;
+                post_extract_operations(tool_name, tool, &this_install_dir)?;
             }
 
-            progress_callback(DownloadProgress::Extracted(download_link.url.clone(), this_install_dir.to_str().unwrap().to_string()));
+            progress_callback(DownloadProgress::Extracted(
+                download_link.url.clone(),
+                this_install_dir.to_str().unwrap().to_string(),
+            ));
             progress_callback(DownloadProgress::Complete);
-          } else {
-            // Remove corrupted file
-            std::fs::remove_file(&full_file_path)?;
-            return Err(anyhow::anyhow!("Downloaded file is corrupted"));
-          }
+            continue;
         }
-        Err(e) => {
-          progress_callback(DownloadProgress::Error(e.to_string()));
-          return Err(anyhow::anyhow!("Download failed: {}", e));
+
+        // Create a channel for progress updates
+        let (tx, rx) = std::sync::mpsc::channel();
+
+        // Spawn a thread to forward progress updates to the callback
+        let callback = progress_callback.clone();
+        let url = download_link.url.clone();
+        std::thread::spawn(move || {
+            while let Ok(progress) = rx.recv() {
+                match progress {
+                    DownloadProgress::Progress(current, total) => {
+                        callback(DownloadProgress::Progress(current, total));
+                    }
+                    DownloadProgress::Complete => {
+                        callback(DownloadProgress::Downloaded(url.clone()));
+                    }
+                    DownloadProgress::Error(e) => {
+                        callback(DownloadProgress::Error(e));
+                    }
+                    _ => {}
+                }
+            }
+        });
+
+        // Download the file
+        match download_file(&download_link.url, download_dir.to_str().unwrap(), Some(tx)).await {
+            Ok(_) => {
+                // Verify downloaded file
+                if verify_file_checksum(&download_link.sha256, full_file_path.to_str().unwrap())? {
+                    progress_callback(DownloadProgress::Verified(download_link.url.clone()));
+                    // Extract the archive
+
+                    decompress_archive(
+                        full_file_path.to_str().unwrap(),
+                        this_install_dir.to_str().unwrap(),
+                    )?;
+
+                    // Post-extraction operations
+                    if let Some(tool) = tools.tools.iter().find(|t| &t.name == tool_name) {
+                        post_extract_operations(tool_name, tool, &this_install_dir)?;
+                    }
+
+                    progress_callback(DownloadProgress::Extracted(
+                        download_link.url.clone(),
+                        this_install_dir.to_str().unwrap().to_string(),
+                    ));
+                    progress_callback(DownloadProgress::Complete);
+                } else {
+                    // Remove corrupted file
+                    std::fs::remove_file(&full_file_path)?;
+                    return Err(anyhow::anyhow!("Downloaded file is corrupted"));
+                }
+            }
+            Err(e) => {
+                progress_callback(DownloadProgress::Error(e.to_string()));
+                return Err(anyhow::anyhow!("Download failed: {}", e));
+            }
         }
-      }
     }
 
     Ok(download_links)
@@ -924,31 +977,42 @@ pub async fn setup_tools(
 /// # Returns
 ///
 /// * `Result<()>` - Ok if successful, Err otherwise
-fn post_extract_operations(tool_name: &str, tool: &Tool, install_dir: &PathBuf) -> Result<()> {
-  // Strip container directories if specified
-  if let Some(levels) = tool.strip_container_dirs {
-    if levels > 0 {
-        log::debug!("Stripping {} container directory levels for tool '{}'", levels, tool_name);
-      if let Err(e) = do_strip_container_dirs(install_dir, levels) {
-        log::warn!("Failed to strip container directories for '{}': {}. Continuing anyway.", tool_name, e);
-        // Don't return error - if stripping fails, we still have a usable installation
-      }
+fn post_extract_operations(tool_name: &str, tool: &Tool, install_dir: &Path) -> Result<()> {
+    // Strip container directories if specified
+    if let Some(levels) = tool.strip_container_dirs {
+        if levels > 0 {
+            log::debug!(
+                "Stripping {} container directory levels for tool '{}'",
+                levels,
+                tool_name
+            );
+            if let Err(e) = do_strip_container_dirs(install_dir, levels) {
+                log::warn!(
+                    "Failed to strip container directories for '{}': {}. Continuing anyway.",
+                    tool_name,
+                    e
+                );
+                // Don't return error - if stripping fails, we still have a usable installation
+            }
+        }
     }
-  }
 
-  // Fix for ninja not having `x` permission in zip archive
-  if tool_name.contains("ninja") {
-    match add_x_permission_to_tool(install_dir, "ninja") {
-      Ok(_) => {
-        log::info!("Set executable permissions for ninja in {}", install_dir.display());
-      }
-      Err(e) => {
-        log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
-      }
+    // Fix for ninja not having `x` permission in zip archive
+    if tool_name.contains("ninja") {
+        match add_x_permission_to_tool(install_dir, "ninja") {
+            Ok(_) => {
+                log::info!(
+                    "Set executable permissions for ninja in {}",
+                    install_dir.display()
+                );
+            }
+            Err(e) => {
+                log::error!("Failed to set executable permissions for ninja: {}. Please set the `+x` permission manually.", e);
+            }
+        }
     }
-  }
 
-  Ok(())
+    Ok(())
 }
 
 /// Adds execute (x) permission to the specified tool within the installation directory.
@@ -986,7 +1050,7 @@ fn post_extract_operations(tool_name: &str, tool: &Tool, install_dir: &PathBuf) 
 ///     eprintln!("Failed to add execute permission: {}", e);
 /// }
 /// ```
-fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Result<()> {
+fn add_x_permission_to_tool(install_dir: &Path, executable_name: &str) -> Result<()> {
     let tool_path = find_by_name_and_extension(install_dir, executable_name, "");
     let direct = install_dir.join(executable_name);
     #[cfg(unix)]
@@ -1013,22 +1077,39 @@ fn add_x_permission_to_tool(install_dir: &PathBuf, executable_name:&str) -> Resu
 }
 
 /// Verify if a tool is installed with the correct version
-pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install_dir: &PathBuf, version: &str) -> Result<ToolStatus> {
+pub fn verify_tool_installation(
+    tool_name: &str,
+    tools_file: &ToolsFile,
+    install_dir: &Path,
+    _version: &str,
+) -> Result<ToolStatus> {
     // Find the tool in the tools file
-    let tool = tools_file.tools.iter()
+    let tool = tools_file
+        .tools
+        .iter()
         .find(|t| t.name == tool_name)
-        .ok_or(format!("Tool '{}' not found in tools file", tool_name)).map_err(|e| anyhow!(e))?;
-
-
+        .ok_or(format!("Tool '{}' not found in tools file", tool_name))
+        .map_err(|e| anyhow!(e))?;
 
     // Get the expected version (recommended or first available)
-    let expected_version = tool.versions.iter().find(|v| v.status == "recommended")
+    let expected_version = tool
+        .versions
+        .iter()
+        .find(|v| v.status == "recommended")
         .or_else(|| tool.versions.first())
-        .ok_or(format!("No version found for tool '{}'", tool_name)).map_err(|e| anyhow!(e))?;
+        .ok_or(format!("No version found for tool '{}'", tool_name))
+        .map_err(|e| anyhow!(e))?;
 
     // adding to PATH the directory where the tool is(or will be) installed
-    debug!("Checking tool: {}, expected version: {} and install dir: {}", tool_name, expected_version.name, install_dir.display());
-    let mut expected_dir = install_dir.join(&tool_name).join(expected_version.clone().name);
+    debug!(
+        "Checking tool: {}, expected version: {} and install dir: {}",
+        tool_name,
+        expected_version.name,
+        install_dir.display()
+    );
+    let mut expected_dir = install_dir
+        .join(tool_name)
+        .join(expected_version.clone().name);
     for ex_path in &tool.export_paths {
         for level in ex_path {
             expected_dir.push(level);
@@ -1036,16 +1117,16 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
     }
 
     if tool.version_cmd.is_empty() || tool.version_cmd[0].is_empty() {
-      match expected_dir.try_exists() {
-          Ok(true) => {
-              return Ok(ToolStatus::Correct {
-                  version: expected_version.name.clone(),
-              });
-          }
-          _ => {
-            return Ok(ToolStatus::Missing);
-          }
-      }
+        match expected_dir.try_exists() {
+            Ok(true) => {
+                return Ok(ToolStatus::Correct {
+                    version: expected_version.name.clone(),
+                });
+            }
+            _ => {
+                return Ok(ToolStatus::Missing);
+            }
+        }
     }
 
     let mut tmp_path = std::env::var("PATH").unwrap_or_default();
@@ -1061,51 +1142,63 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
     // Execute the version command
     // first try exactly expected binary
     let output = {
-      let tool_name = &tool.version_cmd[0];
-      let args = match tool.version_cmd.get(1) {
-        Some(arg) => vec![arg.as_str()],
-        None => vec![],
-      };
-      let env = vec![("PATH", tmp_path.as_str())];
+        let tool_name = &tool.version_cmd[0];
+        let args = match tool.version_cmd.get(1) {
+            Some(arg) => vec![arg.as_str()],
+            None => vec![],
+        };
+        let env = vec![("PATH", tmp_path.as_str())];
 
-      // Try 1: Exact tool path
-      let exact_tool_path = expected_dir.join(tool_name);
-      if exact_tool_path.try_exists().unwrap_or(false) {
-          log::debug!("Found exact tool at: {}", exact_tool_path.display());
-          if let Ok(output) = execute_command_with_env(&exact_tool_path.to_string_lossy(), &args, env.clone()) {
-              output
-          } else {
-              return Ok(ToolStatus::Missing);
-          }
-      }
-      // Try 2: Windows .exe extension
-      else if std::env::consts::OS == "windows" {
-          let exact_tool_path_exe = expected_dir.join(format!("{}.exe", tool_name));
-          if exact_tool_path_exe.try_exists().unwrap_or(false) {
-              log::debug!("Found exact tool at: {}", exact_tool_path_exe.display());
-              if let Ok(output) = execute_command_with_env(&exact_tool_path_exe.to_string_lossy(), &args, env.clone()) {
-                  output
-              } else {
-                  return Ok(ToolStatus::Missing);
-              }
-          } else {
-              // Try 3: Fallback to PATH
-              log::debug!("Exact tool not found at path: {}, falling back to version command", exact_tool_path.display());
-              match execute_command_with_env(tool_name, &args, env) {
-                  Ok(output) => output,
-                  Err(_) => return Ok(ToolStatus::Missing),
-              }
-          }
-      }
-      // Try 3: Non-Windows fallback to PATH
-      else {
-          log::debug!("Exact tool not found at path: {}, falling back to version command", exact_tool_path.display());
-          match execute_command_with_env(tool_name, &args, env) {
-              Ok(output) => output,
-              Err(_) => return Ok(ToolStatus::Missing),
-          }
-      }
-  };
+        // Try 1: Exact tool path
+        let exact_tool_path = expected_dir.join(tool_name);
+        if exact_tool_path.try_exists().unwrap_or(false) {
+            log::debug!("Found exact tool at: {}", exact_tool_path.display());
+            if let Ok(output) =
+                execute_command_with_env(&exact_tool_path.to_string_lossy(), &args, env.clone())
+            {
+                output
+            } else {
+                return Ok(ToolStatus::Missing);
+            }
+        }
+        // Try 2: Windows .exe extension
+        else if std::env::consts::OS == "windows" {
+            let exact_tool_path_exe = expected_dir.join(format!("{}.exe", tool_name));
+            if exact_tool_path_exe.try_exists().unwrap_or(false) {
+                log::debug!("Found exact tool at: {}", exact_tool_path_exe.display());
+                if let Ok(output) = execute_command_with_env(
+                    &exact_tool_path_exe.to_string_lossy(),
+                    &args,
+                    env.clone(),
+                ) {
+                    output
+                } else {
+                    return Ok(ToolStatus::Missing);
+                }
+            } else {
+                // Try 3: Fallback to PATH
+                log::debug!(
+                    "Exact tool not found at path: {}, falling back to version command",
+                    exact_tool_path.display()
+                );
+                match execute_command_with_env(tool_name, &args, env) {
+                    Ok(output) => output,
+                    Err(_) => return Ok(ToolStatus::Missing),
+                }
+            }
+        }
+        // Try 3: Non-Windows fallback to PATH
+        else {
+            log::debug!(
+                "Exact tool not found at path: {}, falling back to version command",
+                exact_tool_path.display()
+            );
+            match execute_command_with_env(tool_name, &args, env) {
+                Ok(output) => output,
+                Err(_) => return Ok(ToolStatus::Missing),
+            }
+        }
+    };
 
     // Convert output to string
     let output_str = String::from_utf8_lossy(&output.stdout);
@@ -1114,11 +1207,14 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
 
     // Parse version using regex
     let regex = Regex::new(&tool.version_regex)
-        .map_err(|e| format!("Invalid regex '{}': {}", tool.version_regex, e)).map_err(|e| anyhow!(e))?;
+        .map_err(|e| format!("Invalid regex '{}': {}", tool.version_regex, e))
+        .map_err(|e| anyhow!(e))?;
 
-    let installed_version = match regex.captures(&combined_output)
+    let installed_version = match regex
+        .captures(&combined_output)
         .and_then(|caps| caps.get(1))
-        .map(|m| m.as_str()) {
+        .map(|m| m.as_str())
+    {
         Some(version) => version,
         None => {
             return Ok(ToolStatus::DifferentVersion {
@@ -1126,7 +1222,7 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
                 expected: expected_version.name.clone(),
             });
         }
-      };
+    };
 
     // Compare versions (major.minor only). Collapse runs of underscores on
     // both sides so cosmetic build-string differences like
@@ -1161,7 +1257,6 @@ pub fn verify_tool_installation(tool_name: &str, tools_file: &ToolsFile, install
             expected: expected_version.name.clone(),
         })
     }
-
 }
 
 #[cfg(test)]
@@ -1193,10 +1288,10 @@ mod tests {
         // Create the test directory and the "bin" directory
         std::fs::create_dir_all(&bin_dir).unwrap();
 
-        let result = find_bin_directories(&test_dir);
+        let result = find_bin_directories(test_dir);
 
         // Remove the test directory
-        std::fs::remove_dir_all(&test_dir).unwrap();
+        std::fs::remove_dir_all(test_dir).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], bin_dir);
@@ -1210,10 +1305,10 @@ mod tests {
         // Create the test directory and the "bin" directory
         std::fs::create_dir_all(&bin_dir).unwrap();
 
-        let result = find_bin_directories(&test_dir);
+        let result = find_bin_directories(test_dir);
 
         // Remove the test directory
-        std::fs::remove_dir_all(&test_dir).unwrap();
+        std::fs::remove_dir_all(test_dir).unwrap();
 
         assert_eq!(result.len(), 1);
         assert_eq!(result[0], bin_dir);
@@ -1224,21 +1319,27 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            ("1.0.0".to_string(),Download {
-                sha256: "abc123".to_string(),
-                size: 1024,
-                url: "https://github.com/example/tool1.tar.gz".to_string(),
-                rename_dist: None,
-            }),
+            (
+                "1.0.0".to_string(),
+                Download {
+                    sha256: "abc123".to_string(),
+                    size: 1024,
+                    url: "https://github.com/example/tool1.tar.gz".to_string(),
+                    rename_dist: None,
+                },
+            ),
         );
         tools.insert(
             "tool2".to_string(),
-            ("1.0.0".to_string(),Download {
-                sha256: "def456".to_string(),
-                size: 2048,
-                url: "https://github.com/example/tool2.tar.gz".to_string(),
-                rename_dist: None,
-            }),
+            (
+                "1.0.0".to_string(),
+                Download {
+                    sha256: "def456".to_string(),
+                    size: 2048,
+                    url: "https://github.com/example/tool2.tar.gz".to_string(),
+                    rename_dist: None,
+                },
+            ),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
@@ -1259,12 +1360,15 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            ("1.0.0".to_string(),Download {
-                sha256: "abc123".to_string(),
-                size: 1024,
-                url: "https://github.com/example/tool1.tar.gz".to_string(),
-                rename_dist: None,
-            }),
+            (
+                "1.0.0".to_string(),
+                Download {
+                    sha256: "abc123".to_string(),
+                    size: 1024,
+                    url: "https://github.com/example/tool1.tar.gz".to_string(),
+                    rename_dist: None,
+                },
+            ),
         );
 
         let mirror = None;
@@ -1291,12 +1395,15 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            ("1.0.0".to_string(),Download {
-                sha256: "abc123".to_string(),
-                size: 1024,
-                url: "https://example.com/tool1.tar.gz".to_string(),
-                rename_dist: None,
-            }),
+            (
+                "1.0.0".to_string(),
+                Download {
+                    sha256: "abc123".to_string(),
+                    size: 1024,
+                    url: "https://example.com/tool1.tar.gz".to_string(),
+                    rename_dist: None,
+                },
+            ),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
@@ -1313,12 +1420,15 @@ mod tests {
         let mut tools = HashMap::new();
         tools.insert(
             "tool1".to_string(),
-            ("1.0.0".to_string(),Download {
-                sha256: "abc123".to_string(),
-                size: 1024,
-                url: "".to_string(),
-                rename_dist: None,
-            }),
+            (
+                "1.0.0".to_string(),
+                Download {
+                    sha256: "abc123".to_string(),
+                    size: 1024,
+                    url: "".to_string(),
+                    rename_dist: None,
+                },
+            ),
         );
 
         let mirror = Some("https://dl.espressif.com/github_assets");
@@ -1338,7 +1448,7 @@ mod tests {
 
     #[test]
     fn test_apply_platform_overrides() {
-        let mut tool = Tool {
+        let tool = Tool {
             description: "Test tool".to_string(),
             export_paths: vec![vec!["bin".to_string()]],
             export_vars: HashMap::new(),
@@ -1374,7 +1484,10 @@ mod tests {
         // Test applying win64 override
         let result = apply_platform_overrides(tools_file.clone(), "win64");
         assert_eq!(result.tools[0].install, "always");
-        assert_eq!(result.tools[0].export_paths, vec![vec!["windows".to_string(), "bin".to_string()]]);
+        assert_eq!(
+            result.tools[0].export_paths,
+            vec![vec!["windows".to_string(), "bin".to_string()]]
+        );
         assert!(result.tools[0].platform_overrides.is_none());
 
         // Test applying linux-i686 override
@@ -1392,12 +1505,18 @@ mod tests {
         // Test idempotency - applying again should not change anything
         let result_first = apply_platform_overrides(tools_file.clone(), "win64");
         let result_second = apply_platform_overrides(result_first.clone(), "win64");
-        assert_eq!(result_first.tools[0].install, result_second.tools[0].install);
-        assert_eq!(result_first.tools[0].export_paths, result_second.tools[0].export_paths);
+        assert_eq!(
+            result_first.tools[0].install,
+            result_second.tools[0].install
+        );
+        assert_eq!(
+            result_first.tools[0].export_paths,
+            result_second.tools[0].export_paths
+        );
     }
     #[test]
     fn test_platform_override_install_only() {
-        let mut tool = Tool {
+        let tool = Tool {
             description: "Test tool".to_string(),
             export_paths: vec![vec!["bin".to_string()]],
             export_vars: HashMap::new(),
@@ -1405,13 +1524,11 @@ mod tests {
             install: "on_request".to_string(),
             license: None,
             name: "test-tool".to_string(),
-            platform_overrides: Some(vec![
-                PlatformOverride {
-                    install: Some("always".to_string()),
-                    platforms: vec!["win64".to_string()],
-                    export_paths: None,
-                }
-            ]),
+            platform_overrides: Some(vec![PlatformOverride {
+                install: Some("always".to_string()),
+                platforms: vec!["win64".to_string()],
+                export_paths: None,
+            }]),
             supported_targets: None,
             strip_container_dirs: None,
             version_cmd: vec![],
@@ -1434,7 +1551,7 @@ mod tests {
 
     #[test]
     fn test_platform_override_export_paths_only() {
-        let mut tool = Tool {
+        let tool = Tool {
             description: "CMake".to_string(),
             export_paths: vec![vec!["bin".to_string()]],
             export_vars: HashMap::new(),
@@ -1442,17 +1559,15 @@ mod tests {
             install: "on_request".to_string(),
             license: None,
             name: "cmake".to_string(),
-            platform_overrides: Some(vec![
-                PlatformOverride {
-                    install: None,
-                    platforms: vec!["macos".to_string(), "macos-arm64".to_string()],
-                    export_paths: Some(vec![vec![
-                        "CMake.app".to_string(),
-                        "Contents".to_string(),
-                        "bin".to_string()
-                    ]]),
-                }
-            ]),
+            platform_overrides: Some(vec![PlatformOverride {
+                install: None,
+                platforms: vec!["macos".to_string(), "macos-arm64".to_string()],
+                export_paths: Some(vec![vec![
+                    "CMake.app".to_string(),
+                    "Contents".to_string(),
+                    "bin".to_string(),
+                ]]),
+            }]),
             supported_targets: None,
             strip_container_dirs: None,
             version_cmd: vec![],
@@ -1471,13 +1586,17 @@ mod tests {
         assert_eq!(result.tools[0].install, "on_request"); // Unchanged
         assert_eq!(
             result.tools[0].export_paths,
-            vec![vec!["CMake.app".to_string(), "Contents".to_string(), "bin".to_string()]]
+            vec![vec![
+                "CMake.app".to_string(),
+                "Contents".to_string(),
+                "bin".to_string()
+            ]]
         );
     }
 
     #[test]
     fn test_no_matching_platform() {
-        let mut tool = Tool {
+        let tool = Tool {
             description: "Test tool".to_string(),
             export_paths: vec![vec!["bin".to_string()]],
             export_vars: HashMap::new(),
@@ -1485,13 +1604,11 @@ mod tests {
             install: "on_request".to_string(),
             license: None,
             name: "test-tool".to_string(),
-            platform_overrides: Some(vec![
-                PlatformOverride {
-                    install: Some("always".to_string()),
-                    platforms: vec!["win64".to_string()],
-                    export_paths: None,
-                }
-            ]),
+            platform_overrides: Some(vec![PlatformOverride {
+                install: Some("always".to_string()),
+                platforms: vec!["win64".to_string()],
+                export_paths: None,
+            }]),
             supported_targets: None,
             strip_container_dirs: None,
             version_cmd: vec![],
@@ -1515,7 +1632,7 @@ mod tests {
 
     #[test]
     fn test_multiple_overrides_first_match_wins() {
-        let mut tool = Tool {
+        let tool = Tool {
             description: "Test tool".to_string(),
             export_paths: vec![vec!["bin".to_string()]],
             export_vars: HashMap::new(),
@@ -1533,7 +1650,7 @@ mod tests {
                     install: Some("on_request".to_string()),
                     platforms: vec!["linux-amd64".to_string()],
                     export_paths: Some(vec![vec!["other".to_string()]]),
-                }
+                },
             ]),
             supported_targets: None,
             strip_container_dirs: None,
@@ -1552,7 +1669,8 @@ mod tests {
 
         // First override should win
         assert_eq!(result.tools[0].install, "always");
-        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]); // Unchanged from original
+        assert_eq!(result.tools[0].export_paths, vec![vec!["bin".to_string()]]);
+        // Unchanged from original
     }
     #[test]
     fn test_platform_identification() {
@@ -1564,8 +1682,15 @@ mod tests {
 
         // Should be one of the known platforms
         let valid_platforms = vec![
-            "win32", "win64", "macos", "macos-arm64",
-            "linux-i686", "linux-amd64", "linux-arm64", "linux-armel", "linux-armhf"
+            "win32",
+            "win64",
+            "macos",
+            "macos-arm64",
+            "linux-i686",
+            "linux-amd64",
+            "linux-arm64",
+            "linux-armel",
+            "linux-armhf",
         ];
         assert!(valid_platforms.contains(&platform.as_str()));
     }
@@ -1588,7 +1713,7 @@ mod tests {
         println!("OS: {}", os);
 
         // Should be one of the known OS names
-        let valid_os = vec!["windows", "macos", "linux", "freebsd"];
+        let valid_os = ["windows", "macos", "linux", "freebsd"];
         assert!(valid_os.contains(&os.as_str()));
     }
 
@@ -1598,7 +1723,7 @@ mod tests {
         println!("Arch: {}", arch);
 
         // Should be one of the known architectures
-        let valid_arch = vec!["x86", "x86_64", "arm", "aarch64"];
+        let valid_arch = ["x86", "x86_64", "arm", "aarch64"];
         assert!(valid_arch.contains(&arch.as_str()));
     }
 }

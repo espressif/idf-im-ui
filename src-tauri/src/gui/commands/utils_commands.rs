@@ -1,18 +1,13 @@
+use anyhow::Result;
+use idf_im_lib::telemetry::{self, get_linux_os_name, InstallMode, InstallOutcome, Interface};
 use idf_im_lib::{self, ensure_path};
-use idf_im_lib::telemetry::{
-    self, get_linux_os_name, InstallMode, InstallOutcome, Interface,
-};
 use log::{error, info};
 use serde_json::{json, Value};
-use tauri_plugin_store::StoreExt;
 use std::fs;
-use std::{
-    path::PathBuf,
-    process::Command,
-};
-use tauri::{AppHandle, Manager};
-use anyhow::{Result};
+use std::{path::PathBuf, process::Command};
 use sysinfo::System;
+use tauri::{AppHandle, Manager};
+use tauri_plugin_store::StoreExt;
 
 use crate::gui::app_state::AppState;
 use crate::gui::ui::send_message;
@@ -21,14 +16,9 @@ const EIM_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[tauri::command]
 pub async fn fetch_json_from_url(url: String) -> Result<Value, String> {
-    let response = reqwest::get(&url)
-        .await
-        .map_err(|e| e.to_string())?;
+    let response = reqwest::get(&url).await.map_err(|e| e.to_string())?;
 
-    let json:Value = response
-        .json::<Value>()
-        .await
-        .map_err(|e| e.to_string())?;
+    let json: Value = response.json::<Value>().await.map_err(|e| e.to_string())?;
 
     Ok(json)
 }
@@ -72,7 +62,7 @@ pub fn get_operating_system() -> String {
 
 #[tauri::command]
 pub fn get_system_info() -> String {
-  idf_im_lib::telemetry::get_system_info()
+    idf_im_lib::telemetry::get_system_info()
 }
 
 /// Gets the logs folder path
@@ -167,7 +157,7 @@ pub fn quit_app(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 pub fn cpu_count() -> usize {
-    let mut sys = System::new_all();
+    let sys = System::new_all();
     sys.cpus().len()
 }
 
@@ -180,9 +170,7 @@ pub fn scan_for_archives() -> Result<Vec<String>, String> {
             return Err("Failed to get current executable path".to_string());
         }
     };
-    let scan_dir = binary
-        .parent()
-        .ok_or("Could not get parent directory")?;
+    let scan_dir = binary.parent().ok_or("Could not get parent directory")?;
 
     let mut archives = Vec::new();
 
@@ -199,23 +187,25 @@ pub fn scan_for_archives() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
-  let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory").unwrap()
+pub fn get_app_settings(app_handle: AppHandle) -> Value {
+    // TODO: persist
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")
+        .unwrap()
         .join("eim");
 
-  let config_file = config_dir.join("eim.json");
-  ensure_path(config_dir.to_str().unwrap()).unwrap();
-  match app_handle.store_builder(config_file).build() {
+    let config_file = config_dir.join("eim.json");
+    ensure_path(config_dir.to_str().unwrap()).unwrap();
+    match app_handle.store_builder(config_file).build() {
         Ok(store) => {
-            let first_run = store.get("first_run")
-                .unwrap_or(Value::Bool(true))
-                .clone();
-            let skip_welcome = store.get("skip_welcome")
+            let first_run = store.get("first_run").unwrap_or(Value::Bool(true)).clone();
+            let skip_welcome = store
+                .get("skip_welcome")
                 .unwrap_or(Value::Bool(false))
                 .clone();
 
-            let usage_statistics = store.get("usage_statistics")
+            let usage_statistics = store
+                .get("usage_statistics")
                 .unwrap_or(Value::Bool(true))
                 .clone();
 
@@ -235,30 +225,44 @@ pub fn get_app_settings(app_handle: AppHandle) -> Value { // TODO: persist
     }
 }
 
-#[tauri::command]
-pub async fn save_app_settings(app_handle: AppHandle, firstRun: bool, skipWelcome: bool, usageStatistics: bool) {
-  let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory").unwrap()
+#[tauri::command(rename_all = "camelCase")]
+pub async fn save_app_settings(
+    app_handle: AppHandle,
+    first_run: bool,
+    skip_welcome: bool,
+    usage_statistics: bool,
+) {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")
+        .unwrap()
         .join("eim");
 
-  let config_file = config_dir.join("eim.json");
-  ensure_path(config_dir.to_str().unwrap()).unwrap();
+    let config_file = config_dir.join("eim.json");
+    ensure_path(config_dir.to_str().unwrap()).unwrap();
 
-  match app_handle.store_builder(config_file).build() {
+    match app_handle.store_builder(config_file).build() {
         Ok(store) => {
-            store.set("first_run".to_string(), Value::Bool(firstRun));
+            store.set("first_run".to_string(), Value::Bool(first_run));
 
-            store.set("skip_welcome".to_string(), Value::Bool(skipWelcome));
+            store.set("skip_welcome".to_string(), Value::Bool(skip_welcome));
 
-            store.set("usage_statistics".to_string(), Value::Bool(usageStatistics));
+            store.set(
+                "usage_statistics".to_string(),
+                Value::Bool(usage_statistics),
+            );
 
             match store.save() {
-              Ok(_) => {
-                  log::info!("App settings saved: first_run={}, skip_welcome={}, usage_statistics={}", firstRun, skipWelcome, usageStatistics);
-              }
-              Err(e) => {
-                  error!("Failed to save store: {}", e);
-              }
+                Ok(_) => {
+                    log::info!(
+                        "App settings saved: first_run={}, skip_welcome={}, usage_statistics={}",
+                        first_run,
+                        skip_welcome,
+                        usage_statistics
+                    );
+                }
+                Err(e) => {
+                    error!("Failed to save store: {}", e);
+                }
             }
         }
         Err(e) => {
@@ -276,26 +280,25 @@ pub fn check_elevated_permissions() -> Result<bool, String> {
 #[tauri::command]
 pub async fn install_drivers() -> Result<(), String> {
     match std::env::consts::OS {
-      "windows" => {
-        info!("Installing drivers...");
-        match idf_im_lib::install_drivers().await {
-          Ok(_) => {
-            info!("Drivers installed successfully.");
-          }
-          Err(err) => {
-            error!("Failed to install drivers: {}", err);
-            return Err(format!("Failed to install drivers: {}", err));
-          }
+        "windows" => {
+            info!("Installing drivers...");
+            match idf_im_lib::install_drivers().await {
+                Ok(_) => {
+                    info!("Drivers installed successfully.");
+                }
+                Err(err) => {
+                    error!("Failed to install drivers: {}", err);
+                    return Err(format!("Failed to install drivers: {}", err));
+                }
+            }
+            Ok(())
         }
-        Ok(())
-      }
-      _ => {
-        return Err(format!("Driver installation is only supported on Windows."));
-      }
+        _ => Err("Driver installation is only supported on Windows.".to_string()),
     }
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn track_event_command(
     app_handle: AppHandle,
     event: String,
@@ -412,10 +415,8 @@ fn build_anyhow(kind: idf_im_lib::telemetry::ErrorKind, message: &str) -> anyhow
     anyhow::anyhow!("{:?}: {}", kind, message)
 }
 
-
-
 #[tauri::command]
-pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
+pub fn open_terminal_with_script(script_path: String) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
         if !std::path::Path::new(&script_path).exists() {
@@ -426,9 +427,11 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
         cmd.args([
             "-NoLogo",
             "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
+            "-ExecutionPolicy",
+            "Bypass",
             "-NoExit",
-            "-File", &script_path,
+            "-File",
+            &script_path,
         ]);
 
         #[cfg(windows)]
@@ -451,9 +454,7 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
             escaped_script_path, escaped_script_path
         );
 
-        let applescript_escaped = shell_cmd
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"");
+        let applescript_escaped = shell_cmd.replace("\\", "\\\\").replace("\"", "\\\"");
 
         let applescript = format!(
             "tell application \"Terminal\"\n\
@@ -483,7 +484,10 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
         let terminals = [
             ("gnome-terminal", vec!["--", "bash", "-c", &shell_cmd]),
             ("konsole", vec!["-e", "bash", "-c", &shell_cmd]),
-            ("xfce4-terminal", vec!["--execute", "bash", "-c", &shell_cmd]),
+            (
+                "xfce4-terminal",
+                vec!["--execute", "bash", "-c", &shell_cmd],
+            ),
             ("xterm", vec!["-e", "bash", "-c", &shell_cmd]),
             ("alacritty", vec!["-e", "bash", "-c", &shell_cmd]),
             ("kitty", vec!["bash", "-c", &shell_cmd]),
@@ -491,11 +495,7 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
 
         let mut success = false;
         for (terminal, args) in terminals.iter() {
-            if Command::new(terminal)
-                .args(args)
-                .spawn()
-                .is_ok()
-            {
+            if Command::new(terminal).args(args).spawn().is_ok() {
                 success = true;
                 break;
             }
@@ -512,8 +512,7 @@ pub fn open_terminal_with_script(script_path: String) -> Result<bool,String> {
 /// Writes content to a text file at the given path
 #[tauri::command]
 pub fn write_text_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, &content)
-        .map_err(|e| format!("Failed to write to file {}: {}", path, e))?;
+    fs::write(&path, &content).map_err(|e| format!("Failed to write to file {}: {}", path, e))?;
     info!("Successfully wrote to file: {}", path);
     Ok(())
 }

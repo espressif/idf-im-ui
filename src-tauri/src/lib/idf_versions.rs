@@ -31,32 +31,30 @@ pub struct Release {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Releases {
-    pub VERSIONS: Vec<Version>,
-    pub IDF_TARGETS: Vec<IDFTarget>,
-    pub RELEASES: std::collections::HashMap<String, Release>,
+    #[serde(rename = "VERSIONS")]
+    pub versions: Vec<Version>,
+    #[serde(rename = "IDF_TARGETS")]
+    pub idf_targets: Vec<IDFTarget>,
+    #[serde(rename = "RELEASES")]
+    pub releases: std::collections::HashMap<String, Release>,
 }
 
-pub const IDF_VERSIONS_URL: &str =
-    "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
+pub const IDF_VERSIONS_URL: &str = "https://dl.espressif.com/dl/esp-idf/idf_versions.json";
 
 // TODO: handle the possibility of multiple downloads
 pub async fn get_idf_versions() -> Result<Releases, String> {
-  let cached_idf_versions = env!("CACHED_IDF_VERSIONS");
-  match download_idf_versions().await {
-      Ok(versions) => Ok(versions),
-      Err(err) => {
-          warn!(
-              "Error downloading IDF versions from {}: {}. Using cached versions.",
-              IDF_VERSIONS_URL, err
-          );
-          let versions: Releases = serde_json::from_str(&cached_idf_versions).map_err(|e| {
-              format!(
-                  "Error parsing cached IDF versions JSON: {}",
-                  e.to_string()
-              )
-          })?;
-          Ok(versions)
-      },
+    let cached_idf_versions = env!("CACHED_IDF_VERSIONS");
+    match download_idf_versions().await {
+        Ok(versions) => Ok(versions),
+        Err(err) => {
+            warn!(
+                "Error downloading IDF versions from {}: {}. Using cached versions.",
+                IDF_VERSIONS_URL, err
+            );
+            let versions: Releases = serde_json::from_str(cached_idf_versions)
+                .map_err(|e| format!("Error parsing cached IDF versions JSON: {}", e))?;
+            Ok(versions)
+        }
     }
 }
 
@@ -83,13 +81,10 @@ pub async fn get_latest_idf_version(include_prerelease: bool) -> Result<Option<V
     let releases = get_idf_versions().await?;
 
     let latest_version = releases
-        .VERSIONS
+        .versions
         .iter()
         .filter(|v| {
-            !v.end_of_life
-                && !v.old
-                && v.name != "latest"
-                && (include_prerelease || !v.pre_release)
+            !v.end_of_life && !v.old && v.name != "latest" && (include_prerelease || !v.pre_release)
         })
         .max_by(|a, b| {
             // Parse versions, stripping 'v' prefix if present
@@ -123,16 +118,16 @@ pub async fn get_latest_idf_version(include_prerelease: bool) -> Result<Option<V
 ///
 /// * If there is an error fetching the IDF versions or processing them, a `String` containing the error message is returned.
 ///
-pub async fn get_avalible_targets() -> Result<Vec<String>, String> {
+pub async fn get_available_targets() -> Result<Vec<String>, String> {
     let versions = get_idf_versions().await;
     match versions {
         Ok(releases) => {
-            let mut avalible_targets = vec![];
-            for target in &releases.IDF_TARGETS {
-                avalible_targets.push(target.value.clone());
+            let mut available_targets = vec![];
+            for target in &releases.idf_targets {
+                available_targets.push(target.value.clone());
             }
-            avalible_targets.sort();
-            Ok(avalible_targets)
+            available_targets.sort();
+            Ok(available_targets)
         }
         Err(err) => Err(err),
     }
@@ -179,9 +174,9 @@ pub async fn download_idf_versions() -> Result<Releases, Box<dyn std::error::Err
 pub fn get_idf_versions_by_target(versions: &Releases) -> HashMap<String, Vec<Version>> {
     let mut versions_by_target = HashMap::new();
 
-    for target in &versions.IDF_TARGETS {
+    for target in &versions.idf_targets {
         let version_list = versions
-            .VERSIONS
+            .versions
             .iter()
             .filter(|v| v.supported_targets.contains(&target.value))
             .cloned()
@@ -267,7 +262,7 @@ async fn get_idf_names_by_flag(include_unstable: bool) -> Vec<String> {
     match versions {
         Ok(releases) => {
             let mut names = vec![];
-            for version in &releases.VERSIONS {
+            for version in &releases.versions {
                 if version.end_of_life
                     || (!include_unstable && version.pre_release)
                     || version.old
@@ -293,7 +288,7 @@ mod tests {
     #[test]
     fn test_get_idf_versions_by_target() {
         let releases = Releases {
-            VERSIONS: vec![
+            versions: vec![
                 Version {
                     name: "v4.4.5".to_string(),
                     pre_release: false,
@@ -311,7 +306,7 @@ mod tests {
                     supported_targets: vec!["esp32".to_string()],
                 },
             ],
-            IDF_TARGETS: vec![
+            idf_targets: vec![
                 IDFTarget {
                     text: "ESP32".to_string(),
                     value: "esp32".to_string(),
@@ -321,7 +316,7 @@ mod tests {
                     value: "esp32s2".to_string(),
                 },
             ],
-            RELEASES: HashMap::new(),
+            releases: HashMap::new(),
         };
 
         let versions_by_target = get_idf_versions_by_target(&releases);

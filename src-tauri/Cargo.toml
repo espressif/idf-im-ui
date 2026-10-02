@@ -4,7 +4,6 @@ version = "0.19.0"
 description = "ESP-IDF Installation Manager"
 authors = ["petr.gadorek@espressif.com"]
 edition = "2021"
-copyright = "Copyright © 2025 Espressif Systems. All rights reserved."
 default-run = "eim"
 
 [package.metadata.deb]
@@ -165,7 +164,6 @@ rustpython-stdlib = { git = "https://github.com/Hahihula/RustPython.git", branch
 
 # OS-specific dependency
 [target.'cfg(target_os = "linux")'.dependencies]
-fork = "0.1"
 
 [dependencies.openssl-sys]
 version = "0.9.117"

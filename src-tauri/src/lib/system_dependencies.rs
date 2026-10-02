@@ -1,10 +1,16 @@
 use anyhow::{anyhow, Context, Result};
-use std::{collections::HashSet, env, fs, path::PathBuf};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
-use log::{debug, trace, warn};
+use log::{debug, warn};
 use serde_json;
 
-use crate::{command_executor, decompress_archive, download_file_and_rename, utils::find_by_name_and_extension};
+use crate::{
+    command_executor, decompress_archive, download_file_and_rename,
+    utils::find_by_name_and_extension,
+};
 
 pub const PYTHON_NAME_TO_INSTALL: &str = "python313";
 
@@ -204,7 +210,7 @@ pub fn verify_shell_execution() -> Option<bool> {
 /// # Returns
 ///
 /// * `Vec<&'static str>` - A vector of required tools for the current operating system.
-pub fn get_prequisites() -> Vec<&'static str> {
+pub fn get_prerequisites() -> Vec<&'static str> {
     match std::env::consts::OS {
         "linux" => vec![
             "git", "wget", "flex", "bison", "gperf", "ccache", "dfu-util", "cmake",
@@ -357,10 +363,10 @@ pub fn get_qemu_prerequisites_based_on_package_manager() -> Vec<&'static str> {
 /// * `Ok(Vec<&'static str>)` - Vector of unsatisfied tools/packages
 /// * `Err(String)` - If an error occurs, returns an error message
 fn check_tools_installed(tools: Vec<&'static str>) -> Result<Vec<&'static str>, String> {
-  match std::env::consts::OS {
-    "linux" => check_tools_with_package_manager(tools, determine_package_manager()),
-    _ => check_tools_with_package_manager(tools,None),
-  }
+    match std::env::consts::OS {
+        "linux" => check_tools_with_package_manager(tools, determine_package_manager()),
+        _ => check_tools_with_package_manager(tools, None),
+    }
 }
 
 /// Checks if the given list of tools/packages are installed on the system.
@@ -512,9 +518,7 @@ fn check_tools_with_package_manager(
                     }
                 }
                 _ => {
-                    return Err(format!(
-                        "Unsupported package manager",
-                    ));
+                    return Err("Unsupported package manager".to_string());
                 }
             }
         }
@@ -558,7 +562,10 @@ fn check_tools_with_package_manager(
             // Verify that we can actually run PowerShell before any other test
             const CANARY: &str = "IDF_SHELL_CANARY_OK";
             match executor.run_script_from_string(&format!("Write-Output '{}'", CANARY)) {
-                Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).contains(CANARY) => {
+                Ok(o)
+                    if o.status.success()
+                        && String::from_utf8_lossy(&o.stdout).contains(CANARY) =>
+                {
                     debug!("PowerShell execution verified successfully");
                 }
                 Ok(o) => {
@@ -625,7 +632,7 @@ fn check_tools_with_package_manager(
 /// * `Err(String)` - If a critical error occurs that prevents any checking.
 ///   The error message will mention `--skip-prerequisites-check` if shell verification fails.
 pub fn check_prerequisites_with_result() -> Result<PrerequisitesCheckResult, String> {
-    let mut list_of_required_tools = get_prequisites();
+    let mut list_of_required_tools = get_prerequisites();
     list_of_required_tools = [
         list_of_required_tools,
         get_general_prerequisites_based_on_package_manager(),
@@ -667,8 +674,7 @@ pub fn check_qemu_prerequisites() -> Result<Vec<&'static str>, String> {
     check_tools_installed(list_of_qemu_tools)
 }
 
-
-fn add_to_registry_path(new_entry: &PathBuf) -> anyhow::Result<()> {
+fn add_to_registry_path(new_entry: &Path) -> anyhow::Result<()> {
     if std::env::consts::OS != "windows" {
         return Ok(());
     }
@@ -708,7 +714,7 @@ fn add_to_registry_path(new_entry: &PathBuf) -> anyhow::Result<()> {
 ///
 /// * `Ok(())` - If git was added to PATH successfully
 /// * `Err(anyhow::Error)` - If an error occurs
-fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
+fn add_git_to_path(git_dir: &Path) -> anyhow::Result<()> {
     match std::env::consts::OS {
         "windows" => {
             let git_bin = git_dir.join("bin");
@@ -716,7 +722,12 @@ fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
 
             // For current process only (immediate effect):
             let current_path = std::env::var("PATH").unwrap_or_default();
-            let new_path = format!("{};{};{}", git_cmd.display(), git_bin.display(), current_path);
+            let new_path = format!(
+                "{};{};{}",
+                git_cmd.display(),
+                git_bin.display(),
+                current_path
+            );
             std::env::set_var("PATH", &new_path);
             debug!("Updated current process PATH with git: {}", new_path);
 
@@ -732,21 +743,33 @@ fn add_git_to_path(git_dir: &PathBuf) -> anyhow::Result<()> {
         }
         _ => {
             // On non-Windows, git is typically installed via package manager
-            debug!("Git PATH modification not needed on {}", std::env::consts::OS);
+            debug!(
+                "Git PATH modification not needed on {}",
+                std::env::consts::OS
+            );
             Ok(())
         }
     }
 }
 
 const S3_TOOLS_BASE_URL: &str = "https://dl.espressif.com/dl/eim/tools";
-const PYTHON_GITHUB_BASE_URL: &str = "https://github.com/astral-sh/python-build-standalone/releases/download/20260414";
+const PYTHON_GITHUB_BASE_URL: &str =
+    "https://github.com/astral-sh/python-build-standalone/releases/download/20260414";
 
 /// Returns the Python standalone archive filename for the current OS/arch combination.
 fn python_filename() -> anyhow::Result<&'static str> {
     match (std::env::consts::OS, std::env::consts::ARCH) {
-        ("windows", "x86_64") => Ok("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz"),
-        ("windows", "aarch64") => Ok("cpython-3.11.15+20260414-aarch64-pc-windows-msvc-install_only.tar.gz"),
-        (os, arch) => Err(anyhow!("Unsupported OS/arch for Python standalone: {}/{}", os, arch)),
+        ("windows", "x86_64") => {
+            Ok("cpython-3.11.15+20260414-x86_64-pc-windows-msvc-install_only.tar.gz")
+        }
+        ("windows", "aarch64") => {
+            Ok("cpython-3.11.15+20260414-aarch64-pc-windows-msvc-install_only.tar.gz")
+        }
+        (os, arch) => Err(anyhow!(
+            "Unsupported OS/arch for Python standalone: {}/{}",
+            os,
+            arch
+        )),
     }
 }
 
@@ -763,7 +786,12 @@ pub async fn get_latest_git_for_windows_url() -> anyhow::Result<(String, String)
     let arch_key = match std::env::consts::ARCH {
         "x86_64" => "x86_64",
         "aarch64" | "arm64" => "arm64",
-        arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
+        arch => {
+            return Err(anyhow!(
+                "Unsupported architecture for Git for Windows: {}",
+                arch
+            ))
+        }
     };
 
     // Try S3 manifest first
@@ -773,7 +801,10 @@ pub async fn get_latest_git_for_windows_url() -> anyhow::Result<(String, String)
             return Ok(result);
         }
         Err(e) => {
-            debug!("S3 Git manifest unavailable ({}), falling back to GitHub API", e);
+            debug!(
+                "S3 Git manifest unavailable ({}), falling back to GitHub API",
+                e
+            );
         }
     }
 
@@ -822,7 +853,12 @@ async fn get_git_for_windows_url_from_github(arch_key: &str) -> anyhow::Result<(
     let arch_suffix = match arch_key {
         "x86_64" => "64-bit",
         "arm64" => "arm64",
-        arch => return Err(anyhow!("Unsupported architecture for Git for Windows: {}", arch)),
+        arch => {
+            return Err(anyhow!(
+                "Unsupported architecture for Git for Windows: {}",
+                arch
+            ))
+        }
     };
 
     let tmp_dir = tempfile::tempdir()?;
@@ -896,9 +932,7 @@ pub async fn download_git(
             debug!("Git downloaded to {}", git_downloaded_path.display());
             Ok(git_downloaded_path)
         }
-        _ => {
-            Err(anyhow!("download_git is only supported on Windows"))
-        }
+        _ => Err(anyhow!("download_git is only supported on Windows")),
     }
 }
 
@@ -928,9 +962,16 @@ pub async fn install_git_from_downloaded(
             } else {
                 // Look for the archive in tools_dir
                 let found = find_by_name_and_extension(&tools_dir, "git", "tar.bz2");
-                found.first().ok_or_else(|| {
-                    anyhow!("Git archive not found in {}. Expected file ending with .tar.bz2", tools_dir.display())
-                })?.clone().into()
+                found
+                    .first()
+                    .ok_or_else(|| {
+                        anyhow!(
+                            "Git archive not found in {}. Expected file ending with .tar.bz2",
+                            tools_dir.display()
+                        )
+                    })?
+                    .clone()
+                    .into()
             };
 
             debug!("Extracting Git archive at {}", git_archive.display());
@@ -947,7 +988,10 @@ pub async fn install_git_from_downloaded(
             let git_install_dir = if expected_git.exists() {
                 tools_dir.join("git")
             } else {
-                find_git_install_dir(&tools_dir)?.parent().unwrap().to_path_buf()
+                find_git_install_dir(&tools_dir)?
+                    .parent()
+                    .unwrap()
+                    .to_path_buf()
             };
 
             add_git_to_path(&git_install_dir)?;
@@ -955,12 +999,15 @@ pub async fn install_git_from_downloaded(
             // Clean up the archive only after successful installation
             let _ = std::fs::remove_file(&git_archive);
 
-            debug!("Git installed successfully at {}", git_install_dir.display());
+            debug!(
+                "Git installed successfully at {}",
+                git_install_dir.display()
+            );
             Ok(git_install_dir)
         }
-        _ => {
-            Err(anyhow!("install_git_from_downloaded is only supported on Windows"))
-        }
+        _ => Err(anyhow!(
+            "install_git_from_downloaded is only supported on Windows"
+        )),
     }
 }
 
@@ -987,9 +1034,7 @@ pub async fn install_git(
             let git_exe = download_git(tools_dir.clone(), progress_sender).await?;
             install_git_from_downloaded(tools_dir, Some(git_exe)).await
         }
-        _ => {
-            Err(anyhow!("install_git is only supported on Windows"))
-        }
+        _ => Err(anyhow!("install_git is only supported on Windows")),
     }
 }
 
@@ -1091,12 +1136,15 @@ pub async fn install_python_from_downloaded(
             // Add python to PATH
             add_python_to_path(&python_install_dir)?;
 
-            debug!("Python installed successfully at {}", python_install_dir.display());
+            debug!(
+                "Python installed successfully at {}",
+                python_install_dir.display()
+            );
             Ok(python_install_dir)
         }
-        _ => {
-            Err(anyhow!("install_python_from_downloaded is only supported on Windows"))
-        }
+        _ => Err(anyhow!(
+            "install_python_from_downloaded is only supported on Windows"
+        )),
     }
 }
 
@@ -1132,7 +1180,10 @@ fn find_python_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
         debug!("Found Python installation at: {}", python_dir.display());
         Ok(python_dir)
     } else {
-        Err(anyhow!("python.exe not found in {}. Python installation may have failed.", tools_dir.display()))
+        Err(anyhow!(
+            "python.exe not found in {}. Python installation may have failed.",
+            tools_dir.display()
+        ))
     }
 }
 
@@ -1168,7 +1219,10 @@ fn find_git_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
         debug!("Found Git installation at: {}", git_dir.display());
         Ok(git_dir)
     } else {
-        Err(anyhow!("git.exe not found in {}. Git installation may have failed.", tools_dir.display()))
+        Err(anyhow!(
+            "git.exe not found in {}. Git installation may have failed.",
+            tools_dir.display()
+        ))
     }
 }
 
@@ -1195,9 +1249,7 @@ pub async fn install_python(
             let python_archive = download_python(tools_dir.clone(), progress_sender).await?;
             install_python_from_downloaded(tools_dir, Some(python_archive)).await
         }
-        _ => {
-            Err(anyhow!("install_python is only supported on Windows"))
-        }
+        _ => Err(anyhow!("install_python is only supported on Windows")),
     }
 }
 
@@ -1214,7 +1266,7 @@ pub async fn install_python(
 ///
 /// * `Ok(())` - If Python was added to PATH successfully
 /// * `Err(anyhow::Error)` - If an error occurs
-fn add_python_to_path(python_dir: &PathBuf) -> anyhow::Result<()> {
+fn add_python_to_path(python_dir: &Path) -> anyhow::Result<()> {
     match std::env::consts::OS {
         "windows" => {
             // For Python standalone builds, we need to add:
@@ -1231,14 +1283,25 @@ fn add_python_to_path(python_dir: &PathBuf) -> anyhow::Result<()> {
             // Only add Scripts directory if it actually exists
             let scripts_dir = python_dir.join("Scripts");
             if scripts_dir.exists() {
-                let new_path_with_scripts = format!("{};{};{}", scripts_dir.display(), python_dir.display(), current_path);
+                let new_path_with_scripts = format!(
+                    "{};{};{}",
+                    scripts_dir.display(),
+                    python_dir.display(),
+                    current_path
+                );
                 std::env::set_var("PATH", &new_path_with_scripts);
-                debug!("Updated current process PATH with python Scripts: {}", new_path_with_scripts);
+                debug!(
+                    "Updated current process PATH with python Scripts: {}",
+                    new_path_with_scripts
+                );
                 if let Err(e) = add_to_registry_path(&scripts_dir) {
                     debug!("Failed to add Scripts to registry: {}", e);
                 }
             } else {
-                debug!("Scripts directory does not exist, skipping: {}", scripts_dir.display());
+                debug!(
+                    "Scripts directory does not exist, skipping: {}",
+                    scripts_dir.display()
+                );
             }
 
             // Add the root directory for persistence
@@ -1250,7 +1313,10 @@ fn add_python_to_path(python_dir: &PathBuf) -> anyhow::Result<()> {
         }
         _ => {
             // On non-Windows, Python is typically installed via package manager
-            debug!("Python PATH modification not needed on {}", std::env::consts::OS);
+            debug!(
+                "Python PATH modification not needed on {}",
+                std::env::consts::OS
+            );
             Ok(())
         }
     }
@@ -1271,7 +1337,10 @@ fn add_python_to_path(python_dir: &PathBuf) -> anyhow::Result<()> {
 ///
 /// * `Ok(())` - If the packages are successfully installed.
 /// * `Err(String)` - If an error occurs during the installation process.
-pub async fn install_prerequisites(packages_list: Vec<String>, tools_dir: PathBuf) -> Result<(), String> {
+pub async fn install_prerequisites(
+    packages_list: Vec<String>,
+    tools_dir: PathBuf,
+) -> Result<(), String> {
     match std::env::consts::OS {
         "linux" => {
             let package_manager = determine_package_manager();
@@ -1353,9 +1422,7 @@ pub async fn install_prerequisites(packages_list: Vec<String>, tools_dir: PathBu
                     }
                 }
                 _ => {
-                    return Err(format!(
-                        "Unsupported package manager"
-                    ));
+                    return Err("Unsupported package manager".to_string());
                 }
             }
         }
@@ -1419,13 +1486,16 @@ pub async fn install_prerequisites(packages_list: Vec<String>, tools_dir: PathBu
 pub fn get_correct_powershell_command() -> String {
     match command_executor::execute_command_direct("pwsh", &["--version"]) {
         Ok(o) => {
-          if (o.status.success()) {
-            debug!("Powershell core is available: {:?}", o.stdout);
-            "pwsh".to_string()
-          } else {
-            debug!("Powershell core check failed: {:?}, {:?}", o.stdout, o.stderr);
-            "powershell".to_string()
-          }
+            if o.status.success() {
+                debug!("Powershell core is available: {:?}", o.stdout);
+                "pwsh".to_string()
+            } else {
+                debug!(
+                    "Powershell core check failed: {:?}, {:?}",
+                    o.stdout, o.stderr
+                );
+                "powershell".to_string()
+            }
         }
         Err(_) => {
             debug!("Powershell core not found, using powershell");
@@ -1456,7 +1526,11 @@ pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
     let binding = env::var_os("PATH").unwrap_or_default();
     let paths = binding.to_string_lossy().to_string();
 
-    let separator = if std::env::consts::OS == "windows" { ';' } else { ':' };
+    let separator = if std::env::consts::OS == "windows" {
+        ';'
+    } else {
+        ':'
+    };
 
     // Case-insensitive dedup on Windows, case-sensitive elsewhere.
     let already_present = paths.split(separator).any(|p| {
@@ -1492,10 +1566,7 @@ pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
         let path_buf = PathBuf::from(new_path);
         add_to_registry_path(&path_buf).map_err(|e| {
             warn!("Failed to persist {} to registry PATH: {}", new_path, e);
-            std::io::Error::new(
-                std::io::ErrorKind::Other,
-                format!("Failed to update registry PATH: {}", e),
-            )
+            std::io::Error::other(format!("Failed to update registry PATH: {}", e))
         })?;
     }
 
@@ -1509,7 +1580,7 @@ pub fn add_to_path(new_path: &str) -> Result<String, std::io::Error> {
 ///
 /// # Arguments
 /// * `tools_path` - The path where tool-related files might be located,
-///                  including the openocd rules file.
+///   including the openocd rules file.
 ///
 /// # Returns
 /// A `Result` indicating success (`Ok(())`) or an `anyhow::Error` if
@@ -1552,9 +1623,20 @@ mod tests {
 
     #[test]
     fn test_map_distro_to_package_manager_debian() {
-        let distros = vec!["debian", "ubuntu", "linuxmint", "pop", "elementary",
-                          "zorin", "kali", "raspbian", "neon", "deepin",
-                          "peppermint", "bodhi"];
+        let distros = vec![
+            "debian",
+            "ubuntu",
+            "linuxmint",
+            "pop",
+            "elementary",
+            "zorin",
+            "kali",
+            "raspbian",
+            "neon",
+            "deepin",
+            "peppermint",
+            "bodhi",
+        ];
         for distro in distros {
             assert_eq!(
                 map_distro_to_package_manager(distro),
@@ -1567,8 +1649,17 @@ mod tests {
 
     #[test]
     fn test_map_distro_to_package_manager_rpm() {
-        let distros = vec!["fedora", "rhel", "centos", "rocky", "alma",
-                          "ol", "nobara", "ultramarine", "mageia"];
+        let distros = vec![
+            "fedora",
+            "rhel",
+            "centos",
+            "rocky",
+            "alma",
+            "ol",
+            "nobara",
+            "ultramarine",
+            "mageia",
+        ];
         for distro in distros {
             assert_eq!(
                 map_distro_to_package_manager(distro),
@@ -1581,7 +1672,14 @@ mod tests {
 
     #[test]
     fn test_map_distro_to_package_manager_arch() {
-        let distros = vec!["arch", "manjaro", "endeavouros", "garuda", "artix", "cachyos"];
+        let distros = vec![
+            "arch",
+            "manjaro",
+            "endeavouros",
+            "garuda",
+            "artix",
+            "cachyos",
+        ];
         for distro in distros {
             assert_eq!(
                 map_distro_to_package_manager(distro),
@@ -1594,7 +1692,13 @@ mod tests {
 
     #[test]
     fn test_map_distro_to_package_manager_suse() {
-        let distros = vec!["opensuse", "opensuse-leap", "opensuse-tumbleweed", "sles", "sled"];
+        let distros = vec![
+            "opensuse",
+            "opensuse-leap",
+            "opensuse-tumbleweed",
+            "sles",
+            "sled",
+        ];
         for distro in distros {
             assert_eq!(
                 map_distro_to_package_manager(distro),
@@ -1654,8 +1758,11 @@ mod tests {
         // Should return error message about unsupported package manager
         assert!(result.is_err());
         let err_msg = result.unwrap_err();
-        assert!(err_msg.contains("Unsupported package manager"),
-            "Expected error message to contain 'Unsupported package manager', got: {}", err_msg);
+        assert!(
+            err_msg.contains("Unsupported package manager"),
+            "Expected error message to contain 'Unsupported package manager', got: {}",
+            err_msg
+        );
     }
 
     // Test that check_tools_with_package_manager works correctly with a valid package manager
@@ -1678,8 +1785,11 @@ mod tests {
             Err(e) => {
                 // This is also fine - could fail due to apt not being available
                 // or other system issues
-                assert!(e.contains("Unsupported package manager") || !e.is_empty(),
-                    "Unexpected error: {}", e);
+                assert!(
+                    e.contains("Unsupported package manager") || !e.is_empty(),
+                    "Unexpected error: {}",
+                    e
+                );
             }
         }
     }
@@ -1694,7 +1804,10 @@ mod tests {
         // Should return error message about unsupported package manager
         assert!(result.is_err());
         let err_msg = result.unwrap_err();
-        assert!(err_msg.contains("Unsupported package manager"),
-            "Expected error message to contain 'Unsupported package manager', got: {}", err_msg);
+        assert!(
+            err_msg.contains("Unsupported package manager"),
+            "Expected error message to contain 'Unsupported package manager', got: {}",
+            err_msg
+        );
     }
 }

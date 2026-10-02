@@ -6,6 +6,7 @@ extend-exclude = [
   "*.js",
   "*.json",
   "*.ps1",
+  "*.zip",
   "man",
   "build",
   "src-tauri/locales/app.yml",
@@ -15,3 +16,6 @@ extend-exclude = [
 bu = "bu"
 inout = "inout"
 NEmpty = "NEmpty"
+# GnuPG fingerprint field in `gpg --list-secret-keys --with-colons` output
+fpr = "fpr"
+FPR = "FPR"

@@ -1,5 +1,5 @@
 use clap::builder::styling::{AnsiColor, Color, Style, Styles};
-use clap::{arg, command, value_parser, ColorChoice, Parser, Subcommand};
+use clap::{value_parser, ColorChoice, Parser, Subcommand};
 use clap_complete::aot::Shell;
 use idf_im_lib::to_absolute_path;
 use std::path::PathBuf;
@@ -81,7 +81,10 @@ pub enum Commands {
     ListTools {
         #[arg(help = "ID, name or path of the IDF installation")]
         identifier: Option<String>,
-        #[arg(long, help = "Show only tools whose installed version is older than the latest available in tools.json")]
+        #[arg(
+            long,
+            help = "Show only tools whose installed version is older than the latest available in tools.json"
+        )]
         outdated: bool,
     },
 
@@ -291,13 +294,13 @@ pub struct InstallArgs {
 
     #[arg(
         long,
-        help = "If set to true, the installer will remove temporary files after installation. Default is false.",
+        help = "If set to true, the installer will remove temporary files after installation. Default is false."
     )]
     pub cleanup: Option<bool>,
 
     #[arg(
         long,
-        help = "If set to true, the installer will skipp component managers components download. Default is false on install true on fix.",
+        help = "If set to true, the installer will skip component managers components download. Default is false on install true on fix."
     )]
     pub skip_components_download: Option<bool>,
 
@@ -328,7 +331,7 @@ pub struct InstallArgs {
 
     #[arg(
         long,
-        help = "Whether to create a .bat activation script on Windows. This is useful for users who want to activate the ESP-IDF environment using a batch file instead of PowerShell. Default is false. This is for legacy compatibility reasons as the default activation method on Windows is now PowerShell script.",
+        help = "Whether to create a .bat activation script on Windows. This is useful for users who want to activate the ESP-IDF environment using a batch file instead of PowerShell. Default is false. This is for legacy compatibility reasons as the default activation method on Windows is now PowerShell script."
     )]
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
 }
@@ -414,13 +417,10 @@ impl IntoIterator for InstallArgs {
                 "version_name".to_string(),
                 self.version_name.map(Into::into),
             ),
+            ("cleanup".to_string(), self.cleanup.map(Into::into)),
             (
-              "cleanup".to_string(),
-              self.cleanup.map(Into::into)
-            ),
-            (
-              "skip_components_download".to_string(),
-              self.skip_components_download.map(Into::into)
+                "skip_components_download".to_string(),
+                self.skip_components_download.map(Into::into),
             ),
             (
                 "python_env_folder_name".to_string(),

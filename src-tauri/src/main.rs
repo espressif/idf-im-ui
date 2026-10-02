@@ -156,10 +156,11 @@ async fn main() {
     #[cfg(target_os = "windows")]
     let mut console_attached_or_allocated = false;
 
-    let has_args = std::env::args().len() > 1;
-
     #[cfg(target_os = "windows")]
     {
+        // Kept inside the Windows block: a `has_args` binding outside it is dead
+        // on every other platform, which makes `unused_variables` fire there.
+        let has_args = std::env::args().len() > 1;
         if has_args {
             let has_existing_console = has_console();
             if !has_existing_console {
@@ -191,9 +192,8 @@ async fn main() {
     match result {
         Ok(_) => std::process::exit(0),
         Err(e) => {
-          eprintln!("Error executing CLI: {}", e);
-          std::process::exit(1);
+            eprintln!("Error executing CLI: {}", e);
+            std::process::exit(1);
         }
     }
-
 }

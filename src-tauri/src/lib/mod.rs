@@ -1,22 +1,20 @@
+use anyhow::Result;
 use bzip2::read::BzDecoder;
 use flate2::read::GzDecoder;
-use std::ffi::OsStr;
-use std::hash::{DefaultHasher, Hash,Hasher};
-use anyhow::{anyhow, Result};
-use idf_env::driver;
 use log::{error, info, trace, warn};
-use reqwest::Client;
 #[cfg(feature = "userustpython")]
 use rustpython_vm::literal::char;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use system_dependencies::copy_openocd_rules;
-use tempfile::TempDir;
-use tar::Archive;
-use thiserror::Error;
-use utils::{find_directories_by_name};
-use zip::ZipArchive;
+use std::ffi::OsStr;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Seek;
+use system_dependencies::copy_openocd_rules;
+use tar::Archive;
+use tempfile::TempDir;
+use thiserror::Error;
+use utils::find_directories_by_name;
+use zip::ZipArchive;
 
 /// Simple template renderer - replaces {{variable}} placeholders with values
 /// This is a lightweight replacement for tera, using only std library
@@ -31,28 +29,29 @@ pub fn render_template(template: &str, variables: &[(&str, String)]) -> String {
 pub mod command_executor;
 pub mod git_tools;
 pub mod idf_config;
+pub mod idf_features;
 pub mod idf_tools;
 pub mod idf_versions;
-pub mod idf_features;
+pub mod logging;
+pub mod offline_installer;
 pub mod python_utils;
 pub mod settings;
 pub mod system_dependencies;
-pub mod utils;
-pub mod version_manager;
-pub mod offline_installer;
 pub mod telemetry;
 pub mod tool_selection;
-pub mod logging;
+pub mod utils;
+pub mod version_manager;
 use std::fs::{set_permissions, File};
 use std::{
-    env,
-    fs,
-    io::{self, Read, Write, BufReader},
+    env, fs,
+    io::{self, BufReader, Read, Write},
     path::{Path, PathBuf},
     sync::mpsc::Sender,
 };
 
-use crate::version_manager::{run_command_using_activation_script, run_command_using_activation_script_headless};
+use crate::version_manager::{
+    run_command_using_activation_script, run_command_using_activation_script_headless,
+};
 
 /// Creates an executable shell script with the given content and file path.
 ///
@@ -302,6 +301,7 @@ fn format_batch_env_pairs_print(pairs: &[(String, String)]) -> String {
 /// # Return
 ///
 /// * `Result<(), String>`: On success, returns `Ok(())`. On error, returns `Err(String)` containing the error message.
+///
 /// Common parameters for Unix shell activation/deactivation scripts
 struct UnixShellParams<'a> {
     pub idf_path: &'a str,
@@ -375,6 +375,7 @@ fn build_unix_shell_variables(params: &UnixShellParams) -> Vec<(&'static str, St
 }
 
 /// Creates a bash shell activation script for the ESP-IDF toolchain.
+#[allow(clippy::too_many_arguments)]
 pub fn create_activation_shell_script(
     file_path: &str,
     idf_path: &str,
@@ -413,6 +414,7 @@ pub fn create_activation_shell_script(
 }
 
 /// Creates a fish shell activation script for the ESP-IDF toolchain.
+#[allow(clippy::too_many_arguments)]
 pub fn create_fish_script(
     file_path: &str,
     idf_path: &str,
@@ -455,6 +457,7 @@ pub fn create_fish_script(
 /// The deactivation script is the inverse of `create_activation_shell_script`:
 /// it unsets the same env vars, strips the IDF PATH prefixes, drops the IDF
 /// shell functions/completions, and runs the Python venv's `deactivate`.
+#[allow(clippy::too_many_arguments)]
 pub fn create_deactivation_shell_script(
     file_path: &str,
     idf_path: &str,
@@ -497,6 +500,7 @@ pub fn create_deactivation_shell_script(
 }
 
 /// Creates a fish shell deactivation script for the ESP-IDF toolchain.
+#[allow(clippy::too_many_arguments)]
 pub fn create_deactivation_fish_script(
     file_path: &str,
     idf_path: &str,
@@ -596,16 +600,15 @@ pub fn run_powershell_script(script: &str) -> Result<String, std::io::Error> {
                 if output.status.success() {
                     trace!("stdout: {}", String::from_utf8_lossy(&output.stdout));
                     trace!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-                    String::from_utf8(output.stdout)
-                        .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+                    String::from_utf8(output.stdout).map_err(std::io::Error::other)
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     error!("PowerShell script failed with status: {}", output.status);
                     error!("stderr: {}", stderr);
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!("PowerShell script failed: {}", stderr),
-                    ))
+                    Err(std::io::Error::other(format!(
+                        "PowerShell script failed: {}",
+                        stderr
+                    )))
                 }
             }
             Err(err) => Err(err),
@@ -772,12 +775,8 @@ pub fn add_windows_terminal_profile(
     profiles_list.push(new_profile);
 
     // Write back to file with pretty formatting
-    let formatted = serde_json::to_string_pretty(&settings).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to serialize settings: {}", e),
-        )
-    })?;
+    let formatted = serde_json::to_string_pretty(&settings)
+        .map_err(|e| std::io::Error::other(format!("Failed to serialize settings: {}", e)))?;
 
     fs::write(&settings_path, formatted)?;
 
@@ -843,12 +842,8 @@ pub fn remove_windows_terminal_profile(idf_version: &str) -> Result<String, std:
     }
 
     // Write back to file
-    let formatted = serde_json::to_string_pretty(&settings).map_err(|e| {
-        std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("Failed to serialize settings: {}", e),
-        )
-    })?;
+    let formatted = serde_json::to_string_pretty(&settings)
+        .map_err(|e| std::io::Error::other(format!("Failed to serialize settings: {}", e)))?;
 
     fs::write(&settings_path, formatted)?;
 
@@ -917,6 +912,7 @@ pub fn is_windows_terminal_profile_installed(idf_version: &str) -> Result<bool, 
 /// # Returns
 ///
 /// * `Result<String, std::io::Error>` - Success message
+#[allow(clippy::too_many_arguments)]
 pub fn create_windows_terminal_idf_profile(
     profile_path: &str,
     idf_path: &str,
@@ -962,6 +958,7 @@ pub fn create_windows_terminal_idf_profile(
 ///
 /// * `Result<String, std::io::Error>` - On success, returns the path to the created PowerShell profile script.
 ///   On error, returns an `std::io::Error` indicating the cause of the error.
+#[allow(clippy::too_many_arguments)]
 fn create_powershell_profile(
     profile_path: &str,
     idf_path: &str,
@@ -1003,6 +1000,7 @@ fn create_powershell_profile(
 /// Mirrors the matching `Microsoft.<ver>.PowerShell_profile.ps1`:
 /// unsets the same env vars, strips toolchain PATH prefixes, removes
 /// the IDF functions/aliases, and deactivates the Python venv.
+#[allow(clippy::too_many_arguments)]
 fn create_powershell_deactivate_profile(
     profile_path: &str,
     idf_path: &str,
@@ -1056,6 +1054,7 @@ fn create_powershell_deactivate_profile(
 ///
 /// * `Result<String, std::io::Error>` - On success, returns the path to the created batch profile script.
 ///   On error, returns an `std::io::Error` indicating the cause of the error.
+#[allow(clippy::too_many_arguments)]
 fn create_batch_profile(
     profile_path: &str,
     idf_path: &str,
@@ -1094,6 +1093,7 @@ fn create_batch_profile(
 /// Mirrors the matching `Microsoft.<ver>_profile.bat`: unsets the same
 /// env vars, strips toolchain PATH prefixes, removes the IDF doskey
 /// aliases, and deactivates the Python venv.
+#[allow(clippy::too_many_arguments)]
 fn create_batch_deactivate_profile(
     profile_path: &str,
     idf_path: &str,
@@ -1141,6 +1141,7 @@ fn create_batch_deactivate_profile(
 ///
 /// * `Result<String, std::io::Error>` - On success, returns a string indicating the output of the PowerShell script.
 ///   On error, returns an `std::io::Error` indicating the cause of the error.
+#[allow(clippy::too_many_arguments)]
 pub fn create_desktop_shortcut(
     profile_path: &str,
     idf_path: &str,
@@ -1188,10 +1189,7 @@ pub fn create_desktop_shortcut(
                 Ok(o) => o,
                 Err(err) => {
                     error!("Failed to execute PowerShell script: {}", err);
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        "Failed to execute PowerShell script",
-                    ));
+                    return Err(std::io::Error::other("Failed to execute PowerShell script"));
                 }
             };
 
@@ -1204,6 +1202,7 @@ pub fn create_desktop_shortcut(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_desktop_shortcut_and_terminal_profile(
     profile_path: &str,
     idf_path: &str,
@@ -1220,7 +1219,7 @@ pub fn create_desktop_shortcut_and_terminal_profile(
         idf_path,
         idf_version,
         idf_tools_path,
-        idf_python_env_path.clone(),
+        idf_python_env_path,
         export_paths.clone(),
         env_var_pairs.clone(),
         python_bin_path,
@@ -1325,8 +1324,8 @@ pub fn verify_file_checksum(expected_checksum: &str, file_path: &str) -> Result<
 ///   - On error, returns a `String` describing the error.
 ///
 pub fn setup_environment_variables(
-    tool_install_directory: &PathBuf,
-    idf_path: &PathBuf,
+    tool_install_directory: &Path,
+    idf_path: &Path,
 ) -> Result<Vec<(String, String)>, String> {
     let mut env_vars = vec![];
 
@@ -1364,7 +1363,7 @@ pub fn setup_environment_variables(
 ///
 /// * `Result<PathBuf, std::io::Error>` - On success, returns a `PathBuf` representing the path to the ELF ROM directory.
 ///   On error, returns a `std::io::Error` indicating the cause of the error.
-fn get_elf_rom_dir(idf_tools_path: &PathBuf) -> Result<PathBuf, std::io::Error> {
+fn get_elf_rom_dir(idf_tools_path: &Path) -> Result<PathBuf, std::io::Error> {
     let elf_rom_dir = idf_tools_path.join("esp-rom-elfs");
     if elf_rom_dir.exists() {
         let mut subdirs = vec![];
@@ -1403,7 +1402,7 @@ fn get_elf_rom_dir(idf_tools_path: &PathBuf) -> Result<PathBuf, std::io::Error> 
 ///
 /// * `Result<PathBuf, std::io::Error>` - On success, returns a `PathBuf` representing the path to the OpenOCD scripts folder.
 ///   On error, returns a `std::io::Error` indicating the cause of the error.
-fn get_openocd_scripts_folder(idf_tools_path: &PathBuf) -> Result<String, std::io::Error> {
+fn get_openocd_scripts_folder(idf_tools_path: &Path) -> Result<String, std::io::Error> {
     let search_path = idf_tools_path.join("openocd-esp32");
 
     let result = find_directories_by_name(&search_path, "scripts");
@@ -1520,13 +1519,13 @@ async fn attempt_download(
         .get(url)
         .send()
         .await
-        .map_err(|e: reqwest::Error| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(|e: reqwest::Error| std::io::Error::other(e))?;
 
     if !response.status().is_success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("HTTP error: {}", response.status()),
-        ));
+        return Err(std::io::Error::other(format!(
+            "HTTP error: {}",
+            response.status()
+        )));
     }
 
     let total_size = response.content_length();
@@ -1544,11 +1543,7 @@ async fn attempt_download(
 
     let mut downloaded: u64 = 0;
 
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
-    {
+    while let Some(chunk) = response.chunk().await.map_err(std::io::Error::other)? {
         downloaded += chunk.len() as u64;
         file.write_all(&chunk)?;
 
@@ -1559,10 +1554,10 @@ async fn attempt_download(
                 DownloadProgress::Indeterminate(downloaded)
             };
             if let Err(e) = sender.send(progress) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Failed to send progress: {}", e),
-                ));
+                return Err(std::io::Error::other(format!(
+                    "Failed to send progress: {}",
+                    e
+                )));
             }
         }
     }
@@ -1743,10 +1738,10 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
                         if !output.status.success() {
                             let error_message = String::from_utf8_lossy(&output.stderr);
                             log::error!("PowerShell decompression failed: {}", error_message);
-                            return Err(DecompressionError::Io(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!("PowerShell decompression failed: {}", error_message),
-                            )));
+                            return Err(DecompressionError::Io(io::Error::other(format!(
+                                "PowerShell decompression failed: {}",
+                                error_message
+                            ))));
                         }
                         Ok(())
                     }
@@ -1757,8 +1752,7 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
                 },
                 Err(e) => {
                     log::error!("Thread panicked: {:?}", e);
-                    Err(DecompressionError::Io(io::Error::new(
-                        io::ErrorKind::Other,
+                    Err(DecompressionError::Io(io::Error::other(
                         "Thread panicked during decompression",
                     )))
                 }
@@ -1829,8 +1823,7 @@ fn decompress_tar_xz(
     let mut reader = BufReader::new(file);
 
     let mut temp = tempfile::tempfile()?;
-    lzma_rs::xz_decompress(&mut reader, &mut temp)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    lzma_rs::xz_decompress(&mut reader, &mut temp).map_err(std::io::Error::other)?;
 
     temp.seek(std::io::SeekFrom::Start(0))?;
     let mut archive = Archive::new(BufReader::new(temp));
@@ -1873,70 +1866,13 @@ fn decompress_tar_bz2(
                 Ok(())
             } else {
                 log::error!("Failed to unpack tar.bz2 archive: {}", e);
-                Err(DecompressionError::Io(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("Failed to unpack tar.bz2 archive: {}", e),
-                )))
+                Err(DecompressionError::Io(io::Error::other(format!(
+                    "Failed to unpack tar.bz2 archive: {}",
+                    e
+                ))))
             }
         }
     }
-}
-
-/// Moves the contents of a single subdirectory up to its parent directory if one exists.
-///
-/// This function is typically used after decompression, where a single top-level directory
-/// might have been created containing all the extracted files. This function identifies
-/// such a scenario and moves the contents of that subdirectory directly into the
-/// `destination_path`.
-///
-/// # Arguments
-///
-/// * `destination_path` - A reference to the path where the contents might need to be moved.
-///                        This is typically the target directory for an extraction.
-///
-/// # Errors
-///
-/// Returns a `DecompressionError` if:
-///
-/// * An I/O error occurs during directory reading, renaming, or removal.
-/// * The `destination_path` is not a valid directory or is inaccessible.
-fn move_contents_folder_up(destination_path: &Path) -> Result<(), DecompressionError> {
-    // Find if there's a single directory in the destination
-    let entries: Vec<_> = std::fs::read_dir(destination_path)?.collect();
-
-    if entries.len() == 1 {
-        let entry = entries[0]
-            .as_ref()
-            .map_err(|e| DecompressionError::Io(e.kind().into()))?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            // Move all contents from the subdirectory to the parent
-            let temp_dir = destination_path.join(format!(
-                "_temp_extract_{}",
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
-            ));
-            std::fs::rename(&path, &temp_dir)?;
-
-            for entry in std::fs::read_dir(&temp_dir)? {
-                let entry = entry?;
-                let dest = destination_path.join(entry.file_name());
-                std::fs::rename(entry.path(), dest)?;
-            }
-
-            std::fs::remove_dir(&temp_dir)?;
-        }
-    } else {
-        log::debug!(
-            "No single subdirectory found in {}",
-            destination_path.display()
-        );
-    }
-
-    Ok(())
 }
 
 /// Ensures that a directory exists at the specified path.
@@ -2019,7 +1955,7 @@ pub fn get_rustpython_fork(
 // kept for pure reference how the IDF tools shouldc be ran using rustpython
 pub fn run_idf_tools_using_rustpython(custom_path: &str) -> Result<String, std::io::Error> {
     let script_path = "esp-idf/tools/idf_tools.py";
-    // env::set_var("RUSTPYTHONPATH", "/tmp/test-directory/RustPython/Lib"); // this is not needed as the standard library is bakend into the binary
+    // env::set_var("RUSTPYTHONPATH", "/tmp/test-directory/RustPython/Lib"); // this is not needed as the standard library is backend into the binary
     let output = std::process::Command::new("rustpython") // this works only on my machine (needs to point to the rustpython executable)
         .current_dir(custom_path)
         .arg(script_path)
@@ -2126,6 +2062,7 @@ pub fn to_absolute_path(path: &str) -> Result<String, Box<dyn std::error::Error>
 /// * `idf_version`: A reference to a string representing the version of ESP-IDF being installed.
 /// * `tool_install_directory`: A reference to a string representing the directory where the ESP-IDF tools will be installed.
 /// * `export_paths`: A vector of strings representing the paths that need to be exported for the ESP-IDF tools.
+#[allow(clippy::too_many_arguments)]
 pub fn single_version_post_install(
     activation_script_path: &str,
     idf_path: &str,
@@ -2397,13 +2334,13 @@ pub fn single_version_post_install(
             // Use headless mode in GUI to avoid showing PowerShell window
             run_command_using_activation_script_headless(
                 &activation_script_fullname,
-                &second_component_command,
+                second_component_command,
                 Some(idf_path),
             )
         } else {
             run_command_using_activation_script(
                 &activation_script_fullname,
-                &second_component_command,
+                second_component_command,
                 Some(idf_path),
             )
         };
@@ -2416,10 +2353,7 @@ pub fn single_version_post_install(
                     warn!("Downloading required components failed.");
                 }
             }
-            Err(err) => warn!(
-                "Downloading required components failed: {:?}",
-                err
-            ),
+            Err(err) => warn!("Downloading required components failed: {:?}", err),
         }
     }
 }
@@ -2523,21 +2457,24 @@ pub async fn install_drivers() -> Result<()> {
             .join("idf-drivers")
             .join(driver.name.replace(" ", "_"));
         // let zip_path = temp_dir.path().join("driver.zip");
-        ensure_path(temp_dir.to_str().unwrap());
-
-        // Download the driver ZIP file
-        let response = download_file(&driver.url, temp_dir.to_str().unwrap(), None).await;
-        if response.is_err() {
+        if let Err(err) = ensure_path(temp_dir.to_str().unwrap()) {
             error!(
-                "Failed to download driver {}: {}",
-                driver.name,
-                response.unwrap_err()
+                "Failed to create driver directory {}: {}",
+                temp_dir.display(),
+                err
             );
             all_success = false;
             continue;
         }
 
-        let filename = driver.url.split('/').last().unwrap();
+        // Download the driver ZIP file
+        if let Err(err) = download_file(&driver.url, temp_dir.to_str().unwrap(), None).await {
+            error!("Failed to download driver {}: {}", driver.name, err);
+            all_success = false;
+            continue;
+        }
+
+        let filename = driver.url.split('/').next_back().unwrap();
 
         let zip_path = temp_dir.join(filename);
         if !zip_path.exists() {
@@ -2588,8 +2525,6 @@ mod tests {
     use std::fs;
     use std::io::Write;
     use tempfile::TempDir;
-
-    use flate2::read::GzEncoder;
 
     fn create_test_file(content: &str) -> (TempDir, String) {
         let dir = TempDir::new().unwrap();
@@ -2683,7 +2618,7 @@ mod tests {
         let result = verify_file_checksum(expected_checksum, file_path);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Clean up the test file
         fs::remove_file(file_path).unwrap();
@@ -2700,7 +2635,7 @@ mod tests {
         let result = verify_file_checksum(expected_checksum, file_path);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
 
         // Clean up the test file
         fs::remove_file(file_path).unwrap();
@@ -2713,7 +2648,7 @@ mod tests {
         let result = verify_file_checksum(expected_checksum, file_path);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
     }
 
     #[test]
@@ -2727,7 +2662,7 @@ mod tests {
         let result = verify_file_checksum(expected_checksum, file_path);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Clean up the test file
         fs::remove_file(file_path).unwrap();
@@ -2746,7 +2681,7 @@ mod tests {
         let result = verify_file_checksum(expected_checksum, file_path);
 
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), true);
+        assert!(result.unwrap());
 
         // Clean up the test file
         fs::remove_file(file_path).unwrap();
@@ -2954,7 +2889,7 @@ mod tests {
             "OPENOCD_SCRIPTS",
         ] {
             let found = deactivate.contains(&format!("unset {var}"))
-                || deactivate.contains(&format!("unset $_v")) && deactivate.contains(var);
+                || deactivate.contains(&"unset $_v".to_string()) && deactivate.contains(var);
             assert!(
                 found,
                 "deactivate script does not unset {var}:\n{deactivate}"

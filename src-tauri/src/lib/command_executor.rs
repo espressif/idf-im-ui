@@ -6,6 +6,7 @@ use std::process::{Command, Output};
 
 use std::process::Child;
 
+#[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub trait CommandExecutor: Send {
@@ -16,24 +17,28 @@ pub trait CommandExecutor: Send {
         args: &[&str],
         env: Vec<(&str, &str)>,
     ) -> std::io::Result<Output>;
-    fn execute_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output>;
-    fn spawn_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Child>;
+    fn execute_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Output>;
+    fn spawn_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Child>;
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output>;
-    fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
-    fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus>;
-    fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming_headless(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming_headless_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus>;
     fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output>;
-    fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus>;
+    fn run_script_from_string_streaming_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus>;
 }
 
 struct DefaultExecutor;
@@ -55,23 +60,10 @@ impl CommandExecutor for DefaultExecutor {
         }
         command.output()
     }
-    fn execute_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output> {
-        Command::new(command)
-            .args(args)
-            .current_dir(dir)
-            .output()
+    fn execute_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Output> {
+        Command::new(command).args(args).current_dir(dir).output()
     }
-    fn spawn_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Child> {
+    fn spawn_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Child> {
         Command::new(command)
             .args(args)
             .current_dir(dir)
@@ -79,22 +71,30 @@ impl CommandExecutor for DefaultExecutor {
             .spawn()
     }
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+        Command::new("bash").args(["-c", script]).output()
+    }
+    fn run_script_from_string_streaming(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
         Command::new("bash")
             .args(["-c", script])
-            .output()
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status()
     }
-    fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
-      Command::new("bash")
-        .args(["-c", script])
-        .stdout(std::process::Stdio::inherit())
-        .stderr(std::process::Stdio::inherit())
-        .stdin(std::process::Stdio::inherit())
-        .status()
-    }
-    fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
+    fn run_script_from_string_streaming_headless(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
         self.run_script_from_string_streaming(script)
     }
-    fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+    fn run_script_from_string_streaming_headless_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
         self.run_script_from_string_streaming_with_dir(script, dir)
     }
     fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
@@ -103,7 +103,11 @@ impl CommandExecutor for DefaultExecutor {
             .current_dir(dir)
             .output()
     }
-    fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
+    fn run_script_from_string_streaming_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
         Command::new("bash")
             .args(["-c", script])
             .current_dir(dir)
@@ -141,8 +145,10 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 #[cfg(target_os = "windows")]
 fn find_powershell() -> std::path::PathBuf {
     // 1. Well-known fixed install paths.
-    let program_files = std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
-    let program_files_x86 = std::env::var("ProgramFiles(x86)").unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
+    let program_files =
+        std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
+    let program_files_x86 = std::env::var("ProgramFiles(x86)")
+        .unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
     let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
 
     let known_paths = [
@@ -150,8 +156,14 @@ fn find_powershell() -> std::path::PathBuf {
         format!(r"{}\PowerShell\7\pwsh.exe", program_files),
         format!(r"{}\PowerShell\7\pwsh.exe", program_files_x86),
         // In-box Windows PowerShell 5.1 on Windows 10/11.
-        format!(r"{}\System32\WindowsPowerShell\v1.0\powershell.exe", system_root),
-        format!(r"{}\SysWOW64\WindowsPowerShell\v1.0\powershell.exe", system_root),
+        format!(
+            r"{}\System32\WindowsPowerShell\v1.0\powershell.exe",
+            system_root
+        ),
+        format!(
+            r"{}\SysWOW64\WindowsPowerShell\v1.0\powershell.exe",
+            system_root
+        ),
     ];
 
     for path in &known_paths {
@@ -181,9 +193,7 @@ fn find_powershell() -> std::path::PathBuf {
                                 let path = path.trim().trim_matches('"');
                                 // Ignore empty/stale entries — only return a
                                 // path that still resolves on disk.
-                                if !path.is_empty()
-                                    && std::path::Path::new(path).is_file()
-                                {
+                                if !path.is_empty() && std::path::Path::new(path).is_file() {
                                     return std::path::PathBuf::from(path);
                                 }
                             }
@@ -204,9 +214,7 @@ fn find_powershell() -> std::path::PathBuf {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 for line in stdout.lines() {
                     let path = line.trim();
-                    if !path.is_empty()
-                        && std::path::Path::new(path).is_file()
-                    {
+                    if !path.is_empty() && std::path::Path::new(path).is_file() {
                         return std::path::PathBuf::from(path);
                     }
                 }
@@ -220,7 +228,10 @@ fn find_powershell() -> std::path::PathBuf {
 
 #[cfg(target_os = "windows")]
 impl WindowsExecutor {
-    fn prepare_powershell_script(&self, script: &str) -> std::io::Result<(std::path::PathBuf, Command)> {
+    fn prepare_powershell_script(
+        &self,
+        script: &str,
+    ) -> std::io::Result<(std::path::PathBuf, Command)> {
         let temp_dir = std::env::temp_dir();
         let script_path = temp_dir.join(format!("idf_script_{}.ps1", std::process::id()));
 
@@ -277,12 +288,7 @@ impl CommandExecutor for WindowsExecutor {
         command.output()
     }
 
-    fn execute_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Output> {
+    fn execute_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Output> {
         Command::new(command)
             .args(args)
             .current_dir(dir)
@@ -290,12 +296,7 @@ impl CommandExecutor for WindowsExecutor {
             .output()
     }
 
-    fn spawn_with_dir(
-        &self,
-        command: &str,
-        args: &[&str],
-        dir: &str,
-    ) -> std::io::Result<Child> {
+    fn spawn_with_dir(&self, command: &str, args: &[&str], dir: &str) -> std::io::Result<Child> {
         Command::new(command)
             .args(args)
             .current_dir(dir)
@@ -305,92 +306,103 @@ impl CommandExecutor for WindowsExecutor {
     }
 
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+        let output = cmd
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?
+            .wait_with_output();
 
-      let output = cmd
-          .creation_flags(CREATE_NO_WINDOW)
-          .stdout(std::process::Stdio::piped())
-          .stderr(std::process::Stdio::piped())
-          .spawn()?
-          .wait_with_output();
+        let _ = std::fs::remove_file(&script_path);
+        output
+    }
 
-      let _ = std::fs::remove_file(&script_path);
-      output
-  }
+    fn run_script_from_string_streaming(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-  fn run_script_from_string_streaming(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+        let status = cmd
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status();
 
-      let status = cmd
-          .stdout(std::process::Stdio::inherit())
-          .stderr(std::process::Stdio::inherit())
-          .stdin(std::process::Stdio::inherit())
-          .status();
+        let _ = std::fs::remove_file(&script_path);
+        status
+    }
 
-      let _ = std::fs::remove_file(&script_path);
-      status
-  }
+    fn run_script_from_string_streaming_headless(
+        &self,
+        script: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-  fn run_script_from_string_streaming_headless(&self, script: &str) -> std::io::Result<std::process::ExitStatus> {
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+        let status = cmd
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status();
 
-      let status = cmd
-          .creation_flags(CREATE_NO_WINDOW)
-          .stdout(std::process::Stdio::inherit())
-          .stderr(std::process::Stdio::inherit())
-          .stdin(std::process::Stdio::inherit())
-          .status();
+        let _ = std::fs::remove_file(&script_path);
+        status
+    }
 
-      let _ = std::fs::remove_file(&script_path);
-      status
-  }
+    fn run_script_from_string_streaming_headless_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-  fn run_script_from_string_streaming_headless_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+        let status = cmd
+            .current_dir(dir)
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status();
 
-      let status = cmd
-          .current_dir(dir)
-          .creation_flags(CREATE_NO_WINDOW)
-          .stdout(std::process::Stdio::inherit())
-          .stderr(std::process::Stdio::inherit())
-          .stdin(std::process::Stdio::inherit())
-          .status();
+        let _ = std::fs::remove_file(&script_path);
+        status
+    }
 
-      let _ = std::fs::remove_file(&script_path);
-      status
-  }
+    fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-  fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
+        let output = cmd
+            .current_dir(dir)
+            .creation_flags(CREATE_NO_WINDOW)
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()?
+            .wait_with_output();
 
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
+        let _ = std::fs::remove_file(&script_path);
+        output
+    }
 
-      let output = cmd
-          .current_dir(dir)
-          .creation_flags(CREATE_NO_WINDOW)
-          .stdout(std::process::Stdio::piped())
-          .stderr(std::process::Stdio::piped())
-          .spawn()?
-          .wait_with_output();
+    fn run_script_from_string_streaming_with_dir(
+        &self,
+        script: &str,
+        dir: &str,
+    ) -> std::io::Result<std::process::ExitStatus> {
+        let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
 
-      let _ = std::fs::remove_file(&script_path);
-      output
-  }
+        let status = cmd
+            .current_dir(dir)
+            .stdout(std::process::Stdio::inherit())
+            .stderr(std::process::Stdio::inherit())
+            .stdin(std::process::Stdio::inherit())
+            .status();
 
-  fn run_script_from_string_streaming_with_dir(&self, script: &str, dir: &str) -> std::io::Result<std::process::ExitStatus> {
-      let (script_path, mut cmd) = self.prepare_powershell_script(script)?;
-
-      let status = cmd
-          .current_dir(dir)
-          .stdout(std::process::Stdio::inherit())
-          .stderr(std::process::Stdio::inherit())
-          .stdin(std::process::Stdio::inherit())
-          .status();
-
-      let _ = std::fs::remove_file(&script_path);
-      status
-  }
-
+        let _ = std::fs::remove_file(&script_path);
+        status
+    }
 }
 
 pub fn get_executor() -> Box<dyn CommandExecutor> {
@@ -427,19 +439,12 @@ pub fn execute_command_with_dir(
     executor.execute_with_dir(command, args, dir)
 }
 
-pub fn spawn_with_dir(
-    command: &str,
-    args: &[&str],
-    dir: &str,
-) -> std::io::Result<Child> {
+pub fn spawn_with_dir(command: &str, args: &[&str], dir: &str) -> std::io::Result<Child> {
     let executor = get_executor();
     executor.spawn_with_dir(command, args, dir)
 }
 
-pub fn run_script_from_string_with_dir(
-    script: &str,
-    dir: &str,
-) -> std::io::Result<Output> {
+pub fn run_script_from_string_with_dir(script: &str, dir: &str) -> std::io::Result<Output> {
     let executor = get_executor();
     executor.run_script_from_string_with_dir(script, dir)
 }
@@ -487,12 +492,11 @@ pub fn execute_command_direct_with_dir(
     execute_command_with_dir(command, args, dir)
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
-    use std::path::PathBuf;
+
     use tempfile::TempDir;
 
     #[test]
@@ -545,12 +549,9 @@ mod tests {
 
         #[cfg(not(target_os = "windows"))]
         {
-            let output = execute_command_direct_with_dir(
-                "ls",
-                &[],
-                temp_dir.path().to_str().unwrap(),
-            )
-            .unwrap();
+            let output =
+                execute_command_direct_with_dir("ls", &[], temp_dir.path().to_str().unwrap())
+                    .unwrap();
             assert!(output.status.success());
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains(file_name));
@@ -576,12 +577,8 @@ mod tests {
 
         #[cfg(not(target_os = "windows"))]
         {
-            let output = execute_command_direct_with_env(
-                "sh",
-                &["-c", "echo $TEST_VAR"],
-                env_vars,
-            )
-            .unwrap();
+            let output =
+                execute_command_direct_with_env("sh", &["-c", "echo $TEST_VAR"], env_vars).unwrap();
             assert!(output.status.success());
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains("test_value"));
@@ -589,12 +586,9 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let output = execute_command_direct_with_env(
-                "cmd",
-                &["/c", "echo %TEST_VAR%"],
-                env_vars,
-            )
-            .unwrap();
+            let output =
+                execute_command_direct_with_env("cmd", &["/c", "echo %TEST_VAR%"], env_vars)
+                    .unwrap();
             assert!(output.status.success());
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains("test_value"));
@@ -699,7 +693,9 @@ mod tests {
 
         #[cfg(target_os = "windows")]
         {
-            let output = execute_command_direct("cmd", &["/c", "dir", "C:\\nonexistent\\path\\xyz"]).unwrap();
+            let output =
+                execute_command_direct("cmd", &["/c", "dir", "C:\\nonexistent\\path\\xyz"])
+                    .unwrap();
             assert!(!output.status.success());
         }
     }
@@ -714,11 +710,9 @@ mod tests {
 
         #[cfg(not(target_os = "windows"))]
         {
-            let output = execute_command_direct(
-                "cat",
-                &[file1.to_str().unwrap(), file2.to_str().unwrap()],
-            )
-            .unwrap();
+            let output =
+                execute_command_direct("cat", &[file1.to_str().unwrap(), file2.to_str().unwrap()])
+                    .unwrap();
             assert!(output.status.success());
             let stdout = String::from_utf8_lossy(&output.stdout);
             assert!(stdout.contains("content1"));
@@ -729,7 +723,12 @@ mod tests {
         {
             let output = execute_command_direct(
                 "cmd",
-                &["/c", "type", file1.to_str().unwrap(), file2.to_str().unwrap()],
+                &[
+                    "/c",
+                    "type",
+                    file1.to_str().unwrap(),
+                    file2.to_str().unwrap(),
+                ],
             )
             .unwrap();
             assert!(output.status.success());
@@ -769,7 +768,7 @@ mod tests {
 
             // Note: We use cmd /c echo for direct to make it comparable
             // Direct execution won't expand the variable in the same way
-            assert!(stdout_shell.trim().len() > 6);  // Shell expands to a path
+            assert!(stdout_shell.trim().len() > 6); // Shell expands to a path
         }
     }
 

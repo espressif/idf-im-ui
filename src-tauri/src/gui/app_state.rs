@@ -1,14 +1,13 @@
 // use crate::models::{settings::Settings, wizard::WizardData};
+use idf_im_lib::settings::Settings;
+use idf_im_lib::telemetry::InstallationContext;
+use idf_im_lib::utils::MirrorEntry;
 use log::error;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use tauri::AppHandle;
-use idf_im_lib::settings::Settings;
-use idf_im_lib::telemetry::InstallationContext;
-use idf_im_lib::utils::MirrorEntry;
 
 use tauri::Manager; // dep: fork = "0.1"
-
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct WizardData {
@@ -30,49 +29,79 @@ pub struct AppState {
     pub telemetry_session: Mutex<Option<InstallationContext>>,
 }
 
-pub fn set_idf_mirror_latency_entries(app_handle: &AppHandle, entries: &Vec<MirrorEntry>) -> Result<(), String> {
+pub fn set_idf_mirror_latency_entries(
+    app_handle: &AppHandle,
+    entries: &[MirrorEntry],
+) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
-    let mut idf_mirror_latency_entries = app_state.idf_mirror_latency_entries.lock().map_err(|_| "Lock error".to_string())?;
-    *idf_mirror_latency_entries = Some(entries.clone());
+    let mut idf_mirror_latency_entries = app_state
+        .idf_mirror_latency_entries
+        .lock()
+        .map_err(|_| "Lock error".to_string())?;
+    *idf_mirror_latency_entries = Some(entries.to_vec());
     Ok(())
 }
 
-pub fn set_tools_mirror_latency_entries(app_handle: &AppHandle, entries: &Vec<MirrorEntry>) -> Result<(), String> {
+pub fn set_tools_mirror_latency_entries(
+    app_handle: &AppHandle,
+    entries: &[MirrorEntry],
+) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
-    let mut tools_mirror_latency_entries = app_state.tools_mirror_latency_entries.lock().map_err(|_| "Lock error".to_string())?;
-    *tools_mirror_latency_entries = Some(entries.clone());
+    let mut tools_mirror_latency_entries = app_state
+        .tools_mirror_latency_entries
+        .lock()
+        .map_err(|_| "Lock error".to_string())?;
+    *tools_mirror_latency_entries = Some(entries.to_vec());
     Ok(())
 }
 
-pub fn set_pypi_mirror_latency_entries(app_handle: &AppHandle, entries: &Vec<MirrorEntry>) -> Result<(), String> {
+pub fn set_pypi_mirror_latency_entries(
+    app_handle: &AppHandle,
+    entries: &[MirrorEntry],
+) -> Result<(), String> {
     let app_state = app_handle.state::<AppState>();
-    let mut pypi_mirror_latency_entries = app_state.pypi_mirror_latency_entries.lock().map_err(|_| "Lock error".to_string())?;
-    *pypi_mirror_latency_entries = Some(entries.clone());
+    let mut pypi_mirror_latency_entries = app_state
+        .pypi_mirror_latency_entries
+        .lock()
+        .map_err(|_| "Lock error".to_string())?;
+    *pypi_mirror_latency_entries = Some(entries.to_vec());
     Ok(())
 }
 
 pub fn get_idf_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
     let app_state = app_handle.state::<AppState>();
-    app_state.idf_mirror_latency_entries.lock().map(|guard| guard.clone()).unwrap_or_else(|_| {
-        error!("Failed to acquire idf_mirror_latency_entries lock, returning None");
-        None
-    })
+    app_state
+        .idf_mirror_latency_entries
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire idf_mirror_latency_entries lock, returning None");
+            None
+        })
 }
 
 pub fn get_tools_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
     let app_state = app_handle.state::<AppState>();
-    app_state.tools_mirror_latency_entries.lock().map(|guard| guard.clone()).unwrap_or_else(|_| {
-        error!("Failed to acquire tools_mirror_latency_entries lock, returning None");
-        None
-    })
+    app_state
+        .tools_mirror_latency_entries
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire tools_mirror_latency_entries lock, returning None");
+            None
+        })
 }
 
 pub fn get_pypi_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
     let app_state = app_handle.state::<AppState>();
-    app_state.pypi_mirror_latency_entries.lock().map(|guard| guard.clone()).unwrap_or_else(|_| {
-        error!("Failed to acquire pypi_mirror_latency_entries lock, returning None");
-        None
-    })
+    app_state
+        .pypi_mirror_latency_entries
+        .lock()
+        .map(|guard| guard.clone())
+        .unwrap_or_else(|_| {
+            error!("Failed to acquire pypi_mirror_latency_entries lock, returning None");
+            None
+        })
 }
 
 pub fn set_is_simple_installation(app_handle: &AppHandle, is_simple: bool) -> Result<(), String> {
