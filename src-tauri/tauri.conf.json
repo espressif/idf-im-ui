@@ -14,7 +14,11 @@
       {
         "title": "ESP-IDF Installation Manager(EIM)",
         "width": 1200,
-        "height": 1000
+        "height": 875,
+        "minWidth": 600,
+        "minHeight": 175,
+        "resizable": true,
+        "center": true
       }
     ],
     "security": {
