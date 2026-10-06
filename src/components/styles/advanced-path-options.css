@@ -1,0 +1,36 @@
+/* Cleanup + custom tool folder options (see composables/useAdvancedPathOptions.js). */
+
+.option-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.option-warning {
+  font-size: 0.8rem;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin: 0;
+}
+
+.folder-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding-left: 1.75rem;
+}
+
+.folder-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.folder-label {
+  font-size: 0.875rem;
+  color: #374151;
+  font-weight: 500;
+}

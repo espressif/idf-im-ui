@@ -1,7 +1,7 @@
 import { expect } from "chai";
-import { describe, it, before, after, beforeEach, afterEach } from "mocha";
-import CLITestRunner from "../classes/CLITestRunner.class.js";
+import { describe, it, before, after } from "mocha";
 import logger from "../classes/logger.class.js";
+import { registerWizardTerminalHooks } from "../helpers/cliTestHelpers.js";
 import os from "os";
 import path from "path";
 
@@ -13,35 +13,11 @@ export function runCLIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     this.timeout(240000);
     let testRunner = null;
 
-    beforeEach(async function () {
-      this.timeout(20000);
-      testRunner = new CLITestRunner();
-      try {
-        await testRunner.start();
-        testRunner.callEIM(pathToEIM, ["wizard"]);
-      } catch (error) {
-        logger.info(`Error starting process: ${error}`);
-        logger.debug(` Error: ${error}`);
-      }
-    });
-
-    afterEach(async function () {
-      this.timeout(20000);
-      if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
-        logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
-      }
-      if (testRunner) {
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to clean up terminal after test");
-          logger.info(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
-      };
+    registerWizardTerminalHooks({
+      pathToEIM,
+      setRunner: (runner) => (testRunner = runner),
+      getRunner: () => testRunner,
+      startTimeout: 20000,
     });
 
     // Linux/MAC Specific Tests

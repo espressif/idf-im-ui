@@ -2,7 +2,13 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
-import TestProxy from "../classes/TestProxy.class.js";
+import { startTestProxy, stopTestProxy } from "../helpers/testProxy.js";
+import {
+  startTerminal,
+  stopTerminal,
+  logFailedTest,
+  waitForTerminalOutput,
+} from "../helpers/cliTestHelpers.js";
 import { downloadOfflineArchive } from "../helper.js";
 import fs from "fs";
 import path from "path";
@@ -41,23 +47,9 @@ export function runCLICustomInstallTest({
         });
       }
       if (testProxyMode) {
-        try {
-          proxy = new TestProxy({
-            mode: testProxyMode,
-            blockedDomains: proxyBlockList,
-          });
-          await proxy.start();
-        } catch (error) {
-          logger.info("Error to start proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        proxy = await startTestProxy(testProxyMode, proxyBlockList);
       }
-      try {
-        await testRunner.start();
-      } catch (error) {
-        logger.info("Error to start terminal");
-        logger.debug(`Error: ${error}`);
-      }
+      await startTerminal(testRunner);
       if (pathToOfflineArchive) {
         args.push(`--use-local-archive "${pathToOfflineArchive}"`);
         testRunner.sendInput(`mkdir ${archiveDir}`);
@@ -75,9 +67,7 @@ export function runCLICustomInstallTest({
     // The afterEach function should log the terminal output on failure
     afterEach(function () {
       if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        logger.info(`Terminal output: >>\r ${testRunner.output.slice(-1000)}`);
-        logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
+        logFailedTest(this.currentTest, testRunner, { tail: 1000 });
       }
     });
 
@@ -86,21 +76,10 @@ export function runCLICustomInstallTest({
     after(async function () {
       logger.info("Custom installation routine completed");
       this.timeout(50000);
-      try {
-        await testRunner.stop();
-      } catch (error) {
-        logger.info("Error to clean up terminal after test");
-        logger.info(` Error: ${error}`);
-      } finally {
-        testRunner = null;
-      }
+      await stopTerminal(testRunner);
+      testRunner = null;
       if (testProxyMode) {
-        try {
-          await proxy.stop();
-        } catch (error) {
-          logger.info("Error stopping proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        await stopTestProxy(proxy);
       }
       // Remove offline archive to save space in the runner
       if (pathToOfflineArchive) {
@@ -152,31 +131,10 @@ export function runCLICustomInstallTest({
       testRunner.callEIM(pathToEIM, ["install", ...args]);
       await new Promise((resolve) => setTimeout(resolve, 5000));
       if (args.includes("-n false")) {
-        const startTime = Date.now();
-        while (Date.now() - startTime < 3600000) {
-          if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
-            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
-            break;
-          }
-          // Add a scape in case the rust application panics
-          if (await testRunner.waitForOutput("panicked", 1000)) {
-            logger.info(">>>>>>>Rust App failure!!!!");
-            break;
-          }
-          if (
-            await testRunner.waitForOutput(
-              "Do you want to save the installer configuration",
-              1000,
-            )
-          ) {
-            logger.info(">>>>>>>Completed!!!");
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-        if (Date.now() - startTime >= 3600000) {
-          logger.info("Installation timed out after 1 hour");
-        }
+        await waitForTerminalOutput(
+          testRunner,
+          "Do you want to save the installer configuration",
+        );
 
         expect(
           testRunner.output,
@@ -188,30 +146,9 @@ export function runCLICustomInstallTest({
         testRunner.sendInput("n");
       }
 
-      const startTime = Date.now();
-      while (Date.now() - startTime < 3600000) {
-        if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
-          logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
-          break;
-        }
-        if (await testRunner.waitForOutput("panicked", 1000)) {
-          logger.info(">>>>>>>Rust App failure!!!!");
-          break;
-        }
-        if (
-          await testRunner.waitForOutput(
-            "Now you can start using IDF tools",
-            1000,
-          )
-        ) {
-          logger.info(">>>>>>>Completed!!!");
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-      if (Date.now() - startTime >= 3600000) {
-        logger.info("Installation timed out after 1 hour");
-      }
+      await waitForTerminalOutput(testRunner, "Now you can start using IDF tools", {
+        pollMs: 500,
+      });
 
       expect(
         testRunner.output,

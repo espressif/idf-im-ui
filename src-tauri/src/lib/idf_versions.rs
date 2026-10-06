@@ -1,5 +1,5 @@
 use log::{error, warn};
-use serde_derive::Deserialize;
+use serde::Deserialize;
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Clone)]

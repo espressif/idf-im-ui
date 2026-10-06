@@ -164,79 +164,13 @@ pub async fn install_prerequisites_offline(
                 .map_err(|e| format!("Failed to create tools directory: {}", e))?;
 
             if needs_git {
-                // Find Git archive - renamed to simple name during archive creation
-                let git_archive_path = archive_dir.path().join("git.tar.bz2");
-                warn!("Looking for Git archive at: {}", git_archive_path.display());
-                let archive_contents = std::fs::read_dir(archive_dir.path())
-                    .map(|d| {
-                        d.into_iter()
-                            .filter_map(|e| e.ok())
-                            .map(|e| e.file_name().to_str().unwrap_or("").to_string())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default();
-                warn!("Archive dir contents: {:?}", archive_contents);
-                if !git_archive_path.exists() {
-                    return Err(format!(
-                        "Git portable archive not found at expected path: {}",
-                        git_archive_path.display()
-                    ));
-                }
-                info!("Found Git archive at: {}", git_archive_path.display());
-
-                // Copy git archive to tools_dir for installation
-                let git_archive_in_tools = tools_dir.join("git.tar.bz2");
-                std::fs::copy(&git_archive_path, &git_archive_in_tools)
-                    .map_err(|e| format!("Failed to copy git archive: {}", e))?;
-
-                // Install git from the copied archive
-                match crate::system_dependencies::install_git_from_downloaded(
-                    tools_dir.clone(),
-                    Some(git_archive_in_tools),
-                )
-                .await
-                {
-                    Ok(install_path) => {
-                        info!("Git installed successfully to {:?}", install_path);
-                    }
-                    Err(e) => {
-                        return Err(format!("Failed to install git: {}", e));
-                    }
-                }
+                install_bundled_git(archive_dir.path(), &tools_dir).await?;
             } else {
                 info!("Git not needed, skipping installation");
             }
 
             if needs_python {
-                // Find Python archive - renamed to simple name during archive creation
-                let python_archive = archive_dir.path().join("python.tar.gz");
-                if !python_archive.exists() {
-                    return Err(format!(
-                        "Python archive not found at expected path: {}",
-                        python_archive.display()
-                    ));
-                }
-                debug!("Found Python archive at: {}", python_archive.display());
-
-                // Copy python archive to tools_dir for installation
-                let python_in_tools = tools_dir.join("python.tar.gz");
-                std::fs::copy(&python_archive, &python_in_tools)
-                    .map_err(|e| format!("Failed to copy python archive: {}", e))?;
-
-                // Install python from the copied archive
-                match crate::system_dependencies::install_python_from_downloaded(
-                    tools_dir.clone(),
-                    Some(python_in_tools),
-                )
-                .await
-                {
-                    Ok(install_path) => {
-                        info!("Python installed successfully to {:?}", install_path);
-                    }
-                    Err(e) => {
-                        return Err(format!("Failed to install python: {}", e));
-                    }
-                }
+                install_bundled_python(archive_dir.path(), &tools_dir).await?;
             } else {
                 info!("Python not needed, skipping installation");
             }
@@ -246,6 +180,78 @@ pub async fn install_prerequisites_offline(
         }
     }
     Ok(())
+}
+
+/// File names in `dir`, or an empty list if it cannot be read.
+fn dir_entry_names(dir: &Path) -> Vec<String> {
+    std::fs::read_dir(dir)
+        .map(|d| {
+            d.into_iter()
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_str().unwrap_or("").to_string())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default()
+}
+
+async fn install_bundled_git(archive_dir: &Path, tools_dir: &Path) -> Result<(), String> {
+    // Git archive is renamed to a simple name during archive creation
+    let git_archive_path = archive_dir.join("git.tar.bz2");
+    warn!("Looking for Git archive at: {}", git_archive_path.display());
+    warn!("Archive dir contents: {:?}", dir_entry_names(archive_dir));
+    if !git_archive_path.exists() {
+        return Err(format!(
+            "Git portable archive not found at expected path: {}",
+            git_archive_path.display()
+        ));
+    }
+    info!("Found Git archive at: {}", git_archive_path.display());
+
+    let git_archive_in_tools = tools_dir.join("git.tar.bz2");
+    std::fs::copy(&git_archive_path, &git_archive_in_tools)
+        .map_err(|e| format!("Failed to copy git archive: {}", e))?;
+
+    match crate::system_dependencies::install_git_from_downloaded(
+        tools_dir.to_path_buf(),
+        Some(git_archive_in_tools),
+    )
+    .await
+    {
+        Ok(install_path) => {
+            info!("Git installed successfully to {:?}", install_path);
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to install git: {}", e)),
+    }
+}
+
+async fn install_bundled_python(archive_dir: &Path, tools_dir: &Path) -> Result<(), String> {
+    // Python archive is renamed to a simple name during archive creation
+    let python_archive = archive_dir.join("python.tar.gz");
+    if !python_archive.exists() {
+        return Err(format!(
+            "Python archive not found at expected path: {}",
+            python_archive.display()
+        ));
+    }
+    debug!("Found Python archive at: {}", python_archive.display());
+
+    let python_in_tools = tools_dir.join("python.tar.gz");
+    std::fs::copy(&python_archive, &python_in_tools)
+        .map_err(|e| format!("Failed to copy python archive: {}", e))?;
+
+    match crate::system_dependencies::install_python_from_downloaded(
+        tools_dir.to_path_buf(),
+        Some(python_in_tools),
+    )
+    .await
+    {
+        Ok(install_path) => {
+            info!("Python installed successfully to {:?}", install_path);
+            Ok(())
+        }
+        Err(e) => Err(format!("Failed to install python: {}", e)),
+    }
 }
 
 /// Copies ESP-IDF (Espressif IoT Development Framework) files from offline archive.
@@ -305,92 +311,115 @@ pub fn copy_idf_from_offline_archive(
         let src_path = archive_dir.path().join(&archive_version);
         let dst_path = config.clone().path.unwrap().join(&archive_version);
 
-        if let Some(parent) = dst_path.parent() {
-            if !parent.exists() {
-                if let Err(e) = fs::create_dir_all(parent) {
-                    error!("Failed to create destination directory: {}", e);
-                    everything_copied = false;
-                    continue;
-                }
-            }
+        if !ensure_parent_dir(&dst_path) {
+            everything_copied = false;
+            continue;
         }
 
-        match std::env::consts::OS {
-            "windows" => {
-                // robocopy handles long paths (no MAX_PATH limit) and preserves timestamps
-                // via /COPY:DAT (Data, Attributes, Timestamps). Exit codes 0-7 are success.
-                let output = command_executor::execute_command(
-                    "robocopy",
-                    &[
-                        src_path.to_string_lossy().as_ref(),
-                        dst_path.to_string_lossy().as_ref(),
-                        "/E",
-                        "/COPY:DAT",
-                        "/R:3",
-                        "/W:1",
-                        "/NP",
-                        "/NFL",
-                        "/NDL",
-                    ],
-                );
-                match output {
-                    Ok(out) => {
-                        let exit_code = out.status.code().unwrap_or(-1);
-                        if exit_code <= 7 {
-                            info!(
-                                "Successfully copied IDF version {} (robocopy exit code: {})",
-                                archive_version, exit_code
-                            );
-                        } else {
-                            error!(
-                                "robocopy failed for version {} with exit code {}: {:?} | {:?}",
-                                archive_version, exit_code, out.stdout, out.stderr
-                            );
-                            everything_copied = false;
-                        }
-                    }
-                    Err(err) => {
-                        error!(
-                            "Failed to execute robocopy for version {}: {}",
-                            archive_version, err
-                        );
-                        everything_copied = false;
-                    }
-                }
-            }
-            _ => {
-                debug!("Moving IDF version: {}", archive_version);
-                match fs::rename(&src_path, &dst_path) {
-                    Ok(_) => {
-                        info!("Successfully moved IDF version: {}", archive_version);
-                    }
-                    Err(rename_err) => {
-                        debug!("fs::rename failed (likely cross-filesystem): {}, falling back to mtime-preserving copy", rename_err);
-                        // For copy, we need to copy the esp-idf subdirectory specifically
-                        // since the archive structure is: version/esp-idf/...
-                        let src_idf_path = src_path.join("esp-idf");
-                        let dst_idf_path = dst_path.join("esp-idf");
-                        match copy_dir_contents_preserving_mtime(&src_idf_path, &dst_idf_path) {
-                            Ok(_) => {
-                                info!(
-                                    "Successfully copied IDF version with preserved timestamps: {}",
-                                    archive_version
-                                );
-                            }
-                            Err(err) => {
-                                error!("Failed to copy IDF version {}: {}", archive_version, err);
-                                everything_copied = false;
-                            }
-                        }
-                    }
-                }
-            }
+        let copied = match std::env::consts::OS {
+            "windows" => robocopy_idf_version(&src_path, &dst_path, &archive_version),
+            _ => move_idf_version(&src_path, &dst_path, &archive_version),
+        };
+        if !copied {
+            everything_copied = false;
         }
     }
     if everything_copied {
         Ok(())
     } else {
         Err("Failed to copy some IDF versions".into())
+    }
+}
+
+/// Creates the parent of `dst_path` if it is missing; returns `false` (after logging) on failure.
+fn ensure_parent_dir(dst_path: &Path) -> bool {
+    if let Some(parent) = dst_path.parent() {
+        if !parent.exists() {
+            if let Err(e) = fs::create_dir_all(parent) {
+                error!("Failed to create destination directory: {}", e);
+                return false;
+            }
+        }
+    }
+    true
+}
+
+/// robocopy exit codes 0-7 mean success (8+ indicate at least one failure).
+fn robocopy_succeeded(exit_code: i32) -> bool {
+    exit_code <= 7
+}
+
+fn robocopy_idf_version(src_path: &Path, dst_path: &Path, archive_version: &str) -> bool {
+    // robocopy handles long paths (no MAX_PATH limit) and preserves timestamps
+    // via /COPY:DAT (Data, Attributes, Timestamps).
+    let output = command_executor::execute_command(
+        "robocopy",
+        &[
+            src_path.to_string_lossy().as_ref(),
+            dst_path.to_string_lossy().as_ref(),
+            "/E",
+            "/COPY:DAT",
+            "/R:3",
+            "/W:1",
+            "/NP",
+            "/NFL",
+            "/NDL",
+        ],
+    );
+    match output {
+        Ok(out) => {
+            let exit_code = out.status.code().unwrap_or(-1);
+            if robocopy_succeeded(exit_code) {
+                info!(
+                    "Successfully copied IDF version {} (robocopy exit code: {})",
+                    archive_version, exit_code
+                );
+                true
+            } else {
+                error!(
+                    "robocopy failed for version {} with exit code {}: {:?} | {:?}",
+                    archive_version, exit_code, out.stdout, out.stderr
+                );
+                false
+            }
+        }
+        Err(err) => {
+            error!(
+                "Failed to execute robocopy for version {}: {}",
+                archive_version, err
+            );
+            false
+        }
+    }
+}
+
+/// Moves the extracted version directory into place, falling back to an
+/// mtime-preserving copy of its `esp-idf` subdirectory when rename fails.
+fn move_idf_version(src_path: &Path, dst_path: &Path, archive_version: &str) -> bool {
+    debug!("Moving IDF version: {}", archive_version);
+    let Err(rename_err) = fs::rename(src_path, dst_path) else {
+        info!("Successfully moved IDF version: {}", archive_version);
+        return true;
+    };
+    debug!(
+        "fs::rename failed (likely cross-filesystem): {}, falling back to mtime-preserving copy",
+        rename_err
+    );
+    // The archive structure is: version/esp-idf/...
+    let src_idf_path = src_path.join("esp-idf");
+    let dst_idf_path = dst_path.join("esp-idf");
+    match copy_dir_contents_preserving_mtime(&src_idf_path, &dst_idf_path) {
+        Ok(_) => {
+            info!(
+                "Successfully copied IDF version with preserved timestamps: {}",
+                archive_version
+            );
+            true
+        }
+        Err(err) => {
+            error!("Failed to copy IDF version {}: {}", archive_version, err);
+            false
+        }
     }
 }
 
@@ -680,5 +709,131 @@ mod tests {
             .join("root_managed.txt")
             .exists());
         assert!(!target_dir.path().join("root_managed.txt").exists());
+    }
+
+    #[test]
+    fn test_dir_entry_names() {
+        let dir = TempDir::new().unwrap();
+        fs::write(dir.path().join("git.tar.bz2"), "").unwrap();
+        fs::create_dir_all(dir.path().join("v5.4")).unwrap();
+        let mut names = dir_entry_names(dir.path());
+        names.sort();
+        assert_eq!(names, vec!["git.tar.bz2".to_string(), "v5.4".to_string()]);
+        assert!(dir_entry_names(&dir.path().join("missing")).is_empty());
+    }
+
+    #[test]
+    fn test_install_bundled_git_errors_when_archive_missing() {
+        let archive = TempDir::new().unwrap();
+        let tools = TempDir::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let err = rt
+            .block_on(install_bundled_git(archive.path(), tools.path()))
+            .unwrap_err();
+        assert!(err.starts_with("Git portable archive not found at expected path: "));
+        assert!(err.ends_with("git.tar.bz2"));
+    }
+
+    #[test]
+    fn test_install_bundled_python_errors_when_archive_missing() {
+        let archive = TempDir::new().unwrap();
+        let tools = TempDir::new().unwrap();
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let err = rt
+            .block_on(install_bundled_python(archive.path(), tools.path()))
+            .unwrap_err();
+        assert!(err.starts_with("Python archive not found at expected path: "));
+        assert!(err.ends_with("python.tar.gz"));
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_creates_missing_parent() {
+        let dir = TempDir::new().unwrap();
+        let dst = dir.path().join("a").join("b").join("v5.4");
+        assert!(ensure_parent_dir(&dst));
+        assert!(dst.parent().unwrap().is_dir());
+        assert!(!dst.exists());
+    }
+
+    #[test]
+    fn test_ensure_parent_dir_fails_when_parent_is_a_file() {
+        let dir = TempDir::new().unwrap();
+        let file = dir.path().join("file");
+        fs::write(&file, "").unwrap();
+        assert!(!ensure_parent_dir(&file.join("sub").join("v5.4")));
+    }
+
+    #[test]
+    fn test_robocopy_succeeded() {
+        for code in 0..=7 {
+            assert!(robocopy_succeeded(code));
+        }
+        assert!(!robocopy_succeeded(8));
+        assert!(!robocopy_succeeded(16));
+        assert!(robocopy_succeeded(-1));
+    }
+
+    #[test]
+    fn test_move_idf_version_renames_directory() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("archive").join("v5.4");
+        fs::create_dir_all(src.join("esp-idf")).unwrap();
+        fs::write(src.join("esp-idf").join("README.md"), "idf").unwrap();
+        let dst = dir.path().join("install").join("v5.4");
+        fs::create_dir_all(dst.parent().unwrap()).unwrap();
+
+        assert!(move_idf_version(&src, &dst, "v5.4"));
+        assert!(dst.join("esp-idf").join("README.md").exists());
+        assert!(!src.exists());
+    }
+
+    #[test]
+    fn test_move_idf_version_fails_when_source_missing() {
+        let dir = TempDir::new().unwrap();
+        let src = dir.path().join("missing");
+        let dst = dir.path().join("install").join("v5.4");
+        assert!(!move_idf_version(&src, &dst, "v5.4"));
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_copy_idf_from_offline_archive_moves_every_version() {
+        let archive_dir = TempDir::new().unwrap();
+        let install = TempDir::new().unwrap();
+        for v in ["v5.3", "v5.4"] {
+            let idf = archive_dir.path().join(v).join("esp-idf");
+            fs::create_dir_all(&idf).unwrap();
+            fs::write(idf.join("version.txt"), v).unwrap();
+        }
+        let config = Settings {
+            idf_versions: Some(vec!["v5.3".to_string(), "v5.4".to_string()]),
+            path: Some(install.path().join("esp")),
+            ..Settings::default()
+        };
+
+        copy_idf_from_offline_archive(&archive_dir, &config).unwrap();
+
+        for v in ["v5.3", "v5.4"] {
+            let copied = install.path().join("esp").join(v).join("esp-idf");
+            assert_eq!(fs::read_to_string(copied.join("version.txt")).unwrap(), v);
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_copy_idf_from_offline_archive_reports_partial_failure() {
+        let archive_dir = TempDir::new().unwrap();
+        let install = TempDir::new().unwrap();
+        fs::create_dir_all(archive_dir.path().join("v5.4").join("esp-idf")).unwrap();
+        let config = Settings {
+            idf_versions: Some(vec!["missing".to_string(), "v5.4".to_string()]),
+            path: Some(install.path().to_path_buf()),
+            ..Settings::default()
+        };
+
+        let err = copy_idf_from_offline_archive(&archive_dir, &config).unwrap_err();
+
+        assert_eq!(err, "Failed to copy some IDF versions");
+        assert!(install.path().join("v5.4").join("esp-idf").exists());
     }
 }

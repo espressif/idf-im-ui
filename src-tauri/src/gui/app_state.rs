@@ -29,101 +29,104 @@ pub struct AppState {
     pub telemetry_session: Mutex<Option<InstallationContext>>,
 }
 
+fn store_locked<T>(slot: &Mutex<T>, value: T) -> Result<(), String> {
+    *slot.lock().map_err(|_| "Lock error".to_string())? = value;
+    Ok(())
+}
+
+fn store_in_state<T>(
+    app_handle: &AppHandle,
+    slot: fn(&AppState) -> &Mutex<T>,
+    value: T,
+) -> Result<(), String> {
+    let app_state = app_handle.state::<AppState>();
+    store_locked(slot(&app_state), value)
+}
+
+fn store_mirror_entries(
+    app_handle: &AppHandle,
+    slot: fn(&AppState) -> &Mutex<Option<Vec<MirrorEntry>>>,
+    entries: &[MirrorEntry],
+) -> Result<(), String> {
+    store_in_state(app_handle, slot, Some(entries.to_vec()))
+}
+
+fn read_from_state<T: Clone>(
+    app_handle: &AppHandle,
+    slot: fn(&AppState) -> &Mutex<T>,
+    fallback: T,
+    poisoned_message: &str,
+) -> T {
+    let app_state = app_handle.state::<AppState>();
+    read_locked(slot(&app_state), fallback, poisoned_message)
+}
+
+fn read_locked<T: Clone>(slot: &Mutex<T>, fallback: T, poisoned_message: &str) -> T {
+    slot.lock().map(|guard| guard.clone()).unwrap_or_else(|_| {
+        error!("{}", poisoned_message);
+        fallback
+    })
+}
+
 pub fn set_idf_mirror_latency_entries(
     app_handle: &AppHandle,
     entries: &[MirrorEntry],
 ) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let mut idf_mirror_latency_entries = app_state
-        .idf_mirror_latency_entries
-        .lock()
-        .map_err(|_| "Lock error".to_string())?;
-    *idf_mirror_latency_entries = Some(entries.to_vec());
-    Ok(())
+    store_mirror_entries(app_handle, |s| &s.idf_mirror_latency_entries, entries)
 }
 
 pub fn set_tools_mirror_latency_entries(
     app_handle: &AppHandle,
     entries: &[MirrorEntry],
 ) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let mut tools_mirror_latency_entries = app_state
-        .tools_mirror_latency_entries
-        .lock()
-        .map_err(|_| "Lock error".to_string())?;
-    *tools_mirror_latency_entries = Some(entries.to_vec());
-    Ok(())
+    store_mirror_entries(app_handle, |s| &s.tools_mirror_latency_entries, entries)
 }
 
 pub fn set_pypi_mirror_latency_entries(
     app_handle: &AppHandle,
     entries: &[MirrorEntry],
 ) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let mut pypi_mirror_latency_entries = app_state
-        .pypi_mirror_latency_entries
-        .lock()
-        .map_err(|_| "Lock error".to_string())?;
-    *pypi_mirror_latency_entries = Some(entries.to_vec());
-    Ok(())
+    store_mirror_entries(app_handle, |s| &s.pypi_mirror_latency_entries, entries)
 }
 
 pub fn get_idf_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
-    let app_state = app_handle.state::<AppState>();
-    app_state
-        .idf_mirror_latency_entries
-        .lock()
-        .map(|guard| guard.clone())
-        .unwrap_or_else(|_| {
-            error!("Failed to acquire idf_mirror_latency_entries lock, returning None");
-            None
-        })
+    read_from_state(
+        app_handle,
+        |state| &state.idf_mirror_latency_entries,
+        None,
+        "Failed to acquire idf_mirror_latency_entries lock, returning None",
+    )
 }
 
 pub fn get_tools_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
-    let app_state = app_handle.state::<AppState>();
-    app_state
-        .tools_mirror_latency_entries
-        .lock()
-        .map(|guard| guard.clone())
-        .unwrap_or_else(|_| {
-            error!("Failed to acquire tools_mirror_latency_entries lock, returning None");
-            None
-        })
+    read_from_state(
+        app_handle,
+        |state| &state.tools_mirror_latency_entries,
+        None,
+        "Failed to acquire tools_mirror_latency_entries lock, returning None",
+    )
 }
 
 pub fn get_pypi_mirror_latency_entries(app_handle: &AppHandle) -> Option<Vec<MirrorEntry>> {
-    let app_state = app_handle.state::<AppState>();
-    app_state
-        .pypi_mirror_latency_entries
-        .lock()
-        .map(|guard| guard.clone())
-        .unwrap_or_else(|_| {
-            error!("Failed to acquire pypi_mirror_latency_entries lock, returning None");
-            None
-        })
+    read_from_state(
+        app_handle,
+        |state| &state.pypi_mirror_latency_entries,
+        None,
+        "Failed to acquire pypi_mirror_latency_entries lock, returning None",
+    )
 }
 
 pub fn set_is_simple_installation(app_handle: &AppHandle, is_simple: bool) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let mut simple_installation = app_state
-        .is_simple_installation
-        .lock()
-        .map_err(|_| "Lock error".to_string())?;
-    *simple_installation = is_simple;
-    Ok(())
+    store_in_state(app_handle, |state| &state.is_simple_installation, is_simple)
 }
 
 pub fn is_simple_installation(app_handle: &AppHandle) -> bool {
-    let app_state = app_handle.state::<AppState>();
-    app_state
-        .is_simple_installation
-        .lock()
-        .map(|guard| *guard)
-        .unwrap_or_else(|_| {
-            error!("Failed to acquire is_simple_installation lock, assuming false");
-            false
-        })
+    read_from_state(
+        app_handle,
+        |state| &state.is_simple_installation,
+        false,
+        "Failed to acquire is_simple_installation lock, assuming false",
+    )
 }
 
 /// Gets the current settings from the app state
@@ -187,24 +190,55 @@ where
 
 /// Checks if installation is currently in progress
 pub fn is_installation_in_progress(app_handle: &AppHandle) -> bool {
-    let app_state = app_handle.state::<AppState>();
-    app_state
-        .is_installing
-        .lock()
-        .map(|guard| *guard)
-        .unwrap_or_else(|_| {
-            error!("Failed to acquire is_installing lock, assuming not installing");
-            false
-        })
+    read_from_state(
+        app_handle,
+        |state| &state.is_installing,
+        false,
+        "Failed to acquire is_installing lock, assuming not installing",
+    )
 }
 
 /// Sets the installation status
 pub fn set_installation_status(app_handle: &AppHandle, status: bool) -> Result<(), String> {
-    let app_state = app_handle.state::<AppState>();
-    let mut is_installing = app_state
-        .is_installing
-        .lock()
-        .map_err(|_| "Lock error".to_string())?;
-    *is_installing = status;
-    Ok(())
+    store_in_state(app_handle, |state| &state.is_installing, status)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn poisoned<T>(value: T) -> Mutex<T> {
+        let slot = Mutex::new(value);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = slot.lock().unwrap();
+            panic!("poison the mutex");
+        }));
+        assert!(slot.is_poisoned());
+        slot
+    }
+
+    #[test]
+    fn store_locked_replaces_value() {
+        let slot = Mutex::new(false);
+        assert_eq!(store_locked(&slot, true), Ok(()));
+        assert!(*slot.lock().unwrap());
+    }
+
+    #[test]
+    fn store_locked_reports_poisoned_mutex() {
+        let slot = poisoned(false);
+        assert_eq!(store_locked(&slot, true), Err("Lock error".to_string()));
+    }
+
+    #[test]
+    fn read_locked_returns_current_value() {
+        let slot = Mutex::new(Some(vec![1, 2]));
+        assert_eq!(read_locked(&slot, None, "unused"), Some(vec![1, 2]));
+    }
+
+    #[test]
+    fn read_locked_returns_fallback_when_poisoned() {
+        let slot = poisoned(true);
+        assert!(!read_locked(&slot, false, "poisoned"));
+    }
 }

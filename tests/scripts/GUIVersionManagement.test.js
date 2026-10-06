@@ -1,7 +1,14 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
+import { describe, it, before, after } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import {
+  startGUIApp,
+  stopGUIApp,
+  registerGUIFailureHooks,
+  expectWelcomePage,
+  openManageInstallations,
+} from "../helpers/guiTestHelpers.js";
 import { tGui } from "../helpers/i18n.js";
 import { By } from "selenium-webdriver";
 import fs from "fs";
@@ -19,87 +26,34 @@ export function runGUIVersionManagementTest({
   describe(`${id}- EIM GUI Version Management |`, () => {
     let eimRunner = null;
     let totalInstallations = 0;
-    let testStepFailed = false;
 
     // The setup function should start the EIM application GUI
     before(async function () {
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
-      try {
-        logger.info("Starting EIM application");
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+      logger.info("Starting EIM application");
+      await startGUIApp(eimRunner);
     });
 
-    // The beforeEach function should skip the next tests if the previous test failed
-    beforeEach(async function () {
-      this.timeout(10000);
-      if (testStepFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
-
-    // The afterEach function should log the EIM application GUI screenshot on failure
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-      if (this.currentTest.state === "failed") testStepFailed = true;
-    });
+    // Skip the next tests if the previous test failed and save a screenshot on failure
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner, skipTimeout: 10000 });
 
     // The tear down function should stop the EIM application GUI
     after(async function () {
       this.timeout(5000);
-      try {
-        await eimRunner.stop();
-        eimRunner = null;
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
+      if (await stopGUIApp(eimRunner)) eimRunner = null;
     });
 
     it("1- Should show welcome page", async function () {
       this.timeout(45000);
-      // Wait for the header to be presented
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      const header = await eimRunner.findByDataId("welcome-header", 25000);
-      expect(header, "Expected welcome header").to.not.be.false;
-      const text = await header.getText();
-      expect(text, "Expected welcome text").to.equal(
-        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
-      );
+      await expectWelcomePage(eimRunner, 10000);
     });
 
     it("2- Should show option to manage installations", async function () {
       this.timeout(10000);
-      const dashboardCard = await eimRunner.findByDataId(
-        "manage-versions-card"
-      );
-      expect(
-        dashboardCard,
-        "Expected dashboard card to be shown on welcome page"
-      ).to.not.be.false;
-      expect(await dashboardCard.getText()).to.include(
-        tGui("welcome.cards.manage.title")
-      );
-      const dashboardContent = await eimRunner.findByDataId(
-        "manage-versions-description"
-      );
-      const text = await dashboardContent.getText();
-      const numberMatch = text.match(/\d+/);
-      totalInstallations = numberMatch ? parseInt(numberMatch[0], 10) : 0;
-      expect(
-        totalInstallations,
-        "Expected at least one installation"
-      ).to.be.gte(1);
-      const click = await eimRunner.clickByDataId("manage-versions-button");
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      expect(click, "Expected to click on Open Dashboard button").to.be.true;
+      totalInstallations = await openManageInstallations(eimRunner, {
+        waitAfterClickMs: 1000,
+      });
     });
 
     it("3- Should show dashboard with installations", async function () {
