@@ -199,18 +199,13 @@ export default {
 }
 </script>
 
+<style scoped src="../styles/wizard-step-header.css"></style>
+
 <style scoped>
 .install-path {
   padding: 2rem;
   max-width: 800px;
   margin: 0 auto;
-}
-
-.title {
-  font-size: 27px;
-  font-family: 'Trueno-bold', sans-serif;
-  color: #374151;
-  margin-bottom: 0.5rem;
 }
 
 .path-card {
@@ -331,39 +326,6 @@ export default {
   border-top: 1px solid #e5e7eb;
   padding-top: 1.25rem;
 }
-
-.option-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.option-warning {
-  font-size: 0.8rem;
-  color: #92400e;
-  background: #fffbeb;
-  border-left: 4px solid #f59e0b;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin: 0;
-}
-
-.folder-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-left: 1.75rem;
-}
-
-.folder-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.folder-label {
-  font-size: 0.875rem;
-  color: #374151;
-  font-weight: 500;
-}
 </style>
+
+<style scoped src="../styles/advanced-path-options.css"></style>

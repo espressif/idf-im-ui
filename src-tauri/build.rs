@@ -1,7 +1,6 @@
 use std::{error::Error, process::Command};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     // Allow offline/sandboxed builds (e.g. Nix, distro packaging) to supply a
     // pre-fetched idf_versions.json instead of downloading it.
     println!("cargo:rerun-if-env-changed=EIM_IDF_VERSIONS_FILE");
