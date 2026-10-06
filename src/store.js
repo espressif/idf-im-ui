@@ -280,47 +280,49 @@ export const useAppStore = defineStore("app", {
   },
 });
 
+const createWizardData = () => ({
+  // Step 1: Prerequisites
+  prerequisites: {
+    checked: false,
+    allInstalled: false,
+    missing: [],
+  },
+
+  // Step 2: Installation Path
+  installPath: "",
+  useDefaultPath: true,
+
+  // Step 3: Version Selection
+  selectedVersions: [],
+  availableVersions: [],
+
+  // Step 4: Tools Selection
+  selectedTools: [],
+  availableTools: [],
+
+  // Step 5: Python Configuration
+  pythonPath: "",
+  pythonVersion: "",
+  useBundledPython: true,
+
+  // Step 6: Mirror Selection
+  mirrorUrl: "",
+  useDefaultMirror: true,
+
+  // Step 7: Additional Options
+  options: {
+    createShortcuts: true,
+    addToPath: true,
+    installExamples: true,
+    enableTelemetry: false,
+  },
+});
+
 export const useWizardStore = defineStore("wizard", {
   state: () => ({
     currentStep: 1,
     totalSteps: 10,
-    wizardData: {
-      // Step 1: Prerequisites
-      prerequisites: {
-        checked: false,
-        allInstalled: false,
-        missing: [],
-      },
-
-      // Step 2: Installation Path
-      installPath: "",
-      useDefaultPath: true,
-
-      // Step 3: Version Selection
-      selectedVersions: [],
-      availableVersions: [],
-
-      // Step 4: Tools Selection
-      selectedTools: [],
-      availableTools: [],
-
-      // Step 5: Python Configuration
-      pythonPath: "",
-      pythonVersion: "",
-      useBundledPython: true,
-
-      // Step 6: Mirror Selection
-      mirrorUrl: "",
-      useDefaultMirror: true,
-
-      // Step 7: Additional Options
-      options: {
-        createShortcuts: true,
-        addToPath: true,
-        installExamples: true,
-        enableTelemetry: false,
-      },
-    },
+    wizardData: createWizardData(),
   }),
 
   getters: {
@@ -432,28 +434,7 @@ export const useWizardStore = defineStore("wizard", {
     resetWizard() {
       this.currentStep = 1;
       this.wizardData = {
-        prerequisites: {
-          checked: false,
-          allInstalled: false,
-          missing: [],
-        },
-        installPath: "",
-        useDefaultPath: true,
-        selectedVersions: [],
-        availableVersions: [],
-        selectedTools: [],
-        availableTools: [],
-        pythonPath: "",
-        pythonVersion: "",
-        useBundledPython: true,
-        mirrorUrl: "",
-        useDefaultMirror: true,
-        options: {
-          createShortcuts: true,
-          addToPath: true,
-          installExamples: true,
-          enableTelemetry: false,
-        },
+        ...createWizardData(),
         configSummary: null,
       };
     },

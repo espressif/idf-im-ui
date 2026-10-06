@@ -385,231 +385,180 @@ fn check_tools_with_package_manager(
     tools: Vec<&'static str>,
     package_manager: Option<&'static str>,
 ) -> Result<Vec<&'static str>, String> {
+    match std::env::consts::OS {
+        "linux" => check_tools_linux(tools, package_manager),
+        "macos" => Ok(check_tools_macos(tools)),
+        "windows" => check_tools_windows(tools),
+        _ => Err(format!("Unsupported OS - {}", std::env::consts::OS)),
+    }
+}
+
+/// Returns the shell command prefix used to query whether a package is installed
+/// with the given Linux package manager, and whether a failed query should be logged.
+fn package_query_prefix(package_manager: Option<&str>) -> Option<(&'static str, bool)> {
+    match package_manager {
+        Some("apt") => Some(("apt list --installed | grep ", true)),
+        Some("dnf") => Some(("rpm -qa | grep -i ", false)),
+        Some("pacman") => Some(("pacman -Qs | grep ", false)),
+        Some("zypper") => Some(("zypper se --installed-only ", false)),
+        _ => None,
+    }
+}
+
+/// Returns true if the command ran and exited successfully, logging the outcome.
+fn command_succeeded(
+    tool: &str,
+    output: Result<std::process::Output, std::io::Error>,
+    log_failure: bool,
+) -> bool {
+    match output {
+        Ok(o) if o.status.success() => {
+            debug!("{} is already installed: {:?}", tool, o);
+            true
+        }
+        Ok(o) => {
+            if log_failure {
+                debug!("check for {} failed: {:?}", tool, o);
+            }
+            false
+        }
+        Err(_e) => false,
+    }
+}
+
+fn check_tools_linux(
+    tools: Vec<&'static str>,
+    package_manager: Option<&'static str>,
+) -> Result<Vec<&'static str>, String> {
     let mut list_of_required_tools = tools;
     let mut unsatisfied = vec![];
 
-    match std::env::consts::OS {
-        "linux" => {
-            // git needs to be checked separately
-            let output = command_executor::execute_command("git", &["--version"]);
-            match output {
-                Ok(output) => {
-                    if output.status.success() {
-                        debug!("git is already installed: {:?}", output);
-                        list_of_required_tools.retain(|&tool| tool != "git");
-                    } else {
-                        debug!("check for git failed: {:?}", output);
-                        unsatisfied.push("git");
-                    }
-                }
-                Err(_e) => {
-                    unsatisfied.push("git");
-                }
-            };
+    // git needs to be checked separately
+    match command_executor::execute_command("git", &["--version"]) {
+        Ok(output) if output.status.success() => {
+            debug!("git is already installed: {:?}", output);
+            list_of_required_tools.retain(|&tool| tool != "git");
+        }
+        Ok(output) => {
+            debug!("check for git failed: {:?}", output);
+            unsatisfied.push("git");
+        }
+        Err(_e) => {
+            unsatisfied.push("git");
+        }
+    };
 
-            // Check if tools are available using "command -v" via shell.
-            // We use "command -v" instead of "which" because "which" is an external
-            // binary that may not be installed on minimal Linux distributions
-            // (e.g. Fedora containers).
-            list_of_required_tools.retain(|&tool| {
-                match command_executor::execute_command(
-                    "sh",
-                    &["-c", &format!("command -v {}", tool)],
-                ) {
+    // Check if tools are available using "command -v" via shell.
+    // We use "command -v" instead of "which" because "which" is an external
+    // binary that may not be installed on minimal Linux distributions
+    // (e.g. Fedora containers).
+    list_of_required_tools.retain(|&tool| {
+        match command_executor::execute_command("sh", &["-c", &format!("command -v {}", tool)]) {
+            Ok(o) if o.status.success() => {
+                debug!("{} is already installed: {:?}", tool, o);
+                false // Tool found, so remove it from the list (don't retain).
+            }
+            Ok(o) => {
+                debug!("'command -v' check for {} failed: {:?}", tool, o);
+                true
+            }
+            Err(e) => {
+                debug!("'command -v' check for {} failed with error: {:?}", tool, e);
+                true
+            }
+        }
+    });
+
+    // now check if the tools are installed with the package manager
+    debug!("Using package manager: {:?}", package_manager);
+
+    let (prefix, log_failure) = package_query_prefix(package_manager)
+        .ok_or_else(|| "Unsupported package manager".to_string())?;
+    for tool in list_of_required_tools {
+        let output =
+            command_executor::execute_command("sh", &["-c", &format!("{}{}", prefix, tool)]);
+        if !command_succeeded(tool, output, log_failure) {
+            unsatisfied.push(tool);
+        }
+    }
+
+    Ok(unsatisfied)
+}
+
+fn check_tools_macos(tools: Vec<&'static str>) -> Vec<&'static str> {
+    let mut unsatisfied = vec![];
+    for tool in tools {
+        let output =
+            command_executor::execute_command("zsh", &["-c", &format!("command -v {}", tool)]);
+        match output {
+            Ok(o) if o.status.success() => {
+                debug!("{} is already installed: {:?}", tool, o);
+            }
+            Ok(o) => {
+                debug!("check for {} failed: {:?}", tool, o);
+                // check if the tool is installed with brew
+                match command_executor::execute_command("brew", &["list", tool]) {
                     Ok(o) if o.status.success() => {
-                        debug!("{} is already installed: {:?}", tool, o);
-                        false // Tool found, so remove it from the list (don't retain).
+                        debug!("{} is already installed with brew", tool);
                     }
-                    Ok(o) => {
-                        debug!("'command -v' check for {} failed: {:?}", tool, o);
-                        true
-                    }
-                    Err(e) => {
-                        debug!("'command -v' check for {} failed with error: {:?}", tool, e);
-                        true
-                    }
+                    _ => unsatisfied.push(tool),
                 }
-            });
-
-            // now check if the tools are installed with the package manager
-            debug!("Using package manager: {:?}", package_manager);
-
-            match package_manager {
-                Some("apt") => {
-                    for tool in list_of_required_tools {
-                        let output = command_executor::execute_command(
-                            "sh",
-                            &["-c", &format!("apt list --installed | grep {}", tool)],
-                        );
-                        match output {
-                            Ok(o) => {
-                                if o.status.success() {
-                                    debug!("{} is already installed: {:?}", tool, o);
-                                } else {
-                                    debug!("check for {} failed: {:?}", tool, o);
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                            Err(_e) => {
-                                unsatisfied.push(tool);
-                            }
-                        }
-                    }
-                }
-
-                Some("dnf") => {
-                    for tool in list_of_required_tools {
-                        let output = command_executor::execute_command(
-                            "sh",
-                            &["-c", &format!("rpm -qa | grep -i {}", tool)],
-                        );
-                        match output {
-                            Ok(o) => {
-                                if o.status.success() {
-                                    debug!("{} is already installed: {:?}", tool, o);
-                                } else {
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                            Err(_e) => {
-                                unsatisfied.push(tool);
-                            }
-                        }
-                    }
-                }
-                Some("pacman") => {
-                    for tool in list_of_required_tools {
-                        let output = command_executor::execute_command(
-                            "sh",
-                            &["-c", &format!("pacman -Qs | grep {}", tool)],
-                        );
-                        match output {
-                            Ok(o) => {
-                                if o.status.success() {
-                                    debug!("{} is already installed: {:?}", tool, o);
-                                } else {
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                            Err(_e) => {
-                                unsatisfied.push(tool);
-                            }
-                        }
-                    }
-                }
-                Some("zypper") => {
-                    for tool in list_of_required_tools {
-                        let output = command_executor::execute_command(
-                            "sh",
-                            &["-c", &format!("zypper se --installed-only {}", tool)],
-                        );
-                        match output {
-                            Ok(o) => {
-                                if o.status.success() {
-                                    debug!("{} is already installed: {:?}", tool, o);
-                                } else {
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                            Err(_e) => {
-                                unsatisfied.push(tool);
-                            }
-                        }
-                    }
-                }
-                _ => {
-                    return Err("Unsupported package manager".to_string());
-                }
+            }
+            Err(_e) => {
+                unsatisfied.push(tool);
             }
         }
-        "macos" => {
-            for tool in list_of_required_tools {
-                let output = command_executor::execute_command(
-                    "zsh",
-                    &["-c", &format!("command -v {}", tool)],
-                );
-                match output {
-                    Ok(o) => {
-                        if o.status.success() {
-                            debug!("{} is already installed: {:?}", tool, o);
-                        } else {
-                            debug!("check for {} failed: {:?}", tool, o);
-                            // check if the tool is installed with brew
-                            let output = command_executor::execute_command("brew", &["list", tool]);
-                            match output {
-                                Ok(o) => {
-                                    if o.status.success() {
-                                        debug!("{} is already installed with brew", tool);
-                                    } else {
-                                        unsatisfied.push(tool);
-                                    }
-                                }
-                                Err(_e) => {
-                                    unsatisfied.push(tool);
-                                }
-                            }
-                        }
-                    }
-                    Err(_e) => {
-                        unsatisfied.push(tool);
-                    }
-                }
-            }
-        }
-        "windows" => {
-            let executor = command_executor::get_executor();
+    }
+    unsatisfied
+}
 
-            // Verify that we can actually run PowerShell before any other test
-            const CANARY: &str = "IDF_SHELL_CANARY_OK";
-            match executor.run_script_from_string(&format!("Write-Output '{}'", CANARY)) {
-                Ok(o)
-                    if o.status.success()
-                        && String::from_utf8_lossy(&o.stdout).contains(CANARY) =>
-                {
-                    debug!("PowerShell execution verified successfully");
-                }
-                Ok(o) => {
-                    return Err(format!(
-                        "Unable to execute PowerShell to verify prerequisites: command ran but produced unexpected output (stdout: {:?}, stderr: {:?}). PowerShell may be restricted (e.g. by execution policy or group policy).",
-                        String::from_utf8_lossy(&o.stdout),
-                        String::from_utf8_lossy(&o.stderr)
-                    ));
-                }
-                Err(e) => {
-                    return Err(format!(
-                        "Unable to execute PowerShell to verify prerequisites: {}. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.",
-                        e
-                    ));
-                }
-            }
+fn check_tools_windows(tools: Vec<&'static str>) -> Result<Vec<&'static str>, String> {
+    let mut unsatisfied = vec![];
+    let executor = command_executor::get_executor();
 
-            for tool in list_of_required_tools {
-                // First try using where.exe which searches PATH
-                let output = executor.run_script_from_string(&format!(
-                    "where.exe {} 2>$null; if ($LASTEXITCODE -ne 0) {{ Get-Command {} -ErrorAction SilentlyContinue }}",
-                    tool, tool
-                ));
-                match output {
-                    Ok(o) => {
-                        // The probe swallows failures (`2>$null`, `-ErrorAction SilentlyContinue`),
-                        // so PowerShell exits with 0 even when the tool is missing. Only the printed
-                        // location tells us it was actually found.
-                        let stdout = String::from_utf8_lossy(&o.stdout);
-                        if o.status.success() && !stdout.trim().is_empty() {
-                            debug!("{} is already installed: {:?}", tool, o);
-                        } else {
-                            debug!("check for {} failed: {:?}", tool, o);
-                            unsatisfied.push(tool);
-                        }
-                    }
-                    Err(_e) => {
-                        unsatisfied.push(tool);
-                    }
+    // Verify that we can actually run PowerShell before any other test
+    const CANARY: &str = "IDF_SHELL_CANARY_OK";
+    match executor.run_script_from_string(&format!("Write-Output '{}'", CANARY)) {
+        Ok(o) if o.status.success() && String::from_utf8_lossy(&o.stdout).contains(CANARY) => {
+            debug!("PowerShell execution verified successfully");
+        }
+        Ok(o) => {
+            return Err(format!(
+                "Unable to execute PowerShell to verify prerequisites: command ran but produced unexpected output (stdout: {:?}, stderr: {:?}). PowerShell may be restricted (e.g. by execution policy or group policy).",
+                String::from_utf8_lossy(&o.stdout),
+                String::from_utf8_lossy(&o.stderr)
+            ));
+        }
+        Err(e) => {
+            return Err(format!(
+                "Unable to execute PowerShell to verify prerequisites: {}. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.",
+                e
+            ));
+        }
+    }
+
+    for tool in tools {
+        // First try using where.exe which searches PATH
+        let output = executor.run_script_from_string(&format!(
+            "where.exe {} 2>$null; if ($LASTEXITCODE -ne 0) {{ Get-Command {} -ErrorAction SilentlyContinue }}",
+            tool, tool
+        ));
+        match output {
+            Ok(o) => {
+                // The probe swallows failures (`2>$null`, `-ErrorAction SilentlyContinue`),
+                // so PowerShell exits with 0 even when the tool is missing. Only the printed
+                // location tells us it was actually found.
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                if o.status.success() && !stdout.trim().is_empty() {
+                    debug!("{} is already installed: {:?}", tool, o);
+                } else {
+                    debug!("check for {} failed: {:?}", tool, o);
+                    unsatisfied.push(tool);
                 }
             }
-        }
-        _ => {
-            return Err(format!("Unsupported OS - {}", std::env::consts::OS));
+            Err(_e) => {
+                unsatisfied.push(tool);
+            }
         }
     }
 
@@ -1029,12 +978,16 @@ pub async fn install_git(
     tools_dir: PathBuf,
     progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
 ) -> anyhow::Result<PathBuf> {
-    match std::env::consts::OS {
-        "windows" => {
-            let git_exe = download_git(tools_dir.clone(), progress_sender).await?;
-            install_git_from_downloaded(tools_dir, Some(git_exe)).await
-        }
-        _ => Err(anyhow!("install_git is only supported on Windows")),
+    ensure_windows("install_git")?;
+    let git_exe = download_git(tools_dir.clone(), progress_sender).await?;
+    install_git_from_downloaded(tools_dir, Some(git_exe)).await
+}
+
+fn ensure_windows(function_name: &str) -> anyhow::Result<()> {
+    if std::env::consts::OS == "windows" {
+        Ok(())
+    } else {
+        Err(anyhow!("{} is only supported on Windows", function_name))
     }
 }
 
@@ -1159,32 +1112,7 @@ pub async fn install_python_from_downloaded(
 /// Returns an error if python.exe is not found, or if it's found directly in tools_dir
 /// (not in a subdirectory) which would indicate an unexpected extraction pattern.
 fn find_python_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
-    // Look for python.exe in subdirectories of tools_dir
-    let found = find_by_name_and_extension(tools_dir, "python", "exe");
-
-    if let Some(python_exe_path) = found.first() {
-        let python_exe = PathBuf::from(python_exe_path);
-        let python_dir = python_exe
-            .parent()
-            .map(|p| p.to_path_buf())
-            .ok_or_else(|| anyhow!("Failed to get parent directory of python.exe"))?;
-
-        // python.exe should NOT be directly in tools_dir - it should be in a subdirectory
-        if python_dir == *tools_dir {
-            return Err(anyhow!(
-                "python.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
-                tools_dir.display()
-            ));
-        }
-
-        debug!("Found Python installation at: {}", python_dir.display());
-        Ok(python_dir)
-    } else {
-        Err(anyhow!(
-            "python.exe not found in {}. Python installation may have failed.",
-            tools_dir.display()
-        ))
-    }
+    find_exe_install_dir(tools_dir, "python", "Python")
 }
 
 /// Finds the Git installation directory by looking for git.exe in subdirectories.
@@ -1198,32 +1126,47 @@ fn find_python_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
 /// Returns an error if git.exe is not found, or if it's found directly in tools_dir
 /// (not in a subdirectory) which would indicate an unexpected extraction pattern.
 fn find_git_install_dir(tools_dir: &PathBuf) -> anyhow::Result<PathBuf> {
-    // Look for git.exe in subdirectories of tools_dir
-    let found = find_by_name_and_extension(tools_dir, "git", "exe");
+    find_exe_install_dir(tools_dir, "git", "Git")
+}
 
-    if let Some(git_exe_path) = found.first() {
-        let git_exe = PathBuf::from(git_exe_path);
-        let git_dir = git_exe
-            .parent()
-            .map(|p| p.to_path_buf())
-            .ok_or_else(|| anyhow!("Failed to get parent directory of git.exe"))?;
+/// Finds the directory containing `<exe_name>.exe` somewhere below `tools_dir`.
+///
+/// Returns an error if the executable is not found, or if it's found directly in
+/// `tools_dir` (not in a subdirectory), which indicates an unexpected extraction pattern.
+fn find_exe_install_dir(
+    tools_dir: &PathBuf,
+    exe_name: &str,
+    display_name: &str,
+) -> anyhow::Result<PathBuf> {
+    let found = find_by_name_and_extension(tools_dir, exe_name, "exe");
 
-        // git.exe should NOT be directly in tools_dir - it should be in a subdirectory
-        if git_dir == *tools_dir {
-            return Err(anyhow!(
-                "git.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
-                tools_dir.display()
-            ));
-        }
+    let Some(exe_path) = found.first() else {
+        return Err(anyhow!(
+            "{}.exe not found in {}. {} installation may have failed.",
+            exe_name,
+            tools_dir.display(),
+            display_name
+        ));
+    };
+    let exe_dir = PathBuf::from(exe_path)
+        .parent()
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| anyhow!("Failed to get parent directory of {}.exe", exe_name))?;
 
-        debug!("Found Git installation at: {}", git_dir.display());
-        Ok(git_dir)
-    } else {
-        Err(anyhow!(
-            "git.exe not found in {}. Git installation may have failed.",
+    if exe_dir == *tools_dir {
+        return Err(anyhow!(
+            "{}.exe found directly in tools_dir ({}), expected it to be in a subdirectory. Archive extraction may have unexpected structure.",
+            exe_name,
             tools_dir.display()
-        ))
+        ));
     }
+
+    debug!(
+        "Found {} installation at: {}",
+        display_name,
+        exe_dir.display()
+    );
+    Ok(exe_dir)
 }
 
 /// Installs Python from the official standalone distribution for Windows.
@@ -1244,13 +1187,9 @@ pub async fn install_python(
     tools_dir: PathBuf,
     progress_sender: Option<std::sync::mpsc::Sender<crate::DownloadProgress>>,
 ) -> anyhow::Result<PathBuf> {
-    match std::env::consts::OS {
-        "windows" => {
-            let python_archive = download_python(tools_dir.clone(), progress_sender).await?;
-            install_python_from_downloaded(tools_dir, Some(python_archive)).await
-        }
-        _ => Err(anyhow!("install_python is only supported on Windows")),
-    }
+    ensure_windows("install_python")?;
+    let python_archive = download_python(tools_dir.clone(), progress_sender).await?;
+    install_python_from_downloaded(tools_dir, Some(python_archive)).await
 }
 
 /// Adds Python directories to the current process PATH and user registry PATH.
@@ -1343,141 +1282,87 @@ pub async fn install_prerequisites(
 ) -> Result<(), String> {
     match std::env::consts::OS {
         "linux" => {
-            let package_manager = determine_package_manager();
-            match package_manager {
-                Some("apt") => {
-                    for package in packages_list {
-                        let pkg = package.to_string();
-                        let output = tokio::task::spawn_blocking(move || {
-                            command_executor::execute_command_direct(
-                                "sudo",
-                                &["apt", "install", "-y", &pkg],
-                            )
-                        })
-                        .await
-                        .map_err(|e| format!("Task join error: {}", e))?;
-                        match output {
-                            Ok(_) => {
-                                debug!("Successfully installed {}", package);
-                            }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
-                        }
-                    }
-                }
-                Some("dnf") => {
-                    for package in packages_list {
-                        let pkg = package.to_string();
-                        let output = tokio::task::spawn_blocking(move || {
-                            command_executor::execute_command_direct(
-                                "sudo",
-                                &["dnf", "install", "-y", &pkg],
-                            )
-                        })
-                        .await
-                        .map_err(|e| format!("Task join error: {}", e))?;
-                        match output {
-                            Ok(_) => {
-                                debug!("Successfully installed {}", package);
-                            }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
-                        }
-                    }
-                }
-                Some("pacman") => {
-                    for package in packages_list {
-                        let pkg = package.to_string();
-                        let output = tokio::task::spawn_blocking(move || {
-                            command_executor::execute_command_direct(
-                                "sudo",
-                                &["pacman", "-S", "--noconfirm", &pkg],
-                            )
-                        })
-                        .await
-                        .map_err(|e| format!("Task join error: {}", e))?;
-                        match output {
-                            Ok(_) => {
-                                debug!("Successfully installed {}", package);
-                            }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
-                        }
-                    }
-                }
-                Some("zypper") => {
-                    for package in packages_list {
-                        let pkg = package.to_string();
-                        let output = tokio::task::spawn_blocking(move || {
-                            command_executor::execute_command_direct(
-                                "sudo",
-                                &["zypper", "install", "-y", &pkg],
-                            )
-                        })
-                        .await
-                        .map_err(|e| format!("Task join error: {}", e))?;
-                        match output {
-                            Ok(_) => {
-                                debug!("Successfully installed {}", package);
-                            }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
-                        }
-                    }
-                }
-                _ => {
-                    return Err("Unsupported package manager".to_string());
-                }
-            }
+            let install_args = linux_install_args(determine_package_manager())
+                .ok_or_else(|| "Unsupported package manager".to_string())?;
+            install_packages_with("sudo", install_args, packages_list).await
         }
-        "macos" => {
-            for package in packages_list {
-                let pkg = package.to_string();
-                let output = tokio::task::spawn_blocking(move || {
-                    command_executor::execute_command_direct("brew", &["install", &pkg])
-                })
-                .await
-                .map_err(|e| format!("Task join error: {}", e))?;
-                match output {
-                    Ok(_) => {
-                        debug!("Successfully installed {}", package);
-                    }
-                    Err(e) => panic!("Failed to install {}: {}", package, e),
-                }
-            }
-        }
-        "windows" => {
-            // Ensure tools directory exists
-            if !tools_dir.exists() {
-                std::fs::create_dir_all(&tools_dir)
-                    .map_err(|e| format!("Failed to create tools directory: {}", e))?;
-            }
+        "macos" => install_packages_with("brew", &["install"], packages_list).await,
+        "windows" => install_windows_prerequisites(packages_list, tools_dir).await,
+        _ => Err(format!("Unsupported OS - {}", std::env::consts::OS)),
+    }
+}
 
-            for package in packages_list {
-                if package.starts_with("python") {
-                    match install_python(tools_dir.clone(), None).await {
-                        Ok(install_path) => {
-                            debug!("Successfully installed python to {:?}", install_path);
-                        }
-                        Err(e) => {
-                            return Err(format!("Failed to install python: {}", e));
-                        }
-                    }
-                } else if package == "git" {
-                    match install_git(tools_dir.clone(), None).await {
-                        Ok(install_path) => {
-                            debug!("Successfully installed git to {:?}", install_path);
-                        }
-                        Err(e) => {
-                            return Err(format!("Failed to install git: {}", e));
-                        }
-                    }
-                } else {
-                    return Err(format!(
-                        "Unsupported package on Windows: '{}'. Only 'git' and 'python*' are supported.",
-                        package
-                    ));
+/// Returns the `sudo` arguments (without the package name) used to install a
+/// package with the given Linux package manager.
+fn linux_install_args(package_manager: Option<&str>) -> Option<&'static [&'static str]> {
+    match package_manager {
+        Some("apt") => Some(&["apt", "install", "-y"]),
+        Some("dnf") => Some(&["dnf", "install", "-y"]),
+        Some("pacman") => Some(&["pacman", "-S", "--noconfirm"]),
+        Some("zypper") => Some(&["zypper", "install", "-y"]),
+        _ => None,
+    }
+}
+
+/// Installs each package by running `program <base_args..> <package>`, panicking on failure.
+async fn install_packages_with(
+    program: &'static str,
+    base_args: &'static [&'static str],
+    packages_list: Vec<String>,
+) -> Result<(), String> {
+    for package in packages_list {
+        let pkg = package.to_string();
+        let output = tokio::task::spawn_blocking(move || {
+            let mut args = base_args.to_vec();
+            args.push(&pkg);
+            command_executor::execute_command_direct(program, &args)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))?;
+        match output {
+            Ok(_) => {
+                debug!("Successfully installed {}", package);
+            }
+            Err(e) => panic!("Failed to install {}: {}", package, e),
+        }
+    }
+    Ok(())
+}
+
+async fn install_windows_prerequisites(
+    packages_list: Vec<String>,
+    tools_dir: PathBuf,
+) -> Result<(), String> {
+    // Ensure tools directory exists
+    if !tools_dir.exists() {
+        std::fs::create_dir_all(&tools_dir)
+            .map_err(|e| format!("Failed to create tools directory: {}", e))?;
+    }
+
+    for package in packages_list {
+        if package.starts_with("python") {
+            match install_python(tools_dir.clone(), None).await {
+                Ok(install_path) => {
+                    debug!("Successfully installed python to {:?}", install_path);
+                }
+                Err(e) => {
+                    return Err(format!("Failed to install python: {}", e));
                 }
             }
-        }
-        _ => {
-            return Err(format!("Unsupported OS - {}", std::env::consts::OS));
+        } else if package == "git" {
+            match install_git(tools_dir.clone(), None).await {
+                Ok(install_path) => {
+                    debug!("Successfully installed git to {:?}", install_path);
+                }
+                Err(e) => {
+                    return Err(format!("Failed to install git: {}", e));
+                }
+            }
+        } else {
+            return Err(format!(
+                "Unsupported package on Windows: '{}'. Only 'git' and 'python*' are supported.",
+                package
+            ));
         }
     }
     Ok(())
@@ -1808,6 +1693,134 @@ mod tests {
             err_msg.contains("Unsupported package manager"),
             "Expected error message to contain 'Unsupported package manager', got: {}",
             err_msg
+        );
+    }
+
+    #[test]
+    fn test_package_query_prefix() {
+        assert_eq!(
+            package_query_prefix(Some("apt")),
+            Some(("apt list --installed | grep ", true))
+        );
+        assert_eq!(
+            package_query_prefix(Some("dnf")),
+            Some(("rpm -qa | grep -i ", false))
+        );
+        assert_eq!(
+            package_query_prefix(Some("pacman")),
+            Some(("pacman -Qs | grep ", false))
+        );
+        assert_eq!(
+            package_query_prefix(Some("zypper")),
+            Some(("zypper se --installed-only ", false))
+        );
+        assert_eq!(package_query_prefix(Some("unknown_pm")), None);
+        assert_eq!(package_query_prefix(None), None);
+    }
+
+    #[test]
+    fn test_linux_install_args() {
+        assert_eq!(
+            linux_install_args(Some("apt")),
+            Some(&["apt", "install", "-y"][..])
+        );
+        assert_eq!(
+            linux_install_args(Some("dnf")),
+            Some(&["dnf", "install", "-y"][..])
+        );
+        assert_eq!(
+            linux_install_args(Some("pacman")),
+            Some(&["pacman", "-S", "--noconfirm"][..])
+        );
+        assert_eq!(
+            linux_install_args(Some("zypper")),
+            Some(&["zypper", "install", "-y"][..])
+        );
+        assert_eq!(linux_install_args(Some("brew")), None);
+        assert_eq!(linux_install_args(None), None);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_command_succeeded() {
+        use std::os::unix::process::ExitStatusExt;
+        let output = |code: i32| std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: vec![],
+            stderr: vec![],
+        };
+        assert!(command_succeeded("git", Ok(output(0)), true));
+        assert!(!command_succeeded("git", Ok(output(1)), true));
+        assert!(!command_succeeded("git", Ok(output(1)), false));
+        assert!(!command_succeeded(
+            "git",
+            Err(std::io::Error::other("not found")),
+            false
+        ));
+    }
+
+    #[test]
+    fn test_ensure_windows() {
+        let result = ensure_windows("install_git");
+        if std::env::consts::OS == "windows" {
+            assert!(result.is_ok());
+        } else {
+            assert_eq!(
+                result.unwrap_err().to_string(),
+                "install_git is only supported on Windows"
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_exe_install_dir_in_subdirectory() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let sub = tmp.path().join("python3.11");
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join("python.exe"), b"").unwrap();
+
+        let found = find_python_install_dir(&tmp.path().to_path_buf()).unwrap();
+        assert_eq!(found, sub);
+    }
+
+    #[test]
+    fn test_find_exe_install_dir_directly_in_tools_dir() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        fs::write(tmp.path().join("git.exe"), b"").unwrap();
+
+        let err = find_git_install_dir(&tmp.path().to_path_buf())
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.starts_with("git.exe found directly in tools_dir"),
+            "{}",
+            err
+        );
+    }
+
+    #[test]
+    fn test_find_exe_install_dir_not_found() {
+        let tmp = tempfile::TempDir::new().unwrap();
+
+        let err = find_git_install_dir(&tmp.path().to_path_buf())
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            err,
+            format!(
+                "git.exe not found in {}. Git installation may have failed.",
+                tmp.path().display()
+            )
+        );
+        let err = find_python_install_dir(&tmp.path().to_path_buf())
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            err,
+            format!(
+                "python.exe not found in {}. Python installation may have failed.",
+                tmp.path().display()
+            )
         );
     }
 }

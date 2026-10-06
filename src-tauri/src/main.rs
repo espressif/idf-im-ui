@@ -9,7 +9,6 @@ pub mod gui;
 
 #[cfg(feature = "cli")]
 use clap::Parser;
-#[cfg(feature = "cli")]
 use log::{debug, info};
 #[cfg(feature = "cli")]
 pub mod cli;
@@ -40,7 +39,7 @@ fn set_locale(locale: &Option<String>) {
     }
 }
 
-#[cfg(all(target_os = "windows", feature = "cli"))]
+#[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
 fn has_console() -> bool {
     use winapi::um::handleapi::INVALID_HANDLE_VALUE;
     use winapi::um::processenv::GetStdHandle;
@@ -52,13 +51,13 @@ fn has_console() -> bool {
     }
 }
 
-#[cfg(all(target_os = "windows", feature = "cli"))]
+#[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
 fn attach_console() -> bool {
     use winapi::um::wincon::{AttachConsole, ATTACH_PARENT_PROCESS};
     unsafe { AttachConsole(ATTACH_PARENT_PROCESS) != 0 }
 }
 
-#[cfg(all(target_os = "windows", feature = "cli"))]
+#[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
 fn detach_console() {
     use winapi::um::wincon::{FreeConsole, ATTACH_PARENT_PROCESS};
     unsafe {
@@ -94,7 +93,7 @@ fn setup_interactive_console() -> bool {
     true
 }
 
-#[cfg(all(target_os = "windows", feature = "cli"))]
+#[cfg(all(target_os = "windows", feature = "gui", feature = "cli"))]
 fn is_interactive_command() -> bool {
     let args: Vec<String> = std::env::args().collect();
     if args.len() <= 1 {
@@ -150,50 +149,52 @@ async fn main() {
     #[cfg(not(feature = "cli"))]
     {
         set_locale(&None);
-        gui::run(None);
+        gui::run(None, None, false);
     }
-    // both GUI and CLI features are enabled
-    #[cfg(target_os = "windows")]
-    let mut console_attached_or_allocated = false;
-
-    #[cfg(target_os = "windows")]
+    #[cfg(all(feature = "gui", feature = "cli"))]
     {
-        // Kept inside the Windows block: a `has_args` binding outside it is dead
-        // on every other platform, which makes `unused_variables` fire there.
-        let has_args = std::env::args().len() > 1;
-        if has_args {
-            let has_existing_console = has_console();
-            if !has_existing_console {
-                let attached = attach_console();
-                if !attached {
-                    unsafe {
-                        winapi::um::consoleapi::AllocConsole();
+        #[cfg(target_os = "windows")]
+        let mut console_attached_or_allocated = false;
+
+        #[cfg(target_os = "windows")]
+        {
+            // Kept inside the Windows block: a `has_args` binding outside it is dead
+            // on every other platform, which makes `unused_variables` fire there.
+            let has_args = std::env::args().len() > 1;
+            if has_args {
+                let has_existing_console = has_console();
+                if !has_existing_console {
+                    let attached = attach_console();
+                    if !attached {
+                        unsafe {
+                            winapi::um::consoleapi::AllocConsole();
+                            console_attached_or_allocated = true;
+                        }
+                    } else {
                         console_attached_or_allocated = true;
                     }
-                } else {
-                    console_attached_or_allocated = true;
                 }
             }
         }
-    }
-    let cli = cli::cli_args::Cli::parse();
-    set_locale(&cli.locale);
+        let cli = cli::cli_args::Cli::parse();
+        set_locale(&cli.locale);
 
-    let result = cli::run_cli(cli).await; // Run the GUI by default if no arguments are provided
+        let result = cli::run_cli(cli).await; // Run the GUI by default if no arguments are provided
 
-    #[cfg(target_os = "windows")]
-    if console_attached_or_allocated {
-        println!("Pressing Enter to exit...");
-        detach_console();
-    } else {
-        debug!("This is the end...");
-    }
-    idf_im_lib::telemetry::flush(std::time::Duration::from_secs(3)).await;
-    match result {
-        Ok(_) => std::process::exit(0),
-        Err(e) => {
-            eprintln!("Error executing CLI: {}", e);
-            std::process::exit(1);
+        #[cfg(target_os = "windows")]
+        if console_attached_or_allocated {
+            println!("Pressing Enter to exit...");
+            detach_console();
+        } else {
+            debug!("This is the end...");
+        }
+        idf_im_lib::telemetry::flush(std::time::Duration::from_secs(3)).await;
+        match result {
+            Ok(_) => std::process::exit(0),
+            Err(e) => {
+                eprintln!("Error executing CLI: {}", e);
+                std::process::exit(1);
+            }
         }
     }
 }

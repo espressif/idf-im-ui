@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use gix::bstr::{BString, ByteSlice};
+use gix::error::ErrorExt;
 use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit};
 use gix::refs::Target;
 use log::{debug, error, info, trace, warn};
@@ -32,20 +33,24 @@ pub fn checkout_with_git_cli(
     dest_path: &Path,
     commit_sha: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let checkout_result = execute_command_with_dir(
-        "git",
+    run_git_checked(
         &["checkout", commit_sha],
         dest_path.to_str().unwrap(),
-    )?;
+        "git checkout",
+    )
+}
 
-    if !checkout_result.status.success() {
+/// Runs `git <args>` in `dir` and turns a non-zero exit into `"<what> failed: <stderr>"`.
+fn run_git_checked(args: &[&str], dir: &str, what: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let output = execute_command_with_dir("git", args, dir)?;
+    if !output.status.success() {
         return Err(format!(
-            "git checkout failed: {}",
-            String::from_utf8_lossy(&checkout_result.stderr)
+            "{} failed: {}",
+            what,
+            String::from_utf8_lossy(&output.stderr)
         )
         .into());
     }
-
     Ok(())
 }
 
@@ -90,66 +95,45 @@ pub fn fetch_single_commit_git_cli(
     tx: &Option<Sender<ProgressMessage>>,
     submodule_name: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    fn send_progress(
-        tx: &Option<Sender<ProgressMessage>>,
-        submodule_name: Option<&str>,
-        progress: u8,
-    ) {
+    fetch_commit_with_git_cli(dest_path, url, commit_sha, &|progress| {
         if let (Some(tx), Some(submodule_name)) = (tx, submodule_name) {
             let _ = tx.send(ProgressMessage::SubmoduleUpdate((
                 submodule_name.to_string(),
                 progress as u64,
             )));
         }
-    }
+    })
+}
 
+/// Initializes `dest_path` if needed, shallow-fetches `commit_sha` (falling back to the
+/// default branch) and checks it out, reporting milestones 10 / 10-80 / 80 / 100.
+fn fetch_commit_with_git_cli(
+    dest_path: &Path,
+    url: &str,
+    commit_sha: &str,
+    report: &dyn Fn(u8),
+) -> Result<(), Box<dyn std::error::Error>> {
     if !dest_path.join(".git").exists() {
         std::fs::create_dir_all(dest_path)?;
-
-        let init_result = execute_command_with_dir("git", &["init"], dest_path.to_str().unwrap())?;
-
-        if !init_result.status.success() {
-            return Err(format!(
-                "git init failed: {}",
-                String::from_utf8_lossy(&init_result.stderr)
-            )
-            .into());
-        }
-
-        let remote_result = execute_command_with_dir(
-            "git",
-            &["remote", "add", "origin", url],
-            dest_path.to_str().unwrap(),
-        )?;
-
-        if !remote_result.status.success() {
-            return Err(format!(
-                "git remote add failed: {}",
-                String::from_utf8_lossy(&remote_result.stderr)
-            )
-            .into());
-        }
+        let dir = dest_path.to_str().unwrap();
+        run_git_checked(&["init"], dir, "git init")?;
+        run_git_checked(&["remote", "add", "origin", url], dir, "git remote add")?;
     }
 
     // 10% - Initialized
-    send_progress(tx, submodule_name, 10);
+    report(10);
 
-    // Fetch with progress parsing from stderr
     let mut child = spawn_with_dir(
         "git",
         &["fetch", "--depth", "1", "--progress", "origin", commit_sha],
         dest_path.to_str().unwrap(),
     )?;
 
-    // Parse progress from git's stderr
     if let Some(stderr) = child.stderr.take() {
         let reader = BufReader::new(stderr);
         for line in reader.lines().map_while(Result::ok) {
-            // Git outputs progress like: "Receiving objects:  45% (123/456)"
             if let Some(percentage) = parse_git_progress(&line) {
-                // Scale git's 0-100% to our 10-80% range
-                let scaled = 10 + ((percentage as u8) * 70 / 100);
-                send_progress(tx, submodule_name, scaled);
+                report(scale_fetch_progress(percentage));
             }
         }
     }
@@ -157,34 +141,31 @@ pub fn fetch_single_commit_git_cli(
     let status = child.wait()?;
 
     if !status.success() {
-        // Fallback: fetch default branch
         debug!("Direct SHA fetch failed, trying default branch");
-
-        let fallback_result = execute_command_with_dir(
-            "git",
+        run_git_checked(
             &["fetch", "--depth", "1", "origin"],
             dest_path.to_str().unwrap(),
+            "git fetch",
         )?;
-
-        if !fallback_result.status.success() {
-            return Err(format!(
-                "git fetch failed: {}",
-                String::from_utf8_lossy(&fallback_result.stderr)
-            )
-            .into());
-        }
     }
 
     // 80% - Fetched
-    send_progress(tx, submodule_name, 80);
+    report(80);
 
-    // Checkout
     checkout_with_git_cli(dest_path, commit_sha)?;
 
     // 100% - Complete
-    send_progress(tx, submodule_name, 100);
+    report(100);
 
     Ok(())
+}
+
+/// Scales git's 0-100% fetch progress into the 10-80% band.
+///
+/// The arithmetic is done in `u8`, so inputs above 3 overflow (panic in debug builds,
+/// wrap in release builds).
+fn scale_fetch_progress(percentage: u64) -> u8 {
+    10 + ((percentage as u8) * 70 / 100)
 }
 
 /// Parses a line of `git fetch` stderr output to extract a progress percentage.
@@ -225,139 +206,6 @@ fn parse_git_progress(line: &str) -> Option<u64> {
     let end_pos = percent_part.find(' ')?;
     let percentage_str = &percent_part[..end_pos].replace("%", "");
     percentage_str.parse::<u64>().ok()
-}
-
-/// A public test wrapper for the private `parse_git_progress` function.
-///
-/// This function exposes the functionality of `parse_git_progress` for use in tests
-/// or other modules, without making the original function public.
-///
-/// # Arguments
-///
-/// * `line` - A string slice representing a single line from git's stderr.
-///
-/// # Returns
-///
-/// * The result of `parse_git_progress(line)`.
-pub fn parse_git_progress_test(line: &str) -> Option<u64> {
-    parse_git_progress(line)
-}
-
-/// Clones or updates a git submodule to a specific commit with progress reporting.
-///
-/// This function uses the `git` command-line tool to perform the operations. It initializes
-/// the submodule repository if it doesn't exist, fetches the specific commit with a shallow
-/// depth, and then checks it out. Progress is reported through the provided sender.
-///
-/// # Arguments
-///
-/// * `submodule_name` - The name of the submodule.
-/// * `url` - The URL of the submodule's repository.
-/// * `commit_sha` - The commit SHA to check out.
-/// * `dest_path` - The local path where the submodule should be cloned/updated.
-/// * `tx` - A sender for reporting progress as `(String, u8)` tuples (submodule name, percentage).
-///
-/// # Returns
-///
-/// * `Ok(())` on success.
-/// * `Err` if any of the git operations fail.
-pub fn clone_or_update_submodule(
-    submodule_name: &str,
-    url: &str,
-    commit_sha: &str,
-    dest_path: &Path,
-    tx: std::sync::mpsc::Sender<(String, u8)>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    fn send_progress(
-        tx: &std::sync::mpsc::Sender<(String, u8)>,
-        submodule_name: &str,
-        progress: u8,
-    ) {
-        let _ = tx.send((submodule_name.to_string(), progress));
-    }
-
-    if !dest_path.join(".git").exists() {
-        std::fs::create_dir_all(dest_path)?;
-
-        let init_result = execute_command_with_dir("git", &["init"], dest_path.to_str().unwrap())?;
-
-        if !init_result.status.success() {
-            return Err(format!(
-                "git init failed: {}",
-                String::from_utf8_lossy(&init_result.stderr)
-            )
-            .into());
-        }
-
-        let remote_result = execute_command_with_dir(
-            "git",
-            &["remote", "add", "origin", url],
-            dest_path.to_str().unwrap(),
-        )?;
-
-        if !remote_result.status.success() {
-            return Err(format!(
-                "git remote add failed: {}",
-                String::from_utf8_lossy(&remote_result.stderr)
-            )
-            .into());
-        }
-    }
-
-    // 10% - Initialized
-    send_progress(&tx, submodule_name, 10);
-
-    // Fetch with progress parsing from stderr
-    let mut child = spawn_with_dir(
-        "git",
-        &["fetch", "--depth", "1", "--progress", "origin", commit_sha],
-        dest_path.to_str().unwrap(),
-    )?;
-
-    // Parse progress from git's stderr
-    if let Some(stderr) = child.stderr.take() {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().map_while(Result::ok) {
-            // Git outputs progress like: "Receiving objects:  45% (123/456)"
-            if let Some(percentage) = parse_git_progress(&line) {
-                // Scale git's 0-100% to our 10-80% range
-                let scaled = 10 + ((percentage as u8) * 70 / 100);
-                send_progress(&tx, submodule_name, scaled);
-            }
-        }
-    }
-
-    let status = child.wait()?;
-
-    if !status.success() {
-        // Fallback: fetch default branch
-        debug!("Direct SHA fetch failed, trying default branch");
-
-        let fallback_result = execute_command_with_dir(
-            "git",
-            &["fetch", "--depth", "1", "origin"],
-            dest_path.to_str().unwrap(),
-        )?;
-
-        if !fallback_result.status.success() {
-            return Err(format!(
-                "git fetch failed: {}",
-                String::from_utf8_lossy(&fallback_result.stderr)
-            )
-            .into());
-        }
-    }
-
-    // 80% - Fetched
-    send_progress(&tx, submodule_name, 80);
-
-    // Checkout
-    checkout_with_git_cli(dest_path, commit_sha)?;
-
-    // 100% - Complete
-    send_progress(&tx, submodule_name, 100);
-
-    Ok(())
 }
 
 /// A helper function to send progress updates via an optional `Sender`.
@@ -406,21 +254,13 @@ pub fn clone_repository(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let dest_path = PathBuf::from(&options.path);
 
-    // Configure shallow clone
-    let shallow = if options.shallow {
-        match &options.reference {
-            GitReference::Commit(_) => gix::remote::fetch::Shallow::NoChange,
-            _ => gix::remote::fetch::Shallow::DepthAtRemote(std::num::NonZeroU32::new(1).unwrap()),
-        }
-    } else {
-        gix::remote::fetch::Shallow::NoChange
-    };
+    let shallow = clone_shallow_mode(options.shallow, &options.reference);
 
     let should_interrupt = &AtomicBool::new(false);
     let progress = gix::progress::Discard;
 
     // Prepare clone - parse URL once, will be cloned inside retry closure
-    let url = gix::url::parse(options.url.as_str().into())?;
+    let url = gix::url::parse(options.url.as_str()).map_err(gix::Error::from)?;
 
     info!("Cloning repository from {:?}", options);
 
@@ -434,42 +274,13 @@ pub fn clone_repository(
                 let _ = std::fs::remove_dir_all(&dest_path);
             }
             std::fs::create_dir_all(&dest_path).ok();
-
-            // Create fresh clone handle on each retry to get new TCP connection
-            // Clone url and shallow since they can't be moved into FnMut closure multiple times
-            let shallow_clone = shallow.clone();
-            let fresh_prepare = gix::prepare_clone(url.clone(), &dest_path)
-                .map_err(|e| format!("Failed to prepare clone: {}", e))?
-                .with_remote_name("origin")
-                .map_err(|e| format!("Failed to set remote name: {}", e))?
-                .with_shallow(shallow_clone);
-
-            // Re-apply refspec configuration for each attempt
-            let mut configured_prepare = match &options.reference {
-                GitReference::Branch(branch) => {
-                    let refspec = format!("+refs/heads/{}:refs/remotes/origin/{}", branch, branch);
-                    fresh_prepare.configure_remote(move |remote| {
-                        Ok(remote.with_refspecs(
-                            Some(BString::from(refspec.clone())),
-                            gix::remote::Direction::Fetch,
-                        )?)
-                    })
-                }
-                GitReference::Tag(tag) => {
-                    let refspec = format!("+refs/tags/{}:refs/tags/{}", tag, tag);
-                    fresh_prepare.configure_remote(move |remote| {
-                        Ok(remote.with_refspecs(
-                            Some(BString::from(refspec.clone())),
-                            gix::remote::Direction::Fetch,
-                        )?)
-                    })
-                }
-                _ => fresh_prepare,
-            };
-
-            configured_prepare
-                .fetch_then_checkout(gix::progress::Discard, should_interrupt)
-                .map_err(|e| format!("Failed to fetch: {}", e))
+            clone_fetch_attempt(
+                &url,
+                &dest_path,
+                &shallow,
+                &options.reference,
+                should_interrupt,
+            )
         },
         3,                                     // max_retries
         std::time::Duration::from_millis(500), // base_delay
@@ -500,17 +311,9 @@ pub fn clone_repository(
     #[cfg(windows)]
     {
         let config_path = repo.git_dir().join("config");
-        if let Ok(mut config) = fs::read_to_string(&config_path) {
-            if config.contains("symlinks = true") {
-                config = config.replace("symlinks = true", "symlinks = false");
+        if let Ok(config) = fs::read_to_string(&config_path) {
+            if let Some(config) = config_with_symlinks_disabled(&config) {
                 let _ = fs::write(&config_path, config);
-            } else if !config.contains("symlinks") {
-                if let Some(pos) = config.find("[core]") {
-                    if let Some(end_pos) = config[pos..].find('\n') {
-                        config.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
-                        let _ = fs::write(&config_path, config);
-                    }
-                }
             }
         }
     }
@@ -548,6 +351,84 @@ pub fn clone_repository(
 
     let _ = tx.send(ProgressMessage::Finish);
     Ok(dest_path)
+}
+
+/// Shallow mode for `clone_repository`: depth 1 unless a raw commit is requested,
+/// since the commit may not be reachable from a depth-1 remote tip.
+fn clone_shallow_mode(shallow: bool, reference: &GitReference) -> gix::remote::fetch::Shallow {
+    match (shallow, reference) {
+        (true, GitReference::Commit(_)) | (false, _) => gix::remote::fetch::Shallow::NoChange,
+        (true, _) => gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap()),
+    }
+}
+
+/// Fetch refspec that limits a clone to the requested branch or tag.
+fn clone_fetch_refspec(reference: &GitReference) -> Option<String> {
+    match reference {
+        GitReference::Branch(branch) => Some(format!(
+            "+refs/heads/{}:refs/remotes/origin/{}",
+            branch, branch
+        )),
+        GitReference::Tag(tag) => Some(format!("+refs/tags/{}:refs/tags/{}", tag, tag)),
+        _ => None,
+    }
+}
+
+/// One `gix` clone attempt with a fresh clone handle (and therefore a new connection).
+fn clone_fetch_attempt(
+    url: &gix::Url,
+    dest_path: &Path,
+    shallow: &gix::remote::fetch::Shallow,
+    reference: &GitReference,
+    should_interrupt: &AtomicBool,
+) -> Result<(gix::clone::PrepareCheckout, gix::remote::fetch::Outcome), String> {
+    let fresh_prepare = gix::prepare_clone(url.clone(), dest_path)
+        .map_err(|e| format!("Failed to prepare clone: {}", e))?
+        .with_remote_name("origin")
+        .map_err(|e| format!("Failed to set remote name: {}", e))?
+        .with_shallow(shallow.clone());
+
+    let mut configured_prepare = match clone_fetch_refspec(reference) {
+        Some(refspec) => fresh_prepare.configure_remote(move |remote| {
+            remote
+                .with_refspecs(
+                    Some(BString::from(refspec.clone())),
+                    gix::remote::Direction::Fetch,
+                )
+                .map_err(ErrorExt::raise_erased)
+        }),
+        None => fresh_prepare,
+    };
+
+    configured_prepare
+        .fetch_then_checkout(gix::progress::Discard, should_interrupt)
+        .map_err(|e| format!("Failed to fetch: {}", e))
+}
+
+/// Inserts `line` right after the `[core]` header line. Returns `false` if there is no
+/// `[core]` header followed by a newline.
+fn insert_after_core_section(config: &mut String, line: &str) -> bool {
+    if let Some(pos) = config.find("[core]") {
+        if let Some(end_pos) = config[pos..].find('\n') {
+            config.insert_str(pos + end_pos + 1, line);
+            return true;
+        }
+    }
+    false
+}
+
+/// Returns the config with `symlinks = false`, or `None` if nothing needs to change
+/// (already set to something other than `true`, or no `[core]` section to add it to).
+#[cfg(any(windows, test))]
+fn config_with_symlinks_disabled(config: &str) -> Option<String> {
+    if config.contains("symlinks = true") {
+        return Some(config.replace("symlinks = true", "symlinks = false"));
+    }
+    if config.contains("symlinks") {
+        return None;
+    }
+    let mut updated = config.to_string();
+    insert_after_core_section(&mut updated, "\tsymlinks = false\n").then_some(updated)
 }
 
 /// Updates all submodules in a repository to their specified commits using a shallow fetch.
@@ -617,7 +498,7 @@ pub fn update_submodules_shallow(
 
     for submodule in submodules {
         let name = submodule.name().to_string();
-        let path = submodule.path()?.to_string();
+        let path = submodule.path().map_err(gix::Error::from)?.to_string();
         // Normalize path to forward slashes for consistency
         let normalized_path = path.replace('\\', "/");
         let url_raw = submodule.url()?.to_bstring().to_string();
@@ -788,27 +669,13 @@ fn resolve_http_relative_url(
     let base_url = url::Url::parse(base).map_err(|e| format!("Failed to parse base URL: {}", e))?;
 
     // Get the path without the .git extension and repo name
-    let mut path_segments: Vec<&str> = base_url
-        .path_segments()
-        .ok_or("Base URL has no path")?
-        .collect();
-
-    // Remove the repository name (last segment)
-    if !path_segments.is_empty() {
-        path_segments.pop();
-    }
-
-    // Process relative path
-    for segment in relative.split('/') {
-        match segment {
-            "." => continue,
-            ".." => {
-                path_segments.pop();
-            }
-            "" => continue,
-            s => path_segments.push(s),
-        }
-    }
+    let path_segments = resolve_relative_segments(
+        base_url
+            .path_segments()
+            .ok_or("Base URL has no path")?
+            .collect(),
+        relative,
+    );
 
     // Reconstruct URL
     let scheme = base_url.scheme();
@@ -844,27 +711,26 @@ fn resolve_ssh_relative_url(
 
     // Remove .git extension and split path
     let path_clean = path_part.trim_end_matches(".git");
-    let mut path_segments: Vec<&str> = path_clean.split('/').collect();
-
-    // Remove repository name
-    if !path_segments.is_empty() {
-        path_segments.pop();
-    }
-
-    // Process relative path
-    for segment in relative.split('/') {
-        match segment {
-            "." => continue,
-            ".." => {
-                path_segments.pop();
-            }
-            "" => continue,
-            s => path_segments.push(s),
-        }
-    }
+    let path_segments = resolve_relative_segments(path_clean.split('/').collect(), relative);
 
     let new_path = path_segments.join("/");
     Ok(format!("{}:{}", host_part, new_path))
+}
+
+/// Drops the repository name (last segment) from `base`, then applies `relative`
+/// segment by segment (`.` and empty segments are skipped, `..` pops).
+fn resolve_relative_segments<'a>(mut base: Vec<&'a str>, relative: &'a str) -> Vec<&'a str> {
+    base.pop();
+    for segment in relative.split('/') {
+        match segment {
+            "." | "" => continue,
+            ".." => {
+                base.pop();
+            }
+            s => base.push(s),
+        }
+    }
+    base
 }
 
 /// Recursively traverses a git tree to find all submodule entries (gitlinks) and their commit SHAs.
@@ -889,7 +755,7 @@ fn collect_submodule_commits(
     commits: &mut std::collections::HashMap<String, gix::ObjectId>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for entry in tree.iter() {
-        let entry = entry?;
+        let entry = entry.map_err(gix::Error::from)?;
         let entry_mode = entry.mode();
         let entry_name = entry.filename();
         let entry_oid = entry.oid();
@@ -945,6 +811,42 @@ fn initialize_modules_repo(
         return Ok(());
     }
 
+    create_modules_dir(modules_dir)?;
+
+    // Check what's in the directory before init
+    info!(
+        "Contents of {} before init: {:?}",
+        modules_dir.display(),
+        fs::read_dir(modules_dir)?.collect::<Vec<_>>()
+    );
+
+    let repo = open_or_init_bare(modules_dir)?;
+
+    // Use the repository's git_dir (might be different from modules_dir)
+    let git_dir = repo.git_dir();
+    info!("Git dir is at: {}", git_dir.display());
+
+    let config_path = git_dir.join("config");
+
+    if !config_path.exists() {
+        return Err(format!("Config file not found at {}", config_path.display()).into());
+    }
+
+    fs::create_dir_all(submodule_workdir)?;
+    let rel_worktree = relative_worktree_path(modules_dir, submodule_workdir)?;
+
+    let config_content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config at {}: {}", config_path.display(), e))?;
+    let config_content = submodule_repo_config(config_content, &rel_worktree, url);
+
+    fs::write(&config_path, config_content)
+        .map_err(|e| format!("Failed to write config: {}", e))?;
+
+    info!("✓ Initialized modules repo: {}", modules_dir.display());
+    Ok(())
+}
+
+fn create_modules_dir(modules_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // Ensure parent directory exists
     if let Some(parent) = modules_dir.parent() {
         info!("Creating parent directories: {}", parent.display());
@@ -963,91 +865,66 @@ fn initialize_modules_repo(
             )
         })?;
     }
+    Ok(())
+}
 
-    // Check what's in the directory before init
-    info!(
-        "Contents of {} before init: {:?}",
-        modules_dir.display(),
-        fs::read_dir(modules_dir)?.collect::<Vec<_>>()
-    );
-
-    // Initialize with gix - try to open first, if it fails, then init
-    let repo = match gix::open(modules_dir) {
+/// Opens the repository at `modules_dir`, or initializes a bare one if it can't be opened.
+fn open_or_init_bare(modules_dir: &Path) -> Result<gix::Repository, Box<dyn std::error::Error>> {
+    match gix::open(modules_dir) {
         Ok(repo) => {
             info!("Repository already exists at {}", modules_dir.display());
-            repo
+            Ok(repo)
         }
         Err(_) => {
             info!("Initializing new git repo at {}", modules_dir.display());
-            gix::init_bare(modules_dir).map_err(|e| {
+            Ok(gix::init_bare(modules_dir).map_err(|e| {
                 format!(
                     "Failed to init git repo at {}: {}",
                     modules_dir.display(),
                     e
                 )
-            })?
+            })?)
         }
-    };
-
-    // Use the repository's git_dir (might be different from modules_dir)
-    let git_dir = repo.git_dir();
-    info!("Git dir is at: {}", git_dir.display());
-
-    let config_path = git_dir.join("config");
-
-    if !config_path.exists() {
-        return Err(format!("Config file not found at {}", config_path.display()).into());
     }
+}
 
-    // Compute relative worktree path from modules_dir (matches standard Git behavior)
-    fs::create_dir_all(submodule_workdir)?;
+/// Relative path from `modules_dir` to the submodule worktree (matches standard Git behavior).
+fn relative_worktree_path(
+    modules_dir: &Path,
+    submodule_workdir: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let modules_canon = modules_dir
         .canonicalize()
         .unwrap_or_else(|_| modules_dir.to_path_buf());
     let workdir_canon = submodule_workdir
         .canonicalize()
         .unwrap_or_else(|_| submodule_workdir.to_path_buf());
-    let rel_worktree = pathdiff::diff_paths(&workdir_canon, &modules_canon)
-        .ok_or("Failed to compute relative worktree path")?;
+    Ok(pathdiff::diff_paths(&workdir_canon, &modules_canon)
+        .ok_or("Failed to compute relative worktree path")?)
+}
 
-    // Read and update config
-    let mut config_content = fs::read_to_string(&config_path)
-        .map_err(|e| format!("Failed to read config at {}: {}", config_path.display(), e))?;
-
-    // For a bare repo, change it to non-bare and add worktree
+/// Turns the bare-repo config into a non-bare submodule config: sets `bare = false`, adds
+/// `worktree` and the `origin` remote (and `symlinks = false` on Windows) unless present.
+fn submodule_repo_config(mut config_content: String, rel_worktree: &Path, url: &str) -> String {
     if config_content.contains("bare = true") {
         config_content = config_content.replace("bare = true", "bare = false");
     }
 
-    // Add worktree
     if !config_content.contains("worktree") {
-        if let Some(pos) = config_content.find("[core]") {
-            if let Some(end_pos) = config_content[pos..].find('\n') {
-                let insert_pos = pos + end_pos + 1;
-                config_content.insert_str(
-                    insert_pos,
-                    &format!(
-                        "\tworktree = {}\n",
-                        rel_worktree.display().to_string().replace('\\', "/")
-                    ),
-                );
-            }
-        }
+        insert_after_core_section(
+            &mut config_content,
+            &format!(
+                "\tworktree = {}\n",
+                rel_worktree.display().to_string().replace('\\', "/")
+            ),
+        );
     }
 
-    // On Windows, ensure symlinks = false
     #[cfg(windows)]
-    if config_content.contains("symlinks = true") {
-        config_content = config_content.replace("symlinks = true", "symlinks = false");
-    } else if !config_content.contains("symlinks") {
-        if let Some(pos) = config_content.find("[core]") {
-            if let Some(end_pos) = config_content[pos..].find('\n') {
-                config_content.insert_str(pos + end_pos + 1, "\tsymlinks = false\n");
-            }
-        }
+    if let Some(updated) = config_with_symlinks_disabled(&config_content) {
+        config_content = updated;
     }
 
-    // Add remote
     if !config_content.contains("[remote \"origin\"]") {
         config_content.push_str(&format!(
             "\n[remote \"origin\"]\n\
@@ -1057,11 +934,7 @@ fn initialize_modules_repo(
         ));
     }
 
-    fs::write(&config_path, config_content)
-        .map_err(|e| format!("Failed to write config: {}", e))?;
-
-    info!("✓ Initialized modules repo: {}", modules_dir.display());
-    Ok(())
+    config_content
 }
 
 /// Creates the `.git` file in a submodule's working directory.
@@ -1168,13 +1041,7 @@ fn fetch_single_commit_to_modules(
         Err(_) => gix::init(modules_dir)?,
     };
 
-    let expected_oid = gix::ObjectId::from_hex(commit_sha.as_bytes()).map_err(
-        |e| -> Box<dyn std::error::Error> {
-            Box::new(std::io::Error::other(format!(
-                "Invalid SHA '{commit_sha}': {e}"
-            )))
-        },
-    )?;
+    let expected_oid = parse_commit_oid(commit_sha)?;
 
     // Check if we already have this commit
     if repo.find_commit(expected_oid).is_ok() {
@@ -1189,15 +1056,55 @@ fn fetch_single_commit_to_modules(
     send_progress(&tx, submodule_name, 30);
 
     // Parse URL and create remote
-    let remote_url =
-        gix::url::parse(url.into()).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
+    let remote_url = gix::url::parse(url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
     send_progress(&tx, submodule_name, 40);
 
-    let shallow = gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap());
+    let _outcome =
+        fetch_commit_shallow_with_retry(&repo, &remote_url, commit_sha, &AtomicBool::new(false))
+            .map_err(|e| {
+                format!(
+                    "fetch_single_commit_to_modules failed after 3 attempts: {}",
+                    e
+                )
+            })?;
 
-    // Retry with fresh remote connection each time to avoid hitting same CDN cache
-    let _outcome = crate::utils::with_retry_exponential(
+    send_progress(&tx, submodule_name, 70);
+
+    // Verify commit exists
+    repo.find_commit(expected_oid)
+        .map_err(|_| format!("Commit {} not found after fetch", &commit_sha[..7]))?;
+
+    // Update HEAD to point to this commit (detached state)
+    std::fs::write(modules_dir.join("HEAD"), format!("{}\n", commit_sha))?;
+
+    debug!("Fetched commit {} to modules dir", &commit_sha[..7]);
+    Ok(())
+}
+
+fn parse_commit_oid(commit_sha: &str) -> Result<gix::ObjectId, Box<dyn std::error::Error>> {
+    gix::ObjectId::from_hex(commit_sha.as_bytes()).map_err(|e| -> Box<dyn std::error::Error> {
+        Box::new(std::io::Error::other(format!(
+            "Invalid SHA '{commit_sha}': {e}"
+        )))
+    })
+}
+
+/// First 7 characters of a commit SHA (or the whole string if shorter), for log messages.
+fn short_sha(commit_sha: &str) -> &str {
+    &commit_sha[..7.min(commit_sha.len())]
+}
+
+/// Fetches exactly `commit_sha` at depth 1 without tags, retrying with a fresh remote
+/// connection each time to avoid hitting the same CDN cache.
+fn fetch_commit_shallow_with_retry(
+    repo: &gix::Repository,
+    remote_url: &gix::Url,
+    commit_sha: &str,
+    should_interrupt: &AtomicBool,
+) -> Result<gix::remote::fetch::Outcome, String> {
+    let shallow = gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap());
+    crate::utils::with_retry_exponential(
         || {
             repo.remote_at(remote_url.clone())
                 .map_err(|e| format!("Failed to create remote: {}", e))?
@@ -1212,30 +1119,12 @@ fn fetch_single_commit_to_modules(
                 )
                 .map_err(|e| format!("Failed to prepare fetch: {}", e))?
                 .with_shallow(shallow.clone())
-                .receive(gix::progress::Discard, &AtomicBool::new(false))
+                .receive(gix::progress::Discard, should_interrupt)
                 .map_err(|e| format!("Failed to receive: {}", e))
         },
         3,
         std::time::Duration::from_millis(500),
     )
-    .map_err(|e| {
-        format!(
-            "fetch_single_commit_to_modules failed after 3 attempts: {}",
-            e
-        )
-    })?;
-
-    send_progress(&tx, submodule_name, 70);
-
-    // Verify commit exists
-    repo.find_commit(expected_oid)
-        .map_err(|_| format!("Commit {} not found after fetch", &commit_sha[..7]))?;
-
-    // Update HEAD to point to this commit (detached state)
-    std::fs::write(modules_dir.join("HEAD"), format!("{}\n", commit_sha))?;
-
-    debug!("Fetched commit {} to modules dir", &commit_sha[..7]);
-    Ok(())
 }
 
 /// Checks out the files from a submodule's repository into its working directory.
@@ -1261,7 +1150,7 @@ fn checkout_submodule_worktree(
     // Open the repository at modules dir
     let repo = gix::open(modules_dir)?;
 
-    let commit_oid = gix::ObjectId::from_hex(commit_sha.as_bytes())?;
+    let commit_oid = gix::ObjectId::from_hex(commit_sha.as_bytes()).map_err(gix::Error::from)?;
     let commit = repo.find_commit(commit_oid)?;
     let tree = commit.tree()?;
 
@@ -1299,7 +1188,7 @@ fn checkout_tree_recursive(
     target_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     for entry in tree.iter() {
-        let entry = entry?;
+        let entry = entry.map_err(gix::Error::from)?;
         let entry_mode = entry.mode();
         let entry_oid = entry.oid();
         let entry_name = entry.filename();
@@ -1334,7 +1223,7 @@ fn checkout_tree_recursive(
 
             // Write blob content
             let object = repo.find_object(entry.oid())?;
-            let blob = object.try_into_blob()?;
+            let blob = object.try_into_blob().map_err(gix::Error::from)?;
             fs::write(&target_path, blob.data.clone())?;
 
             // Set executable bit if needed
@@ -1357,7 +1246,7 @@ fn write_symlink_from_blob(
     target_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let object = repo.find_object(oid)?;
-    let blob = object.try_into_blob()?;
+    let blob = object.try_into_blob().map_err(gix::Error::from)?;
     let link_target = std::str::from_utf8(blob.data.as_ref())
         .map_err(|e| {
             format!(
@@ -1463,10 +1352,7 @@ pub fn fetch_single_commit(
 
     match fetch_single_commit_gix(dest_path, url, commit_sha, &tx, submodule_name) {
         Ok(()) => {
-            debug!(
-                "Successfully fetched {} using gix",
-                &commit_sha[..7.min(commit_sha.len())]
-            );
+            debug!("Successfully fetched {} using gix", short_sha(commit_sha));
             send_progress(&tx, submodule_name, 100);
             Ok(())
         }
@@ -1474,7 +1360,7 @@ pub fn fetch_single_commit(
             debug!(
                 "gix fetch failed ({}), falling back to git CLI for {}",
                 e,
-                &commit_sha[..7.min(commit_sha.len())]
+                short_sha(commit_sha)
             );
             // Only fall back to CLI if git is available
             fetch_single_commit_git_cli(dest_path, url, commit_sha, &tx, submodule_name)
@@ -1510,102 +1396,29 @@ fn fetch_single_commit_gix(
     let should_interrupt = &AtomicBool::new(false);
 
     // Parse the expected commit SHA upfront
-    let expected_oid = gix::ObjectId::from_hex(commit_sha.as_bytes()).map_err(
-        |e| -> Box<dyn std::error::Error> {
-            Box::new(std::io::Error::other(format!(
-                "Invalid SHA '{commit_sha}': {e}"
-            )))
-        },
-    )?;
+    let expected_oid = parse_commit_oid(commit_sha)?;
 
-    // For submodules, we need to handle the gitlink file
-    let git_path = dest_path.join(".git");
-    let is_submodule = git_path.is_file(); // Submodules have .git as a file, not a directory
+    // Submodules have .git as a file (gitlink), not a directory
+    let is_submodule = dest_path.join(".git").is_file();
+    let actual_git_dir = resolve_actual_git_dir(dest_path, is_submodule)?;
 
-    // Determine the actual git directory
-    let actual_git_dir = if is_submodule {
-        // Read the gitlink file to find the actual .git directory
-        let gitlink_content = fs::read_to_string(&git_path)?;
-        let git_dir_path = gitlink_content
-            .trim()
-            .strip_prefix("gitdir: ")
-            .ok_or("Invalid gitlink file")?;
-
-        // Resolve relative path
-        dest_path.join(git_dir_path).canonicalize()?
-    } else {
-        dest_path.join(".git")
-    };
-
-    // Check if we already have this commit
-    if actual_git_dir.exists() {
-        if let Ok(repo) = gix::open(dest_path) {
-            if repo.find_commit(expected_oid).is_ok() {
-                debug!(
-                    "Commit {} already exists locally",
-                    &commit_sha[..7.min(commit_sha.len())]
-                );
-                send_progress(tx, submodule_name, 80);
-                checkout_commit_gix(&repo, expected_oid)?;
-                return Ok(());
-            }
-        }
+    if actual_git_dir.exists()
+        && checkout_if_commit_present(dest_path, expected_oid, commit_sha, tx, submodule_name)?
+    {
+        return Ok(());
     }
 
-    // Initialize repository if needed
-    let repo = if !actual_git_dir.exists() {
-        fs::create_dir_all(&actual_git_dir)?;
-
-        if is_submodule {
-            // For submodules, initialize in the modules directory
-            gix::init(&actual_git_dir)?;
-
-            // Create HEAD file
-            fs::write(actual_git_dir.join("HEAD"), "ref: refs/heads/master\n")?;
-
-            // Open the repository
-            gix::open(dest_path)?
-        } else {
-            gix::init(dest_path)?
-        }
-    } else {
-        gix::open(dest_path)?
-    };
+    let repo = open_or_init_fetch_repo(dest_path, &actual_git_dir, is_submodule)?;
 
     send_progress(tx, submodule_name, 10);
 
     // Parse the remote URL
-    let remote_url =
-        gix::url::parse(url.into()).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
+    let remote_url = gix::url::parse(url).map_err(|e| format!("Invalid URL '{}': {}", url, e))?;
 
     send_progress(tx, submodule_name, 20);
 
-    // Configure shallow fetch
-    let shallow = gix::remote::fetch::Shallow::DepthAtRemote(NonZeroU32::new(1).unwrap());
-
-    // Retry with fresh remote connection each time to avoid hitting same CDN cache
-    let outcome = crate::utils::with_retry_exponential(
-        || {
-            repo.remote_at(remote_url.clone())
-                .map_err(|e| format!("Failed to create remote: {}", e))?
-                .with_fetch_tags(gix::remote::fetch::Tags::None)
-                .with_refspecs([commit_sha], gix::remote::Direction::Fetch)
-                .map_err(|e| format!("Failed to set refspec: {}", e))?
-                .connect(gix::remote::Direction::Fetch)
-                .map_err(|e| format!("Failed to connect: {}", e))?
-                .prepare_fetch(
-                    gix::progress::Discard,
-                    gix::remote::ref_map::Options::default(),
-                )
-                .map_err(|e| format!("Failed to prepare fetch: {}", e))?
-                .with_shallow(shallow.clone())
-                .receive(gix::progress::Discard, should_interrupt)
-                .map_err(|e| format!("Failed to receive: {}", e))
-        },
-        3,
-        std::time::Duration::from_millis(500),
-    )
-    .map_err(|e| format!("fetch_single_commit_gix failed after 3 attempts: {}", e))?;
+    let outcome = fetch_commit_shallow_with_retry(&repo, &remote_url, commit_sha, should_interrupt)
+        .map_err(|e| format!("fetch_single_commit_gix failed after 3 attempts: {}", e))?;
 
     send_progress(tx, submodule_name, 80);
 
@@ -1615,17 +1428,71 @@ fn fetch_single_commit_gix(
     );
 
     // Verify the commit exists
-    let _commit = repo.find_commit(expected_oid).map_err(|_| {
-        format!(
-            "Commit {} not found after fetch",
-            &commit_sha[..7.min(commit_sha.len())]
-        )
-    })?;
+    let _commit = repo
+        .find_commit(expected_oid)
+        .map_err(|_| format!("Commit {} not found after fetch", short_sha(commit_sha)))?;
 
     // Checkout using gix
     checkout_commit_gix(&repo, expected_oid)?;
 
     Ok(())
+}
+
+/// The real git directory for `dest_path`: `<dest>/.git`, or for a submodule the
+/// (canonicalized) target of the `gitdir:` line in its `.git` file.
+fn resolve_actual_git_dir(
+    dest_path: &Path,
+    is_submodule: bool,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let git_path = dest_path.join(".git");
+    if !is_submodule {
+        return Ok(git_path);
+    }
+    let gitlink_content = fs::read_to_string(&git_path)?;
+    let git_dir_path = gitlink_content
+        .trim()
+        .strip_prefix("gitdir: ")
+        .ok_or("Invalid gitlink file")?;
+    Ok(dest_path.join(git_dir_path).canonicalize()?)
+}
+
+/// If the repository at `dest_path` already has `expected_oid`, checks it out and
+/// returns `true`; returns `false` when the repo can't be opened or lacks the commit.
+fn checkout_if_commit_present(
+    dest_path: &Path,
+    expected_oid: gix::ObjectId,
+    commit_sha: &str,
+    tx: &Option<Sender<ProgressMessage>>,
+    submodule_name: Option<&str>,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let Ok(repo) = gix::open(dest_path) else {
+        return Ok(false);
+    };
+    if repo.find_commit(expected_oid).is_err() {
+        return Ok(false);
+    }
+    debug!("Commit {} already exists locally", short_sha(commit_sha));
+    send_progress(tx, submodule_name, 80);
+    checkout_commit_gix(&repo, expected_oid)?;
+    Ok(true)
+}
+
+fn open_or_init_fetch_repo(
+    dest_path: &Path,
+    actual_git_dir: &Path,
+    is_submodule: bool,
+) -> Result<gix::Repository, Box<dyn std::error::Error>> {
+    if actual_git_dir.exists() {
+        return Ok(gix::open(dest_path)?);
+    }
+    fs::create_dir_all(actual_git_dir)?;
+    if !is_submodule {
+        return Ok(gix::init(dest_path)?);
+    }
+    // For submodules, initialize in the modules directory
+    gix::init(actual_git_dir)?;
+    fs::write(actual_git_dir.join("HEAD"), "ref: refs/heads/master\n")?;
+    Ok(gix::open(dest_path)?)
 }
 
 /// Checks out a specific commit's tree to the working directory using `gix`.
@@ -1734,10 +1601,12 @@ fn populate_index_from_tree(
         .truncate(true)
         .open(&index_path)?;
 
-    new_index.write_to(
-        std::io::BufWriter::new(index_file),
-        gix::index::write::Options::default(),
-    )?;
+    new_index
+        .write_to(
+            std::io::BufWriter::new(index_file),
+            gix::index::write::Options::default(),
+        )
+        .map_err(gix::Error::from)?;
 
     Ok(())
 }
@@ -1752,7 +1621,7 @@ fn collect_tree_entries(
     use gix::bstr::BString;
 
     for entry in tree.iter() {
-        let entry = entry?;
+        let entry = entry.map_err(gix::Error::from)?;
         let entry_mode = entry.mode();
         let entry_oid = entry.oid();
         let entry_name = entry.filename();
@@ -1870,47 +1739,7 @@ pub struct CloneOptions {
 /// * `Err` if the reference cannot be found or the `HEAD` update fails.
 fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Result<()> {
     match reference {
-        GitReference::Branch(branch) => {
-            info!("Checking out branch: {}", branch);
-
-            let refname = format!("refs/remotes/origin/{}", branch);
-            let mut git_ref = repo
-                .find_reference(&refname)
-                .or_else(|_| {
-                    debug!("Could not find remote ref {}, trying local branch", refname);
-                    repo.find_reference(&format!("refs/heads/{}", branch))
-                })
-                .or_else(|_| {
-                    debug!("Could not find local branch, trying packed refs");
-                    // For shallow clones, the branch might be in HEAD directly
-                    repo.find_reference("HEAD")
-                })
-                .map_err(|e| anyhow!("Could not find branch '{}': {}", branch, e))?;
-
-            let commit = git_ref.peel_to_commit()?;
-
-            // Create local branch
-            let local_refname = format!("refs/heads/{}", branch);
-            let name = gix::refs::FullName::try_from(local_refname.as_str())?;
-            repo.reference(
-                name,
-                commit.id(),
-                gix::refs::transaction::PreviousValue::Any,
-                format!("branch: Created from origin/{}", branch),
-            )?;
-
-            // Set HEAD
-            set_head_to_ref(
-                repo,
-                &local_refname,
-                &format!("checkout: moving to {}", branch),
-            )?;
-            // CHECK OUT THE FILES
-            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-                error!("Error checking out files for branch {}: {}", branch, e);
-                anyhow::anyhow!("{}", e)
-            })?
-        }
+        GitReference::Branch(branch) => checkout_branch(repo, branch),
         GitReference::Tag(tag) => {
             info!("Checking out tag: {}", tag);
 
@@ -1918,43 +1747,87 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
             let mut git_ref = repo.find_reference(&refname)?;
 
             let commit = git_ref.peel_to_commit()?;
-
-            set_head_detached(
-                repo,
-                commit.id(),
-                &format!("checkout: moving to {}", commit.id()),
-            )?;
-
-            // CHECK OUT THE FILES
-            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-                error!("Error checking out files for tag {}: {}", tag, e);
-                anyhow::anyhow!("{}", e)
-            })?
+            checkout_detached(repo, commit.id(), "tag", tag)
         }
         GitReference::Commit(commit_id) => {
             info!("Checking out commit: {}", commit_id);
 
-            let oid = gix::ObjectId::from_hex(commit_id.as_bytes())?;
+            let oid = gix::ObjectId::from_hex(commit_id.as_bytes()).map_err(gix::Error::from)?;
 
             let commit = repo.find_commit(oid)?;
-            set_head_detached(
-                repo,
-                commit.id(),
-                &format!("checkout: moving to {}", commit.id()),
-            )?;
-
-            // CHECK OUT THE FILES
-            checkout_commit_gix(repo, commit.id().into()).map_err(|e| {
-                error!("Error checking out files for commit {}: {}", commit_id, e);
-                anyhow::anyhow!("{}", e)
-            })?
+            checkout_detached(repo, commit.id(), "commit", commit_id)
         }
         GitReference::None => {
             debug!("Using default reference from clone");
+            Ok(())
         }
     }
+}
 
-    Ok(())
+/// Creates a local branch from `origin/<branch>` (or the local branch / `HEAD` as fallbacks),
+/// points `HEAD` at it and checks out its files.
+fn checkout_branch(repo: &gix::Repository, branch: &str) -> Result<()> {
+    info!("Checking out branch: {}", branch);
+
+    let refname = format!("refs/remotes/origin/{}", branch);
+    let mut git_ref = repo
+        .find_reference(&refname)
+        .or_else(|_| {
+            debug!("Could not find remote ref {}, trying local branch", refname);
+            repo.find_reference(&format!("refs/heads/{}", branch))
+        })
+        .or_else(|_| {
+            debug!("Could not find local branch, trying packed refs");
+            // For shallow clones, the branch might be in HEAD directly
+            repo.find_reference("HEAD")
+        })
+        .map_err(|e| anyhow!("Could not find branch '{}': {}", branch, e))?;
+
+    let commit = git_ref.peel_to_commit()?;
+
+    // Create local branch
+    let local_refname = format!("refs/heads/{}", branch);
+    let name = gix::refs::FullName::try_from(local_refname.as_str())?;
+    repo.reference(
+        name,
+        commit.id(),
+        gix::refs::transaction::PreviousValue::Any,
+        format!("branch: Created from origin/{}", branch),
+    )?;
+
+    set_head_to_ref(
+        repo,
+        &local_refname,
+        &format!("checkout: moving to {}", branch),
+    )?;
+    checkout_files(repo, commit.id().into(), "branch", branch)
+}
+
+/// Detaches `HEAD` at `commit_id` and checks out its files.
+fn checkout_detached(
+    repo: &gix::Repository,
+    commit_id: gix::Id,
+    kind: &str,
+    name: &str,
+) -> Result<()> {
+    set_head_detached(
+        repo,
+        commit_id,
+        &format!("checkout: moving to {}", commit_id),
+    )?;
+    checkout_files(repo, commit_id.into(), kind, name)
+}
+
+fn checkout_files(
+    repo: &gix::Repository,
+    commit_oid: gix::ObjectId,
+    kind: &str,
+    name: &str,
+) -> Result<()> {
+    checkout_commit_gix(repo, commit_oid).map_err(|e| {
+        error!("Error checking out files for {} {}: {}", kind, name, e);
+        anyhow::anyhow!("{}", e)
+    })
 }
 
 /// Sets the repository's `HEAD` to a detached state pointing at a specific commit ID.
@@ -1970,6 +1843,10 @@ fn checkout_reference(repo: &gix::Repository, reference: &GitReference) -> Resul
 /// * `Ok(())` on success.
 /// * `Err` if the reference edit fails.
 fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) -> Result<()> {
+    set_head(repo, Target::Object(commit_id.detach()), message)
+}
+
+fn set_head(repo: &gix::Repository, new: Target, message: &str) -> Result<()> {
     let edit = RefEdit {
         change: Change::Update {
             log: LogChange {
@@ -1978,7 +1855,7 @@ fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) 
                 message: message.into(),
             },
             expected: PreviousValue::Any,
-            new: Target::Object(commit_id.detach()), // For detached HEAD
+            new,
         },
         name: gix::refs::FullName::try_from("HEAD")?,
         deref: false,
@@ -2001,22 +1878,11 @@ fn set_head_detached(repo: &gix::Repository, commit_id: gix::Id, message: &str) 
 /// * `Ok(())` on success.
 /// * `Err` if the reference edit fails.
 fn set_head_to_ref(repo: &gix::Repository, refname: &str, message: &str) -> Result<()> {
-    let edit = RefEdit {
-        change: Change::Update {
-            log: LogChange {
-                mode: gix::refs::transaction::RefLog::AndReference,
-                force_create_reflog: false,
-                message: message.into(),
-            },
-            expected: PreviousValue::Any,
-            new: Target::Symbolic(gix::refs::FullName::try_from(refname)?),
-        },
-        name: gix::refs::FullName::try_from("HEAD")?,
-        deref: false,
-    };
-
-    repo.edit_reference(edit)?;
-    Ok(())
+    set_head(
+        repo,
+        Target::Symbolic(gix::refs::FullName::try_from(refname)?),
+        message,
+    )
 }
 
 /// Clones the ESP-IDF repository with specified options.
@@ -2061,11 +1927,7 @@ pub fn get_esp_idf(
 ) -> Result<String, String> {
     let dest_path = std::path::PathBuf::from(path);
 
-    let had_preexisting_content = dest_path.exists()
-        && (!dest_path.is_dir()
-            || std::fs::read_dir(&dest_path)
-                .map(|mut it| it.next().is_some())
-                .unwrap_or(false));
+    let had_preexisting_content = path_has_content(&dest_path);
 
     // Ensure the path exists (may create an empty directory).
     let _ = ensure_path(path);
@@ -2073,16 +1935,7 @@ pub fn get_esp_idf(
     let url = get_repo_url(repository, mirror);
 
     let shallow = true;
-    // Parse version into a GitReference
-    let reference = if version == "master" {
-        GitReference::Branch("master".to_string())
-    } else if version.contains("release") {
-        GitReference::Branch(version.to_string().replace("release-", "release/"))
-    } else if version.len() == 40 && version.chars().all(|c| c.is_ascii_hexdigit()) {
-        GitReference::Commit(version.to_string())
-    } else {
-        GitReference::Tag(version.to_string())
-    };
+    let reference = git_reference_from_version(version);
 
     let mirror_owned = mirror.map(|s| s.to_string());
     let clone_options = CloneOptions {
@@ -2161,6 +2014,29 @@ pub fn get_esp_idf(
     }
 }
 
+/// `true` if `path` exists and is either a non-directory or a non-empty directory.
+fn path_has_content(path: &Path) -> bool {
+    path.exists()
+        && (!path.is_dir()
+            || std::fs::read_dir(path)
+                .map(|mut it| it.next().is_some())
+                .unwrap_or(false))
+}
+
+/// Maps an ESP-IDF version string to a reference: `master` and `release-*` are branches
+/// (`release-vX.Y` becomes `release/vX.Y`), a 40-char hex string is a commit, anything else a tag.
+fn git_reference_from_version(version: &str) -> GitReference {
+    if version == "master" {
+        GitReference::Branch("master".to_string())
+    } else if version.contains("release") {
+        GitReference::Branch(version.to_string().replace("release-", "release/"))
+    } else if version.len() == 40 && version.chars().all(|c| c.is_ascii_hexdigit()) {
+        GitReference::Commit(version.to_string())
+    } else {
+        GitReference::Tag(version.to_string())
+    }
+}
+
 /// Rewrites a mirror URL back to the equivalent `https://github.com/` URL.
 ///
 /// Relative submodule paths in `.gitmodules` are defined against the GitHub
@@ -2214,15 +2090,11 @@ fn configure_local_github_mirror(
     mirror: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if let Some((key, value)) = git_instead_of_config_pair(mirror) {
-        let output = execute_command_with_dir("git", &["config", &key, &value], repo_path)?;
-        if !output.status.success() {
-            return Err(format!(
-                "git config {} failed: {}",
-                key,
-                String::from_utf8_lossy(&output.stderr)
-            )
-            .into());
-        }
+        run_git_checked(
+            &["config", &key, &value],
+            repo_path,
+            &format!("git config {}", key),
+        )?;
     }
     Ok(())
 }
@@ -2394,12 +2266,7 @@ pub fn clone_with_git_cli(
         }
     }
 
-    let dest_exists_nonempty = dest_path.exists()
-        && (!dest_path.is_dir()
-            || std::fs::read_dir(&dest_path)
-                .map(|mut it| it.next().is_some())
-                .unwrap_or(false));
-    if dest_exists_nonempty {
+    if path_has_content(&dest_path) {
         return Err(format!(
             "Destination {} exists and is not empty; refusing to clone over it",
             dest_path.display()
@@ -2419,190 +2286,244 @@ pub fn clone_with_git_cli(
         .to_str()
         .ok_or("Destination path contains non-UTF-8 characters")?;
 
-    // Build `git clone` arguments based on the requested reference.
-    // For commits we cannot point clone directly at the SHA, so we clone the
-    // default branch first and resolve the commit afterwards.
-    let clone_url = reverse_github_mirror(&options.url, options.mirror.as_deref());
-    let mut clone_args: Vec<String> = vec!["clone".to_string(), "--progress".to_string()];
-    if let Some((key, value)) = git_instead_of_config_pair(options.mirror.as_deref()) {
-        clone_args.push("-c".to_string());
-        clone_args.push(format!("{}={}", key, value));
-    }
-
-    if options.shallow {
-        clone_args.push("--depth".to_string());
-        clone_args.push("1".to_string());
-    }
-
-    let mut needs_post_checkout_commit: Option<String> = None;
-    match &options.reference {
-        GitReference::Branch(branch) => {
-            clone_args.push("--branch".to_string());
-            clone_args.push(branch.clone());
-            clone_args.push("--single-branch".to_string());
-        }
-        GitReference::Tag(tag) => {
-            clone_args.push("--branch".to_string());
-            clone_args.push(tag.clone());
-            clone_args.push("--single-branch".to_string());
-        }
-        GitReference::Commit(sha) => {
-            // Will fetch + checkout this commit after the initial clone.
-            needs_post_checkout_commit = Some(sha.clone());
-        }
-        GitReference::None => {}
-    }
-
-    // Submodules: ask git to recurse and shallow-clone them in one shot when
-    // we don't need a post-clone commit checkout. When we do need a
-    // post-checkout (commit case), run submodule update separately so the
-    // submodule SHAs match the checked-out commit instead of the default
-    // branch tip.
-    let recurse_during_clone = options.recurse_submodules && needs_post_checkout_commit.is_none();
-    if recurse_during_clone {
-        clone_args.push("--recurse-submodules".to_string());
-        if options.shallow {
-            clone_args.push("--shallow-submodules".to_string());
-        }
-    }
-
-    clone_args.push(clone_url);
-    clone_args.push(dest_str.to_string());
+    let plan = git_clone_plan(options, dest_str);
 
     // 0% - starting
     let _ = tx.send(ProgressMessage::Update(0));
 
-    // Spawn `git clone` and stream stderr for progress (best-effort).
-    let clone_args_ref: Vec<&str> = clone_args.iter().map(|s| s.as_str()).collect();
-    let mut child = spawn_with_dir("git", &clone_args_ref, cwd_str)?;
-    let mut stderr_tail: Vec<String> = Vec::new();
-    if let Some(stderr) = child.stderr.take() {
-        let reader = BufReader::new(stderr);
-        for line in reader.lines().map_while(Result::ok) {
-            if let Some(percentage) = parse_git_progress(&line) {
-                // Scale git's 0-100% into 0-80% so we leave headroom for
-                // post-clone work (commit checkout / submodules).
-                let scaled = (percentage * 80) / 100;
-                let _ = tx.send(ProgressMessage::Update(scaled));
-            } else {
-                // Non-progress lines carry git's actual diagnostics (e.g.
-                // "fatal: unable to access '...': Could not resolve host: github.com").
-                // Keep a bounded tail so we can report the real cause on failure.
-                let trimmed = line.trim();
-                if !trimmed.is_empty() {
-                    stderr_tail.push(trimmed.to_string());
-                    if stderr_tail.len() > 20 {
-                        stderr_tail.remove(0);
-                    }
-                }
-            }
-        }
-    }
-    let status = child.wait()?;
-    if !status.success() {
-        let details = stderr_tail.join("; ");
-        return Err(format!(
-            "git clone failed (exit code {:?}) for {}{}",
-            status.code(),
-            options.url,
-            if details.is_empty() {
-                String::new()
-            } else {
-                format!(": {}", details)
-            }
-        )
-        .into());
-    }
+    run_git_clone(&plan.args, cwd_str, &tx, &options.url)?;
 
     let _ = tx.send(ProgressMessage::Update(80));
 
     configure_local_github_mirror(dest_str, options.mirror.as_deref())?;
 
     // If the user asked for a specific commit, fetch + checkout it now.
-    if let Some(sha) = needs_post_checkout_commit.as_deref() {
+    if let Some(sha) = plan.post_checkout_commit.as_deref() {
         info!("Fetching specific commit {} via git CLI fallback", sha);
-
-        // First try a depth-1 fetch by SHA. Many servers support this when
-        // `uploadpack.allowReachableSHA1InWant` is enabled (GitHub does).
-        let shallow_fetch =
-            execute_command_with_dir("git", &["fetch", "--depth", "1", "origin", sha], dest_str)?;
-
-        if !shallow_fetch.status.success() {
-            debug!(
-                "Shallow fetch of commit {} failed, retrying without --depth: {}",
-                sha,
-                String::from_utf8_lossy(&shallow_fetch.stderr)
-            );
-
-            // Try to unshallow first; if the repo is already complete that
-            // errors out, in which case do a plain fetch.
-            let unshallow =
-                execute_command_with_dir("git", &["fetch", "--unshallow", "origin"], dest_str)?;
-            if !unshallow.status.success() {
-                let plain_fetch = execute_command_with_dir("git", &["fetch", "origin"], dest_str)?;
-                if !plain_fetch.status.success() {
-                    return Err(format!(
-                        "git fetch failed while resolving commit {}: {}",
-                        sha,
-                        String::from_utf8_lossy(&plain_fetch.stderr)
-                    )
-                    .into());
-                }
-            }
-        }
-
+        fetch_commit_for_cli_checkout(dest_str, sha)?;
         checkout_with_git_cli(&dest_path, sha)?;
     }
 
     // Run submodule update separately when we couldn't recurse during clone.
-    if options.recurse_submodules && !recurse_during_clone {
+    if options.recurse_submodules && !plan.recurse_during_clone {
         info!("Initializing submodules via git CLI fallback (shallow)");
-        let mut submodule_args: Vec<&str> =
-            vec!["submodule", "update", "--init", "--recursive", "--progress"];
-        if options.shallow {
-            submodule_args.push("--depth");
-            submodule_args.push("1");
-        }
-
-        // Stream stderr so submodule progress reaches the UI as well.
-        let mut sub_child = spawn_with_dir("git", &submodule_args, dest_str)?;
-        let mut current_submodule: Option<String> = None;
-        if let Some(stderr) = sub_child.stderr.take() {
-            let reader = BufReader::new(stderr);
-            for line in reader.lines().map_while(Result::ok) {
-                if let Some(name) = parse_submodule_name(&line) {
-                    if let Some(prev) = current_submodule.replace(name.clone()) {
-                        if prev != name {
-                            let _ = tx.send(ProgressMessage::SubmoduleFinish(prev));
-                        }
-                    }
-                }
-                if let Some(percentage) = parse_git_progress(&line) {
-                    if let Some(name) = current_submodule.as_deref() {
-                        let _ = tx.send(ProgressMessage::SubmoduleUpdate((
-                            name.to_string(),
-                            percentage,
-                        )));
-                    }
-                }
-            }
-        }
-        let sub_status = sub_child.wait()?;
-        if !sub_status.success() {
-            return Err(format!(
-                "git submodule update failed (exit code {:?})",
-                sub_status.code()
-            )
-            .into());
-        }
-
-        if let Some(name) = current_submodule.take() {
-            let _ = tx.send(ProgressMessage::SubmoduleFinish(name));
-        }
+        run_git_submodule_update(&submodule_update_args(options.shallow), dest_str, &tx)?;
     }
 
     let _ = tx.send(ProgressMessage::Update(100));
     Ok(dest_path)
+}
+
+/// `git clone` invocation for [`clone_with_git_cli`] plus the follow-up work it implies.
+#[derive(Debug, PartialEq)]
+struct GitClonePlan {
+    args: Vec<String>,
+    /// Commit to fetch and check out after cloning (a clone can't target a raw SHA).
+    post_checkout_commit: Option<String>,
+    /// Whether submodules are cloned by `git clone --recurse-submodules` itself.
+    recurse_during_clone: bool,
+}
+
+fn git_clone_plan(options: &CloneOptions, dest_str: &str) -> GitClonePlan {
+    let clone_url = reverse_github_mirror(&options.url, options.mirror.as_deref());
+    let mut args: Vec<String> = vec!["clone".to_string(), "--progress".to_string()];
+    if let Some((key, value)) = git_instead_of_config_pair(options.mirror.as_deref()) {
+        args.push("-c".to_string());
+        args.push(format!("{}={}", key, value));
+    }
+
+    if options.shallow {
+        args.push("--depth".to_string());
+        args.push("1".to_string());
+    }
+
+    let post_checkout_commit = match &options.reference {
+        GitReference::Branch(name) | GitReference::Tag(name) => {
+            args.push("--branch".to_string());
+            args.push(name.clone());
+            args.push("--single-branch".to_string());
+            None
+        }
+        GitReference::Commit(sha) => Some(sha.clone()),
+        GitReference::None => None,
+    };
+
+    // When a post-clone commit checkout is needed, submodules are updated separately so
+    // their SHAs match the checked-out commit instead of the default branch tip.
+    let recurse_during_clone = options.recurse_submodules && post_checkout_commit.is_none();
+    if recurse_during_clone {
+        args.push("--recurse-submodules".to_string());
+        if options.shallow {
+            args.push("--shallow-submodules".to_string());
+        }
+    }
+
+    args.push(clone_url);
+    args.push(dest_str.to_string());
+
+    GitClonePlan {
+        args,
+        post_checkout_commit,
+        recurse_during_clone,
+    }
+}
+
+const STDERR_TAIL_LINES: usize = 20;
+
+/// Spawns `git clone`, forwarding its progress scaled into 0-80% (leaving headroom for
+/// post-clone work) and reporting the tail of git's diagnostics on failure.
+fn run_git_clone(
+    args: &[String],
+    cwd: &str,
+    tx: &Sender<ProgressMessage>,
+    url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let args_ref: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    let mut child = spawn_with_dir("git", &args_ref, cwd)?;
+    let mut stderr_tail: Vec<String> = Vec::new();
+    if let Some(stderr) = child.stderr.take() {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            match parse_git_progress(&line) {
+                Some(percentage) => {
+                    let _ = tx.send(ProgressMessage::Update((percentage * 80) / 100));
+                }
+                None => push_stderr_tail(&mut stderr_tail, &line),
+            }
+        }
+    }
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(git_clone_failure_message(status.code(), url, &stderr_tail).into());
+    }
+    Ok(())
+}
+
+/// Keeps the last [`STDERR_TAIL_LINES`] non-empty, trimmed stderr lines.
+fn push_stderr_tail(tail: &mut Vec<String>, line: &str) {
+    let trimmed = line.trim();
+    if !trimmed.is_empty() {
+        tail.push(trimmed.to_string());
+        if tail.len() > STDERR_TAIL_LINES {
+            tail.remove(0);
+        }
+    }
+}
+
+fn git_clone_failure_message(code: Option<i32>, url: &str, stderr_tail: &[String]) -> String {
+    let details = stderr_tail.join("; ");
+    format!(
+        "git clone failed (exit code {:?}) for {}{}",
+        code,
+        url,
+        if details.is_empty() {
+            String::new()
+        } else {
+            format!(": {}", details)
+        }
+    )
+}
+
+/// Makes `sha` available locally: a depth-1 fetch by SHA first, then `--unshallow`,
+/// then a plain fetch.
+fn fetch_commit_for_cli_checkout(
+    dest_str: &str,
+    sha: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Many servers support fetching by SHA when `uploadpack.allowReachableSHA1InWant`
+    // is enabled (GitHub does).
+    let shallow_fetch =
+        execute_command_with_dir("git", &["fetch", "--depth", "1", "origin", sha], dest_str)?;
+    if shallow_fetch.status.success() {
+        return Ok(());
+    }
+    debug!(
+        "Shallow fetch of commit {} failed, retrying without --depth: {}",
+        sha,
+        String::from_utf8_lossy(&shallow_fetch.stderr)
+    );
+
+    // Unshallowing errors out if the repo is already complete; then do a plain fetch.
+    let unshallow = execute_command_with_dir("git", &["fetch", "--unshallow", "origin"], dest_str)?;
+    if unshallow.status.success() {
+        return Ok(());
+    }
+    let plain_fetch = execute_command_with_dir("git", &["fetch", "origin"], dest_str)?;
+    if !plain_fetch.status.success() {
+        return Err(format!(
+            "git fetch failed while resolving commit {}: {}",
+            sha,
+            String::from_utf8_lossy(&plain_fetch.stderr)
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn submodule_update_args(shallow: bool) -> Vec<&'static str> {
+    let mut args = vec!["submodule", "update", "--init", "--recursive", "--progress"];
+    if shallow {
+        args.push("--depth");
+        args.push("1");
+    }
+    args
+}
+
+/// Runs `git submodule update`, streaming per-submodule progress from its stderr.
+fn run_git_submodule_update(
+    args: &[&str],
+    dest_str: &str,
+    tx: &Sender<ProgressMessage>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut child = spawn_with_dir("git", args, dest_str)?;
+    let mut tracker = SubmoduleProgressTracker::default();
+    if let Some(stderr) = child.stderr.take() {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines().map_while(Result::ok) {
+            tracker.handle_line(&line, tx);
+        }
+    }
+    let status = child.wait()?;
+    if !status.success() {
+        return Err(format!(
+            "git submodule update failed (exit code {:?})",
+            status.code()
+        )
+        .into());
+    }
+    tracker.finish(tx);
+    Ok(())
+}
+
+/// Attributes `git submodule update` progress lines to the submodule currently being cloned.
+#[derive(Default)]
+struct SubmoduleProgressTracker {
+    current: Option<String>,
+}
+
+impl SubmoduleProgressTracker {
+    fn handle_line(&mut self, line: &str, tx: &Sender<ProgressMessage>) {
+        if let Some(name) = parse_submodule_name(line) {
+            if let Some(prev) = self.current.replace(name.clone()) {
+                if prev != name {
+                    let _ = tx.send(ProgressMessage::SubmoduleFinish(prev));
+                }
+            }
+        }
+        if let (Some(percentage), Some(name)) = (parse_git_progress(line), self.current.as_deref())
+        {
+            let _ = tx.send(ProgressMessage::SubmoduleUpdate((
+                name.to_string(),
+                percentage,
+            )));
+        }
+    }
+
+    fn finish(&mut self, tx: &Sender<ProgressMessage>) {
+        if let Some(name) = self.current.take() {
+            let _ = tx.send(ProgressMessage::SubmoduleFinish(name));
+        }
+    }
 }
 
 /// Best-effort parse of `git submodule` stderr to figure out which submodule
@@ -2672,5 +2593,663 @@ mod mirror_url_tests {
         let parent = "https://jihulab.com/esp-mirror/espressif/esp-idf.git";
         let wrong = resolve_submodule_url("../../espressif/esp32-bt-lib.git", parent).unwrap();
         assert_eq!(wrong, "https://jihulab.com/espressif/esp32-bt-lib.git");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc::{channel, Receiver};
+    use tempfile::TempDir;
+
+    const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+    fn drain(rx: &Receiver<ProgressMessage>) -> Vec<String> {
+        rx.try_iter()
+            .map(|msg| match msg {
+                ProgressMessage::Update(p) => format!("update:{p}"),
+                ProgressMessage::Finish => "finish".to_string(),
+                ProgressMessage::SubmoduleUpdate((name, p)) => format!("sub:{name}:{p}"),
+                ProgressMessage::SubmoduleFinish(name) => format!("sub-finish:{name}"),
+            })
+            .collect()
+    }
+
+    fn options(reference: GitReference, shallow: bool, recurse: bool) -> CloneOptions {
+        CloneOptions {
+            url: "https://github.com/espressif/esp-idf.git".to_string(),
+            path: "/tmp/esp-idf".to_string(),
+            reference,
+            recurse_submodules: recurse,
+            shallow,
+            mirror: None,
+        }
+    }
+
+    #[test]
+    fn scale_fetch_progress_starts_at_ten_percent() {
+        assert_eq!(scale_fetch_progress(0), 10);
+        assert_eq!(scale_fetch_progress(3), 12);
+    }
+
+    #[test]
+    fn clone_shallow_mode_is_depth_one_except_for_commits() {
+        use gix::remote::fetch::Shallow;
+        let branch = GitReference::Branch("master".into());
+        let commit = GitReference::Commit(SHA.into());
+        assert!(matches!(
+            clone_shallow_mode(true, &branch),
+            Shallow::DepthAtRemote(d) if d.get() == 1
+        ));
+        assert!(matches!(
+            clone_shallow_mode(true, &GitReference::None),
+            Shallow::DepthAtRemote(_)
+        ));
+        assert!(matches!(
+            clone_shallow_mode(true, &commit),
+            Shallow::NoChange
+        ));
+        assert!(matches!(
+            clone_shallow_mode(false, &branch),
+            Shallow::NoChange
+        ));
+    }
+
+    #[test]
+    fn clone_fetch_refspec_targets_branch_or_tag_only() {
+        assert_eq!(
+            clone_fetch_refspec(&GitReference::Branch("release/v5.1".into())).as_deref(),
+            Some("+refs/heads/release/v5.1:refs/remotes/origin/release/v5.1")
+        );
+        assert_eq!(
+            clone_fetch_refspec(&GitReference::Tag("v5.1.2".into())).as_deref(),
+            Some("+refs/tags/v5.1.2:refs/tags/v5.1.2")
+        );
+        assert_eq!(clone_fetch_refspec(&GitReference::Commit(SHA.into())), None);
+        assert_eq!(clone_fetch_refspec(&GitReference::None), None);
+    }
+
+    #[test]
+    fn insert_after_core_section_needs_core_header_line() {
+        let mut config = "[core]\n\tbare = false\n".to_string();
+        assert!(insert_after_core_section(&mut config, "\tx = 1\n"));
+        assert_eq!(config, "[core]\n\tx = 1\n\tbare = false\n");
+
+        let mut no_core = "[remote \"origin\"]\n".to_string();
+        assert!(!insert_after_core_section(&mut no_core, "\tx = 1\n"));
+        assert_eq!(no_core, "[remote \"origin\"]\n");
+
+        let mut no_newline = "[core]".to_string();
+        assert!(!insert_after_core_section(&mut no_newline, "\tx = 1\n"));
+    }
+
+    #[test]
+    fn config_with_symlinks_disabled_cases() {
+        assert_eq!(
+            config_with_symlinks_disabled("[core]\n\tsymlinks = true\n").as_deref(),
+            Some("[core]\n\tsymlinks = false\n")
+        );
+        assert_eq!(
+            config_with_symlinks_disabled("[core]\n\tsymlinks = false\n"),
+            None
+        );
+        assert_eq!(
+            config_with_symlinks_disabled("[core]\n\tbare = false\n").as_deref(),
+            Some("[core]\n\tsymlinks = false\n\tbare = false\n")
+        );
+        assert_eq!(config_with_symlinks_disabled("[user]\n"), None);
+    }
+
+    #[test]
+    fn submodule_repo_config_makes_bare_repo_a_submodule() {
+        let bare = "[core]\n\trepositoryformatversion = 0\n\tbare = true\n";
+        let config = submodule_repo_config(
+            bare.to_string(),
+            Path::new("../../../components/foo"),
+            "https://github.com/espressif/foo.git",
+        );
+        assert!(config.contains("bare = false"));
+        assert!(!config.contains("bare = true"));
+        assert!(config.starts_with("[core]\n\tworktree = ../../../components/foo\n"));
+        assert!(config.ends_with(
+            "\n[remote \"origin\"]\n\turl = https://github.com/espressif/foo.git\n\
+             \tfetch = +refs/heads/*:refs/remotes/origin/*\n"
+        ));
+    }
+
+    #[test]
+    fn submodule_repo_config_keeps_existing_worktree_and_remote() {
+        let existing = "[core]\n\tworktree = ../x\n[remote \"origin\"]\n\turl = u\n";
+        let config = submodule_repo_config(existing.to_string(), Path::new("../y"), "other");
+        #[cfg(not(windows))]
+        assert_eq!(config, existing);
+        assert!(!config.contains("../y"));
+        assert!(!config.contains("other"));
+    }
+
+    #[test]
+    fn resolve_relative_segments_drops_repo_name_then_applies_relative() {
+        assert_eq!(
+            resolve_relative_segments(vec!["espressif", "esp-idf.git"], "../other/lib.git"),
+            vec!["other", "lib.git"]
+        );
+        assert_eq!(
+            resolve_relative_segments(vec!["a", "b", "repo"], "./c//d"),
+            vec!["a", "b", "c", "d"]
+        );
+        assert_eq!(
+            resolve_relative_segments(vec!["repo"], "../../x"),
+            vec!["x"]
+        );
+        assert!(resolve_relative_segments(vec![], "..").is_empty());
+    }
+
+    #[test]
+    fn resolve_relative_urls_for_http_and_ssh_parents() {
+        assert_eq!(
+            resolve_http_relative_url("../lib.git", "https://github.com/espressif/esp-idf.git")
+                .unwrap(),
+            "https://github.com/lib.git"
+        );
+        assert_eq!(
+            resolve_ssh_relative_url("../lib.git", "git@github.com:espressif/esp-idf.git").unwrap(),
+            "git@github.com:lib.git"
+        );
+        assert_eq!(
+            resolve_ssh_relative_url("./lib.git", "git@github.com:espressif/esp-idf.git").unwrap(),
+            "git@github.com:espressif/lib.git"
+        );
+        assert!(resolve_ssh_relative_url("../x", "ssh://a:b:c").is_err());
+    }
+
+    #[test]
+    fn short_sha_truncates_to_seven_chars() {
+        assert_eq!(short_sha(SHA), "0123456");
+        assert_eq!(short_sha("abc"), "abc");
+    }
+
+    #[test]
+    fn parse_commit_oid_accepts_full_hex_and_reports_bad_input() {
+        assert_eq!(parse_commit_oid(SHA).unwrap().to_string(), SHA);
+        let err = parse_commit_oid("not-a-sha").unwrap_err().to_string();
+        assert!(err.starts_with("Invalid SHA 'not-a-sha': "), "{err}");
+    }
+
+    #[test]
+    fn path_has_content_cases() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!path_has_content(&tmp.path().join("missing")));
+        assert!(!path_has_content(tmp.path()));
+        let file = tmp.path().join("file.txt");
+        fs::write(&file, "x").unwrap();
+        assert!(path_has_content(tmp.path()));
+        assert!(path_has_content(&file));
+    }
+
+    #[test]
+    fn git_reference_from_version_cases() {
+        assert!(matches!(
+            git_reference_from_version("master"),
+            GitReference::Branch(b) if b == "master"
+        ));
+        assert!(matches!(
+            git_reference_from_version("release-v5.1"),
+            GitReference::Branch(b) if b == "release/v5.1"
+        ));
+        assert!(matches!(
+            git_reference_from_version(SHA),
+            GitReference::Commit(c) if c == SHA
+        ));
+        assert!(matches!(
+            git_reference_from_version("v5.1.2"),
+            GitReference::Tag(t) if t == "v5.1.2"
+        ));
+        assert!(matches!(
+            git_reference_from_version(&SHA[..39]),
+            GitReference::Tag(_)
+        ));
+    }
+
+    #[test]
+    fn git_clone_plan_for_shallow_branch_with_submodules() {
+        let plan = git_clone_plan(
+            &options(GitReference::Branch("master".into()), true, true),
+            "/tmp/esp-idf",
+        );
+        assert_eq!(
+            plan,
+            GitClonePlan {
+                args: [
+                    "clone",
+                    "--progress",
+                    "--depth",
+                    "1",
+                    "--branch",
+                    "master",
+                    "--single-branch",
+                    "--recurse-submodules",
+                    "--shallow-submodules",
+                    "https://github.com/espressif/esp-idf.git",
+                    "/tmp/esp-idf",
+                ]
+                .map(String::from)
+                .to_vec(),
+                post_checkout_commit: None,
+                recurse_during_clone: true,
+            }
+        );
+    }
+
+    #[test]
+    fn git_clone_plan_for_commit_defers_checkout_and_submodules() {
+        let plan = git_clone_plan(
+            &options(GitReference::Commit(SHA.into()), false, true),
+            "dest",
+        );
+        assert_eq!(
+            plan.args,
+            [
+                "clone",
+                "--progress",
+                "https://github.com/espressif/esp-idf.git",
+                "dest"
+            ]
+        );
+        assert_eq!(plan.post_checkout_commit.as_deref(), Some(SHA));
+        assert!(!plan.recurse_during_clone);
+    }
+
+    #[test]
+    fn git_clone_plan_with_mirror_clones_github_url_through_insteadof() {
+        let mut opts = options(GitReference::Tag("v5.1.2".into()), false, false);
+        opts.url = "https://jihulab.com/esp-mirror/espressif/esp-idf.git".to_string();
+        opts.mirror = Some("https://jihulab.com/esp-mirror".to_string());
+        let plan = git_clone_plan(&opts, "dest");
+        assert_eq!(
+            plan.args,
+            [
+                "clone",
+                "--progress",
+                "-c",
+                "url.https://jihulab.com/esp-mirror/.insteadOf=https://github.com/",
+                "--branch",
+                "v5.1.2",
+                "--single-branch",
+                "https://github.com/espressif/esp-idf.git",
+                "dest"
+            ]
+        );
+        assert!(!plan.recurse_during_clone);
+    }
+
+    #[test]
+    fn git_clone_plan_without_reference_or_recursion() {
+        let plan = git_clone_plan(&options(GitReference::None, false, false), "dest");
+        assert_eq!(plan.args.len(), 4);
+        assert_eq!(plan.post_checkout_commit, None);
+        assert!(!plan.recurse_during_clone);
+    }
+
+    #[test]
+    fn push_stderr_tail_trims_skips_blank_and_is_bounded() {
+        let mut tail = Vec::new();
+        push_stderr_tail(&mut tail, "   ");
+        assert!(tail.is_empty());
+        for i in 0..25 {
+            push_stderr_tail(&mut tail, &format!("  line {i}  "));
+        }
+        assert_eq!(tail.len(), STDERR_TAIL_LINES);
+        assert_eq!(tail.first().map(String::as_str), Some("line 5"));
+        assert_eq!(tail.last().map(String::as_str), Some("line 24"));
+    }
+
+    #[test]
+    fn git_clone_failure_message_with_and_without_details() {
+        assert_eq!(
+            git_clone_failure_message(Some(128), "u", &[]),
+            "git clone failed (exit code Some(128)) for u"
+        );
+        assert_eq!(
+            git_clone_failure_message(None, "u", &["fatal: a".into(), "fatal: b".into()]),
+            "git clone failed (exit code None) for u: fatal: a; fatal: b"
+        );
+    }
+
+    #[test]
+    fn submodule_update_args_add_depth_when_shallow() {
+        assert_eq!(
+            submodule_update_args(false),
+            ["submodule", "update", "--init", "--recursive", "--progress"]
+        );
+        assert_eq!(
+            submodule_update_args(true),
+            [
+                "submodule",
+                "update",
+                "--init",
+                "--recursive",
+                "--progress",
+                "--depth",
+                "1"
+            ]
+        );
+    }
+
+    #[test]
+    fn submodule_progress_tracker_attributes_progress_and_finishes() {
+        let (tx, rx) = channel();
+        let mut tracker = SubmoduleProgressTracker::default();
+        for line in [
+            "Receiving objects: 10% (1/10)",
+            "Submodule path 'components/foo': checked out",
+            "Receiving objects: 50% (5/10)",
+            "Cloning into '/abs/components/foo'...",
+            "Cloning into '/abs/components/bar'...",
+            "Submodule path 'bar': checked out",
+            "Receiving objects: 100% (2/2), done.",
+        ] {
+            tracker.handle_line(line, &tx);
+        }
+        tracker.finish(&tx);
+        tracker.finish(&tx);
+        assert_eq!(
+            drain(&rx),
+            [
+                "sub:components/foo:50",
+                "sub-finish:components/foo",
+                "sub-finish:foo",
+                "sub:bar:100",
+                "sub-finish:bar",
+            ]
+        );
+    }
+
+    #[test]
+    fn resolve_actual_git_dir_for_repo_and_gitlink() {
+        let tmp = TempDir::new().unwrap();
+        let repo = tmp.path().join("repo");
+        assert_eq!(
+            resolve_actual_git_dir(&repo, false).unwrap(),
+            repo.join(".git")
+        );
+
+        let modules = tmp.path().join("modules").join("sub");
+        let sub = tmp.path().join("sub");
+        fs::create_dir_all(&modules).unwrap();
+        fs::create_dir_all(&sub).unwrap();
+        fs::write(sub.join(".git"), "gitdir: ../modules/sub\n").unwrap();
+        assert_eq!(
+            resolve_actual_git_dir(&sub, true).unwrap(),
+            modules.canonicalize().unwrap()
+        );
+
+        fs::write(sub.join(".git"), "nonsense").unwrap();
+        assert_eq!(
+            resolve_actual_git_dir(&sub, true).unwrap_err().to_string(),
+            "Invalid gitlink file"
+        );
+    }
+
+    #[test]
+    fn initialize_modules_repo_writes_submodule_config() {
+        let tmp = TempDir::new().unwrap();
+        let modules_dir = tmp
+            .path()
+            .join(".git")
+            .join("modules")
+            .join("components/foo");
+        let workdir = tmp.path().join("components").join("foo");
+        initialize_modules_repo(&modules_dir, &workdir, "https://example.com/foo.git").unwrap();
+
+        assert!(workdir.is_dir());
+        assert_eq!(
+            relative_worktree_path(&modules_dir, &workdir).unwrap(),
+            Path::new("../../../../components/foo")
+        );
+        let config = fs::read_to_string(modules_dir.join("config")).unwrap();
+        assert!(config.contains("bare = false"));
+        assert!(config.contains("\tworktree = ../../../../components/foo\n"));
+        assert!(config.contains("\turl = https://example.com/foo.git\n"));
+
+        // A second call is a no-op once the config exists.
+        initialize_modules_repo(&modules_dir, &workdir, "https://other.example").unwrap();
+        assert_eq!(
+            fs::read_to_string(modules_dir.join("config")).unwrap(),
+            config
+        );
+    }
+
+    #[cfg(unix)]
+    mod local_repos {
+        use super::*;
+        use std::process::Command;
+
+        fn git(dir: &Path, args: &[&str]) -> String {
+            let output = Command::new("git")
+                .args([
+                    "-c",
+                    "user.name=Test",
+                    "-c",
+                    "user.email=test@example.com",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "-c",
+                    "tag.gpgsign=false",
+                    "-c",
+                    "protocol.file.allow=always",
+                ])
+                .args(args)
+                .current_dir(dir)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8_lossy(&output.stdout).trim().to_string()
+        }
+
+        fn file_url(path: &Path) -> String {
+            format!("file://{}", path.display())
+        }
+
+        /// Repo on branch `main` with two commits (`first.txt`, then `second.txt`) and
+        /// tag `v1.0` on the first. Returns `(first_sha, second_sha)`.
+        fn make_source_repo(dir: &Path) -> (String, String) {
+            fs::create_dir_all(dir).unwrap();
+            git(dir, &["init", "-q", "-b", "main"]);
+            fs::write(dir.join("first.txt"), "first\n").unwrap();
+            git(dir, &["add", "."]);
+            git(dir, &["commit", "-q", "-m", "first"]);
+            let first = git(dir, &["rev-parse", "HEAD"]);
+            git(dir, &["tag", "v1.0"]);
+            fs::write(dir.join("second.txt"), "second\n").unwrap();
+            git(dir, &["add", "."]);
+            git(dir, &["commit", "-q", "-m", "second"]);
+            let second = git(dir, &["rev-parse", "HEAD"]);
+            (first, second)
+        }
+
+        fn clone_opts(url: String, dest: &Path, reference: GitReference) -> CloneOptions {
+            CloneOptions {
+                url,
+                path: dest.to_str().unwrap().to_string(),
+                reference,
+                recurse_submodules: false,
+                shallow: true,
+                mirror: None,
+            }
+        }
+
+        #[test]
+        fn clone_with_git_cli_checks_out_branch() {
+            let tmp = TempDir::new().unwrap();
+            let src = tmp.path().join("src");
+            let (_, second) = make_source_repo(&src);
+            let dest = tmp.path().join("dest");
+            let (tx, rx) = channel();
+
+            let opts = clone_opts(file_url(&src), &dest, GitReference::Branch("main".into()));
+            assert_eq!(clone_with_git_cli(&opts, tx).unwrap(), dest);
+
+            assert!(dest.join("second.txt").is_file());
+            assert_eq!(git(&dest, &["rev-parse", "HEAD"]), second);
+            let messages = drain(&rx);
+            assert_eq!(messages.first().map(String::as_str), Some("update:0"));
+            assert_eq!(messages.last().map(String::as_str), Some("update:100"));
+            assert!(messages.contains(&"update:80".to_string()));
+        }
+
+        #[test]
+        fn clone_with_git_cli_checks_out_older_commit() {
+            let tmp = TempDir::new().unwrap();
+            let src = tmp.path().join("src");
+            let (first, _) = make_source_repo(&src);
+            let dest = tmp.path().join("dest");
+            let (tx, _rx) = channel();
+
+            let opts = clone_opts(file_url(&src), &dest, GitReference::Commit(first.clone()));
+            clone_with_git_cli(&opts, tx).unwrap();
+
+            assert_eq!(git(&dest, &["rev-parse", "HEAD"]), first);
+            assert!(!dest.join("second.txt").exists());
+        }
+
+        #[test]
+        fn clone_with_git_cli_refuses_non_empty_destination() {
+            let tmp = TempDir::new().unwrap();
+            let dest = tmp.path().join("dest");
+            fs::create_dir_all(&dest).unwrap();
+            fs::write(dest.join("keep.txt"), "user data").unwrap();
+            let (tx, _rx) = channel();
+
+            let opts = clone_opts("file:///nonexistent".into(), &dest, GitReference::None);
+            let err = clone_with_git_cli(&opts, tx).unwrap_err().to_string();
+            assert!(err.contains("exists and is not empty"), "{err}");
+            assert!(dest.join("keep.txt").is_file());
+        }
+
+        #[test]
+        fn clone_with_git_cli_reports_git_diagnostics_on_failure() {
+            let tmp = TempDir::new().unwrap();
+            let dest = tmp.path().join("dest");
+            let missing = file_url(&tmp.path().join("missing"));
+            let (tx, _rx) = channel();
+
+            let opts = clone_opts(missing.clone(), &dest, GitReference::None);
+            let err = clone_with_git_cli(&opts, tx).unwrap_err().to_string();
+            assert!(
+                err.starts_with(&format!(
+                    "git clone failed (exit code Some(128)) for {missing}: "
+                )),
+                "{err}"
+            );
+        }
+
+        #[test]
+        fn fetch_single_commit_git_cli_fetches_and_checks_out() {
+            let tmp = TempDir::new().unwrap();
+            let src = tmp.path().join("src");
+            let (first, _) = make_source_repo(&src);
+            let dest = tmp.path().join("dest");
+            let (tx, rx) = channel();
+
+            fetch_single_commit_git_cli(&dest, &file_url(&src), &first, &Some(tx), Some("sub"))
+                .unwrap();
+
+            assert_eq!(git(&dest, &["rev-parse", "HEAD"]), first);
+            let messages = drain(&rx);
+            assert_eq!(messages.first().map(String::as_str), Some("sub:sub:10"));
+            assert_eq!(messages.last().map(String::as_str), Some("sub:sub:100"));
+            assert!(messages.contains(&"sub:sub:80".to_string()));
+        }
+
+        #[test]
+        fn clone_repository_checks_out_branch_tag_and_commit() {
+            let tmp = TempDir::new().unwrap();
+            let src = tmp.path().join("src");
+            let (first, second) = make_source_repo(&src);
+
+            for (name, reference, expected) in [
+                ("branch", GitReference::Branch("main".into()), &second),
+                ("tag", GitReference::Tag("v1.0".into()), &first),
+                ("commit", GitReference::Commit(first.clone()), &first),
+            ] {
+                let dest = tmp.path().join(name);
+                let (tx, rx) = channel();
+                let path = clone_repository(clone_opts(file_url(&src), &dest, reference), tx)
+                    .unwrap_or_else(|e| panic!("{name}: {e}"));
+                assert_eq!(path, dest);
+                assert_eq!(&git(&dest, &["rev-parse", "HEAD"]), expected, "{name}");
+                assert_eq!(dest.join("second.txt").exists(), expected == &second);
+                assert_eq!(drain(&rx), ["update:50", "update:90", "finish"], "{name}");
+            }
+        }
+
+        #[test]
+        fn clone_repository_initializes_submodules() {
+            let tmp = TempDir::new().unwrap();
+            let lib = tmp.path().join("lib");
+            let (_, lib_head) = make_source_repo(&lib);
+            let parent = tmp.path().join("parent");
+            make_source_repo(&parent);
+            git(
+                &parent,
+                &["submodule", "add", "-q", &file_url(&lib), "components/lib"],
+            );
+            git(&parent, &["commit", "-q", "-m", "add submodule"]);
+
+            let dest = tmp.path().join("dest");
+            let (tx, rx) = channel();
+            let mut opts = clone_opts(
+                file_url(&parent),
+                &dest,
+                GitReference::Branch("main".into()),
+            );
+            opts.recurse_submodules = true;
+            clone_repository(opts, tx).unwrap();
+
+            let sub = dest.join("components/lib");
+            assert!(sub.join("second.txt").is_file());
+            assert!(fs::read_to_string(sub.join(".git"))
+                .unwrap()
+                .starts_with("gitdir: "));
+            assert_eq!(git(&sub, &["rev-parse", "HEAD"]), lib_head);
+            let messages = drain(&rx);
+            assert!(messages.contains(&"sub-finish:components/lib".to_string()));
+            assert_eq!(messages.last().map(String::as_str), Some("finish"));
+        }
+
+        #[test]
+        fn fetch_single_commit_uses_gix_into_initialized_repo() {
+            let tmp = TempDir::new().unwrap();
+            let src = tmp.path().join("src");
+            let (first, _) = make_source_repo(&src);
+            let dest = tmp.path().join("dest");
+            fs::create_dir_all(&dest).unwrap();
+            git(&dest, &["init", "-q"]);
+            let (tx, rx) = channel();
+
+            fetch_single_commit(&dest, &file_url(&src), &first, Some(tx), None).unwrap();
+
+            assert!(dest.join("first.txt").is_file());
+            assert!(!dest.join("second.txt").exists());
+            assert_eq!(
+                fs::read_to_string(dest.join(".git/HEAD")).unwrap().trim(),
+                first
+            );
+            assert_eq!(
+                drain(&rx),
+                [
+                    "update:0",
+                    "update:10",
+                    "update:20",
+                    "update:80",
+                    "update:100"
+                ]
+            );
+        }
     }
 }

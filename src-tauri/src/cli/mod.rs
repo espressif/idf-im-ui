@@ -1,41 +1,24 @@
 use std::path::PathBuf;
 
 use anyhow::Context;
+#[cfg(not(feature = "gui"))]
 use clap::CommandFactory;
-use clap_complete::generate;
 use cli_args::Cli;
 use cli_args::Commands;
+#[cfg(feature = "gui")]
 use cli_args::InstallArgs;
 use fern::Dispatch;
-use helpers::generic_input;
-use helpers::generic_select;
 use idf_im_lib::get_log_directory;
-use idf_im_lib::idf_config::{InstallationStatus, IDF_CONFIG_FILE_NAME};
+use idf_im_lib::idf_config::{IdfInstallation, InstallationStatus, IDF_CONFIG_FILE_NAME};
 use idf_im_lib::logging::formatter;
-use idf_im_lib::settings::Settings;
-use idf_im_lib::utils::is_valid_idf_directory;
+use idf_im_lib::telemetry;
 use idf_im_lib::version_manager::get_selected_version;
-use idf_im_lib::version_manager::prepare_settings_for_fix_idf_installation;
-use idf_im_lib::version_manager::remove_single_idf_version;
-use idf_im_lib::version_manager::run_command_in_context;
-use idf_im_lib::version_manager::run_interactive_shell_in_context;
-use idf_im_lib::version_manager::select_idf_version;
-use log::debug;
-use log::error;
 use log::info;
-use log::warn;
 use log::LevelFilter;
 use rust_i18n::t;
 
-#[cfg(feature = "gui")]
-use crate::gui;
-
-use idf_im_lib::telemetry::{
-    self as telemetry, ErrorKind, InstallMode, InstallOutcome, InstallationContext, Interface,
-    OutcomeExtras,
-};
-
 pub mod cli_args;
+mod commands;
 pub mod helpers;
 pub mod prompts;
 pub mod wizard;
@@ -106,6 +89,15 @@ pub fn setup_cli(
     Ok(())
 }
 
+/// Global CLI options shared by the subcommand handlers.
+pub struct CommandContext {
+    pub config_path: Option<PathBuf>,
+    pub esp_idf_json_path: Option<String>,
+    pub do_not_track: bool,
+    #[cfg(feature = "gui")]
+    pub verbose: u8,
+}
+
 /// Resolves the IDF identifier to operate on: the one explicitly passed on
 /// the command line, or the currently selected version if none was given.
 fn resolve_idf_identifier(
@@ -132,96 +124,16 @@ fn status_label(status: &InstallationStatus) -> String {
     }
 }
 
-fn format_tool_list_report(report: &idf_im_lib::version_manager::ToolListReport) {
-    println!(
-        "{}",
-        t!(
-            "list_tools.title",
-            name = report.idf.name,
-            path = report.idf.path
-        )
-    );
-    println!();
-    for entry in &report.tools {
-        if entry.tool.install == "on_request" {
-            println!(
-                "{}: {}{}",
-                entry.tool.name,
-                entry.tool.description,
-                t!("list_tools.optional_marker")
-            );
-        } else {
-            println!("{}: {}", entry.tool.name, entry.tool.description);
-        }
-        for vi in &entry.version_inspections {
-            if !vi.has_platform_download {
-                continue;
-            }
-            if let Some(info) = &vi.installed {
-                println!(
-                    "  - {} ({}){}",
-                    vi.version.name,
-                    vi.version.status,
-                    t!("list_tools.installed", version = info.version)
-                );
-            } else {
-                println!(
-                    "  - {} ({}){}",
-                    vi.version.name,
-                    vi.version.status,
-                    t!("list_tools.not_installed")
-                );
-            }
-        }
-    }
-    if report.outdated_only {
-        println!();
-        if report.outdated.is_empty() {
-            println!("{}", t!("list_tools.no_outdated"));
-        } else {
-            println!("{}", t!("list_tools.outdated_header"));
-            for o in &report.outdated {
-                println!(
-                    "{}",
-                    t!(
-                        "list_tools.outdated_line",
-                        name = o.name,
-                        installed = o.installed,
-                        available = o.available
-                    )
-                );
-            }
-        }
-    }
+/// Menu entries of the form `name [status]` for picking an installed version.
+fn version_option_labels(versions: &[IdfInstallation]) -> Vec<String> {
+    versions
+        .iter()
+        .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
+        .collect()
 }
 
-fn format_feature_list_report(report: &idf_im_lib::version_manager::FeatureListReport) {
-    println!(
-        "{}",
-        t!(
-            "list_features.title",
-            name = report.idf.name,
-            path = report.idf.path
-        )
-    );
-    println!();
-    for entry in &report.features {
-        let name_and_desc = match &entry.feature.description {
-            Some(description) => format!("{}: {}", entry.feature.name, description),
-            None => entry.feature.name.clone(),
-        };
-        let optional_marker = if entry.feature.optional {
-            t!("list_features.optional_marker").to_string()
-        } else {
-            String::new()
-        };
-        let installed_marker = if entry.installed {
-            t!("list_features.installed").to_string()
-        } else {
-            t!("list_features.not_installed").to_string()
-        };
-        println!("{}{}{}", name_and_desc, optional_marker, installed_marker);
-    }
+fn config_path_for(esp_idf_json_path: Option<&String>) -> Option<PathBuf> {
+    esp_idf_json_path.map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME))
 }
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
@@ -240,840 +152,94 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
     }
     #[cfg(not(feature = "gui"))]
     let command = cli.clone().command.unwrap();
-    // Handle completions first, before any logging or output setup.
-    // This ensures shell completion scripts are pure without any log messages.
-    if let Commands::Completions { shell } = &command {
-        let mut cmd = Cli::command();
-        let bin_name = env!("CARGO_PKG_NAME");
-        generate(*shell, &mut cmd, bin_name, &mut std::io::stdout());
-        return Ok(());
-    }
-    // Handle help-json before any logging or output setup to ensure pure JSON output.
-    if let Commands::HelpJson = &command {
-        let cmd = Cli::command();
-
-        fn build_command_json(cmd: &clap::Command) -> serde_json::Value {
-            let mut subcommands = Vec::new();
-            for subcommand in cmd.get_subcommands() {
-                subcommands.push(serde_json::json!({
-                    "name": subcommand.get_name().to_string(),
-                    "about": subcommand.get_about().map(|s| s.to_string()),
-                    "args": build_args_json(subcommand),
-                }));
-            }
-
-            serde_json::json!({
-                "name": cmd.get_name().to_string(),
-                "about": cmd.get_about().map(|s| s.to_string()),
-                "version": cmd.get_version().map(|v| v.to_string()),
-                "subcommands": subcommands,
-                "global_args": build_args_json(cmd),
-            })
+    // Handle completions and help-json first, before any logging or output setup,
+    // so their output stays pure (no log messages mixed into scripts or JSON).
+    match &command {
+        Commands::Completions { shell } => {
+            commands::help::print_completions(*shell);
+            return Ok(());
         }
-
-        fn build_args_json(cmd: &clap::Command) -> serde_json::Value {
-            let mut args = Vec::new();
-            for arg in cmd.get_arguments() {
-                let short = arg.get_short().map(|c| format!("-{}", c));
-                let long = arg.get_long().map(|s| format!("--{}", s));
-                let default_value = arg
-                    .get_default_values()
-                    .first()
-                    .and_then(|v| v.to_str())
-                    .map(|s| s.to_string());
-                let possible_values_vec = arg.get_possible_values();
-                let possible_values: Option<Vec<&str>> = if possible_values_vec.is_empty() {
-                    None
-                } else {
-                    Some(possible_values_vec.iter().map(|pv| pv.get_name()).collect())
-                };
-
-                args.push(serde_json::json!({
-                    "id": arg.get_id().to_string(),
-                    "short": short,
-                    "long": long,
-                    "help": arg.get_help().map(|s| s.to_string()),
-                    "required": arg.is_required_set(),
-                    "default_value": default_value,
-                    "possible_values": possible_values,
-                }));
-            }
-            serde_json::json!(args)
+        Commands::HelpJson => {
+            commands::help::print_help_json();
+            return Ok(());
         }
-
-        let json_help = build_command_json(&cmd);
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&json_help).expect("Failed to serialize help to JSON")
-        );
-        return Ok(());
+        _ => {}
     }
 
+    prepare_output(&command, cli.verbose, cli.log_file)?;
+    if !do_not_track {
+        telemetry::track_cli_invoked(subcommand_name(&command));
+    }
+    let ctx = CommandContext {
+        config_path: config_path_for(cli.esp_idf_json_path.as_ref()),
+        esp_idf_json_path: cli.esp_idf_json_path,
+        do_not_track,
+        #[cfg(feature = "gui")]
+        verbose: cli.verbose,
+    };
+    dispatch(command, &ctx).await
+}
+
+fn prepare_output(command: &Commands, verbose: u8, log_file: Option<String>) -> anyhow::Result<()> {
     match command {
         #[cfg(feature = "gui")]
         Commands::Gui(_) => {
-            #[cfg(not(feature = "gui"))]
-            unimplemented!("GUI not present in this type of build");
             println!("{}", t!("gui.running"));
             // Skip CLI logging setup - tauri-plugin-log handles GUI logging
         }
         _ => {
-            setup_cli(cli.verbose, false, cli.log_file.map(PathBuf::from))
+            setup_cli(verbose, false, log_file.map(PathBuf::from))
                 .context("Failed to setup logging")?;
-            let is_elevated = idf_im_lib::utils::is_running_elevated();
-            if is_elevated {
-                log::warn!("Running as elevated user. This is not recommended but it is required if you want to install drivers.");
-                if cfg!(target_os = "windows") {
-                    println!("{}", t!("cli.running_as_elevated_windows"));
-                } else {
-                    println!("{}", t!("cli.running_as_elevated_posix"));
-                }
-            }
+            warn_if_elevated();
         }
     }
-    if !do_not_track {
-        telemetry::track_cli_invoked(subcommand_name(&command));
-    }
-    let cli_esp_idf_json_path = cli.esp_idf_json_path;
-    let config_path = cli_esp_idf_json_path
-        .as_ref()
-        .map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME));
-    match command {
-        Commands::Completions { .. } => unreachable!(),
-        Commands::HelpJson => unreachable!(),
-        Commands::Install(install_args) => {
-            let settings = Settings::new(install_args.config.clone(), install_args.clone());
-            debug!("Returned settings: {:?}", settings);
-            match settings {
-                Ok(mut settings) => {
-                    debug!("Settings before adjustments: {:?}", settings);
-                    if let Some(ref p) = cli_esp_idf_json_path {
-                        settings.esp_idf_json_path = Some(p.clone());
-                    }
-                    if install_args.install_all_prerequisites.is_none() {
-                        // if cli argument is not set
-                        settings.install_all_prerequisites = Some(true); // The non-interactive install will always install all prerequisites
-                    }
-                    match settings.initialize_esp_ide_json() {
-                    Ok(_) => debug!("ESP-IDF JSON initialized at configured path."),
-                    Err(e) => warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
-                  }
-                    debug!("Settings after adjustments: {:?}", settings);
-                    // Check if the provided path is already an installed IDF
-                    if let Some(ref path) = settings.path {
-                        match idf_im_lib::version_manager::list_installed_versions(
-                            config_path.as_ref(),
-                        ) {
-                            Ok(versions) => {
-                                debug!("Checking provided path against installed versions. Provided path: '{}'", path.display());
-                                if settings.version_name.is_none() {
-                                    if let Some(provided_path) =
-                                        idf_im_lib::utils::normalize_path_for_comparison(
-                                            &path.to_string_lossy(),
-                                        )
-                                    {
-                                        if versions.iter().any(|version| {
-                                            let version_path =
-                                                idf_im_lib::utils::normalize_path_for_comparison(
-                                                    &version.path,
-                                                );
-                                            debug!(
-                                                "Normalized version_path for '{}': {:?}",
-                                                version.path, version_path
-                                            );
-                                            version_path.is_some_and(|p| p == provided_path)
-                                        }) {
-                                            info!(
-                                                "{}",
-                                                t!(
-                                                    "install.already_installed",
-                                                    path = path.display()
-                                                )
-                                            );
-                                            info!("{}", t!("install.use_fix_command"));
-                                            return Ok(());
-                                        }
-                                    }
-                                }
-                            }
-                            Err(err) => {
-                                debug!("Could not list installed versions: {}", err);
-                            }
-                        }
-                    } else {
-                        debug!("No path provided in settings, skipping installed version check");
-                    }
-                    // Create InProgress entries before installation starts so interruptions are detectable
-                    if let Err(e) = settings.create_pending_esp_ide_json() {
-                        warn!("Failed to create pending installation entries: {}", e);
-                    }
+    Ok(())
+}
 
-                    let ctx = build_cli_context(&settings, InstallMode::Cli);
-                    let extras = build_cli_extras(&settings);
-                    if !do_not_track {
-                        telemetry::track_install_started(&ctx);
-                    }
-                    let result = wizard::run_wizard_run(settings).await;
-                    match result {
-                        Ok(_r) => {
-                            info!("{}", t!("install.wizard_result", r = "Ok".to_string()));
-                            info!("{}", t!("install.success"));
-                            info!("{}", t!("install.ready"));
-                            if !do_not_track {
-                                telemetry::track_install_outcome(
-                                    &ctx,
-                                    InstallOutcome::Success,
-                                    None,
-                                    None,
-                                    extras,
-                                );
-                            }
-                            Ok(())
-                        }
-                        Err(err) => {
-                            if !do_not_track {
-                                let wrapped = anyhow::anyhow!(err.clone());
-                                telemetry::track_install_outcome(
-                                    &ctx,
-                                    InstallOutcome::Failure,
-                                    Some(ErrorKind::from_message(&err)),
-                                    Some(&wrapped),
-                                    extras,
-                                );
-                            }
-                            Err(anyhow::anyhow!(err))
-                        }
-                    }
-                }
-                Err(err) => Err(anyhow::anyhow!(err)),
-            }
+fn warn_if_elevated() {
+    if idf_im_lib::utils::is_running_elevated() {
+        log::warn!("Running as elevated user. This is not recommended but it is required if you want to install drivers.");
+        if cfg!(target_os = "windows") {
+            println!("{}", t!("cli.running_as_elevated_windows"));
+        } else {
+            println!("{}", t!("cli.running_as_elevated_posix"));
         }
-        Commands::List => {
-            info!("{}", t!("list.title"));
-            match idf_im_lib::version_manager::get_esp_ide_config(config_path.as_ref()) {
-                Ok(config) => {
-                    if config.idf_installed.is_empty() {
-                        warn!("{}", t!("list.no_versions"));
-                        Ok(())
-                    } else {
-                        println!("{}", t!("list.installed_title"));
-                        for version in config.idf_installed {
-                            let sl = status_label(&version.status);
-                            if version.id == config.idf_selected_id {
-                                println!(
-                                    "{}",
-                                    t!(
-                                        "list.version_selected",
-                                        name = version.name,
-                                        path = version.path,
-                                        status = sl
-                                    )
-                                );
-                            } else {
-                                println!(
-                                    "{}",
-                                    t!(
-                                        "list.version",
-                                        name = version.name,
-                                        path = version.path,
-                                        status = sl
-                                    )
-                                );
-                            }
-                        }
-                        Ok(())
-                    }
-                }
-                Err(err) => {
-                    info!("{}", t!("list.no_versions"));
-                    info!("{}", t!("cli.hint.custom_json_path"));
-                    debug!("Error: {}", err);
-                    Ok(())
-                }
-            }
-        }
+    }
+}
+
+async fn dispatch(command: Commands, ctx: &CommandContext) -> anyhow::Result<()> {
+    let config_path = ctx.config_path.as_ref();
+    match command {
+        Commands::Completions { .. } | Commands::HelpJson => unreachable!(),
+        Commands::Install(install_args) => commands::install::install(install_args, ctx).await,
+        Commands::Wizard(install_args) => commands::install::wizard(install_args, ctx).await,
+        Commands::Fix { install_args } => commands::install::fix(install_args, config_path).await,
+        #[cfg(feature = "gui")]
+        Commands::Gui(install_args) => commands::install::gui(install_args, ctx),
+        Commands::List => commands::list::list(config_path),
         Commands::ListTools {
             identifier,
             outdated,
-        } => {
-            let identifier = if let Some(id) = identifier {
-                Some(id)
-            } else {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) if versions.is_empty() => {
-                        warn!("{}", t!("list.no_versions"));
-                        return Ok(());
-                    }
-                    Ok(versions) => {
-                        let options: Vec<String> = versions
-                            .iter()
-                            .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
-                            .collect();
-                        match helpers::generic_select_index(&t!("list_tools.idf_prompt"), &options)
-                        {
-                            Ok(i) => Some(versions[i].name.clone()),
-                            Err(err) => return Err(anyhow::anyhow!(err)),
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Error: {}", err);
-                        warn!("{}", t!("list.no_versions"));
-                        info!("{}", t!("cli.hint.custom_json_path"));
-                        return Ok(());
-                    }
-                }
-            };
-
-            let report = idf_im_lib::version_manager::list_idf_tools(
-                identifier.as_deref(),
-                outdated,
-                config_path.as_ref(),
-            );
-            match report {
-                Ok(report) => {
-                    format_tool_list_report(&report);
-                    Ok(())
-                }
-                Err(err) => {
-                    error!("{}", err);
-                    Err(anyhow::anyhow!(err))
-                }
-            }
-        }
+        } => commands::list::list_tools(identifier, outdated, config_path),
         Commands::ListFeatures { identifier } => {
-            let identifier = if let Some(id) = identifier {
-                Some(id)
-            } else {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) if versions.is_empty() => {
-                        warn!("{}", t!("list.no_versions"));
-                        return Ok(());
-                    }
-                    Ok(versions) => {
-                        let options: Vec<String> =
-                            versions.iter().map(|v| v.name.clone()).collect();
-                        match generic_select(&t!("list_features.idf_prompt"), &options) {
-                            Ok(selected) => Some(selected),
-                            Err(err) => return Err(anyhow::anyhow!(err)),
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Error: {}", err);
-                        warn!("{}", t!("list.no_versions"));
-                        info!("{}", t!("cli.hint.custom_json_path"));
-                        return Ok(());
-                    }
-                }
-            };
-
-            let report = idf_im_lib::version_manager::list_idf_features(
-                identifier.as_deref(),
-                config_path.as_ref(),
-            );
-            match report {
-                Ok(report) => {
-                    format_feature_list_report(&report);
-                    Ok(())
-                }
-                Err(err) => {
-                    error!("{}", err);
-                    Err(anyhow::anyhow!(err))
-                }
-            }
+            commands::list::list_features(identifier, config_path)
         }
-        Commands::Select { version } => {
-            if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) => {
-                        if versions.is_empty() {
-                            warn!("{}", t!("select.no_versions"));
-                            Ok(())
-                        } else {
-                            println!("{}", t!("select.available_title"));
-                            let options: Vec<String> = versions
-                                .iter()
-                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
-                                .collect();
-                            match helpers::generic_select_index(&t!("select.prompt"), &options) {
-                                Ok(i) => match select_idf_version(
-                                    &versions[i].name,
-                                    config_path.as_ref(),
-                                ) {
-                                    Ok(_) => {
-                                        println!(
-                                            "{}",
-                                            t!("select.success", version = versions[i].name)
-                                        );
-                                        if let Some(selected) =
-                                            get_selected_version(config_path.as_ref())
-                                        {
-                                            println!("{}", t!("wizard.separator.line"));
-                                            println!(
-                                                "{}",
-                                                t!("cli.select.activation_instructions")
-                                            );
-                                            let script =
-                                                selected.activation_script.as_deref().unwrap_or("");
-                                            match std::env::consts::OS {
-                                                "windows" => println!(". \"{}\"", script),
-                                                _ => println!("source \"{}\"", script),
-                                            }
-                                            println!("{}", t!("wizard.separator.line"));
-                                        } else {
-                                            warn!("{}", t!("select.unable_to_get_selected"));
-                                        }
-                                        Ok(())
-                                    }
-                                    Err(err) => Err(anyhow::anyhow!(err)),
-                                },
-                                Err(err) => Err(anyhow::anyhow!(err)),
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        error!("{}", t!("list.no_versions"));
-                        info!("{}", t!("cli.hint.custom_json_path"));
-                        debug!("Error: {}", err);
-                        Err(anyhow::anyhow!(err))
-                    }
-                }
-            } else {
-                match select_idf_version(&version.clone().unwrap(), config_path.as_ref()) {
-                    Ok(_) => {
-                        info!(
-                            "{}",
-                            t!("select.success", version = version.clone().unwrap())
-                        );
-                        if let Some(selected) = get_selected_version(config_path.as_ref()) {
-                            info!("{}", t!("wizard.separator.line"));
-                            info!("{}", t!("cli.select.activation_instructions"));
-                            let script = selected.activation_script.as_deref().unwrap_or("");
-                            match std::env::consts::OS {
-                                "windows" => info!(". {}", script),
-                                _ => info!("source {}", script),
-                            };
-                            info!("{}", t!("wizard.separator.line"));
-                        } else {
-                            warn!("{}", t!("select.unable_to_get_selected"));
-                        }
-                        Ok(())
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            }
-        }
-        Commands::Run { command, idf } => {
-            let idf_identifier = resolve_idf_identifier(idf, config_path.as_ref())?;
-
-            match run_command_in_context(&idf_identifier, &command, config_path.as_ref()) {
-                Ok(status) => {
-                    if !status.success() {
-                        return Err(anyhow::anyhow!(t!("run.command_failed")));
-                    }
-                    Ok(())
-                }
-                Err(err) => Err(err),
-            }
-        }
-        Commands::Shell { idf } => {
-            let idf_identifier = resolve_idf_identifier(idf, config_path.as_ref())?;
-
-            info!("{}", t!("shell.starting", idf = idf_identifier));
-            match run_interactive_shell_in_context(&idf_identifier, config_path.as_ref()) {
-                Ok(status) => {
-                    if !status.success() {
-                        return Err(anyhow::anyhow!(t!("shell.command_failed")));
-                    }
-                    Ok(())
-                }
-                Err(err) => Err(err),
-            }
-        }
+        Commands::Select { version } => commands::manage::select(version, config_path),
         Commands::Rename { version, new_name } => {
-            if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) => {
-                        if versions.is_empty() {
-                            warn!("{}", t!("rename.no_versions"));
-                            Ok(())
-                        } else {
-                            let options: Vec<String> = versions
-                                .iter()
-                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
-                                .collect();
-                            let version =
-                                match helpers::generic_select_index(&t!("rename.prompt"), &options)
-                                {
-                                    Ok(i) => versions[i].name.clone(),
-                                    Err(err) => {
-                                        error!("Error: {}", err);
-                                        return Err(anyhow::anyhow!(err));
-                                    }
-                                };
-
-                            let new_name = match generic_input(
-                                &t!("rename.new_name_prompt"),
-                                &t!("rename.new_name_required"),
-                                "",
-                            ) {
-                                Ok(name) => {
-                                    if name.is_empty() {
-                                        warn!("{}", t!("rename.using_default"));
-                                        version.clone()
-                                    } else {
-                                        name
-                                    }
-                                }
-                                Err(err) => {
-                                    error!("Error: {}", err);
-                                    version.clone()
-                                }
-                            };
-                            match idf_im_lib::version_manager::rename_idf_version(
-                                &version,
-                                new_name,
-                                config_path.as_ref(),
-                            ) {
-                                Ok(_) => {
-                                    println!("{}", t!("rename.success"));
-                                    Ok(())
-                                }
-                                Err(err) => Err(anyhow::anyhow!(err)),
-                            }
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Error: {}", err);
-                        error!("{}", t!("list.no_versions"));
-                        info!("{}", t!("cli.hint.custom_json_path"));
-                        Err(anyhow::anyhow!(err))
-                    }
-                }
-            } else if new_name.is_none() {
-                let new_name = match generic_input(
-                    &t!("rename.new_name_prompt"),
-                    &t!("rename.new_name_required"),
-                    "",
-                ) {
-                    Ok(name) => {
-                        if name.is_empty() {
-                            warn!("{}", t!("rename.using_default"));
-                            version.clone().unwrap()
-                        } else {
-                            name
-                        }
-                    }
-                    Err(err) => {
-                        error!("Error: {}", err);
-                        version.clone().unwrap()
-                    }
-                };
-                match idf_im_lib::version_manager::rename_idf_version(
-                    &version.clone().unwrap(),
-                    new_name,
-                    config_path.as_ref(),
-                ) {
-                    Ok(_) => {
-                        println!("{}", t!("rename.success"));
-                        Ok(())
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            } else {
-                match idf_im_lib::version_manager::rename_idf_version(
-                    &version.clone().unwrap(),
-                    new_name.clone().unwrap(),
-                    config_path.as_ref(),
-                ) {
-                    Ok(_) => {
-                        println!("{}", t!("rename.success"));
-                        Ok(())
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            }
+            commands::manage::rename(version, new_name, config_path)
         }
+        Commands::Remove { version } => commands::manage::remove(version, config_path),
+        Commands::Purge => commands::manage::purge(config_path),
+        Commands::Import { path } => commands::manage::import(path, config_path),
+        Commands::Run { command, idf } => commands::run::run(command, idf, config_path),
+        Commands::Shell { idf } => commands::run::shell(idf, config_path),
         Commands::Discover => {
             // TODO: Implement version discovery. Planned shape: list the IDF folders
             // found by `version_manager::find_esp_idf_folders("/")` under the
             // `discover.title` heading, then report each with `discover.found`.
             unimplemented!("Version discovery not implemented yet")
         }
-        Commands::Import { path } => match path {
-            Some(config_file) => {
-                info!(
-                    "{}",
-                    t!("import.using_config", config = format!("{:?}", config_file))
-                );
-                match idf_im_lib::utils::parse_tool_set_config(&config_file, config_path.as_ref()) {
-                    Ok(_) => {
-                        info!("{}", t!("import.success"));
-                        Ok(())
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            }
-            None => {
-                info!("{}", t!("import.no_config"));
-                Ok(())
-            }
-        },
-        Commands::Remove { version } => {
-            // todo: add spinner
-            if version.is_none() {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) => {
-                        if versions.is_empty() {
-                            info!("{}", t!("remove.no_versions"));
-                            Ok(())
-                        } else {
-                            println!("{}", t!("remove.available_title"));
-                            let options: Vec<String> = versions
-                                .iter()
-                                .map(|v| format!("{} [{}]", v.name, status_label(&v.status)))
-                                .collect();
-                            match helpers::generic_select_index(&t!("remove.prompt"), &options) {
-                                Ok(i) => match remove_single_idf_version(
-                                    &versions[i].name,
-                                    false,
-                                    config_path.as_ref(),
-                                ) {
-                                    Ok(_) => {
-                                        info!(
-                                            "{}",
-                                            t!("remove.success", version = versions[i].name)
-                                        );
-                                        Ok(())
-                                    }
-                                    Err(err) => Err(anyhow::anyhow!(err)),
-                                },
-                                Err(err) => Err(anyhow::anyhow!(err)),
-                            }
-                        }
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            } else {
-                match remove_single_idf_version(
-                    &version.clone().unwrap(),
-                    false,
-                    config_path.as_ref(),
-                ) {
-                    Ok(_) => {
-                        println!(
-                            "{}",
-                            t!("remove.success", version = version.clone().unwrap())
-                        );
-                        Ok(())
-                    }
-                    Err(err) => Err(anyhow::anyhow!(err)),
-                }
-            }
-        }
-        Commands::Purge => {
-            // Todo: offer to run discovery first
-            println!("{}", t!("purge.title"));
-            match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                Ok(versions) => {
-                    if versions.is_empty() {
-                        println!("{}", t!("purge.no_versions"));
-                        Ok(())
-                    } else {
-                        let mut failed = false;
-                        for version in versions {
-                            info!("{}", t!("purge.removing", version = version.name));
-                            match remove_single_idf_version(
-                                &version.name,
-                                false,
-                                config_path.as_ref(),
-                            ) {
-                                Ok(_) => {
-                                    info!("{}", t!("purge.removed", version = version.name));
-                                }
-                                Err(err) => {
-                                    error!(
-                                        "{}",
-                                        t!("purge.failed", version = version.name, error = err)
-                                    );
-                                    failed = true;
-                                }
-                            }
-                        }
-                        if failed {
-                            return Err(anyhow::anyhow!(t!("purge.some_failed")));
-                        } else {
-                            info!("{}", t!("purge.all_success"));
-                        }
-                        Ok(())
-                    }
-                }
-                Err(err) => Err(anyhow::anyhow!(err)),
-            }
-        }
-        Commands::Wizard(install_args) => {
-            info!("{}", t!("wizard.title"));
-            let settings = Settings::new(install_args.config.clone(), install_args.clone());
-            match settings {
-                Ok(mut settings) => {
-                    if let Some(ref p) = cli_esp_idf_json_path {
-                        settings.esp_idf_json_path = Some(p.clone());
-                    }
-                    settings.non_interactive = Some(false);
-                    match settings.initialize_esp_ide_json() {
-                      Ok(_) => debug!("ESP-IDF JSON initialized at configured path."),
-                      Err(e) => warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
-                    }
-
-                    // Check for incomplete installations and offer fix/delete
-                    wizard::check_and_handle_incomplete_installations(
-                        &settings,
-                        config_path.as_ref(),
-                    )
-                    .await;
-
-                    // Create InProgress entries before installation starts so interruptions are detectable
-                    if let Err(e) = settings.create_pending_esp_ide_json() {
-                        warn!("Failed to create pending installation entries: {}", e);
-                    }
-
-                    let ctx = build_cli_context(&settings, InstallMode::Wizard);
-                    let extras = build_cli_extras(&settings);
-                    if !do_not_track {
-                        telemetry::track_install_started(&ctx);
-                    }
-                    let result = wizard::run_wizard_run(settings).await;
-                    match result {
-                        Ok(_r) => {
-                            info!("{}", t!("install.wizard_result"));
-                            info!("{}", t!("install.success"));
-                            info!("{}", t!("install.ready"));
-                            if !do_not_track {
-                                telemetry::track_install_outcome(
-                                    &ctx,
-                                    InstallOutcome::Success,
-                                    None,
-                                    None,
-                                    extras,
-                                );
-                            }
-                            Ok(())
-                        }
-                        Err(err) => {
-                            if !do_not_track {
-                                let wrapped = anyhow::anyhow!(err.clone());
-                                telemetry::track_install_outcome(
-                                    &ctx,
-                                    InstallOutcome::Failure,
-                                    Some(ErrorKind::from_message(&err)),
-                                    Some(&wrapped),
-                                    extras,
-                                );
-                            }
-                            Err(anyhow::anyhow!(err))
-                        }
-                    }
-                }
-                Err(err) => Err(anyhow::anyhow!(err)),
-            }
-        }
-        Commands::Fix { install_args } => {
-            let path_to_fix = if let Some(path) = install_args.path.clone() {
-                // If a path is provided, fix the IDF installation at that path
-                if is_valid_idf_directory(&path) {
-                    PathBuf::from(path)
-                } else {
-                    error!("{}", t!("fix.invalid_directory", path = path));
-                    return Err(anyhow::anyhow!(t!("fix.invalid_directory", path = path)));
-                }
-            } else {
-                match idf_im_lib::version_manager::list_installed_versions(config_path.as_ref()) {
-                    Ok(versions) => {
-                        if versions.is_empty() {
-                            warn!("{}", t!("fix.no_versions"));
-                            return Ok(());
-                        } else {
-                            let options: Vec<String> = versions
-                                .iter()
-                                .map(|v| {
-                                    format!("{} ({}) [{}]", v.name, v.path, status_label(&v.status))
-                                })
-                                .collect();
-                            let version_path =
-                                match helpers::generic_select_index(&t!("fix.prompt"), &options) {
-                                    Ok(i) => versions[i].path.clone(),
-                                    Err(err) => {
-                                        error!("Error: {}", err);
-                                        return Err(anyhow::anyhow!(err));
-                                    }
-                                };
-                            PathBuf::from(version_path)
-                        }
-                    }
-                    Err(err) => {
-                        debug!("Error: {}", err);
-                        return Err(anyhow::anyhow!(t!("fix.no_versions_found")));
-                    }
-                }
-            };
-            info!("{}", t!("fix.fixing", path = path_to_fix.display()));
-            // The fix logic is just installation with use of existing repository.
-            // Start from the settings the installation was originally created with (so tools,
-            // features, target etc. are preserved), then let any CLI args the user explicitly
-            // passed to `fix` override those preserved values (and the defaults).
-            let mut settings = prepare_settings_for_fix_idf_installation(
-                path_to_fix.clone(),
-                config_path.as_ref(),
-            )
-            .await?;
-            settings.apply_cli_overrides(install_args)?;
-            let result = wizard::run_wizard_run(settings).await;
-            match result {
-                Ok(_r) => {
-                    info!("{}", t!("fix.result", r = "Ok"));
-                    info!("{}", t!("fix.success", path = path_to_fix.display()));
-                }
-                Err(err) => {
-                    error!("{}", t!("fix.failed", error = err));
-                    return Err(anyhow::anyhow!(err));
-                }
-            }
-            info!("{}", t!("fix.ready"));
-            Ok(())
-        }
-        #[cfg(feature = "gui")]
-        Commands::Gui(install_args) => {
-            #[cfg(not(feature = "gui"))]
-            unimplemented!("GUI not present in this type of build");
-            let log_level = match cli.verbose {
-                0 => LevelFilter::Info,
-                1 => LevelFilter::Debug,
-                _ => LevelFilter::Trace,
-            };
-            let do_not_track = cli.do_not_track;
-            let settings = match Settings::new(install_args.config.clone(), install_args.clone()) {
-                Ok(mut settings) => {
-                    if let Some(ref p) = cli_esp_idf_json_path {
-                        settings.esp_idf_json_path = Some(p.clone());
-                    }
-                    Some(settings)
-                }
-                Err(_) => None,
-            };
-            gui::run(settings, Some(log_level), do_not_track);
-            Ok(())
-        }
-        Commands::InstallDrivers => match std::env::consts::OS {
-            "windows" => {
-                info!("{}", t!("drivers.installing"));
-                if let Err(err) = idf_im_lib::install_drivers().await {
-                    error!("{}", t!("drivers.failed", error = err));
-                    return Err(anyhow::anyhow!(err));
-                }
-                info!("{}", t!("drivers.success"));
-                Ok(())
-            }
-            _ => Err(anyhow::anyhow!(t!("drivers.windows_only"))),
-        },
+        Commands::InstallDrivers => commands::run::install_drivers().await,
     }
 }
 
@@ -1101,40 +267,74 @@ fn subcommand_name(cmd: &Commands) -> &'static str {
     }
 }
 
-fn build_cli_context(settings: &Settings, mode: InstallMode) -> InstallationContext {
-    let installation_ids: Vec<String> = settings
-        .pending_installation_ids
-        .as_ref()
-        .map(|m| m.values().cloned().collect())
-        .unwrap_or_default();
-    let versions = settings.idf_versions.clone().unwrap_or_default();
-    telemetry::new_session(Interface::Cli, mode, versions, installation_ids)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
 
-fn build_cli_extras(settings: &Settings) -> OutcomeExtras {
-    let feature_count = settings.idf_features.as_ref().map(|v| v.len()).or_else(|| {
-        settings
-            .idf_features_per_version
-            .as_ref()
-            .map(|m| m.values().map(|v| v.len()).sum())
-    });
-    let tool_count = settings.idf_tools.as_ref().map(|v| v.len()).or_else(|| {
-        settings
-            .idf_tools_per_version
-            .as_ref()
-            .map(|m| m.values().map(|v| v.len()).sum())
-    });
-    let target_count = settings.target.as_ref().map(|v| v.len());
-    let non_interactive = settings.non_interactive;
-    let used_existing_idf = settings
-        .path
-        .as_ref()
-        .and_then(|p| is_valid_idf_directory(p.to_str().unwrap_or_default()).then_some(true));
-    OutcomeExtras {
-        feature_count,
-        tool_count,
-        target_count,
-        non_interactive,
-        used_existing_idf,
+    fn installation(name: &str, status: InstallationStatus) -> IdfInstallation {
+        IdfInstallation {
+            activation_script: None,
+            id: format!("id-{}", name),
+            idf_tools_path: String::new(),
+            name: name.to_string(),
+            path: format!("/esp/{}", name),
+            python: None,
+            installation_config: None,
+            status,
+        }
+    }
+
+    #[test]
+    fn version_option_labels_include_status() {
+        let versions = vec![
+            installation("v5.4", InstallationStatus::Finished),
+            installation("v5.3", InstallationStatus::Broken),
+        ];
+        assert_eq!(
+            version_option_labels(&versions),
+            vec![
+                format!("v5.4 [{}]", t!("list.status.finished")),
+                format!("v5.3 [{}]", t!("list.status.broken")),
+            ]
+        );
+    }
+
+    #[test]
+    fn version_option_labels_empty() {
+        assert!(version_option_labels(&[]).is_empty());
+    }
+
+    #[test]
+    fn config_path_for_joins_config_file_name() {
+        let dir = "/tmp/eim".to_string();
+        assert_eq!(
+            config_path_for(Some(&dir)),
+            Some(PathBuf::from("/tmp/eim").join(IDF_CONFIG_FILE_NAME))
+        );
+        assert_eq!(config_path_for(None), None);
+    }
+
+    #[test]
+    fn resolve_idf_identifier_prefers_explicit_value() {
+        let id = resolve_idf_identifier(Some("v5.4".to_string()), None).unwrap();
+        assert_eq!(id, "v5.4");
+    }
+
+    #[test]
+    fn subcommand_name_matches_cli_spelling() {
+        for (args, expected) in [
+            (vec!["eim", "list"], "list"),
+            (vec!["eim", "list-tools"], "list-tools"),
+            (vec!["eim", "list-features"], "list-features"),
+            (vec!["eim", "purge"], "purge"),
+            (vec!["eim", "install-drivers"], "install-drivers"),
+            (vec!["eim", "help-json"], "help-json"),
+            (vec!["eim", "run", "idf.py build"], "run"),
+            (vec!["eim", "rename", "old", "new"], "rename"),
+        ] {
+            let cli = Cli::try_parse_from(&args).unwrap();
+            assert_eq!(subcommand_name(&cli.command.unwrap()), expected);
+        }
     }
 }

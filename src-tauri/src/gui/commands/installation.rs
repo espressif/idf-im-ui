@@ -1,15 +1,13 @@
 use crate::gui::{
     app_state::{self, update_settings},
     commands::idf_tools::setup_tools,
-    get_installed_versions,
     ui::{
         emit_installation_event, emit_log_message, InstallationProgress, InstallationStage,
         MessageLevel,
     },
     utils::{
-        compare_versions, format_bytes, get_file_name, get_mirror_to_use,
-        get_offline_archive_cache_dir, is_path_empty_or_nonexistent, is_stable_version,
-        swap_windows_drive, MirrorType,
+        compare_versions, format_bytes, get_mirror_to_use, get_offline_archive_cache_dir,
+        is_stable_version, swap_windows_drive, MirrorType,
     },
 };
 use std::{
@@ -18,31 +16,11 @@ use std::{
     thread,
 };
 use tauri::{AppHandle, Emitter, Manager};
-use tempfile::TempDir;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-// Used only by the `#[cfg(target_os = "windows")]` `start_installation` below, so
-// these carry the same gate. Ungated they read as unused on macOS/Linux (and a
-// macOS-only `cargo clippy --fix` will delete them again); the non-Windows
-// `start_installation` must not need them.
-#[cfg(target_os = "windows")]
-use std::{
-    io::{BufRead, BufReader},
-    process::{Command, Stdio},
-};
-
-use anyhow::Result;
 use idf_im_lib::{
-    ensure_path,
     git_tools::ProgressMessage,
-    idf_config::IDF_CONFIG_FILE_NAME,
-    offline_installer::{
-        copy_idf_from_offline_archive, install_prerequisites_offline, use_offline_archive,
-    },
-    utils::copy_dir_contents,
-    version_manager::prepare_settings_for_fix_idf_installation,
+    idf_config::{IdfConfig, InstallationStatus, IDF_CONFIG_FILE_NAME},
+    version_manager::get_default_config_path,
 };
 use log::{debug, error, info, warn};
 
@@ -51,12 +29,20 @@ use crate::gui::{
     ui::{send_message, ProgressBar},
 };
 use idf_im_lib::settings::Settings;
-use idf_im_lib::system_dependencies;
 
-use super::{
-    prerequisites::{install_prerequisites, python_install, python_sanity_check},
-    settings,
-};
+use super::{prerequisites, settings};
+
+#[cfg(not(target_os = "windows"))]
+mod batch;
+mod checks;
+#[cfg(any(target_os = "windows", test))]
+mod cli_installer;
+mod offline;
+mod progress;
+mod repair;
+mod simple;
+
+use progress::{emit_error, emit_progress};
 
 /// Offline package as presented to the GUI (one build for the current platform).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -313,29 +299,40 @@ pub async fn install_single_version(
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-#[tauri::command]
-pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+/// The IDE JSON (`eim_idf.json`) path configured in `settings`, if any.
+fn configured_idf_config_path(settings: &Settings) -> Option<PathBuf> {
+    settings
+        .esp_idf_json_path
+        .as_ref()
+        .map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME))
+}
 
-    // Set installation flag
-    if let Err(e) = set_installation_status(&app_handle, true) {
-        return Err(e);
+fn idf_config_path(settings: &Settings) -> PathBuf {
+    configured_idf_config_path(settings).unwrap_or_else(get_default_config_path)
+}
+
+/// Updates the status of the pending `eim_idf.json` entry created for `version`, if any.
+fn mark_pending_status(
+    settings: &Settings,
+    config_path: &Path,
+    version: &str,
+    status: InstallationStatus,
+) {
+    if let Some(id) = settings
+        .pending_installation_ids
+        .as_ref()
+        .and_then(|ids| ids.get(version))
+    {
+        let _ = IdfConfig::update_status_in_file(config_path, id, status);
     }
+}
 
-    // Get the settings and save to a temporary config file
-    let settings = get_locked_settings(&app_handle)?;
-    let temp_dir = std::env::temp_dir();
-    let config_path = temp_dir.join(format!("eim_config_{}.toml", std::process::id()));
-
-    // Make sure settings has proper values
-    let mut settings_clone = settings.clone();
-    settings_clone.config_file_save_path = Some(config_path.clone());
-    settings_clone.non_interactive = Some(true);
-    settings_clone.install_all_prerequisites = Some(true);
-
-    // Validate installation path
-    if !is_path_empty_or_nonexistent(
+#[cfg(target_os = "windows")]
+fn validate_subprocess_install_path(
+    app_handle: &AppHandle,
+    settings_clone: &Settings,
+) -> Result<(), String> {
+    if !crate::gui::utils::is_path_empty_or_nonexistent(
         settings_clone.path.clone().unwrap().to_str().unwrap(),
         &settings_clone.clone().idf_versions.unwrap(),
     ) {
@@ -345,7 +342,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         );
 
         emit_installation_event(
-            &app_handle,
+            app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
@@ -363,13 +360,16 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
         return Err(rust_i18n::t!("gui.installation.path_not_available").to_string());
     }
+    Ok(())
+}
 
-    // Save settings to temp file
+#[cfg(target_os = "windows")]
+fn save_subprocess_config(app_handle: &AppHandle, settings_clone: &Settings) -> Result<(), String> {
     if let Err(e) = settings_clone.save() {
         log::error!("Failed to save temporary config: {}", e);
 
         emit_installation_event(
-            &app_handle,
+            app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
                 percentage: 0,
@@ -381,6 +381,27 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
         return Err(rust_i18n::t!("gui.installation.config_save_failed").to_string());
     }
+    Ok(())
+}
+
+#[cfg(target_os = "windows")]
+#[tauri::command]
+pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    let app_state = app_handle.state::<crate::gui::app_state::AppState>();
+
+    // Set installation flag
+    if let Err(e) = set_installation_status(&app_handle, true) {
+        return Err(e);
+    }
+
+    // Get the settings and save to a temporary config file
+    let settings = get_locked_settings(&app_handle)?;
+    let config_path =
+        cli_installer::subprocess_config_path(&std::env::temp_dir(), std::process::id());
+    let settings_clone = cli_installer::subprocess_settings(&settings, &config_path);
+
+    validate_subprocess_install_path(&app_handle, &settings_clone)?;
+    save_subprocess_config(&app_handle, &settings_clone)?;
 
     log::info!("Saved temporary config to {}", config_path.display());
 
@@ -406,68 +427,10 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         rust_i18n::t!("gui.installation.starting_separate_process").to_string(),
     );
 
-    // Start the process with piped stdout and stderr
-    #[cfg(target_os = "windows")]
-    let mut child = {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        Command::new(current_exe)
-            .arg("install")
-            .arg("-n")
-            .arg("true") // Non-interactive mode
-            .arg("-a")
-            .arg("true") // Install prerequisites
-            .arg("-c")
-            .arg(config_path.clone()) // Path to config file
-            .stdout(Stdio::piped()) // Capture stdout
-            .stderr(Stdio::piped()) // Capture stderr
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| {
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.installation.installer_process_failed")
-                            .to_string(),
-                        detail: Some(e.to_string()),
-                        version: None,
-                    },
-                );
-                format!("Failed to start installer: {}", e)
-            })?
-    };
-
-    #[cfg(not(target_os = "windows"))]
-    let mut child = Command::new(current_exe)
-        .arg("install")
-        .arg("-n")
-        .arg("true") // Non-interactive mode
-        .arg("-a")
-        .arg("true") // Install prerequisites
-        .arg("-c")
-        .arg(config_path.clone()) // Path to config file
-        .stdout(Stdio::piped()) // Capture stdout
-        .stderr(Stdio::piped()) // Capture stderr
-        .spawn()
-        .map_err(|e| {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.installation.installer_process_failed").to_string(),
-                    detail: Some(e.to_string()),
-                    version: None,
-                },
-            );
-            format!("Failed to start installer: {}", e)
-        })?;
+    let child = cli_installer::spawn_cli_installer(&app_handle, current_exe, &config_path)?;
 
     // Set up monitor thread to read output and send to frontend
     let monitor_handle = app_handle.clone();
-    let cfg_path = config_path.clone();
     let versions = settings_clone.idf_versions.clone().unwrap_or_default();
 
     emit_installation_plan(
@@ -480,398 +443,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     );
 
     std::thread::spawn(move || {
-        let pid = child.id();
-
-        // Progress tracking state
-        let mut current_stage = InstallationStage::Checking;
-        let mut current_percentage = 5u32;
-        let mut current_version: Option<String> = None;
-        let mut installation_started = false;
-        let mut tools_phase = false;
-        let mut completed_tools = 0u32;
-        let mut total_tools = 0u32;
-
-        // Get stdout and stderr
-        let mut child = child; // Take ownership of child to wait on it
-        let stdout = child.stdout.take().expect("Failed to capture stdout");
-        let stderr = child.stderr.take().expect("Failed to capture stderr");
-
-        // Helper function to parse and emit progress based on log content
-        let version_clone = versions.clone();
-        let parse_and_emit_progress = move |handle: &AppHandle,
-                                            line: &str,
-                                            stage: &mut InstallationStage,
-                                            percentage: &mut u32,
-                                            current_ver: &mut Option<String>,
-                                            tools_started: &mut bool,
-                                            completed: &mut u32,
-                                            total: &mut u32| {
-            // Extract version information
-            if line.contains("Selected idf version:") {
-                if let Some(start) = line.find('[') {
-                    if let Some(end) = line.find(']') {
-                        let version_str = &line[start + 1..end];
-                        let version = version_str.replace("\"", "").trim().to_string();
-                        *current_ver = Some(version.clone());
-
-                        if let Some(version_index) =
-                            version_clone.iter().position(|v| v == &version)
-                        {
-                            emit_installation_plan(
-                                &handle,
-                                InstallationPlan {
-                                    total_versions: version_clone.len(),
-                                    versions: version_clone.clone(),
-                                    current_version_index: Some(version_index),
-                                },
-                            );
-                        }
-
-                        emit_installation_event(
-                            handle,
-                            InstallationProgress {
-                                stage: InstallationStage::Download,
-                                percentage: 10,
-                                message: rust_i18n::t!(
-                                    "gui.installation.starting_version",
-                                    version = version.clone()
-                                )
-                                .to_string(),
-                                detail: Some(
-                                    rust_i18n::t!("gui.installation.preparing_download")
-                                        .to_string(),
-                                ),
-                                version: Some(version),
-                            },
-                        );
-
-                        *stage = InstallationStage::Download;
-                        *percentage = 10;
-                        return;
-                    }
-                }
-            }
-
-            // Track major phases and estimate progress
-            if line.contains("Checking for prerequisites") {
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Prerequisites,
-                        percentage: 8,
-                        message: rust_i18n::t!("gui.installation.checking_prerequisites")
-                            .to_string(),
-                        detail: Some(
-                            rust_i18n::t!("gui.installation.verifying_requirements").to_string(),
-                        ),
-                        version: current_ver.clone(),
-                    },
-                );
-                *stage = InstallationStage::Prerequisites;
-                *percentage = 8;
-            } else if line.contains("Python sanity check") {
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Prerequisites,
-                        percentage: 12,
-                        message: rust_i18n::t!("gui.installation.verifying_python").to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.checking_python").to_string()),
-                        version: current_ver.clone(),
-                    },
-                );
-                *percentage = 12;
-            } else if line.contains("Cloning ESP-IDF") || line.contains("git clone") {
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: 15,
-                        message: rust_i18n::t!("gui.installation.downloading_repository")
-                            .to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.cloning_main").to_string()),
-                        version: current_ver.clone(),
-                    },
-                );
-                *stage = InstallationStage::Download;
-                *percentage = 15;
-            } else if line.contains("Updating submodule") || line.contains("submodule update") {
-                // Submodules phase - this is the long part (15-65%)
-                let submodule_progress = std::cmp::min(65, *percentage + 2);
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Download,
-                        percentage: submodule_progress,
-                        message: rust_i18n::t!("gui.installation.downloading_submodules")
-                            .to_string(),
-                        detail: Some(
-                            rust_i18n::t!("gui.installation.processing_submodules").to_string(),
-                        ),
-                        version: current_ver.clone(),
-                    },
-                );
-                *percentage = submodule_progress;
-            } else if line.contains("Downloading tools:") {
-                // Extract tools list if possible
-                if let Some(start) = line.find('[') {
-                    if let Some(end) = line.find(']') {
-                        let tools_str = &line[start + 1..end];
-                        let tools: Vec<&str> = tools_str.split(',').collect();
-                        *total = tools.len() as u32;
-
-                        emit_installation_event(
-                            handle,
-                            InstallationProgress {
-                                stage: InstallationStage::Tools,
-                                percentage: 65,
-                                message: rust_i18n::t!(
-                                    "gui.installation.installing_tools",
-                                    count = *total
-                                )
-                                .to_string(),
-                                detail: Some(
-                                    rust_i18n::t!("gui.installation.preparing_tools").to_string(),
-                                ),
-                                version: current_ver.clone(),
-                            },
-                        );
-
-                        *stage = InstallationStage::Tools;
-                        *percentage = 65;
-                        *tools_started = true;
-                    }
-                }
-            } else if line.contains("Downloading tool:") && *tools_started {
-                if let Some(tool_start) = line.find("tool:") {
-                    let tool_name = line[tool_start + 5..].trim();
-                    let tool_progress = 65 + (*completed * 20 / (*total).max(1));
-
-                    emit_installation_event(
-                        handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Tools,
-                            percentage: tool_progress,
-                            message: rust_i18n::t!(
-                                "gui.installation.downloading_tool",
-                                name = tool_name
-                            )
-                            .to_string(),
-                            detail: Some(
-                                rust_i18n::t!(
-                                    "gui.installation.tool_number",
-                                    number = *completed + 1
-                                )
-                                .to_string(),
-                            ),
-                            version: current_ver.clone(),
-                        },
-                    );
-                    *percentage = tool_progress;
-                }
-            } else if line.contains("extracted tool:") || line.contains("Decompression completed") {
-                *completed += 1;
-                let tool_progress = 65 + (*completed * 20 / (*total).max(1));
-
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Tools,
-                        percentage: tool_progress.min(85),
-                        message: rust_i18n::t!(
-                            "gui.installation.installed_tool",
-                            number = *completed
-                        )
-                        .to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.tool_completed").to_string()),
-                        version: current_ver.clone(),
-                    },
-                );
-                *percentage = tool_progress.min(85);
-            } else if line.contains("Python environment") || line.contains("Installing python") {
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Python,
-                        percentage: 90,
-                        message: rust_i18n::t!("gui.installation.python_environment").to_string(),
-                        detail: Some(
-                            rust_i18n::t!("gui.installation.configuring_python").to_string(),
-                        ),
-                        version: current_ver.clone(),
-                    },
-                );
-                *stage = InstallationStage::Python;
-                *percentage = 90;
-            } else if line.contains("Successfully installed IDF")
-                || line.contains("Installation complete")
-            {
-                emit_installation_event(
-                    handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Complete,
-                        percentage: 100,
-                        message: rust_i18n::t!("gui.installation.completed_successfully")
-                            .to_string(),
-                        detail: Some(rust_i18n::t!("gui.installation.finished").to_string()),
-                        version: current_ver.clone(),
-                    },
-                );
-                *stage = InstallationStage::Complete;
-                *percentage = 100;
-            }
-        };
-
-        // Monitor stdout in a separate thread
-        let stdout_monitor = {
-            let handle = monitor_handle.clone();
-            let mut stage = current_stage.clone();
-            let mut percentage = current_percentage;
-            let mut current_ver = current_version.clone();
-            let mut tools_started = tools_phase;
-            let mut completed = completed_tools;
-            let mut total = total_tools;
-
-            std::thread::spawn(move || {
-                let stdout_reader = BufReader::new(stdout);
-                for line in stdout_reader.lines() {
-                    if let Ok(line) = line {
-                        // Parse progress and emit structured events
-                        parse_and_emit_progress(
-                            &handle,
-                            &line,
-                            &mut stage,
-                            &mut percentage,
-                            &mut current_ver,
-                            &mut tools_started,
-                            &mut completed,
-                            &mut total,
-                        );
-
-                        // Skip debug/trace messages from logs
-                        if line.contains("DEBUG") || line.contains("TRACE") {
-                            continue;
-                        }
-
-                        // Clean up log message and emit
-                        let clean_message = if let Some(pos) = line.find(" - ") {
-                            let parts: Vec<&str> = line.splitn(2, " - ").collect();
-                            if parts.len() > 1 {
-                                parts[1].to_string()
-                            } else {
-                                line.clone()
-                            }
-                        } else {
-                            line.clone()
-                        };
-
-                        emit_log_message(&handle, MessageLevel::Info, clean_message);
-                        log::info!("Install process stdout: {}", line);
-                    }
-                }
-            })
-        };
-
-        // Monitor stderr in a separate thread
-        let stderr_monitor = {
-            let handle = monitor_handle.clone();
-            std::thread::spawn(move || {
-                let stderr_reader = BufReader::new(stderr);
-                for line in stderr_reader.lines() {
-                    if let Ok(line) = line {
-                        emit_log_message(&handle, MessageLevel::Error, line.clone());
-                        log::error!("Install process stderr: {}", line);
-                    }
-                }
-            })
-        };
-
-        // Wait for the child process to complete
-        let status = match child.wait() {
-            Ok(status) => {
-                log::info!("Install process completed with status: {:?}", status);
-                status
-            }
-            Err(e) => {
-                log::error!("Failed to wait for install process: {}", e);
-
-                emit_installation_event(
-                    &monitor_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.installation.process_failed").to_string(),
-                        detail: Some(e.to_string()),
-                        version: current_version.clone(),
-                    },
-                );
-
-                std::thread::sleep(std::time::Duration::from_secs(2));
-                return;
-            }
-        };
-
-        // Wait for stdout/stderr monitors to finish
-        let _ = stdout_monitor.join();
-        let _ = stderr_monitor.join();
-
-        // Clean up installation status
-        if let Err(e) = set_installation_status(&monitor_handle, false) {
-            log::error!("Failed to update installation status: {}", e);
-        }
-
-        // Emit final completion or error event
-        let success = status.success();
-        log::info!("Installation completed with success={}", success);
-
-        if success {
-            emit_installation_event(
-                &monitor_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Complete,
-                    percentage: 100,
-                    message: rust_i18n::t!("gui.installation.all_completed").to_string(),
-                    detail: Some(
-                        rust_i18n::t!(
-                            "gui.installation.all_versions",
-                            versions = versions.join(", ")
-                        )
-                        .to_string(),
-                    ),
-                    version: None,
-                },
-            );
-
-            emit_log_message(
-                &monitor_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.installation.success_message").to_string(),
-            );
-        } else {
-            let error_msg = rust_i18n::t!(
-                "gui.installation.failed_exit_code",
-                code = status.code().unwrap_or(-1)
-            )
-            .to_string();
-
-            emit_installation_event(
-                &monitor_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.installation.process_failed_detail").to_string(),
-                    detail: Some(error_msg.clone()),
-                    version: current_version,
-                },
-            );
-
-            emit_log_message(&monitor_handle, MessageLevel::Error, error_msg);
-        }
-
-        // Clean up temporary config file
-        let _ = std::fs::remove_file(&cfg_path);
-
-        log::info!("Installation monitor thread completed");
+        cli_installer::monitor_cli_installer(monitor_handle, child, versions, config_path)
     });
 
     Ok(())
@@ -887,334 +459,20 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
     let mut settings = get_locked_settings(&app_handle)?;
 
-    // Check if versions are selected
-    let versions: Vec<String> = match &settings.idf_versions {
-        Some(versions) if !versions.is_empty() => versions.clone(),
-        _ => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.installation.no_versions_selected").to_string(),
-                    detail: Some(rust_i18n::t!("gui.installation.select_version").to_string()),
-                    version: None,
-                },
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Warning,
-                rust_i18n::t!("gui.installation.no_versions_warning").to_string(),
-            );
-
-            set_installation_status(&app_handle, false)?;
-            return Err(rust_i18n::t!("gui.installation.no_versions_warning").to_string());
-        }
-    };
-
-    emit_installation_plan(
-        &app_handle,
-        InstallationPlan {
-            total_versions: versions.len(),
-            versions: versions.clone(),
-            current_version_index: None,
-        },
-    );
-
-    let total_versions = versions.len();
-    let plural = if total_versions == 1 { "" } else { "s" };
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Checking,
-            percentage: 0,
-            message: rust_i18n::t!(
-                "gui.installation.starting_batch",
-                count = total_versions,
-                plural = plural
-            )
-            .to_string(),
-            detail: Some(
-                rust_i18n::t!(
-                    "gui.installation.versions_list",
-                    versions = versions.join(", ")
-                )
-                .to_string(),
-            ),
-            version: None,
-        },
-    );
-
-    emit_log_message(
-        &app_handle,
-        MessageLevel::Info,
-        rust_i18n::t!(
-            "gui.installation.batch_log",
-            count = total_versions,
-            versions = versions.join(", ")
-        )
-        .to_string(),
-    );
+    let versions = batch::selected_versions(&app_handle, &settings)?;
+    batch::announce_batch(&app_handle, &versions);
 
     // Create pending entries in eim_idf.json before installation starts
     if let Err(e) = settings.create_pending_esp_ide_json() {
         warn!("Failed to create pending installation entries: {}", e);
     }
 
-    // Install each version with progress tracking
-    for (index, version) in versions.iter().enumerate() {
-        emit_installation_plan(
-            &app_handle,
-            InstallationPlan {
-                total_versions: versions.len(),
-                versions: versions.clone(),
-                current_version_index: Some(index),
-            },
-        );
-
-        let version_start_percentage = (index * 90) / total_versions; // Each version gets equal share of 0-90%
-        let version_end_percentage = ((index + 1) * 90) / total_versions;
-
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Download,
-                percentage: version_start_percentage as u32,
-                message: rust_i18n::t!("gui.installation.starting_version", version = version)
-                    .to_string(),
-                detail: Some(
-                    rust_i18n::t!(
-                        "gui.installation.version_detail",
-                        current = index + 1,
-                        total = total_versions,
-                        version = version
-                    )
-                    .to_string(),
-                ),
-                version: Some(version.clone()),
-            },
-        );
-
-        emit_log_message(
-            &app_handle,
-            MessageLevel::Info,
-            rust_i18n::t!(
-                "gui.installation.starting_version_log",
-                version = version,
-                current = index + 1,
-                total = total_versions
-            )
-            .to_string(),
-        );
-
-        // Install single version
-        match install_single_version(app_handle.clone(), &settings, version.clone()).await {
-            Ok(_) => {
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: if index < versions.len() - 1 {
-                            InstallationStage::Configure
-                        } else {
-                            InstallationStage::Complete
-                        },
-                        percentage: version_end_percentage as u32,
-                        message: rust_i18n::t!(
-                            "gui.installation.version_success",
-                            version = version
-                        )
-                        .to_string(),
-                        detail: Some(
-                            rust_i18n::t!(
-                                "gui.installation.completed_versions",
-                                current = index + 1,
-                                total = total_versions
-                            )
-                            .to_string(),
-                        ),
-                        version: Some(version.clone()),
-                    },
-                );
-
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Success,
-                    rust_i18n::t!(
-                        "gui.installation.version_success_log",
-                        version = version,
-                        current = index + 1,
-                        total = total_versions
-                    )
-                    .to_string(),
-                );
-            }
-            Err(e) => {
-                error!("Failed to install version {}: {}", version, e);
-
-                // Mark the pending entry as Failed
-                if let Some(ids) = &settings.pending_installation_ids {
-                    let config_path = settings
-                        .esp_idf_json_path
-                        .as_ref()
-                        .map(|p| {
-                            std::path::PathBuf::from(p)
-                                .join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME)
-                        })
-                        .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
-                    if let Some(id) = ids.get(version.as_str()) {
-                        let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
-                            &config_path,
-                            id,
-                            idf_im_lib::idf_config::InstallationStatus::Failed,
-                        );
-                    }
-                }
-
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!(
-                            "gui.installation.version_failed",
-                            version = version
-                        )
-                        .to_string(),
-                        detail: Some(e.to_string()),
-                        version: Some(version.clone()),
-                    },
-                );
-
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Error,
-                    rust_i18n::t!(
-                        "gui.installation.version_failed_log",
-                        version = version,
-                        error = e.to_string()
-                    )
-                    .to_string(),
-                );
-
-                set_installation_status(&app_handle, false)?;
-                return Err(rust_i18n::t!(
-                    "gui.installation.failed_for_version",
-                    version = version,
-                    error = e.to_string()
-                )
-                .to_string());
-            }
-        }
+    for index in 0..versions.len() {
+        batch::install_batch_version(&app_handle, &settings, &versions, index).await?;
     }
 
-    // Configuration phase - saving IDE JSON (90-95%)
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Configure,
-            percentage: 90,
-            message: rust_i18n::t!("gui.installation.configuring_environment").to_string(),
-            detail: Some(rust_i18n::t!("gui.installation.saving_config").to_string()),
-            version: None,
-        },
-    );
-
-    // Save IDE JSON configuration
-    let ide_json_path = settings.esp_idf_json_path.clone().unwrap_or_default();
-    let _ = ensure_path(&ide_json_path);
-
-    match settings.save_esp_ide_json() {
-        Ok(_) => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: 93,
-                    message: rust_i18n::t!("gui.installation.config_saved").to_string(),
-                    detail: Some(
-                        rust_i18n::t!(
-                            "gui.installation.config_saved_to",
-                            path = ide_json_path.clone()
-                        )
-                        .to_string(),
-                    ),
-                    version: None,
-                },
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.installation.ide_json_saved", path = ide_json_path).to_string(),
-            );
-        }
-        Err(e) => {
-            // Don't fail the entire installation for IDE config save failure
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: 93,
-                    message: rust_i18n::t!("gui.installation.config_save_warning").to_string(),
-                    detail: Some(e.to_string()),
-                    version: None,
-                },
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Warning,
-                rust_i18n::t!("gui.installation.ide_json_failed", error = e.to_string())
-                    .to_string(),
-            );
-        }
-    }
-
-    // Final completion (95-100%)
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Configure,
-            percentage: 97,
-            message: rust_i18n::t!("gui.installation.finalizing").to_string(),
-            detail: Some(rust_i18n::t!("gui.installation.completing_setup").to_string()),
-            version: None,
-        },
-    );
-
-    // Small delay to show finalization
-    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-
-    // Complete!
-    let plural = if total_versions == 1 { "" } else { "s" };
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Complete,
-            percentage: 100,
-            message: rust_i18n::t!(
-                "gui.installation.all_versions_success",
-                count = total_versions,
-                plural = plural
-            )
-            .to_string(),
-            detail: Some(
-                rust_i18n::t!(
-                    "gui.installation.completed_list",
-                    versions = versions.join(", ")
-                )
-                .to_string(),
-            ),
-            version: None,
-        },
-    );
-
-    emit_log_message(
-        &app_handle,
-        MessageLevel::Success,
-        rust_i18n::t!("gui.installation.batch_completed", count = total_versions).to_string(),
-    );
+    batch::save_ide_config(&app_handle, &settings);
+    batch::finish_batch(&app_handle, &versions).await;
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
@@ -1236,346 +494,36 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         }
     };
 
-    emit_installation_event(
+    emit_progress(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Checking,
-            percentage: 0,
-            message: rust_i18n::t!("gui.simple_setup.starting").to_string(),
-            detail: None,
-            version: None,
-        },
+        InstallationStage::Checking,
+        0,
+        rust_i18n::t!("gui.simple_setup.starting").to_string(),
+        None,
+        None,
     );
 
-    // Check prerequisites using the detailed result
-    let prereq_result = match system_dependencies::check_prerequisites_with_result() {
-        Ok(result) => result,
-        Err(err) => {
-            // Error during checking (e.g., unsupported package manager)
-            let error_msg = rust_i18n::t!(
-                "gui.system_dependencies.verification_error",
-                error = err.clone()
-            )
-            .to_string();
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.simple_setup.prerequisites_check_failed")
-                        .to_string(),
-                    detail: Some(error_msg.clone()),
-                    version: None,
-                },
-            );
-            return Err(error_msg);
-        }
-    };
-
-    // Handle verification failures (shell failed or can't verify)
-    if prereq_result.shell_failed || !prereq_result.can_verify {
-        let error_msg = if prereq_result.shell_failed {
-            rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
-        } else {
-            rust_i18n::t!(
-                "gui.system_dependencies.verification_error",
-                error = "unknown"
-            )
-            .to_string()
-        };
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.simple_setup.prerequisites_check_failed").to_string(),
-                detail: Some(error_msg.clone()),
-                version: None,
-            },
-        );
-        return Err(error_msg);
-    }
-
-    let mut prerequisites: Vec<String> = prereq_result
-        .missing
-        .into_iter()
-        .map(|p| p.to_string())
-        .collect();
     let os = std::env::consts::OS.to_lowercase();
+    simple::ensure_prerequisites(&app_handle, &os)?;
+    simple::ensure_python(&app_handle, &os)?;
 
-    // Install prerequisites on Windows if needed
-    if !prerequisites.is_empty() && os == "windows" {
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Prerequisites,
-                percentage: 5,
-                message: rust_i18n::t!("gui.simple_setup.installing_prerequisites").to_string(),
-                detail: Some(
-                    rust_i18n::t!("gui.simple_setup.missing", items = prerequisites.join(", "))
-                        .to_string(),
-                ),
-                version: None,
-            },
-        );
-
-        if !install_prerequisites(app_handle.clone()) {
-            // Re-check after failed install attempt
-            if let Ok(recheck) = system_dependencies::check_prerequisites_with_result() {
-                prerequisites = recheck.missing.into_iter().map(|p| p.to_string()).collect();
-            }
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string(),
-                    detail: Some(
-                        rust_i18n::t!("gui.simple_setup.missing", items = prerequisites.join(", "))
-                            .to_string(),
-                    ),
-                    version: None,
-                },
-            );
-            return Err(rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string());
-        }
-
-        // Re-check after successful install
-        if let Ok(recheck) = system_dependencies::check_prerequisites_with_result() {
-            prerequisites = recheck.missing.into_iter().map(|p| p.to_string()).collect();
-        }
-    }
-
-    // Check if any prerequisites are still missing
-    if !prerequisites.is_empty() {
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string(),
-                detail: Some(
-                    rust_i18n::t!(
-                        "gui.simple_setup.please_install",
-                        items = prerequisites.join(", ")
-                    )
-                    .to_string(),
-                ),
-                version: None,
-            },
-        );
-        return Err(rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string());
-    }
-
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Prerequisites,
-            percentage: 10,
-            message: rust_i18n::t!("gui.simple_setup.prerequisites_verified").to_string(),
-            detail: None,
-            version: None,
-        },
-    );
-
-    // Check for Python
-    let mut python_check_results = python_sanity_check(app_handle.clone(), None);
-    let mut python_found = python_check_results.iter().all(|check| check.passed);
-
-    // Install Python on Windows if needed
-    if !python_found && os == "windows" {
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Python,
-                percentage: 15,
-                message: rust_i18n::t!("gui.simple_setup.installing_python").to_string(),
-                detail: None,
-                version: None,
-            },
-        );
-
-        if !python_install(app_handle.clone()) {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.simple_setup.python_failed").to_string(),
-                    detail: Some(
-                        rust_i18n::t!("gui.simple_setup.python_install_failed").to_string(),
-                    ),
-                    version: None,
-                },
-            );
-            return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
-        }
-
-        python_check_results = python_sanity_check(app_handle.clone(), None);
-        python_found = python_check_results.iter().all(|check| check.passed);
-    }
-
-    // Check if Python is still not found
-    if !python_found {
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.simple_setup.python_not_found").to_string(),
-                detail: Some(rust_i18n::t!("gui.simple_setup.install_python_manually").to_string()),
-                version: None,
-            },
-        );
-        return Err(rust_i18n::t!("gui.simple_setup.python_not_found").to_string());
-    }
-
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Python,
-            percentage: 20,
-            message: rust_i18n::t!("gui.simple_setup.python_ready").to_string(),
-            detail: None,
-            version: None,
-        },
-    );
-
-    // Check for IDF versions
     if settings.idf_versions.is_none() {
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Configure,
-                percentage: 25,
-                message: rust_i18n::t!("gui.simple_setup.fetching_versions").to_string(),
-                detail: None,
-                version: None,
-            },
-        );
-
-        let versions = settings::get_idf_versions(app_handle.clone(), false).await;
-
-        if versions.is_empty() {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.simple_setup.fetch_failed").to_string(),
-                    detail: Some(rust_i18n::t!("gui.simple_setup.retrieve_failed").to_string()),
-                    version: None,
-                },
-            );
-            return Err(rust_i18n::t!("gui.simple_setup.fetch_failed").to_string());
-        }
-
-        let version = versions[0]["name"]
-            .clone()
-            .to_string()
-            .trim_matches('"')
-            .to_string();
-
-        match update_settings(&app_handle, |settings| {
-            settings.idf_versions = Some(vec![version.clone()]);
-        }) {
-            Ok(_) => {
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Info,
-                    rust_i18n::t!(
-                        "gui.simple_setup.version_selected",
-                        version = version.clone()
-                    )
-                    .to_string(),
-                );
-
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Configure,
-                        percentage: 30,
-                        message: rust_i18n::t!(
-                            "gui.simple_setup.version_selected_event",
-                            version = version.clone()
-                        )
-                        .to_string(),
-                        detail: None,
-                        version: Some(version.clone()),
-                    },
-                );
-            }
-            Err(e) => {
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.simple_setup.config_failed").to_string(),
-                        detail: Some(e.to_string()),
-                        version: None,
-                    },
-                );
-                return Err(e);
-            }
-        }
+        simple::select_default_version(&app_handle).await?;
     }
 
-    match update_settings(&app_handle, |settings| {
-        let mut features = settings.idf_features.clone().unwrap_or_default();
-
-        if !features.contains(&"ide".to_string()) {
-            features.push("ide".to_string());
-        }
-
-        settings.idf_features = Some(features);
-    }) {
-        Ok(_) => {
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Info,
-                rust_i18n::t!("gui.simple_setup.ide_feature_added").to_string(),
-            );
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: 35,
-                    message: rust_i18n::t!("gui.simple_setup.ide_feature_configured").to_string(),
-                    detail: None,
-                    version: None,
-                },
-            );
-        }
-        Err(e) => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.simple_setup.config_ide_failed").to_string(),
-                    detail: Some(e.to_string()),
-                    version: None,
-                },
-            );
-            return Err(e);
-        }
-    }
+    simple::add_ide_feature(&app_handle)?;
 
     // Start installation
-    emit_installation_event(
+    emit_progress(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Download,
-            percentage: 35,
-            message: rust_i18n::t!("gui.simple_setup.starting_installation").to_string(),
-            detail: None,
-            version: settings
-                .idf_versions
-                .as_ref()
-                .and_then(|v| v.first().cloned()),
-        },
+        InstallationStage::Download,
+        35,
+        rust_i18n::t!("gui.simple_setup.starting_installation").to_string(),
+        None,
+        settings
+            .idf_versions
+            .as_ref()
+            .and_then(|v| v.first().cloned()),
     );
 
     let res = start_installation(app_handle.clone()).await;
@@ -1643,16 +591,13 @@ pub async fn fix_installation(
     // Set installation flag to indicate installation is running
     set_installation_status(&app_handle, true)?;
 
-    // Initial progress - checking installation
-    emit_installation_event(
+    emit_progress(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Checking,
-            percentage: 0,
-            message: rust_i18n::t!("gui.fix.checking_installation").to_string(),
-            detail: Some(rust_i18n::t!("gui.fix.looking_up", id = id.clone()).to_string()),
-            version: None,
-        },
+        InstallationStage::Checking,
+        0,
+        rust_i18n::t!("gui.fix.checking_installation").to_string(),
+        Some(rust_i18n::t!("gui.fix.looking_up", id = id.clone()).to_string()),
+        None,
     );
 
     emit_log_message(
@@ -1664,371 +609,38 @@ pub async fn fix_installation(
     let fix_config_path = {
         let settings = app_state::get_locked_settings(&app_handle)
             .map_err(|e| format!("Failed to get settings: {}", e))?;
-        settings
-            .esp_idf_json_path
-            .as_ref()
-            .map(|p| PathBuf::from(p).join(IDF_CONFIG_FILE_NAME))
+        configured_idf_config_path(&settings)
     };
 
-    let versions = get_installed_versions(app_handle.clone());
-    let installation = match versions.iter().find(|v| v.id == id) {
-        Some(inst) => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Checking,
-                    percentage: 10,
-                    message: rust_i18n::t!("gui.fix.found_installation", name = inst.name.clone())
-                        .to_string(),
-                    detail: Some(
-                        rust_i18n::t!("gui.installation.path_detail", path = inst.path.clone())
-                            .to_string(),
-                    ),
-                    version: Some(inst.name.clone()),
-                },
-            );
+    let installation = repair::find_installation(&app_handle, &id)?;
+    let mut settings =
+        repair::prepare_fix_settings(&app_handle, &installation, fix_config_path.as_ref()).await?;
 
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Info,
-                rust_i18n::t!(
-                    "gui.fix.found_at",
-                    name = inst.name.clone(),
-                    path = inst.path.clone()
-                )
-                .to_string(),
-            );
-
-            inst
-        }
-        None => {
-            let error_msg = rust_i18n::t!("gui.fix.not_found_detail", id = id.clone()).to_string();
-            error!("{}", error_msg);
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.fix.not_found").to_string(),
-                    detail: Some(error_msg.clone()),
-                    version: None,
-                },
-            );
-
-            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
-            set_installation_status(&app_handle, false)?;
-            return Err(error_msg);
-        }
+    let extras = repair::ExtraSelection {
+        tools: extra_tools,
+        features: extra_features,
     };
-
-    // Preparing settings
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Checking,
-            percentage: 20,
-            message: rust_i18n::t!("gui.fix.preparing_config").to_string(),
-            detail: Some(rust_i18n::t!("gui.fix.setting_up").to_string()),
-            version: Some(installation.name.clone()),
-        },
-    );
-
-    let mut settings = match prepare_settings_for_fix_idf_installation(
-        PathBuf::from(installation.path.clone()),
-        fix_config_path.as_ref(),
-    )
-    .await
-    {
-        Ok(settings) => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Prerequisites,
-                    percentage: 30,
-                    message: rust_i18n::t!("gui.fix.config_prepared").to_string(),
-                    detail: Some(rust_i18n::t!("gui.fix.ready_to_repair").to_string()),
-                    version: Some(installation.name.clone()),
-                },
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.fix.config_prepared_log").to_string(),
-            );
-
-            settings
-        }
-        Err(e) => {
-            let error_msg =
-                rust_i18n::t!("gui.fix.prepare_failed_detail", error = e.to_string()).to_string();
-            error!("{}", error_msg);
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.fix.prepare_failed").to_string(),
-                    detail: Some(e.to_string()),
-                    version: Some(installation.name.clone()),
-                },
-            );
-
-            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
-            set_installation_status(&app_handle, false)?;
-            return Err(error_msg);
-        }
-    };
-
-    merge_extra_selection(
-        &mut settings,
-        &installation.name,
-        &extra_tools,
-        &extra_features,
-    );
+    extras.apply(&mut settings, &installation.name);
 
     let config_path = fix_config_path
         .clone()
-        .unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
-
-    // Starting actual repair (reinstallation)
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Download,
-            percentage: 35,
-            message: rust_i18n::t!(
-                "gui.fix.starting_repair_version",
-                version = installation.name.clone()
-            )
-            .to_string(),
-            detail: Some(rust_i18n::t!("gui.fix.beginning_reinstall").to_string()),
-            version: Some(installation.name.clone()),
-        },
-    );
-
-    emit_log_message(
-        &app_handle,
-        MessageLevel::Info,
-        rust_i18n::t!(
-            "gui.fix.starting_repair_log",
-            version = installation.name.clone()
-        )
-        .to_string(),
-    );
+        .unwrap_or_else(get_default_config_path);
 
     // The actual repair process - this will generate detailed progress events
-    match install_single_version(app_handle.clone(), &settings, installation.name.clone()).await {
-        Ok(_) => {
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!(
-                    "gui.fix.repair_success",
-                    version = installation.name.clone()
-                )
-                .to_string(),
-            );
+    repair::run_repair(&app_handle, &settings, &installation, &config_path).await?;
+    info!("Successfully fixed installation {}", id);
 
-            info!("Successfully fixed installation {}", id);
-        }
-        Err(e) => {
-            let error_msg =
-                rust_i18n::t!("gui.fix.repair_failed_detail", error = e.to_string()).to_string();
-            error!("{}", error_msg);
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!(
-                        "gui.fix.repair_failed",
-                        version = installation.name.clone()
-                    )
-                    .to_string(),
-                    detail: Some(e.to_string()),
-                    version: Some(installation.name.clone()),
-                },
-            );
-
-            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
-
-            // Mark the installation as Broken
-            if let Some(ids) = &settings.pending_installation_ids {
-                if let Some(pending_id) = ids.get(&installation.name) {
-                    let _ = idf_im_lib::idf_config::IdfConfig::update_status_in_file(
-                        &config_path,
-                        pending_id,
-                        idf_im_lib::idf_config::InstallationStatus::Broken,
-                    );
-                }
-            }
-
-            set_installation_status(&app_handle, false)?;
-            return Err(error_msg);
-        }
-    }
-
-    // Configure IDE configuration update
-    emit_installation_event(
+    repair::save_repaired_config(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Configure,
-            percentage: 90,
-            message: rust_i18n::t!("gui.fix.updating_config").to_string(),
-            detail: Some(rust_i18n::t!("gui.fix.saving_info").to_string()),
-            version: Some(installation.name.clone()),
-        },
-    );
-
-    // Reload this installation's stored settings fresh from disk rather than reusing
-    // the `settings` snapshot captured before the (potentially long-running) install
-    // above: another operation may have updated this installation's tools/features
-    // while we were repairing, and persisting our stale in-memory copy would silently
-    // discard that update. Re-apply just the extras this call itself requested.
-    let mut fresh_settings = prepare_settings_for_fix_idf_installation(
-        PathBuf::from(installation.path.clone()),
+        &installation,
+        &settings,
         fix_config_path.as_ref(),
+        &config_path,
+        &extras,
     )
-    .await
-    .unwrap_or_else(|_| settings.clone());
-    merge_extra_selection(
-        &mut fresh_settings,
-        &installation.name,
-        &extra_tools,
-        &extra_features,
-    );
+    .await?;
 
-    // single_version_post_install() only writes the activation script/shortcut, not
-    // eim_idf.json, so reconstruct the settings and save the config ourselves.
-    let paths = fresh_settings
-        .get_version_paths(&installation.name)
-        .map_err(|err| {
-            error!("Failed to get version paths after repair: {}", err);
-            format!("Failed to get version paths after repair: {}", err)
-        })?;
-
-    // Debug: Check what config_path contains
-    debug!("Config path for IDE JSON: {}", config_path.display());
-    debug!("Config path exists: {}", config_path.exists());
-    debug!("Config path is file: {}", config_path.is_file());
-    debug!("Config path is dir: {}", config_path.is_dir());
-
-    // Create a properly configured Settings object for IDE JSON saving
-    let mut updated_settings = fresh_settings;
-    // esp_idf_json_path should be the directory, not the file itself
-    // because save_esp_ide_json() will append the filename
-    if let Some(parent_dir) = config_path.parent() {
-        updated_settings.esp_idf_json_path = Some(parent_dir.to_string_lossy().to_string());
-    } else {
-        updated_settings.esp_idf_json_path = Some(config_path.to_string_lossy().to_string());
-    }
-    updated_settings.idf_versions = Some(vec![installation.name.clone()]);
-    updated_settings.idf_path = Some(paths.idf_path.clone());
-
-    // Ensure the parent directory exists (not the file itself)
-    let ide_json_path = updated_settings.esp_idf_json_path.as_ref().unwrap();
-    info!("IDE JSON path to save: {}", ide_json_path);
-
-    if let Some(parent_dir) = std::path::Path::new(ide_json_path).parent() {
-        info!("Parent directory: {}", parent_dir.display());
-        info!("Parent directory exists: {}", parent_dir.exists());
-        match ensure_path(parent_dir.to_str().unwrap()) {
-            Ok(_) => info!("Parent directory ensured successfully"),
-            Err(e) => error!("Failed to ensure parent directory: {}", e),
-        }
-    }
-
-    let ide_json_path = updated_settings
-        .esp_idf_json_path
-        .clone()
-        .unwrap_or_default();
-
-    // Always save: the pre-repair entry is marked BeingRepaired/InProgress in place
-    // (not removed), so its name+path already exist in the config regardless of
-    // whether the status has been brought back to Finished yet.
-    match updated_settings.save_esp_ide_json() {
-        Ok(_) => {
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: 95,
-                    message: rust_i18n::t!("gui.fix.config_saved_success").to_string(),
-                    detail: Some(
-                        rust_i18n::t!(
-                            "gui.installation.config_saved_to",
-                            path = ide_json_path.clone()
-                        )
-                        .to_string(),
-                    ),
-                    version: Some(installation.name.clone()),
-                },
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.fix.ide_json_updated", path = ide_json_path.clone()).to_string(),
-            );
-
-            info!("IDE JSON saved to {}", ide_json_path);
-        }
-        Err(e) => {
-            // The repair/tools/features install itself succeeded, but without this save
-            // the entry stays persisted as BeingRepaired/InProgress forever (nothing else
-            // writes eim_idf.json for this path) — so this must be a terminal error, not
-            // just a logged warning.
-            let error_msg = rust_i18n::t!(
-                "gui.installation.ide_config_save_failed_detail",
-                error = e.to_string()
-            )
-            .to_string();
-            error!("{}", error_msg);
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.fix.config_save_warning").to_string(),
-                    detail: Some(e.to_string()),
-                    version: Some(installation.name.clone()),
-                },
-            );
-
-            emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
-            set_installation_status(&app_handle, false)?;
-            return Err(error_msg);
-        }
-    }
-
-    // Final completion
-    emit_installation_event(
-        &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Complete,
-            percentage: 100,
-            message: rust_i18n::t!(
-                "gui.fix.repair_completed",
-                version = installation.name.clone()
-            )
-            .to_string(),
-            detail: Some(
-                rust_i18n::t!("gui.fix.repaired_at", path = installation.path.clone()).to_string(),
-            ),
-            version: Some(installation.name.clone()),
-        },
-    );
-
-    emit_log_message(
-        &app_handle,
-        MessageLevel::Success,
-        rust_i18n::t!("gui.fix.completed_log", version = installation.name.clone()).to_string(),
-    );
+    repair::emit_repair_completed(&app_handle, &installation);
 
     // Clear installation flag
     set_installation_status(&app_handle, false)?;
@@ -2049,20 +661,12 @@ pub struct IncompleteInstallationDto {
 
 #[tauri::command]
 pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<IncompleteInstallationDto> {
-    let config_path = {
-        let settings = match app_state::get_settings_non_blocking(&app_handle) {
-            Ok(s) => s,
-            Err(_) => return vec![],
-        };
-        settings
-            .esp_idf_json_path
-            .as_ref()
-            .map(|p| std::path::PathBuf::from(p).join(idf_im_lib::idf_config::IDF_CONFIG_FILE_NAME))
+    let path = match app_state::get_settings_non_blocking(&app_handle) {
+        Ok(settings) => idf_config_path(&settings),
+        Err(_) => return vec![],
     };
 
-    let path = config_path.unwrap_or_else(idf_im_lib::version_manager::get_default_config_path);
-
-    match idf_im_lib::idf_config::IdfConfig::from_file(&path) {
+    match IdfConfig::from_file(&path) {
         Ok(config) => config
             .get_incomplete_installations()
             .into_iter()
@@ -2088,33 +692,23 @@ pub async fn start_offline_installation(
 
     // Validate archives
     if archives.is_empty() {
-        emit_installation_event(
+        emit_error(
             &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.offline.no_archives").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.select_archive").to_string()),
-                version: None,
-            },
+            rust_i18n::t!("gui.offline.no_archives").to_string(),
+            Some(rust_i18n::t!("gui.offline.select_archive").to_string()),
+            None,
         );
         set_installation_status(&app_handle, false)?;
         return Err(rust_i18n::t!("gui.offline.no_archives").to_string());
     }
 
-    // Initial progress event
-    emit_installation_event(
+    emit_progress(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Checking,
-            percentage: 0,
-            message: rust_i18n::t!("gui.offline.starting").to_string(),
-            detail: Some(
-                rust_i18n::t!("gui.offline.processing_archives", count = archives.len())
-                    .to_string(),
-            ),
-            version: None,
-        },
+        InstallationStage::Checking,
+        0,
+        rust_i18n::t!("gui.offline.starting").to_string(),
+        Some(rust_i18n::t!("gui.offline.processing_archives", count = archives.len()).to_string()),
+        None,
     );
 
     emit_log_message(
@@ -2126,703 +720,23 @@ pub async fn start_offline_installation(
     let total_archives = archives.len();
 
     for (archive_index, archive) in archives.iter().enumerate() {
-        let archive_path = std::path::PathBuf::from(archive);
-
-        // Check archive exists
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Checking,
-                percentage: (archive_index * 10 / total_archives) as u32,
-                message: rust_i18n::t!(
-                    "gui.offline.validating_archive",
-                    name = get_file_name(archive)
-                )
-                .to_string(),
-                detail: Some(
-                    rust_i18n::t!(
-                        "gui.offline.archive_number",
-                        current = archive_index + 1,
-                        total = total_archives
-                    )
-                    .to_string(),
-                ),
-                version: None,
-            },
-        );
-
-        if !archive_path.try_exists().unwrap_or(false) {
-            let error_msg =
-                rust_i18n::t!("gui.offline.archive_not_exist", path = archive).to_string();
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.offline.archive_not_found").to_string(),
-                    detail: Some(error_msg.clone()),
-                    version: None,
-                },
-            );
-            set_installation_status(&app_handle, false)?;
-            return Err(error_msg);
+        offline::ArchiveInstall {
+            app_handle: &app_handle,
+            archive,
+            index: archive_index,
+            total: total_archives,
         }
-
-        emit_log_message(
-            &app_handle,
-            MessageLevel::Info,
-            rust_i18n::t!("gui.offline.validated", path = archive).to_string(),
-        );
-
-        // Create temporary directory for extraction
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Extract,
-                percentage: ((archive_index * 90 + 10) / total_archives) as u32,
-                message: rust_i18n::t!("gui.offline.creating_workspace").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.preparing_extraction").to_string()),
-                version: None,
-            },
-        );
-
-        let offline_archive_dir = TempDir::new().map_err(|e| {
-            let error_msg =
-                rust_i18n::t!("gui.offline.temp_dir_failed", error = e.to_string()).to_string();
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.offline.workspace_failed").to_string(),
-                    detail: Some(error_msg.clone()),
-                    version: None,
-                },
-            );
-            error_msg
-        })?;
-
-        emit_log_message(
-            &app_handle,
-            MessageLevel::Info,
-            rust_i18n::t!(
-                "gui.offline.temp_dir_created",
-                path = offline_archive_dir.path().display().to_string()
-            )
-            .to_string(),
-        );
-
-        // Get and configure settings
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Extract,
-                percentage: ((archive_index * 90 + 15) / total_archives) as u32,
-                message: rust_i18n::t!("gui.offline.configuring_settings").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.preparing_config").to_string()),
-                version: None,
-            },
-        );
-
-        let mut settings = get_settings_non_blocking(&app_handle)?;
-        if !install_path.is_empty() && is_path_empty_or_nonexistent(&install_path, &[]) {
-            settings.path = Some(PathBuf::from(install_path.clone()));
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Info,
-                rust_i18n::t!("gui.offline.custom_path", path = install_path.clone()).to_string(),
-            );
-        }
-        settings.use_local_archive = Some(archive_path);
-
-        // Extract and configure archive
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Extract,
-                percentage: ((archive_index * 90 + 20) / total_archives) as u32,
-                message: rust_i18n::t!(
-                    "gui.offline.extracting_archive",
-                    name = get_file_name(archive)
-                )
-                .to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.processing_contents").to_string()),
-                version: None,
-            },
-        );
-
-        settings = match use_offline_archive(settings, &offline_archive_dir) {
-            Ok(updated_config) => {
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Success,
-                    rust_i18n::t!("gui.offline.extraction_success").to_string(),
-                );
-                updated_config
-            }
-            Err(err) => {
-                let error_msg = rust_i18n::t!(
-                    "gui.offline.extraction_failed_detail",
-                    error = err.to_string()
-                )
-                .to_string();
-                error!("{}", error_msg);
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.extraction_failed").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-        };
-
-        // Install prerequisites on Windows
-        if std::env::consts::OS == "windows" {
-            info!("About to install prerequisites from offline archive");
-
-            // Get the tools directory from version paths
-            let tools_dir = if let Some(idf_versions) = &settings.idf_versions {
-                if let Some(version) = idf_versions.first() {
-                    match settings.get_version_paths(version) {
-                        Ok(paths) => {
-                            info!(
-                                "Using tools dir from get_version_paths: {:?}",
-                                paths.tool_install_directory
-                            );
-                            Some(paths.tool_install_directory)
-                        }
-                        Err(e) => {
-                            warn!("Failed to get version paths: {}, falling back to manual calculation", e);
-                            None
-                        }
-                    }
-                } else {
-                    warn!("No IDF versions found in settings");
-                    None
-                }
-            } else {
-                warn!("No IDF versions set in settings");
-                None
-            };
-
-            let tools_dir = tools_dir.unwrap();
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Prerequisites,
-                    percentage: ((archive_index * 90 + 25) / total_archives) as u32,
-                    message: rust_i18n::t!("gui.offline.installing_prerequisites").to_string(),
-                    detail: Some(
-                        rust_i18n::t!("gui.offline.installing_windows_components").to_string(),
-                    ),
-                    version: None,
-                },
-            );
-
-            info!("Tools dir set to: {:?}", tools_dir);
-            info!("Archive dir path: {:?}", offline_archive_dir.path());
-
-            match install_prerequisites_offline(&offline_archive_dir, tools_dir).await {
-                Ok(_) => {
-                    emit_log_message(
-                        &app_handle,
-                        MessageLevel::Success,
-                        rust_i18n::t!("gui.offline.prerequisites_success").to_string(),
-                    );
-                    settings.skip_prerequisites_check = Some(true);
-                }
-                Err(err) => {
-                    let error_msg = rust_i18n::t!(
-                        "gui.offline.prerequisites_failed_detail",
-                        error = err.to_string()
-                    )
-                    .to_string();
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.prerequisites_failed").to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: None,
-                        },
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            }
-        } else {
-            // Check prerequisites on non-Windows systems
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Prerequisites,
-                    percentage: ((archive_index * 90 + 25) / total_archives) as u32,
-                    message: rust_i18n::t!("gui.offline.checking_prerequisites").to_string(),
-                    detail: Some(rust_i18n::t!("gui.offline.verifying_components").to_string()),
-                    version: None,
-                },
-            );
-
-            // Use detailed prerequisites check
-            let prereq_result = match system_dependencies::check_prerequisites_with_result() {
-                Ok(result) => result,
-                Err(err) => {
-                    let error_msg = rust_i18n::t!(
-                        "gui.system_dependencies.verification_error",
-                        error = err.clone()
-                    )
-                    .to_string();
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.prerequisites_check_failed")
-                                .to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: None,
-                        },
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            };
-
-            // Handle verification failures
-            if prereq_result.shell_failed || !prereq_result.can_verify {
-                let error_msg = if prereq_result.shell_failed {
-                    rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
-                } else {
-                    rust_i18n::t!(
-                        "gui.system_dependencies.verification_error",
-                        error = "unknown"
-                    )
-                    .to_string()
-                };
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.prerequisites_check_failed")
-                            .to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-
-            // Check for missing prerequisites
-            let prereq: Vec<String> = prereq_result
-                .missing
-                .into_iter()
-                .map(|p| p.to_string())
-                .collect();
-            if !prereq.is_empty() {
-                let error_msg = rust_i18n::t!(
-                    "gui.offline.missing_prerequisites",
-                    items = prereq.join(", ")
-                )
-                .to_string();
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.prerequisites_missing").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-
-            // Python sanity check — user sees check name + hint; raw output logged only
-            let mut python_sane = true;
-            for result in &idf_im_lib::python_utils::python_sanity_check(None, true) {
-                if !result.passed {
-                    python_sane = false;
-                    let name = rust_i18n::t!(result.check.display_key()).to_string();
-                    let hint = rust_i18n::t!(result.check.hint_key_for_os(std::env::consts::OS))
-                        .to_string();
-                    warn!("[FAIL] {}: {}", name, result.message);
-                    let msg = format!("{} — {}", name, hint);
-                    emit_log_message(&app_handle, MessageLevel::Warning, msg);
-                }
-            }
-            if !python_sane {
-                let error_msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: error_msg.clone(),
-                        detail: Some(
-                            rust_i18n::t!("gui.offline.python_not_configured").to_string(),
-                        ),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.offline.prerequisites_verified").to_string(),
-            );
-        }
-
-        // Copy ESP-IDF from archive
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Download,
-                percentage: ((archive_index * 90 + 35) / total_archives) as u32,
-                message: rust_i18n::t!("gui.offline.installing_idf").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.copying_files").to_string()),
-                version: None,
-            },
-        );
-
-        match copy_idf_from_offline_archive(&offline_archive_dir, &settings) {
-            Ok(_) => {
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Success,
-                    rust_i18n::t!("gui.offline.idf_copy_success").to_string(),
-                );
-            }
-            Err(err) => {
-                let error_msg =
-                    rust_i18n::t!("gui.offline.idf_copy_failed", error = err.to_string())
-                        .to_string();
-                error!("{}", error_msg);
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.idf_install_failed").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-        }
-
-        // Process each IDF version
-        let versions = settings.idf_versions.clone().unwrap_or_default();
-        for (version_index, idf_version) in versions.iter().enumerate() {
-            let version_progress_start = ((archive_index * 90 + 40) / total_archives) as u32;
-            let version_progress_end = ((archive_index * 90 + 85) / total_archives) as u32;
-            let version_progress_range = version_progress_end - version_progress_start;
-
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: version_progress_start
-                        + (version_index as u32 * version_progress_range / versions.len() as u32),
-                    message: rust_i18n::t!("gui.offline.processing_version", version = idf_version)
-                        .to_string(),
-                    detail: Some(
-                        rust_i18n::t!(
-                            "gui.offline.setting_up_version",
-                            current = version_index + 1,
-                            total = versions.len()
-                        )
-                        .to_string(),
-                    ),
-                    version: Some(idf_version.clone()),
-                },
-            );
-
-            let paths = match settings.get_version_paths(idf_version) {
-                Ok(paths) => {
-                    emit_log_message(
-                        &app_handle,
-                        MessageLevel::Info,
-                        rust_i18n::t!(
-                            "gui.offline.version_paths_configured",
-                            version = idf_version,
-                            path = paths.idf_path.display().to_string()
-                        )
-                        .to_string(),
-                    );
-                    paths
-                }
-                Err(err) => {
-                    let error_msg = rust_i18n::t!(
-                        "gui.offline.path_config_failed_detail",
-                        error = err.to_string()
-                    )
-                    .to_string();
-                    error!("{}", error_msg);
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.path_config_failed").to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: Some(idf_version.clone()),
-                        },
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            };
-
-            settings.idf_path = Some(paths.idf_path.clone());
-            idf_im_lib::add_path_to_path(paths.idf_path.to_str().unwrap());
-
-            // Copy tools
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: version_progress_start
-                        + ((version_index + 1) as u32 * version_progress_range
-                            / (versions.len() as u32 * 3)),
-                    message: rust_i18n::t!("gui.offline.installing_tools").to_string(),
-                    detail: Some(rust_i18n::t!("gui.offline.copying_tools").to_string()),
-                    version: Some(idf_version.clone()),
-                },
-            );
-
-            match copy_dir_contents(
-                &offline_archive_dir.path().join("dist"),
-                &paths.tool_download_directory,
-            ) {
-                Ok(_) => {
-                    emit_log_message(
-                        &app_handle,
-                        MessageLevel::Success,
-                        rust_i18n::t!("gui.offline.tools_copy_success").to_string(),
-                    );
-                }
-                Err(err) => {
-                    let error_msg =
-                        rust_i18n::t!("gui.offline.tools_copy_failed", error = err.to_string())
-                            .to_string();
-                    error!("{}", error_msg);
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.tools_install_failed").to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: Some(idf_version.clone()),
-                        },
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            }
-
-            idf_im_lib::add_path_to_path(paths.tool_install_directory.to_str().unwrap());
-
-            // Setup tools
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Tools,
-                    percentage: version_progress_start
-                        + ((version_index + 1) as u32 * version_progress_range * 2
-                            / (versions.len() as u32 * 3)),
-                    message: rust_i18n::t!("gui.offline.configuring_tools").to_string(),
-                    detail: Some(rust_i18n::t!("gui.offline.setting_up_environment").to_string()),
-                    version: Some(idf_version.clone()),
-                },
-            );
-
-            let (export_paths, export_vars) = match setup_tools(
-                &app_handle,
-                &settings,
-                &paths.idf_path,
-                &paths.actual_version,
-                Some(offline_archive_dir.path()),
-            )
-            .await
-            {
-                Ok((paths, vars)) => {
-                    emit_log_message(
-                        &app_handle,
-                        MessageLevel::Success,
-                        rust_i18n::t!("gui.offline.tools_configured").to_string(),
-                    );
-                    (paths, vars)
-                }
-                Err(err) => {
-                    let error_msg =
-                        rust_i18n::t!("gui.offline.tools_setup_failed", error = err.to_string())
-                            .to_string();
-                    error!("{}", error_msg);
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.tools_config_failed").to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: Some(idf_version.clone()),
-                        },
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            };
-
-            // Post-install configuration
-            emit_installation_event(
-                &app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Configure,
-                    percentage: version_progress_end - 5,
-                    message: rust_i18n::t!("gui.offline.finalizing").to_string(),
-                    detail: Some(rust_i18n::t!("gui.offline.completing_setup").to_string()),
-                    version: Some(idf_version.clone()),
-                },
-            );
-
-            idf_im_lib::single_version_post_install(
-                paths.activation_script_path.to_string_lossy().as_ref(),
-                paths.idf_path.to_string_lossy().as_ref(),
-                &paths.actual_version,
-                paths.tool_install_directory.to_string_lossy().as_ref(),
-                export_paths,
-                paths.python_venv_path.to_str(),
-                Some(export_vars),
-                &paths.python_path.to_string_lossy(),
-                false, // create_cmd_bat
-                true,  // is_offline_install
-                true,  // is_gui
-            );
-
-            emit_log_message(
-                &app_handle,
-                MessageLevel::Success,
-                rust_i18n::t!("gui.offline.version_configured", version = idf_version).to_string(),
-            );
-        }
-
-        // Save IDE configuration
-        emit_installation_event(
-            &app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Configure,
-                percentage: ((archive_index * 90 + 88) / total_archives) as u32,
-                message: rust_i18n::t!("gui.offline.saving_ide_config").to_string(),
-                detail: Some(rust_i18n::t!("gui.offline.updating_settings").to_string()),
-                version: None,
-            },
-        );
-
-        let ide_conf_path_tmp =
-            PathBuf::from(&settings.esp_idf_json_path.clone().unwrap_or_default());
-        debug!("IDE configuration path: {}", ide_conf_path_tmp.display());
-
-        match ensure_path(ide_conf_path_tmp.to_str().unwrap()) {
-            Ok(_) => {
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Info,
-                    rust_i18n::t!("gui.offline.ide_dir_created").to_string(),
-                );
-            }
-            Err(err) => {
-                let error_msg =
-                    rust_i18n::t!("gui.offline.ide_dir_failed", error = err.to_string())
-                        .to_string();
-                error!("{}", error_msg);
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.ide_config_failed").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-        }
-
-        match settings.save_esp_ide_json() {
-            Ok(_) => {
-                emit_log_message(
-                    &app_handle,
-                    MessageLevel::Success,
-                    rust_i18n::t!("gui.offline.ide_config_saved").to_string(),
-                );
-                debug!("IDE configuration saved.");
-            }
-            Err(err) => {
-                let error_msg = rust_i18n::t!(
-                    "gui.offline.ide_config_save_failed_detail",
-                    error = err.to_string()
-                )
-                .to_string();
-                error!("{}", error_msg);
-                emit_installation_event(
-                    &app_handle,
-                    InstallationProgress {
-                        stage: InstallationStage::Error,
-                        percentage: 0,
-                        message: rust_i18n::t!("gui.offline.ide_config_save_failed").to_string(),
-                        detail: Some(error_msg.clone()),
-                        version: None,
-                    },
-                );
-                set_installation_status(&app_handle, false)?;
-                return Err(error_msg);
-            }
-        }
-
-        emit_log_message(
-            &app_handle,
-            MessageLevel::Success,
-            rust_i18n::t!(
-                "gui.offline.archive_processed",
-                name = get_file_name(archive),
-                current = archive_index + 1,
-                total = total_archives
-            )
-            .to_string(),
-        );
+        .run(&install_path)
+        .await?;
     }
 
-    // Final completion
-    emit_installation_event(
+    emit_progress(
         &app_handle,
-        InstallationProgress {
-            stage: InstallationStage::Complete,
-            percentage: 100,
-            message: rust_i18n::t!("gui.offline.completed").to_string(),
-            detail: Some(
-                rust_i18n::t!("gui.offline.processed_archives", count = total_archives).to_string(),
-            ),
-            version: None,
-        },
+        InstallationStage::Complete,
+        100,
+        rust_i18n::t!("gui.offline.completed").to_string(),
+        Some(rust_i18n::t!("gui.offline.processed_archives", count = total_archives).to_string()),
+        None,
     );
 
     emit_log_message(
@@ -3068,115 +982,6 @@ async fn download_archive_with_progress(
     })
 }
 
-/// Non-Windows prerequisite + Python pre-check, run BEFORE downloading.
-///
-/// On Windows the offline pipeline installs git/python FROM the archive, so the
-/// archive must be downloaded first. On macOS/Linux it can only *verify* them,
-/// and doing that after a multi-GB download is a poor experience — so we run the
-/// same verification up-front and fail fast. Mirrors the non-Windows branch of
-/// `start_offline_installation` (same i18n keys); emits events only on failure.
-fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
-    let prereq_result = idf_im_lib::system_dependencies::check_prerequisites_with_result()
-        .map_err(|err| {
-            let msg = rust_i18n::t!(
-                "gui.system_dependencies.verification_error",
-                error = err.clone()
-            )
-            .to_string();
-            emit_installation_event(
-                app_handle,
-                InstallationProgress {
-                    stage: InstallationStage::Error,
-                    percentage: 0,
-                    message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
-                    detail: Some(msg.clone()),
-                    version: None,
-                },
-            );
-            msg
-        })?;
-
-    if prereq_result.shell_failed || !prereq_result.can_verify {
-        let msg = if prereq_result.shell_failed {
-            rust_i18n::t!("gui.system_dependencies.shell_verification_failed").to_string()
-        } else {
-            rust_i18n::t!(
-                "gui.system_dependencies.verification_error",
-                error = "unknown"
-            )
-            .to_string()
-        };
-        emit_installation_event(
-            app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
-                detail: Some(msg.clone()),
-                version: None,
-            },
-        );
-        return Err(msg);
-    }
-
-    let missing: Vec<String> = prereq_result
-        .missing
-        .into_iter()
-        .map(|p| p.to_string())
-        .collect();
-    if !missing.is_empty() {
-        let msg = rust_i18n::t!(
-            "gui.offline.missing_prerequisites",
-            items = missing.join(", ")
-        )
-        .to_string();
-        emit_installation_event(
-            app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: rust_i18n::t!("gui.offline.prerequisites_missing").to_string(),
-                detail: Some(msg.clone()),
-                version: None,
-            },
-        );
-        return Err(msg);
-    }
-
-    // Python sanity check — user sees check name + hint; raw output logged only.
-    let mut python_sane = true;
-    for result in &idf_im_lib::python_utils::python_sanity_check(None, true) {
-        if !result.passed {
-            python_sane = false;
-            let name = rust_i18n::t!(result.check.display_key()).to_string();
-            let hint =
-                rust_i18n::t!(result.check.hint_key_for_os(std::env::consts::OS)).to_string();
-            warn!("[FAIL] {}: {}", name, result.message);
-            emit_log_message(
-                app_handle,
-                MessageLevel::Warning,
-                format!("{} — {}", name, hint),
-            );
-        }
-    }
-    if !python_sane {
-        let msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
-        emit_installation_event(
-            app_handle,
-            InstallationProgress {
-                stage: InstallationStage::Error,
-                percentage: 0,
-                message: msg.clone(),
-                detail: Some(rust_i18n::t!("gui.offline.python_not_configured").to_string()),
-                version: None,
-            },
-        );
-        return Err(msg);
-    }
-
-    Ok(())
-}
-
 /// Simple installation via the offline package.
 ///
 /// 1. Resolve the `.zst` for `version` on the current platform.
@@ -3214,7 +1019,7 @@ pub async fn start_simple_offline_setup(
     // Non-Windows: verify prerequisites + Python BEFORE downloading several GB.
     // (Windows installs these from the archive, so it must download first.)
     if std::env::consts::OS != "windows" {
-        precheck_posix_prerequisites(&app_handle)?;
+        checks::precheck_posix_prerequisites(&app_handle)?;
     }
 
     let cache_dir = get_offline_archive_cache_dir()?;
@@ -3324,4 +1129,115 @@ pub fn delete_offline_archive(path: String) -> Result<(), String> {
         std::fs::remove_file(p).map_err(|e| format!("Failed to delete archive: {}", e))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use idf_im_lib::idf_config::IdfInstallation;
+    use std::collections::HashMap;
+    use tempfile::TempDir;
+
+    fn installation(id: &str, status: InstallationStatus) -> IdfInstallation {
+        IdfInstallation {
+            activation_script: None,
+            id: id.to_string(),
+            idf_tools_path: "/e/tools".to_string(),
+            name: "v5.3".to_string(),
+            path: "/e/v5.3/esp-idf".to_string(),
+            python: None,
+            installation_config: None,
+            status,
+        }
+    }
+
+    fn write_config(path: &Path, installations: Vec<IdfInstallation>) {
+        IdfConfig {
+            git_path: "/usr/bin/git".to_string(),
+            idf_installed: installations,
+            idf_selected_id: String::new(),
+            eim_path: None,
+            version: None,
+        }
+        .to_file(path, true, false)
+        .unwrap();
+    }
+
+    #[test]
+    fn configured_idf_config_path_joins_file_name() {
+        let settings = Settings {
+            esp_idf_json_path: Some("/cfg".to_string()),
+            ..Settings::default()
+        };
+        assert_eq!(
+            configured_idf_config_path(&settings),
+            Some(PathBuf::from("/cfg").join(IDF_CONFIG_FILE_NAME))
+        );
+        assert_eq!(
+            idf_config_path(&settings),
+            Path::new("/cfg").join(IDF_CONFIG_FILE_NAME)
+        );
+    }
+
+    #[test]
+    fn idf_config_path_falls_back_to_default() {
+        let settings = Settings {
+            esp_idf_json_path: None,
+            ..Settings::default()
+        };
+        assert_eq!(configured_idf_config_path(&settings), None);
+        assert_eq!(idf_config_path(&settings), get_default_config_path());
+    }
+
+    #[test]
+    fn mark_pending_status_updates_entry_for_version() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(IDF_CONFIG_FILE_NAME);
+        write_config(
+            &path,
+            vec![
+                installation("abc", InstallationStatus::InProgress),
+                installation("other", InstallationStatus::InProgress),
+            ],
+        );
+        let settings = Settings {
+            pending_installation_ids: Some(HashMap::from([(
+                "v5.3".to_string(),
+                "abc".to_string(),
+            )])),
+            ..Settings::default()
+        };
+
+        mark_pending_status(&settings, &path, "v5.3", InstallationStatus::Failed);
+
+        let config = IdfConfig::from_file(&path).unwrap();
+        let status = |id: &str| {
+            config
+                .idf_installed
+                .iter()
+                .find(|i| i.id == id)
+                .unwrap()
+                .status
+                .clone()
+        };
+        assert_eq!(status("abc"), InstallationStatus::Failed);
+        assert_eq!(status("other"), InstallationStatus::InProgress);
+    }
+
+    #[test]
+    fn mark_pending_status_without_pending_entry_is_noop() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(IDF_CONFIG_FILE_NAME);
+        let mut settings = Settings {
+            pending_installation_ids: None,
+            ..Settings::default()
+        };
+        mark_pending_status(&settings, &path, "v5.3", InstallationStatus::Broken);
+        assert!(!path.exists());
+
+        settings.pending_installation_ids =
+            Some(HashMap::from([("v5.2".to_string(), "abc".to_string())]));
+        mark_pending_status(&settings, &path, "v5.3", InstallationStatus::Broken);
+        assert!(!path.exists());
+    }
 }

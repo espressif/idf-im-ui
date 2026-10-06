@@ -1,7 +1,10 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
-import GUITestRunner from "../classes/GUITestRunner.class.js";
-import logger from "../classes/logger.class.js";
+import { describe, it } from "mocha";
+import {
+  registerGUIAppLifecycle,
+  registerGUIFailureHooks,
+  expectWelcomePage,
+} from "../helpers/guiTestHelpers.js";
 import { getOSName, getArchitecture } from "../helper.js";
 import { tGui } from "../helpers/i18n.js";
 
@@ -11,44 +14,17 @@ export function runGUIStartupTest({ id = 0, pathToEIM, eimVersion }) {
 
   describe(`${id}- EIM startup |`, () => {
     let eimRunner = null;
-    before(async function () {
-      this.timeout(60000);
-      eimRunner = new GUITestRunner(pathToEIM);
-      try {
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+    registerGUIAppLifecycle({
+      pathToEIM,
+      getRunner: () => eimRunner,
+      setRunner: (runner) => (eimRunner = runner),
     });
 
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-    });
-
-    after(async function () {
-      this.timeout(5000);
-      try {
-        await eimRunner.stop();
-        eimRunner = null;
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
-    });
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner, skipAfterFailure: false });
 
     it("1- Should show welcome page", async function () {
       this.timeout(45000);
-      // Wait for the header to be present
-      await new Promise((resolve) => setTimeout(resolve, 15000));
-      const header = await eimRunner.findByDataId("welcome-header", 25000);
-      expect(header, "Expected welcome header").to.not.be.false;
-      const text = await header.getText();
-      expect(text, "Expected welcome text").to.equal(
-        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
-      );
+      await expectWelcomePage(eimRunner, 15000);
     });
 
     it("2- Should show correct version number", async function () {

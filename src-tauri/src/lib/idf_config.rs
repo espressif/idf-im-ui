@@ -141,74 +141,16 @@ impl IdfConfig {
         if path.as_ref().exists() && append {
             debug!("Config file already exists, appending to it");
             let existing_config = IdfConfig::from_file(path.as_ref())?;
-            let existing_version = existing_config.idf_installed;
-
-            let new_identities = self
-                .idf_installed
-                .iter()
-                .map(|i| {
-                    let normalized_path = match std::env::consts::OS {
-                        "windows" => i.path.to_lowercase(),
-                        _ => i.path.clone(),
-                    };
-                    let normalized_tools_path = match std::env::consts::OS {
-                        "windows" => i.idf_tools_path.to_lowercase(),
-                        _ => i.idf_tools_path.clone(),
-                    };
-                    (normalized_path, i.name.clone(), normalized_tools_path)
-                })
-                .collect::<Vec<_>>();
-
-            let mut merged_version = existing_version
-                .iter()
-                .filter(|i| {
-                    let normalized_path = match std::env::consts::OS {
-                        "windows" => i.path.to_lowercase(),
-                        _ => i.path.clone(),
-                    };
-                    let normalized_tools_path = match std::env::consts::OS {
-                        "windows" => i.idf_tools_path.to_lowercase(),
-                        _ => i.idf_tools_path.clone(),
-                    };
-                    !new_identities.contains(&(
-                        normalized_path,
-                        i.name.clone(),
-                        normalized_tools_path,
-                    ))
-                })
-                .cloned()
-                .collect::<Vec<_>>();
-            for install in self.idf_installed.iter() {
-                if !merged_version.iter().any(|i| i.id == install.id) {
-                    merged_version.push(install.clone());
-                }
-            }
-            self.idf_installed = merged_version;
+            self.idf_installed = merge_installations(
+                &existing_config.idf_installed,
+                &self.idf_installed,
+                std::env::consts::OS,
+            );
             debug!("Merged existing config with new installations");
         } else {
             debug!("Creating new ide config file");
         }
-        if self.eim_path.is_none() {
-            self.eim_path = match env::current_exe() {
-                Ok(path) => Some(path.to_str().unwrap().to_string()),
-                Err(_) => None,
-            };
-        } else {
-            debug!(
-                "eim_path already set to {}",
-                self.eim_path.as_ref().unwrap()
-            );
-            match env::current_exe() {
-                Ok(path) => {
-                    let path = path.to_str().unwrap().to_string();
-                    if self.eim_path.as_ref().unwrap() != &path {
-                        // Update the eim_path if it is different
-                        self.eim_path = Some(path);
-                    }
-                }
-                Err(_) => debug!("Failed to get current executable path"),
-            };
-        }
+        self.refresh_eim_path();
         self.version = Some(IDF_CONFIG_FILE_VERSION.to_string());
 
         // Convert to JSON string
@@ -227,6 +169,27 @@ impl IdfConfig {
 
         file.write_all(json_string.as_bytes())
             .with_context(|| anyhow!("writing to file eim_idf.json failed"))
+    }
+
+    /// Points `eim_path` at the running executable when it is unset or differs.
+    fn refresh_eim_path(&mut self) {
+        let Some(current) = self.eim_path.as_ref() else {
+            self.eim_path = match env::current_exe() {
+                Ok(path) => Some(path.to_str().unwrap().to_string()),
+                Err(_) => None,
+            };
+            return;
+        };
+        debug!("eim_path already set to {}", current);
+        match env::current_exe() {
+            Ok(path) => {
+                let path = path.to_str().unwrap().to_string();
+                if current != &path {
+                    self.eim_path = Some(path);
+                }
+            }
+            Err(_) => debug!("Failed to get current executable path"),
+        };
     }
 
     /// Reads and parses an IDF configuration from a file.
@@ -420,6 +383,45 @@ impl IdfConfig {
         config.update_installation_status(identifier, status);
         config.to_file(config_path, true, false)
     }
+}
+
+/// Identity used to decide whether a new installation replaces an existing one:
+/// `(path, name, idf_tools_path)`, with paths lowercased on Windows.
+fn installation_identity(install: &IdfInstallation, os: &str) -> (String, String, String) {
+    let normalize = |p: &str| match os {
+        "windows" => p.to_lowercase(),
+        _ => p.to_string(),
+    };
+    (
+        normalize(&install.path),
+        install.name.clone(),
+        normalize(&install.idf_tools_path),
+    )
+}
+
+/// Keeps the existing installations whose identity is not claimed by a new one,
+/// then appends every new installation whose id is not already present.
+fn merge_installations(
+    existing: &[IdfInstallation],
+    new: &[IdfInstallation],
+    os: &str,
+) -> Vec<IdfInstallation> {
+    let new_identities = new
+        .iter()
+        .map(|i| installation_identity(i, os))
+        .collect::<Vec<_>>();
+
+    let mut merged = existing
+        .iter()
+        .filter(|i| !new_identities.contains(&installation_identity(i, os)))
+        .cloned()
+        .collect::<Vec<_>>();
+    for install in new {
+        if !merged.iter().any(|i| i.id == install.id) {
+            merged.push(install.clone());
+        }
+    }
+    merged
 }
 
 pub fn parse_idf_config<P: AsRef<Path>>(path: P) -> Result<IdfConfig> {
@@ -949,6 +951,226 @@ mod tests {
             }
         }
 
+        Ok(())
+    }
+
+    fn golden_config() -> IdfConfig {
+        IdfConfig {
+            git_path: String::from("/usr/bin/git"),
+            idf_installed: vec![
+                IdfInstallation {
+                    activation_script: Some(String::from("/e/activate_idf_v5.4.sh")),
+                    id: String::from("esp-idf-a"),
+                    idf_tools_path: String::from("/e/v5.4/tools"),
+                    name: String::from("v5.4"),
+                    path: String::from("/e/v5.4/esp-idf"),
+                    python: Some(String::from("/e/v5.4/tools/python/bin/python3")),
+                    installation_config: Some(Base64Bytes::new(vec![0, 1, 2, 250, 255])),
+                    status: InstallationStatus::BeingRepaired,
+                },
+                IdfInstallation {
+                    activation_script: None,
+                    id: String::from("esp-idf-b"),
+                    idf_tools_path: String::from("/e/v5.3/tools"),
+                    name: String::from("v5.3"),
+                    path: String::from("/e/v5.3/esp-idf"),
+                    python: None,
+                    installation_config: None,
+                    status: InstallationStatus::InProgress,
+                },
+            ],
+            idf_selected_id: String::from("esp-idf-a"),
+            eim_path: Some(String::from("/stale/eim")),
+            version: Some("1.0".to_string()),
+        }
+    }
+
+    fn current_exe_json() -> String {
+        serde_json::to_string(env::current_exe().unwrap().to_str().unwrap()).unwrap()
+    }
+
+    #[test]
+    fn test_to_file_golden_pretty() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join("nested").join(IDF_CONFIG_FILE_NAME);
+        golden_config().to_file(&path, true, false)?;
+
+        let expected = format!(
+            r#"{{
+  "gitPath": "/usr/bin/git",
+  "idfInstalled": [
+    {{
+      "activationScript": "/e/activate_idf_v5.4.sh",
+      "id": "esp-idf-a",
+      "idfToolsPath": "/e/v5.4/tools",
+      "name": "v5.4",
+      "path": "/e/v5.4/esp-idf",
+      "python": "/e/v5.4/tools/python/bin/python3",
+      "installationConfig": "AAEC+v8=",
+      "status": "being_repaired"
+    }},
+    {{
+      "id": "esp-idf-b",
+      "idfToolsPath": "/e/v5.3/tools",
+      "name": "v5.3",
+      "path": "/e/v5.3/esp-idf",
+      "status": "in_progress"
+    }}
+  ],
+  "idfSelectedId": "esp-idf-a",
+  "eimPath": {},
+  "version": "3.0"
+}}"#,
+            current_exe_json()
+        );
+        assert_eq!(fs::read_to_string(&path)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_file_golden_compact_truncates_existing() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join(IDF_CONFIG_FILE_NAME);
+        fs::write(&path, "x".repeat(4096))?;
+        let mut config = golden_config();
+        config.idf_installed.truncate(1);
+        config.eim_path = None;
+        config.to_file(&path, false, false)?;
+
+        let expected = format!(
+            concat!(
+                r#"{{"gitPath":"/usr/bin/git","idfInstalled":[{{"activationScript":"/e/activate_idf_v5.4.sh","#,
+                r#""id":"esp-idf-a","idfToolsPath":"/e/v5.4/tools","name":"v5.4","path":"/e/v5.4/esp-idf","#,
+                r#""python":"/e/v5.4/tools/python/bin/python3","installationConfig":"AAEC+v8=","#,
+                r#""status":"being_repaired"}}],"idfSelectedId":"esp-idf-a","eimPath":{},"version":"3.0"}}"#
+            ),
+            current_exe_json()
+        );
+        assert_eq!(fs::read_to_string(&path)?, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn test_to_file_append_golden_order() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join(IDF_CONFIG_FILE_NAME);
+        golden_config().to_file(&path, false, false)?;
+
+        let mut replacement = golden_config();
+        replacement.idf_installed[1].id = String::from("esp-idf-b2");
+        replacement.idf_installed[1].python = Some(String::from("/p"));
+        let extra = IdfInstallation {
+            id: String::from("esp-idf-c"),
+            name: String::from("v6.0"),
+            path: String::from("/e/v6.0/esp-idf"),
+            ..replacement.idf_installed[1].clone()
+        };
+        replacement.idf_installed = vec![replacement.idf_installed[1].clone(), extra];
+        replacement.to_file(&path, false, true)?;
+
+        let written = IdfConfig::from_file(&path)?;
+        let ids: Vec<&str> = written
+            .idf_installed
+            .iter()
+            .map(|i| i.id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["esp-idf-a", "esp-idf-b2", "esp-idf-c"]);
+        assert_eq!(
+            written.idf_installed[0]
+                .installation_config
+                .as_ref()
+                .unwrap()
+                .as_slice(),
+            &[0, 1, 2, 250, 255]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_installation_identity_lowercases_paths_on_windows_only() {
+        let mut install = golden_config().idf_installed[0].clone();
+        install.path = String::from("C:/Esp/IDF");
+        install.idf_tools_path = String::from("C:/Esp/Tools");
+        install.name = String::from("MyName");
+
+        assert_eq!(
+            installation_identity(&install, "windows"),
+            (
+                String::from("c:/esp/idf"),
+                String::from("MyName"),
+                String::from("c:/esp/tools")
+            )
+        );
+        assert_eq!(
+            installation_identity(&install, "linux"),
+            (
+                String::from("C:/Esp/IDF"),
+                String::from("MyName"),
+                String::from("C:/Esp/Tools")
+            )
+        );
+    }
+
+    #[test]
+    fn test_merge_installations_replaces_same_identity_and_skips_duplicate_ids() {
+        let existing = golden_config().idf_installed;
+        let mut replacement = existing[1].clone();
+        replacement.id = String::from("esp-idf-b2");
+        let duplicate_id = IdfInstallation {
+            name: String::from("renamed"),
+            ..existing[0].clone()
+        };
+
+        let merged = merge_installations(&existing, &[replacement, duplicate_id], "linux");
+
+        let ids: Vec<&str> = merged.iter().map(|i| i.id.as_str()).collect();
+        assert_eq!(ids, vec!["esp-idf-a", "esp-idf-b2"]);
+        assert_eq!(merged[0].name, "v5.4");
+    }
+
+    #[test]
+    fn test_merge_installations_case_insensitive_paths_on_windows() {
+        let existing = golden_config().idf_installed;
+        let mut upper = existing[1].clone();
+        upper.id = String::from("esp-idf-b2");
+        upper.path = upper.path.to_uppercase();
+
+        let on_windows = merge_installations(&existing, std::slice::from_ref(&upper), "windows");
+        assert_eq!(on_windows.len(), 2);
+        assert_eq!(on_windows[1].id, "esp-idf-b2");
+
+        let on_linux = merge_installations(&existing, &[upper], "linux");
+        assert_eq!(on_linux.len(), 3);
+    }
+
+    #[test]
+    fn test_merge_installations_with_empty_existing() {
+        let new = golden_config().idf_installed;
+        let merged = merge_installations(&[], &new, "macos");
+        assert_eq!(merged.len(), 2);
+    }
+
+    #[test]
+    fn test_settings_bincode_roundtrip_through_config_file() -> Result<()> {
+        let dir = tempdir()?;
+        let path = dir.path().join(IDF_CONFIG_FILE_NAME);
+        let mut config = create_test_config_with_installation_config();
+        let original = config.idf_installed[0]
+            .installation_config
+            .clone()
+            .unwrap()
+            .into_inner();
+        config.to_file(&path, true, false)?;
+
+        let read = IdfConfig::from_file(&path)?;
+        let bytes = read.idf_installed[0]
+            .installation_config
+            .as_ref()
+            .unwrap()
+            .as_slice();
+        assert_eq!(bytes, original.as_slice());
+        let settings: crate::settings::Settings = bincode::deserialize(bytes)?;
+        assert_eq!(bincode::serialize(&settings)?, original);
         Ok(())
     }
 }

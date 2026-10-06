@@ -1,0 +1,15 @@
+/* Title + intro text at the top of the wizard step views. */
+
+.title {
+  font-size: 27px;
+  font-family: 'Trueno-bold', sans-serif;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.description {
+  font-size: 21px;
+  font-family: 'Trueno-light', sans-serif;
+  color: #6b7280;
+  margin-bottom: 2rem;
+}

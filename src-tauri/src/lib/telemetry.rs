@@ -1,17 +1,17 @@
 use anyhow::Error as AnyhowError;
 use chrono::Utc;
-use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use sysinfo::System;
 use uuid::Uuid;
 
 const CONNECTION_STRING: Option<&str> = option_env!("APP_INSIGHTS_CONNECTION_STRING");
 
-static HTTP_CLIENT: Lazy<Option<reqwest::Client>> = Lazy::new(|| {
+static HTTP_CLIENT: LazyLock<Option<reqwest::Client>> = LazyLock::new(|| {
     CONNECTION_STRING?;
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -21,7 +21,7 @@ static HTTP_CLIENT: Lazy<Option<reqwest::Client>> = Lazy::new(|| {
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
 
-static SYSTEM_INFO: Lazy<String> = Lazy::new(compute_system_info);
+static SYSTEM_INFO: LazyLock<String> = LazyLock::new(compute_system_info);
 
 pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::Relaxed);
@@ -336,8 +336,8 @@ fn dispatch(props: EventProps) {
     }
 }
 
-static PENDING_DISPATCHES: Lazy<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
-    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+static PENDING_DISPATCHES: LazyLock<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
+    LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
 
 pub async fn flush(timeout: Duration) {
     let handles: Vec<_> = match PENDING_DISPATCHES.lock() {
@@ -408,7 +408,7 @@ pub fn get_linux_os_name() -> String {
 }
 
 fn scrub_pii(input: &str) -> String {
-    static PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
+    static PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
         [
             r#"/(?:Users|home|root|tmp|var|etc|opt)/[^\s"'<>]+"#,
             r#"[A-Za-z]:\\[^\s"'<>]+"#,
@@ -439,7 +439,7 @@ fn scrub_pii(input: &str) -> String {
 fn hash_short(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
-    let digest = hasher.finalize();
-    let hex = format!("{:x}", digest);
-    hex.chars().take(16).collect()
+    let mut hex = crate::to_hex(&hasher.finalize());
+    hex.truncate(16);
+    hex
 }

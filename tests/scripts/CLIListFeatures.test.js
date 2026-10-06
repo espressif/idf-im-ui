@@ -1,7 +1,8 @@
 import { expect } from "chai";
-import { describe, it, after, beforeEach, afterEach } from "mocha";
+import { describe, it, after } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import { registerSequentialStepHooks } from "../helpers/cliTestHelpers.js";
 
 /**
  * This function verifies the `eim list-features` command.
@@ -19,38 +20,10 @@ export function runListFeaturesTest({
   describe(`${id}- EIM list-features test |`, function () {
     this.timeout(120000);
     let testRunner = null;
-    let testStepFailed = false;
 
-    beforeEach(async function () {
-      this.timeout(10000);
-      if (testStepFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
-
-    afterEach(async function () {
-      this.timeout(20000);
-      if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        if (testRunner) {
-          logger.info(
-            `Terminal output: >>\r ${testRunner.output.slice(-2000)}`
-          );
-          logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
-        }
-        testStepFailed = true;
-      }
-      if (testRunner) {
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error cleaning up terminal after test");
-          logger.info(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
-      }
+    registerSequentialStepHooks({
+      getRunner: () => testRunner,
+      clearRunner: () => (testRunner = null),
     });
 
     after(function () {

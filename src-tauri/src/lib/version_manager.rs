@@ -285,113 +285,122 @@ pub fn remove_single_idf_version(
     //TODO: remove also from path
     let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
     let mut ide_config = IdfConfig::from_file(&config_path)?;
-    if let Some(installation) = ide_config
+    let Some(installation) = ide_config
         .idf_installed
         .iter()
         .find(|install| install.id == identifier || install.name == identifier)
         .cloned()
-    {
-        let installation_folder_path = PathBuf::from(installation.path.clone());
-        let installation_folder = installation_folder_path.parent().ok_or_else(|| {
-            anyhow!(
-                "Installation path '{}' has no parent directory",
-                installation_folder_path.display()
-            )
-        })?;
-        if !keep_idf_folder {
-            // First remove the installation folder itself (e.g., esp-idf)
-            match remove_directory_all(&installation_folder_path) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(anyhow!("Failed to remove installation folder: {}", e));
-                }
-            }
+    else {
+        return Err(anyhow!("Version {} not installed", identifier));
+    };
 
-            // Only remove the parent folder if it's empty
-            match fs::read_dir(installation_folder) {
-                Ok(mut entries) => {
-                    if entries.next().is_none() {
-                        // Directory is empty, remove it
-                        if let Err(e) = remove_directory_all(installation_folder) {
-                            warn!("Failed to remove empty parent directory: {}", e);
-                        }
-                    }
-                    // Directory is not empty, keep it
-                }
-                Err(e) => {
-                    // Directory might not exist or other error
-                    warn!("Could not check or remove parent directory: {}", e);
-                }
-            }
-        }
-
-        if let Some(ref script) = installation.activation_script {
-            match remove_directory_all(script) {
-                Ok(_) => {}
-                Err(e) => {
-                    return Err(anyhow!("Failed to remove activation script: {}", e));
-                }
-            }
-
-            // Also remove fish/bat activation scripts
-            if let Err(e) = remove_activation_scripts(script, &installation.name) {
-                warn!("Failed to remove additional activation scripts: {}", e);
-            }
-        }
-
-        if ide_config.remove_installation(identifier) {
-            debug!("Removed installation from config file");
-        } else {
-            return Err(anyhow!("Failed to remove installation from config file"));
-        }
-        ide_config.to_file(config_path, true, false)?;
-        if std::env::consts::OS == "windows" {
-            // On Windows, also remove the desktop icon associated with the installation
-            let script_ref = installation.activation_script.as_deref().unwrap_or("");
-            match find_shortcut_by_profile(script_ref) {
-                Ok(Some(shortcut_name)) => {
-                    let desktop_path =
-                        match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
-                            Ok(path) => path,
-                            Err(e) => {
-                                error!("{}", e);
-                                return Ok(format!(
-                                    "Version {} removed, but failed to remove desktop shortcut",
-                                    identifier
-                                ));
-                            }
-                        };
-                    let shortcut_path = desktop_path.join(shortcut_name);
-                    if shortcut_path.exists() {
-                        match fs::remove_file(&shortcut_path) {
-                            Ok(_) => {
-                                info!("Removed desktop shortcut: {}", shortcut_path.display());
-                            }
-                            Err(e) => {
-                                error!(
-                                    "Failed to remove desktop shortcut {}: {}",
-                                    shortcut_path.display(),
-                                    e
-                                );
-                            }
-                        }
-                    }
-                }
-                Ok(None) => {
-                    info!(
-                        "No desktop shortcut found for profile: {:?}",
-                        installation.activation_script
-                    );
-                }
-                Err(e) => {
-                    error!("Error searching for desktop shortcut: {}", e);
-                }
-            }
-        }
-        Ok(format!("Version {} removed", identifier))
-    } else {
-        Err(anyhow!("Version {} not installed", identifier))
+    let installation_folder_path = PathBuf::from(installation.path.clone());
+    let installation_folder = installation_folder_path.parent().ok_or_else(|| {
+        anyhow!(
+            "Installation path '{}' has no parent directory",
+            installation_folder_path.display()
+        )
+    })?;
+    if !keep_idf_folder {
+        remove_idf_folder_and_empty_parent(&installation_folder_path, installation_folder)?;
     }
+
+    if let Some(ref script) = installation.activation_script {
+        remove_installation_activation_scripts(script, &installation.name)?;
+    }
+
+    if ide_config.remove_installation(identifier) {
+        debug!("Removed installation from config file");
+    } else {
+        return Err(anyhow!("Failed to remove installation from config file"));
+    }
+    ide_config.to_file(config_path, true, false)?;
+    if std::env::consts::OS == "windows" && !remove_desktop_shortcut(&installation) {
+        return Ok(format!(
+            "Version {} removed, but failed to remove desktop shortcut",
+            identifier
+        ));
+    }
+    Ok(format!("Version {} removed", identifier))
+}
+
+/// Removes the installation folder itself (e.g., esp-idf), then its parent only if it is now empty.
+fn remove_idf_folder_and_empty_parent(
+    installation_folder_path: &Path,
+    installation_folder: &Path,
+) -> Result<()> {
+    if let Err(e) = remove_directory_all(installation_folder_path) {
+        return Err(anyhow!("Failed to remove installation folder: {}", e));
+    }
+
+    match fs::read_dir(installation_folder) {
+        Ok(mut entries) => {
+            if entries.next().is_none() {
+                if let Err(e) = remove_directory_all(installation_folder) {
+                    warn!("Failed to remove empty parent directory: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            // Directory might not exist or other error
+            warn!("Could not check or remove parent directory: {}", e);
+        }
+    }
+    Ok(())
+}
+
+fn remove_installation_activation_scripts(script: &str, installation_name: &str) -> Result<()> {
+    if let Err(e) = remove_directory_all(script) {
+        return Err(anyhow!("Failed to remove activation script: {}", e));
+    }
+
+    // Also remove fish/bat activation scripts
+    if let Err(e) = remove_activation_scripts(script, installation_name) {
+        warn!("Failed to remove additional activation scripts: {}", e);
+    }
+    Ok(())
+}
+
+/// Removes the desktop shortcut pointing at the installation's activation script.
+/// Returns `false` only when the desktop directory could not be determined.
+fn remove_desktop_shortcut(installation: &IdfInstallation) -> bool {
+    let script_ref = installation.activation_script.as_deref().unwrap_or("");
+    match find_shortcut_by_profile(script_ref) {
+        Ok(Some(shortcut_name)) => {
+            let desktop_path = match dirs::desktop_dir().ok_or("Failed to get desktop directory") {
+                Ok(path) => path,
+                Err(e) => {
+                    error!("{}", e);
+                    return false;
+                }
+            };
+            let shortcut_path = desktop_path.join(shortcut_name);
+            if shortcut_path.exists() {
+                match fs::remove_file(&shortcut_path) {
+                    Ok(_) => {
+                        info!("Removed desktop shortcut: {}", shortcut_path.display());
+                    }
+                    Err(e) => {
+                        error!(
+                            "Failed to remove desktop shortcut {}: {}",
+                            shortcut_path.display(),
+                            e
+                        );
+                    }
+                }
+            }
+        }
+        Ok(None) => {
+            info!(
+                "No desktop shortcut found for profile: {:?}",
+                installation.activation_script
+            );
+        }
+        Err(e) => {
+            error!("Error searching for desktop shortcut: {}", e);
+        }
+    }
+    true
 }
 
 /// Finds ESP-IDF folders within the specified directory and its subdirectories.
@@ -832,22 +841,8 @@ pub fn list_idf_tools(
     outdated_only: bool,
     config_path: Option<&std::path::PathBuf>,
 ) -> Result<ToolListReport, String> {
-    let identifier = identifier
-        .ok_or_else(|| "no identifier provided; pass an IDF id, name or path".to_string())?;
-
-    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
-    let ide_config = IdfConfig::from_file(&config_path)
-        .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
-
-    let installation = find_installation(&ide_config, identifier)?;
-
-    let tools_json_path = std::path::Path::new(&installation.path).join("tools/tools.json");
-    if !tools_json_path.exists() {
-        return Err(format!(
-            "tools.json not found at {}",
-            tools_json_path.display()
-        ));
-    }
+    let installation = load_installation(identifier, config_path)?;
+    let tools_json_path = existing_idf_tools_file(&installation, "tools.json")?;
 
     let tools_file = tools_json_path
         .to_str()
@@ -885,58 +880,17 @@ pub fn list_idf_tools(
 
         let tool_dir = std::path::Path::new(&installation.idf_tools_path).join(&tool.name);
         let on_disk_versions = enumerate_on_disk_versions(&tool_dir);
-        let recommended_name = recommended_versions.get(&tool.name).cloned();
+        let recommended_name = recommended_versions.get(&tool.name).map(String::as_str);
 
-        let mut version_inspections: Vec<ToolVersionInspection> = Vec::new();
-        let mut biggest_installed: Option<String> = None;
+        let (version_inspections, biggest_installed) = inspect_tool_versions(
+            &tool.versions,
+            &on_disk_versions,
+            recommended_name,
+            platform.as_deref(),
+        );
 
-        for v in &tool.versions {
-            let has_platform_download = match &platform {
-                Some(p) => v.downloads.contains_key(p) || v.downloads.contains_key("any"),
-                None => v.downloads.contains_key("any"),
-            };
-            let on_disk_match = on_disk_versions.iter().find(|(n, _)| n == &v.name);
-            let installed = on_disk_match.map(|(dir_name, install_path)| ToolListInstalled {
-                version: dir_name.clone(),
-                install_path: install_path.clone(),
-                is_recommended_match: recommended_name
-                    .as_deref()
-                    .map(|r| r == dir_name.as_str())
-                    .unwrap_or(false),
-            });
-            if let Some((dir_name, _)) = on_disk_match {
-                if is_newer_semver(dir_name, biggest_installed.as_deref()) {
-                    biggest_installed = Some(dir_name.clone());
-                }
-            }
-            version_inspections.push(ToolVersionInspection {
-                version: v.clone(),
-                has_platform_download,
-                installed,
-            });
-        }
-
-        let biggest_available = tool
-            .versions
-            .iter()
-            .filter(|v| v.status != "deprecated")
-            .map(|v| v.name.clone())
-            .max_by(|a, b| semver_order(a, b))
-            .or_else(|| {
-                tool.versions
-                    .iter()
-                    .map(|v| v.name.clone())
-                    .max_by(|a, b| semver_order(a, b))
-            })
-            .unwrap_or_default();
-        if let Some(bi) = &biggest_installed {
-            if !biggest_available.is_empty() && is_newer_semver(&biggest_available, Some(bi)) {
-                outdated.push(ToolListOutdatedEntry {
-                    name: tool.name.clone(),
-                    installed: bi.clone(),
-                    available: biggest_available,
-                });
-            }
+        if let Some(entry) = outdated_entry(&tool, biggest_installed) {
+            outdated.push(entry);
         }
 
         tools.push(ToolListEntry {
@@ -946,11 +900,7 @@ pub fn list_idf_tools(
     }
 
     Ok(ToolListReport {
-        idf: ToolListIdfContext {
-            id: installation.id.clone(),
-            name: installation.name.clone(),
-            path: installation.path.clone(),
-        },
+        idf: idf_context(&installation),
         tools_json_path: tools_json_path.to_string_lossy().to_string(),
         idf_tools_path: installation.idf_tools_path.clone(),
         outdated_only,
@@ -1002,23 +952,8 @@ pub fn list_idf_features(
     identifier: Option<&str>,
     config_path: Option<&std::path::PathBuf>,
 ) -> Result<FeatureListReport, String> {
-    let identifier = identifier
-        .ok_or_else(|| "no identifier provided; pass an IDF id, name or path".to_string())?;
-
-    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
-    let ide_config = IdfConfig::from_file(&config_path)
-        .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
-
-    let installation = find_installation(&ide_config, identifier)?;
-
-    let requirements_json_path =
-        std::path::Path::new(&installation.path).join("tools/requirements.json");
-    if !requirements_json_path.exists() {
-        return Err(format!(
-            "requirements.json not found at {}",
-            requirements_json_path.display()
-        ));
-    }
+    let installation = load_installation(identifier, config_path)?;
+    let requirements_json_path = existing_idf_tools_file(&installation, "requirements.json")?;
 
     let metadata = RequirementsMetadata::from_file(&requirements_json_path)
         .map_err(|e| format!("Failed to read requirements.json: {}", e))?;
@@ -1051,14 +986,115 @@ pub fn list_idf_features(
         .collect();
 
     Ok(FeatureListReport {
-        idf: ToolListIdfContext {
-            id: installation.id.clone(),
-            name: installation.name.clone(),
-            path: installation.path.clone(),
-        },
+        idf: idf_context(&installation),
         requirements_json_path: requirements_json_path.to_string_lossy().to_string(),
         features,
     })
+}
+
+/// Resolves `identifier` against the config file at `config_path` (or the default one).
+fn load_installation(
+    identifier: Option<&str>,
+    config_path: Option<&std::path::PathBuf>,
+) -> Result<IdfInstallation, String> {
+    let identifier = identifier
+        .ok_or_else(|| "no identifier provided; pass an IDF id, name or path".to_string())?;
+
+    let config_path = config_path.cloned().unwrap_or_else(get_default_config_path);
+    let ide_config = IdfConfig::from_file(&config_path)
+        .map_err(|e| format!("Failed to read eim_idf.json: {}", e))?;
+
+    find_installation(&ide_config, identifier).cloned()
+}
+
+/// Returns `<idf path>/tools/<file_name>`, or an error if it does not exist.
+fn existing_idf_tools_file(
+    installation: &IdfInstallation,
+    file_name: &str,
+) -> Result<PathBuf, String> {
+    let path = Path::new(&installation.path).join(format!("tools/{}", file_name));
+    if !path.exists() {
+        return Err(format!("{} not found at {}", file_name, path.display()));
+    }
+    Ok(path)
+}
+
+fn idf_context(installation: &IdfInstallation) -> ToolListIdfContext {
+    ToolListIdfContext {
+        id: installation.id.clone(),
+        name: installation.name.clone(),
+        path: installation.path.clone(),
+    }
+}
+
+fn has_platform_download(version: &Version, platform: Option<&str>) -> bool {
+    match platform {
+        Some(p) => version.downloads.contains_key(p) || version.downloads.contains_key("any"),
+        None => version.downloads.contains_key("any"),
+    }
+}
+
+/// Inspects every declared version of a tool against the `(dir name, path)` pairs found
+/// on disk. Returns the per-version inspections plus the newest installed version, if any.
+fn inspect_tool_versions(
+    versions: &[Version],
+    on_disk_versions: &[(String, String)],
+    recommended_name: Option<&str>,
+    platform: Option<&str>,
+) -> (Vec<ToolVersionInspection>, Option<String>) {
+    let mut version_inspections: Vec<ToolVersionInspection> = Vec::new();
+    let mut biggest_installed: Option<String> = None;
+
+    for v in versions {
+        let on_disk_match = on_disk_versions.iter().find(|(n, _)| n == &v.name);
+        let installed = on_disk_match.map(|(dir_name, install_path)| ToolListInstalled {
+            version: dir_name.clone(),
+            install_path: install_path.clone(),
+            is_recommended_match: recommended_name == Some(dir_name.as_str()),
+        });
+        if let Some((dir_name, _)) = on_disk_match {
+            if is_newer_semver(dir_name, biggest_installed.as_deref()) {
+                biggest_installed = Some(dir_name.clone());
+            }
+        }
+        version_inspections.push(ToolVersionInspection {
+            version: v.clone(),
+            has_platform_download: has_platform_download(v, platform),
+            installed,
+        });
+    }
+    (version_inspections, biggest_installed)
+}
+
+/// Newest non-deprecated version name, falling back to the newest of all versions,
+/// or an empty string when the tool declares none.
+fn biggest_available_version(versions: &[Version]) -> String {
+    versions
+        .iter()
+        .filter(|v| v.status != "deprecated")
+        .map(|v| v.name.clone())
+        .max_by(|a, b| semver_order(a, b))
+        .or_else(|| {
+            versions
+                .iter()
+                .map(|v| v.name.clone())
+                .max_by(|a, b| semver_order(a, b))
+        })
+        .unwrap_or_default()
+}
+
+fn outdated_entry(tool: &Tool, biggest_installed: Option<String>) -> Option<ToolListOutdatedEntry> {
+    let installed = biggest_installed?;
+    let available = biggest_available_version(&tool.versions);
+    if !available.is_empty() && is_newer_semver(&available, Some(&installed)) {
+        Some(ToolListOutdatedEntry {
+            name: tool.name.clone(),
+            installed,
+            available,
+        })
+    } else {
+        None
+    }
 }
 
 /// Enumerates the immediate subdirectories of `tool_dir` and returns
@@ -1287,8 +1323,14 @@ mod tests {
         path
     }
 
-    #[test]
-    fn test_list_idf_tools_resolves_installation_by_id() {
+    /// Creates `<tmp>/v5.4/esp-idf` and `<tmp>/v5.4/tools` plus an `eim_idf.json`
+    /// pointing at them. Returns `(temp_dir, idf_path, tools_path, config_path)`.
+    fn setup_fake_idf() -> (
+        TempDir,
+        std::path::PathBuf,
+        std::path::PathBuf,
+        std::path::PathBuf,
+    ) {
         let temp = TempDir::new().unwrap();
         let idf_path = temp.path().join("v5.4/esp-idf");
         let tools_path = temp.path().join("v5.4/tools");
@@ -1299,6 +1341,12 @@ mod tests {
             idf_path.to_str().unwrap(),
             tools_path.to_str().unwrap(),
         );
+        (temp, idf_path, tools_path, config_path)
+    }
+
+    #[test]
+    fn test_list_idf_tools_resolves_installation_by_id() {
+        let (_temp, idf_path, tools_path, config_path) = setup_fake_idf();
         write_fake_tools_json(&idf_path, vec![]);
 
         let report = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path))
@@ -1318,16 +1366,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_filters_never_install_tools() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, _tools_path, config_path) = setup_fake_idf();
 
         let keep = make_tool(
             "xtensa-esp-elf",
@@ -1358,16 +1397,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_detects_installed_recommended_version() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, tools_path, config_path) = setup_fake_idf();
 
         let tool = make_tool(
             "xtensa-esp-elf",
@@ -1396,16 +1426,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_reports_recommended_match_false_for_older_install() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, tools_path, config_path) = setup_fake_idf();
 
         let tool = make_tool(
             "xtensa-esp-elf",
@@ -1438,16 +1459,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_outdated_when_older_version_is_installed() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, tools_path, config_path) = setup_fake_idf();
 
         // Available: 13.2.0 (older, supported) and 14.2.0 (newer, recommended)
         let tool = make_tool(
@@ -1475,16 +1487,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_outdated_empty_when_nothing_installed() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, _tools_path, config_path) = setup_fake_idf();
 
         let tool = make_tool(
             "xtensa-esp-elf",
@@ -1504,16 +1507,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_errors_on_unknown_identifier() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, _idf_path, _tools_path, config_path) = setup_fake_idf();
 
         let result = list_idf_tools(Some("does-not-exist"), false, Some(&config_path));
         let err = result.expect_err("expected error for unknown identifier");
@@ -1526,17 +1520,8 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_errors_on_missing_tools_json() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
         // Intentionally do NOT write tools/tools.json
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, _idf_path, _tools_path, config_path) = setup_fake_idf();
 
         let result = list_idf_tools(Some("esp-idf-test-id"), false, Some(&config_path));
         let err = result.expect_err("expected error for missing tools.json");
@@ -1549,16 +1534,7 @@ mod tests {
 
     #[test]
     fn test_list_idf_tools_marks_has_platform_download_using_current_platform() {
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, _tools_path, config_path) = setup_fake_idf();
 
         // Current platform key + an unrelated one.
         let current_platform =
@@ -1649,16 +1625,7 @@ mod tests {
         // version must still be reported as outdated by the newer available
         // one. The semver-only path would have missed this because neither
         // version parses.
-        let temp = TempDir::new().unwrap();
-        let idf_path = temp.path().join("v5.4/esp-idf");
-        let tools_path = temp.path().join("v5.4/tools");
-        fs::create_dir_all(&idf_path).unwrap();
-        fs::create_dir_all(&tools_path).unwrap();
-        let config_path = write_fake_idf_config(
-            temp.path(),
-            idf_path.to_str().unwrap(),
-            tools_path.to_str().unwrap(),
-        );
+        let (_temp, idf_path, tools_path, config_path) = setup_fake_idf();
 
         let tool = make_tool(
             "esp32ulp-elf",
@@ -1682,5 +1649,180 @@ mod tests {
         assert_eq!(report.outdated[0].name, "esp32ulp-elf");
         assert_eq!(report.outdated[0].installed, "v0.11.0-esp32-20240304");
         assert_eq!(report.outdated[0].available, "v0.12.0-esp32-20260304");
+    }
+
+    #[test]
+    fn test_has_platform_download() {
+        let v = make_version("1.0", "supported", &["linux-amd64"]);
+        assert!(has_platform_download(&v, Some("linux-amd64")));
+        assert!(!has_platform_download(&v, Some("win64")));
+        assert!(!has_platform_download(&v, None));
+
+        let any = make_version("1.0", "supported", &["any"]);
+        assert!(has_platform_download(&any, Some("win64")));
+        assert!(has_platform_download(&any, None));
+    }
+
+    #[test]
+    fn test_inspect_tool_versions_tracks_newest_installed() {
+        let versions = vec![
+            make_version("13.2.0", "supported", &["any"]),
+            make_version("14.2.0", "recommended", &["any"]),
+            make_version("15.0.0", "supported", &["any"]),
+        ];
+        let on_disk = vec![
+            ("14.2.0".to_string(), "/t/14.2.0".to_string()),
+            ("13.2.0".to_string(), "/t/13.2.0".to_string()),
+            ("unrelated".to_string(), "/t/unrelated".to_string()),
+        ];
+
+        let (inspections, biggest) =
+            inspect_tool_versions(&versions, &on_disk, Some("14.2.0"), None);
+
+        assert_eq!(biggest.as_deref(), Some("14.2.0"));
+        assert_eq!(inspections.len(), 3);
+        let older = inspections[0].installed.as_ref().unwrap();
+        assert_eq!(older.install_path, "/t/13.2.0");
+        assert!(!older.is_recommended_match);
+        assert!(
+            inspections[1]
+                .installed
+                .as_ref()
+                .unwrap()
+                .is_recommended_match
+        );
+        assert!(inspections[2].installed.is_none());
+        assert!(inspections.iter().all(|i| i.has_platform_download));
+    }
+
+    #[test]
+    fn test_inspect_tool_versions_nothing_installed() {
+        let versions = vec![make_version("1.0.0", "recommended", &["win64"])];
+        let (inspections, biggest) = inspect_tool_versions(&versions, &[], None, Some("macos"));
+        assert!(biggest.is_none());
+        assert!(inspections[0].installed.is_none());
+        assert!(!inspections[0].has_platform_download);
+    }
+
+    #[test]
+    fn test_biggest_available_version_skips_deprecated() {
+        let versions = vec![
+            make_version("1.0.0", "supported", &[]),
+            make_version("3.0.0", "deprecated", &[]),
+            make_version("2.0.0", "recommended", &[]),
+        ];
+        assert_eq!(biggest_available_version(&versions), "2.0.0");
+    }
+
+    #[test]
+    fn test_biggest_available_version_falls_back_to_deprecated() {
+        let versions = vec![
+            make_version("1.0.0", "deprecated", &[]),
+            make_version("2.0.0", "deprecated", &[]),
+        ];
+        assert_eq!(biggest_available_version(&versions), "2.0.0");
+        assert_eq!(biggest_available_version(&[]), "");
+    }
+
+    #[test]
+    fn test_outdated_entry() {
+        let tool = make_tool(
+            "t",
+            "d",
+            "always",
+            vec![
+                make_version("1.0.0", "supported", &[]),
+                make_version("2.0.0", "recommended", &[]),
+            ],
+        );
+        let entry = outdated_entry(&tool, Some("1.0.0".to_string())).unwrap();
+        assert_eq!(entry.name, "t");
+        assert_eq!(entry.installed, "1.0.0");
+        assert_eq!(entry.available, "2.0.0");
+
+        assert!(outdated_entry(&tool, Some("2.0.0".to_string())).is_none());
+        assert!(outdated_entry(&tool, None).is_none());
+        let empty = make_tool("e", "d", "always", vec![]);
+        assert!(outdated_entry(&empty, Some("1.0.0".to_string())).is_none());
+    }
+
+    #[test]
+    fn test_load_installation_requires_identifier() {
+        let (_temp, _idf_path, _tools_path, config_path) = setup_fake_idf();
+        let err = load_installation(None, Some(&config_path)).unwrap_err();
+        assert_eq!(err, "no identifier provided; pass an IDF id, name or path");
+        let found = load_installation(Some("TestIDF"), Some(&config_path)).unwrap();
+        assert_eq!(found.id, "esp-idf-test-id");
+    }
+
+    #[test]
+    fn test_existing_idf_tools_file() {
+        let (_temp, idf_path, tools_path, _config_path) = setup_fake_idf();
+        let installation =
+            make_idf_installation(idf_path.to_str().unwrap(), tools_path.to_str().unwrap());
+        let err = existing_idf_tools_file(&installation, "requirements.json").unwrap_err();
+        assert!(err.starts_with("requirements.json not found at "));
+
+        let written = write_fake_tools_json(&idf_path, vec![]);
+        assert_eq!(
+            existing_idf_tools_file(&installation, "tools.json").unwrap(),
+            written
+        );
+    }
+
+    #[test]
+    fn test_idf_context_copies_identity() {
+        let installation = make_idf_installation("/idf", "/tools");
+        let ctx = idf_context(&installation);
+        assert_eq!(ctx.id, "esp-idf-test-id");
+        assert_eq!(ctx.name, "TestIDF");
+        assert_eq!(ctx.path, "/idf");
+    }
+
+    #[test]
+    fn test_remove_idf_folder_and_empty_parent_removes_empty_parent() {
+        let temp = TempDir::new().unwrap();
+        let parent = temp.path().join("v5.4");
+        let idf = parent.join("esp-idf");
+        fs::create_dir_all(idf.join("sub")).unwrap();
+
+        remove_idf_folder_and_empty_parent(&idf, &parent).unwrap();
+
+        assert!(!idf.exists());
+        assert!(!parent.exists());
+    }
+
+    #[test]
+    fn test_remove_idf_folder_and_empty_parent_keeps_non_empty_parent() {
+        let temp = TempDir::new().unwrap();
+        let parent = temp.path().join("v5.4");
+        let idf = parent.join("esp-idf");
+        fs::create_dir_all(&idf).unwrap();
+        fs::create_dir_all(parent.join("tools")).unwrap();
+
+        remove_idf_folder_and_empty_parent(&idf, &parent).unwrap();
+
+        assert!(!idf.exists());
+        assert!(parent.join("tools").exists());
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_remove_installation_activation_scripts_removes_companions() {
+        let temp = TempDir::new().unwrap();
+        let script = temp.path().join("activate_idf_v5.4.sh");
+        let fish = temp.path().join("activate_idf_v5.4.fish");
+        let deactivate = temp.path().join("deactivate_idf_v5.4.sh");
+        let other = temp.path().join("activate_idf_v5.3.sh");
+        for p in [&script, &fish, &deactivate, &other] {
+            fs::write(p, "").unwrap();
+        }
+
+        remove_installation_activation_scripts(script.to_str().unwrap(), "v5.4").unwrap();
+
+        assert!(!script.exists());
+        assert!(!fish.exists());
+        assert!(!deactivate.exists());
+        assert!(other.exists());
     }
 }

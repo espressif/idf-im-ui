@@ -759,24 +759,12 @@ export default {
 }
 </script>
 
+<style scoped src="./styles/page-header.css"></style>
+
 <style scoped>
 .simple-setup {
   padding: 2rem;
   margin: 0 auto;
-}
-
-.setup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2rem;
-  color: #1f2937;
-  margin: 0;
 }
 
 .status-card {

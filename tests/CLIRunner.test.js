@@ -39,9 +39,6 @@ import { runInstallationStatusTest } from "./scripts/CLIInstallationStatus.test.
 import { runCLINamedVersionInstallTest } from "./scripts/CLINamedVersionInstall.test.js";
 import logger from "./classes/logger.class.js";
 import {
-  IDFMIRRORS,
-  TOOLSMIRRORS,
-  PYPIMIRRORS,
   IDFDefaultVersion,
   EIMCLIVersion,
   pathToEIMCLI,
@@ -51,21 +48,64 @@ import {
   prerequisites,
   resolveIdfToken,
 } from "./config.js";
+import {
+  loadTestSuite,
+  resolveInstallFolder,
+  parseTargetList,
+  resolveIdfList,
+  getCleanupAndProxyOptions,
+  getCLIInstallSettings,
+} from "./helpers/suiteSettings.js";
 import os from "os";
-import path from "path";
-import fs from "fs";
 
 // Read the test script file from the suites folder
-const jsonFilePath = path.join(
-  import.meta.dirname,
-  "suites",
-  `${process.env.JSON_FILENAME}.json`
-);
-const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
-logger.info(`Running test script: ${jsonFilePath}`);
+const testScript = loadTestSuite();
 
 // Run the tests
 testRun(testScript);
+
+// Install with `eim install <args>`, run the given checks as step 2, then clean up as step 3
+function describeInstallThen(test, settings, runChecks) {
+  const { installFolder, installArgs, testProxyMode, proxyBlockList, deleteAfterTest } =
+    settings;
+  describe(`Test${test.id}- ${test.name} |`, function () {
+    this.timeout(6000000);
+
+    runCLICustomInstallTest({
+      id: `${test.id}1`,
+      pathToEIM: pathToEIMCLI,
+      args: installArgs,
+      testProxyMode,
+      proxyBlockList,
+    });
+
+    runChecks();
+
+    runCleanUp({
+      id: `${test.id}3`,
+      installFolder,
+      toolsFolder: TOOLSFOLDER,
+      deleteAfterTest,
+    });
+  });
+}
+
+// Steps 2 and 3 for installs of the default IDF version into the default folder
+function runDefaultFolderVerificationAndCleanUp(test, deleteAfterTest) {
+  runInstallVerification({
+    id: `${test.id}2`,
+    installFolder: INSTALLFOLDER,
+    idfList: [IDFDefaultVersion],
+    toolsFolder: TOOLSFOLDER,
+  });
+
+  runCleanUp({
+    id: `${test.id}3`,
+    installFolder: INSTALLFOLDER,
+    toolsFolder: TOOLSFOLDER,
+    deleteAfterTest,
+  });
+}
 
 function testRun(jsonScript) {
   // Test Runs
@@ -102,10 +142,8 @@ function testRun(jsonScript) {
     } else if (test.type === "default") {
       //routine for default installation tests
 
-      //set the default values for the test
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -117,121 +155,28 @@ function testRun(jsonScript) {
           proxyBlockList,
         });
 
-        runInstallVerification({
-          id: `${test.id}2`,
-          installFolder: INSTALLFOLDER,
-          idfList: [IDFDefaultVersion],
-          toolsFolder: TOOLSFOLDER,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder: INSTALLFOLDER,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
-        });
+        runDefaultFolderVerificationAndCleanUp(test, deleteAfterTest);
       });
     } else if (test.type === "custom") {
       //routine for custom installation tests
 
-      //set the default values for the test
+      const settings = getCLIInstallSettings(test);
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
-
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      // set the arguments for unattended test
-      let installArgs = [];
-
-      runInDebug && installArgs.push("-vvv");
-
-      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
-
-      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
-
-      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
-        );
-
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${
-            IDFMIRRORS[test.data.idfMirror] || "https://github.com"
-          }`
-        );
-
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${
-            PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"
-          }`
-        );
-
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
-
-
-      describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(6000000);
-
-        runCLICustomInstallTest({
-          id: `${test.id}1`,
-          pathToEIM: pathToEIMCLI,
-          args: installArgs,
-          testProxyMode,
-          proxyBlockList,
-        });
-
+      describeInstallThen(test, settings, () => {
         runInstallVerification({
           id: `${test.id}2`,
-          installFolder,
-          idfList: idfUpdatedList,
-          targetList,
+          installFolder: settings.installFolder,
+          idfList: settings.idfList,
+          targetList: settings.targetList,
           toolsFolder: TOOLSFOLDER,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
         });
       });
     } else if (test.type === "version-management") {
       //routine for version management tests
 
-      //set the default values for the test
       const deleteAfterTest = test.deleteAfterTest ?? true;
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
+      const idfUpdatedList = resolveIdfList(test.data);
+      const installFolder = resolveInstallFolder(test.data);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(60000);
@@ -258,44 +203,8 @@ function testRun(jsonScript) {
       //and finally `eim remove`s the version. The runner then runs
       //the standard clean-up to delete the install folder.
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
-
-      const installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installArgs = [];
-      runInDebug && installArgs.push("-vvv");
-      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
-      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
-      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
-        );
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
-        );
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
-        );
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
+      const { deleteAfterTest, installFolder, idfList, installArgs } =
+        getCLIInstallSettings(test);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -304,7 +213,7 @@ function testRun(jsonScript) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMCLI,
           args: installArgs,
-          idfVersion: idfUpdatedList[0],
+          idfVersion: idfList[0],
           installFolder,
         });
 
@@ -332,10 +241,8 @@ function testRun(jsonScript) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      //set the default values for the test
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? "block";
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test, "block");
 
       describe(`Test${test.id}- ${test.name} |`, async function () {
         this.timeout(6000000);
@@ -348,34 +255,17 @@ function testRun(jsonScript) {
           proxyBlockList,
         });
 
-        runInstallVerification({
-          id: `${test.id}2`,
-          installFolder: INSTALLFOLDER,
-          idfList: [IDFDefaultVersion],
-          toolsFolder: TOOLSFOLDER,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder: INSTALLFOLDER,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
-        });
+        runDefaultFolderVerificationAndCleanUp(test, deleteAfterTest);
       });
     } else if (test.type === "existing-git-clone") {
       const gitRepoUrl = test.data.gitRepoUrl ?? "https://github.com/espressif/esp-idf.git";
       const gitRepoBranch = test.data.gitRepoBranch
         ? resolveIdfToken(test.data.gitRepoBranch)
         : IDFDefaultVersion;
-      const installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const installFolder = resolveInstallFolder(test.data);
+      const targetList = parseTargetList(test.data, ["esp32"]);
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test);
 
       const installArgs = [];
       runInDebug && installArgs.push("-vvv");
@@ -418,201 +308,39 @@ function testRun(jsonScript) {
         });
       });
     } else if (test.type === "list-tools") {
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const settings = getCLIInstallSettings(test);
 
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installArgs = [];
-      runInDebug && installArgs.push("-vvv");
-      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
-      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
-      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
-        );
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
-        );
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
-        );
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
-
-      describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(6000000);
-
-        runCLICustomInstallTest({
-          id: `${test.id}1`,
-          pathToEIM: pathToEIMCLI,
-          args: installArgs,
-          testProxyMode,
-          proxyBlockList,
-        });
-
+      describeInstallThen(test, settings, () => {
         runListToolsTest({
           id: `${test.id}2`,
           pathToEIM: pathToEIMCLI,
-          idfList: idfUpdatedList,
-          installFolder,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
+          idfList: settings.idfList,
+          installFolder: settings.installFolder,
         });
       });
     } else if (test.type === "list-features") {
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const settings = getCLIInstallSettings(test);
 
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installArgs = [];
-      runInDebug && installArgs.push("-vvv");
-      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
-      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
-      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
-        );
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
-        );
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
-        );
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
-
-      describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(6000000);
-
-        runCLICustomInstallTest({
-          id: `${test.id}1`,
-          pathToEIM: pathToEIMCLI,
-          args: installArgs,
-          testProxyMode,
-          proxyBlockList,
-        });
-
+      describeInstallThen(test, settings, () => {
         runListFeaturesTest({
           id: `${test.id}2`,
           pathToEIM: pathToEIMCLI,
-          idfList: idfUpdatedList,
-          installFolder,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
+          idfList: settings.idfList,
+          installFolder: settings.installFolder,
         });
       });
     } else if (test.type === "installation-status") {
       // Tests for eim_idf.json status tracking and interactive dialog status labels
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const settings = getCLIInstallSettings(test);
 
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installArgs = [];
-      runInDebug && installArgs.push("-vvv");
-      test.data.installFolder && installArgs.push(`-p ${installFolder}`);
-      test.data.targetList && installArgs.push(`-t ${targetList.join(",")}`);
-      test.data.idfList && installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`
-        );
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${IDFMIRRORS[test.data.idfMirror] || "https://github.com"}`
-        );
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"}`
-        );
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
-
-      describe(`Test${test.id}- ${test.name} |`, function () {
-        this.timeout(6000000);
-
-        runCLICustomInstallTest({
-          id: `${test.id}1`,
-          pathToEIM: pathToEIMCLI,
-          args: installArgs,
-          testProxyMode,
-          proxyBlockList,
-        });
-
+      describeInstallThen(test, settings, () => {
         runInstallationStatusTest({
           id: `${test.id}2`,
           pathToEIM: pathToEIMCLI,
-          idfList: idfUpdatedList,
-          installFolder,
+          idfList: settings.idfList,
+          installFolder: settings.installFolder,
           toolsFolder: TOOLSFOLDER,
-        });
-
-        runCleanUp({
-          id: `${test.id}3`,
-          installFolder,
-          toolsFolder: TOOLSFOLDER,
-          deleteAfterTest,
         });
       });
     } else if (test.type === "named-version-install") {
@@ -623,58 +351,17 @@ function testRun(jsonScript) {
       // branch must register a second `eim_idf.json` entry while the
       // path is reused as-is.
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
-
-      const installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["esp32"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
+      const {
+        deleteAfterTest,
+        testProxyMode,
+        proxyBlockList,
+        installFolder,
+        idfList,
+        installArgs,
+      } = getCLIInstallSettings(test, { quoteInstallPathOnWindows: true });
 
       const namedVersion =
         test.data["version-name"] || test.data.versionName || "named-idf";
-
-      let installArgs = [];
-      runInDebug && installArgs.push("-vvv");
-      test.data.installFolder &&
-        installArgs.push(
-          os.platform() === "win32"
-            ? `-p "${installFolder}"`
-            : `-p ${installFolder}`,
-        );
-      test.data.targetList &&
-        installArgs.push(`-t ${targetList.join(",")}`);
-      test.data.idfList &&
-        installArgs.push(`-i ${idfUpdatedList.join(",")}`);
-      test.data.toolsMirror &&
-        installArgs.push(
-          `-m ${TOOLSMIRRORS[test.data.toolsMirror] || "https://github.com"}`,
-        );
-      test.data.idfMirror &&
-        installArgs.push(
-          `--idf-mirror ${
-            IDFMIRRORS[test.data.idfMirror] || "https://github.com"
-          }`,
-        );
-      test.data.pypiMirror &&
-        installArgs.push(
-          `--pypi-mirror ${
-            PYPIMIRRORS[test.data.pypiMirror] || "https://pypi.org/simple"
-          }`,
-        );
-      test.data.recursive && installArgs.push(`-r ${test.data.recursive}`);
-      test.data.nonInteractive &&
-        installArgs.push(`-n ${test.data.nonInteractive}`);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(7200000);
@@ -683,7 +370,7 @@ function testRun(jsonScript) {
           id: `${test.id}1`,
           pathToEIM: pathToEIMCLI,
           args: installArgs,
-          idfVersion: idfUpdatedList[0],
+          idfVersion: idfList[0],
           installFolder,
           namedVersion,
           testProxyMode,
