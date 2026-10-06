@@ -418,7 +418,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
                     let ctx = build_cli_context(&settings, InstallMode::Cli);
                     let extras = build_cli_extras(&settings);
-                    if !do_not_track {
+                    if !do_not_track && !session_inherited_from_parent() {
                         telemetry::track_install_started(&ctx);
                     }
                     let result = wizard::run_wizard_run(settings).await;
@@ -946,7 +946,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
 
                     let ctx = build_cli_context(&settings, InstallMode::Wizard);
                     let extras = build_cli_extras(&settings);
-                    if !do_not_track {
+                    if !do_not_track && !session_inherited_from_parent() {
                         telemetry::track_install_started(&ctx);
                     }
                     let result = wizard::run_wizard_run(settings).await;
@@ -1107,6 +1107,16 @@ fn subcommand_name(cmd: &Commands) -> &'static str {
         #[cfg(feature = "gui")]
         Commands::Gui(_) => "gui",
     }
+}
+
+/// Whether the GUI handed this process a session it had already opened.
+///
+/// When it has, the GUI already sent `install_started`, so this process must
+/// not send a second one. The dashboard derives abandoned installs from
+/// `started - succeeded - failed`, so a duplicate start would show up as a
+/// phantom install that never finished.
+fn session_inherited_from_parent() -> bool {
+    env::var("EIM_TELEMETRY_SESSION").is_ok_and(|id| !id.is_empty())
 }
 
 /// Builds the telemetry session for an install run.
