@@ -2,6 +2,7 @@ use anyhow::{anyhow, Result};
 use config::{Config, ConfigError};
 use log::warn;
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -349,42 +350,19 @@ impl Settings {
         );
     }
 
+    fn field_value(&self, field: &str) -> Option<&dyn Any> {
+        self.iter()
+            .find(|(key, _)| *key == field)
+            .map(|(_, value)| value)
+    }
+
     pub fn is_default(&self, field: &str) -> bool {
         let default_settings = Settings::default();
 
-        self.iter()
-            .find(|(key, _)| *key == field)
-            .map(|(_, value)| {
-                default_settings
-                    .iter()
-                    .find(|(key, _)| *key == field)
-                    .map(|(_, default_value)| {
-                        // Handle type-specific comparisons
-                        if let Some(val) = value.downcast_ref::<Option<PathBuf>>() {
-                            if let Some(def) = default_value.downcast_ref::<Option<PathBuf>>() {
-                                return val == def;
-                            }
-                        }
-                        if let Some(val) = value.downcast_ref::<Option<String>>() {
-                            if let Some(def) = default_value.downcast_ref::<Option<String>>() {
-                                return val == def;
-                            }
-                        }
-                        if let Some(val) = value.downcast_ref::<Option<Vec<String>>>() {
-                            if let Some(def) = default_value.downcast_ref::<Option<Vec<String>>>() {
-                                return val == def;
-                            }
-                        }
-                        if let Some(val) = value.downcast_ref::<Option<bool>>() {
-                            if let Some(def) = default_value.downcast_ref::<Option<bool>>() {
-                                return val == def;
-                            }
-                        }
-                        false // Return false if types don't match or can't be compared
-                    })
-                    .unwrap_or(false)
-            })
-            .unwrap_or(false)
+        match (self.field_value(field), default_settings.field_value(field)) {
+            (Some(value), Some(default_value)) => field_values_equal(value, default_value),
+            _ => false,
+        }
     }
 
     /// Creates pending (InProgress) entries in eim_idf.json at the start of installation.
@@ -611,20 +589,8 @@ impl Settings {
     /// Get features for a version only if explicitly set (doesn't fall back to global)
     /// Used to check if we need to prompt for selection
     pub fn get_features_for_version_if_set(&self, version: &str) -> Option<Vec<String>> {
-        // First check per-version
-        if let Some(per_version) = &self.idf_features_per_version {
-            if let Some(features) = per_version.get(version) {
-                return Some(features.clone());
-            }
-        }
-
-        // Then check global (from CLI --idf-features)
-        // If global is set, it applies to all versions
-        if self.idf_features.is_some() {
-            return self.idf_features.clone();
-        }
-
-        None // No features set, need to prompt
+        // Global (from CLI --idf-features) applies to all versions without a per-version entry
+        selection_for_version(&self.idf_features_per_version, &self.idf_features, version)
     }
 
     /// Get features for a version with fallback to required-only
@@ -635,25 +601,113 @@ impl Settings {
     /// Get tools for a version only if explicitly set (doesn't fall back to global)
     /// Used to check if we need to prompt for selection
     pub fn get_tools_for_version_if_set(&self, version: &str) -> Option<Vec<String>> {
-        // First check per-version
-        if let Some(per_version) = &self.idf_tools_per_version {
-            if let Some(tools) = per_version.get(version) {
-                return Some(tools.clone());
-            }
-        }
-
-        // Then check global (from CLI --idf-tools)
-        // If global is set, it applies to all versions
-        if self.idf_tools.is_some() {
-            return self.idf_tools.clone();
-        }
-
-        None // No tools set, need to prompt or use defaults
+        // Global (from CLI --idf-tools) applies to all versions without a per-version entry
+        selection_for_version(&self.idf_tools_per_version, &self.idf_tools, version)
     }
 
     /// Get tools for a version with fallback to empty (required tools will be added during installation)
     pub fn get_tools_for_version(&self, version: &str) -> Vec<String> {
         self.get_tools_for_version_if_set(version)
             .unwrap_or_default()
+    }
+}
+
+/// Returns the per-version selection for `version` if present, otherwise the global selection.
+fn selection_for_version(
+    per_version: &Option<HashMap<String, Vec<String>>>,
+    global: &Option<Vec<String>>,
+    version: &str,
+) -> Option<Vec<String>> {
+    per_version
+        .as_ref()
+        .and_then(|per_version| per_version.get(version))
+        .or(global.as_ref())
+        .cloned()
+}
+
+/// Compares two `Settings` field values of the same supported type; false otherwise.
+fn field_values_equal(value: &dyn Any, default_value: &dyn Any) -> bool {
+    fn equal_as<T: PartialEq + 'static>(value: &dyn Any, default_value: &dyn Any) -> Option<bool> {
+        Some(value.downcast_ref::<T>()? == default_value.downcast_ref::<T>()?)
+    }
+
+    equal_as::<Option<PathBuf>>(value, default_value)
+        .or_else(|| equal_as::<Option<String>>(value, default_value))
+        .or_else(|| equal_as::<Option<Vec<String>>>(value, default_value))
+        .or_else(|| equal_as::<Option<bool>>(value, default_value))
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_selection_for_version_prefers_per_version() {
+        let per_version = Some(HashMap::from([("v5.3".to_string(), vec!["a".to_string()])]));
+        let global = Some(vec!["g".to_string()]);
+        assert_eq!(
+            selection_for_version(&per_version, &global, "v5.3"),
+            Some(vec!["a".to_string()])
+        );
+        assert_eq!(
+            selection_for_version(&per_version, &global, "v5.4"),
+            Some(vec!["g".to_string()])
+        );
+        assert_eq!(selection_for_version(&per_version, &None, "v5.4"), None);
+        assert_eq!(selection_for_version(&None, &None, "v5.3"), None);
+    }
+
+    #[test]
+    fn test_get_features_and_tools_for_version() {
+        let settings = Settings {
+            idf_features: Some(vec!["f".to_string()]),
+            idf_tools_per_version: Some(HashMap::from([(
+                "v5.3".to_string(),
+                vec!["t".to_string()],
+            )])),
+            idf_tools: None,
+            ..Settings::default()
+        };
+        assert_eq!(settings.get_features_for_version("v5.3"), vec!["f"]);
+        assert_eq!(settings.get_tools_for_version("v5.3"), vec!["t"]);
+        assert_eq!(settings.get_tools_for_version_if_set("v5.4"), None);
+        assert!(settings.get_tools_for_version("v5.4").is_empty());
+    }
+
+    #[test]
+    fn test_field_values_equal() {
+        let a: Option<String> = Some("x".to_string());
+        let b: Option<String> = Some("x".to_string());
+        let c: Option<String> = None;
+        let flag: Option<bool> = Some(true);
+        let number: Option<u32> = Some(1);
+        assert!(field_values_equal(&a, &b));
+        assert!(!field_values_equal(&a, &c));
+        assert!(!field_values_equal(&a, &flag));
+        assert!(field_values_equal(&flag, &Some(true)));
+        assert!(field_values_equal(
+            &Some(PathBuf::from("/p")),
+            &Some(PathBuf::from("/p"))
+        ));
+        assert!(field_values_equal(
+            &Some(vec!["a".to_string()]),
+            &Some(vec!["a".to_string()])
+        ));
+        assert!(!field_values_equal(&number, &number));
+    }
+
+    #[test]
+    fn test_is_default() {
+        let mut settings = Settings::default();
+        assert!(settings.is_default("target"));
+        assert!(settings.is_default("non_interactive"));
+        assert!(settings.is_default("idf_versions"));
+        settings.target = Some(vec!["esp32".to_string()]);
+        settings.non_interactive = Some(false);
+        assert!(!settings.is_default("target"));
+        assert!(!settings.is_default("non_interactive"));
+        assert!(!settings.is_default("no_such_field"));
+        assert!(!settings.is_default("idf_features_per_version"));
     }
 }

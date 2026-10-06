@@ -52,6 +52,8 @@ export default {
 }
 </script>
 
+<style scoped src="./styles/page-header.css"></style>
+
 <style scoped>
 .n-card {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -63,20 +65,6 @@ export default {
   padding: 2rem;
   /* max-width: 900px; */
   margin: 0 auto;
-}
-
-.setup-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2rem;
-  color: #1f2937;
-  margin: 0;
 }
 
 .status-card {

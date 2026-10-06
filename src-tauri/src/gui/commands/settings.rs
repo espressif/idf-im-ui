@@ -6,7 +6,7 @@ use crate::gui::{
 use idf_im_lib::{
     settings::{self, Settings},
     to_absolute_path,
-    utils::is_valid_idf_directory,
+    utils::{is_valid_idf_directory, MirrorEntry},
 };
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -14,6 +14,87 @@ use tauri::{AppHandle, Manager};
 use log::info;
 use rust_i18n::t;
 use serde_json::{json, Value};
+
+fn settings_or_report(app_handle: &AppHandle) -> Option<Settings> {
+    get_settings_non_blocking(app_handle)
+        .map_err(|e| send_message(app_handle, e, "error".to_string()))
+        .ok()
+}
+
+fn read_setting<T>(app_handle: &AppHandle, fallback: T, read: impl FnOnce(Settings) -> T) -> T {
+    settings_or_report(app_handle).map_or(fallback, read)
+}
+
+pub(crate) fn update_settings_and_notify<F>(
+    app_handle: &AppHandle,
+    success_message: String,
+    updater: F,
+) -> Result<(), String>
+where
+    F: FnOnce(&mut Settings),
+{
+    update_settings(app_handle, updater)?;
+    send_message(app_handle, success_message, "info".to_string());
+    Ok(())
+}
+
+fn prepend_if_missing<'a>(mut mirrors: Vec<&'a str>, selected: &'a str) -> Vec<&'a str> {
+    if !mirrors.contains(&selected) {
+        mirrors.insert(0, selected);
+    }
+    mirrors
+}
+
+fn mirror_urls_json(selected: &str, known_mirrors: &[&str]) -> Value {
+    let available_mirrors = if selected.is_empty() {
+        known_mirrors.to_vec()
+    } else {
+        prepend_if_missing(known_mirrors.to_vec(), selected)
+    };
+    json!({
+      "mirrors": available_mirrors,
+      "selected": selected,
+    })
+}
+
+fn mirror_urls(
+    app_handle: &AppHandle,
+    selected_mirror: fn(&Settings) -> Option<String>,
+    known_mirrors: &[&str],
+) -> Value {
+    let Some(settings) = settings_or_report(app_handle) else {
+        return json!({
+            "mirrors": Vec::<String>::new(),
+            "selected": "",
+        });
+    };
+    let selected = selected_mirror(&settings).unwrap_or_default();
+    mirror_urls_json(&selected, known_mirrors)
+}
+
+async fn mirror_latency_entries(
+    app_handle: &AppHandle,
+    selected_mirror: fn(&Settings) -> Option<String>,
+    known_mirrors: &[&str],
+    store_entries: fn(&AppHandle, &[MirrorEntry]) -> Result<(), String>,
+) -> Value {
+    let Some(settings) = settings_or_report(app_handle) else {
+        return json!({
+            "entries": Vec::<String>::new(),
+        });
+    };
+    let mirror = selected_mirror(&settings).unwrap_or_default();
+    let available_mirrors = prepend_if_missing(known_mirrors.to_vec(), &mirror);
+
+    let mirror_latency_entries =
+        idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
+    if let Err(e) = store_entries(app_handle, &mirror_latency_entries) {
+        send_message(app_handle, e, "error".to_string());
+    }
+    json!({
+        "entries": mirror_latency_entries,
+    })
+}
 
 /// Gets the current settings
 #[tauri::command]
@@ -75,16 +156,10 @@ pub fn save_config(app_handle: tauri::AppHandle, path: String) {
 /// Gets the installation path
 #[tauri::command]
 pub fn get_installation_path(app_handle: AppHandle) -> String {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return String::new();
-        }
-    };
-
-    let path = settings.path.clone().unwrap_or_default();
-    path.to_str().unwrap_or_default().to_string()
+    read_setting(&app_handle, String::new(), |settings| {
+        let path = settings.path.unwrap_or_default();
+        path.to_str().unwrap_or_default().to_string()
+    })
 }
 
 /// Sets the installation path
@@ -121,12 +196,8 @@ pub fn set_installation_path(app_handle: AppHandle, path: String) -> Result<(), 
 /// Gets the list of available IDF targets
 #[tauri::command]
 pub async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return Vec::new();
-        }
+    let Some(settings) = settings_or_report(&app_handle) else {
+        return Vec::new();
     };
 
     let targets = settings.target.clone().unwrap_or_default();
@@ -149,26 +220,18 @@ pub async fn get_available_targets(app_handle: AppHandle) -> Vec<Value> {
 #[tauri::command]
 pub fn set_targets(app_handle: AppHandle, targets: Vec<String>) -> Result<(), String> {
     info!("Setting targets: {:?}", targets);
-    update_settings(&app_handle, |settings| {
-        settings.target = Some(targets);
-    })?;
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.targets_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.target = Some(targets),
+    )
 }
 
 /// Gets the list of available IDF versions
 #[tauri::command]
 pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> Vec<Value> {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return Vec::new();
-        }
+    let Some(settings) = settings_or_report(&app_handle) else {
+        return Vec::new();
     };
 
     let targets = settings.target.clone().unwrap_or_default();
@@ -247,269 +310,111 @@ pub async fn get_idf_versions(app_handle: AppHandle, include_unstable: bool) -> 
 #[tauri::command]
 pub fn set_versions(app_handle: AppHandle, versions: Vec<String>) -> Result<(), String> {
     info!("Setting IDF versions: {:?}", versions);
-    update_settings(&app_handle, |settings| {
-        settings.idf_versions = Some(versions);
-    })?;
-
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.idf_versions_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.idf_versions = Some(versions),
+    )
 }
 
 /// Gets latency entries for available IDF mirrors
 #[tauri::command]
 pub async fn get_idf_mirror_latency_entries(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "entries": Vec::<String>::new(),
-            });
-        }
-    };
-
-    let mirror = settings.idf_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
-
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    let mirror_latency_entries =
-        idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-    let _app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    match app_state::set_idf_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
-        Ok(_) => {
-            json!({
-                "entries": mirror_latency_entries,
-            })
-        }
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            json!({
-              "entries": mirror_latency_entries,
-            })
-        }
-    }
+    mirror_latency_entries(
+        &app_handle,
+        |settings| settings.idf_mirror.clone(),
+        idf_im_lib::get_idf_mirrors_list(),
+        app_state::set_idf_mirror_latency_entries,
+    )
+    .await
 }
 
 /// Returns only the available IDF mirror URLs quickly (no latency calculation)
 #[tauri::command]
 pub async fn get_idf_mirror_urls(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "mirrors": Vec::<String>::new(),
-                "selected": "",
-            });
-        }
-    };
-
-    let selected = settings.idf_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_mirrors_list().to_vec();
-    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
-        let mut new_mirrors = vec![selected.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    json!({
-      "mirrors": available_mirrors,
-      "selected": selected,
-    })
+    mirror_urls(
+        &app_handle,
+        |settings| settings.idf_mirror.clone(),
+        idf_im_lib::get_idf_mirrors_list(),
+    )
 }
 
 /// Sets the selected IDF mirror
 #[tauri::command]
 pub async fn set_idf_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
     info!("Setting IDF mirror: {}", mirror);
-    update_settings(&app_handle, |settings| {
-        settings.idf_mirror = Some(mirror);
-    })?;
-
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.idf_mirror_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.idf_mirror = Some(mirror),
+    )
 }
 
 /// Gets latency entries for available tools mirrors
 #[tauri::command]
 pub async fn get_tools_mirror_latency_entries(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "entries": Vec::<String>::new(),
-            });
-        }
-    };
-
-    let mirror = settings.mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
-
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    let mirror_latency_entries =
-        idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-    let _app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    match app_state::set_tools_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
-        Ok(_) => {
-            json!({
-                "entries": mirror_latency_entries,
-            })
-        }
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            json!({
-              "entries": mirror_latency_entries,
-            })
-        }
-    }
+    mirror_latency_entries(
+        &app_handle,
+        |settings| settings.mirror.clone(),
+        idf_im_lib::get_idf_tools_mirrors_list(),
+        app_state::set_tools_mirror_latency_entries,
+    )
+    .await
 }
 
 /// Returns only the available tools mirror URLs quickly (no latency
 /// calculation)
 #[tauri::command]
 pub async fn get_tools_mirror_urls(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "mirrors": Vec::<String>::new(),
-                "selected": "",
-            });
-        }
-    };
-
-    let selected = settings.mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_idf_tools_mirrors_list().to_vec();
-    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
-        let mut new_mirrors = vec![selected.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    json!({
-      "mirrors": available_mirrors,
-      "selected": selected,
-    })
+    mirror_urls(
+        &app_handle,
+        |settings| settings.mirror.clone(),
+        idf_im_lib::get_idf_tools_mirrors_list(),
+    )
 }
 
 /// Sets the selected tools mirror
 #[tauri::command]
 pub async fn set_tools_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
     info!("Setting tools mirror: {}", mirror);
-    update_settings(&app_handle, |settings| {
-        settings.mirror = Some(mirror);
-    })?;
-
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.tools_mirror_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.mirror = Some(mirror),
+    )
 }
 
 /// Gets latency entries for available PyPI mirrors
 #[tauri::command]
 pub async fn get_pypi_mirror_latency_entries(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "entries": Vec::<String>::new(),
-            });
-        }
-    };
-
-    let mirror = settings.pypi_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
-
-    if !available_mirrors.contains(&mirror.as_str()) {
-        let mut new_mirrors = vec![mirror.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    let mirror_latency_entries =
-        idf_im_lib::utils::calculate_mirrors_latency(&available_mirrors).await;
-    let _app_state = app_handle.state::<crate::gui::app_state::AppState>();
-    match app_state::set_pypi_mirror_latency_entries(&app_handle, &mirror_latency_entries) {
-        Ok(_) => {
-            json!({
-                "entries": mirror_latency_entries,
-            })
-        }
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            json!({
-              "entries": mirror_latency_entries,
-            })
-        }
-    }
+    mirror_latency_entries(
+        &app_handle,
+        |settings| settings.pypi_mirror.clone(),
+        idf_im_lib::get_pypi_mirrors_list(),
+        app_state::set_pypi_mirror_latency_entries,
+    )
+    .await
 }
 
 /// Returns only the available PyPI mirror URLs quickly (no latency calculation)
 #[tauri::command]
 pub async fn get_pypi_mirror_urls(app_handle: AppHandle) -> Value {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return json!({
-                "mirrors": Vec::<String>::new(),
-                "selected": "",
-            });
-        }
-    };
-
-    let selected = settings.pypi_mirror.clone().unwrap_or_default();
-    let mut available_mirrors = idf_im_lib::get_pypi_mirrors_list().to_vec();
-    if !available_mirrors.iter().any(|m| m == &selected) && !selected.is_empty() {
-        let mut new_mirrors = vec![selected.as_str()];
-        new_mirrors.extend(available_mirrors);
-        available_mirrors = new_mirrors;
-    }
-
-    json!({
-      "mirrors": available_mirrors,
-      "selected": selected,
-    })
+    mirror_urls(
+        &app_handle,
+        |settings| settings.pypi_mirror.clone(),
+        idf_im_lib::get_pypi_mirrors_list(),
+    )
 }
 
 /// Sets the selected PyPI mirror
 #[tauri::command]
 pub async fn set_pypi_mirror(app_handle: AppHandle, mirror: String) -> Result<(), String> {
     info!("Setting pypi mirror: {}", mirror);
-    update_settings(&app_handle, |settings| {
-        settings.pypi_mirror = Some(mirror);
-    })?;
-
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.pypi_mirror_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.pypi_mirror = Some(mirror),
+    )
 }
 
 /// Checks if a path is empty or doesn't exist
@@ -564,89 +469,103 @@ pub fn reset_settings_to_default(app_handle: AppHandle) -> Result<(), String> {
 /// Gets the tool download folder name
 #[tauri::command]
 pub fn get_tool_download_folder_name(app_handle: AppHandle) -> String {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return String::new();
-        }
-    };
-    settings
-        .tool_download_folder_name
-        .clone()
-        .unwrap_or_default()
+    read_setting(&app_handle, String::new(), |settings| {
+        settings.tool_download_folder_name.unwrap_or_default()
+    })
 }
 
 /// Sets the tool download folder name
 #[tauri::command]
 pub fn set_tool_download_folder_name(app_handle: AppHandle, name: String) -> Result<(), String> {
     info!("Setting tool download folder name: {}", name);
-    update_settings(&app_handle, |settings| {
-        settings.tool_download_folder_name = Some(name);
-    })?;
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.tool_download_folder_name_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.tool_download_folder_name = Some(name),
+    )
 }
 
 /// Gets the tool install folder name
 #[tauri::command]
 pub fn get_tool_install_folder_name(app_handle: AppHandle) -> String {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return String::new();
-        }
-    };
-    settings
-        .tool_install_folder_name
-        .clone()
-        .unwrap_or_default()
+    read_setting(&app_handle, String::new(), |settings| {
+        settings.tool_install_folder_name.unwrap_or_default()
+    })
 }
 
 /// Sets the tool install folder name
 #[tauri::command]
 pub fn set_tool_install_folder_name(app_handle: AppHandle, name: String) -> Result<(), String> {
     info!("Setting tool install folder name: {}", name);
-    update_settings(&app_handle, |settings| {
-        settings.tool_install_folder_name = Some(name);
-    })?;
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.tool_install_folder_name_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.tool_install_folder_name = Some(name),
+    )
 }
 
 /// Gets the cleanup flag (delete temporary files after install)
 #[tauri::command]
 pub fn get_cleanup(app_handle: AppHandle) -> bool {
-    let settings = match get_settings_non_blocking(&app_handle) {
-        Ok(s) => s,
-        Err(e) => {
-            send_message(&app_handle, e, "error".to_string());
-            return false;
-        }
-    };
-    settings.cleanup.unwrap_or(false)
+    read_setting(&app_handle, false, |settings| {
+        settings.cleanup.unwrap_or(false)
+    })
 }
 
 /// Sets the cleanup flag (delete temporary files after install)
 #[tauri::command]
 pub fn set_cleanup(app_handle: AppHandle, cleanup: bool) -> Result<(), String> {
     info!("Setting cleanup: {}", cleanup);
-    update_settings(&app_handle, |settings| {
-        settings.cleanup = Some(cleanup);
-    })?;
-    send_message(
+    update_settings_and_notify(
         &app_handle,
         t!("gui.settings.cleanup_updated").to_string(),
-        "info".to_string(),
-    );
-    Ok(())
+        |settings| settings.cleanup = Some(cleanup),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prepend_if_missing_keeps_known_mirror_order() {
+        let mirrors = prepend_if_missing(vec!["a", "b"], "b");
+        assert_eq!(mirrors, vec!["a", "b"]);
+    }
+
+    #[test]
+    fn prepend_if_missing_puts_custom_mirror_first() {
+        let mirrors = prepend_if_missing(vec!["a", "b"], "custom");
+        assert_eq!(mirrors, vec!["custom", "a", "b"]);
+    }
+
+    #[test]
+    fn prepend_if_missing_prepends_empty_selection() {
+        let mirrors = prepend_if_missing(vec!["a"], "");
+        assert_eq!(mirrors, vec!["", "a"]);
+    }
+
+    #[test]
+    fn mirror_urls_json_skips_empty_selection() {
+        assert_eq!(
+            mirror_urls_json("", &["a", "b"]),
+            json!({ "mirrors": ["a", "b"], "selected": "" })
+        );
+    }
+
+    #[test]
+    fn mirror_urls_json_prepends_custom_selection() {
+        assert_eq!(
+            mirror_urls_json("custom", &["a"]),
+            json!({ "mirrors": ["custom", "a"], "selected": "custom" })
+        );
+    }
+
+    #[test]
+    fn mirror_urls_json_keeps_known_selection() {
+        assert_eq!(
+            mirror_urls_json("a", &["a", "b"]),
+            json!({ "mirrors": ["a", "b"], "selected": "a" })
+        );
+    }
 }

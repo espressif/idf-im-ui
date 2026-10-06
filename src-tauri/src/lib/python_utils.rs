@@ -358,143 +358,87 @@ pub fn pip_install_requirements(
         Some(path) => path.to_str().unwrap(),
         None => "",
     };
-
-    const ESPRESSIF_PYPI: &str = "https://dl.espressif.com/pypi/";
+    let args = pip_install_args(
+        requirements_file.to_str().unwrap(),
+        constrain_path,
+        wheel_dir.as_ref().map(|dir| dir.to_str().unwrap()),
+        pypi_mirror.as_deref(),
+        upgrade,
+    );
+    let env = vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())];
 
     match std::env::consts::OS {
         "windows" => {
-            match if let Some(wheel_dir) = wheel_dir {
-                // Offline mode — local wheels only, no indexes needed
-                let mut args = vec![
-                    "-m",
-                    "pip",
-                    "install",
-                    "-r",
-                    requirements_file.to_str().unwrap(),
-                ];
-                if upgrade {
-                    args.push("--upgrade");
-                }
-                args.extend_from_slice(&[
-                    "--constraint",
-                    constrain_path,
-                    "--no-index",
-                    "--find-links",
-                    wheel_dir.to_str().unwrap(),
-                ]);
-                command_executor::execute_command_direct_with_env(
-                    python_location.to_str().unwrap(),
-                    &args,
-                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-                )
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            let out = command_executor::execute_command_direct_with_env(
+                python_location.to_str().unwrap(),
+                &args,
+                env,
+            )?;
+            if out.status.success() {
+                Ok(())
             } else {
-                let mut args = vec![
-                    "-m",
-                    "pip",
-                    "install",
-                    "-r",
-                    requirements_file.to_str().unwrap(),
-                ];
-                if upgrade {
-                    args.push("--upgrade");
-                }
-                args.extend_from_slice(&[
-                    "--constraint",
-                    constrain_path,
-                    "--prefer-binary", // ← never compile if a wheel exists anywhere
-                ]);
-
-                if let Some(mirror_url) = pypi_mirror {
-                    args.push("--index-url");
-                    args.push(ESPRESSIF_PYPI);
-                    args.push("--extra-index-url");
-                    args.push(mirror_url.as_str());
-                } else {
-                    args.push("--index-url");
-                    args.push(ESPRESSIF_PYPI);
-                }
-
-                command_executor::execute_command_direct_with_env(
-                    python_location.to_str().unwrap(),
-                    &args,
-                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-                )
-            } {
-                Ok(out) => {
-                    if out.status.success() {
-                        Ok(())
-                    } else {
-                        let error_msg = String::from_utf8_lossy(&out.stderr).to_string();
-                        Err(std::io::Error::other(error_msg))
-                    }
-                }
-                Err(e) => Err(e),
+                let error_msg = String::from_utf8_lossy(&out.stderr).to_string();
+                Err(std::io::Error::other(error_msg))
             }
         }
         _ => {
-            let upgrade_flag = if upgrade { " --upgrade" } else { "" };
-            match if let Some(wheel_dir) = wheel_dir {
-                // Offline mode — local wheels only
-                command_executor::execute_command_direct_with_env(
-                    "bash",
-                    &[
-                        "-c",
-                        &format!(
-                            "{} -m pip install -r {}{} --constraint {} --no-index --find-links {}",
-                            shell_quote(python_location.to_str().unwrap())?,
-                            shell_quote(requirements_file.to_str().unwrap())?,
-                            upgrade_flag,
-                            shell_quote(constrain_path)?,
-                            shell_quote(wheel_dir.to_str().unwrap())?
-                        ),
-                    ],
-                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-                )
+            let cmd = pip_install_shell_command(python_location.to_str().unwrap(), &args)?;
+            let out =
+                command_executor::execute_command_direct_with_env("bash", &["-c", &cmd], env)?;
+            if out.status.success() {
+                trace!(
+                    "pip install output: {}",
+                    std::str::from_utf8(&out.stdout).unwrap()
+                );
+                Ok(())
             } else {
-                let cmd = if let Some(mirror_url) = pypi_mirror {
-                    format!(
-                    "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
-                    shell_quote(python_location.to_str().unwrap())?,
-                    shell_quote(requirements_file.to_str().unwrap())?,
-                    upgrade_flag,
-                    shell_quote(constrain_path)?,
-                    shell_quote(ESPRESSIF_PYPI)?,
-                    shell_quote(mirror_url)?,
-                  )
-                } else {
-                    format!(
-                        "{} -m pip install -r {}{} --constraint {} --prefer-binary --index-url {}",
-                        shell_quote(python_location.to_str().unwrap())?,
-                        shell_quote(requirements_file.to_str().unwrap())?,
-                        upgrade_flag,
-                        shell_quote(constrain_path)?,
-                        shell_quote(ESPRESSIF_PYPI)?,
-                    )
-                };
-
-                command_executor::execute_command_direct_with_env(
-                    "bash",
-                    &["-c", &cmd],
-                    vec![("VIRTUAL_ENV", venv_path.to_str().unwrap())],
-                )
-            } {
-                Ok(out) => {
-                    if out.status.success() {
-                        trace!(
-                            "pip install output: {}",
-                            std::str::from_utf8(&out.stdout).unwrap()
-                        );
-                        Ok(())
-                    } else {
-                        Err(std::io::Error::other(
-                            std::str::from_utf8(&out.stderr).unwrap().to_string(),
-                        ))
-                    }
-                }
-                Err(e) => Err(e),
+                Err(std::io::Error::other(
+                    std::str::from_utf8(&out.stderr).unwrap().to_string(),
+                ))
             }
         }
     }
+}
+
+const ESPRESSIF_PYPI: &str = "https://dl.espressif.com/pypi/";
+
+/// Builds the interpreter arguments (`-m pip install ...`) for installing a requirements file.
+///
+/// With `wheel_dir` set, pip runs offline against local wheels only; otherwise it uses the
+/// Espressif index, with `pypi_mirror` as an extra index when given.
+fn pip_install_args(
+    requirements_file: &str,
+    constraint_path: &str,
+    wheel_dir: Option<&str>,
+    pypi_mirror: Option<&str>,
+    upgrade: bool,
+) -> Vec<String> {
+    let mut args = vec!["-m", "pip", "install", "-r", requirements_file];
+    if upgrade {
+        args.push("--upgrade");
+    }
+    args.extend_from_slice(&["--constraint", constraint_path]);
+    match wheel_dir {
+        Some(wheel_dir) => args.extend_from_slice(&["--no-index", "--find-links", wheel_dir]),
+        None => {
+            // never compile if a wheel exists anywhere
+            args.extend_from_slice(&["--prefer-binary", "--index-url", ESPRESSIF_PYPI]);
+            if let Some(mirror_url) = pypi_mirror {
+                args.extend_from_slice(&["--extra-index-url", mirror_url]);
+            }
+        }
+    }
+    args.into_iter().map(String::from).collect()
+}
+
+/// Joins the python executable and its arguments into a shell-quoted command line.
+fn pip_install_shell_command(python: &str, args: &[String]) -> Result<String, std::io::Error> {
+    let quoted = std::iter::once(python)
+        .chain(args.iter().map(String::as_str))
+        .map(shell_quote)
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(quoted.join(" "))
 }
 
 /// Detects the Python version being used in the virtual environment
@@ -947,7 +891,7 @@ fn start_local_https_test_server() -> Option<HttpsTestServer> {
             .ok()?;
     let cert_pem = cert.cert.pem();
     let cert_der = cert.cert.der().to_vec();
-    let key_der = cert.key_pair.serialize_der();
+    let key_der = cert.signing_key.serialize_der();
 
     // 2. Build a rustls server config backed by the cert above.
     let config = ServerConfig::builder()
@@ -1454,4 +1398,142 @@ pub fn run_idf_tools() -> ExitCode {
         println!("name: {result}");
     });
     ExitCode::from(interp.run(|_vm| result))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args_of(args: &[&str]) -> Vec<String> {
+        args.iter().map(|arg| arg.to_string()).collect()
+    }
+
+    #[test]
+    fn test_pip_install_args_offline() {
+        assert_eq!(
+            pip_install_args("req.txt", "c.txt", Some("/wheels"), Some("https://m"), true),
+            args_of(&[
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "req.txt",
+                "--upgrade",
+                "--constraint",
+                "c.txt",
+                "--no-index",
+                "--find-links",
+                "/wheels",
+            ])
+        );
+    }
+
+    #[test]
+    fn test_pip_install_args_online_without_mirror() {
+        assert_eq!(
+            pip_install_args("req.txt", "", None, None, false),
+            args_of(&[
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "req.txt",
+                "--constraint",
+                "",
+                "--prefer-binary",
+                "--index-url",
+                ESPRESSIF_PYPI,
+            ])
+        );
+    }
+
+    #[test]
+    fn test_pip_install_args_online_with_mirror() {
+        assert_eq!(
+            pip_install_args(
+                "req.txt",
+                "c.txt",
+                None,
+                Some("https://mirror/simple"),
+                true
+            ),
+            args_of(&[
+                "-m",
+                "pip",
+                "install",
+                "-r",
+                "req.txt",
+                "--upgrade",
+                "--constraint",
+                "c.txt",
+                "--prefer-binary",
+                "--index-url",
+                ESPRESSIF_PYPI,
+                "--extra-index-url",
+                "https://mirror/simple",
+            ])
+        );
+    }
+
+    #[test]
+    fn test_pip_install_shell_command_matches_previous_format() {
+        let python = "/home/u/my venv/bin/python3";
+        let req = "/home/u/esp idf/requirements.txt";
+        let constraint = "/home/u/c.txt";
+        let wheels = "/home/u/wheels dir";
+        let mirror = "https://pypi.tuna.tsinghua.edu.cn/simple";
+        let q = |v: &str| shell_quote(v).unwrap();
+
+        let offline = pip_install_shell_command(
+            python,
+            &pip_install_args(req, constraint, Some(wheels), None, true),
+        )
+        .unwrap();
+        assert_eq!(
+            offline,
+            format!(
+                "{} -m pip install -r {} --upgrade --constraint {} --no-index --find-links {}",
+                q(python),
+                q(req),
+                q(constraint),
+                q(wheels)
+            )
+        );
+
+        let with_mirror = pip_install_shell_command(
+            python,
+            &pip_install_args(req, constraint, None, Some(mirror), false),
+        )
+        .unwrap();
+        assert_eq!(
+            with_mirror,
+            format!(
+                "{} -m pip install -r {} --constraint {} --prefer-binary --index-url {} --extra-index-url {}",
+                q(python),
+                q(req),
+                q(constraint),
+                q(ESPRESSIF_PYPI),
+                q(mirror)
+            )
+        );
+
+        let no_mirror =
+            pip_install_shell_command(python, &pip_install_args(req, "", None, None, false))
+                .unwrap();
+        assert_eq!(
+            no_mirror,
+            format!(
+                "{} -m pip install -r {} --constraint {} --prefer-binary --index-url {}",
+                q(python),
+                q(req),
+                q(""),
+                q(ESPRESSIF_PYPI)
+            )
+        );
+    }
+
+    #[test]
+    fn test_pip_install_shell_command_rejects_nul() {
+        assert!(pip_install_shell_command("python\0", &[]).is_err());
+    }
 }

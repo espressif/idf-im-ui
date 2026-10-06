@@ -2,7 +2,12 @@ import { expect } from "chai";
 import { describe, it, before, after, afterEach } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
-import TestProxy from "../classes/TestProxy.class.js";
+import { startTestProxy, stopTestProxy } from "../helpers/testProxy.js";
+import {
+  startTerminal,
+  stopTerminal,
+  logFailedTest,
+} from "../helpers/cliTestHelpers.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -82,54 +87,23 @@ export function runCLINamedVersionInstallTest({
       }
       testRunner = new CLITestRunner();
       if (testProxyMode) {
-        try {
-          proxy = new TestProxy({
-            mode: testProxyMode,
-            blockedDomains: proxyBlockList,
-          });
-          await proxy.start();
-        } catch (error) {
-          logger.info("Error to start proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        proxy = await startTestProxy(testProxyMode, proxyBlockList);
       }
-      try {
-        await testRunner.start();
-      } catch (error) {
-        logger.info("Error to start terminal");
-        logger.debug(`Error: ${error}`);
-      }
+      await startTerminal(testRunner);
     });
 
     afterEach(function () {
       if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        if (testRunner) {
-          logger.info(
-            `Terminal output: >>\r ${testRunner.output.slice(-2000)}`,
-          );
-          logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
-        }
+        logFailedTest(this.currentTest, testRunner);
       }
     });
 
     after(async function () {
       this.timeout(60000);
-      try {
-        if (testRunner) await testRunner.stop();
-      } catch (error) {
-        logger.info("Error to clean up terminal after test");
-        logger.info(` Error: ${error}`);
-      } finally {
-        testRunner = null;
-      }
+      if (testRunner) await stopTerminal(testRunner);
+      testRunner = null;
       if (proxy) {
-        try {
-          await proxy.stop();
-        } catch (error) {
-          logger.info("Error stopping proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        await stopTestProxy(proxy);
       }
     });
 

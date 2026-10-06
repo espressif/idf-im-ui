@@ -130,68 +130,79 @@ pub fn get_git_path() -> Result<String, String> {
     let executor = get_executor();
 
     if std::env::consts::OS == "windows" {
-        // Search PATH via `where` command
-        match executor.execute("where", &["git"]) {
-            Ok(output) if output.status.success() => {
-                let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    let candidate = line.trim();
-                    if candidate.is_empty() {
-                        continue;
-                    }
+        find_git_windows(&*executor)
+    } else {
+        find_git_unix(&*executor)
+    }
+}
 
-                    // Verify it actually works
-                    if verify_git(&*executor, candidate) {
-                        info!("Found working git on PATH: {}", candidate);
-                        return Ok(candidate.to_string());
-                    }
-                }
-            }
-            Ok(output) => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if !stderr.trim().is_empty() {
-                    debug!("where git failed: {}", stderr.trim());
-                }
-            }
-            Err(e) => debug!("failed to execute where git: {}", e),
-        }
-
-        // Fallback: try direct execution of generic names (bypasses PATH lookup issues)
-        for candidate in &["git.exe", "git", "git.cmd", "git.shim"] {
-            if verify_git(&*executor, candidate) {
-                debug!("Found working git via fallback: {}", candidate);
+fn find_git_windows(executor: &dyn CommandExecutor) -> Result<String, String> {
+    // Search PATH via `where` command
+    if let Some(stdout) = probe_stdout(executor.execute("where", &["git"]), "where git") {
+        for candidate in non_empty_trimmed_lines(&stdout) {
+            // Verify it actually works
+            if verify_git(executor, candidate) {
+                info!("Found working git on PATH: {}", candidate);
                 return Ok(candidate.to_string());
             }
         }
-
-        Err("git not found: not installed, not in PATH,".to_string())
-    } else {
-        // Unix: use `command -v` for portability via shell executor
-        match executor.execute("sh", &["-c", "command -v git"]) {
-            Ok(output) if output.status.success() => {
-                let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                if !path.is_empty() && verify_git(&*executor, &path) {
-                    info!("Found git: {}", path);
-                    return Ok(path);
-                }
-            }
-            Ok(output) => {
-                let stderr = String::from_utf8_lossy(&output.stderr);
-                if !stderr.trim().is_empty() {
-                    debug!("command -v git failed: {}", stderr.trim());
-                }
-            }
-            Err(e) => debug!("failed to execute command -v git: {}", e),
-        }
-
-        // Fallback: try direct execution
-        if verify_git(&*executor, "git") {
-            info!("Found git via direct execution fallback");
-            return Ok("git".to_string());
-        }
-
-        Err("git not found: not installed or not in PATH".to_string())
     }
+
+    // Fallback: try direct execution of generic names (bypasses PATH lookup issues)
+    for candidate in &["git.exe", "git", "git.cmd", "git.shim"] {
+        if verify_git(executor, candidate) {
+            debug!("Found working git via fallback: {}", candidate);
+            return Ok(candidate.to_string());
+        }
+    }
+
+    Err("git not found: not installed, not in PATH,".to_string())
+}
+
+fn find_git_unix(executor: &dyn CommandExecutor) -> Result<String, String> {
+    // Unix: use `command -v` for portability via shell executor
+    if let Some(stdout) = probe_stdout(
+        executor.execute("sh", &["-c", "command -v git"]),
+        "command -v git",
+    ) {
+        let path = stdout.trim().to_string();
+        if !path.is_empty() && verify_git(executor, &path) {
+            info!("Found git: {}", path);
+            return Ok(path);
+        }
+    }
+
+    // Fallback: try direct execution
+    if verify_git(executor, "git") {
+        info!("Found git via direct execution fallback");
+        return Ok("git".to_string());
+    }
+
+    Err("git not found: not installed or not in PATH".to_string())
+}
+
+/// Returns the stdout of a successful lookup command, logging why it failed otherwise.
+fn probe_stdout(result: io::Result<std::process::Output>, label: &str) -> Option<String> {
+    match result {
+        Ok(output) if output.status.success() => {
+            Some(String::from_utf8_lossy(&output.stdout).into_owned())
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            if !stderr.trim().is_empty() {
+                debug!("{} failed: {}", label, stderr.trim());
+            }
+            None
+        }
+        Err(e) => {
+            debug!("failed to execute {}: {}", label, e);
+            None
+        }
+    }
+}
+
+fn non_empty_trimmed_lines(text: &str) -> impl Iterator<Item = &str> {
+    text.lines().map(str::trim).filter(|line| !line.is_empty())
 }
 
 // Helper: verify executable actually works by running `git --version` via executor
@@ -922,21 +933,8 @@ pub fn copy_dir_contents(src: &Path, dst: &Path) -> io::Result<()> {
 /// This prevents `git status` from reporting a dirty working tree after
 /// offline IDF installation.
 pub fn copy_dir_contents_preserving_mtime(src: &Path, dst: &Path) -> io::Result<()> {
-    if !dst.exists() {
-        fs::create_dir_all(dst)?;
-    }
-
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let path = entry.path();
-        let file_name = path.file_name().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!("Invalid file name for path: {:?}", path),
-            )
-        })?;
-        let dest_path = dst.join(file_name);
-
+    for entry in dir_entries_with_destination(src, dst)? {
+        let (path, dest_path) = entry?;
         let meta = fs::symlink_metadata(&path)?;
         if meta.file_type().is_symlink() {
             debug!("Symlink entry: {:?} -> {:?}", path, dest_path);
@@ -1019,19 +1017,17 @@ pub fn create_symlink_rewritten(
     Ok(())
 }
 
-pub fn copy_dir_contents_with_retries(
+/// Creates `dst` if needed and yields each entry of `src` paired with its path inside `dst`.
+fn dir_entries_with_destination<'a>(
     src: &Path,
-    dst: &Path,
-    max_retries: u32,
-    retry_delay: std::time::Duration,
-) -> io::Result<()> {
+    dst: &'a Path,
+) -> io::Result<impl Iterator<Item = io::Result<(PathBuf, PathBuf)>> + 'a> {
     if !dst.exists() {
         fs::create_dir_all(dst)?;
     }
 
-    for entry in fs::read_dir(src)? {
-        let entry = entry?;
-        let path = entry.path();
+    Ok(fs::read_dir(src)?.map(move |entry| {
+        let path = entry?.path();
         let file_name = path.file_name().ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -1039,7 +1035,18 @@ pub fn copy_dir_contents_with_retries(
             )
         })?;
         let dest_path = dst.join(file_name);
+        Ok((path, dest_path))
+    }))
+}
 
+pub fn copy_dir_contents_with_retries(
+    src: &Path,
+    dst: &Path,
+    max_retries: u32,
+    retry_delay: std::time::Duration,
+) -> io::Result<()> {
+    for entry in dir_entries_with_destination(src, dst)? {
+        let (path, dest_path) = entry?;
         if path.is_dir() {
             // Recursively copy subdirectories
             copy_dir_contents_with_retries(&path, &dest_path, max_retries, retry_delay)?;
@@ -1620,13 +1627,8 @@ set(IDF_VERSION_MINOR 2) # Minor version
         assert_eq!(minor, "2");
     }
 
-    #[test]
-    fn test_missing_major_version() {
+    fn assert_missing_version_error(content: &str) {
         let temp_dir = TempDir::new().unwrap();
-        let content = r#"
-set(IDF_VERSION_MINOR 1)
-set(IDF_VERSION_PATCH 2)
-"#;
         let idf_path = create_test_cmake_file(&temp_dir, content);
 
         let result = parse_cmake_version(idf_path.to_str().unwrap());
@@ -1638,20 +1640,23 @@ set(IDF_VERSION_PATCH 2)
     }
 
     #[test]
+    fn test_missing_major_version() {
+        assert_missing_version_error(
+            r#"
+set(IDF_VERSION_MINOR 1)
+set(IDF_VERSION_PATCH 2)
+"#,
+        );
+    }
+
+    #[test]
     fn test_missing_minor_version() {
-        let temp_dir = TempDir::new().unwrap();
-        let content = r#"
+        assert_missing_version_error(
+            r#"
 set(IDF_VERSION_MAJOR 5)
 set(IDF_VERSION_PATCH 2)
-"#;
-        let idf_path = create_test_cmake_file(&temp_dir, content);
-
-        let result = parse_cmake_version(idf_path.to_str().unwrap());
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Could not find both major and minor version numbers"));
+"#,
+        );
     }
 
     #[test]
@@ -1818,5 +1823,67 @@ set(IDF_VERSION_MAJOR 5)
         for m in mirrors.iter() {
             assert_eq!(map.iter().find(|e| e.url == *m).unwrap().latency, None);
         }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_probe_stdout() {
+        use std::os::unix::process::ExitStatusExt;
+        let output = |code: i32, stdout: &str| std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: b"boom".to_vec(),
+        };
+        assert_eq!(
+            probe_stdout(Ok(output(0, "/usr/bin/git\n")), "command -v git"),
+            Some("/usr/bin/git\n".to_string())
+        );
+        assert_eq!(
+            probe_stdout(Ok(output(1, "/usr/bin/git\n")), "command -v git"),
+            None
+        );
+        assert_eq!(
+            probe_stdout(Err(io::Error::other("missing")), "command -v git"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_non_empty_trimmed_lines() {
+        let lines: Vec<_> =
+            non_empty_trimmed_lines("C:\\Git\\cmd\\git.exe\r\n\r\n  git.cmd  \n").collect();
+        assert_eq!(lines, ["C:\\Git\\cmd\\git.exe", "git.cmd"]);
+        assert_eq!(non_empty_trimmed_lines("").count(), 0);
+    }
+
+    #[test]
+    fn test_dir_entries_with_destination() {
+        let src = TempDir::new().unwrap();
+        let dst_root = TempDir::new().unwrap();
+        let dst = dst_root.path().join("nested").join("dst");
+        fs::write(src.path().join("a.txt"), "a").unwrap();
+        fs::create_dir(src.path().join("sub")).unwrap();
+
+        let mut pairs: Vec<_> = dir_entries_with_destination(src.path(), &dst)
+            .unwrap()
+            .collect::<io::Result<_>>()
+            .unwrap();
+        pairs.sort();
+
+        assert!(dst.is_dir());
+        assert_eq!(
+            pairs,
+            vec![
+                (src.path().join("a.txt"), dst.join("a.txt")),
+                (src.path().join("sub"), dst.join("sub")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_dir_entries_with_destination_missing_src() {
+        let src = TempDir::new().unwrap();
+        let dst = TempDir::new().unwrap();
+        assert!(dir_entries_with_destination(&src.path().join("missing"), dst.path()).is_err());
     }
 }

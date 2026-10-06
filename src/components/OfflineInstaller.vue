@@ -227,46 +227,17 @@
       </n-alert>
 
       <!-- Current Activity Display -->
-      <div v-if="installation_running" class="current-activity" data-id="current-activity">
-        <div class="current-step">
-          <h3>{{ $t('offlineInstaller.installation.currentActivity') }}</h3>
-          <div class="activity-status">{{ currentActivity }}</div>
-          <div v-if="currentDetail" class="activity-detail">{{ currentDetail }}</div>
-        </div>
-
-        <div class="progress-section">
-          <div class="progress-label">{{ $t('offlineInstaller.installation.overallProgress') }}</div>
-          <n-progress
-            type="line"
-            :percentage="currentProgress"
-            :processing="installation_running"
-            :indicator-placement="'inside'"
-            color="var(--espressif-red-color)"
-          />
-        </div>
-
-        <!-- Installation Steps -->
-        <div class="installation-steps" v-if="installationSteps.length > 0">
-          <div class="steps-container">
-            <div
-              v-for="(step, index) in installationSteps"
-              :key="index"
-              class="step-item"
-              :class="{
-                'active': index === currentStep,
-                'completed': index < currentStep,
-                'pending': index > currentStep
-              }"
-            >
-              <div class="step-indicator">{{ index + 1 }}</div>
-              <div class="step-content">
-                <div class="step-title">{{ step.title }}</div>
-                <div class="step-description">{{ step.description }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <installation-activity
+        v-if="installation_running"
+        :title="$t('offlineInstaller.installation.currentActivity')"
+        :activity="currentActivity"
+        :detail="currentDetail"
+        :progress-label="$t('offlineInstaller.installation.overallProgress')"
+        :progress="currentProgress"
+        :processing="installation_running"
+        :steps="installationSteps"
+        :current-step="currentStep"
+      />
 
       <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
@@ -302,46 +273,14 @@
       </div>
 
       <!-- Installation Log with Virtual Scrolling -->
-      <n-collapse arrow-placement="right" v-if="totalLogCount > 0">
-        <n-collapse-item :title="$t('offlineInstaller.installation.log.title')" name="1">
-          <template #header-extra>
-            <span class="log-count">({{ totalLogCount }} entries)</span>
-          </template>
-
-          <div class="log-container">
-            <div
-              class="log-virtual-container"
-              ref="virtualContainer"
-              @scroll="onLogScroll"
-            >
-              <div
-                class="virtual-spacer-top"
-                :style="{ height: topSpacerHeight + 'px' }"
-              ></div>
-
-              <div class="log-scroll-container">
-                <div
-                  v-for="(message, index) in visibleLogs"
-                  :key="`log-${startIndex + index}-${message.timestamp}`"
-                  class="log-entry"
-                  :style="{ height: itemHeight + 'px' }"
-                >
-                  <pre
-                    class="log-message"
-                    :class="getLogMessageClass(message)"
-                    v-text="message.text"
-                  ></pre>
-                </div>
-              </div>
-
-              <div
-                class="virtual-spacer-bottom"
-                :style="{ height: bottomSpacerHeight + 'px' }"
-              ></div>
-            </div>
-          </div>
-        </n-collapse-item>
-      </n-collapse>
+      <installation-log
+        v-if="totalLogCount > 0"
+        ref="virtualContainer"
+        :title="$t('offlineInstaller.installation.log.title')"
+        :count-label="`(${totalLogCount} entries)`"
+        v-bind="logListProps"
+        @scroll="onLogScroll"
+      />
     </n-card>
   </div>
 </template>
@@ -370,16 +309,21 @@ import {
   browseToolFolder,
   persistAdvancedPathOptions,
 } from './composables/useAdvancedPathOptions.js'
+import { installationProgressMixin } from './composables/installationProgressMixin.js'
+import InstallationActivity from './InstallationActivity.vue'
+import InstallationLog from './InstallationLog.vue'
 
 export default {
   name: 'OfflineInstaller',
+  mixins: [installationProgressMixin],
   components: {
     NButton, NCard, NIcon, NInput, NInputGroup, NCheckbox,
     NSpace, NAlert, NSpin, NProgress, NSteps, NStep,
     NCollapse, NCollapseItem, NScrollbar,
     ArrowLeftOutlined, FolderOpenOutlined, PlusOutlined,
     CloseOutlined, FileZipOutlined, CheckCircleOutlined,
-    CloseCircleOutlined
+    CloseCircleOutlined,
+    InstallationActivity, InstallationLog
   },
 
   data() {
@@ -424,22 +368,6 @@ export default {
       unlistenProgress: null,
       unlistenLog: null,
 
-      // Virtual scrolling for logs
-      visibleLogs: [],
-      totalLogCount: 0,
-      scrollTop: 0,
-      containerHeight: 300,
-      itemHeight: 24,
-      visibleCount: 15,
-      startIndex: 0,
-      BUFFER_SIZE: 2,
-
-      // UI state
-      installationPath: "",
-
-      // Progress tracking
-      progressUpdateTrigger: 0,
-      lastProgressUpdate: 0,
       timeStarted: null,
 
       missing_prerequisities: [],
@@ -450,45 +378,18 @@ export default {
   },
 
   created() {
-    this._allLogs = [];
     this._progressData = {
       currentProgress: 0,
       currentActivity: "Preparing offline installation...",
       currentDetail: "",
       lastUpdate: Date.now()
     };
-    this._progressThrottle = null;
   },
 
   computed: {
-    // Calculate spacer heights for virtual scrolling
-    topSpacerHeight() {
-      return this.startIndex * this.itemHeight;
-    },
-
-    bottomSpacerHeight() {
-      const remainingItems = Math.max(0, this.totalLogCount - (this.startIndex + this.visibleLogs.length));
-      return remainingItems * this.itemHeight;
-    },
-
-    // Calculate how many items can fit in the container
-    maxVisibleItems() {
-      return Math.ceil(this.containerHeight / this.itemHeight) + (this.BUFFER_SIZE * 2);
-    },
-
-    currentProgress() {
-      this.progressUpdateTrigger;
-      return this._progressData ? this._progressData.currentProgress : 0;
-    },
-
     currentActivity() {
       this.progressUpdateTrigger;
       return this._progressData ? this._progressData.currentActivity : "Preparing offline installation...";
-    },
-
-    currentDetail() {
-      this.progressUpdateTrigger;
-      return this._progressData ? this._progressData.currentDetail : "";
     }
   },
 
@@ -634,97 +535,6 @@ export default {
       this.throttledProgressUpdate();
     },
 
-    throttledProgressUpdate() {
-      if (this._progressThrottle) {
-        clearTimeout(this._progressThrottle);
-      }
-
-      this._progressThrottle = setTimeout(() => {
-        const now = Date.now();
-        if (now - this.lastProgressUpdate > 100) {
-          this.progressUpdateTrigger++;
-          this.lastProgressUpdate = now;
-        }
-        this._progressThrottle = null;
-      }, 100);
-    },
-
-    handleLogMessage(payload) {
-      const { level, message } = payload;
-
-      const logEntry = {
-        level,
-        text: message,
-        timestamp: Date.now(),
-        id: this._allLogs.length
-      };
-
-      this._allLogs.unshift(logEntry);
-
-      const MAX_LOG_ENTRIES = 1000;
-      if (this._allLogs.length > MAX_LOG_ENTRIES) {
-        this._allLogs = this._allLogs.slice(0, MAX_LOG_ENTRIES);
-      }
-
-      this.totalLogCount = this._allLogs.length;
-      this.updateVisibleLogs();
-
-      if (this.scrollTop < this.itemHeight) {
-        this.scrollToTop();
-      }
-
-      // Extract installation path from logs if available
-      if (message.includes('installed at:') || message.includes('Location:')) {
-        const pathMatch = message.match(/(?:installed at:|Location:)\s*(.+)/i);
-        if (pathMatch && pathMatch[1]) {
-          this.installationPath = pathMatch[1].trim();
-        }
-      }
-    },
-
-    updateVisibleLogs() {
-      const startIndex = Math.max(0, Math.floor(this.scrollTop / this.itemHeight) - this.BUFFER_SIZE);
-      const endIndex = Math.min(
-        startIndex + this.maxVisibleItems,
-        this._allLogs.length
-      );
-
-      this.startIndex = startIndex;
-      this.visibleLogs = this._allLogs.slice(startIndex, endIndex).map(log => ({
-        ...log
-      }));
-    },
-
-    onLogScroll(event) {
-      const newScrollTop = event.target.scrollTop;
-
-      if (Math.abs(newScrollTop - this.scrollTop) > this.itemHeight / 2) {
-        this.scrollTop = newScrollTop;
-        this.updateVisibleLogs();
-      }
-    },
-
-    scrollToTop() {
-      this.$nextTick(() => {
-        const container = this.$refs.virtualContainer;
-        if (container) {
-          container.scrollTop = 0;
-          this.scrollTop = 0;
-          this.updateVisibleLogs();
-        }
-      });
-    },
-
-    getLogMessageClass(message) {
-      if (message.level === 'error') return 'log-message log-error';
-      if (message.level === 'warning') return 'log-message log-warning';
-      if (message.level === 'success') return 'log-message log-success';
-      if (message.text && (message.text.includes('WARN') || message.text.includes('ERR'))) {
-        return 'log-message highlight';
-      }
-      return 'log-message';
-    },
-
     handleInstallationComplete(version) {
       this.installation_running = false;
       this.installation_finished = true;
@@ -793,11 +603,7 @@ export default {
       this.progressUpdateTrigger++;
 
       // Clear logs
-      this._allLogs = [];
-      this.visibleLogs = [];
-      this.totalLogCount = 0;
-      this.scrollTop = 0;
-      this.startIndex = 0;
+      this.resetLogs();
 
       try {
         await persistAdvancedPathOptions(this);
@@ -847,16 +653,6 @@ export default {
 
     goBack() {
       this.$router.push('/basic-installer');
-    },
-
-    measureContainer() {
-      this.$nextTick(() => {
-        const container = this.$refs.virtualContainer;
-        if (container) {
-          this.containerHeight = container.clientHeight;
-          this.updateVisibleLogs();
-        }
-      });
     },
 
     cleanupComponent() {
@@ -925,25 +721,13 @@ export default {
 }
 </script>
 
+<style scoped src="./styles/page-header.css"></style>
+
 <style scoped>
 .offline-installer {
   padding: 2rem;
   max-width: 1000px;
   margin: 0 auto;
-}
-
-.installer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2rem;
-  color: #1f2937;
-  margin: 0;
 }
 
 .config-card, .progress-card {
@@ -981,41 +765,6 @@ export default {
   margin-top: 1.25rem;
 }
 
-.option-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.option-warning {
-  font-size: 0.8rem;
-  color: #92400e;
-  background: #fffbeb;
-  border-left: 4px solid #f59e0b;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin: 0;
-}
-
-.folder-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  padding-left: 1.75rem;
-}
-
-.folder-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.folder-label {
-  font-size: 0.875rem;
-  color: #374151;
-  font-weight: 500;
-}
-
 .archive-list {
   display: flex;
   flex-direction: column;
@@ -1048,275 +797,12 @@ export default {
   border-top: 1px solid #e5e7eb;
 }
 
-/* Current Activity Display */
-.current-activity {
-  margin: 1rem 0;
-  padding: 1rem;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border-left: 4px solid #428ED2;
-}
-
-.current-step h3 {
-  margin: 0 0 0.5rem 0;
-  font-size: 1rem;
-  color: #6b7280;
-}
-
-.activity-status {
-  font-size: 1.1rem;
-  font-weight: 500;
-  color: #374151;
-}
-
-.activity-detail {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin-top: 0.5rem;
-}
-
-.progress-section {
-  margin-top: 1rem;
-}
-
-.progress-label {
-  font-size: 0.875rem;
-  color: #6b7280;
-  margin-bottom: 0.5rem;
-}
-
-/* Installation Steps */
-.installation-steps {
-  margin-top: 1.5rem;
-}
-
-.steps-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-}
-
-.step-item {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  transition: all 0.2s ease;
-}
-
-.step-item.active {
-  border-color: #428ED2;
-  background-color: #eff6ff;
-}
-
-.step-item.completed {
-  border-color: #10b981;
-  background-color: #f0fdf4;
-}
-
-.step-item.completed .step-indicator {
-  background-color: #10b981;
-  color: white;
-}
-
-.step-item.active .step-indicator {
-  background-color: #428ED2;
-  color: white;
-}
-
-.step-indicator {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background-color: #e5e7eb;
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: bold;
-  margin-right: 0.75rem;
-}
-
-.step-content {
-  flex: 1;
-}
-
-.step-title {
-  font-weight: 500;
-  color: #374151;
-  font-size: 0.9rem;
-}
-
-.step-description {
-  font-size: 0.8rem;
-  color: #6b7280;
-  margin-top: 0.25rem;
-}
-
-/* Error State */
-.error-message {
-  margin-top: 1rem;
-  border: 1px dotted var(--espressif-red-color);
-  padding: 1rem;
-}
-
-/* Completion Actions */
-.action-footer {
-  display: flex;
-  justify-content: center;
-  margin-top: 2rem;
-  padding-top: 1rem;
-  margin-bottom: 1rem;
-}
-
-/* Installation Summary */
-.installation-summary {
-  margin: 1.5rem 0;
-  padding: 1.5rem;
-  border-radius: 8px;
-  background-color: #f0f9ff;
-  border: 1px solid #bfdbfe;
-}
-
-.summary-details {
-  margin-top: 1rem;
-  display: grid;
-  gap: 0.5rem;
-}
-
-/* Virtual Scrolling Styles */
-.log-container {
-  text-align: left;
-  background-color: white;
-}
-
-.log-virtual-container {
-  height: 300px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  will-change: scroll-position;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-}
-
-.virtual-spacer-top,
-.virtual-spacer-bottom {
-  width: 100%;
-  pointer-events: none;
-}
-
-.log-scroll-container {
-  contain: layout style;
-}
-
-.log-entry {
-  height: 24px;
-  display: flex;
-  align-items: flex-start;
-  contain: layout;
-  box-sizing: border-box;
-}
-
-.log-message {
-  margin: 0;
-  padding: 2px 4px;
-  font-family: monospace;
-  font-size: 0.85rem;
-  line-height: 20px;
-  text-rendering: optimizeSpeed;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
-  flex: 1;
-}
-
-/* Log level styling */
-.log-message.log-error {
-  background-color: #fee2e2;
-  color: #b91c1c;
-  border-left: 3px solid #ef4444;
-}
-
-.log-message.log-warning {
-  background-color: #fef3c7;
-  color: #d97706;
-  border-left: 3px solid #f59e0b;
-}
-
-.log-message.log-success {
-  color: #059669;
-  border-left: 3px solid #10b981;
-}
-
-.log-message.highlight {
-  background-color: #fff9c2;
-  font-weight: 500;
-  border-left: 3px solid var(--espressif-red-color);
-}
-
-.log-count {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: normal;
-}
-
-/* Scrollbar styling */
-.log-virtual-container::-webkit-scrollbar {
-  width: 8px;
-}
-
-.log-virtual-container::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 4px;
-}
-
-.log-virtual-container::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 4px;
-}
-
-.log-virtual-container::-webkit-scrollbar-thumb:hover {
-  background: #a1a1a1;
-}
-
-/* Performance optimizations */
-.log-virtual-container * {
-  backface-visibility: hidden;
-}
-
 /* Button styling */
 .n-button {
   color: #e5e7eb;
 }
-
-.n-card {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  padding-top: 0px;
-}
-
-.n-collapse {
-  background-color: #FAFAFA;
-  border: 1px solid #D5D5D5;
-  max-height: 300px;
-  overflow: auto;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .log-virtual-container {
-    height: 250px;
-  }
-
-  .log-entry {
-    height: 28px;
-  }
-
-  .log-message {
-    line-height: 24px;
-  }
-}
 </style>
+
+<style scoped src="./styles/advanced-path-options.css"></style>
+
+<style scoped src="./styles/installation-result.css"></style>

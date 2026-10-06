@@ -26,6 +26,9 @@ pub fn render_template(template: &str, variables: &[(&str, String)]) -> String {
     }
     result
 }
+mod activation_scripts;
+#[cfg(feature = "cli")]
+pub mod cli_progress;
 pub mod command_executor;
 pub mod git_tools;
 pub mod idf_config;
@@ -41,7 +44,7 @@ pub mod telemetry;
 pub mod tool_selection;
 pub mod utils;
 pub mod version_manager;
-use std::fs::{set_permissions, File};
+use std::fs::File;
 use std::{
     env, fs,
     io::{self, BufReader, Read, Write},
@@ -52,535 +55,15 @@ use std::{
 use crate::version_manager::{
     run_command_using_activation_script, run_command_using_activation_script_headless,
 };
-
-/// Creates an executable shell script with the given content and file path.
-///
-/// # Parameters
-///
-/// * `file_path`: A string representing the path where the shell script should be created.
-/// * `content`: A string representing the content of the shell script.
-///
-/// # Return
-///
-/// * `Result<(), String>`: On success, returns `Ok(())`. On error, returns `Err(String)` containing the error message.
-fn create_executable_shell_script(file_path: &str, content: &str) -> Result<(), String> {
-    if std::env::consts::OS == "windows" {
-        unimplemented!("create_executable_shell_script not implemented for Windows")
-    } else {
-        // Create and write to the file
-        let mut file = File::create(file_path).map_err(|e| e.to_string())?;
-        file.write_all(content.as_bytes())
-            .map_err(|e| e.to_string())?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            // Set the file as executable (mode 0o755)
-            let permissions = PermissionsExt::from_mode(0o755);
-            set_permissions(Path::new(file_path), permissions).map_err(|e| e.to_string())?;
-        }
-    }
-    Ok(())
-}
-
-/// Formats a vector of key-value pairs into a bash-compatible format for environment variables.
-///
-/// # Parameters
-///
-/// * `pairs` - A reference to a vector of tuples, where each tuple contains a key (String) and a value (String).
-///
-/// # Return
-///
-/// * A String representing the formatted environment variable pairs in bash-compatible format.
-///   Each pair is enclosed in double quotes and separated by a newline.
-///
-fn format_bash_env_pairs(pairs: &[(String, String)]) -> String {
-    let formatted_pairs: Vec<String> = pairs
-        .iter()
-        .map(|(key, value)| format!("{}:{}", key, value))
-        .collect();
-
-    format!(
-        "get_env_var_pairs() {{
-cat << 'EOF'
-{}
-EOF
-}}",
-        formatted_pairs.join("\n")
-    )
-}
-
-/// Formats a vector of key-value pairs into a fish shell-compatible format for environment variables.
-fn format_fish_env_pairs(pairs: &[(String, String)]) -> String {
-    // Fish uses semicolon-separated list for easy parsing
-    pairs
-        .iter()
-        .map(|(key, value)| format!("{}:{}", key, value))
-        .collect::<Vec<_>>()
-        .join(";")
-}
-
-/// Formats a vector of key-value pairs into a PowerShell-compatible format for environment variables.
-///
-/// # Parameters
-///
-/// * `pairs`: A reference to a vector of tuples, where each tuple contains a key-value pair.
-///
-/// # Return
-///
-/// * A string representing the formatted environment variables in PowerShell-compatible format.
-///
-fn format_powershell_env_pairs(pairs: &[(String, String)]) -> String {
-    let formatted_pairs: Vec<String> = pairs
-        .iter()
-        .map(|(key, value)| format!("    \"{}\" = \"{}\"", key, value))
-        .collect();
-
-    format!("$env_var_pairs = @{{\n{}\n}}", formatted_pairs.join("\n"))
-}
-
-/// Formats a vector of key-value pairs into a batch file-compatible format for environment variables.
-/// Common parameters for profile script creation
-struct ProfileParams<'a> {
-    pub idf_path: &'a str,
-    pub idf_tools_path: &'a str,
-    pub idf_python_env_path: Option<&'a str>,
-    pub idf_version: &'a str,
-    pub export_paths: Vec<String>,
-    pub env_var_pairs: Vec<(String, String)>,
-    pub python_bin_path: &'a str,
-    pub activate_script_path: Option<String>,
-    pub deactivate_script_path: Option<String>,
-}
-
-/// Builds the template variables for batch profile
-fn build_batch_variables(params: &ProfileParams) -> Vec<(&'static str, String)> {
-    let activate_script_path = params.activate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}\\Microsoft.{}_profile.bat",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-    let deactivate_script_path = params.deactivate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}\\Microsoft.{}_deactivate.bat",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-
-    vec![
-        ("idf_path", replace_unescaped_spaces_win(params.idf_path)),
-        ("idf_version", params.idf_version.to_string()),
-        (
-            "env_var_pairs",
-            format_batch_env_pairs(&params.env_var_pairs),
-        ),
-        (
-            "env_var_pairs_print",
-            format_batch_env_pairs_print(&params.env_var_pairs),
-        ),
-        (
-            "idf_tools_path",
-            replace_unescaped_spaces_win(params.idf_tools_path),
-        ),
-        (
-            "idf_python_env_path",
-            replace_unescaped_spaces_win(
-                params
-                    .idf_python_env_path
-                    .unwrap_or(&format!("{}\\python", params.idf_tools_path)),
-            ),
-        ),
-        ("add_paths_extras", params.export_paths.join(";")),
-        ("current_system_path", env::var("PATH").unwrap_or_default()),
-        (
-            "python_bin_path",
-            replace_unescaped_spaces_win(params.python_bin_path),
-        ),
-        ("activate_script_path", activate_script_path),
-        ("deactivate_script_path", deactivate_script_path),
-    ]
-}
-
-/// Builds the template variables for PowerShell profile
-fn build_powershell_variables(params: &ProfileParams) -> Vec<(&'static str, String)> {
-    let activate_script_path = params.activate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}\\Microsoft.{}.PowerShell_profile.ps1",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-    let deactivate_script_path = params.deactivate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}\\Microsoft.{}.PowerShell_deactivate.ps1",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-
-    vec![
-        ("idf_path", replace_unescaped_spaces_win(params.idf_path)),
-        ("idf_version", params.idf_version.to_string()),
-        (
-            "env_var_pairs",
-            format_powershell_env_pairs(&params.env_var_pairs),
-        ),
-        (
-            "idf_tools_path",
-            replace_unescaped_spaces_win(params.idf_tools_path),
-        ),
-        (
-            "idf_python_env_path",
-            replace_unescaped_spaces_win(
-                params
-                    .idf_python_env_path
-                    .unwrap_or(&format!("{}\\python", params.idf_tools_path)),
-            ),
-        ),
-        ("add_paths_extras", params.export_paths.join(";")),
-        ("current_system_path", env::var("PATH").unwrap_or_default()),
-        (
-            "python_bin_path",
-            replace_unescaped_spaces_win(params.python_bin_path),
-        ),
-        ("activate_script_path", activate_script_path),
-        ("deactivate_script_path", deactivate_script_path),
-    ]
-}
-
-/// Renders a profile template and writes it to a file
-fn render_and_write_profile(
-    profile_path: &str,
-    _template_name: &str,
-    template_content: &str,
-    variables: Vec<(&str, String)>,
-    filename: &str,
-) -> Result<String, std::io::Error> {
-    ensure_path(profile_path).expect("Unable to create directory");
-
-    let mut rendered = render_template(template_content, &variables);
-
-    if std::env::consts::OS == "windows" {
-        rendered = rendered.replace("\r\n", "\n").replace("\n", "\r\n");
-    }
-
-    let mut filepath = PathBuf::from(profile_path);
-    filepath.push(filename);
-    fs::write(&filepath, rendered).expect("Unable to write file");
-    Ok(filepath.display().to_string())
-}
-
-fn format_batch_env_pairs(pairs: &[(String, String)]) -> String {
-    let formatted_pairs: Vec<String> = pairs
-        .iter()
-        .map(|(key, value)| format!("set {}={}", key, value))
-        .collect();
-
-    formatted_pairs.join("\n")
-}
-
-/// Formats env var pairs for printing in batch file -e mode
-fn format_batch_env_pairs_print(pairs: &[(String, String)]) -> String {
-    let formatted_pairs: Vec<String> = pairs
-        .iter()
-        .map(|(key, value)| format!("echo {}={}", key, value))
-        .collect();
-
-    formatted_pairs.join("\n")
-}
-
-/// Creates an activation shell script for the ESP-IDF toolchain.
-///
-/// # Parameters
-///
-/// * `file_path`: A string representing the path where the activation script should be created.
-/// * `idf_path`: A string representing the path to the ESP-IDF installation.
-/// * `idf_tools_path`: A string representing the path to the ESP-IDF tools installation.
-/// * `idf_version`: A string representing the version of the ESP-IDF toolchain.
-/// * `export_paths`: A vector of strings representing additional paths to be added to the shell's PATH environment variable.
-///
-/// # Return
-///
-/// * `Result<(), String>`: On success, returns `Ok(())`. On error, returns `Err(String)` containing the error message.
-///
-/// Common parameters for Unix shell activation/deactivation scripts
-struct UnixShellParams<'a> {
-    pub idf_path: &'a str,
-    pub idf_tools_path: &'a str,
-    pub idf_python_env_path: Option<&'a str>,
-    pub idf_version: &'a str,
-    pub export_paths: Vec<String>,
-    pub env_var_pairs: Vec<(String, String)>,
-    pub python_bin_path: &'a str,
-    pub activate_script_path: Option<String>,
-    pub deactivate_script_path: Option<String>,
-}
-
-/// Builds template variables for Unix shell scripts (bash/fish)
-fn build_unix_shell_variables(params: &UnixShellParams) -> Vec<(&'static str, String)> {
-    let env_var_pairs_str = format_bash_env_pairs(&params.env_var_pairs);
-    let fish_env_var_pairs_str = format_fish_env_pairs(&params.env_var_pairs);
-    let idf_python_env_path_val = match params.idf_python_env_path {
-        Some(path) => path.to_string(),
-        None => format!("{}/python", params.idf_tools_path),
-    };
-
-    let addition_to_path = params.export_paths.join(":");
-    let current_system_path = env::var("PATH").unwrap_or_default();
-    let activate_script_path = params.activate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}/activate_idf_{}.sh",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-    let deactivate_script_path = params.deactivate_script_path.clone().unwrap_or_else(|| {
-        format!(
-            "{}/deactivate_idf_{}.sh",
-            params.idf_tools_path, params.idf_version
-        )
-    });
-
-    vec![
-        ("env_var_pairs", env_var_pairs_str),
-        ("fish_env_var_pairs", fish_env_var_pairs_str),
-        ("idf_path", params.idf_path.to_string()),
-        (
-            "idf_path_escaped",
-            replace_unescaped_spaces_posix(params.idf_path),
-        ),
-        ("idf_tools_path", params.idf_tools_path.to_string()),
-        (
-            "idf_tools_path_escaped",
-            replace_unescaped_spaces_posix(params.idf_tools_path),
-        ),
-        ("idf_version", params.idf_version.to_string()),
-        ("addition_to_path", addition_to_path),
-        ("current_system_path", current_system_path),
-        ("python_bin_path", params.python_bin_path.to_string()),
-        ("idf_python_env_path", idf_python_env_path_val.clone()),
-        (
-            "idf_python_env_path_escaped",
-            replace_unescaped_spaces_posix(&idf_python_env_path_val),
-        ),
-        ("activate_script_path", activate_script_path.clone()),
-        (
-            "activate_script_path_escaped",
-            replace_unescaped_spaces_posix(&activate_script_path),
-        ),
-        ("deactivate_script_path", deactivate_script_path.clone()),
-        (
-            "deactivate_script_path_escaped",
-            replace_unescaped_spaces_posix(&deactivate_script_path),
-        ),
-    ]
-}
-
-/// Creates a bash shell activation script for the ESP-IDF toolchain.
-#[allow(clippy::too_many_arguments)]
-pub fn create_activation_shell_script(
-    file_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<(), String> {
-    ensure_path(file_path).map_err(|e| e.to_string())?;
-    let mut filename = PathBuf::from(file_path);
-    let activate_path = filename
-        .join(format!("activate_idf_{}.sh", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    filename.push(format!("activate_idf_{}.sh", idf_version));
-    let template = include_str!("../../bash_scripts/activate_idf_template.sh");
-
-    let params = UnixShellParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_path),
-        deactivate_script_path: None,
-    };
-    let variables = build_unix_shell_variables(&params);
-    let rendered = render_template(template, &variables);
-
-    create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
-    Ok(())
-}
-
-/// Creates a fish shell activation script for the ESP-IDF toolchain.
-#[allow(clippy::too_many_arguments)]
-pub fn create_fish_script(
-    file_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<(), String> {
-    ensure_path(file_path).map_err(|e| e.to_string())?;
-    let mut filename = PathBuf::from(file_path);
-    let activate_path = filename
-        .join(format!("activate_idf_{}.fish", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    filename.push(format!("activate_idf_{}.fish", idf_version));
-    let template = include_str!("../../bash_scripts/activate_idf_template.fish");
-
-    let params = UnixShellParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_path),
-        deactivate_script_path: None,
-    };
-    let variables = build_unix_shell_variables(&params);
-    let rendered = render_template(template, &variables);
-
-    create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
-    Ok(())
-}
-
-/// Creates a bash shell deactivation script for the ESP-IDF toolchain.
-///
-/// The deactivation script is the inverse of `create_activation_shell_script`:
-/// it unsets the same env vars, strips the IDF PATH prefixes, drops the IDF
-/// shell functions/completions, and runs the Python venv's `deactivate`.
-#[allow(clippy::too_many_arguments)]
-pub fn create_deactivation_shell_script(
-    file_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<(), String> {
-    ensure_path(file_path).map_err(|e| e.to_string())?;
-    let mut filename = PathBuf::from(file_path);
-    let deactivate_path = filename
-        .join(format!("deactivate_idf_{}.sh", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    let activate_path = filename
-        .join(format!("activate_idf_{}.sh", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    filename.push(format!("deactivate_idf_{}.sh", idf_version));
-    let template = include_str!("../../bash_scripts/deactivate_idf_template.sh");
-
-    let params = UnixShellParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_path),
-        deactivate_script_path: Some(deactivate_path),
-    };
-    let variables = build_unix_shell_variables(&params);
-    let rendered = render_template(template, &variables);
-
-    create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
-    Ok(())
-}
-
-/// Creates a fish shell deactivation script for the ESP-IDF toolchain.
-#[allow(clippy::too_many_arguments)]
-pub fn create_deactivation_fish_script(
-    file_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<(), String> {
-    ensure_path(file_path).map_err(|e| e.to_string())?;
-    let mut filename = PathBuf::from(file_path);
-    let deactivate_path = filename
-        .join(format!("deactivate_idf_{}.fish", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    let activate_path = filename
-        .join(format!("activate_idf_{}.fish", idf_version))
-        .to_string_lossy()
-        .into_owned();
-    filename.push(format!("deactivate_idf_{}.fish", idf_version));
-    let template = include_str!("../../bash_scripts/deactivate_idf_template.fish");
-
-    let params = UnixShellParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_path),
-        deactivate_script_path: Some(deactivate_path),
-    };
-    let variables = build_unix_shell_variables(&params);
-    let rendered = render_template(template, &variables);
-
-    create_executable_shell_script(filename.to_str().unwrap(), &rendered)?;
-    Ok(())
-}
-
-// TODO: unify the replace_unescaped_spaces functions
-pub fn replace_unescaped_spaces_posix(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '\\' && chars.peek() == Some(&' ') {
-            // If we see a backslash followed by a space, keep them as-is
-            result.push(ch);
-            result.push(chars.next().unwrap());
-        } else if ch == ' ' {
-            // If we see a space not preceded by a backslash, replace it
-            result.push_str(r"\ ");
-        } else {
-            // For all other characters, just add them to the result
-            result.push(ch);
-        }
-    }
-
-    result
-}
-
-pub fn replace_unescaped_spaces_win(input: &str) -> String {
-    let mut result = String::with_capacity(input.len());
-    let mut chars = input.chars().peekable();
-
-    while let Some(ch) = chars.next() {
-        if ch == '`' && chars.peek() == Some(&' ') {
-            result.push(ch);
-            result.push(chars.next().unwrap());
-        } else if ch == ' ' {
-            result.push_str(r"` ");
-        } else {
-            result.push(ch);
-        }
-    }
-
-    result
-}
+pub use activation_scripts::{
+    create_activation_shell_script, create_deactivation_fish_script,
+    create_deactivation_shell_script, create_fish_script, replace_unescaped_spaces_posix,
+    replace_unescaped_spaces_win,
+};
+use activation_scripts::{
+    create_batch_deactivate_profile, create_batch_profile, create_powershell_deactivate_profile,
+    create_powershell_profile,
+};
 
 /// Runs a PowerShell script and captures its output.
 /// TODO: fix documentation
@@ -946,190 +429,6 @@ pub fn create_windows_terminal_idf_profile(
     ))
 }
 
-/// Creates a PowerShell profile script for the ESP-IDF tools.
-///
-/// # Parameters
-///
-/// * `profile_path` - A string representing the path where the PowerShell profile script should be created.
-/// * `idf_path` - A string representing the path to the ESP-IDF repository.
-/// * `idf_tools_path` - A string representing the path to the ESP-IDF tools directory.
-///
-/// # Returns
-///
-/// * `Result<String, std::io::Error>` - On success, returns the path to the created PowerShell profile script.
-///   On error, returns an `std::io::Error` indicating the cause of the error.
-#[allow(clippy::too_many_arguments)]
-fn create_powershell_profile(
-    profile_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<String, std::io::Error> {
-    let profile_template = include_str!("../../powershell_scripts/idf_tools_profile_template.ps1");
-    let activate_script_path = format!(
-        "{}\\Microsoft.{}.PowerShell_profile.ps1",
-        profile_path, idf_version
-    );
-    let params = ProfileParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_script_path),
-        deactivate_script_path: None,
-    };
-    let variables = build_powershell_variables(&params);
-    render_and_write_profile(
-        profile_path,
-        "powershell_profile",
-        profile_template,
-        variables,
-        &format!("Microsoft.{}.PowerShell_profile.ps1", idf_version),
-    )
-}
-
-/// Creates a PowerShell deactivation script for the ESP-IDF tools.
-///
-/// Mirrors the matching `Microsoft.<ver>.PowerShell_profile.ps1`:
-/// unsets the same env vars, strips toolchain PATH prefixes, removes
-/// the IDF functions/aliases, and deactivates the Python venv.
-#[allow(clippy::too_many_arguments)]
-fn create_powershell_deactivate_profile(
-    profile_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<String, std::io::Error> {
-    let profile_template =
-        include_str!("../../powershell_scripts/idf_tools_profile_deactivate_template.ps1");
-    let activate_script_path = format!(
-        "{}\\Microsoft.{}.PowerShell_profile.ps1",
-        profile_path, idf_version
-    );
-    let deactivate_script_path = format!(
-        "{}\\Microsoft.{}.PowerShell_deactivate.ps1",
-        profile_path, idf_version
-    );
-    let params = ProfileParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_script_path),
-        deactivate_script_path: Some(deactivate_script_path),
-    };
-    let variables = build_powershell_variables(&params);
-    render_and_write_profile(
-        profile_path,
-        "powershell_deactivate_profile",
-        profile_template,
-        variables,
-        &format!("Microsoft.{}.PowerShell_deactivate.ps1", idf_version),
-    )
-}
-
-/// Creates a batch file profile script for the ESP-IDF tools.
-///
-/// # Parameters
-///
-/// * `profile_path` - A string representing the path where the batch profile script should be created.
-/// * `idf_path` - A string representing the path to the ESP-IDF repository.
-/// * `idf_tools_path` - A string representing the path to the ESP-IDF tools directory.
-///
-/// # Returns
-///
-/// * `Result<String, std::io::Error>` - On success, returns the path to the created batch profile script.
-///   On error, returns an `std::io::Error` indicating the cause of the error.
-#[allow(clippy::too_many_arguments)]
-fn create_batch_profile(
-    profile_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<String, std::io::Error> {
-    let profile_template = include_str!("../../powershell_scripts/idf_tools_profile_template.bat");
-    let activate_script_path = format!("{}\\Microsoft.{}_profile.bat", profile_path, idf_version);
-    let params = ProfileParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_script_path),
-        deactivate_script_path: None,
-    };
-    let variables = build_batch_variables(&params);
-    render_and_write_profile(
-        profile_path,
-        "batch_profile",
-        profile_template,
-        variables,
-        &format!("Microsoft.{}_profile.bat", idf_version),
-    )
-}
-
-/// Creates a CMD batch deactivation script for the ESP-IDF tools.
-///
-/// Mirrors the matching `Microsoft.<ver>_profile.bat`: unsets the same
-/// env vars, strips toolchain PATH prefixes, removes the IDF doskey
-/// aliases, and deactivates the Python venv.
-#[allow(clippy::too_many_arguments)]
-fn create_batch_deactivate_profile(
-    profile_path: &str,
-    idf_path: &str,
-    idf_tools_path: &str,
-    idf_python_env_path: Option<&str>,
-    idf_version: &str,
-    export_paths: Vec<String>,
-    env_var_pairs: Vec<(String, String)>,
-    python_bin_path: &str,
-) -> Result<String, std::io::Error> {
-    let profile_template =
-        include_str!("../../powershell_scripts/idf_tools_profile_deactivate_template.bat");
-    let activate_script_path = format!("{}\\Microsoft.{}_profile.bat", profile_path, idf_version);
-    let deactivate_script_path =
-        format!("{}\\Microsoft.{}_deactivate.bat", profile_path, idf_version);
-    let params = ProfileParams {
-        idf_path,
-        idf_tools_path,
-        idf_python_env_path,
-        idf_version,
-        export_paths,
-        env_var_pairs,
-        python_bin_path,
-        activate_script_path: Some(activate_script_path),
-        deactivate_script_path: Some(deactivate_script_path),
-    };
-    let variables = build_batch_variables(&params);
-    render_and_write_profile(
-        profile_path,
-        "batch_deactivate_profile",
-        profile_template,
-        variables,
-        &format!("Microsoft.{}_deactivate.bat", idf_version),
-    )
-}
-
 /// Creates a desktop shortcut for the IDF tools using PowerShell on Windows.
 ///
 /// # Parameters
@@ -1300,14 +599,21 @@ pub fn verify_file_checksum(expected_checksum: &str, file_path: &str) -> Result<
         hasher.update(&buffer[..bytes_read]);
     }
 
-    // Get the final hash
-    let result = hasher.finalize();
-
-    // Convert the hash to a hexadecimal string
-    let computed_checksum = format!("{:x}", result);
+    let computed_checksum = to_hex(&hasher.finalize());
 
     // Compare the computed checksum with the expected checksum
     Ok(computed_checksum == expected_checksum)
+}
+
+/// Lowercase hex encoding of a byte slice, e.g. a hash digest.
+pub(crate) fn to_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    bytes
+        .iter()
+        .fold(String::with_capacity(bytes.len() * 2), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
 }
 
 /// Sets up the environment variables required for the ESP-IDF build system.
@@ -1683,87 +989,93 @@ fn decompress_zip(archive_path: &Path, destination_path: &Path) -> Result<(), De
     }
 
     // First, try using ZipArchive for all platforms
-    let zip_result = (|| {
-        let file = File::open(archive_path)?;
-        let mut archive = ZipArchive::new(file)?;
-
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)?;
-            let outpath = match file.enclosed_name() {
-                Some(path) => destination_path.join(path),
-                None => continue,
-            };
-
-            if file.name().ends_with('/') {
-                std::fs::create_dir_all(&outpath)?;
-            } else {
-                if let Some(p) = outpath.parent() {
-                    if !p.exists() {
-                        std::fs::create_dir_all(p)?;
-                    }
-                }
-                let mut outfile = File::create(&outpath)?;
-                io::copy(&mut file, &mut outfile)?;
-            }
-        }
-        Ok(())
-    })();
+    let zip_result = extract_zip_archive(archive_path, destination_path);
 
     // If ZipArchive failed and we're on Windows, fall back to PowerShell
-    if let Err(err) = zip_result {
-        if std::env::consts::OS == "windows" {
+    match zip_result {
+        Err(err) if std::env::consts::OS == "windows" => {
             log::warn!(
                 "ZipArchive decompression failed: {}. Falling back to PowerShell approach.",
                 err
             );
+            expand_zip_with_powershell(archive_path, destination_path)
+        }
+        // On non-Windows platforms, just return the original error
+        other => other,
+    }
+}
 
-            let executor = crate::command_executor::get_executor();
-            let archive_path_str = archive_path.to_string_lossy().to_string();
-            let destination_path_str = destination_path.to_string_lossy().to_string();
+/// Extracts every entry of a ZIP archive into `destination_path`, skipping entries whose
+/// names would escape the destination.
+fn extract_zip_archive(
+    archive_path: &Path,
+    destination_path: &Path,
+) -> Result<(), DecompressionError> {
+    let file = File::open(archive_path)?;
+    let mut archive = ZipArchive::new(file)?;
 
-            // Create a separate thread to run the PowerShell command
-            let handle = std::thread::spawn(move || {
-                let script = format!(
-                    "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
-                    archive_path_str, destination_path_str
-                );
+    for i in 0..archive.len() {
+        let mut file = archive.by_index(i)?;
+        let outpath = match file.enclosed_name() {
+            Some(path) => destination_path.join(path),
+            None => continue,
+        };
 
-                executor.run_script_from_string(&script)
-            });
-
-            // Wait for the thread to complete
-            match handle.join() {
-                Ok(result) => match result {
-                    Ok(output) => {
-                        if !output.status.success() {
-                            let error_message = String::from_utf8_lossy(&output.stderr);
-                            log::error!("PowerShell decompression failed: {}", error_message);
-                            return Err(DecompressionError::Io(io::Error::other(format!(
-                                "PowerShell decompression failed: {}",
-                                error_message
-                            ))));
-                        }
-                        Ok(())
-                    }
-                    Err(e) => {
-                        log::error!("Failed to execute PowerShell command: {}", e);
-                        Err(DecompressionError::Io(e))
-                    }
-                },
-                Err(e) => {
-                    log::error!("Thread panicked: {:?}", e);
-                    Err(DecompressionError::Io(io::Error::other(
-                        "Thread panicked during decompression",
-                    )))
+        if file.name().ends_with('/') {
+            std::fs::create_dir_all(&outpath)?;
+        } else {
+            if let Some(p) = outpath.parent() {
+                if !p.exists() {
+                    std::fs::create_dir_all(p)?;
                 }
             }
-        } else {
-            // On non-Windows platforms, just return the original error
-            Err(err)
+            let mut outfile = File::create(&outpath)?;
+            io::copy(&mut file, &mut outfile)?;
         }
-    } else {
-        // ZipArchive succeeded
-        Ok(())
+    }
+    Ok(())
+}
+
+/// Extracts a ZIP archive with PowerShell's `Expand-Archive`, run on a separate thread.
+fn expand_zip_with_powershell(
+    archive_path: &Path,
+    destination_path: &Path,
+) -> Result<(), DecompressionError> {
+    let executor = crate::command_executor::get_executor();
+    let archive_path_str = archive_path.to_string_lossy().to_string();
+    let destination_path_str = destination_path.to_string_lossy().to_string();
+
+    // Create a separate thread to run the PowerShell command
+    let handle = std::thread::spawn(move || {
+        let script = format!(
+            "Expand-Archive -Path '{}' -DestinationPath '{}' -Force",
+            archive_path_str, destination_path_str
+        );
+
+        executor.run_script_from_string(&script)
+    });
+
+    // Wait for the thread to complete
+    match handle.join() {
+        Ok(Ok(output)) if !output.status.success() => {
+            let error_message = String::from_utf8_lossy(&output.stderr);
+            log::error!("PowerShell decompression failed: {}", error_message);
+            Err(DecompressionError::Io(io::Error::other(format!(
+                "PowerShell decompression failed: {}",
+                error_message
+            ))))
+        }
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => {
+            log::error!("Failed to execute PowerShell command: {}", e);
+            Err(DecompressionError::Io(e))
+        }
+        Err(e) => {
+            log::error!("Thread panicked: {:?}", e);
+            Err(DecompressionError::Io(io::Error::other(
+                "Thread panicked during decompression",
+            )))
+        }
     }
 }
 
@@ -2076,209 +1388,40 @@ pub fn single_version_post_install(
     skip_component_installation: bool,
     is_gui: bool,
 ) {
-    let mut env_vars_merged = setup_environment_variables(
+    let mut merged_env_vars = setup_environment_variables(
         &PathBuf::from(tool_install_directory),
         &PathBuf::from(idf_path),
     )
     .unwrap_or_default();
-    env_vars_merged.push((
+    merged_env_vars.push((
         // todo: move to setup_environment_variables
         "IDF_PYTHON_ENV_PATH".to_string(),
         idf_python_env_path.unwrap_or_default().to_string(),
     ));
     if let Some(extra_vars) = env_vars {
-        for (key, value) in extra_vars {
-            if let Some(pos) = env_vars_merged.iter().position(|(k, _)| k == &key) {
-                env_vars_merged[pos] = (key, value);
-            } else {
-                env_vars_merged.push((key, value));
-            }
-        }
+        merge_env_vars(&mut merged_env_vars, extra_vars);
     }
-    let env_vars = env_vars_merged;
 
-    let mut export_paths = export_paths.clone();
+    let mut export_paths = export_paths;
     let python_env_path = PathBuf::from(idf_python_env_path.unwrap_or_default());
-    match std::env::consts::OS {
-        "windows" => {
-            // On Windows, we need to add the Python Scripts directory to the PATH
-            if python_env_path.exists() {
-                let scripts_path = python_env_path.join("Scripts");
-                if scripts_path.exists() {
-                    export_paths.push(scripts_path.to_string_lossy().to_string());
-                }
-            }
-        }
-        _ => {
-            // On Unix-like systems, we can add the Python bin directory to the PATH
-            let scripts_path = python_env_path.join("bin");
-            if scripts_path.exists() {
-                export_paths.push(scripts_path.to_string_lossy().to_string());
-            }
-        }
+    if let Some(scripts_path) = python_scripts_dir(&python_env_path, std::env::consts::OS) {
+        export_paths.push(scripts_path.to_string_lossy().to_string());
     }
 
+    let scripts = PostInstallScripts {
+        activation_script_path,
+        idf_path,
+        idf_version,
+        tool_install_directory,
+        idf_python_env_path,
+        export_paths,
+        env_vars: merged_env_vars,
+        python_bin_path,
+    };
     match std::env::consts::OS {
-        "windows" => {
-            // Creating desktop shortcut
-            if let Err(err) = create_desktop_shortcut_and_terminal_profile(
-                activation_script_path,
-                idf_path,
-                idf_version,
-                tool_install_directory,
-                idf_python_env_path,
-                export_paths.clone(),
-                env_vars.clone(),
-                python_bin_path,
-            ) {
-                error!(
-                    "{} {:?}",
-                    "Failed to create desktop shortcut",
-                    err.to_string()
-                )
-            } else {
-                info!("Desktop shortcut created successfully")
-            }
-
-            // Create the PowerShell deactivation script that mirrors the
-            // activation profile written by the desktop shortcut flow above.
-            if let Err(err) = create_powershell_deactivate_profile(
-                activation_script_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths.clone(),
-                env_vars.clone(),
-                python_bin_path,
-            ) {
-                error!(
-                    "{} {:?}",
-                    "Failed to create PowerShell deactivation profile",
-                    err.to_string()
-                )
-            } else {
-                info!("PowerShell deactivation profile created successfully")
-            }
-
-            // Also create CMD batch file if requested
-            if create_cmd_bat {
-                if let Err(err) = create_batch_profile(
-                    activation_script_path,
-                    idf_path,
-                    tool_install_directory,
-                    idf_python_env_path,
-                    idf_version,
-                    export_paths.clone(),
-                    env_vars.clone(),
-                    python_bin_path,
-                ) {
-                    error!(
-                        "{} {:?}",
-                        "Failed to create CMD batch profile",
-                        err.to_string()
-                    )
-                } else {
-                    info!("CMD batch profile created successfully")
-                }
-
-                // And the matching CMD batch deactivation script.
-                if let Err(err) = create_batch_deactivate_profile(
-                    activation_script_path,
-                    idf_path,
-                    tool_install_directory,
-                    idf_python_env_path,
-                    idf_version,
-                    export_paths,
-                    env_vars,
-                    python_bin_path,
-                ) {
-                    error!(
-                        "{} {:?}",
-                        "Failed to create CMD batch deactivation profile",
-                        err.to_string()
-                    )
-                } else {
-                    info!("CMD batch deactivation profile created successfully")
-                }
-            }
-        }
+        "windows" => create_windows_activation_scripts(&scripts, create_cmd_bat),
         _ => {
-            // Create bash activation script
-            match create_activation_shell_script(
-                activation_script_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths.clone(),
-                env_vars.clone(),
-                python_bin_path,
-            ) {
-                Ok(_) => info!("Bash activation script created successfully"),
-                Err(err) => error!(
-                    "{} {:?}",
-                    "Failed to create activation shell script",
-                    err.to_string()
-                ),
-            };
-
-            // Create bash deactivation script
-            match create_deactivation_shell_script(
-                activation_script_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths.clone(),
-                env_vars.clone(),
-                python_bin_path,
-            ) {
-                Ok(_) => info!("Bash deactivation script created successfully"),
-                Err(err) => error!(
-                    "{} {:?}",
-                    "Failed to create deactivation shell script",
-                    err.to_string()
-                ),
-            };
-
-            // Create fish shell activation script (always)
-            match create_fish_script(
-                activation_script_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths.clone(),
-                env_vars.clone(),
-                python_bin_path,
-            ) {
-                Ok(_) => info!("Fish shell activation script created successfully"),
-                Err(err) => error!(
-                    "{} {:?}",
-                    "Failed to create fish shell script",
-                    err.to_string()
-                ),
-            };
-
-            // Create fish shell deactivation script
-            match create_deactivation_fish_script(
-                activation_script_path,
-                idf_path,
-                tool_install_directory,
-                idf_python_env_path,
-                idf_version,
-                export_paths,
-                env_vars,
-                python_bin_path,
-            ) {
-                Ok(_) => info!("Fish deactivation script created successfully"),
-                Err(err) => error!(
-                    "{} {:?}",
-                    "Failed to create fish deactivation script",
-                    err.to_string()
-                ),
-            };
+            create_unix_activation_scripts(&scripts);
 
             // copy openocd rules (it's noop on macOs)
             match copy_openocd_rules(tool_install_directory) {
@@ -2288,73 +1431,216 @@ pub fn single_version_post_install(
         }
     }
 
-    let activation_script_fullname = match std::env::consts::OS {
+    let activation_script_fullname =
+        activation_script_fullname(activation_script_path, idf_version, std::env::consts::OS);
+    if !skip_component_installation {
+        sync_components(
+            &activation_script_fullname,
+            tool_install_directory,
+            idf_path,
+            is_gui,
+        );
+    }
+}
+
+/// Overrides entries of `env_vars` with `extra_vars` by key, appending keys not yet present.
+fn merge_env_vars(env_vars: &mut Vec<(String, String)>, extra_vars: Vec<(String, String)>) {
+    for (key, value) in extra_vars {
+        if let Some(pos) = env_vars.iter().position(|(k, _)| k == &key) {
+            env_vars[pos] = (key, value);
+        } else {
+            env_vars.push((key, value));
+        }
+    }
+}
+
+/// Returns the Python environment's executables directory (`Scripts` on Windows, `bin`
+/// elsewhere) if it exists.
+fn python_scripts_dir(python_env_path: &Path, os: &str) -> Option<PathBuf> {
+    let scripts_path = match os {
+        // On Windows, we need to add the Python Scripts directory to the PATH
+        "windows" if python_env_path.exists() => python_env_path.join("Scripts"),
+        "windows" => return None,
+        // On Unix-like systems, we can add the Python bin directory to the PATH
+        _ => python_env_path.join("bin"),
+    };
+    scripts_path.exists().then_some(scripts_path)
+}
+
+/// Full path of the activation script used to run commands in the installed environment.
+fn activation_script_fullname(activation_script_path: &str, idf_version: &str, os: &str) -> String {
+    match os {
         "windows" => format!(
             "{}\\Microsoft.{}.PowerShell_profile.ps1",
             activation_script_path, idf_version
         ),
         _ => format!("{}/activate_idf_{}.sh", activation_script_path, idf_version),
-    };
-    if !skip_component_installation {
-        let command = format!(
-            "compote registry sync --resolution=latest --recursive {}",
-            tool_install_directory
+    }
+}
+
+/// Signature shared by every activation/deactivation script generator.
+type ScriptGenerator<T, E> = fn(
+    &str,
+    &str,
+    &str,
+    Option<&str>,
+    &str,
+    Vec<String>,
+    Vec<(String, String)>,
+    &str,
+) -> Result<T, E>;
+
+/// Inputs for the activation/deactivation scripts written after installing a version.
+struct PostInstallScripts<'a> {
+    activation_script_path: &'a str,
+    idf_path: &'a str,
+    idf_version: &'a str,
+    tool_install_directory: &'a str,
+    idf_python_env_path: Option<&'a str>,
+    export_paths: Vec<String>,
+    env_vars: Vec<(String, String)>,
+    python_bin_path: &'a str,
+}
+
+impl PostInstallScripts<'_> {
+    fn generate<T, E>(&self, generator: ScriptGenerator<T, E>) -> Result<T, E> {
+        generator(
+            self.activation_script_path,
+            self.idf_path,
+            self.tool_install_directory,
+            self.idf_python_env_path,
+            self.idf_version,
+            self.export_paths.clone(),
+            self.env_vars.clone(),
+            self.python_bin_path,
+        )
+    }
+}
+
+fn log_script_result<T, E: std::fmt::Display>(result: Result<T, E>, success: &str, failure: &str) {
+    match result {
+        Ok(_) => info!("{}", success),
+        Err(err) => error!("{} {:?}", failure, err.to_string()),
+    }
+}
+
+fn create_windows_activation_scripts(scripts: &PostInstallScripts, create_cmd_bat: bool) {
+    // Creating desktop shortcut
+    log_script_result(
+        create_desktop_shortcut_and_terminal_profile(
+            scripts.activation_script_path,
+            scripts.idf_path,
+            scripts.idf_version,
+            scripts.tool_install_directory,
+            scripts.idf_python_env_path,
+            scripts.export_paths.clone(),
+            scripts.env_vars.clone(),
+            scripts.python_bin_path,
+        ),
+        "Desktop shortcut created successfully",
+        "Failed to create desktop shortcut",
+    );
+
+    // Create the PowerShell deactivation script that mirrors the
+    // activation profile written by the desktop shortcut flow above.
+    log_script_result(
+        scripts.generate(create_powershell_deactivate_profile),
+        "PowerShell deactivation profile created successfully",
+        "Failed to create PowerShell deactivation profile",
+    );
+
+    // Also create CMD batch file if requested
+    if create_cmd_bat {
+        log_script_result(
+            scripts.generate(create_batch_profile),
+            "CMD batch profile created successfully",
+            "Failed to create CMD batch profile",
         );
+        log_script_result(
+            scripts.generate(create_batch_deactivate_profile),
+            "CMD batch deactivation profile created successfully",
+            "Failed to create CMD batch deactivation profile",
+        );
+    }
+}
 
-        let result = if is_gui {
-            // Use headless mode in GUI to avoid showing PowerShell window
-            run_command_using_activation_script_headless(
-                &activation_script_fullname,
-                &command,
-                Some(idf_path),
-            )
-        } else {
-            run_command_using_activation_script(
-                &activation_script_fullname,
-                &command,
-                Some(idf_path),
-            )
-        };
+fn create_unix_activation_scripts(scripts: &PostInstallScripts) {
+    log_script_result(
+        scripts.generate(create_activation_shell_script),
+        "Bash activation script created successfully",
+        "Failed to create activation shell script",
+    );
+    log_script_result(
+        scripts.generate(create_deactivation_shell_script),
+        "Bash deactivation script created successfully",
+        "Failed to create deactivation shell script",
+    );
+    log_script_result(
+        scripts.generate(create_fish_script),
+        "Fish shell activation script created successfully",
+        "Failed to create fish shell script",
+    );
+    log_script_result(
+        scripts.generate(create_deactivation_fish_script),
+        "Fish deactivation script created successfully",
+        "Failed to create fish deactivation script",
+    );
+}
 
-        match result {
-            Ok(output) => {
-                if output.success() {
-                    info!("Components registry synchronized successfully");
-                } else {
-                    warn!("Failed to synchronize components.");
-                }
+fn run_with_activation_script(
+    activation_script: &str,
+    command: &str,
+    idf_path: &str,
+    is_gui: bool,
+) -> anyhow::Result<std::process::ExitStatus> {
+    if is_gui {
+        // Use headless mode in GUI to avoid showing PowerShell window
+        run_command_using_activation_script_headless(activation_script, command, Some(idf_path))
+    } else {
+        run_command_using_activation_script(activation_script, command, Some(idf_path))
+    }
+}
+
+/// Synchronizes the component registry and downloads the required components.
+fn sync_components(
+    activation_script_fullname: &str,
+    tool_install_directory: &str,
+    idf_path: &str,
+    is_gui: bool,
+) {
+    let command = format!(
+        "compote registry sync --resolution=latest --recursive {}",
+        tool_install_directory
+    );
+    match run_with_activation_script(activation_script_fullname, &command, idf_path, is_gui) {
+        Ok(output) => {
+            if output.success() {
+                info!("Components registry synchronized successfully");
+            } else {
+                warn!("Failed to synchronize components.");
             }
-            Err(err) => warn!(
-                "Error running command to synchronize components registry: {:?}",
-                err
-            ),
         }
-        let second_component_command = "compote cooking stock";
-        let second_result = if is_gui {
-            // Use headless mode in GUI to avoid showing PowerShell window
-            run_command_using_activation_script_headless(
-                &activation_script_fullname,
-                second_component_command,
-                Some(idf_path),
-            )
-        } else {
-            run_command_using_activation_script(
-                &activation_script_fullname,
-                second_component_command,
-                Some(idf_path),
-            )
-        };
+        Err(err) => warn!(
+            "Error running command to synchronize components registry: {:?}",
+            err
+        ),
+    }
 
-        match second_result {
-            Ok(output) => {
-                if output.success() {
-                    info!("Required components successfully downloaded");
-                } else {
-                    warn!("Downloading required components failed.");
-                }
+    let second_component_command = "compote cooking stock";
+    match run_with_activation_script(
+        activation_script_fullname,
+        second_component_command,
+        idf_path,
+        is_gui,
+    ) {
+        Ok(output) => {
+            if output.success() {
+                info!("Required components successfully downloaded");
+            } else {
+                warn!("Downloading required components failed.");
             }
-            Err(err) => warn!("Downloading required components failed: {:?}", err),
         }
+        Err(err) => warn!("Downloading required components failed: {:?}", err),
     }
 }
 
@@ -2580,6 +1866,97 @@ mod tests {
     }
 
     #[test]
+    fn test_extract_zip_archive_nested_and_unsafe_entries() {
+        let archive_dir = TempDir::new().unwrap();
+        let zip_path = archive_dir.path().join("nested.zip");
+        let mut zip = zip::ZipWriter::new(File::create(&zip_path).unwrap());
+        let options = zip::write::FileOptions::<()>::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        zip.add_directory("empty/", options).unwrap();
+        zip.start_file("a/b/c.txt", options).unwrap();
+        zip.write_all(b"nested").unwrap();
+        zip.start_file("../escape.txt", options).unwrap();
+        zip.write_all(b"evil").unwrap();
+        zip.finish().unwrap();
+
+        let extract_root = TempDir::new().unwrap();
+        let destination = extract_root.path().join("out");
+        fs::create_dir_all(&destination).unwrap();
+        extract_zip_archive(&zip_path, &destination).unwrap();
+
+        assert!(destination.join("empty").is_dir());
+        assert_eq!(
+            fs::read_to_string(destination.join("a/b/c.txt")).unwrap(),
+            "nested"
+        );
+        assert!(!extract_root.path().join("escape.txt").exists());
+    }
+
+    #[test]
+    fn test_extract_zip_archive_invalid_file() {
+        let (_dir, file_path) = create_test_file("not a zip");
+        let extract_dir = TempDir::new().unwrap();
+        let result = extract_zip_archive(Path::new(&file_path), extract_dir.path());
+        assert!(matches!(result, Err(DecompressionError::Zip(_))));
+    }
+
+    #[test]
+    fn test_merge_env_vars_overrides_and_appends() {
+        let mut env_vars = vec![
+            ("A".to_string(), "1".to_string()),
+            ("B".to_string(), "2".to_string()),
+        ];
+        merge_env_vars(
+            &mut env_vars,
+            vec![
+                ("B".to_string(), "20".to_string()),
+                ("C".to_string(), "3".to_string()),
+            ],
+        );
+        assert_eq!(
+            env_vars,
+            vec![
+                ("A".to_string(), "1".to_string()),
+                ("B".to_string(), "20".to_string()),
+                ("C".to_string(), "3".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_python_scripts_dir() {
+        let tmp = TempDir::new().unwrap();
+        let env_path = tmp.path().join("venv");
+        assert_eq!(python_scripts_dir(&env_path, "linux"), None);
+        assert_eq!(python_scripts_dir(&env_path, "windows"), None);
+
+        fs::create_dir_all(env_path.join("bin")).unwrap();
+        assert_eq!(
+            python_scripts_dir(&env_path, "macos"),
+            Some(env_path.join("bin"))
+        );
+        assert_eq!(python_scripts_dir(&env_path, "windows"), None);
+
+        fs::create_dir_all(env_path.join("Scripts")).unwrap();
+        assert_eq!(
+            python_scripts_dir(&env_path, "windows"),
+            Some(env_path.join("Scripts"))
+        );
+    }
+
+    #[test]
+    fn test_activation_script_fullname() {
+        assert_eq!(
+            activation_script_fullname("C:\\Espressif\\tools", "v5.3", "windows"),
+            "C:\\Espressif\\tools\\Microsoft.v5.3.PowerShell_profile.ps1"
+        );
+        assert_eq!(
+            activation_script_fullname("/home/u/.espressif/tools", "v5.3", "linux"),
+            "/home/u/.espressif/tools/activate_idf_v5.3.sh"
+        );
+    }
+
+    #[test]
     fn test_decompress_tar() {
         let content = "test content";
         let (_archive_dir, archive_path) = create_tar_archive(content);
@@ -2774,368 +2151,5 @@ mod tests {
         assert_eq!(result, idf_tools_path.join("esp-rom-elfs"));
 
         Ok(())
-    }
-
-    /// Renders the POSIX activation + deactivation scripts and checks the
-    /// deactivate script's source for the markers a successful deactivation
-    /// requires (no leftover placeholders, the matching activate path in the
-    /// help text, and the PATH-stripping logic).
-    #[test]
-    fn test_posix_activation_and_deactivation_scripts_render() {
-        let tmp = TempDir::new().unwrap();
-        let script_dir = tmp.path().to_str().unwrap().to_string();
-
-        let export_paths = vec![
-            "/opt/esp/tools/xtensa-esp-elf".to_string(),
-            "/opt/esp/tools/riscv32-esp-elf".to_string(),
-        ];
-        let env_vars = vec![
-            ("IDF_TOOLS_PATH".to_string(), "/opt/esp/tools".to_string()),
-            (
-                "IDF_COMPONENT_LOCAL_STORAGE_URL".to_string(),
-                "file:///opt/esp/components".to_string(),
-            ),
-        ];
-
-        create_activation_shell_script(
-            &script_dir,
-            "/opt/esp/esp-idf",
-            "/opt/esp/tools",
-            Some("/opt/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "/opt/esp/tools/python/bin/python",
-        )
-        .expect("create activation shell script");
-
-        create_deactivation_shell_script(
-            &script_dir,
-            "/opt/esp/esp-idf",
-            "/opt/esp/tools",
-            Some("/opt/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "/opt/esp/tools/python/bin/python",
-        )
-        .expect("create deactivation shell script");
-
-        let activate_path = PathBuf::from(&script_dir).join("activate_idf_v5.3.2.sh");
-        let deactivate_path = PathBuf::from(&script_dir).join("deactivate_idf_v5.3.2.sh");
-
-        let activate = fs::read_to_string(&activate_path).expect("read activate");
-        let deactivate = fs::read_to_string(&deactivate_path).expect("read deactivate");
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            let output = std::process::Command::new("sh")
-                .args([
-                    "-c",
-                    "unset IDF_TOOLS_PATH; set -C; . \"$1\" >>/dev/null 2>&1; [ \"$IDF_TOOLS_PATH\" = \"/opt/esp/tools\" ]",
-                    "sh",
-                ])
-                .arg(&activate_path)
-                .output()
-                .expect("run activation script with noclobber");
-            assert!(
-                output.status.success(),
-                "activation with noclobber failed (status: {}): stdout: {} stderr: {}",
-                output.status,
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-
-        // No leftover placeholders
-        assert!(
-            !activate.contains("{{"),
-            "activate has placeholders: {}",
-            activate
-        );
-        assert!(
-            !deactivate.contains("{{"),
-            "deactivate has placeholders: {}",
-            deactivate
-        );
-
-        // The deactivate script must reference the activate path so the
-        // help text points the user at the script being undone.
-        assert!(
-            deactivate.contains("activate_idf_v5.3.2.sh"),
-            "deactivate script does not reference activate script:\n{}",
-            deactivate
-        );
-
-        // The deactivate script must export the addition_to_path so the
-        // PATH stripping works. The activation sets the same value as
-        // `addition_to_path`; we check it's present in both.
-        assert!(activate.contains("/opt/esp/tools/xtensa-esp-elf"));
-        assert!(deactivate.contains("/opt/esp/tools/xtensa-esp-elf"));
-
-        // The deactivate script must unset the fixed IDF env vars and the
-        // tool vars. We check by looking for the variable name in a
-        // for-loop unsetting block. The exact spelling is flexible:
-        // both `unset ESP_IDF_VERSION` (in a literal list) and the
-        // `for _v in ESP_IDF_VERSION ...; do ...; unset $_v; done`
-        // pattern (used in the template) qualify.
-        for var in [
-            "ESP_IDF_VERSION",
-            "IDF_PATH",
-            "IDF_TOOLS_PATH",
-            "IDF_PYTHON_ENV_PATH",
-            "IDF_COMPONENT_LOCAL_STORAGE_URL",
-            "ESP_ROM_ELF_DIR",
-            "OPENOCD_SCRIPTS",
-        ] {
-            let found = deactivate.contains(&format!("unset {var}"))
-                || deactivate.contains(&"unset $_v".to_string()) && deactivate.contains(var);
-            assert!(
-                found,
-                "deactivate script does not unset {var}:\n{deactivate}"
-            );
-        }
-
-        // Tool vars written by the activate script as a heredoc must be
-        // unset by the deactivate script too. We accept either the
-        // safe quoted form (`unset "$_key"`) or the older unquoted
-        // form (`unset $_key`) so this check stays valid across the
-        // regression.
-        assert!(
-            deactivate.contains("unset \"$_key\"")
-                || deactivate.contains("unset $_key")
-                || deactivate.contains("unset $key"),
-            "deactivate script does not unset tool vars:\n{deactivate}"
-        );
-
-        // The deactivate script should refuse to run if executed (not sourced).
-        assert!(deactivate.contains("This script should be sourced"));
-
-        // Regression: the tool-vars unset block must use a heredoc
-        // (`<< EOF`) instead of mktemp+printf. The heredoc keeps the
-        // while loop in the parent shell, so `unset` actually affects
-        // the caller's environment. The mktemp approach can also fail
-        // when /tmp is full or read-only.
-        assert!(
-            deactivate.contains("<< EOF"),
-            "POSIX deactivate must use a heredoc to feed ENV_VAR_PAIRS. Got:\n{deactivate}"
-        );
-        // Look for the actual mktemp command (`$(mktemp)`), not the
-        // word in a comment.
-        assert!(
-            !deactivate.contains("$(mktemp)"),
-            "POSIX deactivate must not call mktemp. Got:\n{deactivate}"
-        );
-        assert!(
-            !deactivate.contains("`mktemp`"),
-            "POSIX deactivate must not call mktemp. Got:\n{deactivate}"
-        );
-
-        // Regression: the tool-vars unset must use the safe `unset "$_key"`
-        // form, not `eval "unset $_key"`. The eval form is unsafe if
-        // a tool var name ever contains a metacharacter.
-        // (The fixed-var block above uses `eval "unset $_v"` on a
-        // hardcoded list, which is safe — only the dynamic `$_key`
-        // path needed to switch to the safe form.)
-        assert!(
-            deactivate.contains("unset \"$_key\""),
-            "POSIX deactivate must use `unset \"$_key\"`. Got:\n{deactivate}"
-        );
-        // Look for the actual `eval "unset $_key"` invocation. The
-        // script may legitimately mention the old pattern in a comment
-        // explaining why it was changed.
-        assert!(
-            !deactivate.contains("eval \"unset $_key\""),
-            "POSIX deactivate must not use `eval \"unset $_key\"`. Got:\n{deactivate}"
-        );
-    }
-
-    /// Same as above for fish, on POSIX only.
-    #[cfg(not(target_os = "windows"))]
-    #[test]
-    fn test_fish_activation_and_deactivation_scripts_render() {
-        let tmp = TempDir::new().unwrap();
-        let script_dir = tmp.path().to_str().unwrap().to_string();
-
-        let export_paths = vec!["/opt/esp/tools/xtensa-esp-elf".to_string()];
-        let env_vars = vec![("IDF_TOOLS_PATH".to_string(), "/opt/esp/tools".to_string())];
-
-        create_fish_script(
-            &script_dir,
-            "/opt/esp/esp-idf",
-            "/opt/esp/tools",
-            Some("/opt/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "/opt/esp/tools/python/bin/python",
-        )
-        .expect("create fish activate");
-
-        create_deactivation_fish_script(
-            &script_dir,
-            "/opt/esp/esp-idf",
-            "/opt/esp/tools",
-            Some("/opt/esp/tools/python"),
-            "v5.3.2",
-            export_paths,
-            env_vars,
-            "/opt/esp/tools/python/bin/python",
-        )
-        .expect("create fish deactivate");
-
-        let activate =
-            fs::read_to_string(PathBuf::from(&script_dir).join("activate_idf_v5.3.2.fish"))
-                .expect("read fish activate");
-        let deactivate =
-            fs::read_to_string(PathBuf::from(&script_dir).join("deactivate_idf_v5.3.2.fish"))
-                .expect("read fish deactivate");
-
-        assert!(!activate.contains("{{"));
-        assert!(!deactivate.contains("{{"));
-        assert!(deactivate.contains("activate_idf_v5.3.2.fish"));
-        assert!(deactivate.contains("/opt/esp/tools/xtensa-esp-elf"));
-        assert!(deactivate.contains("ESP_IDF_VERSION"));
-
-        // Regression: the -h branch must `return 0`, not `exit 0`.
-        // In fish, `exit` inside a sourced script terminates the
-        // entire shell session, which would unexpectedly close the
-        // user's terminal.
-        assert!(
-            deactivate.contains("return 0"),
-            "Fish deactivate -h branch must use `return 0`. Got:\n{deactivate}"
-        );
-        assert!(
-            !deactivate.contains("exit 0"),
-            "Fish deactivate must not use `exit 0` (it would close the user's terminal). Got:\n{deactivate}"
-        );
-    }
-
-    /// Smoke-tests the Windows profile renderers. We can call the
-    /// internal helpers directly on any OS; the templates are platform-
-    /// agnostic until render_and_write_profile rewrites line endings.
-    #[test]
-    fn test_windows_profile_renderers_smoke() {
-        let tmp = TempDir::new().unwrap();
-        let script_dir = tmp.path().to_str().unwrap().to_string();
-
-        let export_paths = vec!["C:/esp/tools/xtensa-esp-elf/bin".to_string()];
-        let env_vars = vec![("IDF_TOOLS_PATH".to_string(), "C:/esp/tools".to_string())];
-
-        // create_powershell_profile / create_batch_profile are private,
-        // but we can call them within the same module's tests.
-        let ps = create_powershell_profile(
-            &script_dir,
-            "C:/esp/esp-idf",
-            "C:/esp/tools",
-            Some("C:/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "C:/esp/tools/python/python.exe",
-        )
-        .expect("create PS profile");
-        let ps_deact = create_powershell_deactivate_profile(
-            &script_dir,
-            "C:/esp/esp-idf",
-            "C:/esp/tools",
-            Some("C:/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "C:/esp/tools/python/python.exe",
-        )
-        .expect("create PS deactivate");
-        let bat = create_batch_profile(
-            &script_dir,
-            "C:/esp/esp-idf",
-            "C:/esp/tools",
-            Some("C:/esp/tools/python"),
-            "v5.3.2",
-            export_paths.clone(),
-            env_vars.clone(),
-            "C:/esp/tools/python/python.exe",
-        )
-        .expect("create batch profile");
-        let bat_deact = create_batch_deactivate_profile(
-            &script_dir,
-            "C:/esp/esp-idf",
-            "C:/esp/tools",
-            Some("C:/esp/tools/python"),
-            "v5.3.2",
-            export_paths,
-            env_vars,
-            "C:/esp/tools/python/python.exe",
-        )
-        .expect("create batch deactivate");
-
-        for (path, label) in [
-            (&ps, "powershell activate"),
-            (&ps_deact, "powershell deactivate"),
-            (&bat, "batch activate"),
-            (&bat_deact, "batch deactivate"),
-        ] {
-            let content = fs::read_to_string(path).expect(label);
-            assert!(!content.contains("{{"), "{label} has placeholders");
-        }
-
-        let ps_deact_content = fs::read_to_string(&ps_deact).expect("read PS deact");
-        assert!(
-            ps_deact_content.contains("Microsoft.v5.3.2.PowerShell_deactivate.ps1"),
-            "PS deactivate did not contain its own filename. Got:\n{ps_deact_content}"
-        );
-        // The help text should describe what the script does.
-        assert!(ps_deact_content.contains("Removes the ESP-IDF environment"));
-
-        let bat_deact_content = fs::read_to_string(&bat_deact).expect("read BAT deact");
-        assert!(
-            bat_deact_content.contains("Microsoft.v5.3.2_deactivate.bat"),
-            "BAT deactivate did not contain its own filename. Got:\n{bat_deact_content}"
-        );
-        assert!(bat_deact_content.contains("Removed IDF toolchain entries from PATH"));
-
-        // Regression: the BAT deactivation script must use `delims== `
-        // (both = and space) with tokens=1,2 so that `set VAR=val` is
-        // parsed as K=`set`, L=`VAR`. Using `delims==` alone would
-        // leave K holding `set VAR` and silently fail to unset anything.
-        assert!(
-            bat_deact_content.contains("delims== "),
-            "BAT deactivate must use `delims== ` (both = and space). Got:\n{bat_deact_content}"
-        );
-        assert!(
-            bat_deact_content.contains("tokens=1,2"),
-            "BAT deactivate must use `tokens=1,2`. Got:\n{bat_deact_content}"
-        );
-        // And it must NOT use the broken `tokens=1,*` form.
-        assert!(
-            !bat_deact_content.contains("tokens=1,*"),
-            "BAT deactivate still contains the broken `tokens=1,*` form. Got:\n{bat_deact_content}"
-        );
-
-        // Regression: the BAT deactivate must not call `doskey /reinstall`
-        // (it would clobber every doskey macro in the user's session,
-        // not just the IDF ones).
-        assert!(
-            !bat_deact_content.contains("doskey /reinstall"),
-            "BAT deactivate must not call `doskey /reinstall`. Got:\n{bat_deact_content}"
-        );
-
-        // Regression: the BAT deactivate must not leave a stray
-        // `endlocal` at the very end (it could prematurely end a
-        // setlocal in a calling script) and must clean up
-        // ACTIVATE_SCRIPT at the `:end` label.
-        let last_meaningful = bat_deact_content
-            .lines()
-            .rev()
-            .find(|l| !l.trim().is_empty() && !l.trim_start().starts_with("REM "))
-            .unwrap_or("");
-        assert!(
-            !last_meaningful.trim().eq_ignore_ascii_case("endlocal"),
-            "BAT deactivate must not have a trailing `endlocal`. Got:\n{bat_deact_content}"
-        );
-        assert!(
-            bat_deact_content.contains("set \"ACTIVATE_SCRIPT=\""),
-            "BAT deactivate must clear ACTIVATE_SCRIPT at the :end label. Got:\n{bat_deact_content}"
-        );
     }
 }
