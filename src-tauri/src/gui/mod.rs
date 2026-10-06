@@ -8,6 +8,7 @@ use std::{env, path::PathBuf, sync::Mutex};
 use tauri::Manager;
 mod app_state;
 pub mod commands;
+pub mod telemetry_session;
 mod ui;
 pub mod utils;
 
@@ -204,7 +205,6 @@ pub fn run(
             install_drivers,
             get_system_info,
             cpu_count,
-            track_event_command,
             set_locale,
             open_terminal_with_script,
             get_pypi_mirror_latency_entries,
@@ -233,6 +233,17 @@ pub fn run(
             start_simple_offline_setup,
             delete_offline_archive,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Telemetry is dispatched on background tasks, so an immediate exit
+            // can drop events that were never sent. Close any install still in
+            // flight and give the pending requests a moment to complete.
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                telemetry_session::abandon_open_session(app_handle);
+                tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
+                    std::time::Duration::from_secs(3),
+                ));
+            }
+        });
 }

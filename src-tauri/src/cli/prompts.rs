@@ -8,6 +8,7 @@ use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::system_dependencies;
+use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::tool_selection::{
     get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
 };
@@ -49,6 +50,21 @@ pub async fn select_idf_version(
     }
 }
 
+/// Records missing system tools for telemetry, so the dashboard can show which
+/// prerequisite is most often absent instead of a generic failure.
+fn note_missing_prerequisites(reason: &str, missing: &[String]) {
+    let mut names: Vec<String> = missing.iter().map(|m| m.to_lowercase()).collect();
+    names.sort();
+    names.dedup();
+    telemetry::note_failure(
+        ErrorKind::DependencyMissing,
+        FailureClass::Environment,
+        Some(FailureStage::Prerequisites),
+        format!("{}: {}", reason, names.join(", ")),
+        names,
+    );
+}
+
 pub async fn check_and_install_prerequisites(
     non_interactive: bool,
     install_all_prerequisites: bool,
@@ -74,6 +90,15 @@ pub async fn check_and_install_prerequisites(
 
                 if non_interactive {
                     // In non-interactive mode, fail with the existing message
+                    telemetry::note_failure_kind(
+                        ErrorKind::PrerequisiteCheckFailed,
+                        Some(FailureStage::Prerequisites),
+                        if result.shell_failed {
+                            "prerequisite check failed: shell could not be invoked"
+                        } else {
+                            "prerequisite check failed: cannot verify"
+                        },
+                    );
                     return Err(t!("prerequisites.failed").to_string());
                 }
 
@@ -81,6 +106,11 @@ pub async fn check_and_install_prerequisites(
                 let skip =
                     generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
                 if !skip {
+                    telemetry::note_failure_kind(
+                        ErrorKind::UserCancelled,
+                        Some(FailureStage::Prerequisites),
+                        "user declined to skip the failed prerequisite check",
+                    );
                     return Err(t!("prerequisites.user_cancelled").to_string());
                 }
                 info!("{}", t!("prerequisites.skipping"));
@@ -130,25 +160,35 @@ pub async fn check_and_install_prerequisites(
                     let recheck_result =
                         run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
                     if !recheck_result.missing.is_empty() {
+                        let still_missing: Vec<String> = recheck_result
+                            .missing
+                            .iter()
+                            .map(|s| s.to_string())
+                            .collect();
+                        note_missing_prerequisites(
+                            "automatic prerequisite install failed, still missing",
+                            &still_missing,
+                        );
                         return Err(format!(
                             "{}",
                             t!(
                                 "prerequisites.install.catastrophic",
-                                l = recheck_result
-                                    .missing
-                                    .iter()
-                                    .map(|s| s.to_string())
-                                    .collect::<Vec<_>>()
-                                    .join(", ")
+                                l = still_missing.join(", ")
                             ),
                         ));
                     } else {
                         info!("{}", t!("prerequisites.ok"));
                     }
                 } else {
+                    note_missing_prerequisites(
+                        "user declined the prerequisite install, still missing",
+                        &unsatisfied_prerequisites,
+                    );
                     return Err(t!("prerequisites.install.ask").to_string());
                 }
             } else {
+                // Non-Windows: we can only report what the user has to install.
+                note_missing_prerequisites("missing prerequisites", &unsatisfied_prerequisites);
                 return Err(t!("prerequisites.install.ask").to_string());
             }
 
@@ -162,12 +202,22 @@ pub async fn check_and_install_prerequisites(
             );
 
             if non_interactive {
+                telemetry::note_failure_kind(
+                    ErrorKind::PrerequisiteCheckFailed,
+                    Some(FailureStage::Prerequisites),
+                    format!("prerequisite check could not run: {}", err),
+                );
                 return Err(err);
             }
 
             // Interactive mode: ask user if they want to skip
             let skip = generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
             if !skip {
+                telemetry::note_failure_kind(
+                    ErrorKind::UserCancelled,
+                    Some(FailureStage::Prerequisites),
+                    "user declined to skip the failed prerequisite check",
+                );
                 return Err(t!("prerequisites.user_cancelled").to_string());
             }
             info!("{}", t!("prerequisites.skipping"));
@@ -200,6 +250,12 @@ fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String
     } else {
         // Per-check [FAIL] lines with hints were already printed above.
         // Return a short error to signal failure without repeating advice.
+        let failed = results.iter().filter(|r| !r.passed).count();
+        telemetry::note_failure_kind(
+            ErrorKind::Python,
+            Some(FailureStage::Python),
+            format!("python sanity check failed ({} checks)", failed),
+        );
         Err(t!("python.sanitycheck.fail").to_string())
     }
 }
@@ -246,13 +302,30 @@ pub async fn check_and_install_python(
                 debug!("{}", t!("debug.using_python", path = usable_python));
                 match run_with_spinner(|| python_sanity_check(Some(&usable_python), offline)) {
                     Ok(_) => info!("{}", t!("python.install.success")),
-                    Err(err) => return Err(format!("{} {:?}", t!("python.install.failure"), err)),
+                    Err(err) => {
+                        telemetry::note_failure_kind(
+                            ErrorKind::Python,
+                            Some(FailureStage::Python),
+                            "python sanity check still failed after installing python",
+                        );
+                        return Err(format!("{} {:?}", t!("python.install.failure"), err));
+                    }
                 }
             } else {
+                telemetry::note_failure_kind(
+                    ErrorKind::Python,
+                    Some(FailureStage::Python),
+                    "user declined the python install",
+                );
                 return Err(t!("python.install.refuse").to_string());
             }
         } else {
             // Details were already printed per-check — just signal the failure.
+            telemetry::note_failure_kind(
+                ErrorKind::Python,
+                Some(FailureStage::Python),
+                "python sanity check failed",
+            );
             return Err(t!("python.sanitycheck.fail").to_string());
         }
     } else {

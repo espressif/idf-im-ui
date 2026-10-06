@@ -1,3 +1,4 @@
+use std::env;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -225,7 +226,14 @@ fn format_feature_list_report(report: &idf_im_lib::version_manager::FeatureListR
 }
 
 pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
-    let do_not_track = cli.do_not_track;
+    // `EIM_DO_NOT_TRACK` lets the GUI pass the user's opt-out down to the
+    // `eim install` child process it spawns on Windows. That preference is
+    // stored by the GUI, so the child has no other way to learn about it.
+    let do_not_track = cli.do_not_track
+        || matches!(
+            env::var("EIM_DO_NOT_TRACK").as_deref(),
+            Ok("1") | Ok("true")
+        );
     telemetry::set_enabled(!do_not_track);
     // Initial tracking of CLI start
     #[cfg(feature = "gui")]
@@ -1101,6 +1109,13 @@ fn subcommand_name(cmd: &Commands) -> &'static str {
     }
 }
 
+/// Builds the telemetry session for an install run.
+///
+/// The Windows GUI wizard installs by spawning `eim install` as a subprocess,
+/// so the child process is the only one that knows what actually happened. The
+/// GUI passes its own interface, mode and session id through the environment
+/// and the child adopts them here, so those installs are reported as one GUI
+/// wizard install instead of an unrelated second CLI install.
 fn build_cli_context(settings: &Settings, mode: InstallMode) -> InstallationContext {
     let installation_ids: Vec<String> = settings
         .pending_installation_ids
@@ -1108,7 +1123,26 @@ fn build_cli_context(settings: &Settings, mode: InstallMode) -> InstallationCont
         .map(|m| m.values().cloned().collect())
         .unwrap_or_default();
     let versions = settings.idf_versions.clone().unwrap_or_default();
-    telemetry::new_session(Interface::Cli, mode, versions, installation_ids)
+
+    let interface = match env::var("EIM_TELEMETRY_INTERFACE").as_deref() {
+        Ok("gui") => Interface::Gui,
+        _ => Interface::Cli,
+    };
+    let mode = match env::var("EIM_TELEMETRY_MODE").as_deref() {
+        Ok("wizard") => InstallMode::Wizard,
+        Ok("simple") => InstallMode::Simple,
+        Ok("offline") => InstallMode::Offline,
+        Ok("fix") => InstallMode::Fix,
+        _ => mode,
+    };
+
+    let mut ctx = telemetry::new_session(interface, mode, versions, installation_ids);
+    if let Ok(session_id) = env::var("EIM_TELEMETRY_SESSION") {
+        if !session_id.is_empty() {
+            ctx.session_id = session_id;
+        }
+    }
+    ctx
 }
 
 fn build_cli_extras(settings: &Settings) -> OutcomeExtras {

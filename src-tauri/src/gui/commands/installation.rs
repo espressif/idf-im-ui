@@ -3,8 +3,9 @@ use crate::gui::{
     commands::idf_tools::setup_tools,
     get_installed_versions,
     ui::{
-        emit_installation_event, emit_log_message, InstallationProgress, InstallationStage,
-        MessageLevel,
+        classify_fs_failure, classify_fs_failure_message, emit_install_error,
+        emit_install_error_fallback, emit_install_error_kind, emit_installation_event,
+        emit_log_message, InstallationProgress, InstallationStage, MessageLevel,
     },
     utils::{
         compare_versions, format_bytes, get_file_name, get_mirror_to_use,
@@ -34,6 +35,8 @@ use std::{
 };
 
 use anyhow::Result;
+use crate::gui::telemetry_session;
+use idf_im_lib::telemetry::{ErrorKind, FailureClass, FailureStage, InstallMode};
 use idf_im_lib::{
     ensure_path,
     git_tools::ProgressMessage,
@@ -80,6 +83,49 @@ pub struct InstallationPlan {
 
 pub fn emit_installation_plan(app_handle: &AppHandle, plan: InstallationPlan) {
     let _ = app_handle.emit("installation-plan", plan);
+}
+
+/// Telemetry environment for the `eim install` child process on Windows.
+///
+/// The child is what runs the install, so it is the only process that knows
+/// why one failed. Handing it this session makes it report as the same GUI
+/// install the user started, instead of as an unrelated CLI install - which
+/// is how the Windows wizard previously got counted twice.
+///
+/// When the session is `None` the user has opted out, and the child is told so
+/// explicitly: it would otherwise default to tracking enabled, because the
+/// opt-out lives in the GUI's store and not in the child's arguments.
+#[cfg(target_os = "windows")]
+fn telemetry_env_for_child(
+    ctx: Option<&idf_im_lib::telemetry::InstallationContext>,
+) -> Vec<(&'static str, String)> {
+    match ctx {
+        Some(ctx) => vec![
+            ("EIM_TELEMETRY_SESSION", ctx.session_id.clone()),
+            ("EIM_TELEMETRY_INTERFACE", "gui".to_string()),
+            (
+                "EIM_TELEMETRY_MODE",
+                match ctx.mode {
+                    InstallMode::Simple => "simple",
+                    InstallMode::Offline => "offline",
+                    InstallMode::Fix => "fix",
+                    _ => "wizard",
+                }
+                .to_string(),
+            ),
+        ],
+        None => vec![("EIM_DO_NOT_TRACK", "true".to_string())],
+    }
+}
+
+/// Prepares the missing-prerequisite tool names for telemetry. Sorted and
+/// deduplicated so the same machine state always produces the same value,
+/// which keeps the "most commonly missing tool" aggregation meaningful.
+fn sorted_missing(missing: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = missing.iter().map(|m| m.to_lowercase()).collect();
+    out.sort();
+    out.dedup();
+    out
 }
 
 // Checks if an installation is currently in progress
@@ -239,7 +285,13 @@ async fn download_idf(
             Ok(())
         }
         Err(e) => {
-            emit_installation_event(
+            // Cloning ESP-IDF: almost always the network or the mirror, but a
+            // full disk surfaces here too.
+            let kind = match ErrorKind::from_message(&e) {
+                k @ (ErrorKind::DiskSpace | ErrorKind::Permission) => k,
+                _ => ErrorKind::Network,
+            };
+            emit_install_error_kind(
                 app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -249,6 +301,9 @@ async fn download_idf(
                     detail: Some(e.to_string()),
                     version: Some(version.to_string()),
                 },
+                kind,
+                FailureStage::Download,
+                e.clone(),
             );
             Err(e.into())
         }
@@ -313,9 +368,47 @@ pub async fn install_single_version(
     Ok(())
 }
 
+/// Windows installs run in a child `eim install` process, which reports its
+/// own classified outcome under the session this command hands it. So the
+/// session is created here but handed over, not finished here: see
+/// `telemetry_env_for_child`.
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    // Simple setup delegates to this command and opens the session first, so
+    // fall back to the session it opened; the child must report under the mode
+    // the user actually chose.
+    let ctx = telemetry_session::begin(&app_handle, child_install_mode(&app_handle))
+        .or_else(|| telemetry_session::current_session(&app_handle));
+
+    let result = run_installation(app_handle.clone(), ctx.as_ref()).await;
+
+    match &result {
+        // The subprocess started and carries this session id, so it reports
+        // the outcome. Returning Ok here only means it launched.
+        Ok(_) => telemetry_session::hand_off_to_subprocess(&app_handle),
+        // We failed before the child could run, so nothing else will report.
+        Err(_) => telemetry_session::finish(&app_handle, ctx, &result),
+    }
+    result
+}
+
+/// Simple setup reaches the installer through this command too, and its events
+/// must stay labelled `simple` rather than `wizard`.
+#[cfg(target_os = "windows")]
+fn child_install_mode(app_handle: &AppHandle) -> InstallMode {
+    if app_state::is_simple_installation(app_handle) {
+        InstallMode::Simple
+    } else {
+        InstallMode::Wizard
+    }
+}
+
+#[cfg(target_os = "windows")]
+async fn run_installation(
+    app_handle: AppHandle,
+    telemetry_ctx: Option<&idf_im_lib::telemetry::InstallationContext>,
+) -> Result<(), String> {
     let app_state = app_handle.state::<crate::gui::app_state::AppState>();
 
     // Set installation flag
@@ -344,7 +437,9 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             settings_clone.path.clone().unwrap()
         );
 
-        emit_installation_event(
+        // The chosen directory already holds an installation: a user choice,
+        // not an installer defect.
+        emit_install_error(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -359,6 +454,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 ),
                 version: None,
             },
+            ErrorKind::Configuration,
+            FailureClass::User,
+            FailureStage::Checking,
+            "installation path is not empty",
+            Vec::new(),
         );
 
         return Err(rust_i18n::t!("gui.installation.path_not_available").to_string());
@@ -368,7 +468,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     if let Err(e) = settings_clone.save() {
         log::error!("Failed to save temporary config: {}", e);
 
-        emit_installation_event(
+        let (kind, class) = classify_fs_failure_message(&e.to_string());
+        emit_install_error(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -377,6 +478,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                 detail: Some(e.to_string()),
                 version: None,
             },
+            kind,
+            class,
+            FailureStage::Configure,
+            e.to_string(),
+            Vec::new(),
         );
 
         return Err(rust_i18n::t!("gui.installation.config_save_failed").to_string());
@@ -419,12 +525,15 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             .arg("true") // Install prerequisites
             .arg("-c")
             .arg(config_path.clone()) // Path to config file
+            .envs(telemetry_env_for_child(telemetry_ctx))
             .stdout(Stdio::piped()) // Capture stdout
             .stderr(Stdio::piped()) // Capture stderr
             .creation_flags(CREATE_NO_WINDOW)
             .spawn()
             .map_err(|e| {
-                emit_installation_event(
+                // The child never ran, so only the parent can report this.
+                let (kind, class) = classify_fs_failure(&e);
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -434,6 +543,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         detail: Some(e.to_string()),
                         version: None,
                     },
+                    kind,
+                    class,
+                    FailureStage::Checking,
+                    format!("failed to spawn installer subprocess: {}", e),
+                    Vec::new(),
                 );
                 format!("Failed to start installer: {}", e)
             })?
@@ -452,7 +566,9 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         .stderr(Stdio::piped()) // Capture stderr
         .spawn()
         .map_err(|e| {
-            emit_installation_event(
+            // The child never ran, so only the parent can report this.
+            let (kind, class) = classify_fs_failure(&e);
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -461,6 +577,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                     detail: Some(e.to_string()),
                     version: None,
                 },
+                kind,
+                class,
+                FailureStage::Checking,
+                format!("failed to spawn installer subprocess: {}", e),
+                Vec::new(),
             );
             format!("Failed to start installer: {}", e)
         })?;
@@ -795,7 +916,9 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             Err(e) => {
                 log::error!("Failed to wait for install process: {}", e);
 
-                emit_installation_event(
+                // We lost track of our own child process, so no outcome can be
+                // attributed to the install itself.
+                emit_install_error(
                     &monitor_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -804,6 +927,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         detail: Some(e.to_string()),
                         version: current_version.clone(),
                     },
+                    ErrorKind::Unknown,
+                    FailureClass::Installer,
+                    FailureStage::Checking,
+                    format!("failed to wait for installer subprocess: {}", e),
+                    Vec::new(),
                 );
 
                 std::thread::sleep(std::time::Duration::from_secs(2));
@@ -854,6 +982,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
             )
             .to_string();
 
+            // UI event only, deliberately not `emit_install_error`: the child
+            // ran and already reported its own classified outcome under this
+            // session (see `telemetry_env_for_child`). All the parent knows is
+            // an exit code, so noting a failure here would overwrite the real
+            // cause with `unknown`.
             emit_installation_event(
                 &monitor_handle,
                 InstallationProgress {
@@ -880,6 +1013,19 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Wizard);
+    let result = run_installation(app_handle.clone()).await;
+    telemetry_session::finish(&app_handle, ctx, &result);
+    result
+}
+
+/// The wizard install itself.
+///
+/// Separate from the command so the command stays a thin telemetry wrapper.
+/// Simple setup reaches this through the command above; `begin` declines to
+/// open a nested session, so the install stays reported as `mode: simple`.
+#[cfg(not(target_os = "windows"))]
+async fn run_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
     let _app_state = app_handle.state::<crate::gui::app_state::AppState>();
     // Set installation flag
@@ -891,7 +1037,7 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     let versions: Vec<String> = match &settings.idf_versions {
         Some(versions) if !versions.is_empty() => versions.clone(),
         _ => {
-            emit_installation_event(
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -900,6 +1046,11 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                     detail: Some(rust_i18n::t!("gui.installation.select_version").to_string()),
                     version: None,
                 },
+                ErrorKind::Configuration,
+                FailureClass::User,
+                FailureStage::Checking,
+                "no IDF version selected",
+                Vec::new(),
             );
 
             emit_log_message(
@@ -1071,7 +1222,10 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                     }
                 }
 
-                emit_installation_event(
+                // `download_idf` / `setup_tools` already classified whatever
+                // went wrong; this handler only knows which version failed.
+                let kind = ErrorKind::from_message(&e.to_string());
+                emit_install_error_fallback(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -1084,6 +1238,10 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
                         detail: Some(e.to_string()),
                         version: Some(version.clone()),
                     },
+                    kind,
+                    kind.default_class(),
+                    FailureStage::Tools,
+                    e.to_string(),
                 );
 
                 emit_log_message(
@@ -1225,6 +1383,13 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 /// Starts a simple setup process that automates the installation
 #[tauri::command]
 pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Simple);
+    let result = run_simple_setup(app_handle.clone()).await;
+    telemetry_session::finish(&app_handle, ctx, &result);
+    result
+}
+
+async fn run_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
     let _app_state = app_handle.state::<crate::gui::app_state::AppState>();
     app_state::set_is_simple_installation(&app_handle, true)?;
     println!("Starting simple setup");
@@ -1257,7 +1422,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 error = err.clone()
             )
             .to_string();
-            emit_installation_event(
+            emit_install_error_kind(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1267,6 +1432,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                     detail: Some(error_msg.clone()),
                     version: None,
                 },
+                ErrorKind::PrerequisiteCheckFailed,
+                FailureStage::Prerequisites,
+                format!("prerequisite check could not run: {}", err),
             );
             return Err(error_msg);
         }
@@ -1283,7 +1451,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             )
             .to_string()
         };
-        emit_installation_event(
+        emit_install_error_kind(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -1291,6 +1459,13 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 message: rust_i18n::t!("gui.simple_setup.prerequisites_check_failed").to_string(),
                 detail: Some(error_msg.clone()),
                 version: None,
+            },
+            ErrorKind::PrerequisiteCheckFailed,
+            FailureStage::Prerequisites,
+            if prereq_result.shell_failed {
+                "prerequisite check failed: shell could not be invoked"
+            } else {
+                "prerequisite check failed: cannot verify"
             },
         );
         return Err(error_msg);
@@ -1324,7 +1499,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             if let Ok(recheck) = system_dependencies::check_prerequisites_with_result() {
                 prerequisites = recheck.missing.into_iter().map(|p| p.to_string()).collect();
             }
-            emit_installation_event(
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1336,6 +1511,14 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                     ),
                     version: None,
                 },
+                ErrorKind::DependencyMissing,
+                FailureClass::Environment,
+                FailureStage::Prerequisites,
+                format!(
+                    "automatic prerequisite install failed, still missing: {}",
+                    prerequisites.join(", ")
+                ),
+                sorted_missing(&prerequisites),
             );
             return Err(rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string());
         }
@@ -1348,7 +1531,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
 
     // Check if any prerequisites are still missing
     if !prerequisites.is_empty() {
-        emit_installation_event(
+        emit_install_error(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -1363,6 +1546,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 ),
                 version: None,
             },
+            ErrorKind::DependencyMissing,
+            FailureClass::Environment,
+            FailureStage::Prerequisites,
+            format!("missing prerequisites: {}", prerequisites.join(", ")),
+            sorted_missing(&prerequisites),
         );
         return Err(rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string());
     }
@@ -1396,7 +1584,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         );
 
         if !python_install(app_handle.clone()) {
-            emit_installation_event(
+            emit_install_error_kind(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1407,6 +1595,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                     ),
                     version: None,
                 },
+                ErrorKind::Python,
+                FailureStage::Python,
+                "automatic python install failed",
             );
             return Err(rust_i18n::t!("gui.simple_setup.python_failed").to_string());
         }
@@ -1417,7 +1608,8 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
 
     // Check if Python is still not found
     if !python_found {
-        emit_installation_event(
+        let failed = python_check_results.iter().filter(|c| !c.passed).count();
+        emit_install_error_kind(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -1426,6 +1618,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 detail: Some(rust_i18n::t!("gui.simple_setup.install_python_manually").to_string()),
                 version: None,
             },
+            ErrorKind::Python,
+            FailureStage::Python,
+            // Check names are localized by the time they reach here, so report
+            // only the count; the kind and stage already carry the meaning.
+            format!("python sanity check failed ({} checks)", failed),
         );
         return Err(rust_i18n::t!("gui.simple_setup.python_not_found").to_string());
     }
@@ -1457,7 +1654,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
         let versions = settings::get_idf_versions(app_handle.clone(), false).await;
 
         if versions.is_empty() {
-            emit_installation_event(
+            // The version list is fetched over the network, so an empty list
+            // means we could not reach the index.
+            emit_install_error_kind(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1466,6 +1665,9 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                     detail: Some(rust_i18n::t!("gui.simple_setup.retrieve_failed").to_string()),
                     version: None,
                 },
+                ErrorKind::Network,
+                FailureStage::Configure,
+                "could not retrieve the list of available IDF versions",
             );
             return Err(rust_i18n::t!("gui.simple_setup.fetch_failed").to_string());
         }
@@ -1506,7 +1708,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                 );
             }
             Err(e) => {
-                emit_installation_event(
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -1515,6 +1717,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                         detail: Some(e.to_string()),
                         version: None,
                     },
+                    ErrorKind::Configuration,
+                    FailureClass::Installer,
+                    FailureStage::Configure,
+                    format!("failed to store the selected version: {}", e),
+                    Vec::new(),
                 );
                 return Err(e);
             }
@@ -1549,7 +1756,7 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
             );
         }
         Err(e) => {
-            emit_installation_event(
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1558,6 +1765,11 @@ pub async fn start_simple_setup(app_handle: tauri::AppHandle) -> Result<(), Stri
                     detail: Some(e.to_string()),
                     version: None,
                 },
+                ErrorKind::Configuration,
+                FailureClass::Installer,
+                FailureStage::Configure,
+                format!("failed to enable the ide feature: {}", e),
+                Vec::new(),
             );
             return Err(e);
         }
@@ -1635,6 +1847,18 @@ pub async fn fix_installation(
     extra_tools: Option<Vec<String>>,
     extra_features: Option<Vec<String>>,
 ) -> Result<(), String> {
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Fix);
+    let result = run_fix_installation(app_handle.clone(), id, extra_tools, extra_features).await;
+    telemetry_session::finish(&app_handle, ctx, &result);
+    result
+}
+
+async fn run_fix_installation(
+    app_handle: AppHandle,
+    id: String,
+    extra_tools: Option<Vec<String>>,
+    extra_features: Option<Vec<String>>,
+) -> Result<(), String> {
     debug!(
         "Fixing installation with id {}, extra_tools: {:?}, extra_features: {:?}",
         id, extra_tools, extra_features
@@ -1705,7 +1929,9 @@ pub async fn fix_installation(
             let error_msg = rust_i18n::t!("gui.fix.not_found_detail", id = id.clone()).to_string();
             error!("{}", error_msg);
 
-            emit_installation_event(
+            // The UI offered an installation that is no longer in the config,
+            // so our own state was stale.
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1714,6 +1940,11 @@ pub async fn fix_installation(
                     detail: Some(error_msg.clone()),
                     version: None,
                 },
+                ErrorKind::Configuration,
+                FailureClass::Installer,
+                FailureStage::Checking,
+                "installation to fix was not found in the config",
+                Vec::new(),
             );
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
@@ -1765,7 +1996,8 @@ pub async fn fix_installation(
                 rust_i18n::t!("gui.fix.prepare_failed_detail", error = e.to_string()).to_string();
             error!("{}", error_msg);
 
-            emit_installation_event(
+            let (kind, class) = classify_fs_failure_message(&e.to_string());
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1774,6 +2006,11 @@ pub async fn fix_installation(
                     detail: Some(e.to_string()),
                     version: Some(installation.name.clone()),
                 },
+                kind,
+                class,
+                FailureStage::Checking,
+                format!("could not prepare settings for fix: {}", e),
+                Vec::new(),
             );
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
@@ -1839,7 +2076,9 @@ pub async fn fix_installation(
                 rust_i18n::t!("gui.fix.repair_failed_detail", error = e.to_string()).to_string();
             error!("{}", error_msg);
 
-            emit_installation_event(
+            // `install_single_version` classifies its own download and tool
+            // failures, so only fill in a cause when it did not.
+            emit_install_error_fallback(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1852,6 +2091,10 @@ pub async fn fix_installation(
                     detail: Some(e.to_string()),
                     version: Some(installation.name.clone()),
                 },
+                ErrorKind::Unknown,
+                FailureClass::Installer,
+                FailureStage::Tools,
+                format!("repair failed: {}", e),
             );
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
@@ -1989,7 +2232,8 @@ pub async fn fix_installation(
             .to_string();
             error!("{}", error_msg);
 
-            emit_installation_event(
+            let (kind, class) = classify_fs_failure_message(&e.to_string());
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -1998,6 +2242,11 @@ pub async fn fix_installation(
                     detail: Some(e.to_string()),
                     version: Some(installation.name.clone()),
                 },
+                kind,
+                class,
+                FailureStage::Configure,
+                format!("could not save eim_idf.json after repair: {}", e),
+                Vec::new(),
             );
 
             emit_log_message(&app_handle, MessageLevel::Error, error_msg.clone());
@@ -2083,12 +2332,28 @@ pub async fn start_offline_installation(
     archives: Vec<String>,
     install_path: String,
 ) -> Result<(), String> {
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Offline);
+    let result = run_offline_installation(app_handle.clone(), archives, install_path).await;
+    telemetry_session::finish(&app_handle, ctx, &result);
+    result
+}
+
+/// The offline pipeline itself.
+///
+/// Split out from the command so `start_simple_offline_setup` can reuse it
+/// without opening a second telemetry session, which would report one install
+/// as two.
+async fn run_offline_installation(
+    app_handle: AppHandle,
+    archives: Vec<String>,
+    install_path: String,
+) -> Result<(), String> {
     // Set installation flag
     set_installation_status(&app_handle, true)?;
 
     // Validate archives
     if archives.is_empty() {
-        emit_installation_event(
+        emit_install_error(
             &app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -2097,6 +2362,11 @@ pub async fn start_offline_installation(
                 detail: Some(rust_i18n::t!("gui.offline.select_archive").to_string()),
                 version: None,
             },
+            ErrorKind::Configuration,
+            FailureClass::User,
+            FailureStage::Checking,
+            "no offline archive was selected",
+            Vec::new(),
         );
         set_installation_status(&app_handle, false)?;
         return Err(rust_i18n::t!("gui.offline.no_archives").to_string());
@@ -2154,7 +2424,8 @@ pub async fn start_offline_installation(
         if !archive_path.try_exists().unwrap_or(false) {
             let error_msg =
                 rust_i18n::t!("gui.offline.archive_not_exist", path = archive).to_string();
-            emit_installation_event(
+            // The user pointed us at an archive that is not there.
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -2163,6 +2434,11 @@ pub async fn start_offline_installation(
                     detail: Some(error_msg.clone()),
                     version: None,
                 },
+                ErrorKind::ArchiveInvalid,
+                FailureClass::User,
+                FailureStage::Checking,
+                "the selected offline archive does not exist",
+                Vec::new(),
             );
             set_installation_status(&app_handle, false)?;
             return Err(error_msg);
@@ -2189,7 +2465,8 @@ pub async fn start_offline_installation(
         let offline_archive_dir = TempDir::new().map_err(|e| {
             let error_msg =
                 rust_i18n::t!("gui.offline.temp_dir_failed", error = e.to_string()).to_string();
-            emit_installation_event(
+            let (kind, class) = classify_fs_failure(&e);
+            emit_install_error(
                 &app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -2198,6 +2475,11 @@ pub async fn start_offline_installation(
                     detail: Some(error_msg.clone()),
                     version: None,
                 },
+                kind,
+                class,
+                FailureStage::Extract,
+                format!("could not create the extraction workspace: {}", e),
+                Vec::new(),
             );
             error_msg
         })?;
@@ -2267,7 +2549,14 @@ pub async fn start_offline_installation(
                 )
                 .to_string();
                 error!("{}", error_msg);
-                emit_installation_event(
+                // Either the archive is bad or the machine ran out of room.
+                let (kind, class) = match classify_fs_failure_message(&err.to_string()) {
+                    (ErrorKind::Filesystem, _) => {
+                        (ErrorKind::ArchiveInvalid, FailureClass::Installer)
+                    }
+                    classified => classified,
+                };
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2276,6 +2565,11 @@ pub async fn start_offline_installation(
                         detail: Some(error_msg.clone()),
                         version: None,
                     },
+                    kind,
+                    class,
+                    FailureStage::Extract,
+                    format!("could not extract the offline archive: {}", err),
+                    Vec::new(),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -2344,7 +2638,10 @@ pub async fn start_offline_installation(
                         error = err.to_string()
                     )
                     .to_string();
-                    emit_installation_event(
+                    // Windows installs git/python from the archive, so a
+                    // failure here is ours unless the machine blocked it.
+                    let (kind, class) = classify_fs_failure_message(&err.to_string());
+                    emit_install_error(
                         &app_handle,
                         InstallationProgress {
                             stage: InstallationStage::Error,
@@ -2353,6 +2650,11 @@ pub async fn start_offline_installation(
                             detail: Some(error_msg.clone()),
                             version: None,
                         },
+                        kind,
+                        class,
+                        FailureStage::Prerequisites,
+                        format!("offline prerequisite install failed: {}", err),
+                        Vec::new(),
                     );
                     set_installation_status(&app_handle, false)?;
                     return Err(error_msg);
@@ -2380,7 +2682,7 @@ pub async fn start_offline_installation(
                         error = err.clone()
                     )
                     .to_string();
-                    emit_installation_event(
+                    emit_install_error_kind(
                         &app_handle,
                         InstallationProgress {
                             stage: InstallationStage::Error,
@@ -2390,6 +2692,9 @@ pub async fn start_offline_installation(
                             detail: Some(error_msg.clone()),
                             version: None,
                         },
+                        ErrorKind::PrerequisiteCheckFailed,
+                        FailureStage::Prerequisites,
+                        format!("prerequisite check could not run: {}", err),
                     );
                     set_installation_status(&app_handle, false)?;
                     return Err(error_msg);
@@ -2407,7 +2712,7 @@ pub async fn start_offline_installation(
                     )
                     .to_string()
                 };
-                emit_installation_event(
+                emit_install_error_kind(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2416,6 +2721,13 @@ pub async fn start_offline_installation(
                             .to_string(),
                         detail: Some(error_msg.clone()),
                         version: None,
+                    },
+                    ErrorKind::PrerequisiteCheckFailed,
+                    FailureStage::Prerequisites,
+                    if prereq_result.shell_failed {
+                        "prerequisite check failed: shell could not be invoked"
+                    } else {
+                        "prerequisite check failed: cannot verify"
                     },
                 );
                 set_installation_status(&app_handle, false)?;
@@ -2434,7 +2746,7 @@ pub async fn start_offline_installation(
                     items = prereq.join(", ")
                 )
                 .to_string();
-                emit_installation_event(
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2443,6 +2755,11 @@ pub async fn start_offline_installation(
                         detail: Some(error_msg.clone()),
                         version: None,
                     },
+                    ErrorKind::DependencyMissing,
+                    FailureClass::Environment,
+                    FailureStage::Prerequisites,
+                    format!("missing prerequisites: {}", prereq.join(", ")),
+                    sorted_missing(&prereq),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -2463,7 +2780,7 @@ pub async fn start_offline_installation(
             }
             if !python_sane {
                 let error_msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
-                emit_installation_event(
+                emit_install_error_kind(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2474,6 +2791,9 @@ pub async fn start_offline_installation(
                         ),
                         version: None,
                     },
+                    ErrorKind::Python,
+                    FailureStage::Python,
+                    "python sanity check failed",
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -2511,7 +2831,8 @@ pub async fn start_offline_installation(
                     rust_i18n::t!("gui.offline.idf_copy_failed", error = err.to_string())
                         .to_string();
                 error!("{}", error_msg);
-                emit_installation_event(
+                let (kind, class) = classify_fs_failure_message(&err.to_string());
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2520,6 +2841,11 @@ pub async fn start_offline_installation(
                         detail: Some(error_msg.clone()),
                         version: None,
                     },
+                    kind,
+                    class,
+                    FailureStage::Extract,
+                    format!("could not copy ESP-IDF out of the archive: {}", err),
+                    Vec::new(),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -2574,7 +2900,7 @@ pub async fn start_offline_installation(
                     )
                     .to_string();
                     error!("{}", error_msg);
-                    emit_installation_event(
+                    emit_install_error(
                         &app_handle,
                         InstallationProgress {
                             stage: InstallationStage::Error,
@@ -2583,6 +2909,11 @@ pub async fn start_offline_installation(
                             detail: Some(error_msg.clone()),
                             version: Some(idf_version.clone()),
                         },
+                        ErrorKind::Configuration,
+                        FailureClass::Installer,
+                        FailureStage::Configure,
+                        format!("could not resolve the install paths: {}", err),
+                        Vec::new(),
                     );
                     set_installation_status(&app_handle, false)?;
                     return Err(error_msg);
@@ -2622,7 +2953,8 @@ pub async fn start_offline_installation(
                         rust_i18n::t!("gui.offline.tools_copy_failed", error = err.to_string())
                             .to_string();
                     error!("{}", error_msg);
-                    emit_installation_event(
+                    let (kind, class) = classify_fs_failure_message(&err.to_string());
+                    emit_install_error(
                         &app_handle,
                         InstallationProgress {
                             stage: InstallationStage::Error,
@@ -2631,6 +2963,11 @@ pub async fn start_offline_installation(
                             detail: Some(error_msg.clone()),
                             version: Some(idf_version.clone()),
                         },
+                        kind,
+                        class,
+                        FailureStage::Tools,
+                        format!("could not copy the bundled tools: {}", err),
+                        Vec::new(),
                     );
                     set_installation_status(&app_handle, false)?;
                     return Err(error_msg);
@@ -2675,7 +3012,8 @@ pub async fn start_offline_installation(
                         rust_i18n::t!("gui.offline.tools_setup_failed", error = err.to_string())
                             .to_string();
                     error!("{}", error_msg);
-                    emit_installation_event(
+                    // `setup_tools` classifies its own failures where it can.
+                    emit_install_error_fallback(
                         &app_handle,
                         InstallationProgress {
                             stage: InstallationStage::Error,
@@ -2684,6 +3022,10 @@ pub async fn start_offline_installation(
                             detail: Some(error_msg.clone()),
                             version: Some(idf_version.clone()),
                         },
+                        ErrorKind::Unknown,
+                        FailureClass::Installer,
+                        FailureStage::Tools,
+                        format!("could not set up the tools: {}", err),
                     );
                     set_installation_status(&app_handle, false)?;
                     return Err(error_msg);
@@ -2752,7 +3094,8 @@ pub async fn start_offline_installation(
                     rust_i18n::t!("gui.offline.ide_dir_failed", error = err.to_string())
                         .to_string();
                 error!("{}", error_msg);
-                emit_installation_event(
+                let (kind, class) = classify_fs_failure_message(&err.to_string());
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2761,6 +3104,11 @@ pub async fn start_offline_installation(
                         detail: Some(error_msg.clone()),
                         version: None,
                     },
+                    kind,
+                    class,
+                    FailureStage::Configure,
+                    format!("could not create the eim_idf.json directory: {}", err),
+                    Vec::new(),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -2783,7 +3131,8 @@ pub async fn start_offline_installation(
                 )
                 .to_string();
                 error!("{}", error_msg);
-                emit_installation_event(
+                let (kind, class) = classify_fs_failure_message(&err.to_string());
+                emit_install_error(
                     &app_handle,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -2792,6 +3141,11 @@ pub async fn start_offline_installation(
                         detail: Some(error_msg.clone()),
                         version: None,
                     },
+                    kind,
+                    class,
+                    FailureStage::Configure,
+                    format!("could not save eim_idf.json: {}", err),
+                    Vec::new(),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -3054,7 +3408,13 @@ async fn download_archive_with_progress(
             error = e.to_string()
         )
         .to_string();
-        emit_installation_event(
+        // Downloading the offline package: the mirror or the user's connection,
+        // unless the cache directory itself is the problem.
+        let kind = match ErrorKind::from_message(&e.to_string()) {
+            k @ (ErrorKind::DiskSpace | ErrorKind::Permission) => k,
+            _ => ErrorKind::Network,
+        };
+        emit_install_error_kind(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -3063,6 +3423,9 @@ async fn download_archive_with_progress(
                 detail: Some(msg.clone()),
                 version: Some(archive.version.clone()),
             },
+            kind,
+            FailureStage::Download,
+            format!("offline archive download failed: {}", e),
         );
         msg
     })
@@ -3083,7 +3446,7 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
                 error = err.clone()
             )
             .to_string();
-            emit_installation_event(
+            emit_install_error_kind(
                 app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -3092,6 +3455,9 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
                     detail: Some(msg.clone()),
                     version: None,
                 },
+                ErrorKind::PrerequisiteCheckFailed,
+                FailureStage::Prerequisites,
+                format!("prerequisite check could not run: {}", err),
             );
             msg
         })?;
@@ -3106,7 +3472,7 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
             )
             .to_string()
         };
-        emit_installation_event(
+        emit_install_error_kind(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -3114,6 +3480,13 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
                 message: rust_i18n::t!("gui.offline.prerequisites_check_failed").to_string(),
                 detail: Some(msg.clone()),
                 version: None,
+            },
+            ErrorKind::PrerequisiteCheckFailed,
+            FailureStage::Prerequisites,
+            if prereq_result.shell_failed {
+                "prerequisite check failed: shell could not be invoked"
+            } else {
+                "prerequisite check failed: cannot verify"
             },
         );
         return Err(msg);
@@ -3130,7 +3503,7 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
             items = missing.join(", ")
         )
         .to_string();
-        emit_installation_event(
+        emit_install_error(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -3139,6 +3512,11 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
                 detail: Some(msg.clone()),
                 version: None,
             },
+            ErrorKind::DependencyMissing,
+            FailureClass::Environment,
+            FailureStage::Prerequisites,
+            format!("missing prerequisites: {}", missing.join(", ")),
+            sorted_missing(&missing),
         );
         return Err(msg);
     }
@@ -3161,7 +3539,7 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
     }
     if !python_sane {
         let msg = rust_i18n::t!("gui.offline.python_check_failed").to_string();
-        emit_installation_event(
+        emit_install_error_kind(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -3170,6 +3548,9 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
                 detail: Some(rust_i18n::t!("gui.offline.python_not_configured").to_string()),
                 version: None,
             },
+            ErrorKind::Python,
+            FailureStage::Python,
+            "python sanity check failed",
         );
         return Err(msg);
     }
@@ -3186,11 +3567,22 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
 ///    rewriting the drive letter of `path`/tool folders for the duration of the
 ///    install, restoring defaults afterwards (registry + activation scripts stay
 ///    on the default drive).
-/// 4. Hand the archive to the existing, e2e-tested `start_offline_installation`.
+/// 4. Hand the archive to the existing, e2e-tested offline pipeline.
 ///
 /// Returns the on-disk archive path so the GUI can offer to keep or delete it.
 #[tauri::command]
 pub async fn start_simple_offline_setup(
+    app_handle: AppHandle,
+    version: String,
+    drive: Option<String>,
+) -> Result<String, String> {
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Simple);
+    let result = run_simple_offline_setup(app_handle.clone(), version, drive).await;
+    telemetry_session::finish(&app_handle, ctx, &result);
+    result
+}
+
+async fn run_simple_offline_setup(
     app_handle: AppHandle,
     version: String,
     drive: Option<String>,
@@ -3265,12 +3657,31 @@ pub async fn start_simple_offline_setup(
         download_archive_with_progress(&app_handle, &archive, cache_dir.to_str().unwrap()).await?;
         if let Ok(m) = std::fs::metadata(&archive_path) {
             if m.len() != archive.size {
-                return Err(format!(
+                let raw = format!(
                     "Downloaded archive size mismatch for {}: expected {}, got {}",
                     archive.filename,
                     archive.size,
                     m.len()
-                ));
+                );
+                // The UI needs the error stage too; without it the frontend
+                // sits on the progress screen forever. Classified as an
+                // installer problem on purpose: a truncated transfer and a
+                // stale size in our manifest look identical from here, and the
+                // second one is our bug, so it should not be hidden.
+                emit_install_error_kind(
+                    &app_handle,
+                    InstallationProgress {
+                        stage: InstallationStage::Error,
+                        percentage: 0,
+                        message: rust_i18n::t!("gui.simple_offline.download_failed").to_string(),
+                        detail: Some(raw.clone()),
+                        version: Some(version.clone()),
+                    },
+                    ErrorKind::ArchiveInvalid,
+                    FailureStage::Download,
+                    raw.clone(),
+                );
+                return Err(raw);
             }
         }
     }
@@ -3293,8 +3704,9 @@ pub async fn start_simple_offline_setup(
     };
 
     // Hand off to the existing offline pipeline (single archive, default path
-    // = current settings, which we may have just drive-swapped).
-    let install_result = start_offline_installation(
+    // = current settings, which we may have just drive-swapped). Calls the
+    // inner function, not the command, so this stays one telemetry session.
+    let install_result = run_offline_installation(
         app_handle.clone(),
         vec![archive_path_str.clone()],
         String::new(),

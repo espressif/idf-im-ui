@@ -433,11 +433,6 @@ export default {
       return `${Math.round(bytes / 1_048_576)} MB`
     }
 
-    const trackEvent = async (event, fields = {}) => {
-      try { await invoke('track_event_command', { event, mode: 'simple', ...fields }) }
-      catch (e) { console.warn('Failed to track event:', e) }
-    }
-
     // === Prerequisites & Python Checks ===
     // Windows: prerequisites (git, python) are auto-installed during the offline
     // install, so we skip the up-front check. Non-Windows: prerequisites must
@@ -583,11 +578,6 @@ export default {
           errorTitle.value = t('simpleSetup.error.start.title')
           errorMessage.value = msg || t('simpleSetup.error.system.message')
           errorDetails.value = detail || ''
-          trackEvent('install_finished', {
-            outcome: 'failure',
-            versions: [version],
-            error_message: detail || msg
-          })
           return
         }
 
@@ -596,10 +586,6 @@ export default {
           stopExtractTimer()
           installProgress.value = 100
           if (currentState.value === 'installing') currentState.value = 'complete'
-          trackEvent('install_finished', {
-            outcome: 'success',
-            versions: [version]
-          })
           return
         }
 
@@ -658,8 +644,6 @@ export default {
       downloadedArchivePath.value = ''
       archiveDecision.value = ''
       timeStarted.value = new Date()
-
-      await trackEvent('install_started', { versions: [selectedVersion.value] })
 
       try {
         await attachListeners()
