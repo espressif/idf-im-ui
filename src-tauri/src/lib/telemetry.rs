@@ -137,9 +137,15 @@ impl ErrorKind {
     /// Order matters: prerequisite and disk/permission phrasing is checked
     /// before the broader `git` / `python` / `os error` matches, because
     /// "missing prerequisites: git" is a dependency problem, not a git one.
+    ///
+    /// Deliberately does not match a bare "missing". It would also catch
+    /// "missing field" from a deserialization error and similar installer
+    /// defects, and classifying those as `environment` would hide them from
+    /// the installer success rate. Every prerequisite message EIM sends says
+    /// "prerequisite", so matching the word itself is enough.
     pub fn from_message(msg: &str) -> Self {
         let msg = msg.to_lowercase();
-        if msg.contains("prerequisite") || msg.contains("dependency") || msg.contains("missing") {
+        if msg.contains("prerequisite") || msg.contains("dependency") {
             ErrorKind::DependencyMissing
         } else if msg.contains("no space left")
             || msg.contains("os error 28")
@@ -721,6 +727,21 @@ mod tests {
     }
 
     #[test]
+    fn a_bare_missing_is_not_a_dependency_problem() {
+        // "missing" on its own shows up in deserialization and lookup errors,
+        // which are installer defects. Classifying them as environment would
+        // quietly remove them from the installer success rate.
+        assert_ne!(
+            ErrorKind::from_message("invalid config: missing field `version`"),
+            ErrorKind::DependencyMissing
+        );
+        assert_ne!(
+            ErrorKind::from_message("archive entry is missing"),
+            ErrorKind::DependencyMissing
+        );
+    }
+
+    #[test]
     fn plain_git_and_python_errors_still_classify() {
         assert_eq!(
             ErrorKind::from_message("git clone failed: remote hung up"),
@@ -765,14 +786,8 @@ mod tests {
                 kind
             );
         }
-        assert_eq!(
-            ErrorKind::AppClosed.default_class(),
-            FailureClass::User
-        );
-        assert_eq!(
-            ErrorKind::Unknown.default_class(),
-            FailureClass::Installer
-        );
+        assert_eq!(ErrorKind::AppClosed.default_class(), FailureClass::User);
+        assert_eq!(ErrorKind::Unknown.default_class(), FailureClass::Installer);
     }
 
     #[test]

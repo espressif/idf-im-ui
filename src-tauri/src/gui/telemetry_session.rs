@@ -103,7 +103,9 @@ pub fn current_session(app_handle: &AppHandle) -> Option<InstallationContext> {
 fn claim(app_handle: &AppHandle, session_id: &str) -> bool {
     match app_handle.state::<AppState>().telemetry_session.lock() {
         Ok(mut slot) => {
-            let matches = slot.as_ref().is_some_and(|open| open.session_id == session_id);
+            let matches = slot
+                .as_ref()
+                .is_some_and(|open| open.session_id == session_id);
             if matches {
                 *slot = None;
             }
@@ -163,7 +165,9 @@ pub fn finish<T>(
         .unwrap_or_default();
 
     match result {
-        Ok(_) => telemetry::track_install_outcome(&ctx, InstallOutcome::Success, None, None, extras),
+        Ok(_) => {
+            telemetry::track_install_outcome(&ctx, InstallOutcome::Success, None, None, extras)
+        }
         Err(err) => {
             let fallback = anyhow::anyhow!(err.clone());
             telemetry::track_install_outcome(
