@@ -1,7 +1,10 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
-import GUITestRunner from "../classes/GUITestRunner.class.js";
+import { describe, it } from "mocha";
 import logger from "../classes/logger.class.js";
+import {
+  registerGUIAppLifecycle,
+  registerGUIFailureHooks,
+} from "../helpers/guiTestHelpers.js";
 import os from "os";
 import { tGui } from "../helpers/i18n.js";
 
@@ -13,37 +16,15 @@ export function runGUIPrerequisitesTest({ id = 0, pathToEIM, prerequisites = [] 
     let eimRunner = null;
 
 
-    // The setup function should start the EIM application GUI
-    before(async function () {
-      this.timeout(60000);
-      eimRunner = new GUITestRunner(pathToEIM);
-      try {
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+    // Start the EIM application GUI before the tests and stop it after them
+    registerGUIAppLifecycle({
+      pathToEIM,
+      getRunner: () => eimRunner,
+      setRunner: (runner) => (eimRunner = runner),
     });
 
-    // The afterEach function should log the EIM application GUI screenshot on failure
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-    });
-
-    // The tear down function should stop the EIM application GUI
-    after(async function () {
-      this.timeout(5000);
-
-      try {
-        await eimRunner.stop();
-        eimRunner = null;
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
-    });
+    // Save a screenshot of the EIM application GUI on failure
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner, skipAfterFailure: false });
 
     it("1- Should check prerequisites", async function () {
       this.timeout(25000);

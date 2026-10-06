@@ -71,18 +71,13 @@ impl CommandExecutor for DefaultExecutor {
             .spawn()
     }
     fn run_script_from_string(&self, script: &str) -> std::io::Result<Output> {
-        Command::new("bash").args(["-c", script]).output()
+        bash_command(script, None).output()
     }
     fn run_script_from_string_streaming(
         &self,
         script: &str,
     ) -> std::io::Result<std::process::ExitStatus> {
-        Command::new("bash")
-            .args(["-c", script])
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .stdin(std::process::Stdio::inherit())
-            .status()
+        bash_streaming_status(bash_command(script, None))
     }
     fn run_script_from_string_streaming_headless(
         &self,
@@ -98,24 +93,31 @@ impl CommandExecutor for DefaultExecutor {
         self.run_script_from_string_streaming_with_dir(script, dir)
     }
     fn run_script_from_string_with_dir(&self, script: &str, dir: &str) -> std::io::Result<Output> {
-        Command::new("bash")
-            .args(["-c", script])
-            .current_dir(dir)
-            .output()
+        bash_command(script, Some(dir)).output()
     }
     fn run_script_from_string_streaming_with_dir(
         &self,
         script: &str,
         dir: &str,
     ) -> std::io::Result<std::process::ExitStatus> {
-        Command::new("bash")
-            .args(["-c", script])
-            .current_dir(dir)
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .stdin(std::process::Stdio::inherit())
-            .status()
+        bash_streaming_status(bash_command(script, Some(dir)))
     }
+}
+
+fn bash_command(script: &str, dir: Option<&str>) -> Command {
+    let mut cmd = Command::new("bash");
+    cmd.args(["-c", script]);
+    if let Some(dir) = dir {
+        cmd.current_dir(dir);
+    }
+    cmd
+}
+
+fn bash_streaming_status(mut cmd: Command) -> std::io::Result<std::process::ExitStatus> {
+    cmd.stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
+        .stdin(std::process::Stdio::inherit())
+        .status()
 }
 
 #[cfg(target_os = "windows")]
@@ -144,35 +146,29 @@ pub fn get_powershell_version() -> std::io::Result<i32> {
 
 #[cfg(target_os = "windows")]
 fn find_powershell() -> std::path::PathBuf {
-    // 1. Well-known fixed install paths.
+    find_powershell_in_known_paths()
+        .or_else(find_powershell_in_app_paths)
+        .or_else(find_powershell_on_path)
+        // 4. Last resort: bare name (Command::new resolves it through PATH).
+        .unwrap_or_else(|| std::path::PathBuf::from("powershell"))
+}
+
+/// 1. Well-known fixed install paths.
+#[cfg(target_os = "windows")]
+fn find_powershell_in_known_paths() -> Option<std::path::PathBuf> {
     let program_files =
         std::env::var("ProgramFiles").unwrap_or_else(|_| r"C:\Program Files".to_string());
     let program_files_x86 = std::env::var("ProgramFiles(x86)")
         .unwrap_or_else(|_| r"C:\Program Files (x86)".to_string());
     let system_root = std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".to_string());
 
-    let known_paths = [
-        // PowerShell 7 MSI default (plus WOW6432Node fallback).
-        format!(r"{}\PowerShell\7\pwsh.exe", program_files),
-        format!(r"{}\PowerShell\7\pwsh.exe", program_files_x86),
-        // In-box Windows PowerShell 5.1 on Windows 10/11.
-        format!(
-            r"{}\System32\WindowsPowerShell\v1.0\powershell.exe",
-            system_root
-        ),
-        format!(
-            r"{}\SysWOW64\WindowsPowerShell\v1.0\powershell.exe",
-            system_root
-        ),
-    ];
+    let known_paths = powershell_known_paths(&program_files, &program_files_x86, &system_root);
+    first_existing_file(known_paths.iter().map(String::as_str))
+}
 
-    for path in &known_paths {
-        if std::path::Path::new(path).is_file() {
-            return std::path::PathBuf::from(path);
-        }
-    }
-
-    // 2. App Paths in both HKLM (machine-wide) and HKCU (per-user installs).
+/// 2. App Paths in both HKLM (machine-wide) and HKCU (per-user installs).
+#[cfg(target_os = "windows")]
+fn find_powershell_in_app_paths() -> Option<std::path::PathBuf> {
     for exe in &["pwsh.exe", "powershell.exe"] {
         for hive in &["HKLM", "HKCU"] {
             let key = format!(
@@ -186,24 +182,21 @@ fn find_powershell() -> std::path::PathBuf {
             {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
-                    // Output format: "    (Default)    REG_SZ    C:\path\to\exe"
-                    for line in stdout.lines() {
-                        if line.contains("REG_SZ") {
-                            if let Some(path) = line.split("REG_SZ").nth(1) {
-                                let path = path.trim().trim_matches('"');
-                                // Ignore empty/stale entries — only return a
-                                // path that still resolves on disk.
-                                if !path.is_empty() && std::path::Path::new(path).is_file() {
-                                    return std::path::PathBuf::from(path);
-                                }
-                            }
-                        }
+                    // Ignore empty/stale entries — only return a
+                    // path that still resolves on disk.
+                    if let Some(path) = first_existing_file(reg_sz_values(&stdout)) {
+                        return Some(path);
                     }
                 }
             }
         }
     }
+    None
+}
 
+/// 3. Whatever `where.exe` finds on PATH.
+#[cfg(target_os = "windows")]
+fn find_powershell_on_path() -> Option<std::path::PathBuf> {
     for exe in &["pwsh.exe", "powershell.exe"] {
         if let Ok(output) = std::process::Command::new("where.exe")
             .arg(exe)
@@ -212,18 +205,67 @@ fn find_powershell() -> std::path::PathBuf {
         {
             if output.status.success() {
                 let stdout = String::from_utf8_lossy(&output.stdout);
-                for line in stdout.lines() {
-                    let path = line.trim();
-                    if !path.is_empty() && std::path::Path::new(path).is_file() {
-                        return std::path::PathBuf::from(path);
-                    }
+                if let Some(path) = first_existing_file(non_empty_trimmed_lines(&stdout)) {
+                    return Some(path);
                 }
             }
         }
     }
+    None
+}
 
-    // 4. Last resort: bare name (Command::new resolves it through PATH).
-    std::path::PathBuf::from("powershell")
+#[cfg(any(target_os = "windows", test))]
+fn powershell_known_paths(
+    program_files: &str,
+    program_files_x86: &str,
+    system_root: &str,
+) -> [String; 4] {
+    [
+        // PowerShell 7 MSI default (plus WOW6432Node fallback).
+        format!(r"{}\PowerShell\7\pwsh.exe", program_files),
+        format!(r"{}\PowerShell\7\pwsh.exe", program_files_x86),
+        // In-box Windows PowerShell 5.1 on Windows 10/11.
+        format!(
+            r"{}\System32\WindowsPowerShell\v1.0\powershell.exe",
+            system_root
+        ),
+        format!(
+            r"{}\SysWOW64\WindowsPowerShell\v1.0\powershell.exe",
+            system_root
+        ),
+    ]
+}
+
+/// Extracts the non-empty values of `REG_SZ` lines from `reg query` output.
+///
+/// Output format: "    (Default)    REG_SZ    C:\path\to\exe"
+#[cfg(any(target_os = "windows", test))]
+fn reg_sz_values(stdout: &str) -> impl Iterator<Item = &str> {
+    stdout
+        .lines()
+        .filter(|line| line.contains("REG_SZ"))
+        .filter_map(|line| line.split("REG_SZ").nth(1))
+        .map(|path| path.trim().trim_matches('"'))
+        .filter(|path| !path.is_empty())
+}
+
+#[cfg(any(target_os = "windows", test))]
+fn non_empty_trimmed_lines(stdout: &str) -> impl Iterator<Item = &str> {
+    stdout
+        .lines()
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+}
+
+/// Returns the first candidate path that is an existing file.
+#[cfg(any(target_os = "windows", test))]
+fn first_existing_file<'a>(
+    candidates: impl IntoIterator<Item = &'a str>,
+) -> Option<std::path::PathBuf> {
+    candidates
+        .into_iter()
+        .find(|path| std::path::Path::new(path).is_file())
+        .map(std::path::PathBuf::from)
 }
 
 #[cfg(target_os = "windows")]
@@ -819,5 +861,61 @@ mod tests {
             assert!(stdout.contains("Hello"));
             // Note: PowerShell UTF-8 handling may vary, so we just check it doesn't crash
         }
+    }
+
+    #[test]
+    fn test_bash_command_sets_args_and_dir() {
+        let cmd = bash_command("echo hi", None);
+        assert_eq!(cmd.get_program(), "bash");
+        let args: Vec<_> = cmd.get_args().collect();
+        assert_eq!(args, ["-c", "echo hi"]);
+        assert_eq!(cmd.get_current_dir(), None);
+
+        let cmd = bash_command("echo hi", Some("/tmp"));
+        assert_eq!(cmd.get_current_dir(), Some(std::path::Path::new("/tmp")));
+    }
+
+    #[test]
+    fn test_powershell_known_paths() {
+        let paths = powershell_known_paths(r"C:\PF", r"C:\PF86", r"C:\Win");
+        assert_eq!(
+            paths,
+            [
+                r"C:\PF\PowerShell\7\pwsh.exe".to_string(),
+                r"C:\PF86\PowerShell\7\pwsh.exe".to_string(),
+                r"C:\Win\System32\WindowsPowerShell\v1.0\powershell.exe".to_string(),
+                r"C:\Win\SysWOW64\WindowsPowerShell\v1.0\powershell.exe".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_reg_sz_values() {
+        let stdout = "\r\nHKEY_LOCAL_MACHINE\\SOFTWARE\\App Paths\\pwsh.exe\r\n    (Default)    REG_SZ    \"C:\\Program Files\\PowerShell\\7\\pwsh.exe\"\r\n    Empty    REG_SZ    \r\n    Other    REG_DWORD    0x1\r\n";
+        let values: Vec<_> = reg_sz_values(stdout).collect();
+        assert_eq!(values, [r"C:\Program Files\PowerShell\7\pwsh.exe"]);
+        assert_eq!(reg_sz_values("").count(), 0);
+    }
+
+    #[test]
+    fn test_non_empty_trimmed_lines() {
+        let values: Vec<_> = non_empty_trimmed_lines("  a\\pwsh.exe \r\n\r\n b.exe\n").collect();
+        assert_eq!(values, ["a\\pwsh.exe", "b.exe"]);
+    }
+
+    #[test]
+    fn test_first_existing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let existing = temp_dir.path().join("pwsh.exe");
+        fs::write(&existing, "").unwrap();
+        let missing = temp_dir.path().join("missing.exe");
+        let dir_only = temp_dir.path().to_string_lossy().to_string();
+
+        let missing = missing.to_string_lossy().to_string();
+        let existing_str = existing.to_string_lossy().to_string();
+        let found =
+            first_existing_file([missing.as_str(), dir_only.as_str(), existing_str.as_str()]);
+        assert_eq!(found, Some(existing));
+        assert_eq!(first_existing_file([missing.as_str()]), None);
     }
 }
