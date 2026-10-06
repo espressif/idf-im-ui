@@ -328,15 +328,7 @@ export default {
       this.forceProgressUpdate();
       this.timeStarted = new Date();
 
-      try {
-        await invoke("track_event_command", {
-          event: "install_started",
-          mode: this.is_fix_mode ? "fix" : "wizard"
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
-
+      // Install telemetry is reported by the Rust commands, not from here.
       try {
         if (this.is_fix_mode) {
           if (this.fixing_version) {
@@ -606,17 +598,6 @@ export default {
       if (this.current_version && !this.installed_versions.includes(this.current_version)) {
         this.installed_versions.push(this.current_version);
       }
-
-      try {
-        invoke("track_event_command", {
-          event: "install_finished",
-          mode: this.is_fix_mode ? "fix" : "wizard",
-          outcome: "success",
-          versions: [version || this.current_version]
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
     },
 
     handleInstallationError: function (message, detail) {
@@ -626,18 +607,6 @@ export default {
 
       if (this.current_version && !this.failed_versions.includes(this.current_version)) {
         this.failed_versions.push(this.current_version);
-      }
-
-      try {
-        invoke("track_event_command", {
-          event: "install_finished",
-          mode: this.is_fix_mode ? "fix" : "wizard",
-          outcome: "failure",
-          versions: [this.current_version],
-          error_message: detail || message
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
       }
     },
 
