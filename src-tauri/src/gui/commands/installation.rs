@@ -34,8 +34,8 @@ use std::{
     process::{Command, Stdio},
 };
 
-use anyhow::Result;
 use crate::gui::telemetry_session;
+use anyhow::Result;
 use idf_im_lib::telemetry::{ErrorKind, FailureClass, FailureStage, InstallMode};
 use idf_im_lib::{
     ensure_path,
