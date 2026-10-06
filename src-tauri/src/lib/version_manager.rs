@@ -62,7 +62,47 @@ fn remove_activation_scripts(
         }
     }
 
+    if std::env::consts::OS != "windows" {
+        remove_posix_shims(&path, parent_dir, idf_version);
+    }
+
     Ok(())
+}
+
+/// Removes the command shim directory created by `create_posix_shims`.
+///
+/// The directory is keyed by the version the scripts were generated for, which is
+/// also embedded in the activation script name (`activate_idf_<version>.sh`). That
+/// name survives `eim rename`, so it is checked alongside the current name.
+fn remove_posix_shims(activation_script: &Path, parent_dir: &Path, idf_version: &str) {
+    let parent_str = parent_dir.to_string_lossy();
+    let mut versions = vec![idf_version.to_string()];
+    if let Some(from_script) = activation_script
+        .file_name()
+        .and_then(|n| n.to_str())
+        .and_then(|n| n.strip_prefix("activate_idf_"))
+        .and_then(|n| n.strip_suffix(".sh"))
+    {
+        if from_script != idf_version {
+            versions.push(from_script.to_string());
+        }
+    }
+
+    for version in versions {
+        let shims_dir = crate::get_posix_shims_dir(&parent_str, &version);
+        if shims_dir.exists() {
+            match fs::remove_dir_all(&shims_dir) {
+                Ok(_) => info!("Removed command shims: {}", shims_dir.display()),
+                Err(e) => warn!("Failed to remove {}: {}", shims_dir.display(), e),
+            }
+        }
+    }
+
+    // Drop the shared `shims` directory once the last installation is gone.
+    let shims_root = parent_dir.join("shims");
+    if fs::read_dir(&shims_root).is_ok_and(|mut entries| entries.next().is_none()) {
+        let _ = fs::remove_dir(&shims_root);
+    }
 }
 
 /// Returns the default path to the ESP-IDF configuration file.
@@ -1141,6 +1181,27 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    /// Shims are keyed by the version in the activation script name, so they
+    /// must be removed even after the installation was renamed.
+    #[cfg(not(target_os = "windows"))]
+    #[test]
+    fn test_remove_activation_scripts_removes_shims_after_rename() {
+        let temp_dir = TempDir::new().unwrap();
+        let dir = temp_dir.path().to_str().unwrap();
+        crate::create_posix_shims(dir, "v5.3.2", "/opt/esp/esp-idf", "/bin/echo").unwrap();
+        let other = crate::create_posix_shims(dir, "v5.4", "/opt/esp/esp-idf", "/bin/echo").unwrap();
+        let script = temp_dir.path().join("activate_idf_v5.3.2.sh");
+        fs::write(&script, "").unwrap();
+
+        remove_activation_scripts(script.to_str().unwrap(), "renamed").unwrap();
+        assert!(!crate::get_posix_shims_dir(dir, "v5.3.2").exists());
+        assert!(other.exists(), "shims of other installations must be kept");
+
+        let script = temp_dir.path().join("activate_idf_v5.4.sh");
+        remove_activation_scripts(script.to_str().unwrap(), "v5.4").unwrap();
+        assert!(!temp_dir.path().join("shims").exists());
+    }
 
     #[test]
     fn test_run_command_using_activation_script_echo() {
