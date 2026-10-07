@@ -14,21 +14,26 @@ use idf_im_lib::telemetry::{
     self, ErrorKind, FailureClass, InstallMode, InstallOutcome, InstallationContext, Interface,
     OutcomeExtras,
 };
+use serde_json::Value;
 use tauri::{AppHandle, Manager};
+use tauri_plugin_store::StoreExt;
 
 use crate::gui::app_state::{get_settings_non_blocking, AppState};
-use crate::gui::commands::utils_commands::get_app_settings;
 
 /// Whether the user has allowed usage statistics.
 ///
-/// Mirrors the gate the frontend used to apply before invoking
-/// `track_event_command`: a missing setting means the question has not been
-/// answered yet and is treated as a no.
+/// A missing or unreadable setting means the question has not been answered
+/// yet and is treated as a no. Never panics: the install hot path must not
+/// die because the config directory is missing or not UTF-8.
 pub fn usage_statistics_allowed(app_handle: &AppHandle) -> bool {
-    match get_app_settings(app_handle.clone()).get("usage_statistics") {
-        Some(serde_json::Value::Bool(allowed)) => *allowed,
-        Some(_) | None => false,
-    }
+    let Some(config_dir) = dirs::config_dir() else {
+        return false;
+    };
+    let config_file = config_dir.join("eim").join("eim.json");
+    let Ok(store) = app_handle.store(config_file) else {
+        return false;
+    };
+    matches!(store.get("usage_statistics"), Some(Value::Bool(true)))
 }
 
 /// Opens an install session and sends `install_started`.

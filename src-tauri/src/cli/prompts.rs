@@ -8,7 +8,7 @@ use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::system_dependencies;
-use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
+use idf_im_lib::telemetry::{self, ErrorKind, FailureStage};
 use idf_im_lib::tool_selection::{
     get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
 };
@@ -48,21 +48,6 @@ pub async fn select_idf_version(
     } else {
         first_defaulted_multiselect("wizard.select_idf_version.prompt", &available_versions)
     }
-}
-
-/// Records missing system tools for telemetry, so the dashboard can show which
-/// prerequisite is most often absent instead of a generic failure.
-fn note_missing_prerequisites(reason: &str, missing: &[String]) {
-    let mut names: Vec<String> = missing.iter().map(|m| m.to_lowercase()).collect();
-    names.sort();
-    names.dedup();
-    telemetry::note_failure(
-        ErrorKind::DependencyMissing,
-        FailureClass::Environment,
-        Some(FailureStage::Prerequisites),
-        format!("{}: {}", reason, names.join(", ")),
-        names,
-    );
 }
 
 pub async fn check_and_install_prerequisites(
@@ -165,7 +150,7 @@ pub async fn check_and_install_prerequisites(
                             .iter()
                             .map(|s| s.to_string())
                             .collect();
-                        note_missing_prerequisites(
+                        telemetry::note_missing_prerequisites(
                             "automatic prerequisite install failed, still missing",
                             &still_missing,
                         );
@@ -180,7 +165,7 @@ pub async fn check_and_install_prerequisites(
                         info!("{}", t!("prerequisites.ok"));
                     }
                 } else {
-                    note_missing_prerequisites(
+                    telemetry::note_missing_prerequisites(
                         "user declined the prerequisite install, still missing",
                         &unsatisfied_prerequisites,
                     );
@@ -188,7 +173,10 @@ pub async fn check_and_install_prerequisites(
                 }
             } else {
                 // Non-Windows: we can only report what the user has to install.
-                note_missing_prerequisites("missing prerequisites", &unsatisfied_prerequisites);
+                telemetry::note_missing_prerequisites(
+                    "missing prerequisites",
+                    &unsatisfied_prerequisites,
+                );
                 return Err(t!("prerequisites.install.ask").to_string());
             }
 

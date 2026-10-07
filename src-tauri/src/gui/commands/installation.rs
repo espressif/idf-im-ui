@@ -118,16 +118,6 @@ fn telemetry_env_for_child(
     }
 }
 
-/// Prepares the missing-prerequisite tool names for telemetry. Sorted and
-/// deduplicated so the same machine state always produces the same value,
-/// which keeps the "most commonly missing tool" aggregation meaningful.
-fn sorted_missing(missing: &[String]) -> Vec<String> {
-    let mut out: Vec<String> = missing.iter().map(|m| m.to_lowercase()).collect();
-    out.sort();
-    out.dedup();
-    out
-}
-
 // Checks if an installation is currently in progress
 #[tauri::command]
 pub fn is_installing(app_handle: AppHandle) -> bool {
@@ -1518,7 +1508,7 @@ async fn run_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
                     "automatic prerequisite install failed, still missing: {}",
                     prerequisites.join(", ")
                 ),
-                sorted_missing(&prerequisites),
+                prerequisites.clone(),
             );
             return Err(rust_i18n::t!("gui.simple_setup.prerequisites_failed").to_string());
         }
@@ -1550,7 +1540,7 @@ async fn run_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
             FailureClass::Environment,
             FailureStage::Prerequisites,
             format!("missing prerequisites: {}", prerequisites.join(", ")),
-            sorted_missing(&prerequisites),
+            prerequisites.clone(),
         );
         return Err(rust_i18n::t!("gui.simple_setup.prerequisites_missing").to_string());
     }
@@ -2759,7 +2749,7 @@ async fn run_offline_installation(
                     FailureClass::Environment,
                     FailureStage::Prerequisites,
                     format!("missing prerequisites: {}", prereq.join(", ")),
-                    sorted_missing(&prereq),
+                    prereq.clone(),
                 );
                 set_installation_status(&app_handle, false)?;
                 return Err(error_msg);
@@ -3516,7 +3506,7 @@ fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
             FailureClass::Environment,
             FailureStage::Prerequisites,
             format!("missing prerequisites: {}", missing.join(", ")),
-            sorted_missing(&missing),
+            missing.clone(),
         );
         return Err(msg);
     }
