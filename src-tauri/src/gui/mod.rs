@@ -236,14 +236,17 @@ pub fn run(
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // Telemetry is dispatched on background tasks, so an immediate exit
-            // can drop events that were never sent. Close any install still in
-            // flight and give the pending requests a moment to complete.
-            if let tauri::RunEvent::ExitRequested { .. } = event {
-                telemetry_session::abandon_open_session(app_handle);
-                tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
-                    std::time::Duration::from_secs(3),
-                ));
+            // ExitRequested is only a request: another handler can call
+            // prevent_exit(). Recording a failure there would leave a false
+            // app_closed outcome if the user then stays. Exit fires only after
+            // nobody cancelled, so that is the safe place to abandon and flush.
+            if let tauri::RunEvent::Exit = event {
+                let abandoned = telemetry_session::abandon_open_session(app_handle);
+                if abandoned || idf_im_lib::telemetry::has_pending_dispatches() {
+                    tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
+                        std::time::Duration::from_millis(500),
+                    ));
+                }
             }
         });
 }

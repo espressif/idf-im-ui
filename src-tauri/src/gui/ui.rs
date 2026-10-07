@@ -64,6 +64,9 @@ pub fn emit_install_error(
     raw: impl Into<String>,
     missing: Vec<String>,
 ) {
+    // Same normalization the CLI uses, so GUI and CLI produce identical
+    // missingPrerequisites values for the same machine state.
+    let missing = telemetry::normalize_missing_names(missing);
     telemetry::note_failure(kind, class, Some(stage), raw, missing);
     emit_installation_event(app_handle, progress);
 }

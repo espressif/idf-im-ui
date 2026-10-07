@@ -147,29 +147,15 @@ impl ErrorKind {
         let msg = msg.to_lowercase();
         if msg.contains("prerequisite") || msg.contains("dependency") {
             ErrorKind::DependencyMissing
-        } else if msg.contains("no space left")
-            || msg.contains("os error 28")
-            || msg.contains("os error 112")
-            || msg.contains("disk full")
-        {
+        } else if is_disk_space_message(&msg) {
             ErrorKind::DiskSpace
-        } else if msg.contains("permission denied")
-            || msg.contains("access is denied")
-            || msg.contains("os error 13")
-            || msg.contains("os error 5")
-        {
+        } else if is_permission_message(&msg) {
             ErrorKind::Permission
         } else if msg.contains("python") || msg.contains("venv") || msg.contains("pip") {
             ErrorKind::Python
         } else if msg.contains("git") {
             ErrorKind::Git
-        } else if msg.contains("timeout")
-            || msg.contains("dns")
-            || msg.contains("connection")
-            || msg.contains("network")
-            || msg.contains("tls")
-            || msg.contains("http")
-        {
+        } else if is_network_message(&msg) {
             ErrorKind::Network
         } else if msg.contains("cancel") || msg.contains("abort") {
             ErrorKind::UserCancelled
@@ -182,6 +168,38 @@ impl ErrorKind {
             ErrorKind::Unknown
         }
     }
+}
+
+fn is_disk_space_message(msg: &str) -> bool {
+    msg.contains("no space left")
+        || msg.contains("no space")
+        || msg.contains("disk full")
+        || msg.contains("enospc")
+        || msg.contains("os error 28")
+        || msg.contains("os error 112")
+        || msg.contains("write to disk")
+        || (msg.contains("disk") && (msg.contains("full") || msg.contains("space")))
+}
+
+fn is_permission_message(msg: &str) -> bool {
+    msg.contains("permission denied")
+        || msg.contains("permission error")
+        || msg.contains("permission")
+        || msg.contains("access is denied")
+        || msg.contains("access denied")
+        || msg.contains("eacces")
+        || msg.contains("not permitted")
+        || msg.contains("os error 13")
+        || msg.contains("os error 5")
+}
+
+fn is_network_message(msg: &str) -> bool {
+    msg.contains("timeout")
+        || msg.contains("dns")
+        || msg.contains("connection")
+        || msg.contains("network")
+        || msg.contains("tls")
+        || msg.contains("http")
 }
 
 /// Maps an `io::Error` onto the kinds that describe machine problems, so a
@@ -248,6 +266,37 @@ pub fn note_failure_kind(kind: ErrorKind, stage: Option<FailureStage>, raw: impl
     note_failure(kind, kind.default_class(), stage, raw, Vec::new());
 }
 
+/// Lowercases, sorts and deduplicates prerequisite tool names so the same
+/// machine state always produces the same `missingPrerequisites` value.
+pub fn normalize_missing_names(missing: impl IntoIterator<Item = impl AsRef<str>>) -> Vec<String> {
+    let mut names: Vec<String> = missing
+        .into_iter()
+        .map(|m| m.as_ref().to_lowercase())
+        .collect();
+    names.sort();
+    names.dedup();
+    names
+}
+
+/// Records missing system tools for telemetry.
+///
+/// Shared by the CLI and GUI so the dashboard can show which prerequisite is
+/// most often absent instead of a generic failure. Names are normalized before
+/// they are stored.
+pub fn note_missing_prerequisites(
+    reason: &str,
+    missing: impl IntoIterator<Item = impl AsRef<str>>,
+) {
+    let names = normalize_missing_names(missing);
+    note_failure(
+        ErrorKind::DependencyMissing,
+        FailureClass::Environment,
+        Some(FailureStage::Prerequisites),
+        format!("{}: {}", reason, names.join(", ")),
+        names,
+    );
+}
+
 /// Records a failure only if none was recorded yet.
 ///
 /// Outer layers see the inner error flattened into a localized string, so they
@@ -274,41 +323,15 @@ pub fn note_failure_if_absent(
 }
 
 /// Whether an error site has already classified the current failure.
-pub fn has_pending_failure() -> bool {
+#[cfg(test)]
+fn has_pending_failure() -> bool {
     PENDING_FAILURE
         .lock()
         .map(|slot| slot.is_some())
         .unwrap_or(false)
 }
 
-/// Records a failure only if nothing has been recorded yet.
-///
-/// For outer error handlers that re-report an error raised deeper in the stack.
-/// The inner site knows the real cause ("connection reset during download"),
-/// while the outer one only sees "version 5.2 failed", so the inner
-/// classification must win.
-pub fn note_failure_if_unset(
-    kind: ErrorKind,
-    class: FailureClass,
-    stage: Option<FailureStage>,
-    raw: impl Into<String>,
-) {
-    let Ok(mut slot) = PENDING_FAILURE.lock() else {
-        return;
-    };
-    if slot.is_some() {
-        return;
-    }
-    *slot = Some(ClassifiedFailure {
-        kind,
-        class,
-        stage,
-        raw: raw.into(),
-        missing: Vec::new(),
-    });
-}
-
-pub fn clear_pending_failure() {
+fn clear_pending_failure() {
     if let Ok(mut slot) = PENDING_FAILURE.lock() {
         *slot = None;
     }
@@ -599,6 +622,14 @@ fn dispatch(props: EventProps) {
 static PENDING_DISPATCHES: Lazy<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
     Lazy::new(|| std::sync::Mutex::new(Vec::new()));
 
+/// Whether any telemetry HTTP requests are still in flight.
+pub fn has_pending_dispatches() -> bool {
+    PENDING_DISPATCHES
+        .lock()
+        .map(|pending| !pending.is_empty())
+        .unwrap_or(false)
+}
+
 pub async fn flush(timeout: Duration) {
     let handles: Vec<_> = match PENDING_DISPATCHES.lock() {
         Ok(mut pending) => std::mem::take(&mut *pending),
@@ -764,9 +795,29 @@ mod tests {
             ErrorKind::DiskSpace
         );
         assert_eq!(
+            ErrorKind::from_message("failed to write to disk"),
+            ErrorKind::DiskSpace
+        );
+        assert_eq!(
             ErrorKind::from_message("open failed: Permission denied (os error 13)"),
             ErrorKind::Permission
         );
+        assert_eq!(
+            ErrorKind::from_message("permission error"),
+            ErrorKind::Permission
+        );
+    }
+
+    #[test]
+    fn missing_prerequisite_names_are_normalized_before_recording() {
+        let _guard = SLOT_GUARD.lock().unwrap();
+        clear_pending_failure();
+
+        note_missing_prerequisites("missing prerequisites", ["CMake", "git", "cmake"]);
+        let failure = take_pending_failure().expect("noted");
+        assert_eq!(failure.missing, vec!["cmake", "git"]);
+        assert_eq!(failure.kind, ErrorKind::DependencyMissing);
+        assert_eq!(failure.class, FailureClass::Environment);
     }
 
     #[test]

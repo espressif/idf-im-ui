@@ -11,7 +11,7 @@ use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
-use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
+use idf_im_lib::telemetry::{self, ErrorKind, FailureStage};
 use idf_im_lib::tool_selection::fetch_tools_file;
 use idf_im_lib::tool_selection::get_tool_names;
 use idf_im_lib::tool_selection::get_tools_json_url;
@@ -192,22 +192,6 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
             }
         }
     }
-}
-
-/// Records the QEMU system packages the machine is missing, so they show up in
-/// the same "most often missing prerequisite" view as git and cmake, and the
-/// failure is attributed to the environment rather than to the installer.
-fn note_missing_qemu_prerequisites(missing: &[&str]) {
-    let mut names: Vec<String> = missing.iter().map(|m| m.to_lowercase()).collect();
-    names.sort();
-    names.dedup();
-    telemetry::note_failure(
-        ErrorKind::DependencyMissing,
-        FailureClass::Environment,
-        Some(FailureStage::Prerequisites),
-        format!("missing qemu prerequisites: {}", names.join(", ")),
-        names,
-    );
 }
 
 fn setup_directory(
@@ -705,7 +689,10 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
             match qemu_prereqs {
                 Ok(prereqs) if !prereqs.is_empty() => {
                     error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
-                    note_missing_qemu_prerequisites(&prereqs);
+                    telemetry::note_missing_prerequisites(
+                        "missing qemu prerequisites",
+                        prereqs.iter().copied(),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Err(err) => {
@@ -854,7 +841,10 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
             match qemu_prereqs {
                 Ok(prereqs) if !prereqs.is_empty() => {
                     error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
-                    note_missing_qemu_prerequisites(&prereqs);
+                    telemetry::note_missing_prerequisites(
+                        "missing qemu prerequisites",
+                        prereqs.iter().copied(),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Err(err) => {
