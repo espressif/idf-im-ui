@@ -732,34 +732,12 @@ export default {
       if (version && !this.installed_versions.includes(version)) {
         this.installed_versions.push(version);
       }
-
-      try {
-        invoke("track_event_command", {
-          event: "install_finished",
-          mode: "offline",
-          outcome: "success",
-          versions: [version]
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
     },
 
     handleInstallationError(message, detail) {
       this.installation_running = false;
       this.installation_failed = true;
       this.error_message = message || "Offline installation failed";
-
-      try {
-        invoke("track_event_command", {
-          event: "install_finished",
-          mode: "offline",
-          outcome: "failure",
-          error_message: detail || message
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
     },
 
     async startInstallation() {
@@ -770,15 +748,6 @@ export default {
       this.error_message = "";
       this.installed_versions = [];
       this.timeStarted = new Date();
-
-      try {
-        await invoke("track_event_command", {
-          event: "install_started",
-          mode: "offline"
-        });
-      } catch (error) {
-        console.warn('Failed to track event:', error);
-      }
 
       // Reset progress data
       this._progressData = {

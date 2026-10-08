@@ -568,7 +568,10 @@ We collect the following information to understand how the installer is used and
   - Whether the install **succeeded** or **failed**
   - Duration of the install (in seconds)
 - **Error & Failure Tracking**
-  - A coarse error **kind** (network, filesystem, git, python, dependency, configuration, user-cancelled, unknown)
+  - A coarse error **kind** (network, filesystem, git, python, dependency, disk space, permissions, invalid archive, configuration, failed prerequisite check, user-cancelled, app closed, unknown)
+  - A failure **class** that says who can act on the failure: **environment** (something on the machine, such as a missing prerequisite or no network), **installer** (a bug or limitation in EIM itself), or **user** (the install was cancelled or the app was closed)
+  - The **stage** the install was in when it failed (checking, prerequisites, download, extract, tools, python, configure)
+  - For missing-prerequisite failures, the names of the prerequisites that were missing (e.g. `git`, `cmake`) — these are fixed, well-known tool names, never paths or versions from your machine
   - A short 16-character **fingerprint** (SHA-256 prefix) of the error message, used to deduplicate recurring failures without storing the text itself
   - The error message itself, with filesystem paths, home-directory segments, and email addresses automatically redacted
 
@@ -586,6 +589,6 @@ The data is sent to Azure Application Insights using the instrumentation key com
 
 You have full control over data collection.
 
-- **GUI**: On the welcome page of the installer, you will find a checkbox to disable telemetry. Unchecking this box will completely prevent any data from being sent.
+- **GUI**: On the welcome page of the installer, you will find a checkbox to disable telemetry. Unchecking this box will completely prevent any data from being sent. On Windows the GUI runs the install in a separate process, and your choice is passed on to it, so nothing is sent from there either.
 - **CLI**: When using the command-line interface, you can use the `--do-not-track true` flag to disable telemetry for that session.
 - **GUI launched from the CLI**: The GUI subcommand (`eim gui`) honours `--do-not-track`; passing it ensures the GUI also starts with telemetry disabled.
