@@ -36,7 +36,7 @@ use tempfile::TempDir;
 use zstd::encode_all;
 
 pub const PYTHON_VERSION: &str = "3.11";
-pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13", "3.14"];
+pub const SUPPORTED_PYTHON_VERSIONS: &[&str] = &["3.10", "3.11", "3.12", "3.13", "3.14", "3.15"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct PythonVersionResult {

@@ -131,7 +131,7 @@ If set to true, the installer will remove temporary tool archive files after ins
 
 .TP
 .B \-\-use\-local\-archive \fIPATH_TO_ARCHIVE\fR
-Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a .zst file. Do not unpack the .zst archive. This option is not compatible with online installation options like --idf-versions, --mirror, etc. At this time, offline installation only supports Python 3.11 to 3.13.
+Use a local archive for offline installation. The installer will use the provided archive instead of downloading from the internet. The archive should be a .zst file. Do not unpack the .zst archive. This option is not compatible with online installation options like --idf-versions, --mirror, etc. At this time, offline installation only supports Python 3.11 to 3.15.
 
 .SS wizard
 Run the interactive ESP-IDF Installer Wizard.
@@ -355,7 +355,7 @@ Important notes:
 .IP \[bu] 2
 Do not unpack the .zst archive file; the installer uses it directly
 .IP \[bu] 2
-Offline installation currently only supports Python 3.11 to 3.13
+Offline installation currently only supports Python 3.11 to 3.15
 .IP \[bu] 2
 On macOS and Linux, install all prerequisites manually before running
 

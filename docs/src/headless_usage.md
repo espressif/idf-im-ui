@@ -130,7 +130,7 @@ steps:
 
 ### Docker Integration
 
-> **Note on Python in Docker:** The example Dockerfile below installs the default `python3` package. On Debian Bookworm, this is currently a supported version (Python 3.11). If you are using a different base image, ensure that the installed Python version is one of 3.10, 3.11, 3.12, 3.13, or 3.14. Python 3.14 is now fully supported on Linux, macOS, and Windows.
+> **Note on Python in Docker:** The example Dockerfile below installs the default `python3` package. On Debian Bookworm, this is currently a supported version (Python 3.11). If you are using a different base image, ensure that the installed Python version is one of 3.10, 3.11, 3.12, 3.13, 3.14, or 3.15. Python 3.15 is now fully supported on Linux, macOS, and Windows.
 
 Example Dockerfile using EIM:
 
