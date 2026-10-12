@@ -589,7 +589,7 @@
       },
       "setupRequired": {
         "title": "Python Setup Required",
-        "description": "Python >= 3.10 < 3.14 with pip, venv, and SSL support is required"
+        "description": "Python 3.10 to 3.15 with pip, venv, and SSL support is required"
       }
     },
     "actions": {
@@ -841,7 +841,7 @@
         "windowsHint": "Click the button below to install prerequisites automatically.",
         "python": {
           "title": "Python Not Configured",
-          "message": "Python >= 3.10 < 3.14 with pip, virtualenv, and SSL support is required.",
+          "message": "Python 3.10 to 3.15 with pip, virtualenv, and SSL support is required.",
           "details": "Please install Python or use custom installation to configure it."
         }
       },
