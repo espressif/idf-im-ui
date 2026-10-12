@@ -27,7 +27,10 @@ use crate::{
     command_executor::{self, execute_command_direct},
     download_file, ensure_path, replace_unescaped_spaces_posix, replace_unescaped_spaces_win,
     settings::VersionPaths,
-    utils::{parse_cmake_version, remove_after_second_dot, GenericCheckResult},
+    utils::{
+        find_directories_by_partial_name, parse_cmake_version, remove_after_second_dot,
+        GenericCheckResult,
+    },
 };
 
 /// Identifies which Python sanity check a [`GenericCheckResult`] belongs to.
@@ -1278,61 +1281,47 @@ pub fn where_non_alias(name: &str) -> Option<PathBuf> {
 /// Detects the best available Python 3 interpreter on the system.
 ///
 /// Search order:
-/// - **macOS**: Absolute paths for Homebrew (Apple Silicon, then Intel),
-///   MacPorts, and the system interpreter, then bare `python3` on PATH.
-///   Absolute paths are checked explicitly because a GUI launched from a
-///   sandboxed environment does not inherit `.zshrc`/`.bashrc` PATH entries.
-/// - **Linux/other Unix**: `python3` first, then `python` (only accepted if it
-///   reports a 3.x version, since on some distros `python` is still 2.7).
-/// - **Windows**: Generic names on PATH while skipping App Execution Aliases,
-///   each verified with [`is_python3`].
+/// - **macOS**: bare `python3` on PATH, then `bin/python3` and every versioned keg
+///   (e.g. `/opt/homebrew/opt/python3@3.13`) under the Homebrew prefixes, MacPorts,
+///   and the system interpreter. Absolute paths are searched explicitly
+///   because a GUI launched from a sandboxed environment does not inherit
+///   `.zshrc`/`.bashrc` PATH entries.
+/// - **Linux/other Unix**: `python3` first, then `python`.
+/// - **Windows**: Generic names on PATH while skipping App Execution Aliases.
+///
+/// Every candidate must pass [`check_python_version`]; failing candidates are
+/// skipped and the next one is tried.
 ///
 /// Returns the command/path string for the first working Python 3 it finds.
 pub fn detect_default_python() -> Result<String> {
-    match std::env::consts::OS {
-        "windows" => {
-            // Generic names on PATH — skip App Execution Aliases
-            for name in ["python3", "python", "python3.exe", "python.exe"] {
-                if let Some(path) = where_non_alias(name) {
-                    let s = path.to_string_lossy().into_owned();
-                    if is_python3(&s) {
-                        info!("Found {} on Windows PATH (alias-free): {}", name, s);
-                        return Ok(s);
-                    }
-                }
+    let candidates: Vec<String> = match std::env::consts::OS {
+        "windows" => ["python3", "python", "python3.exe", "python.exe"]
+            .iter()
+            .filter_map(|name| where_non_alias(name))
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect(),
+        "macos" => {
+            let homebrew_prefixes = ["/opt/homebrew", "/usr/local"];
+            let mut c = vec!["python3".to_string()]; // PATH first
+            c.extend(homebrew_prefixes.iter().map(|p| format!("{p}/bin/python3")));
+            for prefix in homebrew_prefixes {
+                let mut kegs =
+                    find_directories_by_partial_name(&Path::new(prefix).join("opt"), "python");
+                kegs.sort_by(|a, b| b.cmp(a)); // newest version first
+                c.extend(kegs.into_iter().map(|keg| format!("{keg}/bin/python3")));
             }
-
-            warn!("No working Python 3 found on Windows PATH");
-            Err(anyhow!(
-                "No working Python 3 interpreter found on Windows PATH"
-            ))
+            c.extend(["/opt/local/bin/python3", "/usr/bin/python3"].map(String::from));
+            c.retain(|p| p == "python3" || Path::new(p).exists());
+            c
         }
-        os => {
-            // Unix: absolute paths first (sandboxed GUIs don't inherit shell PATH),
-            // then fall back to PATH lookup. Every candidate is verified.
-            let candidates: &[&str] = if os == "macos" {
-                &[
-                    "/opt/homebrew/bin/python3", // Homebrew (Apple Silicon)
-                    "/usr/local/bin/python3",    // Homebrew (Intel)
-                    "/opt/local/bin/python3",    // MacPorts
-                    "/usr/bin/python3",          // system Python (Xcode CLT)
-                    "python3",                   // PATH fallback
-                ]
-            } else {
-                &["python3", "python"] // `python` verified below; may be 2.x on some distros
-            };
+        _ => vec!["python3".to_string(), "python".to_string()],
+    };
 
-            for cand in candidates {
-                if is_python3(cand) {
-                    info!("Found Python 3: {}", cand);
-                    return Ok(cand.to_string());
-                }
-            }
-
-            warn!("No working Python 3 found");
-            Err(anyhow!("No working Python 3 found"))
-        }
-    }
+    candidates
+        .into_iter()
+        .find(|cand| check_python_version(cand).passed)
+        .inspect(|cand| info!("Found working Python 3: {}", cand))
+        .ok_or_else(|| anyhow!("No working Python 3 found"))
 }
 
 /// Returns `true` if `cmd` is a real, working Python 3.x interpreter.

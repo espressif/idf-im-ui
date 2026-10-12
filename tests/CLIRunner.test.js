@@ -22,7 +22,7 @@
 
  */
 
-import { describe } from "mocha";
+import { describe, before } from "mocha";
 import { runCLIPrerequisitesTest } from "./scripts/CLIPrerequisites.test.js";
 import { runCLIArgumentsTest } from "./scripts/CLIArguments.test.js";
 import { runCLIWizardInstallTest } from "./scripts/CLIWizardInstall.test.js";
@@ -38,6 +38,7 @@ import { runListFeaturesTest } from "./scripts/CLIListFeatures.test.js";
 import { runInstallationStatusTest } from "./scripts/CLIInstallationStatus.test.js";
 import { runCLINamedVersionInstallTest } from "./scripts/CLINamedVersionInstall.test.js";
 import logger from "./classes/logger.class.js";
+import { getOfflineArchiveFilename } from "./helper.js";
 import {
   IDFMIRRORS,
   TOOLSMIRRORS,
@@ -339,6 +340,17 @@ function testRun(jsonScript) {
 
       describe(`Test${test.id}- ${test.name} |`, async function () {
         this.timeout(6000000);
+
+        // Skip the whole routine (install, verification, clean up) on platforms
+        // for which no offline archive is published, e.g. macOS x64.
+        before(async function () {
+          if (!(await getOfflineArchiveFilename(IDFDefaultVersion))) {
+            logger.info(
+              `No offline archive for ${IDFDefaultVersion} on this platform, skipping offline test`,
+            );
+            this.skip();
+          }
+        });
 
         runCLICustomInstallTest({
           id: `${test.id}1`,
