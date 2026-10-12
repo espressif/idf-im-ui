@@ -1227,8 +1227,8 @@ fn check_python_version(py: &str) -> GenericCheckResult<SanityCheck> {
 
     // 3. Check version requirement
     let (req, required_str) = (
-        VersionReq::parse(">=3.10.0, <3.15.0").unwrap(),
-        ">=3.10.0, <3.15.0",
+        VersionReq::parse(">=3.10.0, <3.16.0").unwrap(),
+        ">=3.10.0, <3.16.0",
     );
 
     if req.matches(&version) {
