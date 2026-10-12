@@ -105,9 +105,15 @@ const downloadOfflineArchive = async ({
   idfVersion = IDFDefaultVersion,
   packageFilename = null,
 }) => {
-  const archiveUrl = packageFilename
-    ? `${offlineBaseUrl}${packageFilename}`
-    : `${offlineBaseUrl}${await getOfflineArchiveFilename(idfVersion)}`;
+  const filename =
+    packageFilename ?? (await getOfflineArchiveFilename(idfVersion));
+  if (!filename) {
+    logger.error(
+      `No offline archive published for ${idfVersion} on ${getPlatformKey_eim()}`,
+    );
+    return false;
+  }
+  const archiveUrl = `${offlineBaseUrl}${filename}`;
 
   const pathToOfflineArchive = path.resolve(
     process.cwd(),
@@ -244,6 +250,7 @@ export {
   getPlatformKey_eim,
   getOSName,
   getArchitecture,
+  getOfflineArchiveFilename,
   downloadOfflineArchive,
   getAvailableFeatures,
   getAvailableTools,

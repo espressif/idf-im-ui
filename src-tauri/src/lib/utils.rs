@@ -246,6 +246,25 @@ pub fn find_directories_by_name(path: &Path, name: &str) -> Vec<String> {
     filter_directories(filter_subpaths(search))
 }
 
+/// Like [`find_directories_by_name`], but matches directories whose name merely
+/// *contains* `name` (case-insensitive), e.g. "python" finds `python@3.13`.
+pub fn find_directories_by_partial_name(path: &Path, name: &str) -> Vec<String> {
+    let needle = name.to_lowercase();
+    let search: Vec<String> = SearchBuilder::default()
+        .location(path)
+        .search_input(name)
+        .ignore_case()
+        .hidden()
+        .build()
+        .filter(|p| {
+            Path::new(p)
+                .file_name()
+                .is_some_and(|f| f.to_string_lossy().to_lowercase().contains(&needle))
+        })
+        .collect();
+    filter_directories(filter_subpaths(search))
+}
+
 /// Searches for files within a specified directory that match a given name and extension.
 ///
 /// This function constructs a search query using `SearchBuilder` to find files.
@@ -384,13 +403,13 @@ fn filter_subpaths(paths: Vec<String>) -> Vec<String> {
     'outer: for path in paths {
         // Check if this path is a subpath of any already filtered path
         for other in &filtered {
-            if path.starts_with(other) {
+            if Path::new(&path).starts_with(other) {
                 continue 'outer;
             }
         }
 
         // Remove any previously added paths that are subpaths of this one
-        filtered.retain(|other: &String| !other.starts_with(&path));
+        filtered.retain(|other: &String| !Path::new(other).starts_with(&path));
 
         // Add this path
         filtered.push(path);

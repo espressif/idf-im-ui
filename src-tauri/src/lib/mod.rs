@@ -2103,8 +2103,7 @@ pub fn create_posix_shims(
         PathBuf::from(python_bin_path)
     };
 
-    let shims_dir =
-        get_posix_shims_dir(&activation_script_path.to_string_lossy(), idf_version);
+    let shims_dir = get_posix_shims_dir(&activation_script_path.to_string_lossy(), idf_version);
     if shims_dir.exists() {
         fs::remove_dir_all(&shims_dir).map_err(|e| e.to_string())?;
     }
@@ -3065,7 +3064,10 @@ mod tests {
         assert_eq!(shims_dir, script_dir.join("shims").join("v5.3.2"));
 
         for (name, _) in POSIX_SHIM_TARGETS {
-            let mode = fs::metadata(shims_dir.join(name)).unwrap().permissions().mode();
+            let mode = fs::metadata(shims_dir.join(name))
+                .unwrap()
+                .permissions()
+                .mode();
             assert_eq!(mode & 0o111, 0o111, "{name} is not executable");
         }
 
@@ -3109,9 +3111,12 @@ mod tests {
         let rel = rel.join(tmp.path().strip_prefix("/").unwrap());
         assert!(rel.is_relative());
 
-        fs::write(tmp.path().join("python"), "#!/bin/sh\nprintf '%s\\n' \"$@\"\n").unwrap();
-        fs::set_permissions(tmp.path().join("python"), fs::Permissions::from_mode(0o755))
-            .unwrap();
+        fs::write(
+            tmp.path().join("python"),
+            "#!/bin/sh\nprintf '%s\\n' \"$@\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(tmp.path().join("python"), fs::Permissions::from_mode(0o755)).unwrap();
 
         let shims_dir = create_posix_shims(
             rel.join("act").to_str().unwrap(),
@@ -3120,16 +3125,30 @@ mod tests {
             rel.join("python").to_str().unwrap(),
         )
         .expect("create shims");
-        assert!(shims_dir.is_absolute(), "shim dir not absolute: {}", shims_dir.display());
+        assert!(
+            shims_dir.is_absolute(),
+            "shim dir not absolute: {}",
+            shims_dir.display()
+        );
 
         let output = std::process::Command::new(shims_dir.join("idf.py"))
             .current_dir("/")
             .output()
             .expect("run idf.py shim from another directory");
-        assert!(output.status.success(), "stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         let script = String::from_utf8_lossy(&output.stdout);
-        assert!(script.starts_with('/'), "script path not absolute: {script}");
-        assert!(script.trim_end().ends_with("idf/tools/idf.py"), "unexpected script: {script}");
+        assert!(
+            script.starts_with('/'),
+            "script path not absolute: {script}"
+        );
+        assert!(
+            script.trim_end().ends_with("idf/tools/idf.py"),
+            "unexpected script: {script}"
+        );
     }
 
     /// After sourcing the activation script, a child process (not just the
@@ -3144,7 +3163,10 @@ mod tests {
         let export_paths = vec![shims_dir.to_string_lossy().to_string()];
         let env_vars = vec![("IDF_TOOLS_PATH".to_string(), "/opt/esp/tools".to_string())];
 
-        for create in [create_activation_shell_script, create_deactivation_shell_script] {
+        for create in [
+            create_activation_shell_script,
+            create_deactivation_shell_script,
+        ] {
             create(
                 &script_dir,
                 "/opt/esp/esp-idf",

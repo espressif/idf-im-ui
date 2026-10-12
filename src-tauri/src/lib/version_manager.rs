@@ -1190,7 +1190,8 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let dir = temp_dir.path().to_str().unwrap();
         crate::create_posix_shims(dir, "v5.3.2", "/opt/esp/esp-idf", "/bin/echo").unwrap();
-        let other = crate::create_posix_shims(dir, "v5.4", "/opt/esp/esp-idf", "/bin/echo").unwrap();
+        let other =
+            crate::create_posix_shims(dir, "v5.4", "/opt/esp/esp-idf", "/bin/echo").unwrap();
         let script = temp_dir.path().join("activate_idf_v5.3.2.sh");
         fs::write(&script, "").unwrap();
 
