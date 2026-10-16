@@ -1,13 +1,14 @@
 use crate::gui::{
     app_state::{get_settings_non_blocking, update_settings},
     ui::{
-        emit_installation_event, emit_log_message, send_message, InstallationProgress,
-        InstallationStage, MessageLevel,
+        emit_install_error_fallback, emit_install_error_kind, emit_installation_event,
+        emit_log_message, send_message, InstallationProgress, InstallationStage, MessageLevel,
     },
     utils::{get_mirror_to_use, MirrorType},
 };
 use anyhow::{anyhow, Context, Result};
 
+use idf_im_lib::telemetry::{ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata},
@@ -540,7 +541,13 @@ pub async fn setup_tools(
             DownloadProgress::Error(err) => {
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
-                emit_installation_event(
+                // Tools are fetched from a mirror, so this is usually the
+                // connection; a full disk or a locked path shows up here too.
+                let kind = match ErrorKind::from_message(&err.to_string()) {
+                    k @ (ErrorKind::DiskSpace | ErrorKind::Permission) => k,
+                    _ => ErrorKind::Network,
+                };
+                emit_install_error_kind(
                     &app_handle_clone,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -550,6 +557,9 @@ pub async fn setup_tools(
                         detail: Some(err.to_string()),
                         version: Some(idf_version_clone.clone()),
                     },
+                    kind,
+                    FailureStage::Tools,
+                    format!("tool download failed: {}", err),
                 );
 
                 emit_log_message(
@@ -581,7 +591,9 @@ pub async fn setup_tools(
     )
     .await
     .map_err(|e| {
-        emit_installation_event(
+        // Individual download failures are already classified by the progress
+        // callback above, so only fill in a cause if none was recorded.
+        emit_install_error_fallback(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -590,6 +602,10 @@ pub async fn setup_tools(
                 detail: Some(e.to_string()),
                 version: Some(idf_version.to_string()),
             },
+            ErrorKind::Unknown,
+            FailureClass::Installer,
+            FailureStage::Tools,
+            format!("tool setup failed: {}", e),
         );
         anyhow!("Failed to setup tools: {}", e)
     })?;
@@ -696,7 +712,13 @@ pub async fn setup_tools(
         }
         Err(err) => {
             error!("Failed to install Python environment: {}", err);
-            emit_installation_event(
+            // Creating the venv and installing requirements: a broken system
+            // python or an unreachable PyPI mirror, both on the user's side.
+            let kind = match ErrorKind::from_message(&err.to_string()) {
+                k @ (ErrorKind::DiskSpace | ErrorKind::Permission | ErrorKind::Network) => k,
+                _ => ErrorKind::Python,
+            };
+            emit_install_error_kind(
                 app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -705,6 +727,9 @@ pub async fn setup_tools(
                     detail: Some(err.to_string()),
                     version: Some(idf_version.to_string()),
                 },
+                kind,
+                FailureStage::Python,
+                format!("python environment setup failed: {}", err),
             );
             return Err(anyhow!("Failed to install Python environment: {}", err));
         }

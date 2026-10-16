@@ -1,3 +1,4 @@
+use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter}; // dep: fork = "0.1"
@@ -43,6 +44,87 @@ pub fn emit_to_fe(app_handle: &AppHandle, event_name: &str, json_data: Value) {
 /// Unified message emitter for all installation events
 pub fn emit_installation_event(app_handle: &AppHandle, progress: InstallationProgress) {
     let _ = app_handle.emit("installation-progress", &progress);
+}
+
+/// Emits an error stage to the frontend and records why it happened for
+/// telemetry.
+///
+/// Use this instead of a bare `emit_installation_event` with
+/// `InstallationStage::Error`. The `message`/`detail` shown to the user are
+/// localized, so they are useless for classification; `raw` must be the
+/// untranslated error text (`err.to_string()`), and `kind`/`class`/`stage`
+/// state what actually went wrong. `missing` carries tool names for
+/// `DependencyMissing`.
+pub fn emit_install_error(
+    app_handle: &AppHandle,
+    progress: InstallationProgress,
+    kind: ErrorKind,
+    class: FailureClass,
+    stage: FailureStage,
+    raw: impl Into<String>,
+    missing: Vec<String>,
+) {
+    // Same normalization the CLI uses, so GUI and CLI produce identical
+    // missingPrerequisites values for the same machine state.
+    let missing = telemetry::normalize_missing_names(missing);
+    telemetry::note_failure(kind, class, Some(stage), raw, missing);
+    emit_installation_event(app_handle, progress);
+}
+
+/// `emit_install_error` for the common case where the kind implies the class
+/// and there are no missing prerequisites to report.
+pub fn emit_install_error_kind(
+    app_handle: &AppHandle,
+    progress: InstallationProgress,
+    kind: ErrorKind,
+    stage: FailureStage,
+    raw: impl Into<String>,
+) {
+    emit_install_error(
+        app_handle,
+        progress,
+        kind,
+        kind.default_class(),
+        stage,
+        raw,
+        Vec::new(),
+    );
+}
+
+/// `emit_install_error` for wrappers around steps that classify themselves.
+///
+/// Keeps the inner step's classification when there is one, and only falls
+/// back to `kind`/`class` when the failure came from somewhere that does not
+/// classify. Use this wherever the error has already been flattened into a
+/// localized string by an inner layer.
+pub fn emit_install_error_fallback(
+    app_handle: &AppHandle,
+    progress: InstallationProgress,
+    kind: ErrorKind,
+    class: FailureClass,
+    stage: FailureStage,
+    raw: impl Into<String>,
+) {
+    telemetry::note_failure_if_absent(kind, class, Some(stage), raw);
+    emit_installation_event(app_handle, progress);
+}
+
+/// Classifies a filesystem failure in our own pipeline. A full disk or a
+/// denied path is the user's machine, anything else is an EIM defect.
+pub fn classify_fs_failure(err: &std::io::Error) -> (ErrorKind, FailureClass) {
+    match telemetry::kind_from_io_error(err) {
+        Some(kind) => (kind, FailureClass::Environment),
+        None => (ErrorKind::Filesystem, FailureClass::Installer),
+    }
+}
+
+/// Same as `classify_fs_failure` for errors that have already been flattened
+/// into a string and so no longer carry an `io::ErrorKind`.
+pub fn classify_fs_failure_message(msg: &str) -> (ErrorKind, FailureClass) {
+    match ErrorKind::from_message(msg) {
+        kind @ (ErrorKind::DiskSpace | ErrorKind::Permission) => (kind, FailureClass::Environment),
+        _ => (ErrorKind::Filesystem, FailureClass::Installer),
+    }
 }
 
 /// Emit log messages (for detailed output)
