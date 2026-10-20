@@ -44,7 +44,7 @@
         </div>
 
         <!-- Windows-only: change the install DRIVE -->
-        <div class="select-block" v-if="appStore.os === 'windows' && drives.length > 1">
+        <div class="select-block" v-if="appStore.isWindows && drives.length > 1">
           <n-checkbox v-model:checked="allowDriveChange" data-id="drive-change-checkbox">
             {{ $t('simpleSetup.drive.acknowledge') }}
           </n-checkbox>
@@ -189,7 +189,7 @@
           {{ $t('simpleSetup.archive.deleted') }}
         </n-alert>
 
-        <div class="post-install-info" v-if="appStore.os == 'windows'">
+        <div class="post-install-info" v-if="appStore.isWindows">
           <h3>{{ $t('simpleSetup.complete.nextSteps.title') }}</h3>
           <ol>
             <li>{{ $t('simpleSetup.complete.nextSteps.step1') }}</li>
@@ -359,7 +359,7 @@ export default {
     )
     const driveOptions = computed(() => drives.value.map(d => ({ label: d, value: d })))
     const driveChanged = computed(() =>
-      appStore.os === 'windows' &&
+      appStore.isWindows &&
       allowDriveChange.value &&
       !!selectedDrive.value &&
       selectedDrive.value !== defaultDrive.value
@@ -448,7 +448,7 @@ export default {
         verificationFailed.value = false
         pythonCheckResults.value = []
 
-        if (appStore.os !== 'windows') {
+        if (!appStore.isWindows) {
           if (appStore.prerequisitesLastChecked === null || force) {
             await appStore.checkPrerequisites(force)
           }
@@ -508,12 +508,12 @@ export default {
       errorTitle.value = t('simpleSetup.error.prerequisites.title')
       errorMessage.value = t('simpleSetup.error.prerequisites.message')
 
-      if (appStore.os === 'windows') {
+      if (appStore.isWindows) {
         errorDetails.value = t('simpleSetup.error.prerequisites.windowsHint') + '\n\n' +
           t('common.prerequisites.windowsHint', { list: missing.join(', ') })
       } else {
         errorDetails.value = t('common.prerequisites.manualHint') + '\n' +
-          (appStore.os === 'macos'
+          (appStore.isMac
             ? t('common.prerequisites.macosHint', { list: missing.join(' ') })
             : t('common.prerequisites.linuxHint', { list: missing.join(' ') }))
       }
@@ -543,7 +543,7 @@ export default {
         const settings = await invoke('get_settings')
         installPath.value = settings?.path || ''
 
-        if (appStore.os === 'windows') {
+        if (appStore.isWindows) {
           const m = installPath.value.match(/^([A-Za-z]):/)
           defaultDrive.value = m ? `${m[1]}:` : ''
           selectedDrive.value = defaultDrive.value
@@ -642,7 +642,7 @@ export default {
           warningLike.value = true
           noArchive.value = false
           errorTitle.value = t('simpleSetup.error.pathNotEmpty.title')
-          errorMessage.value = t('simpleSetup.error.pathNotEmpty.message', { path: `${displayPath.value}/${selectedVersion.value}` })
+          errorMessage.value = t('simpleSetup.error.pathNotEmpty.message', { path: `${displayPath.value}${appStore.isWindows ? '\\' : '/'}${selectedVersion.value}` })
           errorDetails.value = t('simpleSetup.error.pathNotEmpty.detail')
           currentState.value = 'error'
           return
