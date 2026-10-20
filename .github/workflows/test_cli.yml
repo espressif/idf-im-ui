@@ -35,6 +35,9 @@ on:
         type: string
         default: "false"
 
+env:
+  PYTHON_VERSION: "3.13"
+
 jobs:
   test:
     name: CLI (${{ matrix.package_name }}${{ matrix.run_on == 'MirrorRunner' && '-AlternateMirrors' || '' }}${{ matrix.os == 'self-hosted' && '-CN' || '' }}) ${{ matrix.distro_name || '' }}
@@ -114,7 +117,7 @@ jobs:
         if: matrix.distro_name != 'scoop'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13.8"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Download artifacts
         uses: actions/download-artifact@v8

@@ -26,6 +26,9 @@ on:
         type: string
         default: "false"
 
+env:
+  PYTHON_VERSION: "3.13"
+
 jobs:
   test-cli-in-gui:
     name: CLI in GUI (${{ matrix.package_name }})
@@ -87,7 +90,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13.8"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Get CLI application version number (non-Windows)
         if: matrix.os != 'windows-latest'
@@ -169,7 +172,7 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Run IDF basic install test script (Windows)
         if: matrix.os == 'windows-latest'
@@ -295,7 +298,7 @@ jobs:
         if: matrix.os != 'windows-latest'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13.8"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Get GUI application version number (non-Windows)
         if: matrix.os != 'windows-latest'
@@ -416,7 +419,7 @@ jobs:
         if: matrix.os == 'windows-latest' && matrix.distro_name != 'scoop'
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Update WebView2 Runtime
         if: matrix.os == 'windows-latest'
