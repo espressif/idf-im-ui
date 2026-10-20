@@ -59,7 +59,7 @@ eim install
 
 ## Configuration Files
 
-> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, and 3.14. Python 3.14 is now fully supported on Linux, macOS, and Windows.
+> **Note on Python versions:** ESP-IDF supports Python versions 3.10, 3.11, 3.12, 3.13, 3.14, and 3.15. Python 3.15 is now fully supported on Linux, macOS, and Windows.
 
 Use TOML format configuration files for reproducible installations:
 
