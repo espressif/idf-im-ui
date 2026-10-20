@@ -503,6 +503,44 @@ jobs:
           }
           echo "$env:USERPROFILE\edgedriver" | Out-File -FilePath $env:GITHUB_PATH -Append
 
+      # WebView2 Runtime 150+ ignores WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS - the env
+      # var msedgedriver uses to inject --remote-debugging-port - when the host
+      # process is elevated, and GitHub-hosted runners run as admin. The CDP port
+      # then never opens, so WebDriver session creation hangs until the test deadline
+      # and surfaces as "ECONNREFUSED 127.0.0.1:4444" once the driver is torn down.
+      # Re-running the GUI tests at Medium integrity restores the env var.
+      # See https://github.com/tauri-apps/wry/issues/1782
+      - name: De-elevation setup (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $installed = $false
+          try {
+            winget install gerardog.gsudo --accept-source-agreements --accept-package-agreements --disable-interactivity
+            # winget is a native command - it sets $LASTEXITCODE instead of throwing.
+            if ($LASTEXITCODE -ne 0) {
+              throw "winget exited with code $LASTEXITCODE"
+            }
+            $installed = $true
+          } catch {
+            Write-Host "winget install of gsudo failed, falling back to chocolatey: $($_.Exception.Message)"
+          }
+          if (-not $installed) {
+            choco install gsudo -y --no-progress
+            if ($LASTEXITCODE -ne 0) {
+              throw "choco install of gsudo exited with code $LASTEXITCODE"
+            }
+          }
+          # winget/choco update the persisted PATH but not this session's - refresh it so
+          # gsudo can be located now, and hand its directory to later steps via GITHUB_PATH.
+          $env:PATH = [Environment]::GetEnvironmentVariable('PATH','Machine') + ';' + [Environment]::GetEnvironmentVariable('PATH','User')
+          $gsudo = (Get-Command gsudo -ErrorAction Stop).Source
+          Split-Path $gsudo | Add-Content -Path $env:GITHUB_PATH
+          & $gsudo --version
+          # The de-elevated test process still writes into the workspace the elevated
+          # runner created.
+          icacls "$env:GITHUB_WORKSPACE" /grant "Everyone:(OI)(CI)F"
+
       - name: Setup node modules (Windows)
         if: matrix.os == 'windows-latest'
         run: |
@@ -527,7 +565,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-prerequisites
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-prerequisites"
         continue-on-error: true
 
       - name: Run python check (Windows)
@@ -538,7 +576,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-pythoncheck
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-pythoncheck"
           $scoopShims = "$env:USERPROFILE\scoop\shims"
           if (Test-Path $scoopShims) {
             $env:PATH = "$scoopShims;$env:PATH"
@@ -555,7 +593,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-basic
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-basic"
         continue-on-error: true
 
       - name: "Run simplified install on D drive test script (Windows)"
@@ -570,7 +608,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-simplified-windows-d-drive
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-simplified-windows-d-drive"
         continue-on-error: true
 
       - name: Run incomplete installations modal test script using GUI (Windows)
@@ -582,7 +620,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-incomplete-installations
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-incomplete-installations"
         continue-on-error: true
 
       - name: Run IDF extended install test script using GUI (Windows)
@@ -594,7 +632,7 @@ jobs:
           $env:EIM_GUI_PATH = "${{ github.workspace }}\artifacts\eim.exe"
           $env:EIM_GUI_VERSION = "${{ env.GUI_TAG }}"
           Set-Location -Path "./tests"
-          npm run test-GUI-win --file=GUI-extended
+          gsudo --integrity Medium pwsh -NoProfile -Command "npm run test-GUI-win --file=GUI-extended"
         continue-on-error: true
 
       - name: Restore PATH (Windows)
