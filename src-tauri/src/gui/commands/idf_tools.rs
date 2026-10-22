@@ -8,6 +8,7 @@ use crate::gui::{
 };
 use anyhow::{anyhow, Context, Result};
 
+use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata},
@@ -540,6 +541,12 @@ pub async fn setup_tools(
             DownloadProgress::Error(err) => {
                 let tool_name = current_tool_name_clone.lock().unwrap().clone();
 
+                // Tools are fetched from a mirror, so this is usually the
+                // connection; a full disk or a locked path shows up here too.
+                let kind = match ErrorKind::from_message(&err.to_string()) {
+                    k @ (ErrorKind::DiskSpace | ErrorKind::Permission) => k,
+                    _ => ErrorKind::Network,
+                };
                 emit_installation_event(
                     &app_handle_clone,
                     InstallationProgress {
@@ -550,6 +557,11 @@ pub async fn setup_tools(
                         detail: Some(err.to_string()),
                         version: Some(idf_version_clone.clone()),
                     },
+                );
+                telemetry::note_failure_kind(
+                    kind,
+                    Some(FailureStage::Tools),
+                    format!("tool download failed: {}", err),
                 );
 
                 emit_log_message(
@@ -581,6 +593,8 @@ pub async fn setup_tools(
     )
     .await
     .map_err(|e| {
+        // Individual download failures are already classified by the progress
+        // callback above, so only fill in a cause if none was recorded.
         emit_installation_event(
             app_handle,
             InstallationProgress {
@@ -591,8 +605,15 @@ pub async fn setup_tools(
                 version: Some(idf_version.to_string()),
             },
         );
+        telemetry::note_failure_if_absent(
+            ErrorKind::Unknown,
+            FailureClass::Unknown,
+            Some(FailureStage::Tools),
+            format!("tool setup failed: {}", e),
+        );
         anyhow!("Failed to setup tools: {}", e)
     })?;
+    telemetry::clear_pending_failure();
 
     let tools_install_folder = &install_folder;
 
@@ -693,9 +714,16 @@ pub async fn setup_tools(
                 MessageLevel::Success,
                 t!("gui.setup_tools.python_installed").to_string(),
             );
+            telemetry::clear_pending_failure();
         }
         Err(err) => {
             error!("Failed to install Python environment: {}", err);
+            // Creating the venv and installing requirements: a broken system
+            // python or an unreachable PyPI mirror, both on the user's side.
+            let kind = match ErrorKind::from_message(&err.to_string()) {
+                k @ (ErrorKind::DiskSpace | ErrorKind::Permission | ErrorKind::Network) => k,
+                _ => ErrorKind::Python,
+            };
             emit_installation_event(
                 app_handle,
                 InstallationProgress {
@@ -705,6 +733,11 @@ pub async fn setup_tools(
                     detail: Some(err.to_string()),
                     version: Some(idf_version.to_string()),
                 },
+            );
+            telemetry::note_failure_kind(
+                kind,
+                Some(FailureStage::Python),
+                format!("python environment setup failed: {}", err),
             );
             return Err(anyhow!("Failed to install Python environment: {}", err));
         }

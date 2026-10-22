@@ -11,6 +11,7 @@ use idf_im_lib::offline_installer::install_prerequisites_offline;
 use idf_im_lib::offline_installer::merge_requirements_files;
 use idf_im_lib::offline_installer::use_offline_archive;
 use idf_im_lib::settings::Settings;
+use idf_im_lib::telemetry::{self, ErrorKind, FailureStage};
 use idf_im_lib::tool_selection::fetch_tools_file;
 use idf_im_lib::tool_selection::get_tool_names;
 use idf_im_lib::tool_selection::get_tools_json_url;
@@ -518,6 +519,7 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
     // Multiple version starts here
     let mut using_existing_idf;
     for idf_version in config.idf_versions.clone().unwrap() {
+        idf_im_lib::telemetry::clear_pending_failure();
         let paths = config.get_version_paths(&idf_version).map_err(|err| {
             error!("Failed to get version paths: {}", err);
             err.to_string()
@@ -688,10 +690,19 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
             match qemu_prereqs {
                 Ok(prereqs) if !prereqs.is_empty() => {
                     error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
+                    telemetry::note_missing_prerequisites(
+                        "missing qemu prerequisites",
+                        prereqs.iter().copied(),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Err(err) => {
                     error!("{}: {}", t!("wizard.qemu.prerequisites.check_error"), err);
+                    telemetry::note_failure_kind(
+                        ErrorKind::PrerequisiteCheckFailed,
+                        Some(FailureStage::Prerequisites),
+                        format!("qemu prerequisite check could not run: {}", err),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Ok(_) => { /* All good, continue. */ }
@@ -831,10 +842,19 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
             match qemu_prereqs {
                 Ok(prereqs) if !prereqs.is_empty() => {
                     error!("{}: {:?}", t!("wizard.qemu.prerequisites.missing"), prereqs);
+                    telemetry::note_missing_prerequisites(
+                        "missing qemu prerequisites",
+                        prereqs.iter().copied(),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Err(err) => {
                     error!("{}: {}", t!("wizard.qemu.prerequisites.check_error"), err);
+                    telemetry::note_failure_kind(
+                        ErrorKind::PrerequisiteCheckFailed,
+                        Some(FailureStage::Prerequisites),
+                        format!("qemu prerequisite check could not run: {}", err),
+                    );
                     return Err(t!("wizard.qemu.prerequisites.unmet").to_string());
                 }
                 Ok(_) => { /* All good, continue. */ }
