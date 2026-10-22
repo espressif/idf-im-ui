@@ -185,17 +185,52 @@ pub fn scan_for_archives() -> Result<Vec<String>, String> {
     Ok(archives)
 }
 
+/// Directory and `eim.json` path used by the settings commands and by telemetry.
+fn eim_settings_paths() -> Result<(PathBuf, PathBuf), &'static str> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("eim");
+    let config_file = config_dir.join("eim.json");
+    Ok((config_dir, config_file))
+}
+
+fn open_eim_store(
+    app_handle: &AppHandle,
+    config_file: PathBuf,
+) -> Result<std::sync::Arc<tauri_plugin_store::Store<tauri::Wry>>, tauri_plugin_store::Error> {
+    app_handle.store_builder(config_file).build()
+}
+
+/// A missing key is on. A non-bool value is off.
+fn usage_statistics_from_value(value: Option<Value>) -> bool {
+    match value {
+        Some(Value::Bool(enabled)) => enabled,
+        None => true,
+        Some(_) => false,
+    }
+}
+
+/// Reads the usage-statistics opt-in.
+///
+/// Uses the same path and store open as `get_app_settings`. A missing key is
+/// on. An unreadable store is off, and this never panics or creates the
+/// directory.
+pub fn usage_statistics_from_store(app_handle: &AppHandle) -> bool {
+    let Ok((_, config_file)) = eim_settings_paths() else {
+        return false;
+    };
+    let Ok(store) = open_eim_store(app_handle, config_file) else {
+        return false;
+    };
+    usage_statistics_from_value(store.get("usage_statistics"))
+}
+
 #[tauri::command]
 pub fn get_app_settings(app_handle: AppHandle) -> Value {
     // TODO: persist
-    let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory")
-        .unwrap()
-        .join("eim");
-
-    let config_file = config_dir.join("eim.json");
+    let (config_dir, config_file) = eim_settings_paths().unwrap();
     ensure_path(config_dir.to_str().unwrap()).unwrap();
-    match app_handle.store_builder(config_file).build() {
+    match open_eim_store(&app_handle, config_file) {
         Ok(store) => {
             let first_run = store.get("first_run").unwrap_or(Value::Bool(true)).clone();
             let skip_welcome = store
@@ -231,15 +266,10 @@ pub async fn save_app_settings(
     skip_welcome: bool,
     usage_statistics: bool,
 ) {
-    let config_dir = dirs::config_dir()
-        .ok_or("Failed to get config directory")
-        .unwrap()
-        .join("eim");
-
-    let config_file = config_dir.join("eim.json");
+    let (config_dir, config_file) = eim_settings_paths().unwrap();
     ensure_path(config_dir.to_str().unwrap()).unwrap();
 
-    match app_handle.store_builder(config_file).build() {
+    match open_eim_store(&app_handle, config_file) {
         Ok(store) => {
             store.set("first_run".to_string(), Value::Bool(first_run));
 

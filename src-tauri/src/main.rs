@@ -30,6 +30,15 @@ fn ensure_eim_in_path() {
     }
 }
 
+#[cfg(feature = "cli")]
+async fn exit_after_unreported_child(err: clap::Error) -> ! {
+    if let Some(ctx) = idf_im_lib::telemetry::context_from_parent_env() {
+        idf_im_lib::telemetry::note_unreported_child_exit(&ctx);
+        idf_im_lib::telemetry::flush(std::time::Duration::from_millis(500)).await;
+    }
+    err.exit()
+}
+
 fn set_locale(locale: &Option<String>) {
     match locale {
         Some(l) => {
@@ -134,7 +143,10 @@ async fn main() {
     };
     #[cfg(not(feature = "gui"))]
     {
-        let cli = cli::cli_args::Cli::parse();
+        let cli = match cli::cli_args::Cli::try_parse() {
+            Ok(cli) => cli,
+            Err(err) => exit_after_unreported_child(err).await,
+        };
         set_locale(&cli.locale);
 
         let result = cli::run_cli(cli).await;
@@ -150,7 +162,7 @@ async fn main() {
     #[cfg(not(feature = "cli"))]
     {
         set_locale(&None);
-        gui::run(None);
+        gui::run(None, None, false, false);
     }
     // both GUI and CLI features are enabled
     #[cfg(target_os = "windows")]
@@ -176,7 +188,10 @@ async fn main() {
             }
         }
     }
-    let cli = cli::cli_args::Cli::parse();
+    let cli = match cli::cli_args::Cli::try_parse() {
+        Ok(cli) => cli,
+        Err(err) => exit_after_unreported_child(err).await,
+    };
     set_locale(&cli.locale);
 
     let result = cli::run_cli(cli).await; // Run the GUI by default if no arguments are provided

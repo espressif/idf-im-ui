@@ -519,6 +519,7 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
     // Multiple version starts here
     let mut using_existing_idf;
     for idf_version in config.idf_versions.clone().unwrap() {
+        idf_im_lib::telemetry::clear_pending_failure();
         let paths = config.get_version_paths(&idf_version).map_err(|err| {
             error!("Failed to get version paths: {}", err);
             err.to_string()

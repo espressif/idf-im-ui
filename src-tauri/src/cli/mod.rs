@@ -235,6 +235,11 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
             Ok("1") | Ok("true")
         );
     telemetry::set_enabled(!do_not_track);
+    let _inherited_session_guard = if session_inherited_from_parent() {
+        Some(InheritedSessionGuard)
+    } else {
+        None
+    };
     // Initial tracking of CLI start
     #[cfg(feature = "gui")]
     let command = cli
@@ -1057,7 +1062,6 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 1 => LevelFilter::Debug,
                 _ => LevelFilter::Trace,
             };
-            let do_not_track = cli.do_not_track;
             let settings = match Settings::new(install_args.config.clone(), install_args.clone()) {
                 Ok(mut settings) => {
                     if let Some(ref p) = cli_esp_idf_json_path {
@@ -1067,7 +1071,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 }
                 Err(_) => None,
             };
-            gui::run(settings, Some(log_level), do_not_track);
+            gui::run(settings, Some(log_level), do_not_track, cli.do_not_track);
             Ok(())
         }
         Commands::InstallDrivers => match std::env::consts::OS {
@@ -1117,6 +1121,18 @@ fn subcommand_name(cmd: &Commands) -> &'static str {
 /// phantom install that never finished.
 fn session_inherited_from_parent() -> bool {
     env::var("EIM_TELEMETRY_SESSION").is_ok_and(|id| !id.is_empty())
+}
+
+/// Sends `install_finished` if this process was handed a session and never
+/// reported one. Drop runs on every return path, including panic.
+struct InheritedSessionGuard;
+
+impl Drop for InheritedSessionGuard {
+    fn drop(&mut self) {
+        if let Some(ctx) = telemetry::context_from_parent_env() {
+            telemetry::note_unreported_child_exit(&ctx);
+        }
+    }
 }
 
 /// Builds the telemetry session for an install run.

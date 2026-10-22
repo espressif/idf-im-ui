@@ -14,39 +14,51 @@ use idf_im_lib::telemetry::{
     self, ErrorKind, FailureClass, InstallMode, InstallOutcome, InstallationContext, Interface,
     OutcomeExtras,
 };
-use serde_json::Value;
 use tauri::{AppHandle, Manager};
-use tauri_plugin_store::StoreExt;
 
 use crate::gui::app_state::{get_settings_non_blocking, AppState};
+use crate::gui::commands::utils_commands::usage_statistics_from_store;
 
-/// Whether the user has allowed usage statistics.
-///
-/// A missing or unreadable setting means the question has not been answered
-/// yet and is treated as a no. Never panics: the install hot path must not
-/// die because the config directory is missing or not UTF-8.
 pub fn usage_statistics_allowed(app_handle: &AppHandle) -> bool {
-    let Some(config_dir) = dirs::config_dir() else {
-        return false;
+    usage_statistics_from_store(app_handle)
+}
+
+/// Closes a session that a previous command left open.
+///
+/// Call this only from a top-level install command, before `begin`. Nested
+/// commands must not call it: simple setup is still the open session when it
+/// invokes the wizard command, and `is_installing` is not set yet.
+pub fn reclaim_leaked_session(app_handle: &AppHandle) {
+    let leaked = match app_handle.state::<AppState>().telemetry_session.lock() {
+        Ok(mut slot) => slot.take(),
+        Err(_) => None,
     };
-    let config_file = config_dir.join("eim").join("eim.json");
-    let Ok(store) = app_handle.store(config_file) else {
-        return false;
+    let Some(ctx) = leaked else {
+        return;
     };
-    matches!(store.get("usage_statistics"), Some(Value::Bool(true)))
+    log::info!("Closing a leaked install session before opening a new one.");
+    telemetry::note_failure(
+        ErrorKind::AppClosed,
+        FailureClass::User,
+        None,
+        "a previous install session was never closed",
+        Vec::new(),
+    );
+    telemetry::track_install_outcome(
+        &ctx,
+        InstallOutcome::Failure,
+        None,
+        None,
+        OutcomeExtras::default(),
+    );
 }
 
 /// Opens an install session and sends `install_started`.
 ///
 /// Returns `None`, which makes the matching `finish` a no-op, when either
-/// telemetry is off or a session is already open. The second case is what
-/// keeps nested commands honest: simple setup calls the wizard command, and
-/// simple offline calls the offline pipeline, so without this the inner
-/// command would report a second install under the wrong mode. The outermost
-/// caller wins, which is the mode the user actually picked.
-///
-/// Versions and installation ids come from the current settings, so the event
-/// carries them even though the frontend no longer passes anything.
+/// telemetry is off or a session is already open. An occupied slot is always
+/// a nested command: simple setup calls the wizard command while its own
+/// session is still open. The outermost caller wins.
 pub fn begin(app_handle: &AppHandle, mode: InstallMode) -> Option<InstallationContext> {
     if !usage_statistics_allowed(app_handle) {
         log::debug!("Usage statistics not allowed, not tracking this install.");

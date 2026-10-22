@@ -1,14 +1,14 @@
 use crate::gui::{
     app_state::{get_settings_non_blocking, update_settings},
     ui::{
-        emit_install_error_fallback, emit_install_error_kind, emit_installation_event,
-        emit_log_message, send_message, InstallationProgress, InstallationStage, MessageLevel,
+        emit_installation_event, emit_log_message, send_message, InstallationProgress,
+        InstallationStage, MessageLevel,
     },
     utils::{get_mirror_to_use, MirrorType},
 };
 use anyhow::{anyhow, Context, Result};
 
-use idf_im_lib::telemetry::{ErrorKind, FailureClass, FailureStage};
+use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::{
     add_path_to_path, ensure_path,
     idf_features::{get_requirements_json_url, FeatureInfo, RequirementsMetadata},
@@ -547,7 +547,7 @@ pub async fn setup_tools(
                     k @ (ErrorKind::DiskSpace | ErrorKind::Permission) => k,
                     _ => ErrorKind::Network,
                 };
-                emit_install_error_kind(
+                emit_installation_event(
                     &app_handle_clone,
                     InstallationProgress {
                         stage: InstallationStage::Error,
@@ -557,8 +557,10 @@ pub async fn setup_tools(
                         detail: Some(err.to_string()),
                         version: Some(idf_version_clone.clone()),
                     },
+                );
+                telemetry::note_failure_kind(
                     kind,
-                    FailureStage::Tools,
+                    Some(FailureStage::Tools),
                     format!("tool download failed: {}", err),
                 );
 
@@ -593,7 +595,7 @@ pub async fn setup_tools(
     .map_err(|e| {
         // Individual download failures are already classified by the progress
         // callback above, so only fill in a cause if none was recorded.
-        emit_install_error_fallback(
+        emit_installation_event(
             app_handle,
             InstallationProgress {
                 stage: InstallationStage::Error,
@@ -602,13 +604,16 @@ pub async fn setup_tools(
                 detail: Some(e.to_string()),
                 version: Some(idf_version.to_string()),
             },
+        );
+        telemetry::note_failure_if_absent(
             ErrorKind::Unknown,
-            FailureClass::Installer,
-            FailureStage::Tools,
+            FailureClass::Unknown,
+            Some(FailureStage::Tools),
             format!("tool setup failed: {}", e),
         );
         anyhow!("Failed to setup tools: {}", e)
     })?;
+    telemetry::clear_pending_failure();
 
     let tools_install_folder = &install_folder;
 
@@ -709,6 +714,7 @@ pub async fn setup_tools(
                 MessageLevel::Success,
                 t!("gui.setup_tools.python_installed").to_string(),
             );
+            telemetry::clear_pending_failure();
         }
         Err(err) => {
             error!("Failed to install Python environment: {}", err);
@@ -718,7 +724,7 @@ pub async fn setup_tools(
                 k @ (ErrorKind::DiskSpace | ErrorKind::Permission | ErrorKind::Network) => k,
                 _ => ErrorKind::Python,
             };
-            emit_install_error_kind(
+            emit_installation_event(
                 app_handle,
                 InstallationProgress {
                     stage: InstallationStage::Error,
@@ -727,8 +733,10 @@ pub async fn setup_tools(
                     detail: Some(err.to_string()),
                     version: Some(idf_version.to_string()),
                 },
+            );
+            telemetry::note_failure_kind(
                 kind,
-                FailureStage::Python,
+                Some(FailureStage::Python),
                 format!("python environment setup failed: {}", err),
             );
             return Err(anyhow!("Failed to install Python environment: {}", err));

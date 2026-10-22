@@ -8,7 +8,7 @@ use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::system_dependencies;
-use idf_im_lib::telemetry::{self, ErrorKind, FailureStage};
+use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::tool_selection::{
     get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
 };
@@ -164,10 +164,20 @@ pub async fn check_and_install_prerequisites(
                     } else {
                         info!("{}", t!("prerequisites.ok"));
                     }
-                } else {
+                } else if non_interactive {
                     telemetry::note_missing_prerequisites(
-                        "user declined the prerequisite install, still missing",
+                        "prerequisites still missing in non-interactive mode",
                         &unsatisfied_prerequisites,
+                    );
+                    return Err(t!("prerequisites.install.ask").to_string());
+                } else {
+                    let names = telemetry::normalize_missing_names(&unsatisfied_prerequisites);
+                    telemetry::note_failure(
+                        ErrorKind::DependencyMissing,
+                        FailureClass::User,
+                        Some(FailureStage::Prerequisites),
+                        "user declined the prerequisite install",
+                        names,
                     );
                     return Err(t!("prerequisites.install.ask").to_string());
                 }

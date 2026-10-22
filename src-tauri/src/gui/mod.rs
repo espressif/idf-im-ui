@@ -85,6 +85,7 @@ pub fn run(
     settings: Option<Settings>,
     log_level_override: Option<log::LevelFilter>,
     do_not_track: bool,
+    persist_opt_out: bool,
 ) {
     // this is here because macos bundled .app does not inherit path
     #[cfg(target_os = "macos")]
@@ -111,9 +112,6 @@ pub fn run(
             }
         }
     }
-
-    // Create owned copies before the closure to avoid borrow issues
-    let do_not_track_value = do_not_track;
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -145,8 +143,9 @@ pub fn run(
           if let Err(e) = std::fs::create_dir_all(&config_dir) {
             log::error!("Failed to create config directory: {}", e);
           } else if let Ok(store) = app.handle().store_builder(config_file).build() {
-            // Only an explicit --do-not-track overrides the user's saved preference
-            if do_not_track_value {
+            // Only an explicit --do-not-track overrides the user's saved preference.
+            // EIM_DO_NOT_TRACK disables sending for this process and does not write.
+            if persist_opt_out {
               store.set("usage_statistics".to_string(), Value::Bool(false));
               if let Err(e) = store.save() {
                   log::error!("Failed to save usage_statistics setting: {}", e);
@@ -236,16 +235,19 @@ pub fn run(
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            // ExitRequested is only a request: another handler can call
-            // prevent_exit(). Recording a failure there would leave a false
-            // app_closed outcome if the user then stays. Exit fires only after
-            // nobody cancelled, so that is the safe place to abandon and flush.
             if let tauri::RunEvent::Exit = event {
                 let abandoned = telemetry_session::abandon_open_session(app_handle);
                 if abandoned || idf_im_lib::telemetry::has_pending_dispatches() {
-                    tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
-                        std::time::Duration::from_millis(500),
-                    ));
+                    if tokio::runtime::Handle::try_current().is_err() {
+                        tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
+                            std::time::Duration::from_millis(500),
+                        ));
+                    } else {
+                        tokio::spawn(async {
+                            idf_im_lib::telemetry::flush(std::time::Duration::from_millis(500))
+                                .await;
+                        });
+                    }
                 }
             }
         });

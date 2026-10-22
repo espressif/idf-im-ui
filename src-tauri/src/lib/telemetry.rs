@@ -1,7 +1,6 @@
 use anyhow::Error as AnyhowError;
 use chrono::Utc;
 use once_cell::sync::Lazy;
-use regex::Regex;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -20,6 +19,10 @@ static HTTP_CLIENT: Lazy<Option<reqwest::Client>> = Lazy::new(|| {
 });
 
 static ENABLED: AtomicBool = AtomicBool::new(true);
+
+/// Set once `track_install_outcome` has run, so a drop guard does not send a
+/// second `install_finished` for the same process.
+static OUTCOME_REPORTED: AtomicBool = AtomicBool::new(false);
 
 static SYSTEM_INFO: Lazy<String> = Lazy::new(compute_system_info);
 
@@ -86,10 +89,12 @@ pub enum FailureClass {
     /// Something about the user's machine: missing tools, broken python, no
     /// network, full disk, denied permissions.
     Environment,
-    /// A defect in EIM: our extraction, copy, tool setup or an unknown error.
+    /// A defect in EIM: our extraction, copy, or tool setup.
     Installer,
     /// A user choice or action: bad config input, quitting mid-install.
     User,
+    /// The cause could not be classified. Not counted against the installer.
+    Unknown,
 }
 
 /// Where in the install the failure happened.
@@ -114,14 +119,17 @@ impl ErrorKind {
             | ErrorKind::PrerequisiteCheckFailed
             | ErrorKind::DiskSpace
             | ErrorKind::Permission
-            | ErrorKind::Python
-            // A size or checksum mismatch is nearly always a truncated or
-            // proxy-mangled download rather than a bad published archive.
-            | ErrorKind::ArchiveInvalid => FailureClass::Environment,
-            ErrorKind::UserCancelled | ErrorKind::AppClosed | ErrorKind::Configuration => {
-                FailureClass::User
-            }
-            ErrorKind::Git | ErrorKind::Filesystem | ErrorKind::Unknown => FailureClass::Installer,
+            | ErrorKind::Python => FailureClass::Environment,
+            // Call sites that know the user chose badly pass `FailureClass::User`
+            // themselves. The default is the installer, which is what the
+            // extract and config-save paths already report.
+            ErrorKind::ArchiveInvalid
+            | ErrorKind::Configuration
+            | ErrorKind::Git
+            | ErrorKind::Filesystem => FailureClass::Installer,
+            ErrorKind::UserCancelled | ErrorKind::AppClosed => FailureClass::User,
+            // Unclassified fallbacks must not count against the installer rate.
+            ErrorKind::Unknown => FailureClass::Unknown,
         }
     }
 
@@ -155,7 +163,7 @@ impl ErrorKind {
             ErrorKind::Python
         } else if msg.contains("git") {
             ErrorKind::Git
-        } else if is_network_message(&msg) {
+        } else if is_network_os_error(&msg) || is_network_message(&msg) {
             ErrorKind::Network
         } else if msg.contains("cancel") || msg.contains("abort") {
             ErrorKind::UserCancelled
@@ -170,13 +178,28 @@ impl ErrorKind {
     }
 }
 
+/// `os error 5` must not match `os error 50` or `os error 53`.
+fn contains_os_error(msg: &str, code: u32) -> bool {
+    let needle = format!("os error {code}");
+    let mut rest = msg;
+    while let Some(index) = rest.find(&needle) {
+        let after = &rest[index + needle.len()..];
+        match after.chars().next() {
+            Some(c) if c.is_ascii_digit() => {}
+            _ => return true,
+        }
+        rest = &rest[index + needle.len()..];
+    }
+    false
+}
+
 fn is_disk_space_message(msg: &str) -> bool {
     msg.contains("no space left")
         || msg.contains("no space")
         || msg.contains("disk full")
         || msg.contains("enospc")
-        || msg.contains("os error 28")
-        || msg.contains("os error 112")
+        || contains_os_error(msg, 28)
+        || contains_os_error(msg, 112)
         || msg.contains("write to disk")
         || (msg.contains("disk") && (msg.contains("full") || msg.contains("space")))
 }
@@ -184,13 +207,21 @@ fn is_disk_space_message(msg: &str) -> bool {
 fn is_permission_message(msg: &str) -> bool {
     msg.contains("permission denied")
         || msg.contains("permission error")
-        || msg.contains("permission")
         || msg.contains("access is denied")
         || msg.contains("access denied")
         || msg.contains("eacces")
         || msg.contains("not permitted")
-        || msg.contains("os error 13")
-        || msg.contains("os error 5")
+        || contains_os_error(msg, 13)
+        || contains_os_error(msg, 5)
+}
+
+/// Windows network-path failures. These contain "os error N" but are not
+/// permission errors and are not defects in EIM.
+fn is_network_os_error(msg: &str) -> bool {
+    contains_os_error(msg, 53)
+        || contains_os_error(msg, 67)
+        || contains_os_error(msg, 1231)
+        || contains_os_error(msg, 1232)
 }
 
 fn is_network_message(msg: &str) -> bool {
@@ -216,15 +247,36 @@ pub fn kind_from_io_error(err: &std::io::Error) -> Option<ErrorKind> {
     }
 }
 
+/// Classifies a filesystem failure in our own pipeline. A full disk or a
+/// denied path is the user's machine, anything else is an EIM defect.
+pub fn classify_fs_failure(err: &std::io::Error) -> (ErrorKind, FailureClass) {
+    match kind_from_io_error(err) {
+        Some(kind) => (kind, FailureClass::Environment),
+        None => (ErrorKind::Filesystem, FailureClass::Installer),
+    }
+}
+
+/// Same as `classify_fs_failure` for errors that have already been flattened
+/// into a string and so no longer carry an `io::ErrorKind`.
+pub fn classify_fs_failure_message(msg: &str) -> (ErrorKind, FailureClass) {
+    match ErrorKind::from_message(msg) {
+        kind @ (ErrorKind::DiskSpace | ErrorKind::Permission) => (kind, FailureClass::Environment),
+        _ => (ErrorKind::Filesystem, FailureClass::Installer),
+    }
+}
+
 /// A failure recorded at the place it happened, so the outcome event can report
 /// the real cause instead of guessing from a translated message.
+///
+/// The original text is hashed and discarded. It is never stored here and
+/// never sent.
 #[derive(Debug, Clone)]
 pub struct ClassifiedFailure {
     pub kind: ErrorKind,
     pub class: FailureClass,
     pub stage: Option<FailureStage>,
-    /// Raw, untranslated error text. Scrubbed before it is sent.
-    pub raw: String,
+    /// SHA-256 prefix of the local error text. The text itself is not kept.
+    pub error_hash: String,
     /// Tool names for `DependencyMissing`, for example `git`, `cmake`.
     pub missing: Vec<String>,
 }
@@ -243,13 +295,15 @@ pub fn note_failure(
     raw: impl Into<String>,
     missing: Vec<String>,
 ) {
+    let raw = raw.into();
     let failure = ClassifiedFailure {
         kind,
         class,
         stage,
-        raw: raw.into(),
-        missing,
+        error_hash: hash_short(&raw),
+        missing: normalize_missing_names(missing),
     };
+    drop(raw);
     log::debug!(
         "Telemetry failure noted: kind={:?} class={:?} stage={:?}",
         failure.kind,
@@ -311,11 +365,12 @@ pub fn note_failure_if_absent(
 ) {
     if let Ok(mut slot) = PENDING_FAILURE.lock() {
         if slot.is_none() {
+            let raw = raw.into();
             *slot = Some(ClassifiedFailure {
                 kind,
                 class,
                 stage,
-                raw: raw.into(),
+                error_hash: hash_short(&raw),
                 missing: Vec::new(),
             });
         }
@@ -331,7 +386,11 @@ fn has_pending_failure() -> bool {
         .unwrap_or(false)
 }
 
-fn clear_pending_failure() {
+/// Drops a failure noted for an earlier step.
+///
+/// Call this at the start of each version so a cause from the previous
+/// version cannot be reported for the next one.
+pub fn clear_pending_failure() {
     if let Ok(mut slot) = PENDING_FAILURE.lock() {
         *slot = None;
     }
@@ -405,7 +464,6 @@ pub fn track_install_started(ctx: &InstallationContext) {
         versions: ctx.versions.clone(),
         duration_seconds: None,
         error_kind: None,
-        error_message: None,
         error_hash: None,
         failure_class: None,
         failure_stage: None,
@@ -428,6 +486,7 @@ pub fn track_install_outcome(
     error: Option<&AnyhowError>,
     extras: OutcomeExtras,
 ) {
+    OUTCOME_REPORTED.store(true, Ordering::Relaxed);
     let classified = match outcome {
         InstallOutcome::Failure => take_pending_failure(),
         // A success leaves nothing to attribute; drop anything recorded by a
@@ -441,20 +500,21 @@ pub fn track_install_outcome(
         return;
     }
 
-    let raw_message = match (&classified, error) {
-        (Some(failure), _) => Some(failure.raw.clone()),
-        (None, Some(err)) => Some(format!("{:#}", err)),
-        (None, None) => None,
-    };
-    let (error_message, error_hash) = match (outcome, raw_message.as_deref()) {
-        (InstallOutcome::Failure, Some(raw)) => (Some(scrub_pii(raw)), Some(hash_short(raw))),
-        _ => (None, None),
+    // Used only to classify and hash when no site recorded a cause. Dropped
+    // before the event is built, so the text never leaves the process.
+    let fallback_text = error.map(|err| format!("{:#}", err));
+    let error_hash = match outcome {
+        InstallOutcome::Failure => classified
+            .as_ref()
+            .map(|failure| failure.error_hash.clone())
+            .or_else(|| fallback_text.as_deref().map(hash_short)),
+        InstallOutcome::Success => None,
     };
 
     let kind = match (outcome, &classified) {
         (InstallOutcome::Failure, Some(failure)) => Some(failure.kind),
         (InstallOutcome::Failure, None) => error_kind.or_else(|| {
-            raw_message
+            fallback_text
                 .as_deref()
                 .map(ErrorKind::from_message)
                 .or(Some(ErrorKind::Unknown))
@@ -482,7 +542,6 @@ pub fn track_install_outcome(
         versions: ctx.versions.clone(),
         duration_seconds: Some(ctx.duration_seconds()),
         error_kind: kind,
-        error_message,
         error_hash,
         failure_class,
         failure_stage,
@@ -506,7 +565,6 @@ pub fn track_cli_invoked(subcommand: &str) {
         versions: Vec::new(),
         duration_seconds: None,
         error_kind: None,
-        error_message: None,
         error_hash: None,
         failure_class: None,
         failure_stage: None,
@@ -514,6 +572,54 @@ pub fn track_cli_invoked(subcommand: &str) {
         extras: OutcomeExtras::default(),
         subcommand: Some(subcommand.to_string()),
     });
+}
+
+/// Session handed over by a parent process via `EIM_TELEMETRY_*`.
+///
+/// Used when the child exits before it can build a full install context.
+pub fn context_from_parent_env() -> Option<InstallationContext> {
+    let session_id = std::env::var("EIM_TELEMETRY_SESSION").ok()?;
+    if session_id.is_empty() {
+        return None;
+    }
+    let interface = match std::env::var("EIM_TELEMETRY_INTERFACE").as_deref() {
+        Ok("gui") => Interface::Gui,
+        _ => Interface::Cli,
+    };
+    let mode = match std::env::var("EIM_TELEMETRY_MODE").as_deref() {
+        Ok("wizard") => InstallMode::Wizard,
+        Ok("simple") => InstallMode::Simple,
+        Ok("offline") => InstallMode::Offline,
+        Ok("fix") => InstallMode::Fix,
+        _ => InstallMode::Cli,
+    };
+    let mut ctx = new_session(interface, mode, Vec::new(), Vec::new());
+    ctx.session_id = session_id;
+    Some(ctx)
+}
+
+/// Sends one `install_finished` when an inherited child exits without one.
+///
+/// The reason is a fixed string. It is hashed for clustering and then dropped.
+/// No system-function output is included.
+pub fn note_unreported_child_exit(ctx: &InstallationContext) {
+    if OUTCOME_REPORTED.swap(true, Ordering::Relaxed) {
+        return;
+    }
+    note_failure(
+        ErrorKind::Unknown,
+        FailureClass::Unknown,
+        None,
+        "child installer exited before reporting an outcome",
+        Vec::new(),
+    );
+    track_install_outcome(
+        ctx,
+        InstallOutcome::Failure,
+        Some(ErrorKind::Unknown),
+        None,
+        OutcomeExtras::default(),
+    );
 }
 
 #[derive(Serialize)]
@@ -535,8 +641,6 @@ struct EventProps {
     duration_seconds: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_kind: Option<ErrorKind>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    error_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     error_hash: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -605,6 +709,14 @@ fn dispatch(props: EventProps) {
         }
     };
 
+    if tokio::runtime::Handle::try_current().is_err() {
+        // The Tauri run loop is outside any Tokio runtime, so spawn would panic.
+        // Keep the body for `flush`, which sends it with `block_on` from that thread.
+        if let Ok(mut queued) = QUEUED_DISPATCHES.lock() {
+            queued.push(QueuedDispatch { url, body: serial });
+        }
+        return;
+    }
     let client = client.clone();
     let handle = tokio::spawn(async move {
         let _ = client
@@ -615,30 +727,62 @@ fn dispatch(props: EventProps) {
             .await;
     });
     if let Ok(mut pending) = PENDING_DISPATCHES.lock() {
+        pending.retain(|handle| !handle.is_finished());
         pending.push(handle);
     }
 }
 
+struct QueuedDispatch {
+    url: String,
+    body: String,
+}
+
+static QUEUED_DISPATCHES: Lazy<std::sync::Mutex<Vec<QueuedDispatch>>> =
+    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+
 static PENDING_DISPATCHES: Lazy<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
     Lazy::new(|| std::sync::Mutex::new(Vec::new()));
 
-/// Whether any telemetry HTTP requests are still in flight.
+/// Whether any telemetry HTTP requests are still in flight or waiting to be sent.
 pub fn has_pending_dispatches() -> bool {
-    PENDING_DISPATCHES
+    let queued = QUEUED_DISPATCHES
         .lock()
-        .map(|pending| !pending.is_empty())
-        .unwrap_or(false)
+        .map(|queued| !queued.is_empty())
+        .unwrap_or(false);
+    if queued {
+        return true;
+    }
+    let Ok(mut pending) = PENDING_DISPATCHES.lock() else {
+        return false;
+    };
+    pending.retain(|handle| !handle.is_finished());
+    !pending.is_empty()
 }
 
 pub async fn flush(timeout: Duration) {
+    let queued = match QUEUED_DISPATCHES.lock() {
+        Ok(mut queued) => std::mem::take(&mut *queued),
+        Err(_) => Vec::new(),
+    };
     let handles: Vec<_> = match PENDING_DISPATCHES.lock() {
         Ok(mut pending) => std::mem::take(&mut *pending),
-        Err(_) => return,
+        Err(_) => Vec::new(),
     };
-    if handles.is_empty() {
+    if queued.is_empty() && handles.is_empty() {
         return;
     }
+    let client = HTTP_CLIENT.as_ref().cloned();
     let _ = tokio::time::timeout(timeout, async {
+        if let Some(client) = client {
+            for item in queued {
+                let _ = client
+                    .post(&item.url)
+                    .header("Content-Type", "application/x-json-stream")
+                    .body(item.body)
+                    .send()
+                    .await;
+            }
+        }
         for handle in handles {
             let _ = handle.await;
         }
@@ -696,35 +840,6 @@ pub fn get_linux_os_name() -> String {
         return "linux".to_string();
     }
     "Unknown".to_string()
-}
-
-fn scrub_pii(input: &str) -> String {
-    static PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
-        [
-            r#"/(?:Users|home|root|tmp|var|etc|opt)/[^\s"'<>]+"#,
-            r#"[A-Za-z]:\\[^\s"'<>]+"#,
-            r#"\\\\[^\s"'<>]+"#,
-            r#"~[^\s"'<>]+"#,
-            r#"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"#,
-        ]
-        .into_iter()
-        .filter_map(|p| Regex::new(p).ok())
-        .collect()
-    });
-
-    let mut out = input.to_string();
-    for re in PATTERNS.iter() {
-        out = re.replace_all(&out, "<redacted>").into_owned();
-    }
-    if out.len() > 1024 {
-        let mut end = 1024;
-        while !out.is_char_boundary(end) {
-            end -= 1;
-        }
-        out.truncate(end);
-        out.push('…');
-    }
-    out
 }
 
 fn hash_short(input: &str) -> String {
@@ -838,7 +953,108 @@ mod tests {
             );
         }
         assert_eq!(ErrorKind::AppClosed.default_class(), FailureClass::User);
-        assert_eq!(ErrorKind::Unknown.default_class(), FailureClass::Installer);
+        assert_eq!(ErrorKind::Unknown.default_class(), FailureClass::Unknown);
+        assert_eq!(
+            ErrorKind::ArchiveInvalid.default_class(),
+            FailureClass::Installer
+        );
+        assert_eq!(
+            ErrorKind::Configuration.default_class(),
+            FailureClass::Installer
+        );
+    }
+
+    #[test]
+    fn os_error_codes_do_not_match_a_longer_number() {
+        assert_eq!(ErrorKind::from_message("os error 53"), ErrorKind::Network);
+        assert_eq!(
+            ErrorKind::from_message("os error 53").default_class(),
+            FailureClass::Environment
+        );
+        assert_ne!(
+            ErrorKind::from_message("os error 50"),
+            ErrorKind::Permission
+        );
+        assert_eq!(
+            ErrorKind::from_message("Access is denied. (os error 5)"),
+            ErrorKind::Permission
+        );
+        assert_eq!(
+            ErrorKind::from_message("os error 5)"),
+            ErrorKind::Permission
+        );
+        assert_ne!(
+            ErrorKind::from_message("os error 280"),
+            ErrorKind::DiskSpace
+        );
+        assert_eq!(ErrorKind::from_message("os error 28"), ErrorKind::DiskSpace);
+        assert_ne!(
+            ErrorKind::from_message("invalid permissions configuration"),
+            ErrorKind::Permission
+        );
+    }
+
+    #[test]
+    fn filesystem_helpers_live_with_telemetry() {
+        let denied = std::io::Error::new(std::io::ErrorKind::PermissionDenied, "nope");
+        assert_eq!(
+            classify_fs_failure(&denied),
+            (ErrorKind::Permission, FailureClass::Environment)
+        );
+        let other = std::io::Error::new(std::io::ErrorKind::InvalidData, "corrupt");
+        assert_eq!(
+            classify_fs_failure(&other),
+            (ErrorKind::Filesystem, FailureClass::Installer)
+        );
+        assert_eq!(
+            classify_fs_failure_message("no space left on device"),
+            (ErrorKind::DiskSpace, FailureClass::Environment)
+        );
+    }
+
+    #[test]
+    fn a_later_note_replaces_an_earlier_one() {
+        let _guard = SLOT_GUARD.lock().unwrap();
+        clear_pending_failure();
+
+        note_failure(
+            ErrorKind::Python,
+            FailureClass::Environment,
+            Some(FailureStage::Python),
+            "python failed",
+            Vec::new(),
+        );
+        note_failure(
+            ErrorKind::Network,
+            FailureClass::Environment,
+            Some(FailureStage::Download),
+            "connection reset",
+            Vec::new(),
+        );
+
+        let failure = take_pending_failure().expect("the later note should be kept");
+        assert_eq!(failure.kind, ErrorKind::Network);
+        assert_eq!(failure.class, FailureClass::Environment);
+        assert_eq!(failure.stage, Some(FailureStage::Download));
+    }
+
+    #[test]
+    fn noted_failures_keep_a_hash_and_not_the_text() {
+        let _guard = SLOT_GUARD.lock().unwrap();
+        clear_pending_failure();
+        let raw = "failed to write /Users/secret/idf: os error 5";
+        note_failure(
+            ErrorKind::Permission,
+            FailureClass::Environment,
+            Some(FailureStage::Extract),
+            raw,
+            Vec::new(),
+        );
+        let failure = take_pending_failure().expect("noted");
+        assert_eq!(failure.error_hash, hash_short(raw));
+        assert_eq!(failure.error_hash.len(), 16);
+        assert!(!failure.error_hash.contains("secret"));
+        assert!(!failure.error_hash.contains("os error"));
     }
 
     #[test]
@@ -929,7 +1145,6 @@ mod tests {
             versions: vec!["v5.4".to_string()],
             duration_seconds: Some(12.5),
             error_kind: Some(ErrorKind::DependencyMissing),
-            error_message: Some("missing prerequisites: cmake".to_string()),
             error_hash: Some("abc123".to_string()),
             failure_class: Some(FailureClass::Environment),
             failure_stage: Some(FailureStage::Prerequisites),
@@ -944,6 +1159,8 @@ mod tests {
         assert_eq!(json["missingPrerequisites"][0], "cmake");
         assert_eq!(json["errorKind"], "dependency_missing");
         assert_eq!(json["outcome"], "failure");
+        assert_eq!(json["errorHash"], "abc123");
+        assert!(json.get("errorMessage").is_none());
     }
 
     #[test]
@@ -960,7 +1177,6 @@ mod tests {
             versions: Vec::new(),
             duration_seconds: Some(1.0),
             error_kind: None,
-            error_message: None,
             error_hash: None,
             failure_class: None,
             failure_stage: None,
@@ -974,5 +1190,6 @@ mod tests {
         assert!(json.get("failureStage").is_none());
         assert!(json.get("missingPrerequisites").is_none());
         assert!(json.get("errorKind").is_none());
+        assert!(json.get("errorMessage").is_none());
     }
 }
