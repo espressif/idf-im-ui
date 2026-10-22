@@ -363,14 +363,8 @@ pub async fn install_single_version(
 #[cfg(target_os = "windows")]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    // Simple setup delegates to this command and opens the session first, so
-    // fall back to the session it opened; the child must report under the mode
-    // the user actually chose. Do not reclaim that session.
-    if !app_state::is_simple_installation(&app_handle) {
-        telemetry_session::reclaim_leaked_session(&app_handle);
-    }
-    let ctx = telemetry_session::begin(&app_handle, child_install_mode(&app_handle))
-        .or_else(|| telemetry_session::current_session(&app_handle));
+    telemetry_session::reclaim_leaked_session(&app_handle);
+    let ctx = telemetry_session::begin(&app_handle, InstallMode::Wizard);
 
     let result = run_installation(app_handle.clone(), ctx.as_ref()).await;
 
@@ -382,17 +376,6 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
         Err(_) => telemetry_session::finish(&app_handle, ctx, &result),
     }
     result
-}
-
-/// Simple setup reaches the installer through this command too, and its events
-/// must stay labelled `simple` rather than `wizard`.
-#[cfg(target_os = "windows")]
-fn child_install_mode(app_handle: &AppHandle) -> InstallMode {
-    if app_state::is_simple_installation(app_handle) {
-        InstallMode::Simple
-    } else {
-        InstallMode::Wizard
-    }
 }
 
 #[cfg(target_os = "windows")]
@@ -1014,9 +997,7 @@ async fn run_installation(
 #[cfg(not(target_os = "windows"))]
 #[tauri::command]
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
-    if !app_state::is_simple_installation(&app_handle) {
-        telemetry_session::reclaim_leaked_session(&app_handle);
-    }
+    telemetry_session::reclaim_leaked_session(&app_handle);
     let ctx = telemetry_session::begin(&app_handle, InstallMode::Wizard);
     let result = run_installation(app_handle.clone()).await;
     telemetry_session::finish(&app_handle, ctx, &result);
@@ -1025,9 +1006,8 @@ pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
 
 /// The wizard install itself.
 ///
-/// Separate from the command so the command stays a thin telemetry wrapper.
-/// Simple setup reaches this through the command above; `begin` declines to
-/// open a nested session, so the install stays reported as `mode: simple`.
+/// Separate from the command so simple setup can run the same body without
+/// reclaiming the session it already opened.
 #[cfg(not(target_os = "windows"))]
 async fn run_installation(app_handle: AppHandle) -> Result<(), String> {
     info!("Starting installation");
@@ -1818,7 +1798,17 @@ async fn run_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
         },
     );
 
-    let res = start_installation(app_handle.clone()).await;
+    #[cfg(target_os = "windows")]
+    let res = {
+        let session = telemetry_session::current_session(&app_handle);
+        let res = run_installation(app_handle.clone(), session.as_ref()).await;
+        if res.is_ok() {
+            telemetry_session::hand_off_to_subprocess(&app_handle);
+        }
+        res
+    };
+    #[cfg(not(target_os = "windows"))]
+    let res = run_installation(app_handle.clone()).await;
     app_state::set_is_simple_installation(&app_handle, false)?;
     res
 }

@@ -404,6 +404,17 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                                                 )
                                             );
                                             info!("{}", t!("install.use_fix_command"));
+                                            if session_inherited_from_parent() {
+                                                let ctx =
+                                                    build_cli_context(&settings, InstallMode::Cli);
+                                                telemetry::track_install_outcome(
+                                                    &ctx,
+                                                    InstallOutcome::Success,
+                                                    None,
+                                                    None,
+                                                    build_cli_extras(&settings),
+                                                );
+                                            }
                                             return Ok(());
                                         }
                                     }
