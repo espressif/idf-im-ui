@@ -70,7 +70,7 @@
           "openssl-devel",
           "dfu-util",
           "libusb",
-          "libgcrypt",
+          "libgcrypt.so.20()(64bit)",
           "glib2",
           "pixman",
           "SDL2",

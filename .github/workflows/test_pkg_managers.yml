@@ -117,6 +117,26 @@ jobs:
             uninstall_cmd: dnf remove -y eim
             meta_cmd: rpm -qi eim
             repo_setup: curl -fsSL https://dl.espressif.com/dl/eim/rpm/eim.repo -o /etc/yum.repos.d/eim.repo
+          # openSUSE / Zypper — CLI
+          - image: opensuse/tumbleweed:latest
+            pkg_manager: zypper
+            distro_name: opensuse
+            package_type: cli
+            package_name: eim-cli
+            install_cmd: zypper --non-interactive --gpg-auto-import-keys install eim-cli
+            uninstall_cmd: zypper --non-interactive remove eim-cli
+            meta_cmd: rpm -qi eim-cli
+            repo_setup: zypper --non-interactive addrepo https://dl.espressif.com/dl/eim/rpm/eim.repo
+          # openSUSE / Zypper — GUI
+          - image: opensuse/tumbleweed:latest
+            pkg_manager: zypper
+            distro_name: opensuse
+            package_type: gui
+            package_name: eim
+            install_cmd: zypper --non-interactive --gpg-auto-import-keys install eim
+            uninstall_cmd: zypper --non-interactive remove eim
+            meta_cmd: rpm -qi eim
+            repo_setup: zypper --non-interactive addrepo https://dl.espressif.com/dl/eim/rpm/eim.repo
     steps:
       - name: Install prerequisites
         run: |
@@ -124,6 +144,8 @@ jobs:
             apt-get update && apt-get install -y curl ca-certificates
           elif command -v dnf &>/dev/null; then
             dnf install -y curl ca-certificates
+          elif command -v zypper &>/dev/null; then
+            zypper --non-interactive install curl ca-certificates tar gzip findutils which
           fi
 
       - name: Configure package repository
@@ -140,6 +162,9 @@ jobs:
             elif command -v dnf &>/dev/null; then
               dnf makecache -q 2>/dev/null
               dnf info ${{ matrix.package_name }} 2>/dev/null | grep -q "${EXPECTED}" && echo "Found on attempt $i" && exit 0
+            elif command -v zypper &>/dev/null; then
+              zypper --non-interactive --gpg-auto-import-keys refresh 2>/dev/null
+              zypper --non-interactive info ${{ matrix.package_name }} 2>/dev/null | grep -q "${EXPECTED}" && echo "Found on attempt $i" && exit 0
             fi
             echo "Retry $i/10 — waiting 60s..."
             sleep 60
