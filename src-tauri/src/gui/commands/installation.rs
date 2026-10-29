@@ -770,17 +770,23 @@ pub fn check_incomplete_installations(app_handle: AppHandle) -> Vec<IncompleteIn
     }
 }
 
-#[tauri::command]
-pub async fn start_offline_installation(
-    app_handle: AppHandle,
-    archives: Vec<String>,
-    install_path: String,
-) -> Result<(), String> {
-    telemetry_session::reclaim_leaked_session(&app_handle);
-    let ctx = telemetry_session::begin(&app_handle, InstallMode::Offline);
-    let result = run_offline_installation(app_handle.clone(), archives, install_path).await;
-    telemetry_session::finish(&app_handle, ctx, &result);
+async fn with_install_session<T>(
+    app_handle: &AppHandle,
+    mode: InstallMode,
+    run: impl std::future::Future<Output = Result<T, String>>,
+) -> Result<T, String> {
+    telemetry_session::reclaim_leaked_session(app_handle);
+    let ctx = telemetry_session::begin(app_handle, mode);
+    let result = run.await;
+    telemetry_session::finish(app_handle, ctx, &result);
     result
+}
+
+#[tauri::command]
+#[rustfmt::skip]
+pub async fn start_offline_installation(app_handle: AppHandle, archives: Vec<String>, install_path: String) -> Result<(), String> {
+    let handle = app_handle.clone();
+    with_install_session(&app_handle, InstallMode::Offline, run_offline_installation(handle, archives, install_path)).await
 }
 
 async fn run_offline_installation(
@@ -1096,16 +1102,10 @@ async fn download_archive_with_progress(
 ///
 /// Returns the on-disk archive path so the GUI can offer to keep or delete it.
 #[tauri::command]
-pub async fn start_simple_offline_setup(
-    app_handle: AppHandle,
-    version: String,
-    drive: Option<String>,
-) -> Result<String, String> {
-    telemetry_session::reclaim_leaked_session(&app_handle);
-    let ctx = telemetry_session::begin(&app_handle, InstallMode::Simple);
-    let result = run_simple_offline_setup(app_handle.clone(), version, drive).await;
-    telemetry_session::finish(&app_handle, ctx, &result);
-    result
+#[rustfmt::skip]
+pub async fn start_simple_offline_setup(app_handle: AppHandle, version: String, drive: Option<String>) -> Result<String, String> {
+    let handle = app_handle.clone();
+    with_install_session(&app_handle, InstallMode::Simple, run_simple_offline_setup(handle, version, drive)).await
 }
 
 async fn run_simple_offline_setup(
