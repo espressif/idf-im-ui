@@ -1,11 +1,13 @@
 import { expect } from "chai";
 import { describe, it, before, after, beforeEach, afterEach } from "mocha";
+import os from "os";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
 
 export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
   describe(`${id}- Basic Arguments |`, function () {
     let testRunner = null;
+    const isWin = os.platform() === "win32";
 
     beforeEach(function () {
       testRunner = new CLITestRunner();
@@ -29,6 +31,17 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
     // Test to validate the EIM version number is correct
     it("1- should show correct version number", async function () {
       logger.info(`Starting test - show correct version`);
+      if (isWin) {
+        const versionCheck = await testRunner.runAndCapture(
+          `& "${pathToEIM}" --do-not-track true -V`,
+          "EIM_DONE_VERSION"
+        );
+        expect(
+          versionCheck.output,
+          `EIM showing incorrect version number, expected: ${eimVersion}, actual: ${versionCheck.output}`
+        ).to.include(eimVersion);
+        return;
+      }
       await testRunner.start();
       testRunner.callEIM(pathToEIM, ["-V"]);
       const meetVersion = await testRunner.waitForOutput(eimVersion, 15000);
@@ -39,6 +52,19 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
     // The test only checks for basic elements to validate that the help was printed. This can be improved by checking for specific options and their descriptions.
     it("2- should show help with --help argument", async function () {
       logger.info(`Starting test - show help`);
+      if (isWin) {
+        const helpCheck = await testRunner.runAndCapture(
+          `& "${pathToEIM}" --do-not-track true --help`,
+          "EIM_DONE_HELP"
+        );
+        expect(helpCheck.output, "EIM failed to print help options").to.include(
+          "Options:"
+        );
+        expect(helpCheck.output, "EIM failed to print usage help").to.include(
+          "Usage:"
+        );
+        return;
+      }
       await testRunner.start();
       testRunner.callEIM(pathToEIM, ["--help"]);
       const printHelp = await testRunner.waitForOutput("Options:");
@@ -51,6 +77,17 @@ export function runCLIArgumentsTest({ id = 0, pathToEIM, eimVersion }) {
     // Test to validate the EIM handles invalid arguments correctly
     it("3- should handle invalid arguments", async function () {
       logger.info(`Starting test - invalid argument`);
+      if (isWin) {
+        const invalidArgCheck = await testRunner.runAndCapture(
+          `& "${pathToEIM}" --do-not-track true --KK`,
+          "EIM_DONE_INVALID_ARG"
+        );
+        expect(
+          invalidArgCheck.output,
+          "Missing error when sending non-existing argument"
+        ).to.include("unexpected argument");
+        return;
+      }
       await testRunner.start();
       testRunner.callEIM(pathToEIM, ["--KK"]);
       const wrongArgument = await testRunner.waitForOutput(
