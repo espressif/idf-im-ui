@@ -69,6 +69,18 @@ import InstallationPathSelect from './wizard_steps/InstallationPathSelect.vue';
 import InstalationProgress from './wizard_steps/InstalationProgress.vue';
 import Complete from './wizard_steps/Complete.vue';
 
+const createSteps = () => [
+  { titleKey: "wizardStep.steps.prerequisitesCheck" },
+  { titleKey: "wizardStep.steps.pythonSanityCheck" },
+  { titleKey: "wizardStep.steps.selectTarget" },
+  { titleKey: "wizardStep.steps.selectVersion" },
+  { titleKey: "wizardStep.steps.selectMirror" },
+  { titleKey: "wizardStep.steps.selectFeatures" },
+  { titleKey: "wizardStep.steps.selectTools" },
+  { titleKey: "wizardStep.steps.selectPath" },
+  { titleKey: "wizardStep.steps.installationProgress" },
+  { titleKey: "wizardStep.steps.installationComplete" }
+];
 
 export default {
   name: 'WizardStep',
@@ -92,18 +104,7 @@ export default {
   },
   data() {
     return {
-      steps: [
-        { titleKey: "wizardStep.steps.prerequisitesCheck" },
-        { titleKey: "wizardStep.steps.pythonSanityCheck" },
-        { titleKey: "wizardStep.steps.selectTarget" },
-        { titleKey: "wizardStep.steps.selectVersion" },
-        { titleKey: "wizardStep.steps.selectMirror" },
-        { titleKey: "wizardStep.steps.selectFeatures" },
-        { titleKey: "wizardStep.steps.selectTools" },
-        { titleKey: "wizardStep.steps.selectPath" },
-        { titleKey: "wizardStep.steps.installationProgress" },
-        { titleKey: "wizardStep.steps.installationComplete" }
-      ],
+      steps: createSteps(),
       transitionName: 'slide-left',
     }
   },
@@ -129,18 +130,7 @@ export default {
   },
   methods: {
     initializeSteps() {
-      this.steps = [
-        { titleKey: "wizardStep.steps.prerequisitesCheck" },
-        { titleKey: "wizardStep.steps.pythonSanityCheck" },
-        { titleKey: "wizardStep.steps.selectTarget" },
-        { titleKey: "wizardStep.steps.selectVersion" },
-        { titleKey: "wizardStep.steps.selectMirror" },
-        { titleKey: "wizardStep.steps.selectFeatures" },
-        { titleKey: "wizardStep.steps.selectTools" },
-        { titleKey: "wizardStep.steps.selectPath" },
-        { titleKey: "wizardStep.steps.installationProgress" },
-        { titleKey: "wizardStep.steps.installationComplete" }
-      ];
+      this.steps = createSteps();
     },
     handleStepClick(stepNumber) {
       // Only allow navigation if:

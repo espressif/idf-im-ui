@@ -1,9 +1,16 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
+import { describe, it, before, after } from "mocha";
 import { By, Key, until } from "selenium-webdriver";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
-import TestProxy from "../classes/TestProxy.class.js";
-import logger from "../classes/logger.class.js";
+import { startTestProxy, stopTestProxy } from "../helpers/testProxy.js";
+import {
+  startGUIApp,
+  stopGUIApp,
+  registerGUIFailureHooks,
+  expectWelcomePage,
+  openInstallerSetup,
+  waitForGUIInstallation,
+} from "../helpers/guiTestHelpers.js";
 import { tGui, matchable } from "../helpers/i18n.js";
 import os from "os";
 
@@ -21,7 +28,6 @@ export function runGUISimplifiedInstallTest({
 }) {
   describe("1- Run simplified mode", () => {
     let eimRunner = null;
-    let simplifiedInstallFailed = false;
     let proxy = null;
 
     // The setup function should start the proxy server if enabled and start the EIM application GUI
@@ -29,82 +35,32 @@ export function runGUISimplifiedInstallTest({
       this.timeout(60000);
       eimRunner = new GUITestRunner(pathToEIM);
       if (testProxyMode) {
-        try {
-          proxy = new TestProxy({
-            mode: testProxyMode,
-            blockedDomains: proxyBlockList,
-          });
-          await proxy.start();
-        } catch (error) {
-          logger.info("Error to start proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        proxy = await startTestProxy(testProxyMode, proxyBlockList);
       }
-      try {
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+      await startGUIApp(eimRunner);
     });
 
-    // The beforeEach function should skip the next tests if the previous test failed
-    beforeEach(async function () {
-      if (simplifiedInstallFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
-
-    // The afterEach function should log the EIM application GUI screenshot on failure
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-      if (this.currentTest.state === "failed") simplifiedInstallFailed = true;
-    });
+    // Skip the next tests if the previous test failed and save a screenshot on failure
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner });
 
     // The tear down function should stop the EIM application GUI and proxy server if enabled
     after(async function () {
       this.timeout(5000);
-      try {
-        await eimRunner.stop();
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
+      await stopGUIApp(eimRunner);
       if (testProxyMode) {
-        try {
-          await proxy.stop();
-        } catch (error) {
-          logger.info("Error stopping proxy server");
-          logger.info(`${error}`);
-        }
+        await stopTestProxy(proxy);
       }
     });
 
     it("1- Should show welcome page", async function () {
       this.timeout(45000);
-      // Wait for the header to be present
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      const header = await eimRunner.findByDataId("welcome-header", 25000);
-      expect(header, "Expected welcome header").to.not.be.false;
-      const text = await header.getText();
-      expect(text, "Expected welcome text").to.equal(
-        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
-      );
+      await expectWelcomePage(eimRunner, 10000);
     });
 
     it("2- Should show installation options", async function () {
       this.timeout(10000);
 
-      await eimRunner.clickByDataId("new-installation-button");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const header = await eimRunner.findByDataId("basic-installer-title");
-      const text = await header.getText();
-      expect(text, "Expected installation setup screen").to.equal(
-        tGui("basicInstaller.title")
-      );
+      await openInstallerSetup(eimRunner);
       const simplified = await eimRunner.findByDataId("easy-mode-card");
       expect(simplified, "Expected option for simplified installation").to.not
         .be.false;
@@ -236,21 +192,10 @@ export function runGUISimplifiedInstallTest({
         "Expected installation progress screen"
       ).to.be.true;
 
-      const startTime = Date.now();
-      while (Date.now() - startTime < 2700000) {
-        if (await eimRunner.findByDataId("simple-setup-error", 1000)) {
-          logger.debug("failed!!!!");
-          break;
-        }
-        if (await eimRunner.findByDataId("simple-setup-complete", 1000)) {
-          logger.debug("Completed!!!");
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      if (Date.now() - startTime >= 2700000) {
-        logger.info("Installation timed out after 45 minutes");
-      }
+      await waitForGUIInstallation(eimRunner, {
+        failureIds: ["simple-setup-error"],
+        completeId: "simple-setup-complete",
+      });
       const completed = await eimRunner.findByDataId(
         "simple-setup-complete-result"
       );

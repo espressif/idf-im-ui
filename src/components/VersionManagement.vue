@@ -674,6 +674,19 @@ export default {
       }
     }
 
+    const goToRepairProgress = (version) => {
+      router.push({
+        path: '/installation-progress',
+        query: {
+          mode: 'fix',
+          id: version.id,
+          name: version.name,
+          path: version.path,
+          autotrack: 'true'
+        }
+      })
+    }
+
     const fixVersion = async (version) => {
       selectedVersion.value = version
       showFixModal.value = true
@@ -692,16 +705,7 @@ export default {
         message.success(t('versionManagement.messages.success.repairStarted'))
 
         // Navigate to installation progress with fix mode parameters
-        router.push({
-          path: '/installation-progress',
-          query: {
-            mode: 'fix',
-            id: selectedVersion.value.id,
-            name: selectedVersion.value.name,
-            path: selectedVersion.value.path,
-            autotrack: 'true'
-          }
-        })
+        goToRepairProgress(selectedVersion.value)
       } catch (error) {
         console.error('Fix installation error:', error)
         message.error(t('versionManagement.messages.error.repair', { error }))
@@ -786,16 +790,7 @@ export default {
         showListToolsModal.value = false
         showAddToolsPanel.value = false
 
-        router.push({
-          path: '/installation-progress',
-          query: {
-            mode: 'fix',
-            id: version.id,
-            name: version.name,
-            path: version.path,
-            autotrack: 'true'
-          }
-        })
+        goToRepairProgress(version)
       } catch (error) {
         console.error('Add tools error:', error)
         message.error(t('versionManagement.messages.error.repair', { error }))
@@ -856,16 +851,7 @@ export default {
         showListFeaturesModal.value = false
         showAddFeaturesPanel.value = false
 
-        router.push({
-          path: '/installation-progress',
-          query: {
-            mode: 'fix',
-            id: version.id,
-            name: version.name,
-            path: version.path,
-            autotrack: 'true'
-          }
-        })
+        goToRepairProgress(version)
       } catch (error) {
         console.error('Add features error:', error)
         message.error(t('versionManagement.messages.error.repair', { error }))
@@ -1092,25 +1078,13 @@ export default {
 }
 </script>
 
+<style scoped src="./styles/page-header.css"></style>
+
 <style scoped>
 .version-management {
   padding: 2rem;
   max-width: 1400px;
   margin: 0 auto;
-}
-
-.management-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2rem;
-  color: #1f2937;
-  margin: 0;
 }
 
 .prerequisites-alert {

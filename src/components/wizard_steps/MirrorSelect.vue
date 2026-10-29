@@ -6,79 +6,25 @@
     <n-card class="mirrors-card" data-id="mirrors-card">
       <n-spin :show="loading_idfs || loading_tools || loading_pypi" data-id="mirrors-loading-spinner">
         <div class="mirrors-grid" data-id="mirrors-grid">
-          <!-- IDF Mirror Selection -->
-          <div class="mirror-section" data-id="idf-mirror-section">
-            <h3 class="section-title" data-id="idf-section-title">{{ t('mirrorSelect.sections.idfMirror') }}</h3>
-            <n-radio-group v-model:value="selected_idf_mirror" class="mirror-options" data-id="idf-mirror-radio-group" @update:value="onSelectChange('idf')">
-              <div v-for="mirror in idf_mirrors" :key="mirror.value" class="mirror-option"
-                :class="{ 'selected': selected_idf_mirror === mirror.value }"
-                :data-id="`idf-mirror-option-${mirror.value}`"
-                @click="selected_idf_mirror = mirror.value">
-                <n-radio :value="mirror.value" :data-id="`idf-mirror-radio-${mirror.value}`">
-                  <div class="mirror-content" :data-id="`idf-mirror-content-${mirror.value}`">
-                    <span class="mirror-url" :data-id="`idf-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
-                    <div class="mirror-subline" :data-id="`idf-mirror-subline-${mirror.value}`">
+          <!-- IDF / Tools / PyPI Mirror Selection -->
+          <div v-for="section in mirrorSections" :key="section.type" class="mirror-section" :data-id="`${section.type}-mirror-section`">
+            <h3 class="section-title" :data-id="`${section.type}-section-title`">{{ t(section.titleKey) }}</h3>
+            <n-radio-group :value="selectedMirror(section.type)" class="mirror-options"
+              :data-id="`${section.type}-mirror-radio-group`"
+              @update:value="(value) => { selectMirror(section.type, value); onSelectChange(section.type); }">
+              <div v-for="mirror in section.mirrors" :key="mirror.value" class="mirror-option"
+                :class="{ 'selected': selectedMirror(section.type) === mirror.value }"
+                :data-id="`${section.type}-mirror-option-${mirror.value}`"
+                @click="selectMirror(section.type, mirror.value)">
+                <n-radio :value="mirror.value" :data-id="`${section.type}-mirror-radio-${mirror.value}`">
+                  <div class="mirror-content" :data-id="`${section.type}-mirror-content-${mirror.value}`">
+                    <span class="mirror-url" :data-id="`${section.type}-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
+                    <div class="mirror-subline" :data-id="`${section.type}-mirror-subline-${mirror.value}`">
                       <template v-if="mirror.ping !== null">
-                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`idf-mirror-ping-${mirror.value}`">
+                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`${section.type}-mirror-ping-${mirror.value}`">
                           {{ mirror.ping + ' ms' }}
                         </span>
-                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`idf-mirror-timeout-${mirror.value}`">
-                          {{ t('mirrorSelect.status.timeout') }}
-                        </span>
-                      </template>
-                    </div>
-                  </div>
-                </n-radio>
-              </div>
-            </n-radio-group>
-          </div>
-
-          <!-- Tools Mirror Selection -->
-          <div class="mirror-section" data-id="tools-mirror-section">
-            <h3 class="section-title" data-id="tools-section-title">{{ t('mirrorSelect.sections.toolsMirror') }}</h3>
-            <n-radio-group v-model:value="selected_tools_mirror" class="mirror-options"
-              data-id="tools-mirror-radio-group" @update:value="onSelectChange('tools')">
-              <div v-for="mirror in tools_mirrors" :key="mirror.value" class="mirror-option"
-                :class="{ 'selected': selected_tools_mirror === mirror.value }"
-                :data-id="`tools-mirror-option-${mirror.value}`"
-                @click="selected_tools_mirror = mirror.value">
-                <n-radio :value="mirror.value" :data-id="`tools-mirror-radio-${mirror.value}`">
-                  <div class="mirror-content" :data-id="`tools-mirror-content-${mirror.value}`">
-                    <span class="mirror-url" :data-id="`tools-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
-                    <div class="mirror-subline" :data-id="`tools-mirror-subline-${mirror.value}`">
-                      <template v-if="mirror.ping !== null">
-                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`tools-mirror-ping-${mirror.value}`">
-                          {{ mirror.ping + ' ms' }}
-                        </span>
-                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`tools-mirror-timeout-${mirror.value}`">
-                          {{ t('mirrorSelect.status.timeout') }}
-                        </span>
-                      </template>
-                    </div>
-                  </div>
-                </n-radio>
-              </div>
-            </n-radio-group>
-          </div>
-
-          <!-- PyPI Mirror Selection -->
-          <div class="mirror-section" data-id="pypi-mirror-section">
-            <h3 class="section-title" data-id="pypi-section-title">{{ t('mirrorSelect.sections.pypiMirror') }}</h3>
-            <n-radio-group v-model:value="selected_pypi_mirror" class="mirror-options"
-              data-id="pypi-mirror-radio-group" @update:value="onSelectChange('pypi')">
-              <div v-for="mirror in pypi_mirrors" :key="mirror.value" class="mirror-option"
-                :class="{ 'selected': selected_pypi_mirror === mirror.value }"
-                :data-id="`pypi-mirror-option-${mirror.value}`"
-                @click="selected_pypi_mirror = mirror.value">
-                <n-radio :value="mirror.value" :data-id="`pypi-mirror-radio-${mirror.value}`">
-                  <div class="mirror-content" :data-id="`pypi-mirror-content-${mirror.value}`">
-                    <span class="mirror-url" :data-id="`pypi-mirror-url-${mirror.value}`">{{ mirror.label }}</span>
-                    <div class="mirror-subline" :data-id="`pypi-mirror-subline-${mirror.value}`">
-                      <template v-if="mirror.ping !== null">
-                        <span v-if="mirror.ping > 0" class="mirror-ping" :data-id="`pypi-mirror-ping-${mirror.value}`">
-                          {{ mirror.ping + ' ms' }}
-                        </span>
-                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`pypi-mirror-timeout-${mirror.value}`">
+                        <span v-else class="status-badge timeout" :title="t('mirrorSelect.status.timeout')" :data-id="`${section.type}-mirror-timeout-${mirror.value}`">
                           {{ t('mirrorSelect.status.timeout') }}
                         </span>
                       </template>
@@ -102,7 +48,6 @@
 </template>
 
 <script>
-import { ref} from "vue";
 import { useI18n } from 'vue-i18n';
 import { useMirrorsStore } from "../../store.js";
 import { invoke } from "@tauri-apps/api/core";
@@ -148,6 +93,12 @@ export default {
           ping: null,
         }));
     },
+    selectedMirror(type) {
+      return this[`selected_${type}_mirror`];
+    },
+    selectMirror(type, value) {
+      this[`selected_${type}_mirror`] = value;
+    },
     onSelectChange(type) {
       // User has manually chosen a mirror for this type; stop auto-selecting
       if (this.autoSelect[type]) {
@@ -189,6 +140,13 @@ export default {
     }
   },
   computed: {
+    mirrorSections() {
+      return [
+        { type: 'idf', titleKey: 'mirrorSelect.sections.idfMirror', mirrors: this.idf_mirrors },
+        { type: 'tools', titleKey: 'mirrorSelect.sections.toolsMirror', mirrors: this.tools_mirrors },
+        { type: 'pypi', titleKey: 'mirrorSelect.sections.pypiMirror', mirrors: this.pypi_mirrors },
+      ];
+    },
     // Only show loading while the URL lists are being fetched.
     // Do NOT block on latency computation (it happens in background).
     idf_mirrors() {
@@ -257,25 +215,13 @@ export default {
 }
 </script>
 
+<style scoped src="../styles/wizard-step-header.css"></style>
+
 <style scoped>
 .mirror-select {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
-}
-
-.title {
-  font-size: 27px;
-  font-family: 'Trueno-bold', sans-serif;
-  color: #374151;
-  margin-bottom: 0.5rem;
-}
-
-.description {
-  font-size: 21px;
-  font-family: 'Trueno-light', sans-serif;
-  color: #6b7280;
-  margin-bottom: 2rem;
 }
 
 .mirrors-card {
