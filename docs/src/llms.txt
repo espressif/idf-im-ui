@@ -1,0 +1,13 @@
+# ESP-IDF Installation Manager (EIM)
+
+Documentation: https://docs.espressif.com/projects/idf-im-ui/en/latest/
+Troubleshooting IDs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html
+Scripts, CI, and agents: https://docs.espressif.com/projects/idf-im-ui/en/latest/scripts_ci_and_agents.html
+
+Message format: the original sentence comes first. Fix: is the action, and on a WARN line it is conditional (do not stop a run that is still going). Docs: is either a URL or "Docs: EIM-Exxx in the EIM troubleshooting guide". Chinese messages give the ID only, unless the message already contains an English keyword such as prerequisite or Python, in which case they also carry the URL. The ID is the stable key.
+Exit codes are 0 (success) and 1 (any failure). "is already installed" exits 0 and installs nothing.
+On failure, find the line that starts with "Error executing CLI:". The lines after it are the specific error's Fix: and Docs:, then the generic E900 block. The last stderr line is the E900 link. Also read stdout lines that start with [FAIL] and Hint:.
+In eim.log, Fix: and Docs: follow the ERROR or WARN line and have no timestamp prefix. Read from that line up to the next timestamped line. Fix: and Docs: are the last two lines of that block. grep -A2 cuts them off when git, pip, or PowerShell output is inserted first. grep -A10 is a wider example and can still stop short.
+CLI log: <data dir>/eim/logs/eim.log (`eim_gui.log` for the GUI, `offline_installer.log` for the offline archive builder).
+Linux and macOS do not get prerequisites installed automatically. Windows can, with --install-all-prerequisites true.
+Do not unpack an offline .zst archive. Pass it to --use-local-archive.

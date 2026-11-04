@@ -570,14 +570,14 @@ fn check_tools_with_package_manager(
                 }
                 Ok(o) => {
                     return Err(format!(
-                        "Unable to execute PowerShell to verify prerequisites: command ran but produced unexpected output (stdout: {:?}, stderr: {:?}). PowerShell may be restricted (e.g. by execution policy or group policy).",
+                        "Unable to execute PowerShell to verify prerequisites: command ran but produced unexpected output (stdout: {:?}, stderr: {:?}). PowerShell may be restricted (e.g. by execution policy or group policy).\nFix: Install PowerShell 7 and put pwsh.exe on PATH. EIM is tested on Windows 11.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801",
                         String::from_utf8_lossy(&o.stdout),
                         String::from_utf8_lossy(&o.stderr)
                     ));
                 }
                 Err(e) => {
                     return Err(format!(
-                        "Unable to execute PowerShell to verify prerequisites: {}. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.",
+                        "Unable to execute PowerShell to verify prerequisites: {}. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.\nFix: Install PowerShell 7 so pwsh.exe is on PATH, then rerun eim. Windows 10 is not a supported platform.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801",
                         e
                     ));
                 }
@@ -1360,7 +1360,7 @@ pub async fn install_prerequisites(
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
                             }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
+                            Err(e) => panic!("Failed to install {}: {}\nFix: Install that package with your system package manager, then rerun eim.\nDocs: EIM-E103 in the EIM troubleshooting guide", package, e),
                         }
                     }
                 }
@@ -1379,7 +1379,7 @@ pub async fn install_prerequisites(
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
                             }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
+                            Err(e) => panic!("Failed to install {}: {}\nFix: Install that package with your system package manager, then rerun eim.\nDocs: EIM-E103 in the EIM troubleshooting guide", package, e),
                         }
                     }
                 }
@@ -1398,7 +1398,7 @@ pub async fn install_prerequisites(
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
                             }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
+                            Err(e) => panic!("Failed to install {}: {}\nFix: Install that package with your system package manager, then rerun eim.\nDocs: EIM-E103 in the EIM troubleshooting guide", package, e),
                         }
                     }
                 }
@@ -1417,7 +1417,7 @@ pub async fn install_prerequisites(
                             Ok(_) => {
                                 debug!("Successfully installed {}", package);
                             }
-                            Err(e) => panic!("Failed to install {}: {}", package, e),
+                            Err(e) => panic!("Failed to install {}: {}\nFix: Install that package with your system package manager, then rerun eim.\nDocs: EIM-E103 in the EIM troubleshooting guide", package, e),
                         }
                     }
                 }
@@ -1438,7 +1438,7 @@ pub async fn install_prerequisites(
                     Ok(_) => {
                         debug!("Successfully installed {}", package);
                     }
-                    Err(e) => panic!("Failed to install {}: {}", package, e),
+                    Err(e) => panic!("Failed to install {}: {}\nFix: Install that package with your system package manager, then rerun eim.\nDocs: EIM-E103 in the EIM troubleshooting guide", package, e),
                 }
             }
         }
@@ -1456,7 +1456,7 @@ pub async fn install_prerequisites(
                             debug!("Successfully installed python to {:?}", install_path);
                         }
                         Err(e) => {
-                            return Err(format!("Failed to install python: {}", e));
+                            return Err(format!("Failed to install python: {}\nFix: Install Python 3.10 to 3.14 yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202", e));
                         }
                     }
                 } else if package == "git" {
@@ -1465,7 +1465,7 @@ pub async fn install_prerequisites(
                             debug!("Successfully installed git to {:?}", install_path);
                         }
                         Err(e) => {
-                            return Err(format!("Failed to install git: {}", e));
+                            return Err(format!("Failed to install git: {}\nFix: Install Git yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103", e));
                         }
                     }
                 } else {

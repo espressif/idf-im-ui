@@ -338,7 +338,7 @@
         "description": "更多信息请查阅日志文件。",
         "retry": "重试安装",
         "back": "返回",
-        "info": "更多信息请查阅日志文件。"
+        "info": "更多信息请查阅日志文件。日志：<data dir>/eim/logs/eim_gui.log（Linux：$HOME/.local/share/eim/logs/eim_gui.log，macOS：$HOME/Library/Application Support/eim/logs/eim_gui.log，Windows：%LOCALAPPDATA%\\eim\\logs\\eim_gui.log）。该目录下的 CLI 日志为 eim.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
       },
       "success": {
         "title": "离线安装完成",
@@ -504,7 +504,7 @@
         "openFolder": "打开文件夹失败",
         "purge": "清除安装失败：{error}",
         "prerequisites": "安装依赖项失败：{error}",
-        "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。",
+        "driversPermission": "安装驱动程序的权限不足。请以管理员身份运行应用程序。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e802",
         "drivers": "安装驱动程序失败：{error}",
         "checkUpdates": "检查更新失败",
         "openTerminal": "无法打开 IDF 终端",
@@ -588,7 +588,7 @@
       },
       "setupRequired": {
         "title": "需要设置 Python",
-        "description": "需要 Python >= 3.10 < 3.14，并支持 pip、venv 和 SSL"
+        "description": "需要 Python >= 3.10 且 < 3.15，并支持 pip、venv 和 SSL"
       }
     },
     "actions": {
@@ -840,7 +840,7 @@
         "windowsHint": "点击下方按钮自动安装依赖项。",
         "python": {
           "title": "Python 配置不正确",
-          "message": "缺少可用的 Python >= 3.10 < 3.14，以及 pip、venv 和 SSL。",
+          "message": "缺少可用的 Python >= 3.10 且 < 3.15，以及 pip、venv 和 SSL。",
           "details": "请安装 Python 或使用自定义安装进行配置。"
         }
       },
@@ -855,7 +855,7 @@
       },
       "versions": {
         "title": "版本获取失败",
-        "message": "无法获取可用的 ESP-IDF 版本。"
+        "message": "无法获取可用的 ESP-IDF 版本。Fix: 稍后重试。下载失败时会使用内置版本列表。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301"
       },
       "start": {
         "title": "启动安装失败"
@@ -945,7 +945,7 @@
     },
     "error": {
       "title": "{mode} 期间出错：",
-      "seeLog": "更多信息请查阅日志文件。"
+      "seeLog": "更多信息请查阅日志文件。日志：<data dir>/eim/logs/eim_gui.log（Linux：$HOME/.local/share/eim/logs/eim_gui.log，macOS：$HOME/Library/Application Support/eim/logs/eim_gui.log，Windows：%LOCALAPPDATA%\\eim\\logs\\eim_gui.log）。该目录下的 CLI 日志为 eim.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
     },
     "summary": {
       "repairComplete": "修复完成",

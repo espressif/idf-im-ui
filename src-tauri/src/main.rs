@@ -154,7 +154,7 @@ async fn main() {
         match result {
             Ok(_) => std::process::exit(0),
             Err(e) => {
-                eprintln!("Error executing CLI: {}", e);
+                eprintln!("Error executing CLI: {}\nFix: Read the log at <data dir>/eim/logs/eim.log (Linux: $HOME/.local/share/eim/logs/eim.log or $XDG_DATA_HOME/eim/logs/eim.log, macOS: $HOME/Library/Application Support/eim/logs/eim.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim.log). GUI log: eim_gui.log. Offline builder log: offline_installer.log. Override the CLI path with --log-file.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900", e);
                 std::process::exit(1);
             }
         }
@@ -207,7 +207,7 @@ async fn main() {
     match result {
         Ok(_) => std::process::exit(0),
         Err(e) => {
-            eprintln!("Error executing CLI: {}", e);
+            eprintln!("Error executing CLI: {}\nFix: Read the log at <data dir>/eim/logs/eim.log (Linux: $HOME/.local/share/eim/logs/eim.log or $XDG_DATA_HOME/eim/logs/eim.log, macOS: $HOME/Library/Application Support/eim/logs/eim.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim.log). GUI log: eim_gui.log. Offline builder log: offline_installer.log. Override the CLI path with --log-file.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900", e);
             std::process::exit(1);
         }
     }
