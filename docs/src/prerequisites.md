@@ -89,7 +89,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libopenssl-devel`: Development headers for OpenSSL.
 - `libgcrypt20`: Runtime library for cryptographic functions (QEMU dependency).
 - `glib2`: Runtime library for GLib (QEMU dependency).
-- `pixman-1`: Runtime library for pixman (QEMU dependency).
+- `libpixman-1-0`: Runtime library for pixman (QEMU dependency).
 - `libSDL2-2_0-0`: Runtime library for SDL2 (QEMU dependency).
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
