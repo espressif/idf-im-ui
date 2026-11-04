@@ -13,7 +13,7 @@ ESP-IDF requires Python to be installed. The supported Python versions are **3.1
 
 To get started with ESP-IDF, you need Git and Python. The ESP-IDF Installation Manager will verify the required prerequisites on your system and install any that are missing.
 
-For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF documentation](https://docs.espressif.com/projects/esp-idf/en/v4.2.2/esp32/get-started/windows-setup.html).
+For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF documentation](https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/windows-setup.html).
 
 > **Note**
 > If any of these prerequisites are missing, the installer will prompt you to install them. If you agree, the installer will automatically install and configure everything required to run ESP-IDF.
@@ -30,7 +30,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 
 > **Note**
 > On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed.
-> For offline installations, Python **3.11** to **3.14** is required on Linux and macOS.
+> For offline installations, Python **3.11** to **3.14** is required on Linux, macOS, and Windows.
 
 ## Linux
 
@@ -94,4 +94,4 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
 > **Note**
-> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.14** is required on Linux and macOS.
+> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.14** is required on Linux, macOS, and Windows.

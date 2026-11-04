@@ -14,7 +14,7 @@ These options can be used with any command:
 
 - `-l, --locale <LOCALE>`: Set the language for the wizard (en, cn)
 - `-v, --verbose`: Increase verbosity level (can be used multiple times)
-- `--log-file <LOG_FILE>`: File in which logs will be stored (default: eim.log)
+- `--log-file <LOG_FILE>`: File in which logs will be stored (default: `<data dir>/eim/logs/eim.log`, or `eim.log` when the data directory is unavailable)
 - `--do-not-track <DO_NOT_TRACK>`: If set to true, the installer will not send any usage data. Default is false. Applies to every subcommand, including `eim gui` — when the GUI is launched via the CLI it inherits this flag and starts with telemetry disabled. [possible values: true, false]
 - `--esp-idf-json-path <PATH>`: Path to the directory for `eim_idf.json`. During install, the configuration file is saved here. For version management commands (list, select, rename, remove, etc.), it specifies where to read the file. Defaults to `~/.espressif/tools` on POSIX, `C:\Espressif\tools` on Windows.
 - `-h, --help`: Print help information

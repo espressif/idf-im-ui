@@ -201,11 +201,22 @@ eim install -i v5.3.2 --mirror https://gitlab.example.com --repo-stub my-gitlab-
 
 The mirror parameter should point to the root URL of your repository host, while repo-stub specifies the repository path.
 
+## Failure handling
+
+- Exit codes are `0` (success) and `1` (any failure). The code does not say which failure it was.
+- On failure, find the line that starts with `Error executing CLI:`. The lines after it are the specific error's `Fix:` and `Docs:`, then the generic E900 block. The last stderr line is the E900 link. stdout uses `[FAIL]` and `Hint:` for Python and prerequisite checks.
+- In `eim.log`, `Fix:` and `Docs:` follow the `ERROR` or `WARN` line they belong to and have no timestamp prefix. Read up to the next timestamped line. `Fix:` and `Docs:` are the last two lines of that block. `grep -A10 ERROR` is a wider example and can still miss a long inserted tail. A `Fix:` on a `WARN` line is conditional. Messages keep their original sentence, then `Fix:` and `Docs:` with an `EIM-E` ID. The IDs are listed in [Troubleshooting](./troubleshooting.md).
+- CLI log: `<data dir>/eim/logs/eim.log` (`eim_gui.log` for the GUI, `offline_installer.log` for the offline archive builder). `--log-file` sets the CLI path. `-v` repeats to print more on stderr.
+- `eim help-json` prints machine-readable help and does not open the log.
+- `--do-not-track true`, or `EIM_DO_NOT_TRACK=1` / `EIM_DO_NOT_TRACK=true`, turns telemetry off.
+- On Linux and macOS, prerequisites are never installed for you. `-a` / `--install-all-prerequisites` installs Git and Python on Windows only.
+- Script, CI, and agent recovery steps are in [Using EIM from scripts, CI and AI agents](./scripts_ci_and_agents.md).
+
 ## Best Practices
 
 1. **Version Control**: Always specify the ESP-IDF version explicitly to ensure reproducible builds
 2. **Configuration Files**: Use configuration files for complex setups to ensure consistency
-3. **Error Handling**: In CI/CD environments, ensure proper error handling and logging
-4. **Prerequisites**: On Windows, use `-a true` to automatically install prerequisites
+3. **Error Handling**: On failure, read from the line that starts with `Error executing CLI:` through the following `Fix:` and `Docs:` lines, plus `[FAIL]` and `Hint:` on stdout. In `eim.log`, read from the `ERROR` or `WARN` line up to the next timestamp. `grep -A10 ERROR` is only an example. Match the specific `EIM-E` ID in [Troubleshooting](./troubleshooting.md)
+4. **Prerequisites**: On Windows, use `-a true` to automatically install prerequisites. On Linux and macOS, install them yourself before `eim` runs
 5. **Path Management**: Use absolute paths to avoid any ambiguity
 6. **Cleanup**: Use `--cleanup true` in Docker and CI environments to reduce image size by removing temporary tool archives
