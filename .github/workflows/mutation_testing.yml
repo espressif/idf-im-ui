@@ -1,0 +1,191 @@
+name: Mutation Testing
+
+# cargo-mutants changes the library code one small edit at a time (flip a
+# condition, replace a return value, ...) and reruns the unit tests. A mutant
+# that no test notices ("missed") points at code the tests don't really check.
+# A full run is long, so it runs weekly and on demand (never on PRs), split
+# across shards, and posts a summary (score + the files with the most missed
+# mutants) to Mattermost.
+on:
+  # Sunday 21:30 UTC = 23:30 CEST (22:30 CET in winter), so the report is in
+  # Mattermost by Monday morning. Scheduled runs use the input defaults below.
+  schedule:
+    - cron: "30 21 * * 0"
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Files to mutate (glob relative to src-tauri/)"
+        required: false
+        default: "src/lib/**"
+        type: string
+      shards:
+        description: "Number of parallel shards"
+        required: false
+        default: "4"
+        type: choice
+        options: ["1", "2", "4", "8"]
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: Plan shards
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Build shard matrix
+        id: plan
+        env:
+          SHARDS: ${{ inputs.shards || '4' }}
+        run: echo "matrix=$(jq -cn --argjson n "$SHARDS" '[range(0; $n)]')" >> "$GITHUB_OUTPUT"
+
+  mutants:
+    name: Mutants (shard ${{ matrix.shard }}/${{ inputs.shards || '4' }})
+    needs: setup
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.setup.outputs.matrix) }}
+    defaults:
+      run:
+        working-directory: src-tauri
+    env:
+      # Every mutant is a rebuild; skipping debug info makes each one
+      # noticeably faster and the results don't need it.
+      CARGO_PROFILE_DEV_DEBUG: "0"
+      CARGO_PROFILE_TEST_DEBUG: "0"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev patchelf xdg-utils
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-mutants-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-mutants-
+
+      - name: Install cargo-mutants
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-mutants@27.1.0
+
+      # `--cargo-arg=--lib` applies to both the build and the test step. Passing
+      # `-- --lib` would only reach the test binary, and the build would then
+      # try the eim binary without the cli/gui features, which doesn't compile.
+      # Only library code should be mutated: cli/ and gui/ are not compiled with
+      # --no-default-features, so their mutants would all count as missed. The
+      # same goes for lib/cli_progress.rs, which only exists with `cli`.
+      #
+      # Exit codes 2 (missed mutants) and 3 (timeouts) are results, not
+      # failures; anything else (e.g. 4: tests fail on the unmutated tree) is.
+      - name: Run cargo-mutants
+        env:
+          FILES: ${{ inputs.files || 'src/lib/**' }}
+          SHARD: ${{ matrix.shard }}/${{ inputs.shards || '4' }}
+        run: |
+          set +e
+          cargo mutants --no-default-features --file "$FILES" --shard "$SHARD" \
+            --exclude 'src/lib/cli_progress.rs' \
+            --cargo-arg=--lib --timeout-multiplier 3 --jobs 2
+          code=$?
+          set -e
+          case "$code" in
+            0|2|3) exit 0 ;;
+            *) echo "cargo-mutants failed with exit code $code"; exit "$code" ;;
+          esac
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutants-shard-${{ matrix.shard }}
+          path: src-tauri/mutants.out/
+          if-no-files-found: ignore
+
+  build-notification:
+    name: Build notification
+    needs: [mutants]
+    if: always()
+    runs-on: ubuntu-latest
+    outputs:
+      title: ${{ steps.msg.outputs.title }}
+      body: ${{ steps.msg.outputs.body }}
+    steps:
+      - name: Download shard results
+        uses: actions/download-artifact@v8
+        with:
+          pattern: mutants-shard-*
+          path: shards
+
+      - name: Build message
+        id: msg
+        env:
+          FILES: ${{ inputs.files || 'src/lib/**' }}
+          SHARDS: ${{ inputs.shards || '4' }}
+          JOBS_RESULT: ${{ needs.mutants.result }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BRANCH="${{ github.ref_name }}"
+
+          # Sum the per-shard counters from each outcomes.json.
+          read -r TOTAL CAUGHT MISSED TIMEOUT UNVIABLE < <(
+            find shards -name outcomes.json -print0 | xargs -0 -r cat | jq -s -r '
+              [ (map(.total_mutants) | add // 0), (map(.caught) | add // 0),
+                (map(.missed) | add // 0), (map(.timeout) | add // 0),
+                (map(.unviable) | add // 0) ] | @tsv')
+          VIABLE=$(( TOTAL - UNVIABLE ))
+          SCORE="n/a"
+          [ "$VIABLE" -gt 0 ] && SCORE=$(awk -v c=$(( CAUGHT + TIMEOUT )) -v v="$VIABLE" 'BEGIN { printf "%.1f%%", 100 * c / v }')
+
+          # The files where the tests notice the fewest changes: the most
+          # useful places to add tests.
+          TOP=$(find shards -name missed.txt -print0 | xargs -0 -r cat | cut -d: -f1 \
+            | sort | uniq -c | sort -rn | head -10 \
+            | awk '{ printf "| `%s` | %s |\\n", $2, $1 }')
+
+          if [ "$JOBS_RESULT" = "success" ]; then
+            TITLE=":dna: Mutation Testing — score ${SCORE}"
+          else
+            TITLE=":x: Mutation Testing — some shards failed (score ${SCORE} from finished shards)"
+          fi
+
+          BODY="**Branch:** \`${BRANCH}\` | **Files:** \`${FILES}\` | **Shards:** ${SHARDS}\n\n"
+          BODY+="| Caught | Missed | Timeout | Unviable | Total |\n|---:|---:|---:|---:|---:|\n"
+          BODY+="| ${CAUGHT} | ${MISSED} | ${TIMEOUT} | ${UNVIABLE} | ${TOTAL} |\n\n"
+          if [ -n "$TOP" ]; then
+            BODY+="**Most missed mutants by file:**\n\n| File | Missed |\n|:---|---:|\n${TOP}\n"
+          fi
+          BODY+=":link: [View full run](${RUN_URL}) (per-shard \`mutants.out\` artifacts list every missed mutant)"
+
+          {
+            echo "title=${TITLE}"
+            echo "body<<BODY_EOF"
+            echo -e "$BODY"
+            echo "BODY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  notify:
+    name: Notify Mattermost
+    needs: [build-notification]
+    if: always() && needs.build-notification.result == 'success'
+    uses: ./.github/workflows/notify_mattermost.yml
+    with:
+      title: ${{ needs.build-notification.outputs.title }}
+      body: ${{ needs.build-notification.outputs.body }}
+      icon_emoji: dna
+    secrets: inherit

@@ -1,8 +1,16 @@
 name: Pre-Check
 
-# Blocking quality gate: spell check, formatting, linting and unused dependencies.
+# Blocking quality gate: spell check, formatting, linting, tests, unused
+# dependencies, code duplication and function complexity.
 # Every job below fails the workflow, so a red run blocks the pull request
 # (once the job names are marked as required status checks in branch protection).
+#
+# Thresholds live next to the code they govern, so local runs and CI agree:
+#   - clippy lints and limits:  src-tauri/Cargo.toml [lints], src-tauri/clippy.toml
+#   - Rust duplication:         src-tauri/Cargo.toml [package.metadata.dupes]
+#   - Rust complexity:          .github/scripts/check_complexity.sh (+ allowlist)
+#   - all-language duplication: .jscpd.json
+#   - unused JS deps/exports:   knip.json
 on:
   pull_request:
   push:
@@ -36,7 +44,7 @@ jobs:
           files: . .github
 
   rust:
-    name: Rust (fmt, clippy, machete)
+    name: Rust (fmt, clippy, test, machete)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -69,7 +77,9 @@ jobs:
           restore-keys: ${{ runner.os }}-cargo-precheck-
 
       - name: Install cargo-machete
-        run: cargo install cargo-machete --locked
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-machete@0.9.2
 
       - name: Check formatting
         run: cargo fmt --all -- --check
@@ -79,5 +89,64 @@ jobs:
       - name: Lint
         run: cargo clippy --all-targets --features offline -- -D warnings
 
+      # Unlike the library-only run in build.yaml, this covers the unit tests
+      # inside the eim and offline_installer_builder binaries (cli/, gui/) and
+      # fails the job on any test failure.
+      - name: Test
+        run: cargo test --all-targets --features offline
+
       - name: Check for unused dependencies
-        run: cargo machete
+        run: cargo machete --with-metadata
+
+  rust-quality:
+    name: Rust (duplication, complexity)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Both tools parse the sources directly, so no toolchain build or system
+      # libraries are needed for this job.
+      - name: Install cargo-dupes and rust-code-analysis-cli
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-dupes@0.2.1,rust-code-analysis-cli@0.0.25
+
+      - name: Check for duplicated code
+        working-directory: src-tauri
+        run: cargo dupes check
+
+      - name: Check function complexity
+        run: .github/scripts/check_complexity.sh src-tauri/src
+
+  frontend:
+    name: Frontend (unused code, duplication)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: yarn
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Check for unused files, dependencies and exports
+        run: npx --yes knip@6.39.0 --no-progress
+
+      # Covers every language in .jscpd.json (Rust, Vue, JS, PowerShell, bash,
+      # Python), not only the frontend.
+      - name: Check for duplicated code
+        run: npx --yes jscpd@5.4.0 --config .jscpd.json
+
+      - name: Upload duplication report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jscpd-report
+          path: out/jscpd/
+          if-no-files-found: ignore

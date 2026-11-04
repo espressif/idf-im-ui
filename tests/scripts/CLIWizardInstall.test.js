@@ -10,7 +10,13 @@ import {
   runInDebug,
 } from "../config.js";
 import { getAvailableFeatures, getAvailableTools } from "../helper.js";
-import TestProxy from "../classes/TestProxy.class.js";
+import { startTestProxy, stopTestProxy } from "../helpers/testProxy.js";
+import {
+  startTerminal,
+  stopTerminal,
+  logFailedTest,
+  waitForTerminalOutput,
+} from "../helpers/cliTestHelpers.js";
 import logger from "../classes/logger.class.js";
 import os from "os";
 
@@ -32,31 +38,15 @@ export function runCLIWizardInstallTest({
       this.timeout(5000);
       testRunner = new CLITestRunner();
       if (testProxyMode) {
-        try {
-          proxy = new TestProxy({
-            mode: testProxyMode,
-            blockedDomains: proxyBlockList,
-          });
-          await proxy.start();
-        } catch (error) {
-          logger.info("Error to start proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        proxy = await startTestProxy(testProxyMode, proxyBlockList);
       }
-      try {
-        await testRunner.start();
-      } catch (error) {
-        logger.info("Error to start terminal");
-        logger.debug(`Error: ${error}`);
-      }
+      await startTerminal(testRunner);
     });
 
     // The afterEach function should log the terminal output on failure
     afterEach(function () {
       if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        logger.info(`Terminal output: >>${testRunner.output.slice(-1000)}`);
-        logger.debug(`Terminal output on failure: >>${testRunner.output}`);
+        logFailedTest(this.currentTest, testRunner, { tail: 1000 });
         installationFailed = true;
       }
     });
@@ -65,21 +55,10 @@ export function runCLIWizardInstallTest({
     after(async function () {
       logger.info("Installation wizard test cleanup");
       this.timeout(20000);
-      try {
-        await testRunner.stop();
-      } catch (error) {
-        logger.info("Error to clean up terminal after test");
-        logger.info(`${error}`);
-      } finally {
-        testRunner = null;
-      }
+      await stopTerminal(testRunner);
+      testRunner = null;
       if (testProxyMode) {
-        try {
-          await proxy.stop();
-        } catch (error) {
-          logger.info("Error stopping proxy server");
-          logger.info(`${error}`);
-        }
+        await stopTestProxy(proxy);
       }
     });
 
@@ -276,30 +255,11 @@ export function runCLIWizardInstallTest({
       testRunner.sendInput("");
       await new Promise((resolve) => setTimeout(resolve, 5000));
 
-      const startTime = Date.now();
-      while (Date.now() - startTime < 3600000) {
-        if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
-          logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
-          break;
-        }
-        if (await testRunner.waitForOutput("panicked", 1000)) {
-          logger.info(">>>>>>>Rust App failure!!!!");
-          break;
-        }
-        if (
-          await testRunner.waitForOutput(
-            "Do you want to save the installer configuration",
-            1000
-          )
-        ) {
-          logger.info(">>>>>>>Completed!!!");
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
-      if (Date.now() - startTime >= 3600000) {
-        logger.info("Installation timed out after 1 hour");
-      }
+      await waitForTerminalOutput(
+        testRunner,
+        "Do you want to save the installer configuration",
+        { pollMs: 500 }
+      );
 
       expect(
         testRunner.output,

@@ -421,25 +421,13 @@ export default {
 }
 </script>
 
+<style scoped src="./styles/page-header.css"></style>
+
 <style scoped>
 .basic-installer {
   padding: 2rem;
   max-width: 1200px;
   margin: 0 auto;
-}
-
-.installer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-}
-
-.title {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2rem;
-  color: #1f2937;
-  margin: 0;
 }
 
 .installer-header .n-button {

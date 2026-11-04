@@ -1,0 +1,4 @@
+# Function length ceiling for `clippy::too_many_lines` (enabled in Cargo.toml
+# [lints.clippy]). Complexity limits are enforced separately by
+# .github/scripts/check_complexity.sh.
+too-many-lines-threshold = 150

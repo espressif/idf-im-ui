@@ -1,7 +1,11 @@
 import { expect } from "chai";
-import { describe, it, beforeEach, afterEach } from "mocha";
+import { describe, it } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import {
+  registerSequentialStepHooks,
+  waitForTerminalOutput,
+} from "../helpers/cliTestHelpers.js";
 import { getPlatformKey } from "../helper.js";
 import path from "path";
 import fs from "fs";
@@ -20,7 +24,6 @@ export function runInstallVerification({
   describe(`${id}- Installation verification test |`, function () {
     this.timeout(600000);
     let testRunner = null;
-    let verificationStepFailed = false;
 
     // `toolsFolder` follows the install drive (e.g. D:\Espressif when the
     // user picks a non-default drive). `espIdfJsonPath` is where the app
@@ -40,6 +43,12 @@ export function runInstallVerification({
         );
       }
       return eimJsonContent.idfInstalled.find((e) => e.name === idf) || null;
+    }
+
+    function getRequiredEntry(eimJsonContent, idf) {
+      const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
+      expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+      return eimJsonEntry;
     }
 
     /** Path to IDF root for this idf (installFolder when existingGitClone, else installFolder/idf/esp-idf). */
@@ -67,39 +76,34 @@ export function runInstallVerification({
         : path.join(espIdfJsonFolder, `Microsoft.${idf}.PowerShell_profile.ps1`);
     }
 
-    // The beforeEach function should skip the next tests if the previous test failed
-    beforeEach(async function () {
-      this.timeout(10000);
-      if (verificationStepFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
+    const readEimJson = () => JSON.parse(fs.readFileSync(eimJsonFilePath, "utf-8"));
 
-    // The afterEach function should log the terminal output on failure
-    // If the test failed and left the terminal running, it should be stopped
-    afterEach(async function () {
-      this.timeout(20000);
-      if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        if (testRunner) {
-          logger.info(
-            `Terminal output: >>\r ${testRunner.output.slice(-2000)}`
-          );
-          logger.debug(`Terminal output on failure: >>\r ${testRunner.output}`);
-        }
-        verificationStepFailed = true;
+    async function startIDFTerminal(activationScript) {
+      try {
+        await testRunner.runIDFTerminal(activationScript);
+      } catch (error) {
+        logger.info("Error to start IDF terminal");
+        logger.info(testRunner.output);
+        logger.info(` Error: ${error}`);
+        throw new Error("Error starting IDF Terminal");
       }
-      if (testRunner) {
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to clean up terminal after test");
-          logger.info(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+    }
+
+    async function stopIDFTerminal() {
+      try {
+        await testRunner.stop();
+      } catch (error) {
+        logger.info("Error to stop terminal");
+        logger.debug(` Error: ${error}`);
+      } finally {
+        testRunner = null;
       }
+    }
+
+    // Skip the next tests once a test fails and stop any terminal it left running
+    registerSequentialStepHooks({
+      getRunner: () => testRunner,
+      clearRunner: () => (testRunner = null),
     });
 
     it("1- EIM json file should have expected contents", async function () {
@@ -116,9 +120,7 @@ export function runInstallVerification({
         fs.existsSync(eimJsonFilePath),
         "eim-idf.json file not found on the tools folder."
       ).to.be.true;
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
       logger.debug("EIM Json file content:", eimJsonContent);
       expect(
         eimJsonContent,
@@ -238,9 +240,7 @@ export function runInstallVerification({
        * The test also checks IDF is installed in the correct folder and if Python path matches the expected path.
        */
       logger.info(`Validating entries for installed IDFs in eim_idf.json`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
       logger.debug("EIM Json file content: ", eimJsonContent);
 
       for (let idf of idfList) {
@@ -296,14 +296,10 @@ export function runInstallVerification({
        */
       this.timeout(120000);
       logger.info(`Validating activation script runs with -e flag`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
 
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
-          .be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
         expect(
@@ -368,14 +364,7 @@ export function runInstallVerification({
           /Environment setup complete|These changes will be lost|You are now using IDF version|Python environment activated/
         );
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -384,14 +373,10 @@ export function runInstallVerification({
        * This test checks if the Python environment is set up correctly.
        */
       logger.info(`Validating python requirements`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
 
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not
-          .be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
 
@@ -417,14 +402,7 @@ export function runInstallVerification({
           `Python requirements file not found for IDF ${idf}`
         ).to.be.true;
 
-        try {
-          await testRunner.runIDFTerminal(eimJsonEntry.activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(eimJsonEntry.activationScript);
 
         testRunner.sendInput(
           `${eimJsonEntry.python} ${path.join(
@@ -438,14 +416,7 @@ export function runInstallVerification({
         );
         expect(satisfiedReqs, "Python Requirements not installed").to.be.true;
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -456,23 +427,13 @@ export function runInstallVerification({
        *
        */
       logger.info(`Validating tools versions installed on path`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
-        try {
-          await testRunner.runIDFTerminal(activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(activationScript);
 
         const idfRoot = getIdfRoot(idf);
         let toolsIndexFile = JSON.parse(
@@ -634,14 +595,7 @@ export function runInstallVerification({
             }
           }
         }
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -652,25 +606,15 @@ export function runInstallVerification({
        * The assert is based on the existence of the project files in the expected folder.
        */
       logger.info(`Starting test - create new project`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
         const projectsDir = getProjectsDir(idf);
         const pathToProjectFolder = projectsDir;
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
-        try {
-          await testRunner.runIDFTerminal(activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(activationScript);
 
         testRunner.sendInput(`mkdir ${pathToProjectFolder}`);
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -712,14 +656,7 @@ export function runInstallVerification({
 
         logger.info("sample project creation Passed");
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -729,13 +666,10 @@ export function runInstallVerification({
        */
       this.timeout(750000);
       logger.info(`Starting test - set target`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
 
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
         const pathToProjectFolder = path.join(
@@ -743,14 +677,7 @@ export function runInstallVerification({
           "hello_world"
         );
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
-        try {
-          await testRunner.runIDFTerminal(activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(activationScript);
 
         const validTarget =
           targetList[0].toLowerCase() === "all" ? "esp32" : targetList[0];
@@ -758,26 +685,12 @@ export function runInstallVerification({
         testRunner.sendInput(`cd ${pathToProjectFolder}`);
         testRunner.sendInput(`idf.py set-target ${validTarget}`);
 
-        const startTime = Date.now();
-        while (Date.now() - startTime < 1200000) {
-          if (Date.now() - testRunner.lastDataTimestamp >= 600000) {
-            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
-            break;
-          }
-          if (
-            await testRunner.waitForOutput(
-              "Build files have been written to",
-              1000
-            )
-          ) {
-            logger.info("Target Set!!!");
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
-        if (Date.now() - startTime >= 1200000) {
-          logger.info("Set Target timed out after 20 minutes");
-        }
+        await waitForTerminalOutput(testRunner, "Build files have been written to", {
+          timeoutMs: 1200000,
+          detectPanic: false,
+          successMessage: "Target Set!!!",
+          timeoutMessage: "Set Target timed out after 20 minutes",
+        });
 
         const targetSet = await testRunner.waitForOutput(
           "Build files have been written to"
@@ -798,14 +711,7 @@ export function runInstallVerification({
 
         logger.info("Set Target Passed");
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -816,13 +722,10 @@ export function runInstallVerification({
        */
       this.timeout(15 * 60 * 1000); // 15 minutes
       logger.info(`Starting test - build project`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
 
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
         const pathToProjectFolder = path.join(
@@ -830,31 +733,18 @@ export function runInstallVerification({
           "hello_world"
         );
         const activationScript = getActivationScriptPath(idf, eimJsonEntry);
-        try {
-          await testRunner.runIDFTerminal(activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(activationScript);
 
         testRunner.sendInput(`cd ${pathToProjectFolder}`);
         testRunner.sendInput("idf.py build");
 
-        const startTime = Date.now();
-        while (Date.now() - startTime < 14 * 60 * 1000) {
-          // 14 minutes
-          if (Date.now() - testRunner.lastDataTimestamp >= 300000) {
-            logger.info(">>>>>>>Exited due to Idle terminal!!!!!");
-            break;
-          }
-          if (await testRunner.waitForOutput("Project build complete", 1000)) {
-            logger.info("Build Complete!!!");
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-        }
+        const startTime = await waitForTerminalOutput(testRunner, "Project build complete", {
+          timeoutMs: 14 * 60 * 1000, // 14 minutes
+          idleMs: 300000,
+          detectPanic: false,
+          successMessage: "Build Complete!!!",
+          timeoutMessage: null,
+        });
 
         const buildComplete = await testRunner.waitForOutput(
           "Project build complete"
@@ -884,14 +774,7 @@ export function runInstallVerification({
         ).to.include(`successfully created ${validTarget} image`);
         logger.info("Build Passed");
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
 
@@ -902,23 +785,13 @@ export function runInstallVerification({
        */
       this.timeout(60000);
       logger.info(`Validating idf.py --version`);
-      const eimJsonContent = JSON.parse(
-        fs.readFileSync(eimJsonFilePath, "utf-8")
-      );
+      const eimJsonContent = readEimJson();
 
       for (let idf of idfList) {
-        const eimJsonEntry = getEntryForIdf(eimJsonContent, idf);
-        expect(eimJsonEntry, `No entry for IDF ${idf} in eim_idf.json`).to.not.be.null;
+        const eimJsonEntry = getRequiredEntry(eimJsonContent, idf);
 
         testRunner = new CLITestRunner();
-        try {
-          await testRunner.runIDFTerminal(eimJsonEntry.activationScript);
-        } catch (error) {
-          logger.info("Error to start IDF terminal");
-          logger.info(testRunner.output);
-          logger.info(` Error: ${error}`);
-          throw new Error("Error starting IDF Terminal");
-        }
+        await startIDFTerminal(eimJsonEntry.activationScript);
 
         testRunner.output = "";
         testRunner.sendInput("idf.py --version");
@@ -932,14 +805,7 @@ export function runInstallVerification({
           "idf.py --version output must not show -dirty"
         ).to.not.include("-dirty");
 
-        try {
-          await testRunner.stop();
-        } catch (error) {
-          logger.info("Error to stop terminal");
-          logger.debug(` Error: ${error}`);
-        } finally {
-          testRunner = null;
-        }
+        await stopIDFTerminal();
       }
     });
   });

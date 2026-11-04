@@ -1,0 +1,31 @@
+{
+  "path": [
+    "src",
+    "src-tauri/src",
+    "src-tauri/bash_scripts",
+    "src-tauri/powershell_scripts",
+    "src-tauri/python_scripts",
+    "tests"
+  ],
+  "format": ["javascript", "markup", "css", "rust", "bash", "powershell", "python"],
+  "formatsExts": {
+    "markup": ["vue"]
+  },
+  "ignore": [
+    "**/node_modules/**",
+    "**/*.zip",
+    "**/dist/**",
+    "**/target/**",
+    "src/assets/**",
+    "src/locales/**",
+    "src-tauri/gen/**",
+    "src-tauri/locales/**"
+  ],
+  "minTokens": 50,
+  "minLines": 5,
+  "threshold": 2,
+  "reporters": ["console", "json", "markdown"],
+  "output": "out/jscpd",
+  "absolute": false,
+  "gitignore": true
+}

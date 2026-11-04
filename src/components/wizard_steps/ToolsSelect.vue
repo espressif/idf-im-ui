@@ -227,25 +227,13 @@ export default {
 }
 </script>
 
+<style scoped src="../styles/wizard-step-header.css"></style>
+
 <style scoped>
 .tools-select {
   padding: 2rem;
   max-width: 1000px;
   margin: 0 auto;
-}
-
-.title {
-  font-size: 27px;
-  font-family: 'Trueno-bold', sans-serif;
-  color: #374151;
-  margin-bottom: 0.5rem;
-}
-
-.description {
-  font-size: 21px;
-  font-family: 'Trueno-light', sans-serif;
-  color: #6b7280;
-  margin-bottom: 2rem;
 }
 
 .tools-card {
@@ -257,36 +245,6 @@ export default {
   margin-bottom: 1rem;
 }
 
-.action-footer {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 1rem;
-  margin-top: 2rem;
-  padding-top: 1rem;
-}
-
-.selection-summary {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-.empty-state {
-  padding: 3rem;
-  text-align: center;
-}
-
-.empty-message {
-  font-size: 1rem;
-  color: #6b7280;
-}
-
-.n-card {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  padding: 0px;
-}
-
 .n-card :deep(.n-card__content) {
   padding: 0px;
 }
@@ -295,3 +253,5 @@ export default {
   padding: 5px;
 }
 </style>
+
+<style scoped src="../styles/selection-step.css"></style>

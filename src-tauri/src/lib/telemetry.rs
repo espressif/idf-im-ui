@@ -1,16 +1,16 @@
 use anyhow::Error as AnyhowError;
 use chrono::Utc;
-use once_cell::sync::Lazy;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 use sysinfo::System;
 use uuid::Uuid;
 
 const CONNECTION_STRING: Option<&str> = option_env!("APP_INSIGHTS_CONNECTION_STRING");
 
-static HTTP_CLIENT: Lazy<Option<reqwest::Client>> = Lazy::new(|| {
+static HTTP_CLIENT: LazyLock<Option<reqwest::Client>> = LazyLock::new(|| {
     CONNECTION_STRING?;
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
@@ -24,7 +24,7 @@ static ENABLED: AtomicBool = AtomicBool::new(true);
 /// second `install_finished` for the same process.
 static OUTCOME_REPORTED: AtomicBool = AtomicBool::new(false);
 
-static SYSTEM_INFO: Lazy<String> = Lazy::new(compute_system_info);
+static SYSTEM_INFO: LazyLock<String> = LazyLock::new(compute_system_info);
 
 pub fn set_enabled(enabled: bool) {
     ENABLED.store(enabled, Ordering::Relaxed);
@@ -284,8 +284,8 @@ pub struct ClassifiedFailure {
 /// Holds the most recent classified failure until the outcome event is sent.
 /// A single global slot is enough because installs are serialized: the GUI
 /// guards them with `is_installing` and the CLI runs one install per process.
-static PENDING_FAILURE: Lazy<std::sync::Mutex<Option<ClassifiedFailure>>> =
-    Lazy::new(|| std::sync::Mutex::new(None));
+static PENDING_FAILURE: LazyLock<std::sync::Mutex<Option<ClassifiedFailure>>> =
+    LazyLock::new(|| std::sync::Mutex::new(None));
 
 /// Records the cause of a failure at the point it is detected.
 pub fn note_failure(
@@ -737,11 +737,11 @@ struct QueuedDispatch {
     body: String,
 }
 
-static QUEUED_DISPATCHES: Lazy<std::sync::Mutex<Vec<QueuedDispatch>>> =
-    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+static QUEUED_DISPATCHES: LazyLock<std::sync::Mutex<Vec<QueuedDispatch>>> =
+    LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
 
-static PENDING_DISPATCHES: Lazy<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
-    Lazy::new(|| std::sync::Mutex::new(Vec::new()));
+static PENDING_DISPATCHES: LazyLock<std::sync::Mutex<Vec<tokio::task::JoinHandle<()>>>> =
+    LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
 
 /// Whether any telemetry HTTP requests are still in flight or waiting to be sent.
 pub fn has_pending_dispatches() -> bool {
@@ -845,9 +845,9 @@ pub fn get_linux_os_name() -> String {
 fn hash_short(input: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(input.as_bytes());
-    let digest = hasher.finalize();
-    let hex = format!("{:x}", digest);
-    hex.chars().take(16).collect()
+    let mut hex = crate::to_hex(&hasher.finalize());
+    hex.truncate(16);
+    hex
 }
 
 #[cfg(test)]

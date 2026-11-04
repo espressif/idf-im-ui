@@ -1,7 +1,6 @@
 use std::{error::Error, process::Command};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     // Download the IDF versions file
     match download_idf_versions_with_curl() {
         Ok(content) => {

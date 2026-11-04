@@ -1,7 +1,8 @@
 import { expect } from "chai";
-import { describe, it, after, beforeEach, afterEach } from "mocha";
+import { describe, it, after } from "mocha";
 import CLITestRunner from "../classes/CLITestRunner.class.js";
 import logger from "../classes/logger.class.js";
+import { registerSequentialStepHooks } from "../helpers/cliTestHelpers.js";
 import path from "path";
 import fs from "fs";
 import os from "os";
@@ -28,37 +29,13 @@ export function runInstallationStatusTest({
   describe(`${id}- EIM Installation Status tests |`, function () {
     this.timeout(300000);
     let testRunner = null;
-    let testStepFailed = false;
 
     const eimJsonFilePath = path.join(toolsFolder, "tools", "eim_idf.json");
 
-    beforeEach(async function () {
-      this.timeout(10000);
-      if (testStepFailed) {
-        logger.info("Test step failed — skipping remaining status tests");
-        this.skip();
-      }
-    });
-
-    afterEach(async function () {
-      this.timeout(20000);
-      if (this.currentTest.state === "failed") {
-        logger.info(`Test failed: ${this.currentTest.title}`);
-        if (testRunner) {
-          logger.info(`Terminal output: >>\r ${testRunner.output.slice(-2000)}`);
-          logger.debug(`Full terminal output: >>\r ${testRunner.output}`);
-        }
-        testStepFailed = true;
-      }
-      if (testRunner) {
-        try {
-          await testRunner.stop();
-        } catch (e) {
-          logger.info(`Error stopping terminal: ${e}`);
-        } finally {
-          testRunner = null;
-        }
-      }
+    registerSequentialStepHooks({
+      getRunner: () => testRunner,
+      clearRunner: () => (testRunner = null),
+      skipMessage: "Test step failed — skipping remaining status tests",
     });
 
     after(function () {

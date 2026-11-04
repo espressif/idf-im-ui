@@ -80,6 +80,103 @@ pub fn setup_gui_logging(log_level_override: Option<LevelFilter>) -> Result<(), 
     Ok(())
 }
 
+fn ensure_bundled_macos_path() {
+    // A bundled .app does not inherit the user's PATH.
+    #[cfg(target_os = "macos")]
+    env::set_var(
+        "PATH",
+        "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin",
+    );
+}
+
+fn disable_webkit_dmabuf_on_nvidia() {
+    // Workaround for WebKitGTK DMA-BUF renderer issues on Nvidia (#421, #523).
+    // GBM buffer allocation fails with Nvidia's proprietary driver, causing a
+    // blank window or crash on both Wayland and X11.
+    #[cfg(target_os = "linux")]
+    if env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+        && Path::new("/proc/driver/nvidia/version").exists()
+    {
+        env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        info!(
+            "Nvidia detected: disabled WebKitGTK DMA-BUF renderer (WEBKIT_DISABLE_DMABUF_RENDERER=1)"
+        );
+    }
+}
+
+fn prepare_gui_state(
+    app: &mut tauri::App,
+    settings: Option<Settings>,
+    persist_opt_out: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let app_state = match settings {
+        Some(s) => AppState {
+            settings: Mutex::new(s),
+            ..Default::default()
+        },
+        None => AppState::default(),
+    };
+    initialize_idf_json(&app_state);
+    app.manage(app_state);
+    persist_usage_opt_out(app, persist_opt_out)?;
+    Ok(())
+}
+
+fn initialize_idf_json(app_state: &AppState) {
+    match app_state.settings.lock() {
+        Ok(settings) => match settings.initialize_esp_ide_json() {
+            Ok(_) => log::debug!("ESP-IDF JSON initialized at configured path."),
+            Err(e) => log::warn!(
+                "Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.",
+                e
+            ),
+        },
+        Err(e) => log::warn!("Failed to lock settings: {}", e),
+    }
+}
+
+fn persist_usage_opt_out(
+    app: &tauri::App,
+    persist_opt_out: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("eim");
+    if let Err(e) = std::fs::create_dir_all(&config_dir) {
+        log::error!("Failed to create config directory: {}", e);
+        return Ok(());
+    }
+    // Only an explicit --do-not-track overrides the saved preference.
+    // EIM_DO_NOT_TRACK disables sending for this process and does not write.
+    if !persist_opt_out {
+        return Ok(());
+    }
+    let config_file = config_dir.join("eim.json");
+    if let Ok(store) = app.handle().store_builder(config_file).build() {
+        store.set("usage_statistics".to_string(), Value::Bool(false));
+        if let Err(e) = store.save() {
+            log::error!("Failed to save usage_statistics setting: {}", e);
+        }
+    }
+    Ok(())
+}
+
+fn flush_telemetry_on_exit(app_handle: &tauri::AppHandle) {
+    let abandoned = telemetry_session::abandon_open_session(app_handle);
+    if !abandoned && !idf_im_lib::telemetry::has_pending_dispatches() {
+        return;
+    }
+    if tokio::runtime::Handle::try_current().is_err() {
+        tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
+            std::time::Duration::from_millis(500),
+        ));
+        return;
+    }
+    tokio::spawn(async {
+        idf_im_lib::telemetry::flush(std::time::Duration::from_millis(500)).await;
+    });
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run(
     settings: Option<Settings>,
@@ -87,74 +184,15 @@ pub fn run(
     do_not_track: bool,
     persist_opt_out: bool,
 ) {
-    // this is here because macos bundled .app does not inherit path
-    #[cfg(target_os = "macos")]
-    {
-        env::set_var("PATH", "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/opt/local/bin:/opt/local/sbin");
-    }
-
+    ensure_bundled_macos_path();
     let _ = setup_gui_logging(log_level_override);
-
     idf_im_lib::telemetry::set_enabled(!do_not_track);
-
-    // Workaround for WebKitGTK DMA-BUF renderer issues on Nvidia (#421, #523).
-    // GBM buffer allocation fails when using the DMA-BUF renderer with
-    // Nvidia's proprietary driver, causing a blank window or crash.
-    // This affects both Wayland and X11 sessions.
-    #[cfg(target_os = "linux")]
-    {
-        if env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
-            let has_nvidia = Path::new("/proc/driver/nvidia/version").exists();
-
-            if has_nvidia {
-                env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-                info!("Nvidia detected: disabled WebKitGTK DMA-BUF renderer (WEBKIT_DISABLE_DMABUF_RENDERER=1)");
-            }
-        }
-    }
+    disable_webkit_dmabuf_on_nvidia();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .setup(move |app| {
-          let app_state = match settings {
-            Some(s) => AppState {
-              settings: Mutex::new(s),
-              ..Default::default()
-            },
-            None => AppState::default()
-          };
-          // Initialize eim_idf.json at the configured path (not hardcoded default)
-          match app_state.settings.lock() {
-            Ok(settings) => {
-              match settings.initialize_esp_ide_json() {
-                Ok(_) => log::debug!("ESP-IDF JSON initialized at configured path."),
-                Err(e) => log::warn!("Failed to initialize ESP-IDF JSON: {}. IDE integration may not work correctly.", e),
-              }
-            }
-            Err(e) => log::warn!("Failed to lock settings: {}", e),
-          }
-          app.manage(app_state);
-          // Set usage_statistics based on do_not_track
-          let config_dir = dirs::config_dir()
-            .ok_or("Failed to get config directory")?
-            .join("eim");
-          let config_file = config_dir.join("eim.json");
-          if let Err(e) = std::fs::create_dir_all(&config_dir) {
-            log::error!("Failed to create config directory: {}", e);
-          } else if let Ok(store) = app.handle().store_builder(config_file).build() {
-            // Only an explicit --do-not-track overrides the user's saved preference.
-            // EIM_DO_NOT_TRACK disables sending for this process and does not write.
-            if persist_opt_out {
-              store.set("usage_statistics".to_string(), Value::Bool(false));
-              if let Err(e) = store.save() {
-                  log::error!("Failed to save usage_statistics setting: {}", e);
-              }
-            }
-          }
-
-          Ok(())
-        })
+        .setup(move |app| prepare_gui_state(app, settings, persist_opt_out))
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -236,19 +274,7 @@ pub fn run(
         .expect("error while building tauri application")
         .run(|app_handle, event| {
             if let tauri::RunEvent::Exit = event {
-                let abandoned = telemetry_session::abandon_open_session(app_handle);
-                if abandoned || idf_im_lib::telemetry::has_pending_dispatches() {
-                    if tokio::runtime::Handle::try_current().is_err() {
-                        tauri::async_runtime::block_on(idf_im_lib::telemetry::flush(
-                            std::time::Duration::from_millis(500),
-                        ));
-                    } else {
-                        tokio::spawn(async {
-                            idf_im_lib::telemetry::flush(std::time::Duration::from_millis(500))
-                                .await;
-                        });
-                    }
-                }
+                flush_telemetry_on_exit(app_handle);
             }
         });
 }

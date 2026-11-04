@@ -1,7 +1,15 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
+import { describe, it, before, after } from "mocha";
 import GUITestRunner from "../classes/GUITestRunner.class.js";
-import TestProxy from "../classes/TestProxy.class.js";
+import { startTestProxy, stopTestProxy } from "../helpers/testProxy.js";
+import {
+  startGUIApp,
+  stopGUIApp,
+  registerGUIFailureHooks,
+  expectWelcomePage,
+  openInstallerSetup,
+  waitForGUIInstallation,
+} from "../helpers/guiTestHelpers.js";
 import { downloadOfflineArchive } from "../helper.js";
 import { tGui } from "../helpers/i18n.js";
 import logger from "../classes/logger.class.js";
@@ -21,7 +29,6 @@ export function runGUIOfflineInstallTest({
 }) {
   describe(`${id}- Run offline installation |`, () => {
     let eimRunner = null;
-    let offlineInstallFailed = false;
     let pathToOfflineArchive = null;
     let proxy = null;
 
@@ -33,62 +40,25 @@ export function runGUIOfflineInstallTest({
         idfVersion: offlineIDFVersion,
       });
       if (testProxyMode) {
-        try {
-          proxy = new TestProxy({
-            mode: testProxyMode,
-            blockedDomains: proxyBlockList,
-          });
-          await proxy.start();
-        } catch (error) {
-          logger.info("Error to start proxy server");
-          logger.debug(`Error: ${error}`);
-        }
+        proxy = await startTestProxy(testProxyMode, proxyBlockList);
       }
-      try {
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+      await startGUIApp(eimRunner);
       if (!pathToOfflineArchive) {
         logger.info(">>>>>>> Offline archive not found, skipping this test");
         this.skip();
       }
     });
 
-    // The beforeEach function should skip the next tests if the previous test failed
-    beforeEach(async function () {
-      if (offlineInstallFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
-
-    // The afterEach function should log the EIM application GUI screenshot on failure
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-      if (this.currentTest.state === "failed") offlineInstallFailed = true;
-    });
+    // Skip the next tests if the previous test failed and save a screenshot on failure
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner });
 
     // The tear down function should stop the EIM application GUI and proxy server if enabled
     // The offline archive should be removed to save space in the runner
     after(async function () {
       this.timeout(5000);
-      try {
-        await eimRunner.stop();
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
+      await stopGUIApp(eimRunner);
       if (testProxyMode) {
-        try {
-          await proxy.stop();
-        } catch (error) {
-          logger.info("Error stopping proxy server");
-          logger.info(`${error}`);
-        }
+        await stopTestProxy(proxy);
       }
       if (pathToOfflineArchive) {
         try {
@@ -102,26 +72,13 @@ export function runGUIOfflineInstallTest({
 
     it("1- Should show welcome page", async function () {
       this.timeout(45000);
-      // Wait for the header to be present
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      const header = await eimRunner.findByDataId("welcome-header", 25000);
-      expect(header, "Expected welcome header").to.not.be.false;
-      const text = await header.getText();
-      expect(text, "Expected welcome text").to.equal(
-        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`,
-      );
+      await expectWelcomePage(eimRunner, 5000);
     });
 
     it("2- Should show offline installation option", async function () {
       this.timeout(10000);
 
-      await eimRunner.clickByDataId("new-installation-button");
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const header = await eimRunner.findByDataId("basic-installer-title");
-      const text = await header.getText();
-      expect(text, "Expected installation setup screen").to.equal(
-        tGui("basicInstaller.title"),
-      );
+      await openInstallerSetup(eimRunner);
       const simplified = await eimRunner.findByDataId("offline-mode-card");
       expect(simplified, "Expected option for offline installation").to.not.be
         .false;
@@ -384,27 +341,10 @@ export function runGUIOfflineInstallTest({
         "Expected installation progress screen",
       ).to.be.true;
 
-      const startTime = Date.now();
-      while (Date.now() - startTime < 2700000) {
-        if (await eimRunner.findByDataId("error-message", 1000)) {
-          logger.debug("failed!!!!");
-          break;
-        }
-        if (
-          await eimRunner.findByDataId("offline-installation-error-alert", 1000)
-        ) {
-          logger.debug("failed!!!!");
-          break;
-        }
-        if (await eimRunner.findByDataId("installation-summary", 1000)) {
-          logger.debug("Completed!!!");
-          break;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-      }
-      if (Date.now() - startTime >= 2700000) {
-        logger.info("Installation timed out after 45 minutes");
-      }
+      await waitForGUIInstallation(eimRunner, {
+        failureIds: ["error-message", "offline-installation-error-alert"],
+        completeId: "installation-summary",
+      });
       const completed = await eimRunner.findByDataId("installation-summary");
       expect(completed, "Expected installation to be completed").to.not.be
         .false;

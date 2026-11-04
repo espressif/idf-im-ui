@@ -1,12 +1,9 @@
 use dialoguer::{theme::ColorfulTheme, Confirm, Input, MultiSelect, Select};
 use idf_im_lib::settings::Settings;
-use indicatif::{ProgressBar, ProgressState, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle};
 use log::debug;
 use rust_i18n::t;
-use std::{
-    fmt::Write,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 pub fn run_with_spinner<F, T>(func: F) -> T
 where
@@ -114,24 +111,7 @@ pub fn generic_input(prompt_key: &str, error_key: &str, default: &str) -> Result
         .map_err(|e| format!("{} :{:?}", t!(error_key), e))
 }
 
-pub fn create_progress_bar() -> ProgressBar {
-    let pb = ProgressBar::new(100);
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({eta})",
-        )
-        .unwrap()
-        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
-            write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
-        })
-        .progress_chars("#>-"),
-    );
-    pb
-}
-
-pub fn update_progress_bar_number(pb: &ProgressBar, value: u64) {
-    pb.set_position(value);
-}
+pub use idf_im_lib::cli_progress::{create_progress_bar, update_progress_bar_number};
 
 pub fn print_tool_selection_summary(settings: &Settings) {
     if let Some(tools_per_version) = &settings.idf_tools_per_version {

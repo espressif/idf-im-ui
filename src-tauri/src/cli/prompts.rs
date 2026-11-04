@@ -8,7 +8,7 @@ use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
 use idf_im_lib::system_dependencies;
-use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
+use idf_im_lib::telemetry::{self, ErrorKind, FailureStage};
 use idf_im_lib::tool_selection::{
     get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
 };
@@ -50,6 +50,37 @@ pub async fn select_idf_version(
     }
 }
 
+#[derive(Debug, PartialEq)]
+enum InstallChoice {
+    Prompt,
+    Install,
+    Skip,
+}
+
+fn install_choice(install_all_prerequisites: bool, non_interactive: bool) -> InstallChoice {
+    if install_all_prerequisites {
+        InstallChoice::Install
+    } else if non_interactive {
+        InstallChoice::Skip
+    } else {
+        InstallChoice::Prompt
+    }
+}
+
+fn ask_to_skip_prerequisites() -> Result<(), String> {
+    let skip = generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
+    if !skip {
+        telemetry::note_failure_kind(
+            ErrorKind::UserCancelled,
+            Some(FailureStage::Prerequisites),
+            "user declined to skip the failed prerequisite check",
+        );
+        return Err(t!("prerequisites.user_cancelled").to_string());
+    }
+    info!("{}", t!("prerequisites.skipping"));
+    Ok(())
+}
+
 pub async fn check_and_install_prerequisites(
     non_interactive: bool,
     install_all_prerequisites: bool,
@@ -62,166 +93,117 @@ pub async fn check_and_install_prerequisites(
         run_with_spinner(system_dependencies::check_prerequisites_with_result)
     };
 
-    match check_result {
-        Ok(result) => {
-            // Handle verification failures (shell failed or can't verify)
-            if result.shell_failed || !result.can_verify {
-                let message = if result.shell_failed {
-                    t!("prerequisites.shell_failed").to_string()
-                } else {
-                    t!("prerequisites.verification_error", error = "unknown").to_string()
-                };
-                info!("{}", message);
-
-                if non_interactive {
-                    // In non-interactive mode, fail with the existing message
-                    telemetry::note_failure_kind(
-                        ErrorKind::PrerequisiteCheckFailed,
-                        Some(FailureStage::Prerequisites),
-                        if result.shell_failed {
-                            "prerequisite check failed: shell could not be invoked"
-                        } else {
-                            "prerequisite check failed: cannot verify"
-                        },
-                    );
-                    return Err(t!("prerequisites.failed").to_string());
-                }
-
-                // Interactive mode: ask user if they want to skip
-                let skip =
-                    generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
-                if !skip {
-                    telemetry::note_failure_kind(
-                        ErrorKind::UserCancelled,
-                        Some(FailureStage::Prerequisites),
-                        "user declined to skip the failed prerequisite check",
-                    );
-                    return Err(t!("prerequisites.user_cancelled").to_string());
-                }
-                info!("{}", t!("prerequisites.skipping"));
-                return Ok(());
-            }
-
-            // Normal flow: all prerequisites satisfied
-            if result.missing.is_empty() {
-                info!("{}", t!("prerequisites.ok"));
-                return Ok(());
-            }
-
-            // Some prerequisites are missing
-            let unsatisfied_prerequisites: Vec<String> =
-                result.missing.into_iter().map(|p| p.to_string()).collect();
-
-            info!(
-                "{} {:?}",
-                t!("prerequisites.missing"),
-                unsatisfied_prerequisites
-            );
-            info!(
-                "{}",
-                t!(
-                    "prerequisites.not_ok",
-                    l = unsatisfied_prerequisites.join(", ")
-                )
-            );
-
-            if std::env::consts::OS == "windows" {
-                let res = if !install_all_prerequisites && !non_interactive {
-                    generic_confirm("prerequisites.install.prompt")
-                } else if install_all_prerequisites {
-                    Ok(true)
-                } else {
-                    Ok(false)
-                };
-                if res.map_err(|e| e.to_string())? {
-                    system_dependencies::install_prerequisites(
-                        unsatisfied_prerequisites,
-                        tools_dir,
-                    )
-                    .await
-                    .map_err(|e| e.to_string())?;
-
-                    // Re-check after installation to verify prerequisites were installed
-                    let recheck_result =
-                        run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
-                    if !recheck_result.missing.is_empty() {
-                        let still_missing: Vec<String> = recheck_result
-                            .missing
-                            .iter()
-                            .map(|s| s.to_string())
-                            .collect();
-                        telemetry::note_missing_prerequisites(
-                            "automatic prerequisite install failed, still missing",
-                            &still_missing,
-                        );
-                        return Err(format!(
-                            "{}",
-                            t!(
-                                "prerequisites.install.catastrophic",
-                                l = still_missing.join(", ")
-                            ),
-                        ));
-                    } else {
-                        info!("{}", t!("prerequisites.ok"));
-                    }
-                } else if non_interactive {
-                    telemetry::note_missing_prerequisites(
-                        "prerequisites still missing in non-interactive mode",
-                        &unsatisfied_prerequisites,
-                    );
-                    return Err(t!("prerequisites.install.ask").to_string());
-                } else {
-                    let names = telemetry::normalize_missing_names(&unsatisfied_prerequisites);
-                    telemetry::note_failure(
-                        ErrorKind::DependencyMissing,
-                        FailureClass::User,
-                        Some(FailureStage::Prerequisites),
-                        "user declined the prerequisite install",
-                        names,
-                    );
-                    return Err(t!("prerequisites.install.ask").to_string());
-                }
-            } else {
-                // Non-Windows: we can only report what the user has to install.
-                telemetry::note_missing_prerequisites(
-                    "missing prerequisites",
-                    &unsatisfied_prerequisites,
-                );
-                return Err(t!("prerequisites.install.ask").to_string());
-            }
-
-            Ok(())
-        }
+    let result = match check_result {
+        Ok(result) => result,
         Err(err) => {
             // Error during checking (e.g., unsupported package manager)
             info!(
                 "{}",
                 t!("prerequisites.verification_error", error = err.clone())
             );
-
             if non_interactive {
                 telemetry::note_failure_kind(
                     ErrorKind::PrerequisiteCheckFailed,
                     Some(FailureStage::Prerequisites),
-                    format!("prerequisite check could not run: {}", err),
+                    format!("prerequisite check failed: {err}"),
                 );
                 return Err(err);
             }
-
-            // Interactive mode: ask user if they want to skip
-            let skip = generic_confirm("prerequisites.skip_prompt").map_err(|e| e.to_string())?;
-            if !skip {
-                telemetry::note_failure_kind(
-                    ErrorKind::UserCancelled,
-                    Some(FailureStage::Prerequisites),
-                    "user declined to skip the failed prerequisite check",
-                );
-                return Err(t!("prerequisites.user_cancelled").to_string());
-            }
-            info!("{}", t!("prerequisites.skipping"));
-            Ok(())
+            return ask_to_skip_prerequisites();
         }
+    };
+
+    // Handle verification failures (shell failed or can't verify)
+    if result.shell_failed || !result.can_verify {
+        let message = if result.shell_failed {
+            t!("prerequisites.shell_failed").to_string()
+        } else {
+            t!("prerequisites.verification_error", error = "unknown").to_string()
+        };
+        info!("{}", message);
+
+        if non_interactive {
+            telemetry::note_failure_kind(
+                ErrorKind::PrerequisiteCheckFailed,
+                Some(FailureStage::Prerequisites),
+                if result.shell_failed {
+                    "prerequisite check failed: shell could not be invoked"
+                } else {
+                    "prerequisite check failed: cannot verify"
+                },
+            );
+            return Err(t!("prerequisites.failed").to_string());
+        }
+        return ask_to_skip_prerequisites();
     }
+
+    if result.missing.is_empty() {
+        info!("{}", t!("prerequisites.ok"));
+        return Ok(());
+    }
+
+    let unsatisfied_prerequisites: Vec<String> =
+        result.missing.into_iter().map(|p| p.to_string()).collect();
+
+    info!(
+        "{} {:?}",
+        t!("prerequisites.missing"),
+        unsatisfied_prerequisites
+    );
+    info!(
+        "{}",
+        t!(
+            "prerequisites.not_ok",
+            l = unsatisfied_prerequisites.join(", ")
+        )
+    );
+
+    if std::env::consts::OS != "windows" {
+        telemetry::note_missing_prerequisites("missing prerequisites", &unsatisfied_prerequisites);
+        return Err(t!("prerequisites.install.ask").to_string());
+    }
+    let install = match install_choice(install_all_prerequisites, non_interactive) {
+        InstallChoice::Prompt => {
+            generic_confirm("prerequisites.install.prompt").map_err(|e| e.to_string())?
+        }
+        InstallChoice::Install => true,
+        InstallChoice::Skip => false,
+    };
+    if !install {
+        telemetry::note_missing_prerequisites("missing prerequisites", &unsatisfied_prerequisites);
+        return Err(t!("prerequisites.install.ask").to_string());
+    }
+    install_and_recheck_prerequisites(unsatisfied_prerequisites, tools_dir).await
+}
+
+async fn install_and_recheck_prerequisites(
+    unsatisfied_prerequisites: Vec<String>,
+    tools_dir: PathBuf,
+) -> Result<(), String> {
+    system_dependencies::install_prerequisites(unsatisfied_prerequisites, tools_dir)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // Re-check after installation to verify prerequisites were installed
+    let recheck_result = run_with_spinner(system_dependencies::check_prerequisites_with_result)?;
+    if !recheck_result.missing.is_empty() {
+        telemetry::note_missing_prerequisites(
+            "prerequisites still missing after install",
+            recheck_result.missing.iter().copied(),
+        );
+        return Err(t!(
+            "prerequisites.install.catastrophic",
+            l = recheck_result
+                .missing
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+        .to_string());
+    }
+    info!("{}", t!("prerequisites.ok"));
+    Ok(())
 }
 
 fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String> {
@@ -248,12 +230,6 @@ fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String
     } else {
         // Per-check [FAIL] lines with hints were already printed above.
         // Return a short error to signal failure without repeating advice.
-        let failed = results.iter().filter(|r| !r.passed).count();
-        telemetry::note_failure_kind(
-            ErrorKind::Python,
-            Some(FailureStage::Python),
-            format!("python sanity check failed ({} checks)", failed),
-        );
         Err(t!("python.sanitycheck.fail").to_string())
     }
 }
@@ -270,86 +246,124 @@ pub async fn check_and_install_python(
     } else {
         run_with_spinner(|| python_sanity_check(None, offline))
     };
-    if let Err(_err) = check_result {
-        if std::env::consts::OS == "windows" {
-            let res = if !install_all_prerequisites && !non_interactive {
-                generic_confirm("python.install.prompt")
-            } else if install_all_prerequisites {
-                info!("{}", t!("python.sanitycheck.fail_but_will_install"));
-                Ok(true)
-            } else {
-                info!("{}", t!("python.sanitycheck.fail"));
-                Ok(false)
-            };
+    if check_result.is_ok() {
+        info!("{}", t!("python.sanitycheck.ok"));
+        return Ok(());
+    }
+    if std::env::consts::OS != "windows" {
+        // Details were already printed per-check — just signal the failure.
+        telemetry::note_failure_kind(
+            ErrorKind::Python,
+            Some(FailureStage::Python),
+            "python sanity check failed",
+        );
+        return Err(t!("python.sanitycheck.fail").to_string());
+    }
+    let install = match install_choice(install_all_prerequisites, non_interactive) {
+        InstallChoice::Prompt => {
+            generic_confirm("python.install.prompt").map_err(|e| e.to_string())?
+        }
+        InstallChoice::Install => {
+            info!("{}", t!("python.sanitycheck.fail_but_will_install"));
+            true
+        }
+        InstallChoice::Skip => {
+            info!("{}", t!("python.sanitycheck.fail"));
+            false
+        }
+    };
+    if !install {
+        telemetry::note_failure_kind(
+            ErrorKind::Python,
+            Some(FailureStage::Python),
+            "user declined the python install",
+        );
+        return Err(t!("python.install.refuse").to_string());
+    }
+    install_and_recheck_python(python_version_override, offline, tools_dir).await
+}
 
-            if res.map_err(|e| e.to_string())? {
-                system_dependencies::install_prerequisites(
-                    vec![python_version_override.unwrap_or_else(|| {
-                        idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()
-                    })],
-                    tools_dir.clone(),
-                )
-                .await
-                .map_err(|e| e.to_string())?;
-                let usable_python = tools_dir
-                    .join("python")
-                    .join("python.exe")
-                    .to_str()
-                    .ok_or_else(|| t!("error.path_to_string").to_string())?
-                    .to_string();
-                debug!("{}", t!("debug.using_python", path = usable_python));
-                match run_with_spinner(|| python_sanity_check(Some(&usable_python), offline)) {
-                    Ok(_) => info!("{}", t!("python.install.success")),
-                    Err(err) => {
-                        telemetry::note_failure_kind(
-                            ErrorKind::Python,
-                            Some(FailureStage::Python),
-                            "python sanity check still failed after installing python",
-                        );
-                        return Err(format!("{} {:?}", t!("python.install.failure"), err));
-                    }
-                }
-            } else {
-                telemetry::note_failure_kind(
-                    ErrorKind::Python,
-                    Some(FailureStage::Python),
-                    "user declined the python install",
-                );
-                return Err(t!("python.install.refuse").to_string());
-            }
-        } else {
-            // Details were already printed per-check — just signal the failure.
+async fn install_and_recheck_python(
+    python_version_override: Option<String>,
+    offline: bool,
+    tools_dir: PathBuf,
+) -> Result<(), String> {
+    system_dependencies::install_prerequisites(
+        vec![python_version_override.unwrap_or_else(|| {
+            idf_im_lib::system_dependencies::PYTHON_NAME_TO_INSTALL.to_string()
+        })],
+        tools_dir.clone(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    let usable_python = tools_dir
+        .join("python")
+        .join("python.exe")
+        .to_str()
+        .ok_or_else(|| t!("error.path_to_string").to_string())?
+        .to_string();
+    debug!("{}", t!("debug.using_python", path = usable_python));
+    match run_with_spinner(|| python_sanity_check(Some(&usable_python), offline)) {
+        Ok(_) => {
+            info!("{}", t!("python.install.success"));
+            Ok(())
+        }
+        Err(err) => {
             telemetry::note_failure_kind(
                 ErrorKind::Python,
                 Some(FailureStage::Python),
-                "python sanity check failed",
+                "python sanity check still failed after installing python",
             );
-            return Err(t!("python.sanitycheck.fail").to_string());
+            Err(format!("{} {:?}", t!("python.install.failure"), err))
         }
-    } else {
-        info!("{}", t!("python.sanitycheck.ok"))
     }
-    Ok(())
 }
 
-async fn select_single_mirror<FGet, FSet>(
-    config: &mut Settings,
-    field_name: &str,    // e.g. "idf_mirror"
-    get_value: FGet,     // e.g. |c: &Settings| &c.idf_mirror
-    set_value: FSet,     // e.g. |c: &mut Settings, v| c.idf_mirror = Some(v)
-    candidates: &[&str], // list of mirror URLs
-    wizard_key: &str,    // e.g. "wizard.idf.mirror"
-    log_prefix: &str,    // e.g. "IDF", "Tools", "PyPI"
-) -> Result<(), String>
-where
-    FGet: Fn(&Settings) -> &Option<String>,
-    FSet: Fn(&mut Settings, String),
-{
+struct MirrorField {
+    field_name: &'static str,
+    field: fn(&mut Settings) -> &mut Option<String>,
+    candidates: fn() -> &'static [&'static str],
+    wizard_key: &'static str,
+    log_prefix: &'static str,
+}
+
+const MIRROR_FIELDS: [MirrorField; 3] = [
+    MirrorField {
+        field_name: "idf_mirror",
+        field: |c| &mut c.idf_mirror,
+        candidates: idf_im_lib::get_idf_mirrors_list,
+        wizard_key: "wizard.idf.mirror",
+        log_prefix: "IDF",
+    },
+    MirrorField {
+        field_name: "mirror",
+        field: |c| &mut c.mirror,
+        candidates: idf_im_lib::get_idf_tools_mirrors_list,
+        wizard_key: "wizard.tools.mirror",
+        log_prefix: "Tools",
+    },
+    MirrorField {
+        field_name: "pypi_mirror",
+        field: |c| &mut c.pypi_mirror,
+        candidates: idf_im_lib::get_pypi_mirrors_list,
+        wizard_key: "wizard.pypi.mirror",
+        log_prefix: "PyPI",
+    },
+];
+
+async fn select_single_mirror(config: &mut Settings, mirror: &MirrorField) -> Result<(), String> {
+    let MirrorField {
+        field_name,
+        field,
+        wizard_key,
+        log_prefix,
+        ..
+    } = *mirror;
+    let candidates = (mirror.candidates)();
     // Interactive by default when non_interactive is None
     let interactive = !config.non_interactive.unwrap_or_default();
     let wizard_all = config.wizard_all_questions.unwrap_or_default();
-    let current = get_value(config);
-    let needs_value = current.is_none() || config.is_default(field_name);
+    let needs_value = field(config).is_none() || config.is_default(field_name);
 
     // Only measure mirror latency if we actually need a value (or wizard wants to ask)
     if interactive && (wizard_all || needs_value) {
@@ -363,7 +377,7 @@ where
             .collect::<Vec<String>>();
         let selected = generic_select(wizard_key, &display)?;
         let url = selected.split(" (").next().unwrap_or(&selected).to_string();
-        set_value(config, url);
+        *field(config) = Some(url);
     } else if needs_value && config.config_file.is_none() {
         // Only auto-select based on latency if no config file was loaded
         // This prevents overriding user's mirror selection from GUI/config file
@@ -373,7 +387,7 @@ where
                 // The first entry is best mirror to select
                 info!("Selected {log_prefix} mirror: {}", entry.url);
                 debug!("Selected {log_prefix} mirror latency: {latency:?} ms");
-                set_value(config, entry.url.clone());
+                *field(config) = Some(entry.url.clone());
             }
         } else {
             // If the first entry is timeout or None there are no good mirrors to select try logging a proper message and return an error
@@ -386,48 +400,9 @@ where
 }
 
 pub async fn select_mirrors(mut config: Settings) -> Result<Settings, String> {
-    // IDF mirror
-    let idf_candidates = idf_im_lib::get_idf_mirrors_list();
-
-    select_single_mirror(
-        &mut config,
-        "idf_mirror",
-        |c: &Settings| &c.idf_mirror,
-        |c: &mut Settings, v| c.idf_mirror = Some(v),
-        idf_candidates,
-        "wizard.idf.mirror",
-        "IDF",
-    )
-    .await?;
-
-    // Tools mirror
-    let tools_candidates = idf_im_lib::get_idf_tools_mirrors_list();
-
-    select_single_mirror(
-        &mut config,
-        "mirror",
-        |c: &Settings| &c.mirror,
-        |c: &mut Settings, v| c.mirror = Some(v),
-        tools_candidates,
-        "wizard.tools.mirror",
-        "Tools",
-    )
-    .await?;
-
-    // PyPI mirror
-    let pypi_candidates = idf_im_lib::get_pypi_mirrors_list();
-
-    select_single_mirror(
-        &mut config,
-        "pypi_mirror",
-        |c: &Settings| &c.pypi_mirror,
-        |c: &mut Settings, v| c.pypi_mirror = Some(v),
-        pypi_candidates,
-        "wizard.pypi.mirror",
-        "PyPI",
-    )
-    .await?;
-
+    for mirror in &MIRROR_FIELDS {
+        select_single_mirror(&mut config, mirror).await?;
+    }
     Ok(config)
 }
 
@@ -500,6 +475,23 @@ pub fn select_features(
     }
 }
 
+/// Features from `metadata` whose names are listed in `names`, in metadata order
+pub fn features_matching_names(
+    metadata: &RequirementsMetadata,
+    names: &[String],
+) -> Vec<FeatureInfo> {
+    metadata
+        .features
+        .iter()
+        .filter(|f| names.contains(&f.name))
+        .cloned()
+        .collect()
+}
+
+fn describe_item(name: &str, description: Option<&str>) -> String {
+    format!("{} - {}", name, description.unwrap_or("No description"))
+}
+
 /// Helper function to get features for a specific version
 /// Handles both per-version features (GUI) and global features (CLI)
 pub fn get_features_for_version(
@@ -510,26 +502,13 @@ pub fn get_features_for_version(
     // First check if we have per-version features (from GUI)
     if let Some(per_version) = &config.idf_features_per_version {
         if let Some(feature_names) = per_version.get(version) {
-            // Convert feature names back to FeatureInfo
-            let features: Vec<FeatureInfo> = requirements_files
-                .features
-                .iter()
-                .filter(|f| feature_names.contains(&f.name))
-                .cloned()
-                .collect();
-            return Ok(features);
+            return Ok(features_matching_names(requirements_files, feature_names));
         }
     }
 
     // Fall back to global idf_features (from CLI)
     if let Some(global_features) = &config.idf_features {
-        let features: Vec<FeatureInfo> = requirements_files
-            .features
-            .iter()
-            .filter(|f| global_features.contains(&f.name))
-            .cloned()
-            .collect();
-        return Ok(features);
+        return Ok(features_matching_names(requirements_files, global_features));
     }
 
     // If no features specified, use interactive selection (CLI) or return required only
@@ -568,13 +547,7 @@ fn select_features_interactive(
     // Create display strings for each feature
     let items: Vec<String> = features_to_show
         .iter()
-        .map(|f| {
-            format!(
-                "{} - {}",
-                f.name,
-                f.description.as_deref().unwrap_or("No description")
-            )
-        })
+        .map(|f| describe_item(&f.name, f.description.as_deref()))
         .collect();
 
     // Pre-select all required features
@@ -607,8 +580,7 @@ pub fn select_feature_names(
     non_interactive: bool,
     include_optional: bool,
 ) -> Result<Vec<String>, String> {
-    let features = select_features(metadata, non_interactive, include_optional)?;
-    Ok(features.into_iter().map(|f| f.name).collect())
+    select_features_mapped(metadata, non_interactive, include_optional, |f| f.name)
 }
 
 /// Select features and return their requirement paths
@@ -617,8 +589,19 @@ pub fn select_requirement_paths(
     non_interactive: bool,
     include_optional: bool,
 ) -> Result<Vec<String>, String> {
+    select_features_mapped(metadata, non_interactive, include_optional, |f| {
+        f.requirement_path
+    })
+}
+
+fn select_features_mapped(
+    metadata: &RequirementsMetadata,
+    non_interactive: bool,
+    include_optional: bool,
+    map: fn(FeatureInfo) -> String,
+) -> Result<Vec<String>, String> {
     let features = select_features(metadata, non_interactive, include_optional)?;
-    Ok(features.into_iter().map(|f| f.requirement_path).collect())
+    Ok(features.into_iter().map(map).collect())
 }
 
 /// Advanced selection: filter by specific criteria
@@ -733,13 +716,7 @@ pub fn select_tools_interactive(
     // Create display strings for optional tools
     let items: Vec<String> = optional_tools
         .iter()
-        .map(|t| {
-            format!(
-                "{} - {}",
-                t.name,
-                t.description.as_deref().unwrap_or("No description")
-            )
-        })
+        .map(|t| describe_item(&t.name, t.description.as_deref()))
         .collect();
 
     // Determine defaults based on pre_selected or default to none
@@ -850,11 +827,78 @@ mod tests {
     fn create_test_tool(name: &str, install: &str) -> ToolSelectionInfo {
         ToolSelectionInfo {
             name: name.to_string(),
-            description: Some(format!("Description for {}", name)),
             install: install.to_string(),
             editable: install == "on_request",
-            supported_targets: Some(vec!["all".to_string()]),
+            description: None,
+            supported_targets: None,
         }
+    }
+
+    fn feature(name: &str, optional: bool) -> FeatureInfo {
+        FeatureInfo {
+            name: name.to_string(),
+            description: None,
+            optional,
+            requirement_path: format!("{}.txt", name),
+        }
+    }
+
+    #[test]
+    fn install_choice_prefers_install_all_then_non_interactive() {
+        assert_eq!(install_choice(true, true), InstallChoice::Install);
+        assert_eq!(install_choice(true, false), InstallChoice::Install);
+        assert_eq!(install_choice(false, true), InstallChoice::Skip);
+        assert_eq!(install_choice(false, false), InstallChoice::Prompt);
+    }
+
+    #[test]
+    fn describe_item_falls_back_to_no_description() {
+        assert_eq!(describe_item("core", Some("Core")), "core - Core");
+        assert_eq!(describe_item("core", None), "core - No description");
+    }
+
+    #[test]
+    fn features_matching_names_keeps_metadata_order() {
+        let metadata = RequirementsMetadata {
+            version: 1,
+            features: vec![
+                feature("core", false),
+                feature("gdb", true),
+                feature("ci", true),
+            ],
+        };
+        let selected = features_matching_names(&metadata, &["ci".to_string(), "core".to_string()]);
+        let names: Vec<&str> = selected.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(names, vec!["core", "ci"]);
+        assert!(features_matching_names(&metadata, &[]).is_empty());
+    }
+
+    #[test]
+    fn mirror_fields_are_asked_in_order_and_map_to_settings() {
+        let keys: Vec<&str> = MIRROR_FIELDS.iter().map(|m| m.wizard_key).collect();
+        assert_eq!(
+            keys,
+            vec![
+                "wizard.idf.mirror",
+                "wizard.tools.mirror",
+                "wizard.pypi.mirror"
+            ]
+        );
+        let mut config = Settings::default();
+        for mirror in &MIRROR_FIELDS {
+            *(mirror.field)(&mut config) = Some(mirror.field_name.to_string());
+        }
+        assert_eq!(config.idf_mirror.as_deref(), Some("idf_mirror"));
+        assert_eq!(config.mirror.as_deref(), Some("mirror"));
+        assert_eq!(config.pypi_mirror.as_deref(), Some("pypi_mirror"));
+        assert_eq!(
+            (MIRROR_FIELDS[0].candidates)(),
+            idf_im_lib::get_idf_mirrors_list()
+        );
+        assert_eq!(
+            (MIRROR_FIELDS[2].candidates)(),
+            idf_im_lib::get_pypi_mirrors_list()
+        );
     }
 
     #[test]

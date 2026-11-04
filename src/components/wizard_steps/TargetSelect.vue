@@ -115,25 +115,13 @@ export default {
 }
 </script>
 
+<style scoped src="../styles/wizard-step-header.css"></style>
+
 <style scoped>
 .target-select {
   padding: 2rem;
   max-width: 800px;
   margin: 0 auto;
-}
-
-.title {
-  font-size: 27px;
-  font-family: 'Trueno-bold', sans-serif;
-  color: #374151;
-  margin-bottom: 0.5rem;
-}
-
-.description {
-  font-size: 21px;
-  font-family: 'Trueno-light', sans-serif;
-  color: #6b7280;
-  margin-bottom: 2rem;
 }
 
 hr {

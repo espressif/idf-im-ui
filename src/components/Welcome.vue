@@ -321,43 +321,8 @@ export default {
   padding: 2rem 0;
 }
 
-/* Splash Screen */
-.splash-screen {
-  position: fixed;
-  inset: 0;
-  background: linear-gradient(135deg, #667eea 0%, var(--espressif-red-color) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 99999;
-}
-
 .hidden {
   display: none;
-}
-
-.splash-content {
-  text-align: center;
-  color: white;
-}
-
-.splash-content .logo {
-  width: 120px;
-  height: auto;
-  margin-bottom: 2rem;
-  filter: brightness(0) invert(1);
-}
-
-.splash-content h1 {
-  font-family: 'Trueno-bold', sans-serif;
-  font-size: 2.5rem;
-  margin-bottom: 1rem;
-}
-
-.splash-content p {
-  font-size: 1.125rem;
-  margin-bottom: 2rem;
-  opacity: 0.9;
 }
 
 /* Fade transition */

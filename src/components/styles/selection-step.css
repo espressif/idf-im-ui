@@ -1,0 +1,33 @@
+/* Footer, empty state and card reset of the per-version selection steps.
+   Include after the component's own <style scoped> block so `.n-card`
+   keeps overriding the card padding. */
+
+.action-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding-top: 1rem;
+}
+
+.selection-summary {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.empty-state {
+  padding: 3rem;
+  text-align: center;
+}
+
+.empty-message {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.n-card {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  padding: 0px;
+}

@@ -20,7 +20,6 @@
  */
 
 import logger from "./classes/logger.class.js";
-import fs from "fs";
 import path from "path";
 import os from "os";
 import { describe } from "mocha";
@@ -42,19 +41,19 @@ import {
   INSTALLFOLDER,
   TOOLSFOLDER,
   prerequisites,
-  resolveIdfToken,
 } from "./config.js";
+import {
+  loadTestSuite,
+  resolveInstallFolder,
+  parseTargetList,
+  resolveIdfList,
+  getCleanupAndProxyOptions,
+} from "./helpers/suiteSettings.js";
 logger.debug(`Filename Env variable: ${process.env.JSON_FILENAME}`);
 logger.debug(`Execution folder: ${import.meta.dirname}`);
 
 // Read the test script file from the suites folder
-const jsonFilePath = path.join(
-  import.meta.dirname,
-  "suites",
-  `${process.env.JSON_FILENAME}.json`
-);
-const testScript = JSON.parse(fs.readFileSync(jsonFilePath, "utf-8"));
-logger.info(`Running test script: ${jsonFilePath}`);
+const testScript = loadTestSuite();
 
 // Replace the leading drive letter of a Windows path so verification/cleanup
 // can target the same location EIM installed to. Returns the input unchanged
@@ -63,6 +62,18 @@ function swapWindowsDrive(p, newDrive) {
   if (os.platform() !== "win32" || !p || !newDrive) return p;
   const drive = newDrive.replace(/:?$/, ":");
   return p.replace(/^[A-Za-z]:/, drive);
+}
+
+// Expert-mode install settings for a suite entry; omitted options use the GUI defaults
+function getGUIInstallSettings(data) {
+  return {
+    installFolder: resolveInstallFolder(data),
+    targetList: parseTargetList(data, ["All"]),
+    idfUpdatedList: resolveIdfList(data),
+    toolsMirror: data.toolsMirror || "github",
+    idfMirror: data.idfMirror || "github",
+    pypiMirror: data.pypiMirror || "pypi_org",
+  };
 }
 
 // Run the tests
@@ -107,10 +118,8 @@ function testRun(script) {
     } else if (test.type === "default") {
       //routine for default simplified installation
 
-      //set the default values for the test
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test);
 
       // Optional Windows-only per-install drive override (e.g. "D:"). When set,
       // the simplified flow ticks the acknowledge box and picks this drive in
@@ -155,30 +164,16 @@ function testRun(script) {
     } else if (test.type === "custom") {
       //routine for expert install with custom settings
 
-      //set the default values for the test
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data.targetList
-        ? test.data.targetList.split("|")
-        : ["All"];
-
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      const toolsMirror = test.data.toolsMirror || "github";
-
-      const idfMirror = test.data.idfMirror || "github";
-
-      const pypiMirror = test.data.pypiMirror || "pypi_org";
-
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const {
+        installFolder,
+        targetList,
+        idfUpdatedList,
+        toolsMirror,
+        idfMirror,
+        pypiMirror,
+      } = getGUIInstallSettings(test.data);
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         runGUICustomInstallTest({
@@ -218,16 +213,8 @@ function testRun(script) {
     } else if (test.type === "version-management") {
       //routine for version management tests
 
-      //set the default values for the test
-      const idfVersionList = test.data.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
+      const idfUpdatedList = resolveIdfList(test.data);
+      const installFolder = resolveInstallFolder(test.data);
       const deleteAfterTest = test.deleteAfterTest ?? true;
 
       describe(`Test${test.id}- ${test.name} |`, function () {
@@ -256,14 +243,9 @@ function testRun(script) {
     } else if (test.type === "offline") {
       //routine for offline installation test
 
-      //set the default values for the test
-      let installFolder = test.data.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-      const testProxyMode = test.testProxyMode ?? "block";
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const installFolder = resolveInstallFolder(test.data);
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test, "block");
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
@@ -305,27 +287,16 @@ function testRun(script) {
       // any prior suite having left an installation behind), then injects a
       // non-finished status into eim_idf.json before exercising the modal.
 
-      const deleteAfterTest = test.deleteAfterTest ?? true;
-
-      let installFolder = test.data?.installFolder
-        ? path.join(os.homedir(), test.data.installFolder)
-        : INSTALLFOLDER;
-
-      const targetList = test.data?.targetList
-        ? test.data.targetList.split("|")
-        : ["All"];
-
-      const idfVersionList = test.data?.idfList
-        ? test.data.idfList.split("|")
-        : [IDFDefaultVersion];
-
-      const idfUpdatedList = idfVersionList.map((idf) => resolveIdfToken(idf));
-
-      const toolsMirror = test.data?.toolsMirror || "github";
-      const idfMirror = test.data?.idfMirror || "github";
-      const pypiMirror = test.data?.pypiMirror || "pypi_org";
-      const testProxyMode = test.testProxyMode ?? false;
-      const proxyBlockList = test.proxyBlockList ?? [];
+      const {
+        installFolder,
+        targetList,
+        idfUpdatedList,
+        toolsMirror,
+        idfMirror,
+        pypiMirror,
+      } = getGUIInstallSettings(test.data ?? {});
+      const { deleteAfterTest, testProxyMode, proxyBlockList } =
+        getCleanupAndProxyOptions(test);
 
       describe(`Test${test.id}- ${test.name} |`, function () {
         this.timeout(6000000);
