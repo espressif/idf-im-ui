@@ -149,7 +149,7 @@ By default, the builder downloads wheels for multiple Python versions to maximiz
 ./offline_installer_builder -c default --idf-version-override v5.1.2 --wheel-python-versions 3.11,3.12,3.15
 ```
 
-This ensures the archive includes wheels compatible with Python 3.11, 3.12, and 3.15 on Linux and macOS.
+This ensures the archive includes wheels compatible with Python 3.11, 3.12, and 3.15 for the platform you are building. Offline installs need Python 3.11 to 3.15 on Linux, macOS, and Windows.
 
 ---
 

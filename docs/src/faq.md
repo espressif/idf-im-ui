@@ -25,7 +25,8 @@ For more details, see the "Privacy and Data Collection" section in our documenta
 - [ESP-IDF Forum](https://www.esp32.com/viewforum.php?f=20)
 
 ### Should I run the installer 'as admin'?
-No, the installer does not require elevated rights and should **not** be run as an administrator. Running the installer with admin privileges is unnecessary and could lead to unintended permission issues.
+
+No. See [EIM-E503](./troubleshooting.md#eim-e503). Windows driver installation is the exception ([EIM-E802](./troubleshooting.md#eim-e802)).
 
 ### Does EIM support Windows on ARM?
 
@@ -133,170 +134,28 @@ NixOS has no standard dynamic linker, so the prebuilt toolchains EIM downloads c
 
 ### "No space left on device" error despite having free disk space
 
-If installation fails with an error like:
-
-```text
-Installation failed for version vX.Y.Z: Failed to setup tools: IO error: io error: No space left on device (os error 28)
-```
-
-or
-
-```text
-IO error: io error: Disk quota exceeded (os error 122)
-```
-
-...even though you have plenty of free space, the likely cause is that your `/tmp` directory is on a separate, smaller partition (or a RAM-backed tmpfs) that runs out of space during extraction. EIM extracts tool archives to a temporary location before moving them to the final install path, and `/tmp` is used for this — but its available space is not checked beforehand.
-
-This commonly affects systems where `/tmp` is mounted as a small tmpfs (e.g. 1–2 GB backed by RAM), which is the default on many Linux distributions. The issue can appear even if your home partition has hundreds of gigabytes free.
-
-**Workaround:** redirect the temp directory to a location with more space before running EIM:
-
-```bash
-export TMPDIR=~/tmp_build
-mkdir -p $TMPDIR
-```
-
-Then run `eim` from the same terminal session. You can remove `~/tmp_build` after installation completes.
-
-To check how much space your `/tmp` has:
-
-```bash
-df -h /tmp
-```
-
-If it shows only 1–2 GB available, the workaround above is recommended, especially when installing large toolchains like `clang-esp32` or `riscv32`.
+`No space left on device` or `Disk quota exceeded` during tool extraction is [EIM-E501](./troubleshooting.md#eim-e501). A small `/tmp` is the usual cause. The page has the `TMPDIR` workaround.
 
 
 ### The installer says prerequisites are missing, but they are already installed
-In rare cases, the installer might fail to detect prerequisites even if they are properly installed on your system.
-If this happens, you can use the CLI version of the installer with the following flag to skip the check:
 
-```bash
-eim install --skip-prerequisites-check=true
-````
-
-> ⚠️ **Warning:** Use this flag only if you are certain that all required prerequisites are correctly installed, as skipping the check may lead to installation failures later.
+See [EIM-E101](./troubleshooting.md#eim-e101) when packages are missing, and [EIM-E102](./troubleshooting.md#eim-e102) when the check itself cannot run. `--skip-prerequisites-check true` is only for the second case, and only when the packages really are installed.
 
 ### "Failed to check prerequisites: Unable to execute PowerShell" error on Windows
 
-If installation on Windows fails with an error like:
-
-```text
-Failed to install dependencies from offline archive: Failed to check prerequisites: Unable to execute PowerShell to verify prerequisites: program not found. Make sure PowerShell (powershell.exe or pwsh.exe) is installed and accessible.
-```
-
-it means EIM was unable to locate or execute PowerShell on your system.
-
-**Note:** Windows 10 is no longer a supported platform for the ESP-IDF Installation Manager. The installer is tested and validated on Windows 11 only. If you must run EIM on Windows 10 and PowerShell cannot be detected (even though Windows 10 ships with Windows PowerShell 5.1 by default), installing an updated PowerShell version typically resolves the issue.
-
-Once PowerShell 7 is installed and added to `PATH`, EIM will locate it via `pwsh.exe` and the prerequisite check will complete successfully.
+`Unable to execute PowerShell` means PowerShell is missing or could not be started. See [EIM-E801](./troubleshooting.md#eim-e801). EIM is tested on Windows 11.
 
 ### Python SSL sanity check fails when using a system-wide proxy
 
-If EIM reports:
-
-```text
-[FAIL] SSL/HTTPS
-Hint: Check your network and proxy settings...
-````
-
-but Python itself works correctly, and you are using a system-wide HTTP/HTTPS proxy, the proxy configuration may be intercepting connections to `localhost` (`127.0.0.1`).
-
-Starting with EIM v0.13.x, the Python SSL sanity check uses a temporary local HTTPS server to verify that Python's SSL support is working correctly. This allows the check to work even when the machine has no internet access.
-
-Some proxy configurations attempt to route **all** HTTPS connections through the proxy, including connections to `127.0.0.1` or `localhost`. When this happens, the SSL sanity check can fail even though Python's SSL support is functioning correctly.
-
-**Solution:** configure your proxy to bypass local addresses. Most proxy implementations support the `NO_PROXY` (or `no_proxy`) environment variable:
-
-```bash
-export NO_PROXY=localhost,127.0.0.1,::1
-export no_proxy=localhost,127.0.0.1,::1
-```
-
-You can verify whether the proxy is the cause by temporarily unsetting the proxy variables and rerunning EIM:
-
-```bash
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
-eim install
-```
-
-If the sanity check passes after unsetting the proxy variables, update your proxy configuration to exclude localhost addresses rather than disabling the proxy entirely.
+`[FAIL] SSL/HTTPS` while a proxy is set is [EIM-E201](./troubleshooting.md#eim-e201). Bypass `localhost` and `127.0.0.1`.
 
 ### Why does EIM find the wrong Python on macOS?
 
-If EIM reports that it found an unsupported Python version (typically Apple's built-in Python 3.9) even though running `python3 --version` in your terminal shows a newer version, this is usually caused by the difference between **terminal applications** and **GUI applications** on macOS.
-
-When you open a terminal, your shell (Zsh, Bash, etc.) reads your shell configuration (`.zprofile`, `.zshrc`, etc.) and updates your `PATH`. Package managers such as **Homebrew** and **MacPorts** typically install Python into locations like:
-
-* `/opt/homebrew/bin` (Apple Silicon Homebrew)
-* `/usr/local/bin` (Intel Homebrew)
-* `/opt/local/bin` (MacPorts)
-
-and add these directories to your shell's `PATH`.
-
-However, applications launched from **Finder** (including the EIM GUI) are started by macOS's `launchd` service, which **does not inherit your shell configuration**. As a result, the GUI may see a different `PATH` and resolve `python3` to Apple's system Python located at:
-
-```text
-/usr/bin/python3
-```
-
-instead of the newer Python installed by your package manager.
-
-You can verify whether this is the issue by comparing:
-
-```bash
-which python3
-python3 --version
-```
-
-in your terminal with the version reported by EIM.
-
-If the CLI detects the correct Python but the GUI does not, this is almost certainly the cause.
-
-* Run the **EIM CLI** from the same terminal session. It inherits your shell environment and will use the same Python that your terminal does.
-
-  If you installed EIM via **Homebrew**, you already have the `eim` CLI available. You can launch the GUI from your terminal by running:
-
-  ```bash
-  eim gui
-  ```
-
-  This starts the GUI with the same environment and `PATH` as your current shell, allowing it to discover Python installations provided by Homebrew, MacPorts, `pyenv`, and other tools that modify your shell's `PATH`.
-
-* Install Python using the official python.org installer if you want it to be available system-wide to GUI applications.
-
-* Alternatively, configure your macOS environment so GUI applications launched from Finder inherit the same `PATH` as your shell. This is a macOS configuration issue rather than an EIM-specific one.
+A Finder launch can see Apple's Python while the terminal sees another one. See [EIM-E201](./troubleshooting.md#eim-e201).
 
 ### EIM detected the wrong Python — multiple Python installations found
 
-If you have more than one Python installed on your system (e.g. from the Microsoft Store, MSYS2, python.org, Homebrew, MacPorts, pyenv, or a Linux package manager), EIM may pick a different Python than the one you intended, causing the prerequisite/configure step to fail or behave unexpectedly.
-
-This happens because EIM searches `PATH` for a `python3`/`python` executable and uses the **first valid one it finds** — which isn't always the one you want, especially if:
-- You have a Windows Store "App Execution Alias" stub alongside a real Python install.
-- You have multiple Python installs from different sources (MSYS2, python.org, Anaconda, etc.).
-- Your shell/environment `PATH` ordering doesn't match what you'd expect.
-
-**Solution: run EIM from the CLI with your preferred Python prepended to `PATH`**
-
-Since the EIM GUI and CLI are the same binary, you can fix this without reinstalling anything — just prepend the directory containing the correct Python to `PATH` before launching `eim`, so it's found first.
-
-**Windows (PowerShell):**
-```powershell
-$env:PATH = "C:\path\to\correct\python\folder;" + $env:PATH
-eim install
-```
-
-**macOS / Linux (Bash/Zsh):**
-```bash
-export PATH="/path/to/correct/python/folder:$PATH"
-eim install
-```
-
-This only affects the current terminal session. Once EIM installs with the correct Python, it pins that Python path into the generated ESP-IDF activation scripts, so ESP-IDF will consistently use that same Python afterward — you don't need to repeat this step for normal day-to-day use.
-
-You can also launch the GUI from the same terminal session (once `PATH` is fixed) if you prefer the guided flow — e.g. run `eim` with no arguments, or `eim gui` if using the Homebrew-installed CLI on macOS.
-
-> **Note:** We currently don't offer a manual Python-selector in the GUI, as we feel it would add confusion for less advanced users without a clear way to explain when/why it's needed. The CLI approach above is intended to cover this "multiple Pythons on the system" case for users who need more control.
+EIM uses the first `python3` or `python` on `PATH` that passes the sanity check. See [EIM-E201](./troubleshooting.md#eim-e201).
 
 ## GUI-Specific Questions
 
@@ -330,15 +189,13 @@ Download and run the appropriate WebView2 Runtime installer inside the Windows S
 Yes, you can return to the main page by clicking on the Espressif logo in the top-left corner. However, this is not possible during the final steps of installation.
 
 ### What if the installation fails in simplified mode?
-You can either:
-- Click "Try again" after resolving any issues
-- Switch to expert mode for more control over the installation process
-- Check the logs folder for detailed information about the failure
+
+Open the log (`eim_gui.log`, see [Reporting an Issue](./issue_reporting.md)) and match the `EIM-E` ID in [Troubleshooting](./troubleshooting.md). You can retry after that, or switch to expert mode.
 
 ## CLI-Specific Questions
 
 ### What if I want to install a specific version of IDF that is not listed?
-You can install any tagged version of ESP-IDF using the `-i` or `--idf-version` flag:
+You can install any tagged version of ESP-IDF using the `-i` or `--idf-versions` flag:
 ```bash
 eim install -i v5.3.1
 ```
@@ -376,42 +233,7 @@ To use PowerShell, simply run the generated PowerShell profile script - it is cr
 
 ### Open IDF Terminal fails with "running scripts is disabled on this system" on Windows
 
-If clicking **Open IDF Terminal** in an older EIM build shows `File ... cannot be loaded because running scripts is disabled on this system` (`PSSecurityException` / `UnauthorizedAccess`), your PowerShell execution policy is `Restricted` or `AllSigned`. Either run once per user `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or launch the profile manually with `powershell -NoLogo -NoProfile -ExecutionPolicy Bypass -NoExit -File "<path-to>\Microsoft.{version}.PowerShell_profile.ps1"`. Newer EIM builds pass `-ExecutionPolicy Bypass` automatically, and the desktop shortcut and Windows Terminal profile created by EIM already do so.
-
-### "No space left on device" error despite having free disk space
-
-If installation fails with an error like:
-
-```
-Installation failed for version vX.Y.Z: Failed to setup tools: IO error: io error: No space left on device (os error 28)
-```
-
-or
-
-```
-IO error: io error: Disk quota exceeded (os error 122)
-```
-
-...even though you have plenty of free space, the likely cause is that your `/tmp` directory is on a separate, smaller partition (or a RAM-backed tmpfs) that runs out of space during extraction. EIM extracts tool archives to a temporary location before moving them to the final install path, and `/tmp` is used for this — but its available space is not checked beforehand.
-
-This commonly affects systems where `/tmp` is mounted as a small tmpfs (e.g. 1–2 GB backed by RAM), which is the default on many Linux distributions. The issue can appear even if your home partition has hundreds of gigabytes free.
-
-**Workaround**: redirect the temp directory to a location with more space before running EIM:
-
-```bash
-export TMPDIR=~/tmp_build
-mkdir -p $TMPDIR
-```
-
-Then run `eim` from the same terminal session. You can remove `~/tmp_build` after installation completes.
-
-To check how much space your `/tmp` has:
-
-```bash
-df -h /tmp
-```
-
-If it shows only 1–2 GB available, the workaround above is recommended, especially when installing large toolchains like `clang-esp32` or `riscv32`.
+`running scripts is disabled on this system` is a PowerShell execution-policy block. See [EIM-E801](./troubleshooting.md#eim-e801).
 
 ## More Questions?
 

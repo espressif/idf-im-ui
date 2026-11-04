@@ -180,7 +180,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                     || err.contains("not empty")
                 {
                     warn!(
-                        "IDF path already present; continuing (non-interactive): {}",
+                        "IDF path already present; continuing (non-interactive). Act on the Fix below only if a later step fails: {}",
                         err
                     );
                     Ok(())

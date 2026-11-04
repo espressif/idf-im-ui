@@ -603,10 +603,10 @@ pub fn run_powershell_script(script: &str) -> Result<String, std::io::Error> {
                     String::from_utf8(output.stdout).map_err(std::io::Error::other)
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    error!("PowerShell script failed with status: {}", output.status);
+                    error!("PowerShell script failed with status: {}\nFix: PowerShell started but the script failed. Read the stderr line logged next. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801", output.status);
                     error!("stderr: {}", stderr);
                     Err(std::io::Error::other(format!(
-                        "PowerShell script failed: {}",
+                        "PowerShell script failed: {}\nFix: PowerShell started but the script failed. Read the stderr line logged next. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801",
                         stderr
                     )))
                 }
@@ -1166,7 +1166,7 @@ pub fn create_desktop_shortcut(
             ) {
                 Ok(filename) => filename,
                 Err(err) => {
-                    error!("Failed to create PowerShell profile: {}", err);
+                    error!("Failed to create PowerShell profile: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", err);
                     return Err(err);
                 }
             };
@@ -1486,7 +1486,7 @@ pub async fn download_file_and_rename(
             Ok(()) => return Ok(()),
             Err(e) => {
                 log::warn!(
-                    "Download attempt {}/{} failed for {}: {}",
+                    "Download attempt {}/{} failed for {}: {}\nFix (only if the run then fails): rerun with --mirror, --idf-mirror, or --pypi-mirror. EIM retries this attempt on its own.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e302",
                     attempt,
                     retries,
                     url,
@@ -2603,7 +2603,7 @@ pub async fn install_drivers() -> Result<()> {
         info!("All drivers installed successfully");
         Ok(())
     } else {
-        Err(anyhow::anyhow!("Some drivers failed to install"))
+        Err(anyhow::anyhow!("Some drivers failed to install\nFix: Read the \"Failed to … driver\" lines above. \"Failed to install driver\" needs EIM run as administrator. \"Failed to download driver\" is EIM-E301.\nDocs: EIM-E802 in the EIM troubleshooting guide"))
     }
 }
 

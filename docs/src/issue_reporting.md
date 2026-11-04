@@ -18,3 +18,11 @@ If you need to manually access the log files, they are stored in the following l
 | Linux | `$XDG_DATA_HOME/eim/logs` or `$HOME/.local/share/eim/logs` |
 | macOS | `$HOME/Library/Application Support/eim/logs` |
 | Windows | `{FOLDERID_LocalAppData}\eim\logs` (typically `C:\Users\<username>\AppData\Local\eim\logs`) |
+
+File names in that directory:
+
+| File | Written by |
+|------|------------|
+| `eim.log` | CLI (`--log-file` overrides the path) |
+| `eim_gui.log` | GUI |
+| `offline_installer.log` | Offline archive builder |

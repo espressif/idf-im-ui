@@ -48,7 +48,10 @@ pub struct Cli {
     )]
     pub verbose: u8,
 
-    #[arg(long, help = "file in which logs will be stored (default: eim.log)")]
+    #[arg(
+        long,
+        help = "File in which logs will be stored (default: <data dir>/eim/logs/eim.log, or eim.log when the data directory is unavailable)"
+    )]
     pub log_file: Option<String>,
 
     #[arg(
@@ -239,7 +242,10 @@ pub struct InstallArgs {
     #[arg(short, long, help = "Set the language for the wizard (en, cn)")]
     pub locale: Option<String>,
 
-    #[arg(long, help = "file in which logs will be stored (default: eim.log)")]
+    #[arg(
+        long,
+        help = "File in which logs will be stored (default: <data dir>/eim/logs/eim.log, or eim.log when the data directory is unavailable)"
+    )]
     pub log_file: Option<String>,
 
     #[arg(
