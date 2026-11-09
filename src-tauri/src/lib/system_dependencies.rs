@@ -74,8 +74,10 @@ fn determine_package_manager() -> Option<&'static str> {
 
     // Fallback: probe for package manager binaries (excluding dpkg to avoid
     // false positives on non-Debian systems where dpkg is installed as a
-    // standalone tool)
-    let package_managers = vec!["apt", "dnf", "pacman", "zypper"];
+    // standalone tool). `nix` goes last: it is also commonly installed on top of
+    // other distros, which are matched earlier, and it covers minimal Nix
+    // containers that have no /etc/os-release.
+    let package_managers = vec!["apt", "dnf", "pacman", "zypper", "nix"];
 
     for manager in package_managers {
         let output = command_executor::execute_command(manager, &["--version"]);
@@ -155,6 +157,8 @@ fn map_distro_to_package_manager(distro: &str) -> Option<&'static str> {
         "arch" | "manjaro" | "endeavouros" | "garuda" | "artix" | "cachyos" => Some("pacman"),
         // SUSE-based
         "opensuse" | "opensuse-leap" | "opensuse-tumbleweed" | "sles" | "sled" => Some("zypper"),
+        // NixOS
+        "nixos" => Some("nix"),
         _ => None,
     }
 }
@@ -496,6 +500,11 @@ fn check_tools_with_package_manager(
                             }
                         }
                     }
+                }
+                Some("nix") => {
+                    // No queryable system package database: anything not found
+                    // on PATH above is missing.
+                    unsatisfied.extend(list_of_required_tools);
                 }
                 Some("zypper") => {
                     for tool in list_of_required_tools {
@@ -1421,6 +1430,13 @@ pub async fn install_prerequisites(
                         }
                     }
                 }
+                Some("nix") => {
+                    return Err(format!(
+                        "NixOS packages are declarative and cannot be installed by EIM. \
+                         Add these to your configuration (or use `nix shell nixpkgs#<pkg>`): {}",
+                        packages_list.join(", ")
+                    ));
+                }
                 _ => {
                     return Err("Unsupported package manager".to_string());
                 }
@@ -1710,8 +1726,22 @@ mod tests {
     }
 
     #[test]
+    fn test_map_distro_to_package_manager_nixos() {
+        assert_eq!(map_distro_to_package_manager("nixos"), Some("nix"));
+    }
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn test_check_tools_with_nix_reports_missing_tools() {
+        // A tool name that can't exist on PATH must be reported missing, not error.
+        let result =
+            check_tools_with_package_manager(vec!["eim-nonexistent-tool-xyz"], Some("nix"));
+        assert_eq!(result, Ok(vec!["eim-nonexistent-tool-xyz"]));
+    }
+
+    #[test]
     fn test_map_distro_to_package_manager_unsupported() {
-        let distros = vec!["unknown", "gentoo", "slackware", "nixos", "void", "freebsd"];
+        let distros = vec!["unknown", "gentoo", "slackware", "void", "freebsd"];
         for distro in distros {
             assert_eq!(
                 map_distro_to_package_manager(distro),

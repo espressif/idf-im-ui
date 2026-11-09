@@ -44,6 +44,12 @@ fi
 sudo pacman -Syu eim-cli
 ```
 
+Or with Nix (CLI only, see [NixOS / Nix installation](./general_info.md#nixos--nix-installation-via-flake) for the NixOS module and `nix-ld` requirement):
+```bash
+export NIX_CONFIG="experimental-features = nix-command flakes"
+nix profile install "github:espressif/idf-im-ui"
+```
+
 ## Installation Methods
 
 ### Interactive Wizard

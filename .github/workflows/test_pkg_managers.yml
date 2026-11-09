@@ -29,6 +29,8 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/test_pkg_managers.yml'
+      - 'flake.nix'
+      - 'flake.lock'
 
 # ─────────────────────────────────────────────────────────────
 #  Jobs
@@ -378,11 +380,73 @@ jobs:
           path: ${{ env.LOCALAPPDATA }}\eim\logs\
           if-no-files-found: ignore
 
+  # ── 4b. Nix — flake from this repository (CLI only) ──
+
+  test-nix:
+    name: PkgMgr (nix-cli) nixos-flake
+    needs: resolve-version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            access-tokens = github.com=${{ github.token }}
+
+      - name: Resolve flake reference
+        id: ref
+        run: |
+          REPO="${{ github.repository }}"
+          if [ "${{ inputs.run_mode }}" = "release" ] && [ -n "${{ needs.resolve-version.outputs.stripped }}" ]; then
+            REF="github:${REPO}/v${{ needs.resolve-version.outputs.stripped }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            REF="github:${REPO}/${{ github.event.pull_request.head.sha }}"
+          else
+            REF="github:${REPO}"
+          fi
+          echo "flake=${REF}" >> "$GITHUB_OUTPUT"
+          echo "Flake reference: ${REF}"
+
+      - name: Build package
+        run: nix build "${{ steps.ref.outputs.flake }}#eim" --no-link --print-out-paths --print-build-logs
+
+      - name: Verify binary
+        run: |
+          OUT=$(nix build "${{ steps.ref.outputs.flake }}#eim" --no-link --print-out-paths)
+          test -x "$OUT/bin/eim"
+          echo "OUT=$OUT" >> "$GITHUB_ENV"
+
+      - name: Verify version
+        run: |
+          VERSION=$("$OUT/bin/eim" --do-not-track true --version 2>&1) || true
+          echo "Output: ${VERSION}"
+          # Only strict in release mode; nightly builds the default branch,
+          # which may be ahead of the latest release.
+          EXPECTED="${{ needs.resolve-version.outputs.stripped }}"
+          if [ "${{ inputs.run_mode }}" = "release" ] && [ -n "$EXPECTED" ]; then
+            echo "${VERSION}" | grep -q "${EXPECTED}" || { echo "FAIL: expected ${EXPECTED}"; exit 1; }
+          fi
+
+      - name: Verify help output
+        run: '"$OUT/bin/eim" --do-not-track true --help | grep -i install'
+
+      - name: Verify man page and completions
+        run: |
+          test -f "$OUT/share/man/man1/eim.1.gz"
+          test -f "$OUT/share/bash-completion/completions/eim.bash"
+
+      - name: Verify wrapped PATH contains tools
+        run: grep -q "git" "$OUT/bin/eim"
+
+      - name: Verify nix run
+        run: nix run "${{ steps.ref.outputs.flake }}" -- --do-not-track true --version
+
   # ── 5. Mattermost notification ──
 
   build-notification:
     name: Build notification
-    needs: [resolve-version, test-linux, test-brew, test-winget]
+    needs: [resolve-version, test-linux, test-brew, test-winget, test-nix]
     if: always()
     runs-on: ubuntu-latest
     outputs:
