@@ -127,6 +127,10 @@ The offline installation allows you to install ESP-IDF without an internet conne
 
 The `offline_installer_builder-*` binary is **not** required for performing offline installations. It is a separate tool that allows you to create custom offline installation archives for specific or all ESP-IDF versions. These archives contain everything needed for offline installation — ESP-IDF source, tools, Python wheels, and prerequisites — making them ideal for air-gapped environments, enterprise deployment, or ensuring your whole team has the same offline installable environment. You only need this tool if you want to create your own offline installer archives; for regular offline installation, you only need the pre-built offline installer artifacts available from the [Espressif Download Portal](https://dl.espressif.com/dl/eim/?tab=offline).
 
+### On NixOS, downloaded tools fail with "Could not start dynamically linked executable"
+
+NixOS has no standard dynamic linker, so the prebuilt toolchains EIM downloads cannot start. Enable [`nix-ld`](https://github.com/nix-community/nix-ld) with `programs.nix-ld.enable = true;`, or use the `programs.eim` module from the EIM flake, which also adds the libraries these tools need. See [NixOS / Nix installation](./general_info.md#nixos--nix-installation-via-flake).
+
 ### "No space left on device" error despite having free disk space
 
 If installation fails with an error like:

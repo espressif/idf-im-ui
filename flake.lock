@@ -1,0 +1,40 @@
+{
+  "nodes": {
+    "idf-versions": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-3OSlETgYlbK4AYpbQvBDSm3QXCmoam9520iT6cy6jmg=",
+        "type": "file",
+        "url": "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://dl.espressif.com/dl/esp-idf/idf_versions.json"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1794042290,
+        "narHash": "sha256-ziZn2PvCJE5JEEpqTdxXwJpPB+L3YqoCpTAMCzyaP3U=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "f4a03c008967841f2a0b3cb7c436fc6fc31671f6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "idf-versions": "idf-versions",
+        "nixpkgs": "nixpkgs"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

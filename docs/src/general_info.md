@@ -13,6 +13,7 @@ The ESP-IDF Installation Manager (EIM) is a unified tool that simplifies the set
 > | **Linux (Debian/Ubuntu)** | [APT](#debian-based-linux-installation-via-apt-repository) |
 > | **Linux (Fedora/RHEL)** | [RPM](#rpm-based-linux-installation-via-dnf-repository) |
 > | **Linux (Arch)** | [pacman](#arch-linux-installation-via-pacman-repository) |
+> | **Linux (NixOS / Nix)** | [Nix flake](#nixos--nix-installation-via-flake) |
 >
 > If you prefer a manual installation, you can download standalone installers for **all platforms** and **ESP-IDF versions** directly from the
 > 👉 [**Espressif Download Page**](https://dl.espressif.com/dl/eim/).
@@ -269,6 +270,67 @@ sudo pacman -Syu eim-cli
 # or
 sudo pacman -Syu eim-gui
 ```
+
+---
+
+### NixOS / Nix Installation (via Flake)
+
+<a id="nixos--nix-installation-via-flake"></a>
+
+EIM provides a `flake.nix` in its repository. It builds the **CLI only** (there is no GUI package for Nix yet) and works on NixOS as well as on any Linux or macOS system with Nix installed. The flake is taken from the `master` branch of the repository.
+
+Flakes are an experimental Nix feature and must be enabled first. Either add `experimental-features = nix-command flakes` to `~/.config/nix/nix.conf` (or `/etc/nix/nix.conf`), or set it for the current shell:
+
+```bash
+export NIX_CONFIG="experimental-features = nix-command flakes"
+```
+
+Then build or install EIM:
+
+```bash
+# Build only (result is linked in ./result, run ./result/bin/eim)
+nix build "github:espressif/idf-im-ui#eim" -L
+
+# Try it without installing
+nix run "github:espressif/idf-im-ui" -- --help
+
+# Install into your user profile
+nix profile install "github:espressif/idf-im-ui"
+```
+
+The first build compiles EIM and its dependencies from source and can take several minutes. To pick up a newer version later, add `--refresh` so Nix re-resolves the branch instead of using its cached lookup.
+
+> **Troubleshooting:** If you see `cannot write modified lock file of flake ... (use '--no-write-lock-file' to ignore)`, the flake reference cannot be locked in your environment. Add `--no-write-lock-file` to the command.
+
+On **NixOS**, the ESP-IDF toolchains that EIM downloads are prebuilt, dynamically linked binaries, which do not start on NixOS by default. Use the provided NixOS module, which installs EIM, enables [`nix-ld`](https://github.com/nix-community/nix-ld) with the libraries these tools need, and installs the openocd udev rules:
+
+```nix
+# flake.nix
+{
+  inputs.eim.url = "github:espressif/idf-im-ui";
+
+  outputs = { nixpkgs, eim, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      modules = [
+        eim.nixosModules.default
+        { programs.eim.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `programs.eim.enable` | `false` | Install EIM and its runtime support |
+| `programs.eim.package` | flake's `eim` | EIM package to install |
+| `programs.eim.enableNixLd` | `true` | Enable `programs.nix-ld` with the required libraries |
+| `programs.eim.enableQemuLibraries` | `false` | Also provide the libraries needed by the downloadable QEMU |
+| `programs.eim.udevRules` | `true` | Install the openocd udev rules (EIM cannot write to `/etc/udev/rules.d` on NixOS) |
+
+Without the module, add `programs.nix-ld.enable = true;` to your NixOS configuration yourself.
+
+> **Note:** NixOS packages are declarative, so EIM cannot install missing prerequisites there. The prerequisites check only verifies that the required tools are on `PATH`; the package wraps `eim` so that git, cmake, ninja, python3, and the other required tools are available. To update, run `nix flake update eim` (or `nix profile upgrade`).
 
 ---
 

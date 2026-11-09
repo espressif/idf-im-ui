@@ -93,5 +93,12 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 - `libSDL2-2_0-0`: Runtime library for SDL2 (QEMU dependency).
 - `libslirp`: Runtime library for SLIRP user-mode networking (QEMU dependency).
 
+#### NixOS
+
+NixOS is detected through `/etc/os-release` (`ID=nixos`). Packages are declarative, so EIM does not install anything: it only checks that the required tools (`git`, `wget`, `flex`, `bison`, `gperf`, `ccache`, `dfu-util`, `cmake`) are on `PATH` and lists the missing ones. Library packages are not checked.
+
+- The Nix package of EIM already provides these tools to EIM. If you run a binary from elsewhere, add them to your configuration or a `nix shell`.
+- The toolchains EIM downloads are dynamically linked and need [`nix-ld`](https://github.com/nix-community/nix-ld) (`programs.nix-ld.enable = true;`). The `programs.eim` NixOS module of the [flake](./general_info.md#nixos--nix-installation-via-flake) sets it up for you.
+
 > **Note**
 > On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.14** is required on Linux and macOS.
