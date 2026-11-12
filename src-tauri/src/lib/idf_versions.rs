@@ -48,7 +48,7 @@ pub async fn get_idf_versions() -> Result<Releases, String> {
         Ok(versions) => Ok(versions),
         Err(err) => {
             warn!(
-                "Error downloading IDF versions from {}: {}. Using cached versions.\nFix (only if the version you need is absent from the bundled list): retry later, or pass -i and a version you know. This warning does not stop the command.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301",
+                "Error downloading IDF versions from {}: {}. Using cached versions.\nThe command continues with the built-in version list. If the version you need is not in that list, retry later or pass -i and a version you know.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301",
                 IDF_VERSIONS_URL, err
             );
             let versions: Releases = serde_json::from_str(cached_idf_versions)

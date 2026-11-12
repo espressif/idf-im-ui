@@ -1,23 +1,6 @@
-# Using EIM from scripts, CI and AI agents
+# Using EIM from scripts and CI
 
-EIM is a single `eim` binary. Scripts and agents should use the CLI. The GUI is for interactive use.
-
-## Exit codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | The command finished. |
-| `1` | The command failed. |
-
-There is no per-cause exit code. Read the text.
-
-## How to read a failure
-
-1. On failure, find the line that starts with `Error executing CLI:` ([EIM-E900](./troubleshooting.md#eim-e900)). The lines after it are the specific error's `Fix:` and `Docs:`, then the generic E900 block with the log location. The last stderr line is the E900 link. Do not use `tail -n1` as the specific ID.
-2. In `eim.log`, `Fix:` and `Docs:` follow the `ERROR` or `WARN` line they belong to and have no timestamp prefix. Read from that line up to the next line that starts with a timestamp. `Fix:` and `Docs:` are the last two lines of that block. `grep -A2` misses them when git stderr, pip output, or PowerShell stderr is inserted first. `grep -A10` is a wider example and can still stop short. A `WARN` `Fix:` is conditional. Do not kill a run that is still going.
-3. stdout prints `[FAIL]` for a failed check and `Hint:` on the next line with the step for that check.
-4. The specific message keeps its original sentence and then adds `Fix:` and `Docs:`. Open the `EIM-E` ID on the [troubleshooting](./troubleshooting.md) page. Chinese text gives the ID only, unless the message already contains an English keyword such as `prerequisite` or `Python`, in which case it also carries the URL.
-5. If the message has no ID, match the operating-system text. Disk full is [EIM-E501](./troubleshooting.md#eim-e501). A denied path is [EIM-E502](./troubleshooting.md#eim-e502).
+Use the `eim` command. The GUI is for interactive use. When a command fails, the message names an `EIM-E` number. Open that section in [Troubleshooting](./troubleshooting.md). Installing a path that is already installed finishes successfully and does not reinstall it. Repair it with `eim fix`.
 
 ## Logs and verbosity
 
@@ -39,20 +22,22 @@ Default CLI log: `<data dir>/eim/logs/eim.log`.
 
 `-v` raises stderr verbosity. Repeat it for more detail. The file log is already the most detailed level.
 
-## Non-interactive install
+## Install a version
+
+`eim install` does not ask questions unless you run `eim wizard`.
 
 ```bash
-eim install -i v5.4.2 --non-interactive true
+eim install -i v5.4.2
 ```
 
-`-n true` is the same flag. `--idf-versions` is the long name of `-i`. There is no `--idf-version`. Several versions are comma-separated.
+`--idf-versions` is the long name of `-i`. There is no `--idf-version`. Several versions are comma-separated.
 
 `eim help-json` prints the command tree as JSON and does not start logging.
 
 ## Telemetry opt-out
 
 ```bash
-eim install -i v5.4.2 --non-interactive true --do-not-track true
+eim install -i v5.4.2 --do-not-track true
 ```
 
 The environment variable `EIM_DO_NOT_TRACK=1` or `EIM_DO_NOT_TRACK=true` does the same. Other values do not.
@@ -74,8 +59,8 @@ The environment variable `EIM_DO_NOT_TRACK=1` or `EIM_DO_NOT_TRACK=true` does th
 | `git clone failed` | `--idf-mirror https://git.espressif.com.cn` (or `https://github.com`) | Do not delete an existing checkout that you still need. A non-empty path is [EIM-E402](./troubleshooting.md#eim-e402) |
 | `is already installed` | The install exits 0 and does nothing. Repair with `eim fix --path <path>`, or pass a new `--path` | Do not treat exit 0 as a finished install of that path |
 | `No space left on device` | Export `TMPDIR` to a disk with room, or free space. See [EIM-E501](./troubleshooting.md#eim-e501) | Do not retry in a loop on a 1 GB `/tmp` |
-| Offline `.zst` | `eim install --use-local-archive <file>.zst --non-interactive true` | Do not unpack the `.zst`. Python for that archive is 3.11 to 3.14 |
-| `Error executing CLI:` and no earlier ID | Open `eim.log` and match [the guide](./troubleshooting.md) | Do not branch on exit code `1` alone |
+| Offline `.zst` | `eim install --use-local-archive <file>.zst` | Do not unpack the `.zst`. Python for that archive is 3.11 to 3.14 |
+| A failure you do not recognise | Open `eim.log` and the `EIM-E` number in [the guide](./troubleshooting.md) | |
 
 ## Mirrors
 

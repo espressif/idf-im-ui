@@ -387,8 +387,8 @@ wizard.debug.ide_config_saved:
   en: IDE configuration saved
   cn: IDE 配置已保存
 wizard.error.prerequisites_offline_install:
-  en: "Failed to install prerequisites from offline archive: %{error}\nDocs: see the EIM-E ID in the message above"
-  cn: "无法从离线存档安装依赖项：%{error}\nDocs: see the EIM-E ID in the message above"
+  en: "Failed to install prerequisites from offline archive: %{error}\nFollow the next step in that message.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e701"
+  cn: "无法从离线存档安装依赖项：%{error}\n请按该消息中的下一步操作。\nDocs: EIM-E701 in the EIM troubleshooting guide"
 wizard.error.copy_dist_directory:
   en: "Failed to copy dist directory from offline archive: %{error}"
   cn: "无法从离线存档复制 dist 目录：%{error}"
@@ -624,11 +624,11 @@ cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
 cli.running_as_elevated_posix:
-  en: "Running as elevated user. This is not recommended.\nFix (only if you did not mean to be elevated): rerun eim as a normal user. This warning does not fail the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
-  cn: "以管理员权限运行。这不是推荐的做法。\nFix (only if you did not mean to be elevated): 以普通用户身份重新运行 eim。此警告不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  en: "Running as elevated user. This is not recommended.\nRun eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法。\n请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 cli.running_as_elevated_windows:
-  en: "Running as elevated user. This is not recommended but it is required if you want to install drivers.\nFix (only if you are not installing drivers): rerun eim as a normal user. This warning does not fail the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
-  cn: "以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。\nFix (only if you are not installing drivers): 以普通用户身份重新运行 eim。此警告不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  en: "Running as elevated user. This is not recommended but it is required if you want to install drivers.\nFor anything other than drivers, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。\n除安装驱动程序外，请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 gui.setup_tools.qemu_prerequisites_check.failed:
   en: "Failed to check QEMU prerequisites: %{error}"
   cn: "无法检查 QEMU 依赖项：%{error}"
