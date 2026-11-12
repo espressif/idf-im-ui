@@ -48,11 +48,11 @@ pub async fn get_idf_versions() -> Result<Releases, String> {
         Ok(versions) => Ok(versions),
         Err(err) => {
             warn!(
-                "Error downloading IDF versions from {}: {}. Using cached versions.",
+                "Error downloading IDF versions from {}: {}. Using cached versions.\nThe command continues with the built-in version list. If the version you need is not in that list, retry later or pass -i and a version you know.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301",
                 IDF_VERSIONS_URL, err
             );
             let versions: Releases = serde_json::from_str(cached_idf_versions)
-                .map_err(|e| format!("Error parsing cached IDF versions JSON: {}", e))?;
+                .map_err(|e| format!("Error parsing cached IDF versions JSON: {}\nFix: Reinstall EIM. The bundled version list shipped with this binary could not be read.\nDocs: EIM-E301 in the EIM troubleshooting guide", e))?;
             Ok(versions)
         }
     }

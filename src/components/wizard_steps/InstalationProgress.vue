@@ -107,7 +107,7 @@
       <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
         <h3 data-id="error-title">{{ t('installationProgress.error.title', { mode: is_fix_mode ? t('installationProgress.title.repair').toLowerCase() : t('installationProgress.title.installation').toLowerCase() }) }}</h3>
-        <p data-id="error-message-text">{{ error_message }} <br> {{ t('installationProgress.error.seeLog') }}</p>
+        <p data-id="error-message-text">{{ error_message }} <br> {{ logFolder ? t('installationProgress.error.seeLog', { logFolder }) : t('installationProgress.error.seeLogNoPath') }}</p>
         <n-button @click="goHome()" type="primary" size="large" data-id="home-installation-button">{{ t('installationProgress.buttons.goBack') }}</n-button>
       </div>
 
@@ -240,6 +240,7 @@ export default {
       installation_finished: false,
       installation_failed: false,
       error_message: "",
+      logFolder: "",
 
       // Progress tracking
       currentStep: 0,
@@ -780,6 +781,7 @@ export default {
   mounted() {
     this.get_os();
     this.get_settings();
+    invoke("get_logs_folder", {}).then((folder) => { this.logFolder = folder || ""; }).catch(() => {});
     this.startListening();
     this.measureContainer();
     window.addEventListener('resize', this.measureContainer);

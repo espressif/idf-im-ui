@@ -540,8 +540,8 @@ pub fn clone_repository(
             Ok(_) => info!("Submodules updated successfully"),
             Err(e) => {
                 let _ = tx.send(ProgressMessage::Finish);
-                error!("Submodule update failed: {}", e);
-                return Err(anyhow!("Submodule update failed: {}", e).into());
+                error!("Submodule update failed: {}\nFix: Retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e);
+                return Err(anyhow!("Submodule update failed: {}\nFix: Retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e).into());
             }
         }
     }
@@ -2118,19 +2118,19 @@ pub fn get_esp_idf(
                 error!(
                     "gix-based clone failed and {} already contained data \
               before this call; refusing to wipe it. Move or remove \
-              the directory manually and retry.",
+              the directory manually and retry.\nFix: Choose an empty directory, or move the existing contents aside, then rerun eim.\nDocs: EIM-E402 in the EIM troubleshooting guide",
                     dest_path.display()
                 );
                 return Err(format!(
                     "gix clone failed and destination {} is not empty; \
-              refusing to delete pre-existing content. Original error: {}",
+              refusing to delete pre-existing content. Original error: {}\nFix: Choose an empty directory, or move the existing contents aside, then rerun eim.\nDocs: EIM-E402 in the EIM troubleshooting guide",
                     dest_path.display(),
                     gix_err
                 ));
             }
 
             warn!(
-                "gix-based clone of ESP-IDF failed ({}); falling back to system git",
+                "The first clone attempt failed. A second attempt with the system git command is in progress. {}",
                 gix_err
             );
 
@@ -2153,7 +2153,7 @@ pub fn get_esp_idf(
                     let _ = tx.send(ProgressMessage::Finish);
                     Err(format!(
                         "Both gix and system git failed to clone ESP-IDF. \
-                gix error: {gix_err}; git CLI error: {cli_err}"
+                gix error: {gix_err}; git CLI error: {cli_err}\nThe git command's message above is the one to follow. If that message is not about a directory that already has files, retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401"
                     ))
                 }
             }
@@ -2401,7 +2401,7 @@ pub fn clone_with_git_cli(
                 .unwrap_or(false));
     if dest_exists_nonempty {
         return Err(format!(
-            "Destination {} exists and is not empty; refusing to clone over it",
+            "Destination {} exists and is not empty; refusing to clone over it\nFix: Choose an empty directory, or move the existing contents aside, then rerun eim.\nDocs: EIM-E402 in the EIM troubleshooting guide",
             dest_path.display()
         )
         .into());
@@ -2502,7 +2502,7 @@ pub fn clone_with_git_cli(
     if !status.success() {
         let details = stderr_tail.join("; ");
         return Err(format!(
-            "git clone failed (exit code {:?}) for {}{}",
+            "git clone failed (exit code {:?}) for {}{}\nFix: Retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401",
             status.code(),
             options.url,
             if details.is_empty() {
@@ -2590,7 +2590,7 @@ pub fn clone_with_git_cli(
         let sub_status = sub_child.wait()?;
         if !sub_status.success() {
             return Err(format!(
-                "git submodule update failed (exit code {:?})",
+                "git submodule update failed (exit code {:?})\nFix: Retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e403",
                 sub_status.code()
             )
             .into());

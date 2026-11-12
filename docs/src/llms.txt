@@ -1,0 +1,9 @@
+# ESP-IDF Installation Manager (EIM)
+
+Documentation: https://docs.espressif.com/projects/idf-im-ui/en/latest/
+Troubleshooting: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html
+CI and Docker: https://docs.espressif.com/projects/idf-im-ui/en/latest/headless_usage.html
+
+Every EIM error ends with a code such as EIM-E101. Its section is troubleshooting.html#eim-e101.
+Linux and macOS do not install prerequisites for you. Windows can, with --install-all-prerequisites true.
+Do not unpack an offline .zst archive. Pass it to --use-local-archive.

@@ -138,11 +138,11 @@ pub async fn install_prerequisites_offline(
 ) -> Result<(), String> {
     // First check which prerequisites are missing
     let check_result = crate::system_dependencies::check_prerequisites_with_result()
-        .map_err(|e| format!("Failed to check prerequisites: {}", e))?;
+        .map_err(|e| format!("Failed to check prerequisites: {}\nFix: Restore PowerShell (EIM-E801) and rerun. --skip-prerequisites-check does not skip this offline step.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801", e))?;
 
     if check_result.shell_failed {
         warn!("Shell verification failed, cannot determine missing prerequisites");
-        return Err("Cannot verify prerequisites: shell execution failed".to_string());
+        return Err("Cannot verify prerequisites: shell execution failed\nFix: Restore PowerShell (EIM-E801) and rerun. --skip-prerequisites-check does not skip this offline step.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801".to_string());
     }
 
     info!("Missing prerequisites: {:?}", check_result.missing);
@@ -161,7 +161,7 @@ pub async fn install_prerequisites_offline(
         "windows" => {
             // Ensure tools directory exists
             crate::ensure_path(tools_dir.to_str().unwrap())
-                .map_err(|e| format!("Failed to create tools directory: {}", e))?;
+                .map_err(|e| format!("Failed to create tools directory: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", e))?;
 
             if needs_git {
                 // Find Git archive - renamed to simple name during archive creation
@@ -178,7 +178,7 @@ pub async fn install_prerequisites_offline(
                 warn!("Archive dir contents: {:?}", archive_contents);
                 if !git_archive_path.exists() {
                     return Err(format!(
-                        "Git portable archive not found at expected path: {}",
+                        "Git portable archive not found at expected path: {}\nFix: The archive is incomplete for this platform. Download it again.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e701",
                         git_archive_path.display()
                     ));
                 }
@@ -187,7 +187,7 @@ pub async fn install_prerequisites_offline(
                 // Copy git archive to tools_dir for installation
                 let git_archive_in_tools = tools_dir.join("git.tar.bz2");
                 std::fs::copy(&git_archive_path, &git_archive_in_tools)
-                    .map_err(|e| format!("Failed to copy git archive: {}", e))?;
+                    .map_err(|e| format!("Failed to copy git archive: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", e))?;
 
                 // Install git from the copied archive
                 match crate::system_dependencies::install_git_from_downloaded(
@@ -200,7 +200,7 @@ pub async fn install_prerequisites_offline(
                         info!("Git installed successfully to {:?}", install_path);
                     }
                     Err(e) => {
-                        return Err(format!("Failed to install git: {}", e));
+                        return Err(format!("Failed to install git: {}\nFix: Install Git yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103", e));
                     }
                 }
             } else {
@@ -212,7 +212,7 @@ pub async fn install_prerequisites_offline(
                 let python_archive = archive_dir.path().join("python.tar.gz");
                 if !python_archive.exists() {
                     return Err(format!(
-                        "Python archive not found at expected path: {}",
+                        "Python archive not found at expected path: {}\nFix: The archive is incomplete for this platform. Download it again.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e701",
                         python_archive.display()
                     ));
                 }
@@ -221,7 +221,7 @@ pub async fn install_prerequisites_offline(
                 // Copy python archive to tools_dir for installation
                 let python_in_tools = tools_dir.join("python.tar.gz");
                 std::fs::copy(&python_archive, &python_in_tools)
-                    .map_err(|e| format!("Failed to copy python archive: {}", e))?;
+                    .map_err(|e| format!("Failed to copy python archive: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", e))?;
 
                 // Install python from the copied archive
                 match crate::system_dependencies::install_python_from_downloaded(
@@ -234,7 +234,7 @@ pub async fn install_prerequisites_offline(
                         info!("Python installed successfully to {:?}", install_path);
                     }
                     Err(e) => {
-                        return Err(format!("Failed to install python: {}", e));
+                        return Err(format!("Failed to install python: {}\nFix: Install Python 3.10 to 3.14 yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202", e));
                     }
                 }
             } else {
@@ -308,7 +308,7 @@ pub fn copy_idf_from_offline_archive(
         if let Some(parent) = dst_path.parent() {
             if !parent.exists() {
                 if let Err(e) = fs::create_dir_all(parent) {
-                    error!("Failed to create destination directory: {}", e);
+                    error!("Failed to create destination directory: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", e);
                     everything_copied = false;
                     continue;
                 }
@@ -351,7 +351,7 @@ pub fn copy_idf_from_offline_archive(
                     }
                     Err(err) => {
                         error!(
-                            "Failed to execute robocopy for version {}: {}",
+                            "Failed to execute robocopy for version {}: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide",
                             archive_version, err
                         );
                         everything_copied = false;
@@ -378,7 +378,7 @@ pub fn copy_idf_from_offline_archive(
                                 );
                             }
                             Err(err) => {
-                                error!("Failed to copy IDF version {}: {}", archive_version, err);
+                                error!("Failed to copy IDF version {}: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide", archive_version, err);
                                 everything_copied = false;
                             }
                         }
@@ -390,7 +390,7 @@ pub fn copy_idf_from_offline_archive(
     if everything_copied {
         Ok(())
     } else {
-        Err("Failed to copy some IDF versions".into())
+        Err("Failed to copy some IDF versions\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide".into())
     }
 }
 
@@ -408,7 +408,7 @@ pub fn copy_components_from_offline_archive(
         }
         Err(err) => {
             return Err(format!(
-                "Failed to copy components from offline archive: {}",
+                "Failed to copy components from offline archive: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide",
                 err
             ))
         }
@@ -425,7 +425,7 @@ pub fn copy_components_from_offline_archive(
         }
         Err(err) => {
             return Err(format!(
-                "Failed to copy Root Managed Components from offline archive: {}",
+                "Failed to copy Root Managed Components from offline archive: {}\nFix: Check free space and write permission on the install path.\nDocs: EIM-E501 or EIM-E502 in the EIM troubleshooting guide",
                 err
             ))
         }
@@ -440,7 +440,7 @@ pub fn use_offline_archive(
     debug!("Using offline archive: {:?}", config.use_local_archive);
     if !config.use_local_archive.as_ref().unwrap().exists() {
         return Err(format!(
-            "Local archive path does not exist: {}",
+            "Local archive path does not exist: {}\nFix: Pass the compressed .zst file to --use-local-archive. Do not unpack the .zst.\nDocs: EIM-E701 in the EIM troubleshooting guide",
             config.use_local_archive.as_ref().unwrap().display()
         ));
     }
@@ -455,7 +455,7 @@ pub fn use_offline_archive(
             );
         }
         Err(err) => {
-            return Err(format!("Failed to extract archive: {}", err));
+            return Err(format!("Failed to extract archive: {}\nFix: Pass the compressed .zst file to --use-local-archive. Do not unpack the .zst.\nDocs: EIM-E701 in the EIM troubleshooting guide", err));
         }
     }
     let config_path = offline_archive_dir.path().join("config.toml");
@@ -473,7 +473,7 @@ pub fn use_offline_archive(
                 config.idf_versions = tmp_setting.idf_versions;
             }
             Err(err) => {
-                return Err(format!("Failed to load config from archive: {}", err));
+                return Err(format!("Failed to load config from archive: {}\nFix: Pass the compressed .zst file to --use-local-archive. Do not unpack the .zst.\nDocs: EIM-E701 in the EIM troubleshooting guide", err));
             }
         }
     } else {

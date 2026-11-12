@@ -1,4 +1,7 @@
 _version: 2
+# cn text for the Fix: and Docs: lines needs review by a native speaker.
+# The Fix: and Docs: labels stay in English so both locales parse the same way.
+# wizard.qemu.prerequisites.missing and check_error end the Chinese sentence with English "(Docs: …). Missing" / ". Detail" on purpose, so a suffix appended by the caller stays after the pointer. Include those two in the native-speaker review.
 hello:
   en: Hello world
   cn: 你好，世界
@@ -12,8 +15,8 @@ prerequisites.missing:
   en: The following prerequisites are not satisfied
   cn: 以下依赖项不满足
 prerequisites.failed:
-  en: The installer is unable to verify the prerequisites. Please try again with the --skip-prerequisites-check flag.
-  cn: 安装程序无法验证依赖项。请使用 --skip-prerequisites-check 标志重试。
+  en: "The installer is unable to verify the prerequisites. Please try again with the --skip-prerequisites-check flag.\nFix: Restore the shell, or rerun with --skip-prerequisites-check true only when the packages are already installed.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
+  cn: "安装程序无法验证依赖项。请使用 --skip-prerequisites-check 标志重试。\nFix: 恢复 shell，或仅当软件包已经安装时使用 --skip-prerequisites-check true 重新运行。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
 prerequisites.install.prompt:
   en: Do you want to install prerequisites?
   cn: 是否要安装这些依赖项？
@@ -21,20 +24,20 @@ prerequisites.install.success:
   en: Prerequisites installed successfully
   cn: 成功安装依赖项
 prerequisites.install.failure:
-  en: Prerequisite installation failed
-  cn: 安装依赖项失败
+  en: "Prerequisite installation failed\nFix: Install the package named in the output above with your system package manager, then rerun the same eim command.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103"
+  cn: "安装依赖项失败\nFix: 用系统包管理器安装上方输出中点名的软件包，然后重新运行同一条 eim 命令。\nDocs: EIM-E103 in the EIM troubleshooting guide"
 prerequisites.install.catastrophic:
-  en: Something went terribly wrong. These prerequisites were not installed:%{l}
-  cn: 发生了严重错误。以下依赖项未安装成功:%{l}
+  en: "Something went terribly wrong. These prerequisites were not installed:%{l}\nFix: Install the packages in the list above manually, then rerun the same eim command.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103"
+  cn: "发生了严重错误。以下依赖项未安装成功:%{l}\nFix: 手动安装上方列表中的软件包，然后重新运行同一条 eim 命令。\nDocs: EIM-E103 in the EIM troubleshooting guide"
 prerequisites.install.ask:
-  en: Please install the missing prerequisites and try again.
-  cn: 请先安装缺少的依赖项并重试。
+  en: "Please install the missing prerequisites and try again.\nFix: Install the packages listed above with your system package manager, then rerun the same eim command. On Windows, rerun with --install-all-prerequisites true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e101"
+  cn: "请先安装缺少的依赖项并重试。\nFix: 使用系统包管理器安装上方列出的软件包，然后重新运行同一条 eim 命令。Windows 上请使用 --install-all-prerequisites true 重新运行。\nDocs: EIM-E101 in the EIM troubleshooting guide"
 prerequisites.shell_failed:
-  en: Basic shell execution failed on this system. Unable to verify prerequisites.
-  cn: 此系统上的基本 Shell 执行失败。无法验证依赖项。
+  en: "Basic shell execution failed on this system. Unable to verify prerequisites.\nFix: Restore a working shell (bash on Linux and macOS, powershell.exe or pwsh.exe on Windows), then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
+  cn: "此系统上的基本 Shell 执行失败。无法验证依赖项。\nFix: 恢复可用的 shell（Linux 和 macOS 上为 bash，Windows 上为 powershell.exe 或 pwsh.exe），然后重新运行 eim。\nDocs: EIM-E102 in the EIM troubleshooting guide"
 prerequisites.verification_error:
-  en: "A system error occurred while checking prerequisites: %{error}"
-  cn: "检查依赖项时发生系统错误：%{error}"
+  en: "A system error occurred while checking prerequisites: %{error}\nFix: Rerun with --skip-prerequisites-check true only when the packages are already installed.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
+  cn: "检查依赖项时发生系统错误：%{error}\nFix: 仅当软件包已经安装时，使用 --skip-prerequisites-check true 重新运行。\nDocs: EIM-E102 in the EIM troubleshooting guide"
 prerequisites.skip_prompt:
   en: Would you like to skip the prerequisites check and continue?
   cn: 您想跳过依赖项检查并继续吗？
@@ -51,8 +54,8 @@ python.sanitycheck.ok:
   en: Your Python meets the requirements
   cn: 你的 python 符合要求
 python.sanitycheck.fail:
-  en: "Python sanity check failed. See the [FAIL] entries above for details."
-  cn: "Python 环境检查未通过。请查看上方 [FAIL] 条目了解详情。"
+  en: "Python sanity check failed. See the [FAIL] entries above for details.\nFix: Follow the Hint line under each [FAIL] entry. Supported Python is 3.10 to 3.14.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
+  cn: "Python 环境检查未通过。请查看上方 [FAIL] 条目了解详情。\nFix: 按照每个 [FAIL] 条目下方的 Hint 行操作。受支持的 Python 为 3.10 到 3.14。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
 python.sanitycheck.fail_but_will_install:
   en: Python is missing, or it does not meet the requirements. The installer will now install Python for you.
   cn: Python 缺失或不符合要求。安装程序现在将为您安装 Python。
@@ -81,8 +84,8 @@ python.sanitycheck.hint.app_alias:
   en: "The detected Python is a Windows App Execution Alias (Microsoft Store stub). Install Python from https://www.python.org/downloads/ or disable the alias in Settings > Apps > Advanced app settings > App execution aliases."
   cn: "检测到的 Python 是 Windows 应用执行别名（Microsoft Store 存根）。请从 https://www.python.org/downloads/ 安装 Python，或在 设置 > 应用 > 高级应用设置 > 应用执行别名 中禁用该别名。"
 python.sanitycheck.hint.version:
-  en: "Install a supported Python version (3.10 to 3.13) from https://www.python.org/downloads/"
-  cn: "请从 https://www.python.org/downloads/ 安装受支持的 Python 版本 (3.10 到 3.13)"
+  en: "Install a supported Python version (3.10 to 3.14) from https://www.python.org/downloads/\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
+  cn: "请从 https://www.python.org/downloads/ 安装受支持的 Python 版本 (3.10 到 3.14)\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
 python.sanitycheck.hint.pip:
   en: "Ensure pip is installed. Try running: python3 -m ensurepip --upgrade"
   cn: "请确保已安装 pip。尝试运行：python3 -m ensurepip --upgrade"
@@ -123,11 +126,11 @@ python.install.success:
   en: Python installed successfully
   cn: 成功安装 Python
 python.install.failure:
-  en: Python installation failed
-  cn: Python 安装失败
+  en: "Python installation failed\nFix: Install Python 3.10 to 3.14 from https://www.python.org/downloads/ and rerun eim. On Windows, rerun with -a true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  cn: "Python 安装失败\nFix: 从 https://www.python.org/downloads/ 安装 Python 3.10 到 3.14，然后重新运行 eim。在 Windows 上，使用 -a true 重新运行。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
 python.install.refuse:
-  en: Please install Python3 with pip, venv, and SSL support and try again
-  cn: 请安装支持 pip、venv 和 SSL 的 Python3 并重试
+  en: "Please install Python3 with pip, venv, and SSL support and try again\nFix: Install Python 3.10 to 3.14 with pip, venv, and SSL from https://www.python.org/downloads/, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  cn: "请安装支持 pip、venv 和 SSL 的 Python3 并重试\nFix: 从 https://www.python.org/downloads/ 安装带有 pip、venv 和 SSL 的 Python 3.10 到 3.14，然后重新运行 eim。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
 wizard.installation_path.prompt:
   en: Please select the ESP-IDF installation location
   cn: 请选择 ESP-IDF 安装位置
@@ -192,14 +195,14 @@ wizard.tools.mirror:
   en: Select a source from which to download tools
   cn: 请选择下载工具的来源
 wizard.qemu.prerequisites.missing:
-  en: The following prerequisites for QEMU are not satisfied
-  cn: 以下 QEMU 依赖项不满足
+  en: "The following prerequisites for QEMU are not satisfied (Docs: EIM-E104 in the EIM troubleshooting guide). Missing"
+  cn: "以下 QEMU 依赖项不满足 (Docs: EIM-E104 in the EIM troubleshooting guide). Missing"
 wizard.qemu.prerequisites.check_error:
-  en: Failed to check QEMU prerequisites. Error:%{e}
-  cn: 无法检查 QEMU 依赖项。错误：%{e}
+  en: "Failed to check QEMU prerequisites (Docs: EIM-E104 in the EIM troubleshooting guide). Detail"
+  cn: "无法检查 QEMU 依赖项 (Docs: EIM-E104 in the EIM troubleshooting guide). Detail"
 wizard.qemu.prerequisites.unmet:
-  en: QEMU prerequisites are not satisfied and you selected QEMU for installation.
-  cn: QEMU 依赖项不满足，且您选择安装 QEMU。
+  en: "QEMU prerequisites are not satisfied and you selected QEMU for installation.\nFix: Install the missing QEMU packages, or rerun without selecting QEMU.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e104"
+  cn: "QEMU 依赖项不满足，且您选择安装 QEMU。\nFix: 安装缺失的 QEMU 软件包，或不选择 QEMU 再重新运行。\nDocs: EIM-E104 in the EIM troubleshooting guide"
 wizard.pypi.mirror:
   en: Select a PyPI mirror to download Python packages
   cn: 请选择 PyPI 镜像来下载 Python 包
@@ -384,8 +387,8 @@ wizard.debug.ide_config_saved:
   en: IDE configuration saved
   cn: IDE 配置已保存
 wizard.error.prerequisites_offline_install:
-  en: "Failed to install prerequisites from offline archive: %{error}"
-  cn: "无法从离线存档安装依赖项：%{error}"
+  en: "Failed to install prerequisites from offline archive: %{error}\nFollow the next step in that message.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e701"
+  cn: "无法从离线存档安装依赖项：%{error}\n请按该消息中的下一步操作。\nDocs: EIM-E701 in the EIM troubleshooting guide"
 wizard.error.copy_dist_directory:
   en: "Failed to copy dist directory from offline archive: %{error}"
   cn: "无法从离线存档复制 dist 目录：%{error}"
@@ -426,8 +429,8 @@ install.ready:
   en: Now you can start using IDF tools
   cn: 现在可以开始使用 IDF 工具了
 install.already_installed:
-  en: "The IDF at path '%{path}' is already installed. If you need to reinstall or fix it, please use the 'fix' command."
-  cn: "路径 '%{path}' 处的 IDF 已安装。如果您需要重新安装或修复它，请使用 'fix' 命令。"
+  en: "The IDF at path '%{path}' is already installed. If you need to reinstall or fix it, please use the 'fix' command.\nDocs: EIM-E602 in the EIM troubleshooting guide"
+  cn: "路径 '%{path}' 处的 IDF 已安装。如果您需要重新安装或修复它，请使用 'fix' 命令。\nDocs: EIM-E602 in the EIM troubleshooting guide"
 install.use_fix_command:
   en: "To fix the installation, run: eim fix --path <path>"
   cn: "要修复安装，请运行: eim fix --path <path>"
@@ -564,8 +567,8 @@ wizard.title:
   en: Running IDF Installer Wizard...
   cn: 正在运行 IDF 安装程序向导...
 fix.invalid_directory:
-  en: "Invalid IDF directory: %{path}"
-  cn: "无效的 IDF 目录：%{path}"
+  en: "Invalid IDF directory: %{path}\nFix: Pass a directory that contains an ESP-IDF checkout to eim fix --path.\nDocs: EIM-E603 in the EIM troubleshooting guide"
+  cn: "无效的 IDF 目录：%{path}\nFix: 向 eim fix --path 传入包含 ESP-IDF 检出的目录。\nDocs: EIM-E603 in the EIM troubleshooting guide"
 fix.no_versions:
   en: No versions installed
   cn: 未安装版本
@@ -585,8 +588,8 @@ fix.success:
   en: "Successfully fixed IDF installation at %{path}"
   cn: "已成功修复 IDF 安装路径：%{path}"
 fix.failed:
-  en: "Failed to fix IDF installation: %{error}"
-  cn: "未能修复 IDF 安装：%{error}"
+  en: "Failed to fix IDF installation: %{error}\nFix: Rerun eim fix --path <path> after correcting the problem reported above.\nDocs: EIM-E603 in the EIM troubleshooting guide"
+  cn: "未能修复 IDF 安装：%{error}\nFix: 先处理上方报告的问题，再重新运行 eim fix --path <path>。\nDocs: EIM-E603 in the EIM troubleshooting guide"
 fix.ready:
   en: Now you can start using IDF tools
   cn: 现在可以开始使用 IDF 工具了
@@ -606,8 +609,8 @@ cli.using_selected_idf:
   en: "Using selected IDF version: %{idf}"
   cn: "使用已选择的 IDF 版本：%{idf}"
 cli.no_idf_specified_no_selected:
-  en: No IDF version specified and no version is selected. Please specify an IDF version.
-  cn: 未指定 IDF 版本且未选择版本。请指定一个 IDF 版本。
+  en: "No IDF version specified and no version is selected. Please specify an IDF version.\nFix: List installed versions with eim list, then pass one as the last argument (eim run \"<command>\" <name>, eim shell <name>) or make it the default with eim select <name>.\nDocs: EIM-E601 in the EIM troubleshooting guide"
+  cn: "未指定 IDF 版本且未选择版本。请指定一个 IDF 版本。\nFix: 用 eim list 列出已安装版本，然后把它作为最后一个参数传入（eim run \"<command>\" <name>，eim shell <name>），或用 eim select <name> 设为默认。\nDocs: EIM-E601 in the EIM troubleshooting guide"
 run.command_failed:
   en: Command failed to execute
   cn: 命令执行失败
@@ -621,11 +624,11 @@ cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
 cli.running_as_elevated_posix:
-  en: Running as elevated user. This is not recommended.
-  cn: 以管理员权限运行。这不是推荐的做法。
+  en: "Running as elevated user. This is not recommended.\nRun eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法。\n请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 cli.running_as_elevated_windows:
-  en: Running as elevated user. This is not recommended but it is required if you want to install drivers.
-  cn: 以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。
+  en: "Running as elevated user. This is not recommended but it is required if you want to install drivers.\nFor anything other than drivers, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。\n除安装驱动程序外，请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 gui.setup_tools.qemu_prerequisites_check.failed:
   en: "Failed to check QEMU prerequisites: %{error}"
   cn: "无法检查 QEMU 依赖项：%{error}"

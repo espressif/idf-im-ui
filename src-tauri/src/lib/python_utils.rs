@@ -584,7 +584,7 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 
         if !wheel_dirs.is_empty() {
             warn!("Available wheel directories: {:?}", wheel_dirs);
-            warn!("Could not find wheels for Python {}, you might need to rebuild the offline archive with this Python version", python_version);
+            warn!("Could not find wheels for Python {}, you might need to rebuild the offline archive with this Python version\nIf the install then fails, rebuild the offline archive with this Python version, or use Python 3.11, 3.12, 3.13, or 3.14 when the archive already has matching wheels.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e205", python_version);
         }
     }
 
@@ -621,16 +621,16 @@ fn populate_venv(
     match ensure_path(venv_path.to_str().unwrap()) {
         Ok(_) => debug!("venv path ensured: {}", venv_path.display()),
         Err(e) => {
-            error!("failed to ensure venv path: {}", e);
-            return Err(format!("failed to ensure venv path: {}", e));
+            error!("failed to ensure venv path: {}\nFix: Install Python 3.10 to 3.14 that provides the venv module, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e203", e);
+            return Err(format!("failed to ensure venv path: {}\nFix: Install Python 3.10 to 3.14 that provides the venv module, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e203", e));
         }
     }
 
     match create_python_venv(venv_path.to_str().unwrap(), python_executable) {
         Ok(_) => debug!("venv created"),
         Err(e) => {
-            error!("failed to create venv: {}", e);
-            return Err(format!("failed to create venv: {}", e));
+            error!("failed to create venv: {}\nFix: Install Python 3.10 to 3.14 that provides the venv module, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e203", e);
+            return Err(format!("failed to create venv: {}\nFix: Install Python 3.10 to 3.14 that provides the venv module, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e203", e));
         }
     }
 
@@ -646,11 +646,11 @@ fn populate_venv(
             Ok(_) => debug!("requirements installed: {}", requirements_file.display()),
             Err(e) => {
                 error!(
-                    "failed to install requirements from file {:?}: {}",
+                    "failed to install requirements from file {:?}: {}\nFix: Rerun eim. To select another package index, pass --pypi-mirror.\nDocs: EIM-E203 in the EIM troubleshooting guide",
                     requirements_file, e
                 );
                 return Err(format!(
-                    "failed to install requirements from file {:?}: {}",
+                    "failed to install requirements from file {:?}: {}\nFix: Rerun eim. To select another package index, pass --pypi-mirror.\nDocs: EIM-E203 in the EIM troubleshooting guide",
                     requirements_file, e
                 ));
             }
@@ -762,7 +762,7 @@ pub async fn install_python_env(
                 Some(constraint_file)
             }
             Err(e) => {
-                warn!("Failed to download constraints file: {}", e);
+                warn!("Failed to download constraints file: {}\nInstallation continues without this file. If package installation then fails, retry when the Espressif download host can be reached. A mirror flag does not replace that host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e204", e);
                 None
             }
         }
@@ -783,7 +783,7 @@ pub async fn install_python_env(
             Some(wheel_path) => Some(wheel_path),
             None => {
                 return Err(format!(
-                    "No compatible wheel directory found for Python {}. Available wheel directories should be named like 'wheels_py311', 'wheels_py312', etc.",
+                    "No compatible wheel directory found for Python {}. Available wheel directories should be named like 'wheels_py311', 'wheels_py312', etc.\nFix: Rebuild the offline archive with this Python version, or use Python 3.11, 3.12, 3.13, or 3.14 when the archive already has matching wheels.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e205",
                     python_version
                 ));
             }
