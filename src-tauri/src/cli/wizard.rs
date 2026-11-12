@@ -180,7 +180,7 @@ pub fn download_idf(config: DownloadConfig) -> Result<(), DownloadError> {
                     || err.contains("not empty")
                 {
                     warn!(
-                        "IDF path already present; continuing (non-interactive). Act on the Fix below only if a later step fails: {}",
+                        "The install directory is already there, so installation continues. If a later step fails, choose another directory or run eim fix. {}",
                         err
                     );
                     Ok(())

@@ -31,6 +31,24 @@ fn ensure_eim_in_path() {
 }
 
 #[cfg(feature = "cli")]
+fn cli_log_location() -> &'static str {
+    match std::env::consts::OS {
+        "windows" => r"%LOCALAPPDATA%\eim\logs\eim.log",
+        "macos" => "~/Library/Application Support/eim/logs/eim.log",
+        _ => "$XDG_DATA_HOME/eim/logs/eim.log, or $HOME/.local/share/eim/logs/eim.log when that variable is not set",
+    }
+}
+
+#[cfg(feature = "cli")]
+fn report_cli_failure(error: &impl std::fmt::Display) {
+    eprintln!(
+        "Error executing CLI: {}\nThe log is {}.\nhttps://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
+        error,
+        cli_log_location()
+    );
+}
+
+#[cfg(feature = "cli")]
 async fn exit_after_unreported_child(err: clap::Error) -> ! {
     if let Some(ctx) = idf_im_lib::telemetry::context_from_parent_env() {
         idf_im_lib::telemetry::note_unreported_child_exit(&ctx);
@@ -154,7 +172,7 @@ async fn main() {
         match result {
             Ok(_) => std::process::exit(0),
             Err(e) => {
-                eprintln!("Error executing CLI: {}\nFix: Read the log at <data dir>/eim/logs/eim.log (Linux: $HOME/.local/share/eim/logs/eim.log or $XDG_DATA_HOME/eim/logs/eim.log, macOS: $HOME/Library/Application Support/eim/logs/eim.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim.log). GUI log: eim_gui.log. Offline builder log: offline_installer.log. Override the CLI path with --log-file.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900", e);
+                report_cli_failure(&e);
                 std::process::exit(1);
             }
         }
@@ -207,7 +225,7 @@ async fn main() {
     match result {
         Ok(_) => std::process::exit(0),
         Err(e) => {
-            eprintln!("Error executing CLI: {}\nFix: Read the log at <data dir>/eim/logs/eim.log (Linux: $HOME/.local/share/eim/logs/eim.log or $XDG_DATA_HOME/eim/logs/eim.log, macOS: $HOME/Library/Application Support/eim/logs/eim.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim.log). GUI log: eim_gui.log. Offline builder log: offline_installer.log. Override the CLI path with --log-file.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900", e);
+            report_cli_failure(&e);
             std::process::exit(1);
         }
     }

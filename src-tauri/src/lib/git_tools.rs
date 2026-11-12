@@ -2130,7 +2130,7 @@ pub fn get_esp_idf(
             }
 
             warn!(
-                "gix-based clone of ESP-IDF failed; falling back to system git. Ignore the Fix in this detail unless the fallback also fails: {}",
+                "The first clone attempt failed. A second attempt with the system git command is in progress. {}",
                 gix_err
             );
 
@@ -2153,7 +2153,7 @@ pub fn get_esp_idf(
                     let _ = tx.send(ProgressMessage::Finish);
                     Err(format!(
                         "Both gix and system git failed to clone ESP-IDF. \
-                gix error: {gix_err}; git CLI error: {cli_err}\nFix: Act on the Fix in the git CLI error above. If it names no other cause, retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401"
+                gix error: {gix_err}; git CLI error: {cli_err}\nThe git command's message above is the one to follow. If that message is not about a directory that already has files, retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401"
                     ))
                 }
             }

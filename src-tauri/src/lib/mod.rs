@@ -603,10 +603,10 @@ pub fn run_powershell_script(script: &str) -> Result<String, std::io::Error> {
                     String::from_utf8(output.stdout).map_err(std::io::Error::other)
                 } else {
                     let stderr = String::from_utf8_lossy(&output.stderr);
-                    error!("PowerShell script failed with status: {}\nFix: PowerShell started but the script failed. Read the stderr line logged next. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801", output.status);
+                    error!("PowerShell script failed with status: {}\nPowerShell started, but the script failed. The script output follows. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801", output.status);
                     error!("stderr: {}", stderr);
                     Err(std::io::Error::other(format!(
-                        "PowerShell script failed: {}\nFix: PowerShell started but the script failed. Read the stderr line logged next. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801",
+                        "PowerShell script failed: {}\nPowerShell started, but the script failed. Read the script output above. If it says running scripts is disabled, see EIM-E801.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e801",
                         stderr
                     )))
                 }
@@ -1486,7 +1486,7 @@ pub async fn download_file_and_rename(
             Ok(()) => return Ok(()),
             Err(e) => {
                 log::warn!(
-                    "Download attempt {}/{} failed for {}: {}\nFix (only if the run then fails): rerun with --mirror, --idf-mirror, or --pypi-mirror. EIM retries this attempt on its own.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e302",
+                    "Download attempt {}/{} failed for {}: {}\nEIM is still retrying. If the command fails after the retries, run it again with --mirror, --idf-mirror, or --pypi-mirror.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e302",
                     attempt,
                     retries,
                     url,

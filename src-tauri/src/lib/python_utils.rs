@@ -584,7 +584,7 @@ fn find_wheel_directory(offline_archive_dir: &Path, python_version: &str) -> Opt
 
         if !wheel_dirs.is_empty() {
             warn!("Available wheel directories: {:?}", wheel_dirs);
-            warn!("Could not find wheels for Python {}, you might need to rebuild the offline archive with this Python version\nFix (only if the install then fails): rebuild the offline archive with this Python version, or use Python 3.11, 3.12, 3.13, or 3.14 when the archive already has matching wheels.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e205", python_version);
+            warn!("Could not find wheels for Python {}, you might need to rebuild the offline archive with this Python version\nIf the install then fails, rebuild the offline archive with this Python version, or use Python 3.11, 3.12, 3.13, or 3.14 when the archive already has matching wheels.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e205", python_version);
         }
     }
 
@@ -762,7 +762,7 @@ pub async fn install_python_env(
                 Some(constraint_file)
             }
             Err(e) => {
-                warn!("Failed to download constraints file: {}\nFix (only if pip then fails): retry when the Espressif download host is reachable. A mirror flag does not replace that host. Installation continues without this file.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e204", e);
+                warn!("Failed to download constraints file: {}\nInstallation continues without this file. If package installation then fails, retry when the Espressif download host can be reached. A mirror flag does not replace that host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e204", e);
                 None
             }
         }
