@@ -201,13 +201,34 @@ eim install -i v5.3.2 --mirror https://gitlab.example.com --repo-stub my-gitlab-
 
 The mirror parameter should point to the root URL of your repository host, while repo-stub specifies the repository path.
 
-## Failure handling
+## When something fails
 
-- The error names an `EIM-E` number. Open it in [Troubleshooting](./troubleshooting.md).
-- CLI log: `<data dir>/eim/logs/eim.log` (`eim_gui.log` for the GUI, `offline_installer.log` for the offline archive builder). `--log-file` sets the CLI path. `-v` prints more on stderr.
-- `--do-not-track true`, or `EIM_DO_NOT_TRACK=1` / `EIM_DO_NOT_TRACK=true`, turns telemetry off.
-- On Linux and macOS, prerequisites are never installed for you. `-a` / `--install-all-prerequisites` installs Git and Python on Windows only.
-- Script and CI recovery steps are in [Using EIM from scripts and CI](./scripts_ci_and_agents.md).
+Every EIM error ends with a short code such as `EIM-E101` and a link to the [Troubleshooting](./troubleshooting.md) section for it. The CLI also prints the path of its log file. `--log-file` sets a different path, and `-v` prints more detail on the next run.
+
+On Linux and macOS, EIM never installs prerequisites for you. Install them in the image first. `-a` / `--install-all-prerequisites` installs Git and Python on Windows only.
+
+Turn off telemetry with `--do-not-track true`, or set `EIM_DO_NOT_TRACK=1` or `EIM_DO_NOT_TRACK=true`.
+
+### Common failures in CI
+
+| What you see | What to do |
+|--------------|------------|
+| Missing packages on Linux or macOS | Install them with the distro package manager or Homebrew, then rerun ([EIM-E101](./troubleshooting.md#eim-e101)) |
+| `Python sanity check failed` | Follow each `Hint:` line. Use Python 3.10 to 3.14 ([EIM-E201](./troubleshooting.md#eim-e201)) |
+| `Download attempt … failed` warning | Nothing yet, EIM retries. If the command then fails, rerun with a mirror (below) |
+| `git clone failed` | Rerun with `--idf-mirror https://git.espressif.com.cn` ([EIM-E401](./troubleshooting.md#eim-e401)) |
+| `is already installed` | Nothing was installed. Repair with `eim fix --path <path>`, or choose a new `--path` ([EIM-E602](./troubleshooting.md#eim-e602)) |
+| `No space left on device` | Point `TMPDIR` at a larger disk ([EIM-E501](./troubleshooting.md#eim-e501)) |
+
+### Mirrors
+
+| Flag | Replaces |
+|------|----------|
+| `--mirror` | Tool downloads (GitHub release assets) |
+| `--idf-mirror` | ESP-IDF git repository |
+| `--pypi-mirror` | Python package index |
+
+They don't change downloads from `dl.espressif.com`, such as the version list and the constraints file.
 
 ## Best Practices
 

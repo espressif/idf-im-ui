@@ -338,7 +338,8 @@
         "description": "For more information consult the log file.",
         "retry": "Retry Installation",
         "back": "Go Back",
-        "info": "For more information consult the log file. Log: <data dir>/eim/logs/eim_gui.log (Linux: $HOME/.local/share/eim/logs/eim_gui.log, macOS: $HOME/Library/Application Support/eim/logs/eim_gui.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim_gui.log). CLI log: eim.log in that folder. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
+        "info": "For more information, see eim_gui.log in {logFolder}. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
+        "infoNoPath": "For more information consult the log file. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
       },
       "success": {
         "title": "Offline Installation Complete",
@@ -945,7 +946,8 @@
     },
     "error": {
       "title": "Error during {mode}:",
-      "seeLog": "For more information consult the log file. Log: <data dir>/eim/logs/eim_gui.log (Linux: $HOME/.local/share/eim/logs/eim_gui.log, macOS: $HOME/Library/Application Support/eim/logs/eim_gui.log, Windows: %LOCALAPPDATA%\\eim\\logs\\eim_gui.log). CLI log: eim.log in that folder. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
+      "seeLog": "For more information, see eim_gui.log in {logFolder}. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
+      "seeLogNoPath": "For more information consult the log file. Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
     },
     "summary": {
       "repairComplete": "Repair Complete",

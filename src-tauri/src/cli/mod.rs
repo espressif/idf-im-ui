@@ -1,5 +1,7 @@
 use std::env;
+use std::path::Path;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 
 use anyhow::Context;
 use clap::CommandFactory;
@@ -41,6 +43,26 @@ pub mod helpers;
 pub mod prompts;
 pub mod wizard;
 
+const CLI_FAILURE_DOCS: &str =
+    "https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900";
+
+static CLI_LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// The log file `setup_cli` opened, or `None` if logging was never set up.
+pub fn cli_log_path() -> Option<&'static Path> {
+    CLI_LOG_PATH.get().map(PathBuf::as_path)
+}
+
+/// Text printed to stderr when a CLI command fails.
+pub fn format_cli_failure(error: &dyn std::fmt::Display, log: Option<&Path>) -> String {
+    let mut out = format!("Error executing CLI: {error}");
+    if let Some(path) = log {
+        out.push_str(&format!("\nLog: {}", path.display()));
+    }
+    out.push_str(&format!("\nDocs: {CLI_FAILURE_DOCS}"));
+    out
+}
+
 /// Setup logging for the CLI application.
 ///
 /// # Arguments
@@ -77,6 +99,7 @@ pub fn setup_cli(
             .map(|dir| dir.join("eim.log"))
             .unwrap_or_else(|| PathBuf::from("eim.log"))
     });
+    let log_file_path = std::path::absolute(&log_file_path).unwrap_or(log_file_path);
 
     // Build dispatch with file chain first (Trace level)
     // Then add console chain with configurable level
@@ -98,6 +121,7 @@ pub fn setup_cli(
                 .chain(std::io::stderr()),
         )
         .apply()?;
+    let _ = CLI_LOG_PATH.set(log_file_path);
 
     log::trace!(
         "CLI logging initialized. Console: {:?}, File: {:?}",
@@ -1207,5 +1231,31 @@ fn build_cli_extras(settings: &Settings) -> OutcomeExtras {
         target_count,
         non_interactive,
         used_existing_idf,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_failure_without_log_path_has_no_log_line() {
+        let out = format_cli_failure(&"boom", None);
+        assert_eq!(
+            out,
+            format!("Error executing CLI: boom\nDocs: {CLI_FAILURE_DOCS}")
+        );
+    }
+
+    #[test]
+    fn cli_failure_prints_the_given_log_path() {
+        let log = Path::new("/tmp/custom/eim.log");
+        let out = format_cli_failure(&"boom", Some(log));
+        assert_eq!(
+            out,
+            format!(
+                "Error executing CLI: boom\nLog: /tmp/custom/eim.log\nDocs: {CLI_FAILURE_DOCS}"
+            )
+        );
     }
 }

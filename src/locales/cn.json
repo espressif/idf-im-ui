@@ -338,7 +338,8 @@
         "description": "更多信息请查阅日志文件。",
         "retry": "重试安装",
         "back": "返回",
-        "info": "更多信息请查阅日志文件。日志：<data dir>/eim/logs/eim_gui.log（Linux：$HOME/.local/share/eim/logs/eim_gui.log，macOS：$HOME/Library/Application Support/eim/logs/eim_gui.log，Windows：%LOCALAPPDATA%\\eim\\logs\\eim_gui.log）。该目录下的 CLI 日志为 eim.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
+        "info": "更多信息请查阅 {logFolder} 中的 eim_gui.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
+        "infoNoPath": "更多信息请查阅日志文件。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
       },
       "success": {
         "title": "离线安装完成",
@@ -945,7 +946,8 @@
     },
     "error": {
       "title": "{mode} 期间出错：",
-      "seeLog": "更多信息请查阅日志文件。日志：<data dir>/eim/logs/eim_gui.log（Linux：$HOME/.local/share/eim/logs/eim_gui.log，macOS：$HOME/Library/Application Support/eim/logs/eim_gui.log，Windows：%LOCALAPPDATA%\\eim\\logs\\eim_gui.log）。该目录下的 CLI 日志为 eim.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
+      "seeLog": "更多信息请查阅 {logFolder} 中的 eim_gui.log。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
+      "seeLogNoPath": "更多信息请查阅日志文件。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900"
     },
     "summary": {
       "repairComplete": "修复完成",

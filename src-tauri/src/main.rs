@@ -31,21 +31,8 @@ fn ensure_eim_in_path() {
 }
 
 #[cfg(feature = "cli")]
-fn cli_log_location() -> &'static str {
-    match std::env::consts::OS {
-        "windows" => r"%LOCALAPPDATA%\eim\logs\eim.log",
-        "macos" => "~/Library/Application Support/eim/logs/eim.log",
-        _ => "$XDG_DATA_HOME/eim/logs/eim.log, or $HOME/.local/share/eim/logs/eim.log when that variable is not set",
-    }
-}
-
-#[cfg(feature = "cli")]
 fn report_cli_failure(error: &impl std::fmt::Display) {
-    eprintln!(
-        "Error executing CLI: {}\nThe log is {}.\nhttps://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e900",
-        error,
-        cli_log_location()
-    );
+    eprintln!("{}", cli::format_cli_failure(error, cli::cli_log_path()));
 }
 
 #[cfg(feature = "cli")]
