@@ -4,10 +4,10 @@ Below are the minimum requirements for running the ESP-IDF. The Installation Man
 
 ## Python Version
 
-ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, **3.13**, and **3.14**.
+ESP-IDF requires Python to be installed. The supported Python versions are **3.10**, **3.11**, **3.12**, **3.13**, **3.14**, and **3.15**.
 
 > **Important**
-> Python 3.14 is now fully supported on **Linux**, **macOS**, and **Windows**.
+> Python 3.15 is now fully supported on **Linux**, **macOS**, and **Windows**.
 
 ## Windows
 
@@ -30,7 +30,7 @@ For more details about ESP-IDF prerequisites, please refer to [the ESP-IDF docum
 
 > **Note**
 > On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed.
-> For offline installations, Python **3.11** to **3.14** is required on Linux and macOS.
+> For offline installations, Python **3.11** to **3.15** is required on Linux and macOS.
 
 ## Linux
 
@@ -101,4 +101,4 @@ NixOS is detected through `/etc/os-release` (`ID=nixos`). Packages are declarati
 - The toolchains EIM downloads are dynamically linked and need [`nix-ld`](https://github.com/nix-community/nix-ld) (`programs.nix-ld.enable = true;`). The `programs.eim` NixOS module of the [flake](./general_info.md#nixos--nix-installation-via-flake) sets it up for you.
 
 > **Note**
-> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.14** is required on Linux and macOS.
+> On POSIX systems, the installer will check for the required prerequisites. If they are not met, the installation will not proceed unless `--skip-prerequisites-check` is used. In that case it's user's own responsibility to have all the needed prerequisites already there. For offline installations, Python **3.11** to **3.15** is required on Linux and macOS.
