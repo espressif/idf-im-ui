@@ -1,5 +1,5 @@
 _version: 2
-# cn text added below for agent-readable remediation needs review by a native speaker.
+# cn text for the Fix: and Docs: lines needs review by a native speaker.
 # The Fix: and Docs: labels stay in English so both locales parse the same way.
 # wizard.qemu.prerequisites.missing and check_error end the Chinese sentence with English "(Docs: …). Missing" / ". Detail" on purpose, so a suffix appended by the caller stays after the pointer. Include those two in the native-speaker review.
 hello:
@@ -30,8 +30,8 @@ prerequisites.install.catastrophic:
   en: "Something went terribly wrong. These prerequisites were not installed:%{l}\nFix: Install the packages in the list above manually, then rerun the same eim command.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103"
   cn: "发生了严重错误。以下依赖项未安装成功:%{l}\nFix: 手动安装上方列表中的软件包，然后重新运行同一条 eim 命令。\nDocs: EIM-E103 in the EIM troubleshooting guide"
 prerequisites.install.ask:
-  en: "Please install the missing prerequisites and try again.\nFix: Install each package named above, then rerun the same eim command. Debian/Ubuntu: sudo apt install <packages>. Fedora: sudo dnf install <packages>. Arch: sudo pacman -S <packages>. openSUSE: sudo zypper install <packages>. macOS: brew install <packages>. Windows: rerun with --install-all-prerequisites true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e101"
-  cn: "请先安装缺少的依赖项并重试。\nFix: 安装上方点名的每个软件包，然后重新运行同一条 eim 命令。Debian/Ubuntu：sudo apt install <packages>。Fedora：sudo dnf install <packages>。Arch：sudo pacman -S <packages>。openSUSE：sudo zypper install <packages>。macOS：brew install <packages>。Windows：使用 -a true 重新运行。\nDocs: EIM-E101 in the EIM troubleshooting guide"
+  en: "Please install the missing prerequisites and try again.\nFix: Install the packages listed above with your system package manager, then rerun the same eim command. On Windows, rerun with --install-all-prerequisites true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e101"
+  cn: "请先安装缺少的依赖项并重试。\nFix: 使用系统包管理器安装上方列出的软件包，然后重新运行同一条 eim 命令。Windows 上请使用 --install-all-prerequisites true 重新运行。\nDocs: EIM-E101 in the EIM troubleshooting guide"
 prerequisites.shell_failed:
   en: "Basic shell execution failed on this system. Unable to verify prerequisites.\nFix: Restore a working shell (bash on Linux and macOS, powershell.exe or pwsh.exe on Windows), then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
   cn: "此系统上的基本 Shell 执行失败。无法验证依赖项。\nFix: 恢复可用的 shell（Linux 和 macOS 上为 bash，Windows 上为 powershell.exe 或 pwsh.exe），然后重新运行 eim。\nDocs: EIM-E102 in the EIM troubleshooting guide"
