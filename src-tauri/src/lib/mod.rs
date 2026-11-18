@@ -2372,7 +2372,10 @@ pub fn single_version_post_install(
             // copy openocd rules (it's noop on macOs)
             match copy_openocd_rules(tool_install_directory) {
                 Ok(_) => info!("OpenOCD rules copied successfully"),
-                Err(err) => error!("Failed to copy OpenOCD rules: {:?}", err),
+                Err(err) => warn!(
+                    "OpenOCD udev rules not installed (only needed for JTAG debugging): {:?}",
+                    err
+                ),
             }
         }
     }
