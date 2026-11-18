@@ -2373,7 +2373,7 @@ pub fn single_version_post_install(
             match copy_openocd_rules(tool_install_directory) {
                 Ok(_) => info!("OpenOCD rules copied successfully"),
                 Err(err) => warn!(
-                    "OpenOCD udev rules not installed (only needed for JTAG debugging): {:?}",
+                    "OpenOCD udev rules not installed (only needed to use USB JTAG adapters without root): {:?}",
                     err
                 ),
             }
