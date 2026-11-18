@@ -11,6 +11,9 @@
 is_sourced() {
   if [ -n "$ZSH_VERSION" ]; then
       case $ZSH_EVAL_CONTEXT in *:file:*) return 0;; esac
+  elif [ -n "$BASH_VERSION" ]; then
+      # shellcheck disable=SC3028,SC3054  # reachable only with bash
+      [ "${BASH_SOURCE[0]}" != "$0" ] && return 0
   else
       case ${0##*/} in dash|-dash|bash|-bash|ksh|-ksh|sh|-sh) return 0;; esac
   fi

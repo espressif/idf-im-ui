@@ -2934,6 +2934,30 @@ mod tests {
                 String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
+
+            // Sourcing both scripts from a bash script must work ($0 is the script name).
+            let wrapper_path = PathBuf::from(&script_dir).join("build.sh");
+            fs::write(
+                &wrapper_path,
+                ". \"$1\" >>/dev/null 2>&1\n\
+                 [ \"$IDF_TOOLS_PATH\" = \"/opt/esp/tools\" ] || exit 2\n\
+                 . \"$2\" >>/dev/null 2>&1\n\
+                 [ -z \"$IDF_TOOLS_PATH\" ] || exit 3\n",
+            )
+            .expect("write wrapper script");
+            let output = std::process::Command::new("bash")
+                .arg(&wrapper_path)
+                .arg(&activate_path)
+                .arg(&deactivate_path)
+                .output()
+                .expect("run wrapper script");
+            assert!(
+                output.status.success(),
+                "sourcing from a bash script failed (status: {}): stdout: {} stderr: {}",
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
         }
 
         // No leftover placeholders
