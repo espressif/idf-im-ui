@@ -184,7 +184,7 @@ register_idf_completions() {
 is_sourced() {
   if [ -n "$ZSH_VERSION" ]; then
       case $ZSH_EVAL_CONTEXT in *:file:*) return 0;; esac
-  elif [ -n "$BASH_VERSION" ]; then
+  elif [ -n "${BASH_SOURCE-}" ]; then
       # shellcheck disable=SC3028,SC3054  # reachable only with bash
       [ "${BASH_SOURCE[0]}" != "$0" ] && return 0
   else  # Add additional POSIX-compatible shell names here, if needed.
