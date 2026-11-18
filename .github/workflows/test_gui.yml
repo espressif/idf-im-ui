@@ -112,7 +112,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 webkit2gtk-driver
+          sudo apt-get install -y git wget flex bison gperf ccache libffi-dev libssl-dev dfu-util libusb-1.0-0-dev libgcrypt20 libglib2.0-0 libpixman-1-0 libsdl2-2.0-0 libslirp0 $(apt-cache policy webkitgtk-webdriver 2>/dev/null | grep -qE "Candidate: [^(]" && echo webkitgtk-webdriver || echo webkit2gtk-driver)
 
       - name: Run IDF basic install test script (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
@@ -319,7 +319,7 @@ jobs:
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'
         run: |
           sudo apt-get update
-          sudo apt-get install -y webkit2gtk-driver xvfb
+          sudo apt-get install -y $(apt-cache policy webkitgtk-webdriver 2>/dev/null | grep -qE "Candidate: [^(]" && echo webkitgtk-webdriver || echo webkit2gtk-driver) xvfb
 
       - name: Start XVFB (Ubuntu)
         if: matrix.os == 'ubuntu-latest' || matrix.os == 'ubuntu-24.04-arm'

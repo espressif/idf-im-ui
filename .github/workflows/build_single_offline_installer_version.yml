@@ -119,7 +119,10 @@ jobs:
           HOMEBREW_NO_REQUIRE_TAP_TRUST: "1"
         run: |
           brew update
-          brew install gdk-pixbuf cairo pango libjpeg libpng zlib meson glib dbus-glib
+          # dbus-glib is intentionally not installed: macOS has no D-Bus, and
+          # Homebrew no longer ships Intel bottles, so it would be built from
+          # source and fail (dbus meson setup: Docbook XSL "html" not found).
+          brew install gdk-pixbuf cairo pango libjpeg libpng zlib meson glib
 
       - name: Install UV
         uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
