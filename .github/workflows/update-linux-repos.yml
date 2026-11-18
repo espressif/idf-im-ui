@@ -314,11 +314,18 @@ jobs:
           printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
           chmod 600 "$PASS_FILE"
 
+          if rpm --eval '%{__gpg_sign_cmd}' | grep -qE '^\S*gpg gpg( |$)'; then
+            GPG_ARGV0="gpg "
+          else
+            GPG_ARGV0=""
+          fi
+          echo "rpm: $(rpm --version); gpg argv0 prefix: '${GPG_ARGV0}'"
+
           cat > "$HOME/.rpmmacros" <<RPMMACROS
           %_signature gpg
           %_gpg_name ${GPG_KEY_FPR}
           %__gpg /usr/bin/gpg
-          %__gpg_sign_cmd %{__gpg} gpg --no-verbose --no-armor --batch --pinentry-mode loopback --passphrase-file ${PASS_FILE} --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+          %__gpg_sign_cmd %{__gpg} ${GPG_ARGV0}--no-verbose --no-armor --batch --pinentry-mode loopback --passphrase-file ${PASS_FILE} --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
           RPMMACROS
 
           for arch in x86_64 aarch64 armv7hl; do
