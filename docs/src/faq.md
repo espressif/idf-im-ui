@@ -145,9 +145,9 @@ See [EIM-E101](./troubleshooting.md#eim-e101) when packages are missing, and [EI
 
 `Unable to execute PowerShell` means PowerShell is missing or could not be started. See [EIM-E801](./troubleshooting.md#eim-e801). EIM is tested on Windows 11.
 
-### Python SSL sanity check fails when using a system-wide proxy
+### Python SSL sanity check fails behind a proxy or antivirus
 
-`[FAIL] SSL/HTTPS` while a proxy is set is [EIM-E206](./troubleshooting.md#eim-e206). Bypass `localhost` and `127.0.0.1`.
+`[FAIL] SSL/HTTPS` means something intercepted Python's connection to EIM's local test server on `127.0.0.1`. The check trusts only a certificate EIM made for that run, so it works without internet and fails when HTTPS traffic is inspected. Exclude `127.0.0.1` from antivirus HTTPS scanning, or bypass the proxy for `localhost` and `127.0.0.1`. See [EIM-E206](./troubleshooting.md#eim-e206).
 
 ### Why does EIM find the wrong Python on macOS?
 

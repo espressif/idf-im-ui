@@ -169,15 +169,19 @@ The activation scripts then pin that interpreter.
 
 ### EIM-E206: Python SSL check failed {#eim-e206}
 
-**What you see:** `[FAIL] SSL/HTTPS` in the Python sanity check, or later `CERTIFICATE_VERIFY_FAILED` / `certificate verify failed` from pip.
+**What you see:** `[FAIL] SSL/HTTPS` in the Python sanity check.
 
-**Why:** This is rare. The SSL check talks only to a local HTTPS server on `127.0.0.1`, so it fails when something sits between Python and that connection. The usual cause is security software that inspects HTTPS traffic (corporate antivirus, endpoint protection, or a TLS-inspection proxy) and replaces the certificates. A proxy that captures `127.0.0.1` does the same. A Python build without a working `ssl` module is less common.
+**How the check works:** EIM starts a short-lived HTTPS server on `127.0.0.1` with a certificate it generates for that run, and has Python connect to it. Python trusts only that one certificate, not the system or company certificate store. The check needs no internet. Anything that intercepts the connection shows a different certificate, so the check fails. This is on purpose: it means something is reading HTTPS traffic between Python and the server.
+
+**Why:** This is rare. The usual cause is security software that scans HTTPS traffic (antivirus, endpoint protection) and also intercepts `127.0.0.1`. A proxy that receives requests for `127.0.0.1` does the same. A Python build without a working `ssl` module is less common.
 
 **What to do:**
 
-- Antivirus or TLS inspection: ask your IT team to exclude `eim` and the Python it uses from HTTPS scanning, or to give you the company root certificate. pip reads that certificate from `PIP_CERT`, for example `export PIP_CERT=/path/to/company-root.pem`.
+- Antivirus or endpoint protection: exclude `127.0.0.1` (or `eim` and the Python it uses) from HTTPS scanning, or ask your IT team to. A company root certificate, `PIP_CERT`, `SSL_CERT_FILE`, a PyPI mirror, or an offline archive do not fix this check.
 - Proxy: bypass localhost, as below.
 - Broken `ssl` module: reinstall Python from [python.org](https://www.python.org/downloads/).
+
+The install does not continue while this check fails. `--skip-prerequisites-check` does not skip it, and it also runs for offline installs.
 
 If `[FAIL] SSL/HTTPS` appears only when a proxy is set, bypass localhost:
 
@@ -258,6 +262,8 @@ eim install -i v5.4.2 --pypi-mirror https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 If no mirror works, use an [offline archive](#eim-e701). It ships the Python packages as wheels.
+
+If the pip text says `CERTIFICATE_VERIFY_FAILED`, something on the network is replacing the certificate of the package host. pip always contacts `https://dl.espressif.com/pypi/`; `--pypi-mirror` only adds a second index. Ask your IT team to allow that host without HTTPS inspection, or use an [offline archive](#eim-e701), which installs from bundled wheels.
 
 ## Git
 
