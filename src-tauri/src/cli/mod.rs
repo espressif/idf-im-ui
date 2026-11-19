@@ -359,7 +359,7 @@ pub async fn run_cli(cli: Cli) -> anyhow::Result<()> {
                 .context("Failed to setup logging")?;
             let is_elevated = idf_im_lib::utils::is_running_elevated();
             if is_elevated {
-                log::warn!("Running as elevated user. This is not recommended, except when installing drivers. For anything else, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide");
+                log::warn!("Running as elevated user. This is not recommended, except when installing drivers. Files installed now belong to the elevated account, so a normal user may not be able to run the build tools later. For anything else, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide");
                 if cfg!(target_os = "windows") {
                     println!("{}", t!("cli.running_as_elevated_windows"));
                 } else {

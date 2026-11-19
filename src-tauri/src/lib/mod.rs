@@ -1486,7 +1486,7 @@ pub async fn download_file_and_rename(
             Ok(()) => return Ok(()),
             Err(e) => {
                 log::warn!(
-                    "Download attempt {}/{} failed for {}: {}\nEIM is still retrying. If the command fails after the retries, run it again with --mirror, --idf-mirror, or --pypi-mirror.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e302",
+                    "Download attempt {}/{} failed for {}: {}\nEIM is still retrying. If the command fails after the retries, run it again with --mirror, --idf-mirror, or --pypi-mirror. If it keeps failing, use an offline archive (--use-local-archive).\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e302",
                     attempt,
                     retries,
                     url,

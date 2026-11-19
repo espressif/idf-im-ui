@@ -15,13 +15,14 @@ Errors include a `Fix:` line. Warnings describe what to do only if the command l
 | [EIM-E203](#eim-e203) | Virtual environment or requirements failed |
 | [EIM-E204](#eim-e204) | Constraints file download failed |
 | [EIM-E205](#eim-e205) | Offline wheels missing |
+| [EIM-E206](#eim-e206) | Python SSL check failed |
 | [EIM-E301](#eim-e301) | Version list fetch failed |
 | [EIM-E302](#eim-e302) | Tool download failed |
 | [EIM-E303](#eim-e303) | PyPI download failed |
 | [EIM-E401](#eim-e401) | Clone failed |
 | [EIM-E402](#eim-e402) | Destination is not empty |
 | [EIM-E403](#eim-e403) | Submodule update failed |
-| [EIM-E501](#eim-e501) | No space left, including a small /tmp |
+| [EIM-E501](#eim-e501) | No space left on device |
 | [EIM-E502](#eim-e502) | Permission denied on a custom path |
 | [EIM-E503](#eim-e503) | Running as administrator |
 | [EIM-E601](#eim-e601) | No IDF version specified |
@@ -60,7 +61,7 @@ Increase detail with `-v` (repeat it for more).
 
 **Why:** A required package is missing. On Linux and macOS, EIM never installs prerequisites for you. On Windows it installs them only when you agree, or when `--install-all-prerequisites true` is set.
 
-**What to do:** Install the packages named above with your system package manager, then rerun the same `eim` command. The names for your system are on the [Prerequisites](./prerequisites.md) page. On Windows, `eim install --install-all-prerequisites true` installs Git and Python. That flag does nothing on Linux or macOS. QEMU libraries are [EIM-E104](#eim-e104).
+**What to do:** The simplest fix on Linux is to install EIM itself from a package manager. The `eim-cli` packages declare these prerequisites as dependencies, so the package manager installs them too: `sudo apt install eim-cli` (Debian/Ubuntu) or `sudo dnf install eim-cli` (Fedora). See [Installation](./general_info.md). Otherwise install the packages named above with your system package manager, which resolves their dependencies, then rerun the same `eim` command. The names for your system are on the [Prerequisites](./prerequisites.md) page. On Windows, `eim install --install-all-prerequisites true` installs Git and Python. That flag does nothing on Linux or macOS. QEMU libraries are [EIM-E104](#eim-e104).
 
 ### EIM-E102: Prerequisite check could not run {#eim-e102}
 
@@ -86,7 +87,7 @@ eim install --skip-prerequisites-check true
 
 **Why:** EIM tried to install prerequisites and at least one package did not install.
 
-**What to do:** Read the package-manager output, install the named packages yourself, then rerun `eim`. See [Missing prerequisites](#eim-e101). On Windows, `--install-all-prerequisites true` is what asks EIM to install them.
+**What to do:** Read the package-manager output, install the named packages yourself with your system package manager, then rerun `eim`. See [Missing prerequisites](#eim-e101). On Windows, `--install-all-prerequisites true` is what asks EIM to install them.
 
 ### EIM-E104: QEMU prerequisites {#eim-e104}
 
@@ -98,11 +99,11 @@ eim install --skip-prerequisites-check true
 
 **Why:** QEMU was selected and its libraries are missing. The message lists them after `Missing:`.
 
-**What to do:** Install those packages, or rerun without QEMU. The names are on the [Prerequisites](./prerequisites.md) page. EIM does not install these libraries for you.
+**What to do:** Install those packages with your system package manager, or rerun without QEMU. The `eim-cli` apt and dnf packages already depend on them ([EIM-E101](#eim-e101)). The names are on the [Prerequisites](./prerequisites.md) page. EIM does not install these libraries for you.
 
 ## Python
 
-Supported interpreters for a normal install are Python **3.10, 3.11, 3.12, 3.13, and 3.14** (`>= 3.10.0` and `< 3.15.0`). Offline archives ship wheels for **3.11 to 3.14** on Linux, macOS, and Windows. See [Offline archive](#eim-e701).
+Supported interpreters for a normal install are Python **3.10, 3.11, 3.12, 3.13, 3.14, and 3.15** (`>= 3.10.0` and `< 3.16.0`). Offline archives ship wheels for **3.11 to 3.15** on Linux, macOS, and Windows. See [Offline archive](#eim-e701).
 
 ### EIM-E201: Python sanity check failed {#eim-e201}
 
@@ -110,29 +111,13 @@ Supported interpreters for a normal install are Python **3.10, 3.11, 3.12, 3.13,
 
 Each failed check is a `[FAIL]` line followed by `Hint:`.
 
-**Why:** The selected Python is missing, too old, too new, or lacks pip, venv, the standard library, ctypes, or SSL. On Windows the Microsoft Store alias also fails this check.
+**Why:** The selected Python is missing, too old, too new, or lacks pip, venv, the standard library, or ctypes. On Windows the Microsoft Store alias also fails this check. A failed `[FAIL] SSL/HTTPS` line is [EIM-E206](#eim-e206).
 
-**What to do:** Follow the `Hint:` line for each `[FAIL]`. Install Python 3.10 to 3.14 from [python.org](https://www.python.org/downloads/) when the hint says to reinstall.
-
-If `[FAIL] SSL/HTTPS` appears only when a proxy is set, bypass localhost:
-
-```bash
-export NO_PROXY=localhost,127.0.0.1,::1
-export no_proxy=localhost,127.0.0.1,::1
-```
-
-The sanity check opens a local HTTPS server. A proxy that captures `127.0.0.1` makes that check fail even when SSL works. To confirm the proxy is the cause, unset it and rerun:
-
-```bash
-unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
-eim install
-```
-
-If that passes, exclude localhost rather than disabling the proxy.
+**What to do:** Follow the `Hint:` line for each `[FAIL]`. Install Python 3.10 to 3.15 from [python.org](https://www.python.org/downloads/) when the hint says to reinstall.
 
 On macOS, a GUI launch does not load your shell `PATH`. Finder starts EIM from `launchd`, which does not read `.zprofile` or `.zshrc`, so the GUI can see `/usr/bin/python3` (often 3.9) while a terminal sees Homebrew (`/opt/homebrew/bin` or `/usr/local/bin`) or MacPorts (`/opt/local/bin`). Compare `which python3` in the terminal with the version EIM reports. Start the GUI from that terminal with `eim gui`, or install Python from python.org so GUI launches can see it.
 
-When several Pythons are installed, EIM uses the first `python3` or `python` on `PATH` that passes the sanity check. Prepend the directory you want, for this terminal only:
+When several Pythons are installed, EIM takes the first one with a supported version, in the order listed in the [FAQ](./faq.md#eim-detected-the-wrong-python--multiple-python-installations-found), and checks only that one. Prepend the directory you want, for this terminal only:
 
 ```bash
 export PATH="/path/to/correct/python/folder:$PATH"
@@ -152,7 +137,7 @@ The activation scripts then pin that interpreter.
 
 **Why:** EIM could not install Python, or you declined the install and no suitable interpreter is present.
 
-**What to do:** Install Python 3.10 to 3.14 with pip, venv, and SSL from [python.org](https://www.python.org/downloads/), then rerun `eim`. On Windows, `eim install --install-all-prerequisites true` asks EIM to install Python.
+**What to do:** Install Python 3.10 to 3.15 with pip, venv, and SSL from [python.org](https://www.python.org/downloads/), then rerun `eim`. On Windows, `eim install --install-all-prerequisites true` asks EIM to install Python.
 
 ### EIM-E203: Virtual environment or requirements failed {#eim-e203}
 
@@ -164,25 +149,55 @@ The activation scripts then pin that interpreter.
 
 **Why:** The tools directory is not usable, `python -m venv` failed, or `pip install -r` failed. A pip download problem is [PyPI download](#eim-e303). A missing offline wheel is [Offline wheels](#eim-e205).
 
-**What to do:** Use Python 3.10 to 3.14 with the `venv` module and rerun `eim`. Point `--path` at a directory your user can write to. For a package-index failure, rerun with `--pypi-mirror` as in [PyPI download](#eim-e303).
+**What to do:** Use Python 3.10 to 3.15 with the `venv` module and rerun `eim`. Point `--path` at a directory your user can write to. For a package-index failure, rerun with `--pypi-mirror` as in [PyPI download](#eim-e303).
 
 ### EIM-E204: Constraints file download failed {#eim-e204}
 
 **What you see:** `Failed to download constraints file:`
 
-**Why:** EIM downloads `espidf.constraints.<version>.txt` from `dl.espressif.com`. This warning does not stop the installation. `--mirror`, `--idf-mirror`, and `--pypi-mirror` do not replace that host.
+**Why:** EIM downloads `espidf.constraints.<version>.txt` from `dl.espressif.com`. This warning does not stop the installation. `--mirror`, `--idf-mirror`, and `--pypi-mirror` do not replace that host. On a platform ESP-IDF does not support, such as Windows on ARM, the packages this file pins may not exist at all.
 
-**What to do:** Retry the same command when `dl.espressif.com` is reachable. For an air-gapped machine, use an offline archive ([EIM-E701](#eim-e701)); the archive copies this file instead of downloading it.
+**What to do:** Check that your OS and CPU are supported. Windows on ARM is not, see the [FAQ](./faq.md#does-eim-support-windows-on-arm). Otherwise retry the same command when `dl.espressif.com` is reachable. If downloads keep failing, use an offline archive ([EIM-E701](#eim-e701)); the archive copies this file instead of downloading it.
 
 ### EIM-E205: Offline wheels missing {#eim-e205}
 
 **What you see:** `Could not find wheels for Python` or `No compatible wheel directory found for Python`
 
-**Why:** The offline archive has no `wheels_py*` directory for the Python that was detected. Published archives include wheels for Python 3.11, 3.12, 3.13, and 3.14.
+**Why:** The offline archive has no `wheels_py*` directory for the Python that was detected. Published archives include wheels for Python 3.11, 3.12, 3.13, 3.14, and 3.15. They are built only for Windows x64, macOS (x64 and arm64), and Linux (x64 and arm64). On any other platform, such as Windows on ARM, no archive has wheels for you.
 
-**What to do:** Install one of those Python versions and rerun against the same `.zst`, or rebuild the archive with the offline archive builder so it contains wheels for the version you need.
+**What to do:** Check that your OS and CPU are supported. Windows on ARM is not, see the [FAQ](./faq.md#does-eim-support-windows-on-arm). On a supported platform, install one of those Python versions and rerun against the same `.zst`, or rebuild the archive with the offline archive builder so it contains wheels for the version you need.
+
+### EIM-E206: Python SSL check failed {#eim-e206}
+
+**What you see:** `[FAIL] SSL/HTTPS` in the Python sanity check, or later `CERTIFICATE_VERIFY_FAILED` / `certificate verify failed` from pip.
+
+**Why:** This is rare. The SSL check talks only to a local HTTPS server on `127.0.0.1`, so it fails when something sits between Python and that connection. The usual cause is security software that inspects HTTPS traffic (corporate antivirus, endpoint protection, or a TLS-inspection proxy) and replaces the certificates. A proxy that captures `127.0.0.1` does the same. A Python build without a working `ssl` module is less common.
+
+**What to do:**
+
+- Antivirus or TLS inspection: ask your IT team to exclude `eim` and the Python it uses from HTTPS scanning, or to give you the company root certificate. pip reads that certificate from `PIP_CERT`, for example `export PIP_CERT=/path/to/company-root.pem`.
+- Proxy: bypass localhost, as below.
+- Broken `ssl` module: reinstall Python from [python.org](https://www.python.org/downloads/).
+
+If `[FAIL] SSL/HTTPS` appears only when a proxy is set, bypass localhost:
+
+```bash
+export NO_PROXY=localhost,127.0.0.1,::1
+export no_proxy=localhost,127.0.0.1,::1
+```
+
+A proxy that captures `127.0.0.1` makes the check fail even when SSL works. To confirm the proxy is the cause, unset it and rerun:
+
+```bash
+unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY
+eim install
+```
+
+If that passes, exclude localhost rather than disabling the proxy.
 
 ## Network
+
+When downloads keep failing, install from an [offline archive](#eim-e701) instead. It needs no network during the install. Offline archives exist for Windows x64, macOS, and Linux (x64 and arm64).
 
 ### EIM-E301: Version list fetch failed {#eim-e301}
 
@@ -190,7 +205,7 @@ The activation scripts then pin that interpreter.
 
 **Why:** `https://dl.espressif.com/dl/esp-idf/idf_versions.json` could not be downloaded. EIM then uses the version list built into the binary and the command continues. Mirror flags do not change this URL.
 
-**What to do:** Retry later. You can still install a version you already know:
+**What to do:** Retry later, or use an [offline archive](#eim-e701). You can still install a version you already know:
 
 ```bash
 eim install -i v5.4.2
@@ -204,7 +219,7 @@ If the message is `Error parsing cached IDF versions JSON`, reinstall EIM. The c
 
 **Why:** One download attempt failed. EIM retries on its own. The URL in the message is the host that failed.
 
-**What to do:** Nothing while EIM is still retrying. If the command fails after the retries, rerun with a mirror closer to you.
+**What to do:** Nothing while EIM is still retrying. If the command fails after the retries, rerun with a mirror closer to you. If it keeps failing, use an [offline archive](#eim-e701).
 
 Tools (`--mirror`), any of:
 
@@ -242,6 +257,8 @@ Python package downloads use `--pypi-mirror` ([EIM-E303](#eim-e303)).
 eim install -i v5.4.2 --pypi-mirror https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
+If no mirror works, use an [offline archive](#eim-e701). It ships the Python packages as wheels.
+
 ## Git
 
 ### EIM-E401: Clone failed {#eim-e401}
@@ -250,7 +267,7 @@ eim install -i v5.4.2 --pypi-mirror https://pypi.tuna.tsinghua.edu.cn/simple
 
 **Why:** The ESP-IDF repository could not be cloned from the selected host. When both clone attempts fail, follow the git command's message. If that message is about a directory that already has files, see [Destination is not empty](#eim-e402).
 
-**What to do:** Retry with another IDF mirror:
+**What to do:** Read the git error printed above it first. For a network error, use an [offline archive](#eim-e701). In mainland China, the Espressif mirror is usually faster:
 
 ```bash
 eim install -i v5.4.2 --idf-mirror https://git.espressif.com.cn
@@ -270,11 +287,11 @@ eim install -i v5.4.2 --idf-mirror https://git.espressif.com.cn
 
 **Why:** The ESP-IDF clone succeeded and the submodule step did not.
 
-**What to do:** Retry with `--idf-mirror`, the same flag as [Clone failed](#eim-e401).
+**What to do:** The same as [Clone failed](#eim-e401): read the git error, and for a network error use an [offline archive](#eim-e701) or another `--idf-mirror`.
 
 ## Filesystem
 
-### EIM-E501: No space left, including a small /tmp {#eim-e501}
+### EIM-E501: No space left on device {#eim-e501}
 
 **What you see:** `No space left on device (os error 28)`, `Disk quota exceeded (os error 122)`, or a message that says the disk is full. The usual wrapper is `Failed to setup tools` during extraction. During offline installs it can also appear as one of:
 
@@ -285,9 +302,11 @@ eim install -i v5.4.2 --idf-mirror https://git.espressif.com.cn
 
 Those lines can also mean a permission problem, see [EIM-E502](#eim-e502).
 
-**Why:** The disk is full, or `/tmp` is a small tmpfs (often 1–2 GB) while the home disk is not. EIM extracts tool archives in the temp directory and does not check its free space first.
+**Why:** The disk is full. On Windows this is almost always the `C:` drive: the default install path (`C:\Espressif`), the download cache, and the temp directory (`%TEMP%`) are all on it. On Linux, `/tmp` can also be a small tmpfs (often 1–2 GB) while the home disk has space. EIM does not check free space before it extracts.
 
-**What to do:** Free disk space, or point the temp directory at a larger disk and rerun from that same terminal:
+**What to do on Windows:** Free space on `C:`, or install to a drive with space. `--path` alone moves only ESP-IDF; the tools stay in `C:\Espressif\tools` unless you also pass `--tool-install-folder-name` and `--tool-download-folder-name`, as in the [FAQ example](./faq.md#can-i-install-esp-idf-to-a-custom-location-or-a-different-hard-drive). `--cleanup true` deletes the downloaded archives after the install.
+
+**What to do on Linux and macOS:** Free disk space. If only `/tmp` is small, point the temp directory at a larger disk and rerun from that same terminal:
 
 ```bash
 mkdir -p "$HOME/tmp_build"
@@ -315,9 +334,9 @@ Running as an administrator is [EIM-E503](#eim-e503). Windows drivers that need 
 
 **What you see:** `Running as elevated user. This is not recommended.` On Windows the same warning adds that elevation is required to install drivers.
 
-**Why:** The process is elevated. That is unnecessary for the install itself and can leave root-owned files.
+**Why:** The process is elevated. The install does not need it, and the files it creates belong to the administrator or root account. Later, a normal user may not be able to run the build tools or update that install.
 
-**What to do:** Nothing if you meant to be elevated for a Windows driver install ([EIM-E802](#eim-e802)). Otherwise rerun as a normal user. The warning does not fail the command.
+**What to do:** Nothing if you meant to be elevated for a Windows driver install ([EIM-E802](#eim-e802)). Otherwise rerun as a normal user and install to a path that user owns. If you already installed as administrator, remove that install and install again as a normal user, or give the normal user ownership of the install path. The warning does not fail the command.
 
 ## Version management
 
@@ -380,7 +399,7 @@ Unzip the downloaded `.zip`, but pass the `.zst` inside it to EIM as it is.
 eim install --use-local-archive /path/to/archive.zst
 ```
 
-On Windows the offline installer can install Git and Python from the archive. That step always runs, and `--skip-prerequisites-check` does not skip it. On Linux and macOS those prerequisites must already be installed ([EIM-E101](#eim-e101)). Python for the wheels must be 3.11 to 3.14 ([EIM-E205](#eim-e205)).
+On Windows the offline installer can install Git and Python from the archive. That step always runs, and `--skip-prerequisites-check` does not skip it. On Linux and macOS those prerequisites must already be installed ([EIM-E101](#eim-e101)). Python for the wheels must be 3.11 to 3.15 ([EIM-E205](#eim-e205)).
 
 **Not this one?**
 

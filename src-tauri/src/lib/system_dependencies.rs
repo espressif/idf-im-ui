@@ -1472,7 +1472,7 @@ pub async fn install_prerequisites(
                             debug!("Successfully installed python to {:?}", install_path);
                         }
                         Err(e) => {
-                            return Err(format!("Failed to install python: {}\nFix: Install Python 3.10 to 3.14 yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202", e));
+                            return Err(format!("Failed to install python: {}\nFix: Install Python 3.10 to 3.15 yourself, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202", e));
                         }
                     }
                 } else if package == "git" {

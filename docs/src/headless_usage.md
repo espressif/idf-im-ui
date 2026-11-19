@@ -213,12 +213,12 @@ Turn off telemetry with `--do-not-track true`, or set `EIM_DO_NOT_TRACK=1` or `E
 
 | What you see | What to do |
 |--------------|------------|
-| Missing packages on Linux or macOS | Install them with the distro package manager or Homebrew, then rerun ([EIM-E101](./troubleshooting.md#eim-e101)) |
-| `Python sanity check failed` | Follow each `Hint:` line. Use Python 3.10 to 3.14 ([EIM-E201](./troubleshooting.md#eim-e201)) |
-| `Download attempt … failed` warning | Nothing yet, EIM retries. If the command then fails, rerun with a mirror (below) |
-| `git clone failed` | Rerun with `--idf-mirror https://git.espressif.com.cn` ([EIM-E401](./troubleshooting.md#eim-e401)) |
+| Missing packages on Linux or macOS | Install them with the distro package manager or Homebrew, then rerun. The `eim-cli` apt and dnf packages pull them in for you ([EIM-E101](./troubleshooting.md#eim-e101)) |
+| `Python sanity check failed` | Follow each `Hint:` line. Use Python 3.10 to 3.15 ([EIM-E201](./troubleshooting.md#eim-e201)). Only `[FAIL] SSL/HTTPS` is [EIM-E206](./troubleshooting.md#eim-e206) |
+| `Download attempt … failed` warning | Nothing yet, EIM retries. If the command then fails, rerun with a mirror (below). If it keeps failing, use an [offline archive](./offline_installation.md) |
+| `git clone failed` | Read the git error printed above it. For a network error, use an [offline archive](./offline_installation.md). In mainland China, `--idf-mirror https://git.espressif.com.cn` is usually faster ([EIM-E401](./troubleshooting.md#eim-e401)) |
 | `is already installed` | Nothing was installed. Repair with `eim fix --path <path>`, or choose a new `--path` ([EIM-E602](./troubleshooting.md#eim-e602)) |
-| `No space left on device` | Point `TMPDIR` at a larger disk ([EIM-E501](./troubleshooting.md#eim-e501)) |
+| `No space left on device` | Free space on the install disk (on Windows, usually `C:`), or install elsewhere. On Linux, a small `/tmp` needs `TMPDIR` on a larger disk ([EIM-E501](./troubleshooting.md#eim-e501)) |
 
 ### Mirrors
 
@@ -229,6 +229,8 @@ Turn off telemetry with `--do-not-track true`, or set `EIM_DO_NOT_TRACK=1` or `E
 | `--pypi-mirror` | Python package index |
 
 They don't change downloads from `dl.espressif.com`, such as the version list and the constraints file.
+
+On an unreliable or restricted network, an [offline archive](./offline_installation.md) avoids these downloads.
 
 ## Best Practices
 

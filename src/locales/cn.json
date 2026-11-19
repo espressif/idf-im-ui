@@ -856,7 +856,7 @@
       },
       "versions": {
         "title": "版本获取失败",
-        "message": "无法获取可用的 ESP-IDF 版本。Fix: 稍后重试。下载失败时会使用内置版本列表。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301"
+        "message": "无法获取可用的 ESP-IDF 版本。Fix: 稍后重试，或使用离线安装包。下载失败时会使用内置版本列表。Docs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e301"
       },
       "start": {
         "title": "启动安装失败"

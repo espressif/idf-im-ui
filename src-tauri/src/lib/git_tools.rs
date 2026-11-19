@@ -540,8 +540,8 @@ pub fn clone_repository(
             Ok(_) => info!("Submodules updated successfully"),
             Err(e) => {
                 let _ = tx.send(ProgressMessage::Finish);
-                error!("Submodule update failed: {}\nFix: Retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e);
-                return Err(anyhow!("Submodule update failed: {}\nFix: Retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e).into());
+                error!("Submodule update failed: {}\nFix: For a network error, use an offline archive (--use-local-archive) or retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e);
+                return Err(anyhow!("Submodule update failed: {}\nFix: For a network error, use an offline archive (--use-local-archive) or retry with --idf-mirror set to another host.\nDocs: EIM-E403 in the EIM troubleshooting guide", e).into());
             }
         }
     }
@@ -2153,7 +2153,7 @@ pub fn get_esp_idf(
                     let _ = tx.send(ProgressMessage::Finish);
                     Err(format!(
                         "Both gix and system git failed to clone ESP-IDF. \
-                gix error: {gix_err}; git CLI error: {cli_err}\nThe git command's message above is the one to follow. If that message is not about a directory that already has files, retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401"
+                gix error: {gix_err}; git CLI error: {cli_err}\nThe git command's message above is the one to follow. If that message is not about a directory that already has files and it is a network error, use an offline archive (--use-local-archive) or retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401"
                     ))
                 }
             }
@@ -2502,7 +2502,7 @@ pub fn clone_with_git_cli(
     if !status.success() {
         let details = stderr_tail.join("; ");
         return Err(format!(
-            "git clone failed (exit code {:?}) for {}{}\nFix: Retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401",
+            "git clone failed (exit code {:?}) for {}{}\nFix: For a network error, use an offline archive (--use-local-archive) or retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e401",
             status.code(),
             options.url,
             if details.is_empty() {
@@ -2590,7 +2590,7 @@ pub fn clone_with_git_cli(
         let sub_status = sub_child.wait()?;
         if !sub_status.success() {
             return Err(format!(
-                "git submodule update failed (exit code {:?})\nFix: Retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e403",
+                "git submodule update failed (exit code {:?})\nFix: For a network error, use an offline archive (--use-local-archive) or retry with --idf-mirror set to another host.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e403",
                 sub_status.code()
             )
             .into());

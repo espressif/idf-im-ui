@@ -132,14 +132,14 @@ The `offline_installer_builder-*` binary is **not** required for performing offl
 
 NixOS has no standard dynamic linker, so the prebuilt toolchains EIM downloads cannot start. Enable [`nix-ld`](https://github.com/nix-community/nix-ld) with `programs.nix-ld.enable = true;`, or use the `programs.eim` module from the EIM flake, which also adds the libraries these tools need. See [NixOS / Nix installation](./general_info.md#nixos--nix-installation-via-flake).
 
-### "No space left on device" error despite having free disk space
+### "No space left on device" error
 
-`No space left on device` or `Disk quota exceeded` during tool extraction is [EIM-E501](./troubleshooting.md#eim-e501). A small `/tmp` is the usual cause. The page has the `TMPDIR` workaround.
+`No space left on device` or `Disk quota exceeded` during tool extraction is [EIM-E501](./troubleshooting.md#eim-e501). On Windows, the `C:` drive is usually full. On Linux, a small `/tmp` can cause it even when the home disk has space.
 
 
 ### The installer says prerequisites are missing, but they are already installed
 
-See [EIM-E101](./troubleshooting.md#eim-e101) when packages are missing, and [EIM-E102](./troubleshooting.md#eim-e102) when the check itself cannot run. `--skip-prerequisites-check true` is only for the second case, and only when the packages really are installed.
+See [EIM-E101](./troubleshooting.md#eim-e101) when packages are missing, and [EIM-E102](./troubleshooting.md#eim-e102) when the check itself cannot run. `--skip-prerequisites-check true` is only for the second case, and only when the packages really are installed. On Linux, installing EIM from the apt or dnf package avoids most of these problems, because the package manager installs the prerequisites with it ([EIM-E101](./troubleshooting.md#eim-e101)).
 
 ### "Failed to check prerequisites: Unable to execute PowerShell" error on Windows
 
@@ -147,7 +147,7 @@ See [EIM-E101](./troubleshooting.md#eim-e101) when packages are missing, and [EI
 
 ### Python SSL sanity check fails when using a system-wide proxy
 
-`[FAIL] SSL/HTTPS` while a proxy is set is [EIM-E201](./troubleshooting.md#eim-e201). Bypass `localhost` and `127.0.0.1`.
+`[FAIL] SSL/HTTPS` while a proxy is set is [EIM-E206](./troubleshooting.md#eim-e206). Bypass `localhost` and `127.0.0.1`.
 
 ### Why does EIM find the wrong Python on macOS?
 
@@ -155,7 +155,13 @@ A Finder launch can see Apple's Python while the terminal sees another one. See 
 
 ### EIM detected the wrong Python — multiple Python installations found
 
-EIM uses the first `python3` or `python` on `PATH` that passes the sanity check. See [EIM-E201](./troubleshooting.md#eim-e201).
+EIM takes the first interpreter whose version is 3.10 to 3.15, then runs the full sanity check (pip, venv, SSL) on that one only. If that check fails, EIM stops. It does not try the next interpreter. The search order is:
+
+- Linux: `python3`, then `python`, on `PATH`.
+- macOS: `python3` on `PATH`, then `/opt/homebrew/bin/python3` and `/usr/local/bin/python3`, then the Homebrew `python@3.x` kegs, newest first, then MacPorts (`/opt/local/bin/python3`), then `/usr/bin/python3`.
+- Windows: `python3`, `python`, `python3.exe`, `python.exe` as found by `where`, skipping Microsoft Store aliases.
+
+To make EIM pick another interpreter, put its directory first on `PATH`. See [EIM-E201](./troubleshooting.md#eim-e201).
 
 ## GUI-Specific Questions
 

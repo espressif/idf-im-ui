@@ -30,8 +30,8 @@ prerequisites.install.catastrophic:
   en: "Something went terribly wrong. These prerequisites were not installed:%{l}\nFix: Install the packages in the list above manually, then rerun the same eim command.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e103"
   cn: "发生了严重错误。以下依赖项未安装成功:%{l}\nFix: 手动安装上方列表中的软件包，然后重新运行同一条 eim 命令。\nDocs: EIM-E103 in the EIM troubleshooting guide"
 prerequisites.install.ask:
-  en: "Please install the missing prerequisites and try again.\nFix: Install the packages listed above with your system package manager, then rerun the same eim command. On Windows, rerun with --install-all-prerequisites true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e101"
-  cn: "请先安装缺少的依赖项并重试。\nFix: 使用系统包管理器安装上方列出的软件包，然后重新运行同一条 eim 命令。Windows 上请使用 --install-all-prerequisites true 重新运行。\nDocs: EIM-E101 in the EIM troubleshooting guide"
+  en: "Please install the missing prerequisites and try again.\nFix: Install the packages listed above with your system package manager, then rerun the same eim command. On Linux, installing EIM from its apt or dnf package (eim-cli) installs them for you. On Windows, rerun with --install-all-prerequisites true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e101"
+  cn: "请先安装缺少的依赖项并重试。\nFix: 使用系统包管理器安装上方列出的软件包，然后重新运行同一条 eim 命令。在 Linux 上，通过 apt 或 dnf 安装 EIM 软件包 (eim-cli) 会自动安装这些依赖项。Windows 上请使用 --install-all-prerequisites true 重新运行。\nDocs: EIM-E101 in the EIM troubleshooting guide"
 prerequisites.shell_failed:
   en: "Basic shell execution failed on this system. Unable to verify prerequisites.\nFix: Restore a working shell (bash on Linux and macOS, powershell.exe or pwsh.exe on Windows), then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e102"
   cn: "此系统上的基本 Shell 执行失败。无法验证依赖项。\nFix: 恢复可用的 shell（Linux 和 macOS 上为 bash，Windows 上为 powershell.exe 或 pwsh.exe），然后重新运行 eim。\nDocs: EIM-E102 in the EIM troubleshooting guide"
@@ -54,8 +54,11 @@ python.sanitycheck.ok:
   en: Your Python meets the requirements
   cn: 你的 python 符合要求
 python.sanitycheck.fail:
-  en: "Python sanity check failed. See the [FAIL] entries above for details.\nFix: Follow the Hint line under each [FAIL] entry. Supported Python is 3.10 to 3.14.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
-  cn: "Python 环境检查未通过。请查看上方 [FAIL] 条目了解详情。\nFix: 按照每个 [FAIL] 条目下方的 Hint 行操作。受支持的 Python 为 3.10 到 3.14。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
+  en: "Python sanity check failed. See the [FAIL] entries above for details.\nFix: Follow the Hint line under each [FAIL] entry. Supported Python is 3.10 to 3.15.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
+  cn: "Python 环境检查未通过。请查看上方 [FAIL] 条目了解详情。\nFix: 按照每个 [FAIL] 条目下方的 Hint 行操作。受支持的 Python 为 3.10 到 3.15。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e201"
+python.sanitycheck.fail_ssl:
+  en: "Python SSL check failed. See the [FAIL] entry above for details.\nFix: Follow the Hint line under the SSL/HTTPS entry.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
+  cn: "Python SSL 检查未通过。请查看上方 [FAIL] 条目了解详情。\nFix: 按照 SSL/HTTPS 条目下方的 Hint 行操作。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
 python.sanitycheck.fail_but_will_install:
   en: Python is missing, or it does not meet the requirements. The installer will now install Python for you.
   cn: Python 缺失或不符合要求。安装程序现在将为您安装 Python。
@@ -111,14 +114,14 @@ python.sanitycheck.hint.ctypes.windows:
   en: "Reinstall Python from python.org"
   cn: "请从 python.org 重新安装 Python"
 python.sanitycheck.hint.ssl.linux:
-  en: "Check your network and proxy settings, or try to install OpenSSL development headers: sudo apt install libssl-dev (Debian/Ubuntu), then reinstall Python"
-  cn: "请检查您的网络和代理设置，或尝试安装 OpenSSL 开发头文件：sudo apt install libssl-dev (Debian/Ubuntu)，然后重新安装 Python"
+  en: "Security software or a proxy that inspects HTTPS is the usual cause. Exclude eim and Python from HTTPS scanning, or bypass the proxy for localhost. Otherwise install OpenSSL development headers (sudo apt install libssl-dev on Debian/Ubuntu) and reinstall Python\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
+  cn: "通常是检查 HTTPS 流量的安全软件或代理导致的。请将 eim 和 Python 排除在 HTTPS 扫描之外，或让代理绕过 localhost。否则请安装 OpenSSL 开发头文件（Debian/Ubuntu 上运行 sudo apt install libssl-dev），然后重新安装 Python\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
 python.sanitycheck.hint.ssl.macos:
-  en: "Check your network and proxy settings, or try to run: brew install openssl, then reinstall Python. Ensure Python links against the correct OpenSSL"
-  cn: "请检查您的网络和代理设置，或尝试运行：brew install openssl，然后重新安装 Python。确保 Python 链接到正确的 OpenSSL"
+  en: "Security software or a proxy that inspects HTTPS is the usual cause. Exclude eim and Python from HTTPS scanning, or bypass the proxy for localhost. Otherwise run brew install openssl and reinstall Python, so that it links against the correct OpenSSL\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
+  cn: "通常是检查 HTTPS 流量的安全软件或代理导致的。请将 eim 和 Python 排除在 HTTPS 扫描之外，或让代理绕过 localhost。否则请运行 brew install openssl 并重新安装 Python，确保其链接到正确的 OpenSSL\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
 python.sanitycheck.hint.ssl.windows:
-  en: "Check your network and proxy settings, or try to reinstall Python from python.org (the official installer includes SSL support)"
-  cn: "请检查您的网络和代理设置，或尝试从 python.org 重新安装 Python（官方安装程序包含 SSL 支持）"
+  en: "Security software or a proxy that inspects HTTPS is the usual cause. Exclude eim and Python from HTTPS scanning, or bypass the proxy for localhost. Otherwise reinstall Python from python.org (the official installer includes SSL support)\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
+  cn: "通常是检查 HTTPS 流量的安全软件或代理导致的。请将 eim 和 Python 排除在 HTTPS 扫描之外，或让代理绕过 localhost。否则请从 python.org 重新安装 Python（官方安装程序包含 SSL 支持）\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e206"
 python.install.prompt:
   en: Do you want to install Python?
   cn: 是否要安装 Python?
@@ -126,11 +129,11 @@ python.install.success:
   en: Python installed successfully
   cn: 成功安装 Python
 python.install.failure:
-  en: "Python installation failed\nFix: Install Python 3.10 to 3.14 from https://www.python.org/downloads/ and rerun eim. On Windows, rerun with -a true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
-  cn: "Python 安装失败\nFix: 从 https://www.python.org/downloads/ 安装 Python 3.10 到 3.14，然后重新运行 eim。在 Windows 上，使用 -a true 重新运行。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  en: "Python installation failed\nFix: Install Python 3.10 to 3.15 from https://www.python.org/downloads/ and rerun eim. On Windows, rerun with -a true.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  cn: "Python 安装失败\nFix: 从 https://www.python.org/downloads/ 安装 Python 3.10 到 3.15，然后重新运行 eim。在 Windows 上，使用 -a true 重新运行。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
 python.install.refuse:
-  en: "Please install Python3 with pip, venv, and SSL support and try again\nFix: Install Python 3.10 to 3.14 with pip, venv, and SSL from https://www.python.org/downloads/, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
-  cn: "请安装支持 pip、venv 和 SSL 的 Python3 并重试\nFix: 从 https://www.python.org/downloads/ 安装带有 pip、venv 和 SSL 的 Python 3.10 到 3.14，然后重新运行 eim。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  en: "Please install Python3 with pip, venv, and SSL support and try again\nFix: Install Python 3.10 to 3.15 with pip, venv, and SSL from https://www.python.org/downloads/, then rerun eim.\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
+  cn: "请安装支持 pip、venv 和 SSL 的 Python3 并重试\nFix: 从 https://www.python.org/downloads/ 安装带有 pip、venv 和 SSL 的 Python 3.10 到 3.15，然后重新运行 eim。\nDocs: https://docs.espressif.com/projects/idf-im-ui/en/latest/troubleshooting.html#eim-e202"
 wizard.installation_path.prompt:
   en: Please select the ESP-IDF installation location
   cn: 请选择 ESP-IDF 安装位置
@@ -624,11 +627,11 @@ cli.no_command:
   en: No command specified, use --help to see available commands
   cn: 未指定命令，请使用 --help 查看可用命令
 cli.running_as_elevated_posix:
-  en: "Running as elevated user. This is not recommended.\nRun eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
-  cn: "以管理员权限运行。这不是推荐的做法。\n请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  en: "Running as elevated user. This is not recommended.\nFiles installed now belong to root, so a normal user may not be able to run the build tools later. Run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法。\n现在安装的文件将归 root 所有，之后普通用户可能无法运行构建工具。请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 cli.running_as_elevated_windows:
-  en: "Running as elevated user. This is not recommended but it is required if you want to install drivers.\nFor anything other than drivers, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
-  cn: "以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。\n除安装驱动程序外，请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  en: "Running as elevated user. This is not recommended but it is required if you want to install drivers.\nFiles installed now belong to the Administrator account, so a normal user may not be able to run the build tools later. For anything other than drivers, run eim as a normal user. This does not stop the command.\nDocs: EIM-E503 in the EIM troubleshooting guide"
+  cn: "以管理员权限运行。这不是推荐的做法，但如果您想安装驱动程序，则需要这样做。\n现在安装的文件将归管理员账户所有，之后普通用户可能无法运行构建工具。除安装驱动程序外，请以普通用户身份运行 eim。此提示不会使命令失败。\nDocs: EIM-E503 in the EIM troubleshooting guide"
 gui.setup_tools.qemu_prerequisites_check.failed:
   en: "Failed to check QEMU prerequisites: %{error}"
   cn: "无法检查 QEMU 依赖项：%{error}"
