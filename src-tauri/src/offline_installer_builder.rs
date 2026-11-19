@@ -1239,7 +1239,7 @@ async fn main() {
                     file
                 }
                 Err(e) => {
-                    error!("Failed to download constraints for {}: {}", idf_version, e);
+                    error!("Failed to download constraints for {}: {}\nFix: Retry the command. This file comes from the Espressif download host and a mirror flag does not replace that host.\nDocs: EIM-E204 in the EIM troubleshooting guide", idf_version, e);
                     build_summaries.push(summary);
                     continue;
                 }

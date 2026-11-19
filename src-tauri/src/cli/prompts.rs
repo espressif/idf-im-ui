@@ -7,12 +7,13 @@ use dialoguer::theme::ColorfulTheme;
 use dialoguer::MultiSelect;
 use idf_im_lib::idf_features::FeatureInfo;
 use idf_im_lib::idf_tools::ToolsFile;
+use idf_im_lib::python_utils::SanityCheck;
 use idf_im_lib::system_dependencies;
 use idf_im_lib::telemetry::{self, ErrorKind, FailureClass, FailureStage};
 use idf_im_lib::tool_selection::{
     get_optional_tools, get_required_tools, get_tools_for_selection, ToolSelectionInfo,
 };
-use idf_im_lib::utils::calculate_mirrors_latency;
+use idf_im_lib::utils::{calculate_mirrors_latency, GenericCheckResult};
 use idf_im_lib::{idf_features::RequirementsMetadata, settings::Settings};
 use log::{debug, info};
 use rust_i18n::t;
@@ -254,7 +255,21 @@ fn python_sanity_check(python: Option<&str>, offline: bool) -> Result<(), String
             Some(FailureStage::Python),
             format!("python sanity check failed ({} checks)", failed),
         );
-        Err(t!("python.sanitycheck.fail").to_string())
+        Err(t!(sanity_fail_key(&results)).to_string())
+    }
+}
+
+/// SSL failures get their own troubleshooting code (EIM-E206), so the summary
+/// message only points at the generic EIM-E201 when something else failed too.
+fn sanity_fail_key(results: &[GenericCheckResult<SanityCheck>]) -> &'static str {
+    let only_ssl = results
+        .iter()
+        .filter(|r| !r.passed)
+        .all(|r| r.check == SanityCheck::Ssl);
+    if only_ssl {
+        "python.sanitycheck.fail_ssl"
+    } else {
+        "python.sanitycheck.fail"
     }
 }
 pub async fn check_and_install_python(
@@ -270,7 +285,7 @@ pub async fn check_and_install_python(
     } else {
         run_with_spinner(|| python_sanity_check(None, offline))
     };
-    if let Err(_err) = check_result {
+    if let Err(fail_msg) = check_result {
         if std::env::consts::OS == "windows" {
             let res = if !install_all_prerequisites && !non_interactive {
                 generic_confirm("python.install.prompt")
@@ -278,7 +293,7 @@ pub async fn check_and_install_python(
                 info!("{}", t!("python.sanitycheck.fail_but_will_install"));
                 Ok(true)
             } else {
-                info!("{}", t!("python.sanitycheck.fail"));
+                info!("{}", fail_msg);
                 Ok(false)
             };
 
@@ -324,7 +339,7 @@ pub async fn check_and_install_python(
                 Some(FailureStage::Python),
                 "python sanity check failed",
             );
-            return Err(t!("python.sanitycheck.fail").to_string());
+            return Err(fail_msg);
         }
     } else {
         info!("{}", t!("python.sanitycheck.ok"))
@@ -874,5 +889,33 @@ mod tests {
         // With optional
         let selected = select_tools_non_interactive(&tools, true);
         assert_eq!(selected.len(), 3);
+    }
+
+    fn check(check: SanityCheck, passed: bool) -> GenericCheckResult<SanityCheck> {
+        GenericCheckResult {
+            check,
+            passed,
+            message: String::new(),
+        }
+    }
+
+    #[test]
+    fn sanity_fail_key_uses_ssl_code_when_only_ssl_failed() {
+        let results = vec![
+            check(SanityCheck::PythonVersion, true),
+            check(SanityCheck::Pip, true),
+            check(SanityCheck::Ssl, false),
+        ];
+        assert_eq!(sanity_fail_key(&results), "python.sanitycheck.fail_ssl");
+    }
+
+    #[test]
+    fn sanity_fail_key_uses_generic_code_when_other_checks_failed() {
+        let results = vec![
+            check(SanityCheck::PythonVersion, true),
+            check(SanityCheck::Pip, false),
+            check(SanityCheck::Ssl, false),
+        ];
+        assert_eq!(sanity_fail_key(&results), "python.sanitycheck.fail");
     }
 }

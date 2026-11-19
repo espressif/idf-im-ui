@@ -18,4 +18,5 @@
 - [Using EIM with git bisect](./git_bisect.md)
 - [Report issue](./issue_reporting.md)
 - [Headless Usage](./headless_usage.md)
+- [Troubleshooting](./troubleshooting.md)
 - [FAQ](./faq.md)

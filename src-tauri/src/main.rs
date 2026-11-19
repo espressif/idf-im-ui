@@ -31,6 +31,11 @@ fn ensure_eim_in_path() {
 }
 
 #[cfg(feature = "cli")]
+fn report_cli_failure(error: &impl std::fmt::Display) {
+    eprintln!("{}", cli::format_cli_failure(error, cli::cli_log_path()));
+}
+
+#[cfg(feature = "cli")]
 async fn exit_after_unreported_child(err: clap::Error) -> ! {
     if let Some(ctx) = idf_im_lib::telemetry::context_from_parent_env() {
         idf_im_lib::telemetry::note_unreported_child_exit(&ctx);
@@ -154,7 +159,7 @@ async fn main() {
         match result {
             Ok(_) => std::process::exit(0),
             Err(e) => {
-                eprintln!("Error executing CLI: {}", e);
+                report_cli_failure(&e);
                 std::process::exit(1);
             }
         }
@@ -207,7 +212,7 @@ async fn main() {
     match result {
         Ok(_) => std::process::exit(0),
         Err(e) => {
-            eprintln!("Error executing CLI: {}", e);
+            report_cli_failure(&e);
             std::process::exit(1);
         }
     }

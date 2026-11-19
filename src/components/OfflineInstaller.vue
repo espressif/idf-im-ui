@@ -271,7 +271,7 @@
       <!-- Error State -->
       <div v-if="installation_failed" class="error-message" data-id="error-message">
         <h3 data-id="error-title">{{ $t('offlineInstaller.installation.error.title') }}</h3>
-        <p data-id="error-message-text">{{ error_message }} <br> {{ $t('offlineInstaller.installation.error.info') }}</p>
+        <p data-id="error-message-text">{{ error_message }} <br> {{ logFolder ? $t('offlineInstaller.installation.error.info', { logFolder }) : $t('offlineInstaller.installation.error.infoNoPath') }}</p>
         <n-button @click="retry" type="primary" size="large" data-id="retry-installation-button">
           {{ $t('offlineInstaller.installation.error.retry') }}
         </n-button>
@@ -390,6 +390,7 @@ export default {
       useDefaultPath: true,
       pathValid: true,
       operating_system: '',
+      logFolder: '',
 
       // Advanced tool-folder + cleanup options; see composable for
       // the canonical state shape and load/persist helpers. Same
@@ -877,6 +878,7 @@ export default {
 
   async mounted() {
     this.loadArchivesFromQuery();
+    invoke('get_logs_folder', {}).then((folder) => { this.logFolder = folder || '' }).catch(() => {})
     if (this.useDefaultPath) {
       await this.getDefaultPath();
     }
