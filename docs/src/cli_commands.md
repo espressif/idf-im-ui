@@ -57,7 +57,7 @@ Options:
 - `-p, --path <PATH>`: Base path to which all files and folders will be installed
 - `-c, --config <FILE>`: Path to configuration file
 - `-t, --target <TARGET>`: Target platforms (comma-separated)
-- `-i, --idf-versions <IDF_VERSIONS>`: ESP-IDF versions to install (comma-separated)
+- `-i, --idf-versions <IDF_VERSIONS>`: ESP-IDF versions to install (comma-separated). A version is a release tag such as `v6.1`, or the 40-character hexadecimal id of one commit. See [Installing a specific commit](#installing-a-specific-commit).
 - `--tool-download-folder-name <TOOL_DOWNLOAD_FOLDER_NAME>`: Name of the folder for tool downloads
 - `--tool-install-folder-name <TOOL_INSTALL_FOLDER_NAME>`: Name of the folder for tool installations
 - `--python-env-folder-name <PYTHON_ENV_FOLDER_NAME>`: Folder name to be used for the python environments. If not provided, it will default to `python`.
@@ -79,6 +79,26 @@ Options:
 - `--activation-script-path-override`: Optional override for activation script path. This allows specifying a custom path for the activation script to be saved to instead of the default one.
 - `--create-bat-activation-script`: Optional flag to create a CMD batch activation script in addition to PowerShell profile. This is for backward compatibility only - PowerShell is recommended and batch support will be abandoned in a future release.
 - `--idf-tools <IDF_TOOLS>`: Comma separated list of tools to be installed with ESP-IDF. When installing multiple versions, these tools are applied to all versions. For per-version tool configuration, use a configuration file with the `idf_tools_per_version` option.
+
+#### Installing a specific commit
+
+Pass the full 40-character commit id to `-i`. EIM shallow-clones that commit and installs the toolchain for the tree it checked out:
+
+```bash
+eim install -i c1d1695f8f8310fa7e408ab97f95ab4e76b3be88
+```
+
+A shorter hash is treated as a tag name, so use the full id. `git rev-parse <tag>^{commit}` prints the commit id of a tag. The hash of an annotated tag object is a different value.
+
+Without `--version-name`, `eim list` shows the full hash, and that hash is the name used by `eim run`, `eim shell`, and the activation script. Pass `--version-name` when you want a stable name instead:
+
+```bash
+eim install -i c1d1695f8f8310fa7e408ab97f95ab4e76b3be88 --version-name my-commit
+```
+
+The clone contains that one commit and no tags, so `git describe` inside it can fail. EIM still reads the IDF version from `tools/cmake/version.cmake`.
+
+To move this installation to a different commit later, check that commit out yourself and run [`eim fix`](#switching-to-another-commit).
 
 ### Wizard Command
 
@@ -295,6 +315,23 @@ eim fix
 
 `fix` never touches the Git repository itself — it does not fetch, check out or update submodules. It re-reads `tools/tools.json` and the Python requirements from the working tree as it currently stands, which makes it the command to run after you change the checked-out revision yourself. See [Using EIM with git bisect](./git_bisect.md) for that workflow.
 
+#### Switching to another commit
+
+To point an installation EIM already created at a different commit, fetch and check out that commit in the installation directory, then run `fix`. On the shallow clone EIM created, `git checkout <sha>` fails until that object has been fetched:
+
+```bash
+cd /path/to/esp-idf
+git fetch --depth 1 origin <40-character-commit-id>
+git checkout <40-character-commit-id>
+eim fix -p /path/to/esp-idf
+```
+
+`fix` leaves `HEAD` on the commit you checked out. It rewrites the activation script from the `tools/tools.json` in the tree after the checkout. The installation name stays the one recorded at install time.
+
+Use the commit id from `git rev-parse <tag>^{commit}`. The hash of an annotated tag object is not that commit; it peels to the commit only after the tag has been fetched.
+
+A shell that already sourced the activation script keeps the previous toolchain on `PATH`. Source the script again, or start a new one with `eim run` or `eim shell`, so the rewritten paths are picked up.
+
 #### Mirrors
 
 `fix` reuses the mirrors recorded in the installation and does not measure mirror latency. `install` and `wizard` pick the fastest reachable mirror by probing the candidates, which costs several seconds; repeating that on every `fix` would only re-derive the mirrors the installation already has, so it is skipped.
@@ -340,6 +377,9 @@ The output is a JSON object containing the command structure with all subcommand
 ```bash
 # Install ESP-IDF v5.3.2 non-interactively (default behavior)
 eim install -i v5.3.2
+
+# Install one commit. Without --version-name, eim list shows the full hash.
+eim install -i c1d1695f8f8310fa7e408ab97f95ab4e76b3be88 --version-name my-commit
 
 # Install ESP-IDF v5.3.2 in interactive mode
 eim install -i v5.3.2 -n false
