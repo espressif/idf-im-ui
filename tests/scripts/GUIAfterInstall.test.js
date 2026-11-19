@@ -1,9 +1,13 @@
 import { expect } from "chai";
-import { describe, it, before, after, afterEach } from "mocha";
-import GUITestRunner from "../classes/GUITestRunner.class.js";
+import { describe, it } from "mocha";
 import logger from "../classes/logger.class.js";
+import {
+  registerGUIAppLifecycle,
+  registerGUIFailureHooks,
+  expectWelcomePage,
+  openManageInstallations,
+} from "../helpers/guiTestHelpers.js";
 import { By } from "selenium-webdriver";
-import { tGui } from "../helpers/i18n.js";
 
 // This function verifies the presence of the installed IDF versions in the dashboard
 export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
@@ -11,80 +15,23 @@ export function runGUIAfterInstallTest({ id = 0, pathToEIM, idfList }) {
   describe(`${id}- EIM GUI After Install |`, () => {
     let eimRunner = null;
     let totalInstallations = 0;
-    let afterInstallFailed = false;
-    
-    before(async function () {
-      this.timeout(60000);
-      eimRunner = new GUITestRunner(pathToEIM);
-      try {
-        await eimRunner.start();
-      } catch (err) {
-        logger.info("Error starting EIM application");
-        throw err;
-      }
+
+    registerGUIAppLifecycle({
+      pathToEIM,
+      getRunner: () => eimRunner,
+      setRunner: (runner) => (eimRunner = runner),
     });
 
-    beforeEach(async function () {
-      if (afterInstallFailed) {
-        logger.info("Test failed, skipping next tests");
-        this.skip();
-      }
-    });
-
-    afterEach(async function () {
-      if (this.currentTest.state === "failed" && eimRunner?.driver) {
-        await eimRunner.takeScreenshot(`${id} ${this.currentTest.title}.png`);
-        logger.info(`Screenshot saved as ${id} ${this.currentTest.title}.png`);
-      }
-      if (this.currentTest.state === "failed") afterInstallFailed = true;
-    });
-
-    after(async function () {
-      this.timeout(5000);
-      try {
-        await eimRunner.stop();
-        eimRunner = null;
-      } catch (error) {
-        logger.info("Error to close EIM application");
-      }
-    });
+    registerGUIFailureHooks({ id, getRunner: () => eimRunner });
 
     it("1- Should show welcome page", async function () {
       this.timeout(45000);
-      // Wait for the header to be present231e
-      await new Promise((resolve) => setTimeout(resolve, 10000));
-      const header = await eimRunner.findByDataId("welcome-header", 25000);
-      expect(header, "Expected welcome header").to.not.be.false;
-      const text = await header.getText();
-      expect(text, "Expected welcome text").to.equal(
-        `${tGui("welcome.welcome")} ESP-IDF ${tGui("welcome.title")}`
-      );
+      await expectWelcomePage(eimRunner, 10000);
     });
 
     it("2- Should show option to manage installations", async function () {
       this.timeout(10000);
-      const dashboardCard = await eimRunner.findByDataId(
-        "manage-versions-card"
-      );
-      expect(
-        dashboardCard,
-        "Expected dashboard card to be shown on welcome page"
-      ).to.not.be.false;
-      expect(await dashboardCard.getText()).to.include(
-        tGui("welcome.cards.manage.title")
-      );
-      const dashboardContent = await eimRunner.findByDataId(
-        "manage-versions-description"
-      );
-      const text = await dashboardContent.getText();
-      const numberMatch = text.match(/\d+/);
-      totalInstallations = numberMatch ? parseInt(numberMatch[0], 10) : 0;
-      expect(
-        totalInstallations,
-        "Expected at least one installation"
-      ).to.be.gte(1);
-      const click = await eimRunner.clickByDataId("manage-versions-button");
-      expect(click, "Expected to click on Open Dashboard button").to.be.true;
+      totalInstallations = await openManageInstallations(eimRunner);
     });
 
     it("3- Should show dashboard with installations", async function () {

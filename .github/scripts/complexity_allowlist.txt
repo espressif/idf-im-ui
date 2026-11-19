@@ -1,0 +1,4 @@
+# Functions allowed to exceed the limits in check_complexity.sh.
+# One "path::function" per line, as printed by the script (path relative to
+# src-tauri/src), each with a comment explaining why it can't be split.
+# Keep this empty: split the function instead whenever possible.
