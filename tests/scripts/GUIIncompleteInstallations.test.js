@@ -54,6 +54,14 @@ export function runGUIIncompleteInstallationsTest({
       return json.idfInstalled[entryIndex];
     }
 
+    // Start the GUI, give its startup check time to run and look for the modal
+    async function launchAppAndFindModal() {
+      eimRunner = new GUITestRunner(pathToEIM);
+      await eimRunner.start();
+      await new Promise((r) => setTimeout(r, 8000));
+      return eimRunner.findByDataId("incomplete-installations-modal", 20000);
+    }
+
     function restoreJson() {
       if (originalJsonContent) {
         writeJson(originalJsonContent);
@@ -117,14 +125,7 @@ export function runGUIIncompleteInstallationsTest({
       const injected = injectStatus(0, "failed");
       logger.info(`Injected 'failed' status into entry: ${injected.name}`);
 
-      eimRunner = new GUITestRunner(pathToEIM);
-      await eimRunner.start();
-      await new Promise((r) => setTimeout(r, 8000)); // wait for startup check
-
-      const modal = await eimRunner.findByDataId(
-        "incomplete-installations-modal",
-        20000
-      );
+      const modal = await launchAppAndFindModal();
       expect(modal, "Incomplete installations modal did not appear").to.not.be.false;
 
       // Modal should mention the injected installation name
@@ -153,14 +154,7 @@ export function runGUIIncompleteInstallationsTest({
       for (const status of ["failed", "broken", "in_progress", "being_repaired"]) {
         injectStatus(0, status);
 
-        eimRunner = new GUITestRunner(pathToEIM);
-        await eimRunner.start();
-        await new Promise((r) => setTimeout(r, 8000));
-
-        const modal = await eimRunner.findByDataId(
-          "incomplete-installations-modal",
-          20000
-        );
+        const modal = await launchAppAndFindModal();
         expect(modal, `Modal should appear for status '${status}'`).to.not.be.false;
 
         // Status tag text should correspond to the injected status
@@ -185,14 +179,7 @@ export function runGUIIncompleteInstallationsTest({
       const injected = injectStatus(0, "failed");
       logger.info(`Injected 'failed' status into: ${injected.name}`);
 
-      eimRunner = new GUITestRunner(pathToEIM);
-      await eimRunner.start();
-      await new Promise((r) => setTimeout(r, 8000));
-
-      const modal = await eimRunner.findByDataId(
-        "incomplete-installations-modal",
-        20000
-      );
+      const modal = await launchAppAndFindModal();
       expect(modal, "Modal should appear").to.not.be.false;
 
       const dismissButton = await eimRunner.findByDataId("dismiss-incomplete-modal", 5000);
@@ -236,14 +223,7 @@ export function runGUIIncompleteInstallationsTest({
       const injected = injectStatus(0, "failed");
       logger.info(`Injected 'failed' status into: ${injected.name}`);
 
-      eimRunner = new GUITestRunner(pathToEIM);
-      await eimRunner.start();
-      await new Promise((r) => setTimeout(r, 8000));
-
-      const modal = await eimRunner.findByDataId(
-        "incomplete-installations-modal",
-        20000
-      );
+      const modal = await launchAppAndFindModal();
       expect(modal, "Modal should appear").to.not.be.false;
 
       const deleteButton = await eimRunner.findByDataId(
@@ -283,14 +263,7 @@ export function runGUIIncompleteInstallationsTest({
       const injected = injectStatus(0, "broken");
       logger.info(`Injected 'broken' status into: ${injected.name}`);
 
-      eimRunner = new GUITestRunner(pathToEIM);
-      await eimRunner.start();
-      await new Promise((r) => setTimeout(r, 8000));
-
-      const modal = await eimRunner.findByDataId(
-        "incomplete-installations-modal",
-        20000
-      );
+      const modal = await launchAppAndFindModal();
       expect(modal, "Modal should appear").to.not.be.false;
 
       const fixButton = await eimRunner.findByDataId(

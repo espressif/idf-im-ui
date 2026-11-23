@@ -1,0 +1,17 @@
+/* Header row + page title of the top-level installer / management views. */
+
+.installer-header,
+.management-header,
+.setup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.title {
+  font-family: 'Trueno-bold', sans-serif;
+  font-size: 2rem;
+  color: #1f2937;
+  margin: 0;
+}

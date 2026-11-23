@@ -1,0 +1,44 @@
+/* Error / completion / summary / log panel blocks shared by the
+   installation progress views. Include after the component's own
+   <style scoped> block so `.n-card` keeps overriding the card padding. */
+
+.error-message {
+  margin-top: 1rem;
+  border: 1px dotted var(--espressif-red-color);
+  padding: 1rem;
+}
+
+.action-footer {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
+  padding-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.installation-summary {
+  margin: 1.5rem 0;
+  padding: 1.5rem;
+  border-radius: 8px;
+  background-color: #f0f9ff;
+  border: 1px solid #bfdbfe;
+}
+
+.summary-details {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.n-card {
+  border: none;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 0px;
+}
+
+.n-collapse {
+  background-color: #FAFAFA;
+  border: 1px solid #D5D5D5;
+  max-height: 300px;
+  overflow: auto;
+}

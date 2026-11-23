@@ -21,8 +21,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { path as tauriPath } from "@tauri-apps/api";
 
-export const TOOL_DOWNLOAD_FOLDER_DEFAULT = "dist";
-export const TOOL_INSTALL_FOLDER_DEFAULT = "tools";
+const TOOL_DOWNLOAD_FOLDER_DEFAULT = "dist";
+const TOOL_INSTALL_FOLDER_DEFAULT = "tools";
 
 /**
  * Build the initial reactive state for the advanced options. Returned
