@@ -418,7 +418,7 @@ fn telemetry_env_for_child(
 pub async fn start_installation(app_handle: AppHandle) -> Result<(), String> {
     telemetry_session::reclaim_leaked_session(&app_handle);
     let ctx = telemetry_session::begin(&app_handle, InstallMode::Wizard);
-    let result = run_windows_installation(app_handle, ctx.as_ref()).await;
+    let result = run_windows_installation(app_handle.clone(), ctx.as_ref()).await;
     match &result {
         Ok(_) => telemetry_session::hand_off_to_subprocess(&app_handle),
         Err(_) => telemetry_session::finish(&app_handle, ctx, &result),
