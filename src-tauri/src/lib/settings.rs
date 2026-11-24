@@ -457,8 +457,8 @@ impl Settings {
     ///
     /// The padded decode is accepted only if the stored bytes are a complete record of
     /// an older layout: the padding must have been consumed as whole trailing `None`
-    /// fields, the stored bytes must be exactly the encoding of the fields before them,
-    /// and at least one field must come from stored data. Empty blobs and blobs
+    /// fields (so the stored bytes end exactly on a field boundary), and at least one
+    /// field must come from stored data. Empty blobs and blobs
     /// truncated inside a field are rejected, so callers can fall back to defaults.
     ///
     /// This keeps old blobs readable as long as new fields are `Option`s appended at the
@@ -476,12 +476,12 @@ impl Settings {
 
         let mut padded = bytes.to_vec();
         padded.resize(bytes.len() + INSTALLATION_CONFIG_PADDING, 0);
-        let settings = bincode::deserialize::<Settings>(&padded).map_err(|_| reject())?;
-
-        // Re-encode to learn how much of the padded input the decode really consumed.
-        let reencoded = bincode::serialize(&settings).map_err(|_| reject())?;
-        let missing = reencoded.len().saturating_sub(bytes.len());
-        if missing == 0 || !reencoded.starts_with(bytes) {
+        let mut cursor = std::io::Cursor::new(padded.as_slice());
+        let settings =
+            bincode::deserialize_from::<_, Settings>(&mut cursor).map_err(|_| reject())?;
+        let consumed = usize::try_from(cursor.position()).map_err(|_| reject())?;
+        let missing = consumed.saturating_sub(bytes.len());
+        if missing == 0 {
             return Err(reject());
         }
 
@@ -763,6 +763,35 @@ mod installation_config_tests {
         let decoded = Settings::from_installation_config(&bytes).unwrap();
         assert_eq!(decoded.target, Some(vec!["esp32".to_string()]));
         assert_eq!(decoded.idf_tools, Some(vec!["cmake".to_string()]));
+        assert_eq!(decoded.force_python_env_upgrade, None);
+    }
+
+    #[test]
+    fn legacy_blob_with_multiple_map_entries_decodes() {
+        let per_version = |prefix: &str| -> HashMap<String, Vec<String>> {
+            (0..8)
+                .map(|i| (format!("v{}", i), vec![format!("{}{}", prefix, i)]))
+                .collect()
+        };
+        let settings = Settings {
+            idf_features_per_version: Some(per_version("feat")),
+            idf_tools_per_version: Some(per_version("tool")),
+            force_python_env_upgrade: None,
+            ..Default::default()
+        };
+        let mut bytes = bincode::serialize(&settings).unwrap();
+        bytes.pop(); // saved before the last field existed
+        assert!(bincode::deserialize::<Settings>(&bytes).is_err());
+
+        let decoded = Settings::from_installation_config(&bytes).unwrap();
+        assert_eq!(
+            decoded.idf_features_per_version,
+            settings.idf_features_per_version
+        );
+        assert_eq!(
+            decoded.idf_tools_per_version,
+            settings.idf_tools_per_version
+        );
         assert_eq!(decoded.force_python_env_upgrade, None);
     }
 

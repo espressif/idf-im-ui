@@ -913,7 +913,12 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
             }
         }
 
-        info!("{}", t!("wizard.python.reusing_env"));
+        // `None` means the default, which is to upgrade (see `install_python_env`).
+        if config.force_python_env_upgrade.unwrap_or(true) {
+            info!("{}", t!("wizard.python.reusing_env_upgrade"));
+        } else {
+            info!("{}", t!("wizard.python.reusing_env"));
+        }
         match idf_im_lib::python_utils::install_python_env(
             &paths,
             &paths.actual_version,

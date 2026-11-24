@@ -377,6 +377,9 @@ wizard.python.env_installed:
 wizard.python.reusing_env:
   en: "Reusing the existing Python virtual environment; installing only the packages which are missing or no longer satisfy the constraints"
   cn: "正在重用现有的 Python 虚拟环境，仅安装缺失的或不再满足约束条件的软件包"
+wizard.python.reusing_env_upgrade:
+  en: "Reusing the existing Python virtual environment; upgrading its packages to the newest versions allowed by the constraints (pip --upgrade)"
+  cn: "正在重用现有的 Python 虚拟环境，并将其软件包升级到约束条件允许的最新版本（pip --upgrade）"
 wizard.debug.config_entering:
   en: "Config entering wizard: %{config}"
   cn: "配置进入向导: %{config}"
