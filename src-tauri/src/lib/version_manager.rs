@@ -741,7 +741,7 @@ pub async fn prepare_settings_for_fix_idf_installation(
                     // Recover the settings the installation was originally created with
                     match &v.installation_config {
                         Some(config_bytes) => {
-                            match bincode::deserialize::<Settings>(config_bytes.as_slice()) {
+                            match Settings::from_installation_config(config_bytes.as_slice()) {
                                 Ok(settings) => {
                                     info!(
                                         "Recovered original installation settings for {}",
@@ -1071,7 +1071,7 @@ pub fn list_idf_features(
     let selected_optional_features: Vec<String> = installation
         .installation_config
         .as_ref()
-        .and_then(|bytes| bincode::deserialize::<Settings>(bytes.as_slice()).ok())
+        .and_then(|bytes| Settings::from_installation_config(bytes.as_slice()).ok())
         .map(|settings| {
             settings
                 .idf_features_per_version

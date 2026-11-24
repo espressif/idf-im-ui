@@ -925,6 +925,7 @@ pub async fn run_wizard_run(mut config: Settings) -> Result<(), String> {
                 None
             },
             &config.pypi_mirror,
+            &config.force_python_env_upgrade,
         )
         .await
         {

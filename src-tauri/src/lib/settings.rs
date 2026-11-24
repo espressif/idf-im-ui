@@ -24,6 +24,10 @@ macro_rules! merge_fields {
     };
 }
 
+/// Zero bytes appended when decoding an `installation_config` blob that predates newly
+/// added trailing fields. Each missing `Option` field needs one byte.
+const INSTALLATION_CONFIG_PADDING: usize = 64;
+
 // Using derive macro for Iterable
 #[derive(Debug, Deserialize, Serialize, Clone, Iterable)]
 #[serde(default)]
@@ -59,6 +63,10 @@ pub struct Settings {
     pub activation_script_path_override: Option<String>, // Optional override for activation script path
     pub python_version_override: Option<String>, // Optional override for Python version to install when installing prerequisites
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
+    // NOTE: `Settings` is stored with bincode (positional). Only append new `Option` fields
+    // here, after the last stored field, so old blobs stay readable via
+    // `Settings::from_installation_config`.
+    pub force_python_env_upgrade: Option<bool>,
     /// Maps version name → pre-generated installation ID, set during create_pending_esp_ide_json.
     /// Skipped during serialization so it never lands in config files.
     #[serde(skip)]
@@ -148,6 +156,7 @@ impl Default for Settings {
             activation_script_path_override: Some(default_activation_script_path_override),
             python_version_override: Some(PYTHON_NAME_TO_INSTALL.to_string()),
             create_bat_activation_script: Some(false),
+            force_python_env_upgrade: Some(true),
             pending_installation_ids: None,
         }
     }
@@ -259,7 +268,8 @@ impl Settings {
                 use_local_archive,
                 activation_script_path_override,
                 python_version_override,
-                create_bat_activation_script
+                create_bat_activation_script,
+                force_python_env_upgrade
             );
 
             if cli_overrides.contains("idf_tools") {
@@ -345,7 +355,8 @@ impl Settings {
             use_local_archive,
             activation_script_path_override,
             python_version_override,
-            create_bat_activation_script
+            create_bat_activation_script,
+            force_python_env_upgrade
         );
     }
 
@@ -434,6 +445,69 @@ impl Settings {
         self.pending_installation_ids = Some(pending_ids);
 
         config.to_file(json_path, true, false)
+    }
+
+    /// Decodes `Settings` from the bincode blob stored as `installation_config`.
+    ///
+    /// bincode is not self-describing: fields are read by position, and a blob written
+    /// before a field was appended fails with an unexpected-EOF error instead of falling
+    /// back to a default. Every `Settings` field is an `Option`, and `None` is encoded as
+    /// a single `0x00` byte, so a blob that ends early is padded with zero bytes and
+    /// decoded again.
+    ///
+    /// The padded decode is accepted only if the stored bytes are a complete record of
+    /// an older layout: the padding must have been consumed as whole trailing `None`
+    /// fields, the stored bytes must be exactly the encoding of the fields before them,
+    /// and at least one field must come from stored data. Empty blobs and blobs
+    /// truncated inside a field are rejected, so callers can fall back to defaults.
+    ///
+    /// This keeps old blobs readable as long as new fields are `Option`s appended at the
+    /// end of the struct. Reordering, removing or inserting fields mid-struct, or adding
+    /// a non-`Option` field, still breaks decoding of stored blobs.
+    pub fn from_installation_config(bytes: &[u8]) -> Result<Settings> {
+        if bytes.is_empty() {
+            return Err(anyhow!("Installation settings are empty"));
+        }
+        let first_err = match bincode::deserialize::<Settings>(bytes) {
+            Ok(settings) => return Ok(settings),
+            Err(e) => e,
+        };
+        let reject = || anyhow!("Failed to deserialize installation settings: {}", first_err);
+
+        let mut padded = bytes.to_vec();
+        padded.resize(bytes.len() + INSTALLATION_CONFIG_PADDING, 0);
+        let settings = bincode::deserialize::<Settings>(&padded).map_err(|_| reject())?;
+
+        // Re-encode to learn how much of the padded input the decode really consumed.
+        let reencoded = bincode::serialize(&settings).map_err(|_| reject())?;
+        let missing = reencoded.len().saturating_sub(bytes.len());
+        if missing == 0 || !reencoded.starts_with(bytes) {
+            return Err(reject());
+        }
+
+        // The `missing` padding bytes must be `missing` whole trailing `None` fields
+        // (one byte each), and some field must have come from the stored bytes.
+        let names = Self::serialized_field_names();
+        if missing >= names.len() {
+            return Err(reject());
+        }
+        let value = serde_json::to_value(&settings).map_err(|_| reject())?;
+        let trailing_all_none = names[names.len() - missing..]
+            .iter()
+            .all(|name| value.get(*name).is_some_and(|v| v.is_null()));
+        if !trailing_all_none {
+            return Err(reject());
+        }
+        Ok(settings)
+    }
+
+    /// Names of the fields bincode writes, in declaration order (skipped fields excluded).
+    fn serialized_field_names() -> Vec<&'static str> {
+        Settings::default()
+            .iter()
+            .map(|(name, _)| name)
+            .filter(|name| *name != "pending_installation_ids")
+            .collect()
     }
 
     pub fn save_esp_ide_json(&self) -> Result<()> {
@@ -655,5 +729,72 @@ impl Settings {
     pub fn get_tools_for_version(&self, version: &str) -> Vec<String> {
         self.get_tools_for_version_if_set(version)
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod installation_config_tests {
+    use super::*;
+
+    #[test]
+    fn current_blob_roundtrips() {
+        let settings = Settings {
+            force_python_env_upgrade: Some(false),
+            ..Default::default()
+        };
+        let bytes = bincode::serialize(&settings).unwrap();
+        let decoded = Settings::from_installation_config(&bytes).unwrap();
+        assert_eq!(decoded.force_python_env_upgrade, Some(false));
+    }
+
+    #[test]
+    fn blob_missing_trailing_fields_decodes_with_none() {
+        let settings = Settings {
+            target: Some(vec!["esp32".to_string()]),
+            idf_tools: Some(vec!["cmake".to_string()]),
+            force_python_env_upgrade: None, // encoded as one 0x00 byte
+            ..Default::default()
+        };
+        let mut bytes = bincode::serialize(&settings).unwrap();
+        // Simulate a blob saved before the last field existed.
+        bytes.pop();
+        assert!(bincode::deserialize::<Settings>(&bytes).is_err());
+
+        let decoded = Settings::from_installation_config(&bytes).unwrap();
+        assert_eq!(decoded.target, Some(vec!["esp32".to_string()]));
+        assert_eq!(decoded.idf_tools, Some(vec!["cmake".to_string()]));
+        assert_eq!(decoded.force_python_env_upgrade, None);
+    }
+
+    #[test]
+    fn empty_blob_is_rejected() {
+        assert!(Settings::from_installation_config(&[]).is_err());
+    }
+
+    #[test]
+    fn blob_truncated_inside_a_field_is_rejected() {
+        let settings = Settings {
+            path: Some(PathBuf::from("/some/long/path")),
+            ..Default::default()
+        };
+        let bytes = bincode::serialize(&settings).unwrap();
+        // Cut inside the first field's string payload.
+        assert!(Settings::from_installation_config(&bytes[..6]).is_err());
+        // Cut right after the `Some` tag of the first field.
+        assert!(Settings::from_installation_config(&bytes[..1]).is_err());
+    }
+
+    #[test]
+    fn serialized_field_names_match_encoding() {
+        // Guards the field-name list used to validate padded decodes.
+        let value = serde_json::to_value(Settings::default()).unwrap();
+        let names = Settings::serialized_field_names();
+        assert_eq!(value.as_object().unwrap().len(), names.len());
+        assert!(names.iter().all(|n| value.get(*n).is_some()));
+    }
+
+    #[test]
+    fn garbage_blob_is_rejected() {
+        assert!(Settings::from_installation_config(&[0xff, 0xff, 0xff]).is_err());
     }
 }

@@ -102,7 +102,7 @@ If EIM detects a valid ESP-IDF Git repository at the selected path, it will:
 
 ### Can I use EIM while bisecting ESP-IDF?
 
-Yes, but you have to clone ESP-IDF yourself first. EIM's own clones are shallow and single-reference, so they contain no history to bisect. Clone the repository with its full history, install the toolchain with `eim install -p <repo> --version-name bisect`, and run `eim fix -p <repo>` at each bisect step to re-sync the tools and the Python environment with the newly checked-out revision. The full workflow, including a ready-made `git bisect run` script, is on the [Using EIM with git bisect](./git_bisect.md) page.
+Yes, but you have to clone ESP-IDF yourself first. EIM's own clones are shallow and single-reference, so they contain no history to bisect. Clone the repository with its full history, install the toolchain with `eim install -p <repo> --version-name bisect`, and run `eim fix -p <repo> --force-python-env-upgrade false` at each bisect step to re-sync the tools and the Python environment with the newly checked-out revision. The full workflow, including a ready-made `git bisect run` script, is on the [Using EIM with git bisect](./git_bisect.md) page.
 
 ### How do I add more tools or features to an existing installation?
 

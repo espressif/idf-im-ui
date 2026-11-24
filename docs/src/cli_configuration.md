@@ -71,6 +71,7 @@ tool_download_folder_name = "/Users/testusername/.espressif/dist"
 tool_install_folder_name = "/Users/testusername/.espressif/tools"
 activation_script_path_override = "/Users/testusername/.espressif/tools"
 create_bat_activation_script = false
+force_python_env_upgrade = true
 python_env_folder_name = "python_env"
 cleanup = true
 target = ["all"]
