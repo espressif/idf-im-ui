@@ -300,6 +300,8 @@ Options:
 
 Apart from that, `fix` accepts the same options as [`install`](#install-command) / [`wizard`](#wizard-command) (`--idf-features`, `--idf-tools`, `--target`, `-i, --idf-versions`, `-m, --mirror`, etc.). By default, `fix` reinstalls the version using **exactly the configuration it was originally installed with** — the same target, features and tools are preserved, so you don't lose any customization made at install time. Any option you explicitly pass on the command line overrides both the preserved value and the built-in default for that option, letting you fix an installation with a different set of tools/features than it originally had.
 
+> **Options passed to `fix` are remembered.** When `fix` finishes successfully it stores the resulting configuration — the preserved values plus any options you passed — with the installation. The next `eim fix` for that installation starts from those stored values, so a flag such as `--force-python-env-upgrade false` or `--idf-tools cmake,openocd` keeps applying on later runs without being passed again. To go back, pass the option again with the value you want (for example `--force-python-env-upgrade true`); an option that is not passed keeps its stored value, and an installation created before an option existed uses that option's default. Scripts and automation should pass every option they depend on explicitly rather than relying on what an earlier run stored.
+
 ```bash
 # Fix (repair) an installation, keeping its original tools/features
 eim fix -p /path/to/existing/esp-idf
@@ -343,7 +345,7 @@ Pass `-m, --mirror`, `--idf-mirror` or `--pypi-mirror` to fix an installation ag
 
 All commands (`install`, `wizard`, `fix`) keep the existing virtual environment and run pip against it. By default pip runs with `--upgrade`, so every package is checked against the package index and moved to the newest release the constraints file allows. This is thorough, but it contacts the index for every package and can be slow.
 
-Pass `--force-python-env-upgrade false` (or set `force_python_env_upgrade = false` in the configuration file) to run pip without `--upgrade`. pip then installs only the packages which are missing or no longer satisfy the constraints file; everything already satisfied is left alone, and pip does not contact the package index for it.
+Pass `--force-python-env-upgrade false` (or set `force_python_env_upgrade = false` in the configuration file) to run pip without `--upgrade`. The value is stored with the installation, so later `eim fix` runs for it reuse it until you pass a different value (see [Fix Command](#fix-command)). pip then installs only the packages which are missing or no longer satisfy the constraints file; everything already satisfied is left alone, and pip does not contact the package index for it.
 
 Whatever the setting, if the first pip run fails — a corrupted environment, a missing interpreter, a non-zero pip exit — the environment is deleted and pip is retried once with `--upgrade`. A second failure is reported as an error.
 

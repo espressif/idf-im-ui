@@ -105,6 +105,8 @@ The existing Python virtual environment is kept rather than rebuilt. By default 
 eim fix -p ~/esp/esp-idf-bisect --force-python-env-upgrade false
 ```
 
+The value is stored with the installation, so later `eim fix` runs reuse it. It is still good practice to pass it explicitly in scripts, and to pass `--force-python-env-upgrade true` once the bisect is over if you want regular upgrades again.
+
 `fix` is necessary because EIM's activation script is generated once, with the toolchain paths and environment variables written into it. Unlike ESP-IDF's own `export.sh`, which recomputes the environment every time you source it, the activation script cannot notice that the checked-out revision now needs a different compiler — it will simply put the previously installed one on `PATH`. `eim fix` is what regenerates it.
 
 **Delete the build directory.** A CMake build directory produced by a different ESP-IDF version will fail in confusing ways, or worse, succeed against stale cached paths. Remove `build/` and `sdkconfig` whenever the version changes. Deleting `sdkconfig` is why `set-target` appears in the command above — a fresh `sdkconfig` has no target selected.
