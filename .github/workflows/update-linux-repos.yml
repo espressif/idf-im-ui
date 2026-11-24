@@ -17,7 +17,7 @@ on:
 jobs:
   update-apt-repo:
     name: Update APT Repository on S3
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -198,7 +198,7 @@ jobs:
   update-rpm-repo:
     name: Update RPM Repository on S3
     needs: update-apt-repo
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -314,19 +314,15 @@ jobs:
           printf '%s' "$GPG_PASSPHRASE" > "$PASS_FILE"
           chmod 600 "$PASS_FILE"
 
-          if rpm --eval '%{__gpg_sign_cmd}' | grep -qE '^\S*gpg gpg( |$)'; then
-            GPG_ARGV0="gpg "
-          else
-            GPG_ARGV0=""
-          fi
-          echo "rpm: $(rpm --version); gpg argv0 prefix: '${GPG_ARGV0}'"
-
           cat > "$HOME/.rpmmacros" <<RPMMACROS
           %_signature gpg
           %_gpg_name ${GPG_KEY_FPR}
-          %__gpg /usr/bin/gpg
-          %__gpg_sign_cmd %{__gpg} ${GPG_ARGV0}--no-verbose --no-armor --batch --pinentry-mode loopback --passphrase-file ${PASS_FILE} --no-secmem-warning -u "%{_gpg_name}" -sbo %{__signature_filename} --digest-algo sha256 %{__plaintext_filename}
+          %_gpg_digest_algo sha256
+          %_gpg_sign_cmd_extra_args --batch --pinentry-mode loopback --passphrase-file ${PASS_FILE}
           RPMMACROS
+
+          echo "rpm: $(rpm --version)"
+          echo "effective sign command: $(rpm --eval '%{__gpg_sign_cmd}' 2>&1 || true)"
 
           for arch in x86_64 aarch64 armv7hl; do
             shopt -s nullglob
@@ -398,7 +394,7 @@ jobs:
   update-pacman-repo:
     name: Update Pacman Repository on S3
     needs: update-rpm-repo
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     container:
       image: archlinux:latest
     steps:
