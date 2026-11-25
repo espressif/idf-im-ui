@@ -661,10 +661,14 @@ fn populate_venv(
 
 /// Installs or updates the Python virtual environment for a specific ESP-IDF version.
 ///
-/// The existing virtual environment is kept and pip installs only the packages that are
-/// missing or no longer satisfy the constraints. If that first attempt fails (venv
-/// creation or a non-zero pip exit), the environment is deleted and pip is retried once
-/// with `--upgrade`; a second failure is returned as an error.
+/// The existing virtual environment is kept and pip runs against it. By default
+/// (`force_upgrade` unset or `Some(true)`) pip is run with `--upgrade`, so packages move
+/// to the newest release allowed by the constraints. With `Some(false)` the `--upgrade`
+/// flag is omitted and pip installs only the packages that are missing or no longer
+/// satisfy the constraints, which is much faster because pip does not check every
+/// package against the index. If the first attempt fails (venv creation or a non-zero
+/// pip exit), the environment is deleted and pip is retried once with `--upgrade`
+/// regardless of `force_upgrade`; a second failure is returned as an error.
 ///
 /// # Arguments
 ///
@@ -678,6 +682,8 @@ fn populate_venv(
 /// * `offline_archive_dir` - Optional path to offline archive directory containing
 ///   pre-downloaded wheels and constraints files.
 /// * `pypi_mirror` - Optional PyPI mirror URL.
+/// * `force_upgrade` - Whether to pass `--upgrade` to pip on the first attempt. `None`
+///   behaves like `Some(true)`.
 ///
 /// # Returns
 ///
@@ -692,6 +698,7 @@ pub async fn install_python_env(
     features: &[String],
     offline_archive_dir: Option<&Path>,
     pypi_mirror: &Option<String>,
+    force_upgrade: &Option<bool>,
 ) -> Result<(), String> {
     let mut offline_mode = false;
     let venv_path = paths.python_venv_path.clone();
@@ -799,7 +806,7 @@ pub async fn install_python_env(
         &constraint_file,
         &wheel_dir,
         pypi_mirror,
-        false,
+        force_upgrade.unwrap_or(true),
     ) {
         warn!(
             "Python environment reuse failed; deleting the virtual environment and retrying with a full reinstall: {}",

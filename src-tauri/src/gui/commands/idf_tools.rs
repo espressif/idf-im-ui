@@ -693,6 +693,7 @@ pub async fn setup_tools(
         &features_for_version,
         offline_archive_dir,       // Offline archive directory
         &Some(pypi_mirror_to_use), // PyPI mirror
+        &settings.force_python_env_upgrade,
     )
     .await
     {

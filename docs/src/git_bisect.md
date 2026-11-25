@@ -79,7 +79,7 @@ git bisect start <bad-revision> <good-revision>
 git submodule sync --recursive
 git submodule update --init --recursive
 
-eim fix -p ~/esp/esp-idf-bisect
+eim fix -p ~/esp/esp-idf-bisect --force-python-env-upgrade false
 
 rm -rf ~/esp/bisect-proj/build ~/esp/bisect-proj/sdkconfig
 eim run "idf.py -C ~/esp/bisect-proj set-target esp32 && idf.py -C ~/esp/bisect-proj build" bisect
@@ -99,7 +99,13 @@ When a revision removes a submodule, `git checkout` prints warnings like `warnin
 
 **Run `eim fix`.** This re-reads `tools/tools.json` and `tools/requirements/*` from the worktree as it currently stands, installs any tool versions the new revision needs, and refreshes the Python environment against the constraints file matching the revision's `tools/cmake/version.cmake`. It never touches your repository — no fetch, no checkout, no submodule handling — and it keeps the name recorded at install time. It also runs without prompting, because it recovers the configuration stored with the installation, which is what makes it safe to call from a `git bisect run` script. See the [Fix command](./cli_commands.md#fix-command).
 
-The existing Python virtual environment is kept rather than rebuilt, so pip installs only the packages the new revision needs and leaves everything already satisfying its constraints alone. Inside one release line that usually means nothing to do and no network traffic; when a revision tightens a constraint, the affected package is upgraded. This is what makes it affordable to run at every step. If pip fails, the environment is recreated once and retried — see [The Python environment](./cli_commands.md#the-python-environment).
+The existing Python virtual environment is kept rather than rebuilt. By default pip runs with `--upgrade`, which checks every package against the package index and is slow when repeated at every bisect step. For bisecting, pass `--force-python-env-upgrade false` to `eim fix`: pip then installs only the packages the new revision needs and leaves everything already satisfying its constraints alone. Inside one release line that usually means nothing to do and no network traffic; when a revision tightens a constraint, the affected package is upgraded. If pip fails, the environment is recreated once and retried — see [The Python environment](./cli_commands.md#the-python-environment).
+
+```bash
+eim fix -p ~/esp/esp-idf-bisect --force-python-env-upgrade false
+```
+
+The value is stored with the installation, so later `eim fix` runs reuse it. It is still good practice to pass it explicitly in scripts, and to pass `--force-python-env-upgrade true` once the bisect is over if you want regular upgrades again.
 
 `fix` is necessary because EIM's activation script is generated once, with the toolchain paths and environment variables written into it. Unlike ESP-IDF's own `export.sh`, which recomputes the environment every time you source it, the activation script cannot notice that the checked-out revision now needs a different compiler — it will simply put the previously installed one on `PATH`. `eim fix` is what regenerates it.
 
@@ -130,6 +136,7 @@ If that exits zero, nothing about the environment changed and you can go straigh
 
 Other things that help:
 
+- Always run `eim fix` with `--force-python-env-upgrade false`. The default `pip --upgrade` re-checks every package against the upstream index, which is by far the slowest part of a step.
 - Bisect the narrowest range you can. If you know the regression is inside one release line, use two patch tags from that line rather than two major versions.
 - Build the smallest project that reproduces the problem, for a single target.
 - Install `ccache` and export `IDF_CCACHE_ENABLE=1` before starting, which pays off whenever a revision is revisited.

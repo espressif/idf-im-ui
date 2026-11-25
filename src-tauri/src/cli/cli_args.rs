@@ -340,6 +340,12 @@ pub struct InstallArgs {
         help = "Whether to create a .bat activation script on Windows. This is useful for users who want to activate the ESP-IDF environment using a batch file instead of PowerShell. Default is false. This is for legacy compatibility reasons as the default activation method on Windows is now PowerShell script."
     )]
     pub create_bat_activation_script: Option<bool>, // Whether to create a .bat activation script on Windows
+
+    #[arg(
+        long,
+        help = "Whether to run pip with --upgrade when installing into an existing Python environment. Default is true. Set to false to only install missing or unsatisfied packages, which is much faster (useful e.g. when bisecting)."
+    )]
+    pub force_python_env_upgrade: Option<bool>,
 }
 
 impl IntoIterator for InstallArgs {
@@ -447,6 +453,10 @@ impl IntoIterator for InstallArgs {
             (
                 "create_bat_activation_script".to_string(),
                 self.create_bat_activation_script.map(Into::into),
+            ),
+            (
+                "force_python_env_upgrade".to_string(),
+                self.force_python_env_upgrade.map(Into::into),
             ),
         ]
         .into_iter()

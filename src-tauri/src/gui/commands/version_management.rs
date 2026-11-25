@@ -152,7 +152,7 @@ pub fn generate_installation_config_for_version(
         }
     };
 
-    let settings = match bincode::deserialize::<Settings>(config_bytes.as_slice()) {
+    let settings = match Settings::from_installation_config(config_bytes.as_slice()) {
         Ok(settings) => settings,
         Err(e) => {
             error!("Failed to deserialize settings from binary: {}", e);
