@@ -6,6 +6,25 @@ use rust_i18n::t;
 use serde_json::json;
 use tauri::{AppHandle, Emitter};
 
+/// Runs the system prerequisites check unless `skip_prerequisites_check` is set
+/// (e.g. `eim gui --skip-prerequisites-check true`), in which case all
+/// prerequisites are reported as satisfied — mirroring the CLI wizard.
+pub fn check_prerequisites_respecting_skip(
+    app_handle: &AppHandle,
+) -> Result<idf_im_lib::system_dependencies::PrerequisitesCheckResult, String> {
+    let skip = get_settings_non_blocking(app_handle)
+        .ok()
+        .and_then(|s| s.skip_prerequisites_check)
+        .unwrap_or(false);
+    if skip {
+        log::info!("Skipping prerequisites check (skip_prerequisites_check is set)");
+        return Ok(
+            idf_im_lib::system_dependencies::PrerequisitesCheckResult::new(vec![], true, false),
+        );
+    }
+    idf_im_lib::system_dependencies::check_prerequisites_with_result()
+}
+
 /// Gets the list of prerequisites for ESP-IDF
 #[tauri::command]
 pub fn get_prerequisites() -> Vec<&'static str> {
@@ -20,7 +39,7 @@ pub fn get_prerequisites() -> Vec<&'static str> {
 /// Checks which prerequisites are missing
 #[tauri::command]
 pub fn check_prerequisites(app_handle: AppHandle) -> Vec<String> {
-    match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+    match check_prerequisites_respecting_skip(&app_handle) {
         Ok(result) => {
             if result.shell_failed {
                 let warning_msg =
@@ -49,7 +68,7 @@ pub fn check_prerequisites(app_handle: AppHandle) -> Vec<String> {
 
 #[tauri::command]
 pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value {
-    match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
+    match check_prerequisites_respecting_skip(&app_handle) {
         Ok(result) => {
             if result.shell_failed {
                 // Shell execution failed - can't verify, user can skip
@@ -103,29 +122,27 @@ pub fn check_prerequisites_detailed(app_handle: AppHandle) -> serde_json::Value 
 /// Installs missing prerequisites (non-blocking - runs in tokio background task)
 #[tauri::command]
 pub fn install_prerequisites(app_handle: AppHandle) -> bool {
-    let unsatisfied_prerequisites =
-        match idf_im_lib::system_dependencies::check_prerequisites_with_result() {
-            Ok(result) => {
-                if result.shell_failed {
-                    let error_msg =
-                        t!("gui.system_dependencies.shell_verification_failed").to_string();
-                    send_message(&app_handle, error_msg.clone(), "error".to_string());
-                    error!("{}", error_msg);
-                    return false;
-                }
-                result.missing.into_iter().map(|p| p.to_string()).collect()
-            }
-            Err(err) => {
-                let error_msg = t!(
-                    "gui.system_dependencies.verification_error",
-                    error = err.to_string()
-                )
-                .to_string();
+    let unsatisfied_prerequisites = match check_prerequisites_respecting_skip(&app_handle) {
+        Ok(result) => {
+            if result.shell_failed {
+                let error_msg = t!("gui.system_dependencies.shell_verification_failed").to_string();
                 send_message(&app_handle, error_msg.clone(), "error".to_string());
                 error!("{}", error_msg);
                 return false;
             }
-        };
+            result.missing.into_iter().map(|p| p.to_string()).collect()
+        }
+        Err(err) => {
+            let error_msg = t!(
+                "gui.system_dependencies.verification_error",
+                error = err.to_string()
+            )
+            .to_string();
+            send_message(&app_handle, error_msg.clone(), "error".to_string());
+            error!("{}", error_msg);
+            return false;
+        }
+    };
 
     // Spawn tokio task to avoid blocking the UI
     let app_handle_clone = app_handle.clone();
