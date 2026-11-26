@@ -17,8 +17,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "cargo:warning=Failed to download IDF versions at build time: {}",
                 e
             );
-            // Optionally set a fallback empty JSON or handle error
-            println!("cargo:rustc-env=CACHED_IDF_VERSIONS={{}}");
+            // Empty but valid fallback, so offline runs report "no versions"
+            // instead of a JSON parse error.
+            println!(
+                "cargo:rustc-env=CACHED_IDF_VERSIONS={{\"VERSIONS\":[],\"IDF_TARGETS\":[],\"RELEASES\":{{}}}}"
+            );
         }
     }
     #[cfg(feature = "gui")]

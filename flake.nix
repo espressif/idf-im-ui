@@ -3,17 +3,10 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-
-    # Pinned copy of the IDF versions list, embedded at build time (the Nix
-    # sandbox has no network). Refresh with: nix flake update idf-versions
-    idf-versions = {
-      url = "file+https://dl.espressif.com/dl/esp-idf/idf_versions.json";
-      flake = false;
-    };
   };
 
   outputs =
-    { self, nixpkgs, idf-versions }:
+    { self, nixpkgs }:
     let
       systems = [
         "x86_64-linux"
@@ -70,8 +63,10 @@
           buildNoDefaultFeatures = true;
           buildFeatures = [ "cli" ];
 
-          # build.rs reads this instead of curl-ing dl.espressif.com.
-          EIM_IDF_VERSIONS_FILE = idf-versions;
+          # No embedded IDF versions list: the Nix sandbox has no network, and
+          # pinning the mutable idf_versions.json as a flake input breaks every
+          # tagged release once upstream changes it. eim downloads the list at
+          # runtime; the build-time copy is only an offline fallback.
 
           # The `cli` feature enables `vendored-openssl`, which compiles
           # OpenSSL from source (needs perl). openssl/pkg-config are kept as a
@@ -228,7 +223,6 @@
             clippy
             rust-analyzer
           ];
-          EIM_IDF_VERSIONS_FILE = idf-versions;
         };
       });
 
