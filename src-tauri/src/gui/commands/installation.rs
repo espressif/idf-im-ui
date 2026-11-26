@@ -1403,7 +1403,8 @@ async fn run_simple_setup(app_handle: tauri::AppHandle) -> Result<(), String> {
     );
 
     // Check prerequisites using the detailed result
-    let prereq_result = match system_dependencies::check_prerequisites_with_result() {
+    let prereq_result = match super::prerequisites::check_prerequisites_respecting_skip(&app_handle)
+    {
         Ok(result) => result,
         Err(err) => {
             // Error during checking (e.g., unsupported package manager)
@@ -2712,34 +2713,35 @@ async fn run_offline_installation(
             );
 
             // Use detailed prerequisites check
-            let prereq_result = match system_dependencies::check_prerequisites_with_result() {
-                Ok(result) => result,
-                Err(err) => {
-                    let error_msg = rust_i18n::t!(
-                        "gui.system_dependencies.verification_error",
-                        error = err.clone()
-                    )
-                    .to_string();
-                    emit_installation_event(
-                        &app_handle,
-                        InstallationProgress {
-                            stage: InstallationStage::Error,
-                            percentage: 0,
-                            message: rust_i18n::t!("gui.offline.prerequisites_check_failed")
-                                .to_string(),
-                            detail: Some(error_msg.clone()),
-                            version: None,
-                        },
-                    );
-                    telemetry::note_failure_kind(
-                        ErrorKind::PrerequisiteCheckFailed,
-                        Some(FailureStage::Prerequisites),
-                        format!("prerequisite check could not run: {}", err),
-                    );
-                    set_installation_status(&app_handle, false)?;
-                    return Err(error_msg);
-                }
-            };
+            let prereq_result =
+                match super::prerequisites::check_prerequisites_respecting_skip(&app_handle) {
+                    Ok(result) => result,
+                    Err(err) => {
+                        let error_msg = rust_i18n::t!(
+                            "gui.system_dependencies.verification_error",
+                            error = err.clone()
+                        )
+                        .to_string();
+                        emit_installation_event(
+                            &app_handle,
+                            InstallationProgress {
+                                stage: InstallationStage::Error,
+                                percentage: 0,
+                                message: rust_i18n::t!("gui.offline.prerequisites_check_failed")
+                                    .to_string(),
+                                detail: Some(error_msg.clone()),
+                                version: None,
+                            },
+                        );
+                        telemetry::note_failure_kind(
+                            ErrorKind::PrerequisiteCheckFailed,
+                            Some(FailureStage::Prerequisites),
+                            format!("prerequisite check could not run: {}", err),
+                        );
+                        set_installation_status(&app_handle, false)?;
+                        return Err(error_msg);
+                    }
+                };
 
             // Handle verification failures
             if prereq_result.shell_failed || !prereq_result.can_verify {
@@ -3500,7 +3502,7 @@ async fn download_archive_with_progress(
 /// same verification up-front and fail fast. Mirrors the non-Windows branch of
 /// `start_offline_installation` (same i18n keys); emits events only on failure.
 fn precheck_posix_prerequisites(app_handle: &AppHandle) -> Result<(), String> {
-    let prereq_result = idf_im_lib::system_dependencies::check_prerequisites_with_result()
+    let prereq_result = super::prerequisites::check_prerequisites_respecting_skip(app_handle)
         .map_err(|err| {
             let msg = rust_i18n::t!(
                 "gui.system_dependencies.verification_error",
